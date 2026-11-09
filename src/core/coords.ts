@@ -19,9 +19,18 @@
  * angles, so texels stay close to equal in area across a face, which matters
  * for the baked maps. See docs/decisions.md.
  */
+import type { Rng } from './rng';
 import { PLANET_RADIUS } from './units';
 import type { Meters, Radians } from './units';
 import { Vec3d } from './vec3d';
+
+/** Uniformly distributed unit vector drawn from `r` (three draws). */
+export function randomUnitVector(r: Rng, out = new Vec3d()): Vec3d {
+  const y = r.range(-1, 1);
+  const az = r.range(0, 2 * Math.PI);
+  const s = Math.sqrt(1 - y * y);
+  return out.set(s * Math.cos(az), y, s * Math.sin(az));
+}
 
 export const CubeFace = {
   PosX: 0,

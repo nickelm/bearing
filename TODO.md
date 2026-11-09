@@ -22,18 +22,18 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [x] Neighbor lookup across face seams and corners (4- and 8-neighborhoods), with tests
 - [x] Tile key type `(face, level, x, y)`: parent/child/neighbor math, texel ↔ direction, string key for streams and caches, with tests (decision 13)
 - [x] Seeded 3D noise (Perlin, fBm, ridged) and a deterministic min-heap in `core`
-- [ ] Continental crust field around two near-antipodal continent centers (decisions 17, 18)
-- [ ] Plate seeding steered into seeds inside the two continents (3 main, 2 second), the rest spread over the oceans (`rng("plates")`)
-- [ ] Plate growth by randomized weighted flood fill; a motion vector (Euler pole) per plate
-- [ ] Plate boundary detection and classification (convergent / divergent / transform × continental / oceanic)
-- [ ] Uplift field: continental collision ranges, trenches and island arcs, mid-ocean ridges, with distance-to-boundary falloff
-- [ ] Base elevation from crust type plus uplift, scaled by `reliefScale` (decision 14); sea level set at the `oceanFraction` height percentile
-- [ ] Provisional climate (temperature from latitude and altitude, banded moisture, no seasons) and a stylized biome palette
+- [x] Continental crust field around two near-antipodal continent centers (decisions 17, 18)
+- [x] Plate seeding steered into seeds inside the two continents (3 main, 2 second), the rest spread over the oceans (`rng("plates")`)
+- [x] Plate growth by randomized weighted flood fill; a motion vector (Euler pole) per plate
+- [x] Plate boundary detection and classification (convergent / divergent / transform × continental / oceanic)
+- [x] Uplift field: continental collision ranges, trenches and island arcs, mid-ocean ridges, with distance-to-boundary falloff
+- [x] Base elevation from crust type plus uplift, scaled by `reliefScale` (decision 14); sea level set at the `oceanFraction` height percentile
+- [x] Provisional climate (temperature from latitude and altitude, banded moisture, no seasons) and a stylized biome palette
 - [ ] Globe material: displace by height (with an exaggeration slider) and color by biome, replacing the debug face colors
 - [ ] Debug views: plate IDs, boundary types, uplift
 - [ ] Run generation in a worker with transferable typed arrays; per-stage progress UI and cancel
 - [ ] Parameter sliders (plate count, ocean fraction, relief scale, temperature offset, moisture scale) driving regeneration
-- [ ] Determinism tests: same seed gives the same height hash; changing one stage's parameters leaves other streams untouched
+- [x] Determinism tests: same seed gives the same height hash; changing one stage's parameters leaves other streams untouched
 - [ ] Per-stage timing log
 
 ## Milestone 2: Erosion, rivers, tiles, LOD
