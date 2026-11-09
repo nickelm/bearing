@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Guidance for Claude Code sessions in this repository. `docs/design.md` is the source of truth for scope and architecture. Read it before starting milestone work.
+Guidance for Claude Code sessions in this repository. `docs/design.md` is the source of truth for scope and architecture. Read it before starting milestone work. `docs/decisions.md` records later decisions; where the two conflict, the later decision wins (e.g. no 30 s generation budget, tiled world data, relief scaled to the planet, day/night and weather in scope).
 
 ## Commands
 

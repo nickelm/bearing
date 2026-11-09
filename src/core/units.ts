@@ -41,3 +41,6 @@ export const KMH = KM / HOUR;
 
 /** Default planet radius (design doc: ~1,000 km). Worldgen takes the radius as a parameter. */
 export const PLANET_RADIUS: Meters = 1_000_000;
+
+/** Earth's mean radius. Reference for scaling Earth-like relief to the planet (decision 14). */
+export const EARTH_RADIUS: Meters = 6_371_000;

@@ -20,53 +20,61 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 
 - [ ] Cube-sphere cell grid: `CubeGrid(resolution)` with cell index ↔ (face, i, j), cell-center directions and cell areas
 - [ ] Neighbor lookup across face seams and corners (4- and 8-neighborhoods), with tests
+- [ ] Tile key type `(face, level, x, y)`: parent/child/neighbor math, texel ↔ direction, string key for streams and caches, with tests (decision 13)
 - [ ] Plate seeding steered into two continental clusters 90–130° apart, with oceanic plates between them (`rng("plates")`)
 - [ ] Plate growth by randomized weighted flood fill; a motion vector (Euler pole) per plate
 - [ ] Plate boundary detection and classification (convergent / divergent / transform × continental / oceanic)
 - [ ] Uplift field: continental collision ranges, trenches and island arcs, mid-ocean ridges, with distance-to-boundary falloff
-- [ ] Base elevation from crust type plus uplift; sea level set at the `oceanFraction` height percentile
-- [ ] Provisional climate (temperature from latitude and altitude, banded moisture) and a stylized biome palette
-- [ ] Bake height and biome into per-face textures at coarse resolution (256²)
+- [ ] Base elevation from crust type plus uplift, scaled by `reliefScale` (decision 14); sea level set at the `oceanFraction` height percentile
+- [ ] Provisional climate (temperature from latitude and altitude, banded moisture, no seasons) and a stylized biome palette
+- [ ] Bake coarse height and biome into level-0 tiles
 - [ ] Globe material: displace by height (with an exaggeration slider) and color by biome, replacing the debug face colors
 - [ ] Debug views: plate IDs, boundary types, uplift
-- [ ] Run generation in a worker with progress reporting and transferable typed arrays
-- [ ] Parameter sliders (plate count, ocean fraction, temperature offset, moisture scale) driving regeneration
+- [ ] Run generation in a worker with transferable typed arrays; per-stage progress UI and cancel
+- [ ] Parameter sliders (plate count, ocean fraction, relief scale, temperature offset, moisture scale) driving regeneration
 - [ ] Determinism tests: same seed gives the same height hash; changing one stage's parameters leaves other streams untouched
 - [ ] Per-stage timing log
 
-## Milestone 2: Erosion, rivers, LOD
+## Milestone 2: Erosion, rivers, tiles, LOD
 
+- [ ] Benchmark erosion memory and time on a global grid at 1024² and 2048² per face; choose the global grid resolution (decision 13)
+- [ ] Global grid on the GPU with cross-face neighbor addressing
 - [ ] Detail noise stage on the GPU: ridged multifractal amplified by uplift, domain warping on coasts and ridges
-- [ ] GPU height-map layout per face with seam handling (shared edges or border texels)
-- [ ] Hydraulic erosion compute pass with cross-face neighbors
+- [ ] Hydraulic erosion compute pass on the global grid
 - [ ] Thermal erosion compute pass (talus angle)
-- [ ] Erosion benchmark at coarse and full resolution; tune iterations to the 30 s budget
 - [ ] Flow direction and flow accumulation maps
 - [ ] River extraction: threshold the accumulation into vector polylines with a width per segment
-- [ ] Quadtree per cube face, refined by screen-space error
+- [ ] Climate stage proper: seasonal temperature range from axial tilt, prevailing-wind moisture with rain shadows, Whittaker biomes (replaces the provisional climate)
+- [ ] Detail tile synthesis on the GPU: global maps + detail noise + local erosion constrained by global rivers; per-tile `fork(tileKey)`
+- [ ] Tile borders and seam tests: neighboring tiles agree on shared texels whatever the generation order
+- [ ] Tile cache: GPU/CPU LRU with a memory budget; on-demand generation queue
+- [ ] IndexedDB persistence for generated worlds and tiles, keyed by seed, parameters and generator version (moved from M8, decision 12)
+- [ ] Terrain quadtree per cube face on the same tile keys, refined by screen-space error
 - [ ] Tile meshes with skirts and a float64 origin per tile (camera-relative)
-- [ ] Tile heights from baked maps plus shader detail noise; normals
-- [ ] Tile cache and streaming; geomorphing so LOD changes don't pop
+- [ ] Tile normals; shader detail noise below the finest baked level
+- [ ] Geomorphing so LOD changes don't pop
 - [ ] Camera: terrain-aware near plane and ground clamp; flyable down to 500 m
-- [ ] High-resolution regional bake (about 50 m): design and prototype
 
-## Milestone 3: Atmosphere, ocean, forests
+## Milestone 3: Atmosphere, ocean, forests, sky
 
-- [ ] Single-scattering atmosphere: limb glow from orbit
+- [ ] Calendar and sun ephemeris in `core`: sun direction from `GameTime`, axial tilt, day length, year length and campaign start date, with tests (decision 15)
+- [ ] Day/night lighting driven by the sun ephemeris; time-of-day slider in the debug GUI
+- [ ] Single-scattering atmosphere: limb glow from orbit, sunset colors at the terminator
 - [ ] Aerial perspective on terrain
 - [ ] Ocean: depth-based color from bathymetry
 - [ ] Ocean: wave normal map and sun glint
 - [ ] Coastal foam
 - [ ] Terrain shading: biome color blended by slope (rock), altitude (snow) and moisture; triplanar mapping on cliffs
+- [ ] Seasonal snow line and seasonal vegetation tint
 - [ ] Forest density map (also used later by line of sight)
 - [ ] Instanced low-poly tree clusters within about 5 km of the camera
 - [ ] River rendering from vector data (mask texture or decals)
-- [ ] Stretch: 2D cloud shell driven by the moisture map
+- [ ] Cloud layer rendering, from a static field derived from moisture until live weather exists (M6)
 
 ## Milestone 4: Geography and front
 
 - [ ] Landmass labeling (connected components); identify the two largest landmasses
-- [ ] Ocean gap measurement between the two continents
+- [ ] Ocean gap: shortest great-circle distance between the two continents' coasts, islands ignored (decision 16)
 - [ ] Main-continent size and depth checks
 - [ ] Reject and retry with seeded sub-seeds (`fork("retry-n")`), with a test for retry determinism
 - [ ] Coarse pass wired end to end before the full pass
@@ -76,12 +84,13 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [ ] Start line placed one line forward of the strongest barrier
 - [ ] Faction placement: NATO holds the side nearer the second continent
 - [ ] Invasion corridors: low-barrier segments with good access (refine with roads after milestone 5)
+- [ ] Pre-bake the contested region to tile level 7 (about 48 m) during world generation
 - [ ] Strategic map overlay for defensive lines, start line and corridors
 
 ## Milestone 5: Settlements, roads, airbases
 
 - [ ] Settlement site scoring (river confluences, coasts, fertile lowlands); placement with population
-- [ ] Ports on coasts facing the ocean gap
+- [ ] Ports on the coasts facing the ocean gap
 - [ ] Movement cost map from slope, terrain and water
 - [ ] Least-cost road paths between settlements, merged where they overlap
 - [ ] Bridges at river crossings, as targetable features
@@ -89,26 +98,32 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [ ] Airbase density by distance behind the front (densest 100–400 km back); strategic bomber bases far from the front
 - [ ] Road rendering
 - [ ] Settlement building clusters scaled by population
+- [ ] Night-side settlement lights
 - [ ] Airbase runway meshes
 
-## Milestone 6: Simulation core
+## Milestone 6: Simulation core and weather
 
 - [ ] Sim worker host: message protocol and state snapshots to the main thread (evaluate transferables vs. SharedArrayBuffer)
 - [ ] Float64 game clock and time acceleration (pause, 1×, 4×, 16×, 64×, 256×)
 - [ ] Discrete-event scheduler (priority queue with deterministic tie-breaking)
 - [ ] Fixed-tick processes (1 game minute) interleaved with events in time order
 - [ ] Determinism test: 1× and 64× give identical state at a given game time
-- [ ] Time-control UI with auto-slowdown on flagged events
-- [ ] Benchmark: how many battalions the worker handles at 256×
+- [ ] Time-control UI with calendar date and local time display, and auto-slowdown on flagged events
+- [ ] Weather model: coarse global grid (about 50–100 km cells), hourly ticks, `rng(seed, "weather")`, driven by the climate maps and season (decision 15)
+- [ ] Weather fields for operations: cloud cover and ceiling, visibility, precipitation, wind at several levels
+- [ ] Weather determinism test across time acceleration
+- [ ] Clouds rendered from the live weather field (replaces the static M3 field)
+- [ ] Benchmark: how many battalions plus weather the worker handles at 256×
 
 ## Milestone 7: Flights, convoys, formations
 
 - [ ] Great-circle route math with climb and descent profiles; analytic position(t)
 - [ ] Flight scheduling between airbases (20–50 aircraft), with the range factor applied to fuel
+- [ ] Weather and daylight in flight operations: cancellations below minimums, winds aloft in ground speed, day/night sortie mix
 - [ ] Convoys on great-circle sea routes between ports
 - [ ] Order of battle: division / brigade / battalion data model with per-unit seeds (ready for promotion)
 - [ ] Initial deployment along the start line
-- [ ] Lanchester-style aggregate combat per tick, with terrain, posture, supply and support modifiers
+- [ ] Lanchester-style aggregate combat per tick, with terrain, posture, supply, support and weather modifiers
 - [ ] Front segment movement by local force balance, slowed by barriers
 - [ ] Scripted Pact offensive along the corridors
 - [ ] Display: faction icons and route lines from orbit; NATO-style unit symbols
@@ -117,12 +132,11 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 
 ## Milestone 8: Polish
 
-- [ ] IndexedDB cache of baked maps and vector data, keyed by seed, parameters and generator version
-- [ ] Generation profiling to meet the 30 s budget on a mid-range laptop
+- [ ] Generation profiling and progress polish (no time budget, decision 12)
 - [ ] Rendering performance pass (GPU timestamp queries, frame budget)
 - [ ] Bundle size and code splitting
-- [ ] Scripted flythrough camera path for screenshots
-- [ ] Check every demo goal against the design doc
+- [ ] Scripted flythrough camera path for screenshots, including a dawn and a weather front
+- [ ] Check every demo goal against the design doc and decisions
 
 ## After the demo
 

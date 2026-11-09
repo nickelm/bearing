@@ -118,3 +118,69 @@ Newest entries go at the bottom. Each entry records the date, the decision and t
 **Date:** 2026-11-09
 **Decision:** `vite.config.ts` sets `cacheDir` to `<os tmpdir>/vite-cache/bearing-<hash of project path>` instead of the default `node_modules/.vite`.
 **Reason:** The repository lives in Dropbox. Vite's dependency optimizer writes `deps_temp_*` and then renames it to `deps`, and that rename failed with `EBUSY` even with `node_modules` marked as ignored by Dropbox. The pre-bundled `three/tsl` then returned 404 and the app could not load. With the cache outside the synced folder, the problem goes away, and the setup works the same on machines without Dropbox.
+
+### 12. No generation time budget
+
+**Date:** 2026-11-09
+**Decision:** Drop the design doc's 30-second limit on generation (demo goal 1). Generation may take minutes.
+
+- Keep the fast coarse pass, so failed seeds are still rejected cheaply.
+- Report per-stage progress in the UI.
+- Cache finished worlds in IndexedDB from milestone 2, instead of milestone 8, so each seed and parameter set is generated once.
+
+**Reason:** Owner's direction: world quality matters more than generation speed. Resolution choices are now limited by GPU memory, not by time.
+
+### 13. Tiled world data from the start
+
+**Date:** 2026-11-09
+**Decision:**
+
+- **Tile keys.** Every baked map is addressed by a tile key (face, level, x, y), which forms a quadtree per cube face. A tile is 256 × 256 texels plus a border. At level L a texel spans about 1,571 km / (256 · 2^L), which gives:
+  - level 4: about 380 m, the design's 4096² per face;
+  - level 7: about 48 m, the design's regional bake.
+- **Global grid.** Processes that need the whole planet at once (plates, erosion and drainage, climate, rivers, the front) run on one global grid. Its resolution will be chosen by a GPU memory benchmark, with a target of 1024–2048 per face, or about 1.5–0.77 km per cell.
+- **Detail tiles.** Tiles finer than the global grid are synthesized per tile on the GPU from the global maps, detail noise and a local erosion pass constrained by the global river network. Per-tile randomness comes from `fork` with the tile key.
+- **Residency.** Tiles are generated on demand, kept in a GPU/CPU LRU cache with a memory budget, and persisted in IndexedDB. World generation pre-bakes the contested region to level 7.
+- **Rendering.** The terrain LOD quadtree uses the same tile keys.
+
+**Reason:**
+
+- Holding 4096² × 6 faces × 5 maps in memory at once would take 1–2 GB, and a 50 m regional bake cannot be a single texture.
+- Tiling caps resident memory, turns the regional bake into deeper levels of the same structure, and shares addressing with rendering LOD.
+- The cost: tile seams need border texels and order-independent generation. The hardest part will be keeping detail tiles consistent with global drainage.
+
+### 14. Relief scaled to the planet
+
+**Date:** 2026-11-09
+**Decision:** Elevations and ocean depths are Earth-like reference values multiplied by `reliefScale` = R / R_Earth ≈ 0.157 (1,000 km / 6,371 km). The highest peaks reach about 1.4 km instead of 8.8 km, typical ranges 0.5–0.8 km, and the mean ocean depth is about 600 m. The atmosphere (scale height, density), aircraft performance and service ceilings stay real.
+**Reason:** Owner's direction: mountains should look proportionate to the globe.
+**Consequences:**
+
+- Terrain no longer constrains aircraft ceilings.
+- Helicopter terrain masking still works, because it depends on relief of tens of meters.
+- Continental shelves become very shallow (about 20 m). Revisit before naval and submarine work after the demo.
+
+### 15. Day and night, seasons, calendar and weather are in demo scope
+
+**Date:** 2026-11-09
+**Decision:**
+
+- **Planet.** A 24 h solar day, 23.44° axial tilt and a 365-day year, all planet parameters. The sun direction is a stateless, analytic function of `GameTime` in `core`.
+- **Calendar.** A campaign start date (day of year and time of day) maps `GameTime` 0 onto the calendar. It is a campaign parameter, not a planet parameter.
+- **Climate.** The climate stage computes a seasonal temperature range from tilt and latitude, and biomes use annual means. The provisional climate in milestone 1 ignores seasons.
+- **Weather.** A headless sim process runs on a coarse global grid (about 50–100 km cells), ticks hourly in game time, draws from `rng(seed, "weather")` and is driven by the climate maps. Because ticks are fixed, weather is identical at any time acceleration. The sim uses ceiling, visibility and wind for flight operations, and the renderer draws clouds from the same field.
+- **Rendering.** Lighting follows the sun, the night side shows settlement lights, the snow line moves with the seasons, and clouds are now required rather than a stretch goal.
+
+**Reason:** Owner's direction. Day, night and weather shape air operations (night sorties, weather cancellations) and the view from orbit.
+
+### 16. Ocean gap measured coast to coast
+
+**Date:** 2026-11-09
+**Decision:** The ocean gap is the shortest great-circle distance between any coastal cell of the main continent and any coastal cell of the second continent, with islands ignored. The geography check requires it to fall within `oceanGap`. Milestone 5 places ports on the facing coasts, so convoy routes come out at about the gap length or somewhat longer.
+**Reason:**
+
+- It can be measured in the coarse pass, before ports exist.
+- It is simple and robust.
+- An island chain in the gap (the GIUK analogue) does not break it.
+
+Revisit if convoy crossings in milestone 7 come out too long.

@@ -10,8 +10,8 @@
  * Nothing is implemented yet; this module holds the parameter set.
  */
 import type { WorldSeed } from '../core/rng';
-import type { Meters } from '../core/units';
-import { KM, PLANET_RADIUS } from '../core/units';
+import type { Meters, Radians, Seconds } from '../core/units';
+import { DAY, DEG, EARTH_RADIUS, HOUR, KM, PLANET_RADIUS } from '../core/units';
 
 /** Planet parameters (design doc, "Planet Parameters"). SI units. */
 export interface PlanetParams {
@@ -28,6 +28,18 @@ export interface PlanetParams {
   /** Kelvin offset applied to the temperature model (equal to °C offset). */
   temperatureOffset: number;
   moistureScale: number;
+  /**
+   * Multiplier from Earth-like reference elevations and depths to this planet's
+   * (decision 14). Default R / R_Earth, so mountains are proportionate to the globe.
+   * Does not affect the atmosphere or aircraft performance.
+   */
+  reliefScale: number;
+  /** Obliquity of the rotation axis; drives seasons (decision 15). */
+  axialTilt: Radians;
+  /** Mean solar day (noon to noon). */
+  solarDay: Seconds;
+  /** Orbital period. */
+  year: Seconds;
 }
 
 /**
@@ -44,4 +56,8 @@ export const DEFAULT_PLANET_PARAMS: Readonly<PlanetParams> = {
   erosionStrength: 1.0,
   temperatureOffset: 0,
   moistureScale: 1.0,
+  reliefScale: PLANET_RADIUS / EARTH_RADIUS,
+  axialTilt: 23.44 * DEG,
+  solarDay: 24 * HOUR,
+  year: 365 * DAY,
 };
