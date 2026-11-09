@@ -1,0 +1,6 @@
+dist
+node_modules
+coverage
+package-lock.json
+# Authored by hand; the source of truth for scope. Do not reformat.
+docs/design.md

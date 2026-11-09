@@ -1,0 +1,6 @@
+# Keep LF in the working tree (Prettier default) regardless of core.autocrlf.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ktx2 binary
+*.glb binary

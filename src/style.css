@@ -1,0 +1,62 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #05070a;
+  color: #d8dee6;
+  font-family: system-ui, sans-serif;
+}
+
+#app,
+#app canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.frame-overlay {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  padding: 4px 8px;
+  background: rgb(0 0 0 / 0.55);
+  border-radius: 4px;
+  font:
+    12px/1.4 ui-monospace,
+    Consolas,
+    monospace;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+#fatal {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  padding: 16px;
+  max-width: 40rem;
+  margin: 0 auto;
+  line-height: 1.5;
+}
+
+#fatal[hidden] {
+  display: none;
+}
+
+#fatal h1 {
+  margin: 0 0 0.5em;
+  font-size: 1.6rem;
+}
+
+#fatal .reason {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.9rem;
+  color: #f0a070;
+}
+
+#fatal a {
+  color: #8cc8ff;
+}
