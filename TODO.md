@@ -49,7 +49,8 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [ ] Thermal erosion compute pass (talus angle)
 - [ ] Flow direction and flow accumulation maps
 - [ ] River extraction: threshold the accumulation into vector polylines with a width per segment
-- [ ] Climate stage proper: seasonal temperature range from axial tilt, prevailing-wind moisture with rain shadows, Whittaker biomes (replaces the provisional climate)
+- [x] Climate stage proper: seasonal temperature range from axial tilt, prevailing-wind moisture with rain shadows, Whittaker biomes (replaces the provisional climate)
+  - [ ] Recompute biomes on the eroded global grid (lapse-corrected temperature, upsampled precipitation)
 - [ ] Detail tile synthesis on the GPU: global maps + detail noise + local erosion constrained by global rivers; per-tile `fork(tileKey)`
 - [ ] Tile borders and seam tests: neighboring tiles agree on shared texels whatever the generation order
 - [ ] Tile cache: GPU/CPU LRU with a memory budget; on-demand generation queue

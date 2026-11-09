@@ -123,6 +123,25 @@ export const MOISTURE_RAMP: readonly [number, Rgb][] = [
   [1, hex(0x1f5fa0)],
 ];
 
+/** Annual precipitation (mm/yr), log-like stops. */
+export const PRECIPITATION_RAMP: readonly [number, Rgb][] = [
+  [0, hex(0x8a5a2b)],
+  [250, hex(0xd8c27a)],
+  [600, hex(0xa8c86a)],
+  [1200, hex(0x3f9a5a)],
+  [2500, hex(0x1f6fa8)],
+  [4000, hex(0x23307a)],
+];
+
+/** Seasonal half-range (K). */
+export const SEASONS_RAMP: readonly [number, Rgb][] = [
+  [0, hex(0x1f6f8b)],
+  [5, hex(0x99d8c9)],
+  [12, hex(0xf2e394)],
+  [20, hex(0xe08a3c)],
+  [30, hex(0x8b1e3f)],
+];
+
 /** Diverging ramp for uplift in reference meters. */
 export const UPLIFT_RAMP: readonly [number, Rgb][] = [
   [-3500, hex(0x5b2a86)],

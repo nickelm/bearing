@@ -9,6 +9,8 @@ import {
   BOUNDARY_COLORS,
   HEIGHT_RAMP,
   MOISTURE_RAMP,
+  PRECIPITATION_RAMP,
+  SEASONS_RAMP,
   TEMPERATURE_RAMP,
   UPLIFT_RAMP,
   plateColor,
@@ -25,6 +27,8 @@ export const VIEW_MODES = [
   'uplift',
   'temperature',
   'moisture',
+  'precipitation',
+  'seasons',
   'faces',
 ] as const;
 export type ViewMode = (typeof VIEW_MODES)[number];
@@ -64,5 +68,11 @@ export function cellColor(mode: ViewMode, world: World | null, c: number, faceCo
       return ramp(TEMPERATURE_RAMP, m.temperature[c]);
     case 'moisture':
       return land ? ramp(MOISTURE_RAMP, m.moisture[c]) : OCEAN_GRAY;
+    case 'precipitation': {
+      const p = ramp(PRECIPITATION_RAMP, m.precipitation[c]);
+      return land ? p : [p[0] * 0.5, p[1] * 0.5, p[2] * 0.55];
+    }
+    case 'seasons':
+      return ramp(SEASONS_RAMP, m.temperatureRange[c]);
   }
 }

@@ -8,7 +8,8 @@
  */
 import { CubeGrid } from '../core/cubeGrid';
 import { rng } from '../core/rng';
-import { computeBiomes, computeClimate } from './biomes';
+import { computeBiomes } from './biomes';
+import { computeClimate } from './climate';
 import { classifyBoundaries } from './boundaries';
 import { continentalCrust, layoutContinents } from './continents';
 import { computeElevation, computeUplift } from './elevation';
@@ -28,8 +29,15 @@ export interface WorldMaps {
   height: Float32Array;
   /** Annual mean temperature (°C). */
   temperature: Float32Array;
-  /** Relative moisture 0..1. */
+  /** Seasonal half-range: (warmest month − coldest month) / 2 (K). */
+  temperatureRange: Float32Array;
+  /** Annual precipitation (mm/yr). */
+  precipitation: Float32Array;
+  /** Relative moisture 0..1 (0.5 × precipitation / potential evapotranspiration). */
   moisture: Float32Array;
+  /** Prevailing surface wind, east and north components. */
+  windEast: Float32Array;
+  windNorth: Float32Array;
   /** Biome per cell. */
   biome: Uint8Array;
 }
@@ -147,7 +155,11 @@ export function generateWorld(params: PlanetParams, options: GenerateOptions): W
       uplift,
       height: h,
       temperature: climate.temperature,
+      temperatureRange: climate.temperatureRange,
+      precipitation: climate.precipitation,
       moisture: climate.moisture,
+      windEast: climate.windEast,
+      windNorth: climate.windNorth,
       biome,
     },
     info: {
