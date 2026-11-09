@@ -5,8 +5,9 @@
  */
 export { GlobeScene } from './globeScene';
 export type { GlobeSceneOptions } from './globeScene';
+export { GlobeMesh, VIEW_MODES } from './globeMesh';
+export type { ViewMode } from './globeMesh';
 export { OrbitCamera, attachOrbitInput, DEFAULT_ORBIT_LIMITS } from './orbitCamera';
-export { CubeSphereMesh, debugFaceColors } from './cubeSphereMesh';
 export { buildCubeSphereArrays } from './cubeSphereGeometry';
 export {
   probeWebGpu,

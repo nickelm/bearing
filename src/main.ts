@@ -1,9 +1,13 @@
 import './style.css';
 import { WebGPURenderer } from 'three/webgpu';
+import { CubeGrid } from './core/cubeGrid';
 import { rng } from './core/rng';
-import { DEG, KM, PLANET_RADIUS } from './core/units';
-import { DEFAULT_PLANET_PARAMS } from './worldgen';
+import { DEG, KM } from './core/units';
+import { DEFAULT_PLANET_PARAMS } from './worldgen/params';
+import type { PlanetParams } from './worldgen/params';
 import { GlobeScene } from './render/globeScene';
+import { VIEW_MODES } from './render/globeMesh';
+import type { ViewMode } from './render/globeMesh';
 import { runComputeSmokeTest } from './render/computeSmokeTest';
 import {
   isOnWebGpuBackend,
@@ -11,10 +15,12 @@ import {
   showFatalError,
   showWebGpuRequired,
 } from './render/webgpuSupport';
-import { DebugGui } from './ui/debugGui';
+import { DebugGui, RESOLUTIONS } from './ui/debugGui';
+import type { ViewGuiParams, WorldGuiParams } from './ui/debugGui';
 import { FrameTimeOverlay } from './ui/frameTimeOverlay';
 import { PING_STREAM } from './workers/protocol';
 import type { FromSimWorker, ToSimWorker } from './workers/protocol';
+import { GenerationCancelled, WorldgenClient } from './workers/worldgenClient';
 
 async function main(): Promise<void> {
   const problem = await probeWebGpu();
@@ -37,52 +43,109 @@ async function main(): Promise<void> {
     return;
   }
 
-  const params = {
-    // ?seed=<integer or any string> selects a world; otherwise use the default.
-    seed: new URLSearchParams(location.search).get('seed') ?? String(DEFAULT_PLANET_PARAMS.seed),
-    subdivisions: 64,
-    wireframe: true,
+  // URL parameters: ?seed=<integer or text>&res=<cells per face edge>
+  const query = new URLSearchParams(location.search);
+  const queryRes = Number(query.get('res'));
+  const worldParams: WorldGuiParams = {
+    seed: query.get('seed') ?? String(DEFAULT_PLANET_PARAMS.seed),
+    resolution: (RESOLUTIONS as readonly number[]).includes(queryRes) ? queryRes : 256,
+    plateCount: DEFAULT_PLANET_PARAMS.plateCount,
+    oceanFraction: DEFAULT_PLANET_PARAMS.oceanFraction,
+    reliefScale: Number(DEFAULT_PLANET_PARAMS.reliefScale.toFixed(3)),
+    temperatureOffset: DEFAULT_PLANET_PARAMS.temperatureOffset,
+    moistureScale: DEFAULT_PLANET_PARAMS.moistureScale,
+  };
+  const viewParams: ViewGuiParams = { mode: 'biome', exaggeration: 10, wireframe: false };
+
+  let grid = new CubeGrid(worldParams.resolution);
+  const globe = new GlobeScene(renderer, { radius: DEFAULT_PLANET_PARAMS.radius, grid });
+  globe.globe.setFaceSeed(worldParams.seed);
+  globe.globe.setExaggeration(viewParams.exaggeration);
+
+  const worldgen = new WorldgenClient();
+  let generation = 0;
+
+  const regenerate = async () => {
+    const token = ++generation;
+    const params: PlanetParams = {
+      ...DEFAULT_PLANET_PARAMS,
+      seed: worldParams.seed,
+      plateCount: worldParams.plateCount,
+      oceanFraction: worldParams.oceanFraction,
+      reliefScale: worldParams.reliefScale,
+      temperatureOffset: worldParams.temperatureOffset,
+      moistureScale: worldParams.moistureScale,
+    };
+    const resolution = worldParams.resolution;
+    gui.status.generation = 'starting';
+    pingWorker(worldParams.seed);
+    const url = new URL(location.href);
+    url.searchParams.set('seed', worldParams.seed);
+    url.searchParams.set('res', String(resolution));
+    history.replaceState(null, '', url);
+    const t0 = performance.now();
+    try {
+      const world = await worldgen.generate(params, resolution, (stage, f) => {
+        if (token === generation) gui.status.generation = `${stage} (${Math.round(f * 100)}%)`;
+      });
+      if (token !== generation) return;
+      if (grid.n !== resolution) {
+        grid = new CubeGrid(resolution);
+        globe.globe.setGrid(grid);
+      }
+      globe.globe.setFaceSeed(worldParams.seed);
+      globe.globe.setWorld(world);
+      const total = performance.now() - t0;
+      gui.status.generation = `done in ${(total / 1000).toFixed(1)} s`;
+      console.info(
+        `World ${worldParams.seed} @ ${resolution}: land ${(world.info.landFraction * 100).toFixed(1)}%, ` +
+          `heights ${world.info.minHeight.toFixed(0)}..${world.info.maxHeight.toFixed(0)} m, ` +
+          `continents ${((world.info.continentSeparation / Math.PI) * 180).toFixed(1)}° apart`,
+      );
+      console.table(world.info.timings.map((t) => ({ stage: t.stage, ms: Math.round(t.ms) })));
+    } catch (err) {
+      if (token !== generation) return;
+      if (err instanceof GenerationCancelled) {
+        gui.status.generation = 'cancelled';
+      } else {
+        gui.status.generation = 'error (see console)';
+        console.error(err);
+      }
+    }
   };
 
-  const globe = new GlobeScene(renderer, {
-    radius: PLANET_RADIUS,
-    subdivisions: params.subdivisions,
-    seed: params.seed,
-  });
-  globe.globe.wireframe = params.wireframe;
-
-  const gui = new DebugGui(params, {
-    regenerate: (p) => {
-      globe.globe.recolor(p.seed);
-      pingWorker(p.seed);
+  const gui = new DebugGui(worldParams, viewParams, VIEW_MODES, {
+    regenerate: () => void regenerate(),
+    cancel: () => worldgen.cancel(),
+    viewChanged: (v) => {
+      globe.globe.setViewMode(v.mode as ViewMode);
+      globe.globe.wireframe = v.wireframe;
     },
-    setSubdivisions: (n) => globe.globe.setSubdivisions(n, params.seed),
-    setWireframe: (on) => (globe.globe.wireframe = on),
+    shapeChanged: (v) => globe.globe.setExaggeration(v.exaggeration),
   });
   gui.status.backend = 'WebGPU';
 
   const overlay = new FrameTimeOverlay();
 
-  // Sim worker stub: confirm bundling and cross-context determinism.
-  const worker = new Worker(new URL('./workers/sim.worker.ts', import.meta.url), {
+  // Sim worker stub: confirms bundling and cross-context determinism.
+  const simWorker = new Worker(new URL('./workers/sim.worker.ts', import.meta.url), {
     type: 'module',
   });
   let expected = 0;
   const pingWorker = (seed: string) => {
     expected = rng(seed, PING_STREAM).nextUint32();
     gui.status.worker = 'pending';
-    worker.postMessage({ type: 'ping', seed } satisfies ToSimWorker);
+    simWorker.postMessage({ type: 'ping', seed } satisfies ToSimWorker);
   };
-  worker.onmessage = (e: MessageEvent<FromSimWorker>) => {
+  simWorker.onmessage = (e: MessageEvent<FromSimWorker>) => {
     const ok = e.data.value === expected;
     gui.status.worker = ok ? 'ok (deterministic)' : 'MISMATCH';
     if (!ok) console.error('Sim worker RNG mismatch', e.data.value, expected);
   };
-  worker.onerror = (e) => {
+  simWorker.onerror = (e) => {
     gui.status.worker = 'error';
     console.error('Sim worker error', e);
   };
-  pingWorker(params.seed);
 
   runComputeSmokeTest(renderer)
     .then((ok) => (gui.status.compute = ok ? 'ok' : 'WRONG RESULT'))
@@ -94,6 +157,8 @@ async function main(): Promise<void> {
   const onResize = () => globe.resize(window.innerWidth, window.innerHeight);
   window.addEventListener('resize', onResize);
   onResize();
+
+  void regenerate();
 
   let last = performance.now();
   await renderer.setAnimationLoop((now) => {

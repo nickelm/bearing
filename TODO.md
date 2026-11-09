@@ -29,12 +29,13 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [x] Uplift field: continental collision ranges, trenches and island arcs, mid-ocean ridges, with distance-to-boundary falloff
 - [x] Base elevation from crust type plus uplift, scaled by `reliefScale` (decision 14); sea level set at the `oceanFraction` height percentile
 - [x] Provisional climate (temperature from latitude and altitude, banded moisture, no seasons) and a stylized biome palette
-- [ ] Globe material: displace by height (with an exaggeration slider) and color by biome, replacing the debug face colors
-- [ ] Debug views: plate IDs, boundary types, uplift
-- [ ] Run generation in a worker with transferable typed arrays; per-stage progress UI and cancel
-- [ ] Parameter sliders (plate count, ocean fraction, relief scale, temperature offset, moisture scale) driving regeneration
+- [x] Globe mesh on the cell grid: seam-free averaged heights/normals/colors, exaggeration slider, biome coloring (CPU mesh; GPU tiles in M2)
+- [x] Debug views: biome, height, plates, boundaries, crust, uplift, temperature, moisture, cube faces
+- [x] Run generation in a worker with transferable typed arrays; per-stage progress UI and cancel
+- [x] Parameter sliders (plate count, ocean fraction, relief scale, temperature offset, moisture scale) driving regeneration
 - [x] Determinism tests: same seed gives the same height hash; changing one stage's parameters leaves other streams untouched
-- [ ] Per-stage timing log
+- [x] Per-stage timing log
+- [ ] Owner review in the browser: tune continent shapes, range widths and biome palette from feedback
 
 ## Milestone 2: Erosion, rivers, tiles, LOD
 

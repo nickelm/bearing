@@ -47,6 +47,12 @@ export class OrbitCamera {
   near: Meters = 1;
   far: Meters = 1;
 
+  /**
+   * Highest displayed terrain above the reference sphere (including any
+   * exaggeration). Keeps the camera above it and widens the clip range.
+   */
+  terrainMaxHeight: Meters = 0;
+
   private readonly east = new Vec3d();
   private readonly north = new Vec3d();
   private readonly radial = new Vec3d();
@@ -80,6 +86,7 @@ export class OrbitCamera {
   /** Eases altitude toward the zoom target and recomputes eye, orientation and clip planes. */
   update(dt: number): void {
     // Exponential approach in log space: the same feel at 10 km and 5,000 km.
+    this.targetAltitude = this.clampAltitude(this.targetAltitude);
     const t = dt > 0 ? 1 - Math.exp(-dt * 12) : 1;
     this.altitude = Math.exp(
       Math.log(this.altitude) + (Math.log(this.targetAltitude) - Math.log(this.altitude)) * t,
@@ -95,16 +102,24 @@ export class OrbitCamera {
     this.forward.set(0, 0, 0).addScaled(this.radial, -c).addScaled(this.north, s);
     this.up.set(0, 0, 0).addScaled(this.radial, s).addScaled(this.north, c);
 
-    // No surface point is closer than the altitude, so half of it is a safe near plane.
-    // The horizon distance is the farthest visible surface point.
-    // TODO(M2): revisit once terrain rises above the reference sphere.
+    // No surface point is closer than (altitude − highest terrain), so half of that is a
+    // safe near plane. The farthest visible surface point is the sphere's horizon plus the
+    // distance at which the tallest terrain beyond it still pokes above it.
+    // TODO(M2): replace with a terrain-aware ground clamp once LOD terrain exists.
     const h = this.altitude;
-    this.near = 0.5 * h;
-    this.far = 1.05 * Math.sqrt(h * (2 * this.radius + h));
+    const R = this.radius;
+    const t0 = Math.max(0, this.terrainMaxHeight);
+    this.near = Math.max(1, 0.5 * (h - t0));
+    this.far = 1.05 * (Math.sqrt(h * (2 * R + h)) + Math.sqrt(t0 * (2 * R + t0)));
+  }
+
+  /** Lowest allowed altitude: the configured minimum, but at least 2 km above the highest terrain. */
+  get minAltitude(): Meters {
+    return Math.max(this.limits.minAltitude, Math.max(0, this.terrainMaxHeight) + 2000);
   }
 
   private clampAltitude(a: Meters): Meters {
-    return clamp(a, this.limits.minAltitude, this.limits.maxAltitude);
+    return clamp(a, Math.min(this.minAltitude, this.limits.maxAltitude), this.limits.maxAltitude);
   }
 }
 

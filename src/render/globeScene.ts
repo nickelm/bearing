@@ -11,24 +11,23 @@
  */
 import { AmbientLight, DirectionalLight, PerspectiveCamera, Scene } from 'three/webgpu';
 import type { WebGPURenderer } from 'three/webgpu';
-import type { WorldSeed } from '../core/rng';
+import type { CubeGrid } from '../core/cubeGrid';
 import { Vec3d } from '../core/vec3d';
-import { CubeSphereMesh } from './cubeSphereMesh';
+import { GlobeMesh } from './globeMesh';
 import { OrbitCamera, attachOrbitInput } from './orbitCamera';
 
 const PLANET_CENTER = new Vec3d(0, 0, 0);
 
 export interface GlobeSceneOptions {
   radius: number;
-  subdivisions: number;
-  seed: WorldSeed;
+  grid: CubeGrid;
 }
 
 export class GlobeScene {
   readonly scene = new Scene();
   readonly camera: PerspectiveCamera;
   readonly orbit: OrbitCamera;
-  readonly globe: CubeSphereMesh;
+  readonly globe: GlobeMesh;
   private readonly detachInput: () => void;
   private readonly scratch = new Vec3d();
 
@@ -38,7 +37,7 @@ export class GlobeScene {
   ) {
     this.camera = new PerspectiveCamera(45, 1, 1, 2);
     this.orbit = new OrbitCamera(options.radius);
-    this.globe = new CubeSphereMesh(options.radius, options.subdivisions, options.seed);
+    this.globe = new GlobeMesh(options.grid, options.radius);
     this.scene.add(this.globe.group);
 
     // Light directions are translation-invariant, so camera-relative offsets do not affect them.
@@ -62,6 +61,7 @@ export class GlobeScene {
   /** Advances camera easing and renders one frame. `dt` is real seconds since the last frame. */
   render(dt: number): void {
     const o = this.orbit;
+    o.terrainMaxHeight = this.globe.maxDisplayedHeight;
     o.update(dt);
 
     // Camera at the origin, oriented from float64 vectors.

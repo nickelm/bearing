@@ -1,16 +1,28 @@
 /**
- * lil-gui debug panel. Holds world parameters (only the seed for now), debug
- * view toggles and read-only status values.
+ * lil-gui debug panel: world parameters, generation control, debug view
+ * options and read-only status values.
  */
 import GUI from 'lil-gui';
 
-export interface DebugGuiParams {
+export interface WorldGuiParams {
   seed: string;
-  subdivisions: number;
+  /** Cells per cube-face edge. */
+  resolution: number;
+  plateCount: number;
+  oceanFraction: number;
+  reliefScale: number;
+  temperatureOffset: number;
+  moistureScale: number;
+}
+
+export interface ViewGuiParams {
+  mode: string;
+  exaggeration: number;
   wireframe: boolean;
 }
 
 export interface DebugGuiStatus {
+  generation: string;
   altitudeKm: number;
   latDeg: number;
   lonDeg: number;
@@ -21,14 +33,18 @@ export interface DebugGuiStatus {
 }
 
 export interface DebugGuiCallbacks {
-  regenerate(params: DebugGuiParams): void;
-  setSubdivisions(n: number): void;
-  setWireframe(on: boolean): void;
+  regenerate(): void;
+  cancel(): void;
+  viewChanged(view: ViewGuiParams): void;
+  shapeChanged(view: ViewGuiParams): void;
 }
+
+export const RESOLUTIONS = [64, 128, 256, 512] as const;
 
 export class DebugGui {
   readonly gui = new GUI({ title: 'Bearing' });
   readonly status: DebugGuiStatus = {
+    generation: 'idle',
     altitudeKm: 0,
     latDeg: 0,
     lonDeg: 0,
@@ -39,36 +55,51 @@ export class DebugGui {
   };
 
   constructor(
-    readonly params: DebugGuiParams,
+    readonly world: WorldGuiParams,
+    readonly view: ViewGuiParams,
+    viewModes: readonly string[],
     callbacks: DebugGuiCallbacks,
   ) {
-    const world = this.gui.addFolder('World');
-    world.add(params, 'seed').name('Seed');
-    world.add({ regenerate: () => callbacks.regenerate(params) }, 'regenerate').name('Regenerate');
-    world
-      .add(
-        {
-          randomize: () => {
-            params.seed = randomSeed();
-            this.gui.controllersRecursive().forEach((c) => c.updateDisplay());
-            callbacks.regenerate(params);
-          },
-        },
-        'randomize',
-      )
-      .name('Random seed');
+    const regen = () => callbacks.regenerate();
 
-    const view = this.gui.addFolder('Debug view');
-    view
-      .add(params, 'subdivisions', 1, 256, 1)
-      .name('Face subdivisions')
-      .onFinishChange((n: number) => callbacks.setSubdivisions(n));
-    view
-      .add(params, 'wireframe')
+    const w = this.gui.addFolder('World');
+    w.add(world, 'seed').name('Seed').onFinishChange(regen);
+    w.add({ regenerate: regen }, 'regenerate').name('Regenerate');
+    w.add(
+      {
+        randomize: () => {
+          world.seed = randomSeed();
+          this.refresh();
+          regen();
+        },
+      },
+      'randomize',
+    ).name('Random seed');
+    w.add({ cancel: () => callbacks.cancel() }, 'cancel').name('Cancel generation');
+    w.add(world, 'resolution', [...RESOLUTIONS])
+      .name('Cells per face edge')
+      .onFinishChange(regen);
+    w.add(world, 'plateCount', 6, 40, 1).name('Plates').onFinishChange(regen);
+    w.add(world, 'oceanFraction', 0.4, 0.9, 0.01).name('Ocean fraction').onFinishChange(regen);
+    w.add(world, 'reliefScale', 0.05, 1, 0.005).name('Relief scale').onFinishChange(regen);
+    w.add(world, 'temperatureOffset', -20, 20, 0.5)
+      .name('Temperature offset (°C)')
+      .onFinishChange(regen);
+    w.add(world, 'moistureScale', 0.2, 2, 0.05).name('Moisture scale').onFinishChange(regen);
+
+    const v = this.gui.addFolder('View');
+    v.add(view, 'mode', [...viewModes])
+      .name('Color by')
+      .onChange(() => callbacks.viewChanged(view));
+    v.add(view, 'exaggeration', 1, 40, 1)
+      .name('Height exaggeration')
+      .onFinishChange(() => callbacks.shapeChanged(view));
+    v.add(view, 'wireframe')
       .name('Wireframe')
-      .onChange((on: boolean) => callbacks.setWireframe(on));
+      .onChange(() => callbacks.viewChanged(view));
 
     const st = this.gui.addFolder('Status');
+    st.add(this.status, 'generation').name('Generation').disable().listen();
     st.add(this.status, 'altitudeKm').name('Altitude (km)').decimals(1).disable().listen();
     st.add(this.status, 'latDeg').name('Latitude (°)').decimals(3).disable().listen();
     st.add(this.status, 'lonDeg').name('Longitude (°)').decimals(3).disable().listen();
@@ -76,6 +107,10 @@ export class DebugGui {
     st.add(this.status, 'backend').name('Backend').disable().listen();
     st.add(this.status, 'compute').name('GPU compute').disable().listen();
     st.add(this.status, 'worker').name('Sim worker').disable().listen();
+  }
+
+  refresh(): void {
+    this.gui.controllersRecursive().forEach((c) => c.updateDisplay());
   }
 }
 

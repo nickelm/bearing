@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { buildCubeSphereArrays } from '../src/render/cubeSphereGeometry';
+import { buildCornerCells, buildCubeSphereArrays } from '../src/render/cubeSphereGeometry';
+import { CubeGrid } from '../src/core/cubeGrid';
 import { PLANET_RADIUS } from '../src/core/units';
 
 describe('cube-sphere geometry', () => {
@@ -30,5 +31,38 @@ describe('cube-sphere geometry', () => {
       const nz = e1[0]! * e2[1]! - e1[1]! * e2[0]!;
       expect(nx * p[a]! + ny * p[a + 1]! + nz * p[a + 2]!).toBeGreaterThan(0);
     }
+  });
+});
+
+describe('corner cells', () => {
+  const n = 12;
+  const grid = new CubeGrid(n);
+  const lattice = buildCubeSphereArrays(n, 1);
+  const corners = buildCornerCells(grid);
+
+  it('gives 4 cells per vertex, or 3 at the 8 cube corners', () => {
+    const vertexCount = lattice.normals.length / 3;
+    let threes = 0;
+    for (let v = 0; v < vertexCount; v++) {
+      const list = Array.from(corners.subarray(v * 4, v * 4 + 4)).filter((c) => c >= 0);
+      if (list.length === 3) threes++;
+      else expect(list.length).toBe(4);
+    }
+    // Each cube corner appears once on each of its 3 faces.
+    expect(threes).toBe(8 * 3);
+  });
+
+  it('assigns identical corner lists to duplicated seam vertices', () => {
+    const groups = new Map<string, string>();
+    const d = lattice.normals;
+    for (let v = 0; v < d.length / 3; v++) {
+      const key = [d[v * 3]!, d[v * 3 + 1]!, d[v * 3 + 2]!].map((x) => x.toFixed(5)).join(',');
+      const list = Array.from(corners.subarray(v * 4, v * 4 + 4)).join(',');
+      const seen = groups.get(key);
+      if (seen === undefined) groups.set(key, list);
+      else expect(list).toBe(seen);
+    }
+    // 6(n+1)² lattice vertices collapse to 6n² + 2 distinct sphere points.
+    expect(groups.size).toBe(6 * n * n + 2);
   });
 });

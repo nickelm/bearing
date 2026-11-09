@@ -8,6 +8,7 @@
  */
 import { CUBE_FACE_COUNT, cubeFaceUvToDirection } from '../core/coords';
 import type { CubeFace } from '../core/coords';
+import type { CubeGrid } from '../core/cubeGrid';
 import { Vec3d } from '../core/vec3d';
 
 export interface CubeSphereArrays {
@@ -72,3 +73,38 @@ export function buildCubeSphereArrays(subdivisions: number, radius: number): Cub
   }
   return { positions, normals, faces, uvs, indices };
 }
+
+/**
+ * For each lattice vertex (same order as buildCubeSphereArrays), the grid
+ * cells sharing that corner: up to 4, sorted ascending and padded with −1.
+ * Three cells meet at a cube corner. Vertices duplicated on face edges get
+ * identical lists on every face, which keeps averaged values seam-free.
+ */
+export function buildCornerCells(grid: CubeGrid): Int32Array {
+  const n = grid.n;
+  const corners = new Int32Array(CUBE_FACE_COUNT * (n + 1) * (n + 1) * 4).fill(-1);
+  const found: number[] = [];
+  let v = 0;
+  for (let face = 0; face < CUBE_FACE_COUNT; face++) {
+    for (let j = 0; j <= n; j++) {
+      for (let i = 0; i <= n; i++) {
+        found.length = 0;
+        for (const [di, dj] of CORNER_QUADRANTS) {
+          const cell = grid.cellAtFaceCoords(face, i + di, j + dj);
+          if (!found.includes(cell)) found.push(cell);
+        }
+        found.sort((a, b) => a - b);
+        for (let k = 0; k < found.length; k++) corners[v * 4 + k] = found[k]!;
+        v++;
+      }
+    }
+  }
+  return corners;
+}
+
+const CORNER_QUADRANTS = [
+  [-0.5, -0.5],
+  [0.5, -0.5],
+  [-0.5, 0.5],
+  [0.5, 0.5],
+] as const;

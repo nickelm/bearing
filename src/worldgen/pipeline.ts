@@ -47,6 +47,8 @@ export interface WorldInfo {
   secondContinent: [number, number, number];
   continentSeparation: number;
   seaLevelReference: number;
+  /** Multiplier from reference to physical elevation (decision 14). */
+  reliefScale: number;
   minHeight: number;
   maxHeight: number;
   /** Area fraction above sea level. */
@@ -153,6 +155,7 @@ export function generateWorld(params: PlanetParams, options: GenerateOptions): W
       secondContinent: [layout.second.x, layout.second.y, layout.second.z],
       continentSeparation: layout.separation,
       seaLevelReference: elevation.seaLevelReference,
+      reliefScale: params.reliefScale,
       minHeight,
       maxHeight,
       landFraction: landArea / totalArea,
