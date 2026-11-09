@@ -4,15 +4,16 @@ Guidance for Claude Code sessions in this repository. `docs/design.md` is the so
 
 ## Commands
 
-| Task                 | Command                                     |
-| -------------------- | ------------------------------------------- |
-| Dev server           | `npm run dev`                               |
-| Unit tests           | `npm test` (watch: `npm run test:watch`)    |
-| Type check           | `npm run typecheck`                         |
-| Lint                 | `npm run lint`                              |
-| Everything but build | `npm run check`                             |
-| Production build     | `npm run build` (runs the type check first) |
-| Format               | `npm run format`                            |
+| Task                     | Command                                                     |
+| ------------------------ | ----------------------------------------------------------- |
+| Dev server               | `npm run dev`                                               |
+| Unit tests               | `npm test` (watch: `npm run test:watch`)                    |
+| Type check               | `npm run typecheck`                                         |
+| Lint                     | `npm run lint`                                              |
+| Everything but build     | `npm run check`                                             |
+| Production build         | `npm run build` (runs the type check first)                 |
+| Format                   | `npm run format`                                            |
+| Render world maps to PNG | `npm run maps` (env: `SEED`, `RES`, `MODES`) → `tools/out/` |
 
 ## Directory map
 
@@ -27,6 +28,7 @@ src/ui/             lil-gui debug panel, overlays, time controls
 src/workers/        worker entry points and message protocols
 src/main.ts         app entry: WebGPU checks, renderer, scene, GUI
 tests/              Vitest unit tests (node environment, no GPU)
+tools/              offline tools (map preview PNGs); run via vitest.tools.config.ts
 TODO.md             milestone task list
 ```
 
@@ -76,6 +78,7 @@ Promotion expands a unit deterministically from its seed and current strength. D
 - Record any architectural decision, or any deviation from `docs/design.md`, in `docs/decisions.md` with the date, the decision and the reason.
 - Run `npm test` and `npm run typecheck` (or `npm run check`) before declaring a task complete.
 - Prefer small, reviewable commits with descriptive messages.
+- You cannot see the WebGPU view. To inspect generated worlds, run `npm run maps` and read the PNGs in `tools/out/` (equirectangular map plus both polar caps, any view mode).
 - When a task produces something visual, tell the user what they should see and how to check it in the browser (`npm run dev`, which GUI controls to use, and what would indicate a bug).
 
 ## Tooling notes

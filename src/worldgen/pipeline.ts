@@ -46,6 +46,8 @@ export interface WorldInfo {
   mainContinent: [number, number, number];
   secondContinent: [number, number, number];
   continentSeparation: number;
+  /** Shortest gap between the two continent ellipses before coastline noise (radians). */
+  nominalGap: number;
   seaLevelReference: number;
   /** Multiplier from reference to physical elevation (decision 14). */
   reliefScale: number;
@@ -154,6 +156,7 @@ export function generateWorld(params: PlanetParams, options: GenerateOptions): W
       mainContinent: [layout.main.x, layout.main.y, layout.main.z],
       secondContinent: [layout.second.x, layout.second.y, layout.second.z],
       continentSeparation: layout.separation,
+      nominalGap: layout.nominalGap,
       seaLevelReference: elevation.seaLevelReference,
       reliefScale: params.reliefScale,
       minHeight,

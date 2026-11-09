@@ -21,6 +21,7 @@ npm run format       # format with Prettier
 npm run check        # typecheck + lint + test
 npm run build        # type check and production build into dist/
 npm run preview      # serve the production build
+npm run maps         # render world map PNGs to tools/out/ (SEED, RES, MODES env vars)
 ```
 
 Append `?seed=<number or text>` to the URL to open a specific world.

@@ -17,7 +17,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "check": "npm run typecheck && npm run lint && npm test"
+    "check": "npm run typecheck && npm run lint && npm test",
+    "maps": "vitest run --config vitest.tools.config.ts"
   },
   "dependencies": {
     "lil-gui": "^0.21.0",

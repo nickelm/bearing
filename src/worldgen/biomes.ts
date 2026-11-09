@@ -70,6 +70,10 @@ export interface Climate {
 
 /** Lapse rate in K per reference meter. */
 const LAPSE_RATE = 6.5 / 1000;
+/** Amplitude (radians) of the noise that bends latitude for temperature and moisture. */
+// fBm rarely exceeds ±0.5, so the typical bend is about a third of these values.
+const TEMPERATURE_LATITUDE_WARP = 0.38; // ≈ 22°
+const MOISTURE_LATITUDE_WARP = 0.4; // ≈ 23°
 
 /** Sea-level annual mean temperature at a latitude (°C). */
 export function seaLevelTemperature(lat: number): number {
@@ -86,21 +90,51 @@ export function computeClimate(
   const temperature = new Float32Array(n);
   const moisture = new Float32Array(n);
   const noise = new Noise3(r.fork('moisture-noise'));
+  const tNoise = new Noise3(r.fork('temperature-noise'));
   const ocean = new Uint8Array(n);
   for (let c = 0; c < n; c++) ocean[c] = height[c] <= 0 ? 1 : 0;
   // Distance inland from the coast, out to 2,500 km.
   const inland = distanceFromSources(grid, ocean, (2500 * KM) / params.radius);
+  // Distance offshore from land, out to 2,500 km.
+  const land = new Uint8Array(n);
+  for (let c = 0; c < n; c++) land[c] = 1 - ocean[c];
+  const offshore = distanceFromSources(grid, land, (2500 * KM) / params.radius);
   const x = new Vec3d();
   for (let c = 0; c < n; c++) {
     grid.center(c, x);
     const lat = Math.asin(clamp(x.y, -1, 1));
-    const refAlt = Math.max(0, height[c]) / params.reliefScale;
-    temperature[c] = seaLevelTemperature(lat) + params.temperatureOffset - LAPSE_RATE * refAlt;
-
-    const band = 0.55 + 0.35 * Math.cos(6 * lat) - 0.15 * Math.abs(Math.sin(lat));
     const d = inland.angle[c] === Infinity ? 2500 * KM : inland.angle[c] * params.radius;
+
+    // Temperature: latitude bent by large-scale noise (stand-in for ocean currents and
+    // planetary waves) so isotherms, ice edges and biome belts are not circles.
+    const latWarpT =
+      TEMPERATURE_LATITUDE_WARP * tNoise.fbm(x.x * 1.1, x.y * 1.1, x.z * 1.1, 3) +
+      0.35 * TEMPERATURE_LATITUDE_WARP * tNoise.fbm(x.x * 3.5 + 7.3, x.y * 3.5, x.z * 3.5, 3);
+    const latT = clamp(Math.abs(lat) + latWarpT, 0, Math.PI / 2);
+    const refAlt = Math.max(0, height[c]) / params.reliefScale;
+    // Continental interiors run colder toward the poles; coasts are moderated by the sea.
+    const interiorChill =
+      ocean[c] === 1 ? 0 : 7 * Math.sin(Math.abs(lat)) * (1 - Math.exp(-d / (600 * KM)));
+    // Open ocean far from land carries heat poleward (stand-in for currents), so sea ice
+    // clings to coasts and enclosed seas instead of forming a disc around the pole.
+    const dOff = offshore.angle[c] === Infinity ? 2500 * KM : offshore.angle[c] * params.radius;
+    const oceanWarmth =
+      ocean[c] === 1 ? 9 * Math.sin(Math.abs(lat)) * (1 - Math.exp(-dOff / (500 * KM))) : 0;
+    temperature[c] =
+      seaLevelTemperature(latT) +
+      2.5 * tNoise.fbm(x.x * 6 + 3.1, x.y * 6, x.z * 6, 3) -
+      interiorChill +
+      oceanWarmth +
+      params.temperatureOffset -
+      LAPSE_RATE * refAlt;
+
+    // Moisture: latitude bands bent by their own warp, damped inland, plus noise.
+    const latM = lat + MOISTURE_LATITUDE_WARP * noise.fbm(x.x * 1.4 + 5.7, x.y * 1.4, x.z * 1.4, 3);
+    const band = 0.55 + 0.3 * Math.cos(6 * latM) - 0.15 * Math.abs(Math.sin(latM));
     const continentality = 0.35 + 0.65 * Math.exp(-d / (700 * KM));
-    const jitter = 0.18 * noise.fbm(x.x * 4, x.y * 4, x.z * 4, 4);
+    const jitter =
+      0.2 * noise.fbm(x.x * 3, x.y * 3, x.z * 3, 4) +
+      0.08 * noise.fbm(x.x * 10, x.y * 10, x.z * 10, 3);
     moisture[c] = clamp((band * continentality + jitter) * params.moistureScale, 0, 1);
   }
   return { temperature, moisture };
@@ -121,9 +155,10 @@ export function classifyBiome(
     if (referenceHeightM > -2500) return Biome.Ocean;
     return Biome.DeepOcean;
   }
-  if (temperature < -12) return Biome.IceSheet;
+  // Ice sheets need deep cold: Siberia-like land at −10..−15 °C is tundra, not glacier.
+  if (temperature < -20) return Biome.IceSheet;
   if (referenceHeightM > ALPINE_REFERENCE && temperature < 4) return Biome.Alpine;
-  if (temperature < -3) return Biome.Tundra;
+  if (temperature < -6) return Biome.Tundra;
   if (temperature < 5) return moisture < 0.25 ? Biome.Tundra : Biome.Taiga;
   if (temperature < 18) {
     if (moisture < 0.18) return Biome.ColdDesert;

@@ -60,16 +60,28 @@ describe('generateWorld', () => {
     expect(dry.info.landFraction).toBeCloseTo(0.5, 1);
   });
 
-  it('places the continents nearly antipodal', () => {
-    const a = new Vec3d(...base.info.mainContinent);
-    const b = new Vec3d(...base.info.secondContinent);
-    const sep = Math.acos(a.dot(b));
-    expect(sep).toBeCloseTo(base.info.continentSeparation, 9);
-    expect(sep).toBeGreaterThan(140 * DEG);
-    expect(sep).toBeLessThanOrEqual(178 * DEG + 1e-9);
-    // The main continent's center is on continental crust.
-    expect(base.maps.continentalness[grid.cellOfDirection(a)]).toBeGreaterThan(0);
-    expect(base.maps.continentalness[grid.cellOfDirection(b)]).toBeGreaterThan(0);
+  it('places two temperate continents across an ocean gap', () => {
+    for (const seed of [1983, 7, 42, 'Fulda']) {
+      const w = seed === DEFAULT_PLANET_PARAMS.seed ? base : gen({ seed });
+      const a = new Vec3d(...w.info.mainContinent);
+      const b = new Vec3d(...w.info.secondContinent);
+      const sep = Math.acos(a.dot(b));
+      expect(sep).toBeCloseTo(w.info.continentSeparation, 9);
+      expect(sep).toBeGreaterThanOrEqual(100 * DEG - 1e-9);
+      expect(sep).toBeLessThanOrEqual(178 * DEG + 1e-9);
+      // Ellipse-to-ellipse gap near the middle of the 1,200–1,800 km range.
+      expect(w.info.nominalGap * DEFAULT_PLANET_PARAMS.radius).toBeGreaterThan(1200e3);
+      expect(w.info.nominalGap * DEFAULT_PLANET_PARAMS.radius).toBeLessThan(1800e3);
+      const latA = Math.abs(Math.asin(a.y) / DEG);
+      const latB = Math.abs(Math.asin(b.y) / DEG);
+      expect(latA).toBeGreaterThanOrEqual(32);
+      expect(latA).toBeLessThanOrEqual(45);
+      expect(latB).toBeGreaterThanOrEqual(22);
+      expect(latB).toBeLessThanOrEqual(55);
+      // Both centers are on continental crust.
+      expect(w.maps.continentalness[grid.cellOfDirection(a)]).toBeGreaterThan(0);
+      expect(w.maps.continentalness[grid.cellOfDirection(b)]).toBeGreaterThan(0);
+    }
   });
 
   it('scales relief to the planet', () => {
@@ -119,6 +131,7 @@ describe('helpers', () => {
     expect(classifyBiome(100, 600, 10, 0.5)).toBe(Biome.TemperateForest);
     expect(classifyBiome(100, 600, 0, 0.5)).toBe(Biome.Taiga);
     expect(classifyBiome(500, 3200, 0, 0.5)).toBe(Biome.Alpine);
-    expect(classifyBiome(100, 600, -20, 0.5)).toBe(Biome.IceSheet);
+    expect(classifyBiome(100, 600, -25, 0.5)).toBe(Biome.IceSheet);
+    expect(classifyBiome(100, 600, -12, 0.5)).toBe(Biome.Tundra);
   });
 });

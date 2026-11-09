@@ -24,37 +24,12 @@ import type { CubeGrid } from '../core/cubeGrid';
 import type { WorldSeed } from '../core/rng';
 import type { World } from '../worldgen/pipeline';
 import { buildCornerCells, buildCubeSphereArrays } from './cubeSphereGeometry';
-import {
-  BIOME_COLORS,
-  BOUNDARY_COLORS,
-  HEIGHT_RAMP,
-  MOISTURE_RAMP,
-  TEMPERATURE_RAMP,
-  UPLIFT_RAMP,
-  faceColors,
-  plateColor,
-  ramp,
-  srgbToLinear,
-} from './palette';
-import type { Rgb } from './palette';
+import { cellColor } from './cellColors';
+import type { ViewMode } from './cellColors';
+import { faceColors, srgbToLinear } from './palette';
 
-export const VIEW_MODES = [
-  'biome',
-  'height',
-  'plates',
-  'boundaries',
-  'crust',
-  'uplift',
-  'temperature',
-  'moisture',
-  'faces',
-] as const;
-export type ViewMode = (typeof VIEW_MODES)[number];
-
-const LAND_GRAY: Rgb = [0.55, 0.55, 0.52];
-const OCEAN_GRAY: Rgb = [0.18, 0.22, 0.28];
-const CONTINENTAL: Rgb = [0.72, 0.6, 0.42];
-const OCEANIC: Rgb = [0.15, 0.3, 0.5];
+export { VIEW_MODES } from './cellColors';
+export type { ViewMode } from './cellColors';
 
 export class GlobeMesh {
   readonly group = new Group();
@@ -275,51 +250,12 @@ export class GlobeMesh {
     nor.needsUpdate = true;
   }
 
-  private cellColor(c: number, faces: Rgb[]): Rgb {
-    const w = this.world;
-    if (!w || this.mode === 'faces') return faces[this.grid.faceOf(c)]!;
-    const m = w.maps;
-    const land = m.height[c] > 0;
-    switch (this.mode) {
-      case 'biome':
-        return BIOME_COLORS[m.biome[c]]!;
-      case 'height': {
-        const ref = m.height[c] / this.reliefScale();
-        return ramp(HEIGHT_RAMP, ref);
-      }
-      case 'plates': {
-        const p = plateColor(m.plate[c]);
-        return land ? p : [p[0] * 0.55, p[1] * 0.55, p[2] * 0.65];
-      }
-      case 'boundaries': {
-        const t = m.boundary[c];
-        if (t !== 0) return BOUNDARY_COLORS[t]!;
-        return land ? LAND_GRAY : OCEAN_GRAY;
-      }
-      case 'crust':
-        return m.continentalness[c] > 0 ? CONTINENTAL : OCEANIC;
-      case 'uplift':
-        return ramp(UPLIFT_RAMP, m.uplift[c]);
-      case 'temperature':
-        return ramp(TEMPERATURE_RAMP, m.temperature[c]);
-      case 'moisture':
-        return land ? ramp(MOISTURE_RAMP, m.moisture[c]) : OCEAN_GRAY;
-    }
-  }
-
-  /** reliefScale recovered from the world (height / reference), for reference-elevation ramps. */
-  private reliefScale(): number {
-    const w = this.world;
-    if (!w || w.info.maxHeight <= 0) return 1;
-    return w.info.reliefScale;
-  }
-
   private rebuildColors(): void {
     const grid = this.grid;
     const faces = faceColors(this.faceSeed);
     const cellLinear = new Float32Array(grid.cellCount * 3);
     for (let c = 0; c < grid.cellCount; c++) {
-      const rgb = this.cellColor(c, faces);
+      const rgb = cellColor(this.mode, this.world, c, faces[grid.faceOf(c)]!);
       cellLinear[c * 3] = srgbToLinear(rgb[0]);
       cellLinear[c * 3 + 1] = srgbToLinear(rgb[1]);
       cellLinear[c * 3 + 2] = srgbToLinear(rgb[2]);

@@ -41,7 +41,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ['*.config.{js,ts}'],
+    files: ['*.config.{js,ts}', 'tools/**'],
     languageOptions: { globals: { ...globals.node } },
   },
   // ---- Layering and determinism (see CLAUDE.md, docs/decisions.md) ----

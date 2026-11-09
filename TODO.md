@@ -35,6 +35,8 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [x] Parameter sliders (plate count, ocean fraction, relief scale, temperature offset, moisture scale) driving regeneration
 - [x] Determinism tests: same seed gives the same height hash; changing one stage's parameters leaves other streams untouched
 - [x] Per-stage timing log
+- [x] Offline map preview tool (`npm run maps`) so worlds can be inspected without a browser
+- [x] Review fixes: irregular polar caps, warped climate bands, temperate east–west continents (decisions 20, 21)
 - [ ] Owner review in the browser: tune continent shapes, range widths and biome palette from feedback
 
 ## Milestone 2: Erosion, rivers, tiles, LOD
