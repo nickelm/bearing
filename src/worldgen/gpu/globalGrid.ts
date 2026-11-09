@@ -14,6 +14,8 @@ export class GlobalGrid {
   /** WGSL helpers for this N (prepend to kernels). */
   readonly wgsl: string;
   private readonly maps = new Map<string, { buffer: GPUBuffer; type: MapType }>();
+  /** Most bytes held in maps at any one time. */
+  peakBytes = 0;
 
   constructor(
     readonly gpu: GpuContext,
@@ -43,6 +45,7 @@ export class GlobalGrid {
     if (!m) {
       m = { buffer: this.gpu.storage(this.mapBytes, `grid.${name}`), type };
       this.maps.set(name, m);
+      this.peakBytes = Math.max(this.peakBytes, this.bytes);
     }
     return m.buffer;
   }

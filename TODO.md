@@ -41,7 +41,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 
 ## Milestone 2: Erosion, rivers, tiles, LOD
 
-- [ ] Benchmark erosion memory and time on a global grid at 1024² and 2048² per face; choose the global grid resolution (decision 13)
+- [x] Benchmark erosion memory and time on a global grid at 1024² and 2048² per face; choose the global grid resolution (decision 13): 1024², decision 27 (`tools/bench.preview.ts`)
 - [x] Global grid on the GPU with cross-face neighbor addressing (plain WGSL on a raw device, decision 26; self-tests run in Vitest on Dawn and from the GUI)
 - [ ] Bake global maps into tiles with borders (GPU textures); M1 renders straight from the grid
 - [x] Detail noise stage on the GPU: ridged multifractal amplified by uplift, domain warping on coasts and ridges (upsamples the tectonic grid; `tools/terrain.preview.ts` renders it offline)
