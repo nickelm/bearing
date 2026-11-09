@@ -297,3 +297,22 @@ This replaces the TODO's "local erosion pass" on each tile. The same function ex
 **Date:** 2026-11-09
 **Decision:** Tile synthesis computes a texel's face coordinate as `u = (gx + 0.5) / (256 · 2^L)`, with the integer `gx = x · 256 + tx`. It does not add a fractional offset to the tile origin.
 **Reason:** Two tiles that share a texel then compute bit-identical inputs within a face, so shared border texels agree exactly. Across face seams the same direction comes from different face coordinates, so agreement there is only to within rounding. Skirts cover the difference.
+
+### 26. World-generation kernels are plain WGSL, tested in Node on Dawn
+
+**Date:** 2026-11-09
+**Decision:**
+
+- GPU world-generation kernels are written in plain WGSL and run on a raw `GPUDevice` through `worldgen/gpu/gpuContext.ts`. They do not use TSL compute nodes.
+- In the browser the device is three's own (`renderer.backend.device`), which keeps decision 22. In Vitest and offline tools it comes from Dawn's Node bindings, the `webgpu` dev dependency.
+- GPU tests skip themselves when no adapter is available.
+- Kernel checks are written once as self-tests (`worldgen/gpu/selfTests.ts`). They run in Vitest and from a GUI button in the browser, which catches browser shader compilers that disagree with Dawn.
+- This supersedes part of decision 24: detail tiles do **not** get a TypeScript twin. Seam tests run on the GPU in Vitest. The camera ground clamp reads the CPU copies of resident tiles. How the sim queries terrain will be decided in M6.
+
+**Reason:**
+
+- GPU code can then be tested automatically, rather than only by eye in a browser.
+- WGSL is far easier to write and review than node graphs for kernels the size of stream-power erosion or multi-octave noise.
+- Two implementations of the detail-height function would drift apart.
+
+**Notes (webgpu 0.6.2, Windows):** `queue.onSubmittedWorkDone()` and error scopes used after a buffer has been mapped both crash the Node process. `GpuContext.finish()` waits on a 4-byte readback instead, and errors are collected from the `uncapturederror` event.

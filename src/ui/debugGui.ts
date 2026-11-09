@@ -109,6 +109,33 @@ export class DebugGui {
     st.add(this.status, 'worker').name('Sim worker').disable().listen();
   }
 
+  /**
+   * Adds the Self-tests folder: one status line per test and a button that
+   * runs them all. `run` reports each test's status ('running', 'ok' or a
+   * failure message).
+   */
+  addSelfTests(
+    names: readonly string[],
+    run: (report: (name: string, status: string) => void) => Promise<void>,
+  ): void {
+    const f = this.gui.addFolder('Self-tests');
+    const status: Record<string, string> = {};
+    for (const n of names) status[n] = 'not run';
+    let running = false;
+    f.add(
+      {
+        run: () => {
+          if (running) return;
+          running = true;
+          void run((name, s) => (status[name] = s)).finally(() => (running = false));
+        },
+      },
+      'run',
+    ).name('Run GPU self-tests');
+    for (const n of names) f.add(status, n).disable().listen();
+    f.close();
+  }
+
   refresh(): void {
     this.gui.controllersRecursive().forEach((c) => c.updateDisplay());
   }

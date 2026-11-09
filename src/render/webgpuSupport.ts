@@ -8,20 +8,46 @@
  */
 import type { WebGPURenderer } from 'three/webgpu';
 
-/** Returns null when WebGPU is usable, otherwise a reason string. */
-export async function probeWebGpu(): Promise<string | null> {
+/** Device limits that world generation raises to the adapter's maximum (decision 22). */
+export type RequiredLimits = Record<string, number>;
+
+/**
+ * Returns the device limits to request when WebGPU is usable, otherwise a
+ * reason string. The global grid at 2048² per face needs storage buffers of
+ * about 100 MB, close to the default 128 MB binding limit, so we ask for what
+ * the adapter offers.
+ */
+export async function probeWebGpu(): Promise<{ limits: RequiredLimits } | { problem: string }> {
   if (!('gpu' in navigator) || !navigator.gpu) {
-    return 'This browser does not expose WebGPU (navigator.gpu is undefined).';
+    return { problem: 'This browser does not expose WebGPU (navigator.gpu is undefined).' };
   }
   try {
     const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
     if (!adapter) {
-      return 'WebGPU is present, but no GPU adapter is available. It may be disabled or blocklisted.';
+      return {
+        problem:
+          'WebGPU is present, but no GPU adapter is available. It may be disabled or blocklisted.',
+      };
     }
+    const l = adapter.limits;
+    return {
+      limits: {
+        maxStorageBufferBindingSize: l.maxStorageBufferBindingSize,
+        maxBufferSize: l.maxBufferSize,
+        maxComputeWorkgroupsPerDimension: l.maxComputeWorkgroupsPerDimension,
+        maxStorageBuffersPerShaderStage: l.maxStorageBuffersPerShaderStage,
+      },
+    };
   } catch (err) {
-    return `Requesting a WebGPU adapter failed: ${String(err)}`;
+    return { problem: `Requesting a WebGPU adapter failed: ${String(err)}` };
   }
-  return null;
+}
+
+/** The raw GPUDevice behind three's WebGPU backend. Call after init(). */
+export function rendererDevice(renderer: WebGPURenderer): GPUDevice {
+  const device = (renderer.backend as unknown as { device?: GPUDevice }).device;
+  if (!device) throw new Error('WebGPU backend has no device');
+  return device;
 }
 
 /** True only if the renderer actually ended up on the WebGPU backend. Call after init(). */

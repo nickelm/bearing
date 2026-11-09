@@ -12,10 +12,13 @@ import { runComputeSmokeTest } from './render/computeSmokeTest';
 import {
   isOnWebGpuBackend,
   probeWebGpu,
+  rendererDevice,
   showFatalError,
   showWebGpuRequired,
 } from './render/webgpuSupport';
 import { DebugGui, RESOLUTIONS } from './ui/debugGui';
+import { GpuContext } from './worldgen/gpu/gpuContext';
+import { GPU_SELF_TESTS, runSelfTest } from './worldgen/gpu/selfTests';
 import type { ViewGuiParams, WorldGuiParams } from './ui/debugGui';
 import { FrameTimeOverlay } from './ui/frameTimeOverlay';
 import { PING_STREAM } from './workers/protocol';
@@ -23,14 +26,14 @@ import type { FromSimWorker, ToSimWorker } from './workers/protocol';
 import { GenerationCancelled, WorldgenClient } from './workers/worldgenClient';
 
 async function main(): Promise<void> {
-  const problem = await probeWebGpu();
-  if (problem) {
-    showWebGpuRequired(problem);
+  const probe = await probeWebGpu();
+  if ('problem' in probe) {
+    showWebGpuRequired(probe.problem);
     return;
   }
 
   const container = document.getElementById('app')!;
-  const renderer = new WebGPURenderer({ antialias: true });
+  const renderer = new WebGPURenderer({ antialias: true, requiredLimits: probe.limits });
   renderer.setPixelRatio(window.devicePixelRatio);
   container.appendChild(renderer.domElement);
   await renderer.init();
@@ -124,6 +127,20 @@ async function main(): Promise<void> {
     shapeChanged: (v) => globe.globe.setExaggeration(v.exaggeration),
   });
   gui.status.backend = 'WebGPU';
+
+  // World-generation compute shares three's device (decision 22).
+  const gpu = new GpuContext(rendererDevice(renderer));
+  gui.addSelfTests(
+    GPU_SELF_TESTS.map((t) => t.name),
+    async (report) => {
+      for (const t of GPU_SELF_TESTS) {
+        report(t.name, 'running');
+        const failure = await runSelfTest(gpu, t);
+        report(t.name, failure ?? 'ok');
+        if (failure) console.error(`GPU self-test "${t.name}" failed: ${failure}`);
+      }
+    },
+  );
 
   const overlay = new FrameTimeOverlay();
 
