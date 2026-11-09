@@ -45,8 +45,9 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [x] Global grid on the GPU with cross-face neighbor addressing (plain WGSL on a raw device, decision 26; self-tests run in Vitest on Dawn and from the GUI)
 - [ ] Bake global maps into tiles with borders (GPU textures); M1 renders straight from the grid
 - [x] Detail noise stage on the GPU: ridged multifractal amplified by uplift, domain warping on coasts and ridges (upsamples the tectonic grid; `tools/terrain.preview.ts` renders it offline)
-- [ ] Hydraulic erosion compute pass on the global grid
-- [ ] Thermal erosion compute pass (talus angle)
+- [x] Hydraulic erosion compute pass on the global grid (stream power with rebound toward the tectonic height, Planchon–Darboux routing surface, gathered drainage; decision 23)
+- [x] Thermal erosion compute pass (talus angle; symmetric pairwise exchange, mass-conserving)
+- [ ] Wire the GPU stages into the app: main-thread orchestrator after the worker's tectonic pass, progress UI, downsampled display in the M1 globe
 - [ ] Flow direction and flow accumulation maps
 - [ ] River extraction: threshold the accumulation into vector polylines with a width per segment
 - [x] Climate stage proper: seasonal temperature range from axial tilt, prevailing-wind moisture with rain shadows, Whittaker biomes (replaces the provisional climate)

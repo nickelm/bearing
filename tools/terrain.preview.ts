@@ -18,6 +18,8 @@ import { directionToCubeFace } from '../src/core/coords';
 import type { CubeFaceUv } from '../src/core/coords';
 import { Vec3d } from '../src/core/vec3d';
 import { runDetailStage } from '../src/worldgen/gpu/detailStage';
+import { runErosion } from '../src/worldgen/gpu/erosion';
+import { upsampleMap } from '../src/worldgen/gpu/upsample';
 import { GlobalGrid } from '../src/worldgen/gpu/globalGrid';
 import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
 import { generateWorld } from '../src/worldgen/pipeline';
@@ -208,12 +210,29 @@ it('render terrain previews', async () => {
     seed,
     params.reliefScale,
   );
-  const height = await grid.readF32('height');
+  await grid.readF32('height');
   console.info(`detail ${gres}: ${(performance.now() - t0).toFixed(0)} ms`);
+  let water: Float32Array | undefined;
+  const strength = Number(process.env.EROSION ?? 1);
+  if (strength > 0) {
+    upsampleMap(grid, tres, world.maps.precipitation, 'precipitation');
+    t0 = performance.now();
+    await runErosion(grid, {
+      reliefScale: params.reliefScale,
+      radius: params.radius,
+      erosionStrength: strength,
+    });
+    console.info(`erosion ${gres}: ${(performance.now() - t0).toFixed(0)} ms`);
+    // Drainage overlay: cells draining more than ~2,000 km²·(m/yr).
+    const flow = await grid.readF32('flow');
+    water = new Float32Array(flow.length);
+    for (let c = 0; c < flow.length; c++) water[c] = Math.max(0, Math.log10(flow[c]! + 1e-9) - 3.3);
+  }
+  const height = await grid.readF32('height');
   const [x, y, z] = world.info.mainContinent;
   writeViews(
-    `terrain-${seed}-${gres}`,
-    { n: gres, height },
+    `terrain-${seed}-${gres}-e${strength}`,
+    { n: gres, height, water },
     new Vec3d(x, y, z),
     params.reliefScale,
     params.radius,
