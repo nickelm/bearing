@@ -44,7 +44,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [ ] Benchmark erosion memory and time on a global grid at 1024² and 2048² per face; choose the global grid resolution (decision 13)
 - [x] Global grid on the GPU with cross-face neighbor addressing (plain WGSL on a raw device, decision 26; self-tests run in Vitest on Dawn and from the GUI)
 - [ ] Bake global maps into tiles with borders (GPU textures); M1 renders straight from the grid
-- [ ] Detail noise stage on the GPU: ridged multifractal amplified by uplift, domain warping on coasts and ridges
+- [x] Detail noise stage on the GPU: ridged multifractal amplified by uplift, domain warping on coasts and ridges (upsamples the tectonic grid; `tools/terrain.preview.ts` renders it offline)
 - [ ] Hydraulic erosion compute pass on the global grid
 - [ ] Thermal erosion compute pass (talus angle)
 - [ ] Flow direction and flow accumulation maps

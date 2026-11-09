@@ -22,6 +22,11 @@ export class Noise3 {
     for (let i = 0; i < 512; i++) this.perm[i] = p[i & 255];
   }
 
+  /** The 512-entry permutation table (two copies of a 256 shuffle), e.g. for upload to the GPU. */
+  get permutation(): Readonly<Uint8Array> {
+    return this.perm;
+  }
+
   /** Gradient noise in roughly [−1, 1]; 0 at integer lattice points. */
   noise(x: number, y: number, z: number): number {
     const p = this.perm;

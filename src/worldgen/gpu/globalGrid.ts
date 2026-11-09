@@ -5,7 +5,7 @@
  */
 import { CUBE_FACE_COUNT } from '../../core/coords';
 import type { GpuContext } from './gpuContext';
-import { gridWgsl } from './gridWgsl';
+import { FACE_WGSL, gridWgsl } from './gridWgsl';
 
 export type MapType = 'f32' | 'u32' | 'i32';
 
@@ -20,7 +20,7 @@ export class GlobalGrid {
     readonly n: number,
   ) {
     this.cellCount = CUBE_FACE_COUNT * n * n;
-    this.wgsl = gridWgsl(n);
+    this.wgsl = FACE_WGSL + gridWgsl(n);
   }
 
   /** Bytes per map (all maps are 4 bytes per cell). */

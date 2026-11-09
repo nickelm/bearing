@@ -8,9 +8,12 @@
  */
 import { CubeGrid, NEIGHBOR_OFFSETS } from '../../core/cubeGrid';
 import { neighborCell } from '../../core/faceAdjacency';
+import { Noise3 } from '../../core/noise';
+import { rng } from '../../core/rng';
 import { GlobalGrid } from './globalGrid';
 import { LINEAR_ID_WGSL } from './gpuContext';
 import type { GpuContext } from './gpuContext';
+import { NOISE_WGSL, PERMUTATION_SIZE, packPermutations } from './noiseWgsl';
 
 export interface GpuSelfTest {
   name: string;
@@ -72,9 +75,67 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroups) nwg:
   }
 }
 
+/** GPU noise vs core/noise.ts at seeded random points, two tables to exercise `base`. */
+async function noiseAgreement(gpu: GpuContext): Promise<string | null> {
+  const r = rng('self-test', 'noise');
+  const noises = [new Noise3(r.fork('a')), new Noise3(r.fork('b'))];
+  const count = 4096;
+  const pts = new Float32Array(count * 4);
+  for (let k = 0; k < count; k++) {
+    // Mix of small and large magnitudes, both signs.
+    const scale = k % 2 === 0 ? 3 : 60;
+    pts[k * 4] = r.range(-scale, scale);
+    pts[k * 4 + 1] = r.range(-scale, scale);
+    pts[k * 4 + 2] = r.range(-scale, scale);
+  }
+  const perm = gpu.storageFrom(packPermutations(noises));
+  const inBuf = gpu.storageFrom(pts);
+  const outBuf = gpu.storage(count * 16);
+  try {
+    const code = `${LINEAR_ID_WGSL}
+@group(0) @binding(0) var<storage, read> perm: array<u32>;
+@group(0) @binding(1) var<storage, read> pts: array<vec4f>;
+@group(0) @binding(2) var<storage, read_write> outv: array<vec4f>;
+${NOISE_WGSL}
+@compute @workgroup_size(64)
+fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroups) nwg: vec3u) {
+  let id = linearId(gid, nwg);
+  if (id >= ${count}u) { return; }
+  let q = pts[id].xyz;
+  let base = (id % 2u) * ${PERMUTATION_SIZE}u;
+  outv[id] = vec4f(noise3(q, base), fbm3(q, base, 5, 2.0, 0.5), ridged3(q, base, 4, 2.0, 0.5), 0.0);
+}`;
+    gpu.dispatchLinear(gpu.kernel(code), [perm, inBuf, outBuf], count);
+    const out = new Float32Array(await gpu.read(outBuf));
+    let maxErr = 0;
+    let worst = '';
+    for (let k = 0; k < count; k++) {
+      const n = noises[k % 2]!;
+      const x = pts[k * 4]!;
+      const y = pts[k * 4 + 1]!;
+      const z = pts[k * 4 + 2]!;
+      const want = [n.noise(x, y, z), n.fbm(x, y, z, 5), n.ridged(x, y, z, 4)];
+      for (let a = 0; a < 3; a++) {
+        const e = Math.abs(out[k * 4 + a]! - want[a]!);
+        if (e > maxErr) {
+          maxErr = e;
+          worst = `point ${k} (${x.toFixed(3)}, ${y.toFixed(3)}, ${z.toFixed(3)}) fn ${a}: GPU ${out[k * 4 + a]}, CPU ${want[a]}`;
+        }
+      }
+    }
+    // float32 coordinates near 60 carry ~4e-6 error; noise gradients are O(1) per octave.
+    return maxErr > 2e-4 ? `max error ${maxErr.toExponential(2)} at ${worst}` : null;
+  } finally {
+    perm.destroy();
+    inBuf.destroy();
+    outBuf.destroy();
+  }
+}
+
 export const GPU_SELF_TESTS: GpuSelfTest[] = [
   { name: 'grid addressing (n = 3)', run: (gpu) => gridAddressing(gpu, 3) },
   { name: 'grid addressing (n = 64)', run: (gpu) => gridAddressing(gpu, 64) },
+  { name: 'noise (Perlin, fBm, ridged)', run: noiseAgreement },
 ];
 
 /** Runs one self-test and converts exceptions and device errors into failures. */
