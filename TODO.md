@@ -18,16 +18,17 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 
 ## Milestone 1: Globe skeleton
 
-- [ ] Cube-sphere cell grid: `CubeGrid(resolution)` with cell index ↔ (face, i, j), cell-center directions and cell areas
-- [ ] Neighbor lookup across face seams and corners (4- and 8-neighborhoods), with tests
-- [ ] Tile key type `(face, level, x, y)`: parent/child/neighbor math, texel ↔ direction, string key for streams and caches, with tests (decision 13)
-- [ ] Plate seeding steered into two continental clusters 90–130° apart, with oceanic plates between them (`rng("plates")`)
+- [x] Cube-sphere cell grid: `CubeGrid(resolution)` with cell index ↔ (face, i, j), cell-center directions and cell areas
+- [x] Neighbor lookup across face seams and corners (4- and 8-neighborhoods), with tests
+- [x] Tile key type `(face, level, x, y)`: parent/child/neighbor math, texel ↔ direction, string key for streams and caches, with tests (decision 13)
+- [x] Seeded 3D noise (Perlin, fBm, ridged) and a deterministic min-heap in `core`
+- [ ] Continental crust field around two near-antipodal continent centers (decisions 17, 18)
+- [ ] Plate seeding steered into seeds inside the two continents (3 main, 2 second), the rest spread over the oceans (`rng("plates")`)
 - [ ] Plate growth by randomized weighted flood fill; a motion vector (Euler pole) per plate
 - [ ] Plate boundary detection and classification (convergent / divergent / transform × continental / oceanic)
 - [ ] Uplift field: continental collision ranges, trenches and island arcs, mid-ocean ridges, with distance-to-boundary falloff
 - [ ] Base elevation from crust type plus uplift, scaled by `reliefScale` (decision 14); sea level set at the `oceanFraction` height percentile
 - [ ] Provisional climate (temperature from latitude and altitude, banded moisture, no seasons) and a stylized biome palette
-- [ ] Bake coarse height and biome into level-0 tiles
 - [ ] Globe material: displace by height (with an exaggeration slider) and color by biome, replacing the debug face colors
 - [ ] Debug views: plate IDs, boundary types, uplift
 - [ ] Run generation in a worker with transferable typed arrays; per-stage progress UI and cancel
@@ -39,6 +40,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 
 - [ ] Benchmark erosion memory and time on a global grid at 1024² and 2048² per face; choose the global grid resolution (decision 13)
 - [ ] Global grid on the GPU with cross-face neighbor addressing
+- [ ] Bake global maps into tiles with borders (GPU textures); M1 renders straight from the grid
 - [ ] Detail noise stage on the GPU: ridged multifractal amplified by uplift, domain warping on coasts and ridges
 - [ ] Hydraulic erosion compute pass on the global grid
 - [ ] Thermal erosion compute pass (talus angle)

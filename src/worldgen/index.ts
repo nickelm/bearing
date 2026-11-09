@@ -51,7 +51,7 @@ export const DEFAULT_PLANET_PARAMS: Readonly<PlanetParams> = {
   radius: PLANET_RADIUS,
   rangeFactor: 0.5,
   plateCount: 14,
-  oceanFraction: 0.55,
+  oceanFraction: 0.7,
   oceanGap: [1200 * KM, 1800 * KM],
   erosionStrength: 1.0,
   temperatureOffset: 0,

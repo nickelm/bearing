@@ -184,3 +184,44 @@ Newest entries go at the bottom. Each entry records the date, the decision and t
 - An island chain in the gap (the GIUK analogue) does not break it.
 
 Revisit if convoy crossings in milestone 7 come out too long.
+
+### 17. Earth-like geography: near-antipodal continents, ocean fraction 0.70
+
+**Date:** 2026-11-09
+**Decision:** The default `oceanFraction` is 0.70, not the design table's 0.55. Continent centers are placed about 150–175° apart, not 90–130°.
+
+- The main continent's crust covers about 60% of the land, which gives a radius of about 50° (roughly 1,750 km across).
+- The second continent covers about 30% (a radius of about 35°).
+- The remaining land comes from islands and noise.
+- The separation is chosen as the sum of the two radii plus the middle of the `oceanGap` range, then jittered and capped below 180°.
+
+**Reason:**
+
+- On a 1,000 km planet a 1,200–1,800 km gap spans 69–103° of arc.
+- With centers 90–130° apart, the two continents' radii could add up to at most about 61°, covering about 15% of the surface. That conflicts with 45% land and with a main continent deep enough for a front.
+- The owner chose the Earth-like resolution over keeping 0.55 or shrinking the gap.
+
+### 18. Continents come from a crust field, with plates laid over it
+
+**Date:** 2026-11-09
+**Decision:**
+
+- **Crust field.** Continental crust is a scalar field: the larger of two cone-shaped fields around the continent centers, plus noise. It is thresholded at the area percentile that matches the land fraction.
+- **Plates.** Plates are grown independently by flood fill, with steered seeding: three seeds inside the main continent, two inside the second, and the rest spread over the oceans by best-candidate sampling.
+- **Boundaries.** A boundary's type follows from the plates' relative motion and from the crust on each side.
+
+**Reason:**
+
+- It controls land area and continent sizes directly, which the geography check needs.
+- Plate boundaries cutting through continents produce internal collision ranges, the river and mountain barriers the front generator looks for, the way India and Asia do on Earth.
+- The design doc's "continental plate clusters" become plate seeds clustered inside each continent.
+
+### 19. Climate uses reference (unscaled) elevation for lapse rate
+
+**Date:** 2026-11-09
+**Decision:**
+
+- Temperature lapse with altitude (6.5 K/km) and the alpine and snow biomes use the Earth-like reference elevation, i.e. height ÷ `reliefScale`.
+- Physical heights, rendering and flight use the scaled heights.
+
+**Reason:** With relief scaled to the planet (decision 14), the highest peaks reach only about 1.4 km, too low for snow caps or tree lines under a real lapse rate. Using reference elevation keeps the stylized biome distribution Earth-like while the shapes stay proportionate.
