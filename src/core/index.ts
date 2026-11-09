@@ -7,6 +7,7 @@ export * from './vec3d';
 export * from './coords';
 export * from './rng';
 export * from './cubeGrid';
+export * from './faceAdjacency';
 export * from './tiles';
 export * from './noise';
 export * from './heap';
