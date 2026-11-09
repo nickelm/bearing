@@ -3,7 +3,10 @@
  * and transfers the resulting typed arrays without copying. To cancel a
  * run, the main thread terminates the worker.
  */
+import { finishWorld } from '../worldgen/finishWorld';
+import type { FinishResult } from '../worldgen/finishWorld';
 import { generateWorld, worldBuffers } from '../worldgen/pipeline';
+import { riverBuffers } from '../worldgen/rivers';
 import type { FromWorldgenWorker, ToWorldgenWorker } from './worldgenProtocol';
 
 const ctx = self as unknown as {
@@ -13,6 +16,15 @@ const ctx = self as unknown as {
 
 ctx.onmessage = (e) => {
   const msg = e.data;
+  if (msg.type === 'finish') {
+    try {
+      const result = finishWorld(msg.input);
+      ctx.postMessage({ type: 'finished', id: msg.id, result }, finishBuffers(result));
+    } catch (err) {
+      ctx.postMessage({ type: 'error', id: msg.id, message: String(err) });
+    }
+    return;
+  }
   if (msg.type !== 'generate') return;
   try {
     const world = generateWorld(msg.params, {
@@ -28,3 +40,15 @@ ctx.onmessage = (e) => {
     ctx.postMessage({ type: 'error', id: msg.id, message: String(err) });
   }
 };
+
+function finishBuffers(r: FinishResult): ArrayBuffer[] {
+  const d = r.drainage;
+  return [
+    d.receiver.buffer,
+    d.discharge.buffer,
+    d.lakeDepth.buffer,
+    r.biome.buffer,
+    ...Object.values(r.display).map((a: ArrayBufferView) => a.buffer),
+    ...riverBuffers(r.rivers),
+  ] as ArrayBuffer[];
+}

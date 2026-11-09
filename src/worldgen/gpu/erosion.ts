@@ -2,11 +2,15 @@
  * Stage: hydraulic (stream-power) and thermal erosion on the global grid
  * (design doc, pipeline step 4; decision 23).
  *
- * Each iteration, all in Earth-like reference meters so the tuning does not
- * depend on reliefScale:
+ * First, closed depressions are filled to `prefill` of their depth (sediment-
+ * filled basins). Then each iteration, all in Earth-like reference meters so
+ * the tuning does not depend on reliefScale:
  *  1. Every `fillEvery` iterations, refresh the depression-filled routing
  *     surface W with Planchon–Darboux passes, W = max(h, min_nb W + ε). The
- *     fixed point is unique, so passes can warm-start from the previous W.
+ *     first fill starts from W = ∞ on land and converges in about one pass
+ *     per cell of drainage path; later fills warm-start from the previous W,
+ *     which stays at or above the new fixed point as erosion lowers spills.
+ *     (Starting below the fixed point would creep up by ε per pass on flats.)
  *     W is used only for routing: closed basins keep their low terrain
  *     (lakes) but still pass their flow on through the outlet.
  *  2. Receivers: steepest descent on W over the 8 seam-aware neighbors.
@@ -16,7 +20,8 @@
  *  4. Incision: implicit stream power (Braun & Willett 2013, Jacobi form),
  *     h' = (h + U + F·h_r) / (1 + F) with F = K·dt·A^m / L. A cell is never
  *     cut below its receiver. The uplift U rebounds toward the pre-erosion
- *     height, so valleys deepen in proportion to drainage while ridges hold.
+ *     height (depression-filled, so it does not restore noise pits), so valleys deepen in proportion to drainage while ridges hold,
+ *     and closed hollows below W slowly fill with sediment.
  *     Plus linear hillslope diffusion on land.
  *  5. Thermal: symmetric pairwise exchange wherever the slope between two
  *     neighbors exceeds the talus angle. Conserves material and is race-free.
@@ -48,6 +53,18 @@ export const EROSION_TUNING = {
    * relief (ranges, plateaus) without a separate rescale.
    */
   rebound: 0.001,
+  /**
+   * Sediment infill of closed hollows: fraction of the gap to the routing
+   * surface W filled per iteration (0.0008 fills about 60 % over 1,200
+   * iterations). Noise leaves many small pits; real land has few such lakes.
+   */
+  infill: 0.0008,
+  /**
+   * Before erosion, fill every closed depression to this fraction of its
+   * depth: intermontane basins full of sediment. Detail noise leaves about
+   * 15 % of the land in closed hollows; only the deepest stay lakes.
+   */
+  prefill: 0.85,
   /** Talus slope (rise over run, reference meters) for thermal erosion; tan 31°. */
   talus: 0.6,
   /** Fraction of the excess slope moved per neighbor pair per iteration (≤ 1/16 for stability). */
@@ -60,7 +77,7 @@ export const EROSION_TUNING = {
   /** Lowest reference height land may erode to (m). */
   minLand: 2,
   /** Iterations per GPU submission (keeps the browser responsive). */
-  chunk: 25,
+  chunk: 5,
 };
 
 export type ErosionTuning = typeof EROSION_TUNING;
@@ -92,6 +109,9 @@ const CELL_AREA: f32 = ${f(cellAreaKm2)};
 const SQRT2: f32 = 1.41421356;
 const RCV_MASK: u32 = ${RCV_MASK}u;
 fn neighborDist(k: i32) -> f32 { return select(CELL_L, CELL_L * SQRT2, k >= 4); }
+// Depth of a cell below the filled surface. W still at its "infinite" start
+// (no path to the sea yet, e.g. a world with no ocean) counts as no hollow.
+fn fillGap(w: f32, h: f32) -> f32 { return select(0.0, max(w - h, 0.0), w < 1.0e29); }
 `;
   const main = (body: string) => /* wgsl */ `
 @compute @workgroup_size(64)
@@ -107,12 +127,21 @@ ${body}
 @group(0) @binding(1) var<storage, read_write> h: array<f32>;
 @group(0) @binding(2) var<storage, read_write> w: array<f32>;
 @group(0) @binding(3) var<storage, read_write> h0: array<f32>;
-${main('  h[id] = hPhys[id] / RELIEF;\n  w[id] = h[id];\n  h0[id] = h[id];')}`);
+${main(
+  // Planchon–Darboux converges quickly only from above: land starts "infinitely" high.
+  '  h[id] = hPhys[id] / RELIEF;\n  w[id] = select(h[id], 1.0e30, h[id] > 0.0);\n  h0[id] = h[id];',
+)}`);
 
   const toPhys = gpu.kernel(`${head}
 @group(0) @binding(0) var<storage, read> h: array<f32>;
 @group(0) @binding(1) var<storage, read_write> hPhys: array<f32>;
 ${main('  hPhys[id] = h[id] * RELIEF;')}`);
+
+  const prefill = gpu.kernel(`${head}
+@group(0) @binding(0) var<storage, read_write> h: array<f32>;
+@group(0) @binding(1) var<storage, read> w: array<f32>;
+${main(`  let hc = h[id];
+  if (hc > 0.0) { h[id] = hc + ${f(t.prefill)} * fillGap(w[id], hc); }`)}`);
 
   const fill = gpu.kernel(`${head}
 @group(0) @binding(0) var<storage, read> h: array<f32>;
@@ -164,9 +193,11 @@ ${main(`  var a = CELL_AREA * max(rain[id], 0.0) / 1000.0;
 @group(0) @binding(2) var<storage, read> area: array<f32>;
 @group(0) @binding(3) var<storage, read_write> hOut: array<f32>;
 @group(0) @binding(4) var<storage, read> h0: array<f32>;
+@group(0) @binding(5) var<storage, read> w: array<f32>;
 ${main(`  let hc = hIn[id];
   if (hc <= 0.0) { hOut[id] = hc; return; }
-  let u = ${f(t.rebound)} * max(h0[id] - hc, 0.0);
+  // Closed hollows below the routing surface fill with sediment.
+  let u = ${f(t.rebound)} * max(h0[id] - hc, 0.0) + ${f(t.infill)} * fillGap(w[id], hc);
   var hn = hc + u;
   let r = rcv[id];
   let rc = r & RCV_MASK;
@@ -234,10 +265,13 @@ ${main(`  let hc = hIn[id];
   };
   // Initial fill: enough passes to cross the widest basin.
   const initialPasses = 2 * n;
-  for (let p = 0; p < initialPasses; p += t.chunk * 4) {
-    fillPasses(Math.min(t.chunk * 4, initialPasses - p));
+  for (let p = 0; p < initialPasses; p += 64) {
+    fillPasses(Math.min(64, initialPasses - p));
     await gpu.finish();
   }
+  // Rebound toward the filled surface, so it never recreates the noise's closed pits.
+  gpu.copy(grid.get('erosion.w'), grid.get('erosion.h0'));
+  gpu.dispatchLinear(prefill, [grid.get('erosion.h'), grid.get('erosion.w')], count);
 
   const iterations = Math.max(0, Math.round(t.iterations * opts.erosionStrength));
   for (let it = 0; it < iterations; it++) {
@@ -255,6 +289,7 @@ ${main(`  let hc = hIn[id];
         grid.get('flow'),
         grid.get('erosion.h2'),
         grid.get('erosion.h0'),
+        grid.get('erosion.w'),
       ],
       count,
     );

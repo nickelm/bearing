@@ -17,13 +17,12 @@ import { it } from 'vitest';
 import { directionToCubeFace } from '../src/core/coords';
 import type { CubeFaceUv } from '../src/core/coords';
 import { Vec3d } from '../src/core/vec3d';
-import { runDetailStage } from '../src/worldgen/gpu/detailStage';
-import { runErosion } from '../src/worldgen/gpu/erosion';
-import { upsampleMap } from '../src/worldgen/gpu/upsample';
-import { GlobalGrid } from '../src/worldgen/gpu/globalGrid';
 import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
 import { generateWorld } from '../src/worldgen/pipeline';
 import { testGpu } from '../tests/gpu/device';
+import { BIOME_COLORS } from '../src/render/palette';
+import { finishWorld } from '../src/worldgen/finishWorld';
+import { buildGlobalWorld } from '../src/worldgen/globalPipeline';
 import { encodePng } from './png';
 
 export interface TerrainView {
@@ -31,6 +30,8 @@ export interface TerrainView {
   height: Float32Array;
   /** Optional overlay: 0..1 per cell, drawn in blue (e.g. rivers). */
   water?: Float32Array;
+  /** Optional biome per cell; colors the land with the biome palette instead of height. */
+  biome?: Uint8Array;
 }
 
 const uv: CubeFaceUv = { face: 0, u: 0, v: 0 };
@@ -97,7 +98,7 @@ export function renderTerrain(
       if (!dirAt(px, py, d)) continue;
       const c = cellAt(view.n, d);
       const h = view.height[c]!;
-      let [r, g, b] = tint(h, relief);
+      let [r, g, b] = view.biome ? BIOME_COLORS[view.biome[c]!]! : tint(h, relief);
       if (h > 0) {
         e.copy(up).cross(d);
         if (e.lengthSq() < 1e-12) e.set(1, 0, 0);
@@ -202,42 +203,46 @@ it('render terrain previews', async () => {
   let t0 = performance.now();
   const world = generateWorld(params, { resolution: tres });
   console.info(`tectonic ${tres}: ${(performance.now() - t0).toFixed(0)} ms`);
-  const grid = new GlobalGrid(gpu, gres);
-  t0 = performance.now();
-  runDetailStage(
-    grid,
-    { n: tres, height: world.maps.height, uplift: world.maps.uplift },
-    seed,
-    params.reliefScale,
-  );
-  await grid.readF32('height');
-  console.info(`detail ${gres}: ${(performance.now() - t0).toFixed(0)} ms`);
-  let water: Float32Array | undefined;
   const strength = Number(process.env.EROSION ?? 1);
-  if (strength > 0) {
-    upsampleMap(grid, tres, world.maps.precipitation, 'precipitation');
-    t0 = performance.now();
-    await runErosion(grid, {
-      reliefScale: params.reliefScale,
-      radius: params.radius,
-      erosionStrength: strength,
-    });
-    console.info(`erosion ${gres}: ${(performance.now() - t0).toFixed(0)} ms`);
-    // Drainage overlay: cells draining more than ~2,000 km²·(m/yr).
-    const flow = await grid.readF32('flow');
-    water = new Float32Array(flow.length);
-    for (let c = 0; c < flow.length; c++) water[c] = Math.max(0, Math.log10(flow[c]! + 1e-9) - 3.3);
+  t0 = performance.now();
+  const g = await buildGlobalWorld(gpu, { ...params, erosionStrength: strength }, world, {
+    n: gres,
+    finish: async (input) => finishWorld(input),
+  });
+  console.info(`global pass ${gres}: ${(performance.now() - t0).toFixed(0)} ms`);
+  if (gpu.errors.length) throw new Error(`GPU errors: ${gpu.errors.join(' | ')}`);
+  const timings = [...g.timings, ...g.finish.timings];
+  const lines = timings.map((t) => `  ${t.stage}: ${t.ms.toFixed(0)} ms`);
+  lines.push(`  rivers: ${g.finish.rivers.count} polylines`);
+  console.info(lines.join('\n'));
+  // Rivers (log of discharge above 20 m³/s) and lakes.
+  const { discharge, lakeDepth } = g.finish.drainage;
+  const water = new Float32Array(discharge.length);
+  for (let c = 0; c < water.length; c++) {
+    const q = discharge[c]!;
+    water[c] = lakeDepth[c]! > 0 ? 0.8 : q >= 20 ? Math.min(0.9, 0.35 + Math.log10(q / 20) / 2) : 0;
   }
-  const height = await grid.readF32('height');
   const [x, y, z] = world.info.mainContinent;
+  const name = `terrain-${seed}-${gres}-e${strength}`;
+  const center = new Vec3d(x, y, z);
   writeViews(
-    `terrain-${seed}-${gres}-e${strength}`,
-    { n: gres, height, water },
-    new Vec3d(x, y, z),
+    name,
+    { n: gres, height: g.height, water },
+    center,
     params.reliefScale,
     params.radius,
     views,
     regionKm,
   );
-  grid.dispose();
+  writeViews(
+    `${name}-biome`,
+    { n: gres, height: g.height, water, biome: g.finish.biome },
+    center,
+    params.reliefScale,
+    params.radius,
+    views,
+    regionKm,
+  );
+  writeFileSync(join(import.meta.dirname, 'out', `${name}-timings.txt`), lines.join('\n'));
+  g.grid.dispose();
 });

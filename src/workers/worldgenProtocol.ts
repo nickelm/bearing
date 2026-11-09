@@ -1,4 +1,5 @@
 /** Messages between the main thread and the world-generation worker. */
+import type { FinishInput, FinishResult } from '../worldgen/finishWorld';
 import type { PlanetParams } from '../worldgen/params';
 import type { WorldInfo, WorldMaps } from '../worldgen/pipeline';
 
@@ -9,7 +10,14 @@ export interface GenerateRequest {
   resolution: number;
 }
 
-export type ToWorldgenWorker = GenerateRequest;
+/** CPU stages after GPU erosion: drainage, rivers, biomes, display maps. */
+export interface FinishRequest {
+  type: 'finish';
+  id: number;
+  input: FinishInput;
+}
+
+export type ToWorldgenWorker = GenerateRequest | FinishRequest;
 
 export interface ProgressMessage {
   type: 'progress';
@@ -31,4 +39,11 @@ export interface ErrorMessage {
   message: string;
 }
 
-export type FromWorldgenWorker = ProgressMessage | ResultMessage | ErrorMessage;
+export interface FinishResultMessage {
+  type: 'finished';
+  id: number;
+  result: FinishResult;
+}
+
+export type FromWorldgenWorker =
+  ProgressMessage | ResultMessage | FinishResultMessage | ErrorMessage;

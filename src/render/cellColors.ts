@@ -29,6 +29,7 @@ export const VIEW_MODES = [
   'moisture',
   'precipitation',
   'seasons',
+  'rivers',
   'faces',
 ] as const;
 export type ViewMode = (typeof VIEW_MODES)[number];
@@ -37,6 +38,10 @@ const LAND_GRAY: Rgb = [0.55, 0.55, 0.52];
 const OCEAN_GRAY: Rgb = [0.18, 0.22, 0.28];
 const CONTINENTAL: Rgb = [0.72, 0.6, 0.42];
 const OCEANIC: Rgb = [0.15, 0.3, 0.5];
+const RIVER: Rgb = [0.12, 0.32, 0.85];
+const LAKE: Rgb = [0.2, 0.45, 0.75];
+/** Discharge (m³/s) at which the rivers view starts drawing a river. */
+const RIVER_MIN = 20;
 
 /**
  * Color of cell `c` in `mode`. `faceColor` is used for the 'faces' mode and
@@ -74,5 +79,19 @@ export function cellColor(mode: ViewMode, world: World | null, c: number, faceCo
     }
     case 'seasons':
       return ramp(SEASONS_RAMP, m.temperatureRange[c]);
+    case 'rivers': {
+      // Biome under a blue river overlay that thickens with discharge.
+      const b = BIOME_COLORS[m.biome[c]]!;
+      if (!land) return b;
+      if (m.lakeDepth[c] > 0) return LAKE;
+      const q = m.discharge[c];
+      if (q < RIVER_MIN) return [b[0] * 0.85, b[1] * 0.85, b[2] * 0.85];
+      const t = Math.min(1, Math.log10(q / RIVER_MIN) / 2 + 0.35);
+      return [
+        b[0] + (RIVER[0] - b[0]) * t,
+        b[1] + (RIVER[1] - b[1]) * t,
+        b[2] + (RIVER[2] - b[2]) * t,
+      ];
+    }
   }
 }

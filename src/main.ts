@@ -16,8 +16,15 @@ import {
   showFatalError,
   showWebGpuRequired,
 } from './render/webgpuSupport';
-import { DebugGui, RESOLUTIONS } from './ui/debugGui';
+import {
+  DEFAULT_GLOBAL_RESOLUTION,
+  DebugGui,
+  GLOBAL_RESOLUTIONS,
+  RESOLUTIONS,
+} from './ui/debugGui';
 import { GpuContext } from './worldgen/gpu/gpuContext';
+import { buildGlobalWorld, GlobalPassCancelled } from './worldgen/globalPipeline';
+import type { GlobalWorld } from './worldgen/globalPipeline';
 import { GPU_SELF_TESTS, runSelfTest } from './worldgen/gpu/selfTests';
 import type { ViewGuiParams, WorldGuiParams } from './ui/debugGui';
 import { FrameTimeOverlay } from './ui/frameTimeOverlay';
@@ -46,17 +53,22 @@ async function main(): Promise<void> {
     return;
   }
 
-  // URL parameters: ?seed=<integer or text>&res=<cells per face edge>
+  // URL parameters: ?seed=<integer or text>&res=<tectonic cells per face edge>&gres=<global grid>
   const query = new URLSearchParams(location.search);
   const queryRes = Number(query.get('res'));
+  const queryGres = Number(query.get('gres'));
   const worldParams: WorldGuiParams = {
     seed: query.get('seed') ?? String(DEFAULT_PLANET_PARAMS.seed),
     resolution: (RESOLUTIONS as readonly number[]).includes(queryRes) ? queryRes : 256,
+    globalResolution: (GLOBAL_RESOLUTIONS as readonly number[]).includes(queryGres)
+      ? queryGres
+      : DEFAULT_GLOBAL_RESOLUTION,
     plateCount: DEFAULT_PLANET_PARAMS.plateCount,
     oceanFraction: DEFAULT_PLANET_PARAMS.oceanFraction,
     reliefScale: Number(DEFAULT_PLANET_PARAMS.reliefScale.toFixed(3)),
     temperatureOffset: DEFAULT_PLANET_PARAMS.temperatureOffset,
     moistureScale: DEFAULT_PLANET_PARAMS.moistureScale,
+    erosionStrength: DEFAULT_PLANET_PARAMS.erosionStrength,
   };
   const viewParams: ViewGuiParams = { mode: 'biome', exaggeration: 10, wireframe: false };
 
@@ -67,6 +79,8 @@ async function main(): Promise<void> {
 
   const worldgen = new WorldgenClient();
   let generation = 0;
+  /** The current world's global pass (eroded grid on the GPU, rivers...), once finished. */
+  let globalWorld: GlobalWorld | null = null;
 
   const regenerate = async () => {
     const token = ++generation;
@@ -78,19 +92,24 @@ async function main(): Promise<void> {
       reliefScale: worldParams.reliefScale,
       temperatureOffset: worldParams.temperatureOffset,
       moistureScale: worldParams.moistureScale,
+      erosionStrength: worldParams.erosionStrength,
     };
     const resolution = worldParams.resolution;
+    const globalN = Math.max(worldParams.globalResolution, resolution);
     gui.status.generation = 'starting';
     pingWorker(worldParams.seed);
     const url = new URL(location.href);
     url.searchParams.set('seed', worldParams.seed);
     url.searchParams.set('res', String(resolution));
+    url.searchParams.set('gres', String(globalN));
     history.replaceState(null, '', url);
     const t0 = performance.now();
+    const status = (stage: string, f: number) => {
+      if (token === generation) gui.status.generation = `${stage} (${Math.round(f * 100)}%)`;
+    };
     try {
-      const world = await worldgen.generate(params, resolution, (stage, f) => {
-        if (token === generation) gui.status.generation = `${stage} (${Math.round(f * 100)}%)`;
-      });
+      // 1. Tectonic pass in the worker, shown at once as a preview.
+      const world = await worldgen.generate(params, resolution, status);
       if (token !== generation) return;
       if (grid.n !== resolution) {
         grid = new CubeGrid(resolution);
@@ -98,17 +117,54 @@ async function main(): Promise<void> {
       }
       globe.globe.setFaceSeed(worldParams.seed);
       globe.globe.setWorld(world);
-      const total = performance.now() - t0;
-      gui.status.generation = `done in ${(total / 1000).toFixed(1)} s`;
       console.info(
         `World ${worldParams.seed} @ ${resolution}: land ${(world.info.landFraction * 100).toFixed(1)}%, ` +
           `heights ${world.info.minHeight.toFixed(0)}..${world.info.maxHeight.toFixed(0)} m, ` +
           `continents ${((world.info.continentSeparation / Math.PI) * 180).toFixed(1)}° apart`,
       );
       console.table(world.info.timings.map((t) => ({ stage: t.stage, ms: Math.round(t.ms) })));
+
+      // 2. Global pass: GPU detail and erosion here, drainage and rivers in the worker.
+      const global = await buildGlobalWorld(gpu, params, world, {
+        n: globalN,
+        finish: (input) => worldgen.finish(input),
+        onProgress: (stage, f) => status(`global ${globalN}: ${stage}`, f),
+        cancelled: () => token !== generation,
+      });
+      if (token !== generation) {
+        global.grid.dispose();
+        return;
+      }
+      globalWorld?.grid.dispose();
+      globalWorld = global;
+      const d = global.finish.display;
+      let maxHeight = -Infinity;
+      for (const h of d.height) maxHeight = Math.max(maxHeight, h);
+      globe.globe.setWorld({
+        maps: {
+          ...world.maps,
+          height: d.height,
+          biome: d.biome,
+          discharge: d.discharge,
+          lakeDepth: d.lakeDepth,
+        },
+        info: { ...world.info, maxHeight },
+      });
+      const total = performance.now() - t0;
+      gui.status.generation = `done in ${(total / 1000).toFixed(1)} s`;
+      console.info(
+        `Global ${globalN}: ${global.finish.rivers.count} river polylines, ` +
+          `GPU maps ${(global.grid.peakBytes / 2 ** 20).toFixed(0)} MiB`,
+      );
+      console.table(
+        [...global.timings, ...global.finish.timings].map((t) => ({
+          stage: t.stage,
+          ms: Math.round(t.ms),
+        })),
+      );
     } catch (err) {
       if (token !== generation) return;
-      if (err instanceof GenerationCancelled) {
+      if (err instanceof GenerationCancelled || err instanceof GlobalPassCancelled) {
         gui.status.generation = 'cancelled';
       } else {
         gui.status.generation = 'error (see console)';
@@ -119,7 +175,11 @@ async function main(): Promise<void> {
 
   const gui = new DebugGui(worldParams, viewParams, VIEW_MODES, {
     regenerate: () => void regenerate(),
-    cancel: () => worldgen.cancel(),
+    cancel: () => {
+      generation++;
+      worldgen.cancel();
+      gui.status.generation = 'cancelled';
+    },
     viewChanged: (v) => {
       globe.globe.setViewMode(v.mode as ViewMode);
       globe.globe.wireframe = v.wireframe;

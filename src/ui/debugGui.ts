@@ -6,13 +6,16 @@ import GUI from 'lil-gui';
 
 export interface WorldGuiParams {
   seed: string;
-  /** Cells per cube-face edge. */
+  /** Tectonic grid: cells per cube-face edge. */
   resolution: number;
+  /** Global grid (erosion, drainage): cells per cube-face edge. */
+  globalResolution: number;
   plateCount: number;
   oceanFraction: number;
   reliefScale: number;
   temperatureOffset: number;
   moistureScale: number;
+  erosionStrength: number;
 }
 
 export interface ViewGuiParams {
@@ -40,6 +43,9 @@ export interface DebugGuiCallbacks {
 }
 
 export const RESOLUTIONS = [64, 128, 256, 512] as const;
+/** Global grid sizes; 1024 is the default (decision 27). */
+export const GLOBAL_RESOLUTIONS = [512, 1024, 2048] as const;
+export const DEFAULT_GLOBAL_RESOLUTION = 1024;
 
 export class DebugGui {
   readonly gui = new GUI({ title: 'Bearing' });
@@ -77,8 +83,12 @@ export class DebugGui {
     ).name('Random seed');
     w.add({ cancel: () => callbacks.cancel() }, 'cancel').name('Cancel generation');
     w.add(world, 'resolution', [...RESOLUTIONS])
-      .name('Cells per face edge')
+      .name('Tectonic cells per face')
       .onFinishChange(regen);
+    w.add(world, 'globalResolution', [...GLOBAL_RESOLUTIONS])
+      .name('Global cells per face')
+      .onFinishChange(regen);
+    w.add(world, 'erosionStrength', 0, 2, 0.05).name('Erosion strength').onFinishChange(regen);
     w.add(world, 'plateCount', 6, 40, 1).name('Plates').onFinishChange(regen);
     w.add(world, 'oceanFraction', 0.4, 0.9, 0.01).name('Ocean fraction').onFinishChange(regen);
     w.add(world, 'reliefScale', 0.05, 1, 0.005).name('Relief scale').onFinishChange(regen);

@@ -35,6 +35,15 @@ export interface WorldMaps {
   precipitation: Float32Array;
   /** Relative moisture 0..1 (0.5 × precipitation / potential evapotranspiration). */
   moisture: Float32Array;
+  /** Runoff after evapotranspiration (mm/yr). */
+  runoff: Float32Array;
+  /**
+   * Largest river discharge per cell (m³/s). Zero until the global pass
+   * (globalPipeline.ts) has run and replaced the display maps.
+   */
+  discharge: Float32Array;
+  /** Lake depth per cell (m); zero until the global pass. */
+  lakeDepth: Float32Array;
   /** Prevailing surface wind, east and north components. */
   windEast: Float32Array;
   windNorth: Float32Array;
@@ -158,6 +167,9 @@ export function generateWorld(params: PlanetParams, options: GenerateOptions): W
       temperatureRange: climate.temperatureRange,
       precipitation: climate.precipitation,
       moisture: climate.moisture,
+      runoff: climate.runoff,
+      discharge: new Float32Array(grid.cellCount),
+      lakeDepth: new Float32Array(grid.cellCount),
       windEast: climate.windEast,
       windNorth: climate.windNorth,
       biome,

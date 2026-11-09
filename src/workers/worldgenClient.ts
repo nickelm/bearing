@@ -3,6 +3,7 @@
  * at a time. Starting a new one, or calling cancel(), terminates the worker
  * and rejects the pending promise with a GenerationCancelled error.
  */
+import type { FinishInput, FinishResult } from '../worldgen/finishWorld';
 import type { PlanetParams } from '../worldgen/params';
 import type { ProgressCallback, World } from '../worldgen/pipeline';
 import type { FromWorldgenWorker, ToWorldgenWorker } from './worldgenProtocol';
@@ -17,6 +18,7 @@ export class GenerationCancelled extends Error {
 interface Pending {
   id: number;
   resolve: (w: World) => void;
+  resolveFinish?: (r: FinishResult) => void;
   reject: (e: Error) => void;
   onProgress?: ProgressCallback;
 }
@@ -41,6 +43,27 @@ export class WorldgenClient {
     return new Promise<World>((resolve, reject) => {
       this.pending = { id, resolve, reject, onProgress };
       worker.postMessage({ type: 'generate', id, params, resolution } satisfies ToWorldgenWorker);
+    });
+  }
+
+  /**
+   * Runs the CPU stages after GPU erosion. The input arrays are transferred
+   * (and become unusable here). Cancels any pending request.
+   */
+  finish(input: FinishInput): Promise<FinishResult> {
+    this.cancel();
+    const worker = this.ensureWorker();
+    const id = this.nextId++;
+    return new Promise<FinishResult>((resolveFinish, reject) => {
+      this.pending = { id, resolve: () => {}, resolveFinish, reject };
+      const transfer = [
+        input.height,
+        input.runoff,
+        input.precipitation,
+        input.seaLevelTemperature,
+        input.temperatureRange,
+      ].map((a) => a.buffer as ArrayBuffer);
+      worker.postMessage({ type: 'finish', id, input } satisfies ToWorldgenWorker, transfer);
     });
   }
 
@@ -84,6 +107,10 @@ export class WorldgenClient {
       case 'result':
         this.pending = null;
         p.resolve({ maps: msg.maps, info: msg.info });
+        break;
+      case 'finished':
+        this.pending = null;
+        p.resolveFinish?.(msg.result);
         break;
       case 'error':
         this.pending = null;

@@ -45,6 +45,8 @@ export interface Climate {
   precipitation: Float32Array;
   /** Relative moisture 0..1: 0.5 × precipitation / potential evapotranspiration. */
   moisture: Float32Array;
+  /** Runoff: precipitation minus actual evapotranspiration (Turc–Pike), mm/yr. */
+  runoff: Float32Array;
   /** Prevailing surface wind, east and north components (relative speed, about 0..1). */
   windEast: Float32Array;
   windNorth: Float32Array;
@@ -134,6 +136,16 @@ function saturation(t: number): number {
 /** Potential evapotranspiration (mm/yr) from annual mean temperature. */
 export function potentialEvapotranspiration(t: number): number {
   return Math.max(150, 150 + 55 * t);
+}
+
+/**
+ * Runoff (mm/yr) by the Turc–Pike formula: actual evapotranspiration
+ * ET = P / √(1 + (P/PET)²), runoff = P − ET. About 4 % of rain runs off in
+ * deserts, 30 % where rain equals PET, and over half in very wet climates.
+ */
+export function runoffFrom(precipitation: number, pet: number): number {
+  const r = precipitation / pet;
+  return precipitation - precipitation / Math.sqrt(1 + r * r);
 }
 
 /** The largest power-of-two divisor of `n` that is at most MAX_CLIMATE_RES. */
@@ -370,6 +382,7 @@ export function computeClimate(
   const moisture = new Float32Array(n);
   const windEast = new Float32Array(n);
   const windNorth = new Float32Array(n);
+  const runoff = new Float32Array(n);
   for (let c = 0; c < n; c++) {
     const face = grid.faceOf(c);
     const fi = ((grid.iOf(c) + 0.5) / grid.n) * cn - 0.5;
@@ -398,8 +411,9 @@ export function computeClimate(
       0,
       1,
     );
+    runoff[c] = runoffFrom(precipitation[c]!, potentialEvapotranspiration(temperature[c]!));
     windEast[c] = we;
     windNorth[c] = wn;
   }
-  return { temperature, temperatureRange, precipitation, moisture, windEast, windNorth };
+  return { temperature, temperatureRange, precipitation, moisture, runoff, windEast, windNorth };
 }

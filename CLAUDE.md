@@ -27,7 +27,8 @@ src/render/         terrain, atmosphere, ocean, units, cameras (Three.js WebGPU 
 src/ui/             lil-gui debug panel, overlays, time controls
 src/workers/        worker entry points and message protocols
 src/main.ts         app entry: WebGPU checks, renderer, scene, GUI
-tests/              Vitest unit tests (node environment, no GPU)
+tests/              Vitest unit tests (node); tests/gpu/ runs WGSL kernels on a real GPU via Dawn
+tools/              offline previews (npm run maps; terrain/bench *.preview.ts), output in tools/out/
 tools/              offline tools (map preview PNGs); run via vitest.tools.config.ts
 TODO.md             milestone task list
 ```
@@ -87,6 +88,8 @@ Promotion expands a unit deterministically from its seed and current strength. D
   - Init with `new WebGPURenderer()`, then `await renderer.init()`, then `setAnimationLoop`.
   - Run compute with `Fn(() => …)().compute(count)` and `renderer.compute()` or `computeAsync()`.
   - Read back with `renderer.getArrayBufferAsync(storageNode.value)`.
+- **World-generation GPU code is plain WGSL on a raw `GPUDevice`** (`src/worldgen/gpu/`, decision 26). Vitest runs it on this machine's GPU through Dawn's Node bindings (the `webgpu` dev dependency); GPU tests skip without an adapter. With webgpu 0.6.2 on Windows, `queue.onSubmittedWorkDone()` and error scopes after a buffer map crash Node: use `GpuContext.finish()` and `GpuContext.errors`. Write kernel checks as self-tests in `worldgen/gpu/selfTests.ts`, so they also run in the browser (GUI → Self-tests).
+- **Seeing terrain without a browser:** `npx vitest run --config vitest.tools.config.ts tools/terrain.preview.ts` runs the whole pipeline on Dawn and writes PNGs to `tools/out/`. Read them to judge changes.
 - **TypeScript is pinned to 6.0.** TypeScript 7 (the native compiler) is out, but typescript-eslint 8.x supports only `<6.1`. See `docs/decisions.md`.
 - Vite's cache lives in the OS temp directory (`cacheDir` in `vite.config.ts`), not `node_modules/.vite`, because the repo is in Dropbox and the in-tree cache fails with `EBUSY`. To clear it, delete `%TEMP%/vite-cache/bearing-*`.
 - `node_modules/` and `dist/` carry the Dropbox "ignored" attribute so they don't sync. If you delete and recreate them, reapply it in PowerShell with `Set-Content -Path node_modules -Stream com.dropbox.ignored -Value 1`.

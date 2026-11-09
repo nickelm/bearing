@@ -47,11 +47,13 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [x] Detail noise stage on the GPU: ridged multifractal amplified by uplift, domain warping on coasts and ridges (upsamples the tectonic grid; `tools/terrain.preview.ts` renders it offline)
 - [x] Hydraulic erosion compute pass on the global grid (stream power with rebound toward the tectonic height, Planchon–Darboux routing surface, gathered drainage; decision 23)
 - [x] Thermal erosion compute pass (talus angle; symmetric pairwise exchange, mass-conserving)
-- [ ] Wire the GPU stages into the app: main-thread orchestrator after the worker's tectonic pass, progress UI, downsampled display in the M1 globe
-- [ ] Flow direction and flow accumulation maps
-- [ ] River extraction: threshold the accumulation into vector polylines with a width per segment
+- [x] Wire the GPU stages into the app: main-thread orchestrator after the worker's tectonic pass, progress UI, downsampled display in the M1 globe
+- [ ] Checkpoint 1: owner review of eroded terrain, rivers and climate (in the browser and `tools/terrain.preview.ts`)
+- [x] Flow direction and flow accumulation maps (CPU in the worker: Priority-Flood+ε, D8, Turc–Pike runoff accumulated to m³/s, lakes; about 2 s at 1024²)
+- [x] River extraction: threshold the accumulation into vector polylines with a width per segment (w = 4·√Q m)
+  - [ ] Spatial index of river segments by tile key (needed by detail tile synthesis)
 - [x] Climate stage proper: seasonal temperature range from axial tilt, prevailing-wind moisture with rain shadows, Whittaker biomes (replaces the provisional climate)
-  - [ ] Recompute biomes on the eroded global grid (lapse-corrected temperature, upsampled precipitation)
+  - [x] Recompute biomes on the eroded global grid (lapse-corrected temperature, upsampled precipitation)
 - [ ] Detail tile synthesis on the GPU: global maps + detail noise + local erosion constrained by global rivers; per-tile `fork(tileKey)`
 - [ ] Tile borders and seam tests: neighboring tiles agree on shared texels whatever the generation order
 - [ ] Tile cache: GPU/CPU LRU with a memory budget; on-demand generation queue
