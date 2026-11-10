@@ -11,8 +11,14 @@ const projectHash = createHash('sha1')
   .digest('hex')
   .slice(0, 8);
 
-export default defineConfig({
-  cacheDir: join(tmpdir(), 'vite-cache', `bearing-${projectHash}`),
+/** Shared with vitest.tools.config.ts. */
+export const cacheDir = join(tmpdir(), 'vite-cache', `bearing-${projectHash}`);
+
+export default defineConfig(({ command, isPreview }) => ({
+  // Production is a GitHub Pages project site at /bearing/ (decision 40). The dev
+  // server and Vitest stay at the root; `vite preview` serves the build under its base.
+  base: command === 'build' || isPreview ? '/bearing/' : '/',
+  cacheDir,
   build: {
     // WebGPU-only project: every supported browser handles modern syntax and top-level await.
     target: 'esnext',
@@ -28,4 +34,4 @@ export default defineConfig({
     // Grid-wide CPU tests share the machine with the Dawn GPU tests; 5 s is too tight.
     testTimeout: 30_000,
   },
-});
+}));

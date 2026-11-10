@@ -12,6 +12,7 @@ Guidance for Claude Code sessions in this repository. `docs/design.md` is the so
 | Lint                     | `npm run lint`                                              |
 | Everything but build     | `npm run check`                                             |
 | Production build         | `npm run build` (runs the type check first)                 |
+| Serve production build   | `npm run preview` → `http://localhost:4173/bearing/`        |
 | Format                   | `npm run format`                                            |
 | Render world maps to PNG | `npm run maps` (env: `SEED`, `RES`, `MODES`) → `tools/out/` |
 
@@ -57,6 +58,10 @@ These are the project conventions. Lint enforces some of them (marked ⚙).
    - ⚙ `core` imports nothing else from `src/`.
    - `worldgen` may use `three/webgpu` and `three/tsl` for GPU compute.
 7. **WebGPU is required.** Do not add a WebGL path. `WebGPURenderer` silently falls back to WebGL 2, so keep the post-`init()` backend check in `main.ts`.
+8. **Static hosting.** The app is a static site on GitHub Pages under `/bearing/`, with no server and no custom headers (decision 40).
+   - No `SharedArrayBuffer`, `Atomics.wait`, or anything else that needs cross-origin isolation (COOP/COEP).
+   - Workers exchange data via `postMessage`, transferring `ArrayBuffer`s rather than copying them.
+   - Never use root-absolute asset URLs. Load workers with `new Worker(new URL('./x.worker.ts', import.meta.url), { type: 'module' })` or a `?worker` import, and prefix other runtime paths with `import.meta.env.BASE_URL`.
 
 ## Fidelity as level of detail
 

@@ -4,6 +4,8 @@ Bearing is a browser-based late-Cold-War air war set on a procedurally generated
 
 The project is at the tech-demo stage. See [docs/design.md](docs/design.md) for the design, [TODO.md](TODO.md) for progress and [docs/decisions.md](docs/decisions.md) for the architecture decision log.
 
+**Live build:** <https://nickelm.github.io/bearing/>. Forks deploy to `https://<user>.github.io/bearing/`. It needs a WebGPU browser.
+
 ## Requirements
 
 - Node.js 22.12 or later, with npm.
@@ -20,7 +22,7 @@ npm run lint         # ESLint, including the layering and determinism rules
 npm run format       # format with Prettier
 npm run check        # typecheck + lint + test
 npm run build        # type check and production build into dist/
-npm run preview      # serve the production build
+npm run preview      # serve the production build (http://localhost:4173/bearing/)
 npm run maps         # render world map PNGs to tools/out/ (SEED, RES, MODES env vars)
 ```
 
@@ -33,6 +35,14 @@ npx vitest run --config vitest.tools.config.ts tools/terrain.preview.ts   # erod
 npx vitest run --config vitest.tools.config.ts tools/tiles.preview.ts     # a mosaic of detail tiles
 npx vitest run --config vitest.tools.config.ts tools/bench.preview.ts     # global-grid benchmark
 ```
+
+## Deployment
+
+Every push to `main` runs [.github/workflows/deploy.yml](.github/workflows/deploy.yml). It runs the type check and tests, builds, and publishes `dist/` to GitHub Pages. Production builds use the base path `/bearing/`, so the site is served at `https://<user>.github.io/bearing/`.
+
+Before the first deploy, set the repository's **Settings → Pages → Build and deployment → Source** to **GitHub Actions**. Until then the deploy job fails.
+
+The site is fully static, with no custom headers, so the app never relies on `SharedArrayBuffer` or cross-origin isolation (decision 40).
 
 ## Controls
 
