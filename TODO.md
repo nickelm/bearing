@@ -150,6 +150,9 @@ The strategic graph is the only view of the world that theater detection, castin
 - [x] Graph overlay mode in `npm run maps`, so detection can be checked without a browser (`MODES=graph,barrier`)
 - [x] Seed browser: a CLI table first (`npm run seeds`: theaters, fit scores, range factor, retries per seed), then a GUI panel (GUI → Campaign → "Seed browser: scan next 10")
 - [ ] Tune the theater fit thresholds from seed browser statistics (design open question)
+  - First run, seeds 1–40 at the defaults (2026-11-10): continental front 90%, sea lane 25%, chokepoint 5%, island campaign 10%, strategic 100%; one retry (seed 9, Alliance short of airbase room), none invalid; 4–6 s per seed.
+  - The range factor is 1.0 for almost every seed (mean 0.98, min 0.73): fronts are 1,500–2,500 km deep, beyond a medium strike radius of 1,300 km. Owner decision: keep real ranges, measure depth to the enemy's industry and base regions instead of 90% of its land, or change the reference radii.
+  - Island campaigns are lopsided: the Pact gets a large landmass with no valid front (often a ring continent) and the Alliance a few islands (45–254 vs. 1,200–1,500 airbase sites).
 - [x] Determinism tests: graph and cast identical across runs; changing casting leaves the graph unchanged
 - [ ] Checkpoint 5: owner review of the graph overlay, theaters and briefings across many seeds
 
