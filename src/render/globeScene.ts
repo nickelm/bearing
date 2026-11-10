@@ -27,6 +27,7 @@ import { GlobeMesh } from './globeMesh';
 import { PlanetLighting } from './lighting/planetLighting';
 import { TerrainRenderer } from './terrain/terrainRenderer';
 import { OrbitCamera, attachOrbitInput } from './orbitCamera';
+import { StrategicOverlay } from './strategic/strategicOverlay';
 
 const PLANET_CENTER = new Vec3d(0, 0, 0);
 
@@ -52,6 +53,8 @@ export class GlobeScene {
   readonly forest: ForestLayer;
   /** Cloud shell and cloud shadows (decision 55). */
   readonly clouds: CloudLayer;
+  /** Strategic graph and cast overlay (milestone 4). */
+  readonly strategic: StrategicOverlay;
   /** Unit vector toward the sun, world frame. Set by the app from the ephemeris. */
   readonly sun = new Vec3d(1, 0.6, 0.8).normalize();
   /** Draw the tiled terrain when available (otherwise the M1 grid mesh). */
@@ -78,7 +81,14 @@ export class GlobeScene {
     // The sky: single scattering along each view ray, drawn behind everything (decision 35).
     this.scene.backgroundNode = this.lighting.atmosphere.skyNode();
     this.globe = new GlobeMesh(options.grid, options.radius);
-    this.scene.add(this.globe.group, this.terrain.group, this.forest.group, this.clouds.group);
+    this.strategic = new StrategicOverlay(options.radius);
+    this.scene.add(
+      this.globe.group,
+      this.terrain.group,
+      this.forest.group,
+      this.clouds.group,
+      this.strategic.group,
+    );
 
     // Scene lights serve only the M1 grid mesh (a debug view); the terrain lights itself.
     // Light directions are translation-invariant, so camera-relative offsets do not affect them.
@@ -148,6 +158,9 @@ export class GlobeScene {
       this.forest.group.visible = false;
     }
 
+    // Above the highest exaggerated terrain, so the lines are not buried.
+    this.strategic.update(o.eye, this.globe.maxDisplayedHeight + 2000);
+
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -157,5 +170,6 @@ export class GlobeScene {
     this.terrain.dispose();
     this.forest.dispose();
     this.clouds.dispose();
+    this.strategic.dispose();
   }
 }

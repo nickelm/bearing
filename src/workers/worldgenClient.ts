@@ -3,6 +3,7 @@
  * at a time. Starting a new one, or calling cancel(), terminates the worker
  * and rejects the pending promise with a GenerationCancelled error.
  */
+import type { StrategicWorld } from '../worldgen/campaignWorld';
 import type { FinishInput, FinishResult } from '../worldgen/finishWorld';
 import type { PlanetParams } from '../worldgen/params';
 import type { ProgressCallback, World } from '../worldgen/pipeline';
@@ -15,9 +16,14 @@ export class GenerationCancelled extends Error {
   }
 }
 
+/** A tectonic world plus the coarse pass's graph and campaign. */
+export interface GeneratedWorld extends World {
+  strategic: StrategicWorld;
+}
+
 interface Pending {
   id: number;
-  resolve: (w: World) => void;
+  resolve: (w: GeneratedWorld) => void;
   resolveFinish?: (r: FinishResult) => void;
   reject: (e: Error) => void;
   onProgress?: ProgressCallback;
@@ -36,11 +42,11 @@ export class WorldgenClient {
     params: PlanetParams,
     resolution: number,
     onProgress?: ProgressCallback,
-  ): Promise<World> {
+  ): Promise<GeneratedWorld> {
     this.cancel();
     const worker = this.ensureWorker();
     const id = this.nextId++;
-    return new Promise<World>((resolve, reject) => {
+    return new Promise<GeneratedWorld>((resolve, reject) => {
       this.pending = { id, resolve, reject, onProgress };
       worker.postMessage({ type: 'generate', id, params, resolution } satisfies ToWorldgenWorker);
     });
@@ -106,7 +112,7 @@ export class WorldgenClient {
         break;
       case 'result':
         this.pending = null;
-        p.resolve({ maps: msg.maps, info: msg.info });
+        p.resolve({ maps: msg.maps, info: msg.info, strategic: msg.strategic });
         break;
       case 'finished':
         this.pending = null;

@@ -71,6 +71,21 @@ export interface LightingGuiParams {
   cloudCover: number;
 }
 
+/** Campaign folder: the cast summary (read-only) and overlay toggles. */
+export interface CampaignGuiParams {
+  /** Strategic graph overlay on the globe. */
+  overlay: boolean;
+  /** Briefing panel. */
+  briefing: boolean;
+  /** Seed actually generated (differs from the input after validity retries). */
+  seedUsed: string;
+  theaters: string;
+  rangeFactor: number;
+  airbases: string;
+  /** Coarse pass time (s). */
+  coarseSeconds: number;
+}
+
 export const TIME_RATES: Record<string, number> = {
   paused: 0,
   '1×': 1,
@@ -270,6 +285,22 @@ export class DebugGui {
     f.add(light, 'cloudCover', -0.5, 0.5, 0.01)
       .name('Cloud cover')
       .onChange(() => changed(light));
+  }
+
+  /** Adds the Campaign folder: overlay and briefing toggles and the cast summary. */
+  addCampaign(params: CampaignGuiParams, changed: (p: CampaignGuiParams) => void): void {
+    const f = this.folderBeforeStatus('Campaign');
+    f.add(params, 'overlay')
+      .name('Strategic graph')
+      .onChange(() => changed(params));
+    f.add(params, 'briefing')
+      .name('Briefing')
+      .onChange(() => changed(params));
+    f.add(params, 'seedUsed').name('Seed generated').disable().listen();
+    f.add(params, 'theaters').name('Theaters').disable().listen();
+    f.add(params, 'rangeFactor').name('Range factor').decimals(2).disable().listen();
+    f.add(params, 'airbases').name('Airbase sites A/P').disable().listen();
+    f.add(params, 'coarseSeconds').name('Coarse pass (s)').decimals(1).disable().listen();
   }
 
   /**

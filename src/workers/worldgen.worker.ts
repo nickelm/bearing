@@ -3,6 +3,8 @@
  * and transfers the resulting typed arrays without copying. To cancel a
  * run, the main thread terminates the worker.
  */
+import { generateCampaignWorld, strategicBuffers, strategicWorld } from '../worldgen/campaignWorld';
+import { COARSE_RESOLUTION } from '../worldgen/coarsePass';
 import { finishWorld } from '../worldgen/finishWorld';
 import type { FinishResult } from '../worldgen/finishWorld';
 import { generateWorld, worldBuffers } from '../worldgen/pipeline';
@@ -27,15 +29,28 @@ ctx.onmessage = (e) => {
   }
   if (msg.type !== 'generate') return;
   try {
-    const world = generateWorld(msg.params, {
-      resolution: msg.resolution,
-      onProgress: (stage, fraction) =>
-        ctx.postMessage({ type: 'progress', id: msg.id, stage, fraction }),
+    const progress = (stage: string, fraction: number) =>
+      ctx.postMessage({ type: 'progress', id: msg.id, stage, fraction });
+    // Pipeline steps 1–9 on the coarse grid, with the validity check and retries.
+    const t0 = performance.now();
+    const cw = generateCampaignWorld(msg.params, {
+      resolution: COARSE_RESOLUTION,
+      onProgress: progress,
     });
-    ctx.postMessage(
-      { type: 'result', id: msg.id, maps: world.maps, info: world.info },
-      worldBuffers(world.maps),
-    );
+    const strategic = strategicWorld(cw);
+    strategic.timings.push({ stage: 'coarse pass total', ms: performance.now() - t0 });
+    // The displayed tectonic world at the requested resolution, from the seed that passed.
+    const world =
+      msg.resolution === COARSE_RESOLUTION
+        ? cw.world
+        : generateWorld(
+            { ...msg.params, seed: cw.seed },
+            { resolution: msg.resolution, onProgress: progress },
+          );
+    ctx.postMessage({ type: 'result', id: msg.id, maps: world.maps, info: world.info, strategic }, [
+      ...worldBuffers(world.maps),
+      ...strategicBuffers(strategic),
+    ]);
   } catch (err) {
     ctx.postMessage({ type: 'error', id: msg.id, message: String(err) });
   }

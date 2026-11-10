@@ -1,4 +1,5 @@
 /** Messages between the main thread and the world-generation worker. */
+import type { StrategicWorld } from '../worldgen/campaignWorld';
 import type { FinishInput, FinishResult } from '../worldgen/finishWorld';
 import type { PlanetParams } from '../worldgen/params';
 import type { WorldInfo, WorldMaps } from '../worldgen/pipeline';
@@ -31,6 +32,8 @@ export interface ResultMessage {
   id: number;
   maps: WorldMaps;
   info: WorldInfo;
+  /** Graph and campaign from the coarse pass; the maps use its seed. */
+  strategic: StrategicWorld;
 }
 
 export interface ErrorMessage {
