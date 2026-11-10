@@ -7,7 +7,7 @@
  *   `maxAltitude`, like the trees (decision 45), on the same level-10 surface.
  * - **Towns:** candidates on a jittered 45 m lattice from
  *   rng(seed, "buildings").fork(tileKey); every candidate draws all its
- *   values. A candidate is kept with probability 0.75 × exp(−2 (d / r)²)
+ *   values. A candidate is kept with probability 0.55 × exp(−2 (d / r)²)
  *   within the urban radius r of the nearest town, off roads and water.
  *   Cities get taller buildings in their core.
  * - **Airbases and industry:** a fixed layout per site from
@@ -36,6 +36,8 @@ import {
   normalize,
   positionWorld,
   sin,
+  smoothstep,
+  uniform,
   varyingProperty,
   vec3,
   vec4,
@@ -82,7 +84,7 @@ interface Building {
 }
 
 function townBuilding(r: Rng, core: boolean, city: boolean): Omit<Building, 'd'> {
-  const tall = core && city;
+  const tall = core && city && r.chance(0.3);
   const w = tall ? r.range(18, 40) : r.range(9, 22);
   const shade = r.range(0.55, 0.85);
   const brick = r.chance(0.35);
@@ -90,7 +92,7 @@ function townBuilding(r: Rng, core: boolean, city: boolean): Omit<Building, 'd'>
     w,
     depth: w * r.range(0.6, 1.4),
     angle: r.range(0, Math.PI),
-    height: tall ? r.range(18, 75) : r.range(5, core ? 18 : 11),
+    height: tall ? r.range(20, 60) : r.range(5, core ? 16 : 10),
     rgb: brick ? [shade * 0.75, shade * 0.5, shade * 0.4] : [shade, shade * 0.97, shade * 0.92],
   };
 }
@@ -243,7 +245,7 @@ export function placeBuildings(
         for (const s of towns) {
           const dist = Math.acos(Math.min(1, s.point.dot(d))) * R;
           const f = dist / s.radius;
-          const p = 0.75 * Math.exp(-2 * f * f);
+          const p = 0.55 * Math.exp(-2 * f * f);
           if (f < 1.3 && p > bestF) {
             bestF = p;
             best = s;
@@ -335,7 +337,9 @@ export class StructureLayer {
   readonly group = new Group();
   enabled = true;
   /** Buildings appear within this distance of the camera (m). */
-  range = 12_000;
+  readonly range = uniform(12_000);
+  /** Buildings shrink away over this last stretch of the range (m). */
+  readonly fade = uniform(2500);
   /** Above this height over the ground, no buildings are built or drawn (m). */
   maxAltitude = 15_000;
   buildBudgetMs = 4;
@@ -377,10 +381,13 @@ export class StructureLayer {
     const apIn = varyingProperty('vec3', 'vBuildInscatter');
     const apTr = varyingProperty('vec3', 'vBuildTransmittance');
     m.positionNode = Fn(() => {
+      // Shrink buildings away toward the edge of the range, like the trees.
+      const dist = modelWorldMatrix.mul(vec4(ground, 1)).xyz.length();
+      const k = smoothstep(this.range, this.range.sub(this.fade), dist);
       const p = ground
-        .add(ax.mul(local.x.mul(params.y)))
-        .add(up.mul(local.y.mul(style.x)))
-        .add(az.mul(local.z.mul(params.z)));
+        .add(ax.mul(local.x.mul(params.y).mul(k)))
+        .add(up.mul(local.y.mul(style.x).mul(k)))
+        .add(az.mul(local.z.mul(params.z).mul(k)));
       const ap = lighting.atmosphere.aerialPerspective(
         modelWorldMatrix.mul(vec4(p, 1)).xyz as V3,
         6,
@@ -423,7 +430,7 @@ export class StructureLayer {
     if (!show) return;
     const R = opts.radius;
     const tileSize = ((Math.PI / 2) * R) / (1 << BUILDING_TILE_LEVEL);
-    const reach = this.range + tileSize;
+    const reach = this.range.value + tileSize;
     const radial = eye.clone().normalize();
     const near = scene.sitesNear(radial, reach);
     const wanted = new Map<string, TileKey>();

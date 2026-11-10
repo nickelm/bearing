@@ -177,7 +177,9 @@ Civilian geography (settlements, roads, bridges) joins the strategic graph befor
 - [x] Airbase runway meshes (drawn as concrete in the terrain shader, plus hangar and shelter meshes; decision 65)
 - [x] Tools: `npm run maps` graph mode draws settlements, roads, bridges, airbases, ports and targets; `npm run seeds` and the seed browser report them; render preview views `town`, `airbase`, `roads`, `night`
 - [ ] Snap bridges to the rendered (eroded) rivers, which can run a few kilometers from the coarse ones (decision 65)
+- [ ] Keep civilian roads off airfields (a road may cross a taxiway; route around airbase footprints or end them at the gate)
 - [ ] Flatten the terrain under runways (they follow the fine terrain's detail noise)
+- [ ] Island campaigns can leave the Alliance under 15 airbases (seed 11: 9), since its islands have little flat land; tied to the lopsided island split noted under milestone 4
 - [ ] Checkpoint 6: owner review of towns, roads, airbases and night lights in the browser
 
 ## Milestone 6: Simulation core and weather

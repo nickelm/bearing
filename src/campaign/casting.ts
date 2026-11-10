@@ -350,8 +350,7 @@ function castRegions(
       });
       const all = towns.map((t, i) => ({
         deep: !(
-          owners[t.node]!.kind === 'split' &&
-          t.depth < Math.min(400e3, 0.6 * deepest.get(t.node)!)
+          owners[t.node]!.kind === 'split' && t.depth < Math.min(400e3, 0.6 * deepest.get(t.node)!)
         ),
         point: settlementPoint(pts, t.index),
         key: Math.sqrt(mass[i]! / maxMass) * (0.75 + 0.5 * rs.nextFloat()),

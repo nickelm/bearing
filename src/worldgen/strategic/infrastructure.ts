@@ -124,6 +124,8 @@ export interface Infrastructure {
 // ---- Tuning ----
 
 export const AIRBASE_MIN_SPACING = 40e3;
+/** Lowest physical height of an airbase cell (m): coastal flats below it may be sea in the eroded world. */
+export const AIRBASE_MIN_HEIGHT = 5;
 /** Airbases per side: MIN_AIRBASES plus one per AIRBASE_AREA of held land, at most MAX_AIRBASES. */
 export const MIN_AIRBASES = 15;
 export const MAX_AIRBASES = 45;
@@ -331,7 +333,11 @@ function placeAirbases(
 
   // Candidate cells and their attributes.
   const suit = new Float32Array(n).fill(-1);
-  for (let c = 0; c < n; c++) if (sideOf(owner[c]!)) suit[c] = airbaseSuitability(ctx, c);
+  for (let c = 0; c < n; c++) {
+    // Not on coastal flats the eroded world may drown (decision 65).
+    if (sideOf(owner[c]!) && ctx.height[c]! >= AIRBASE_MIN_HEIGHT)
+      suit[c] = airbaseSuitability(ctx, c);
+  }
   const roadCells = build.roads.cellsOnRoad();
   const settlementCells = new Set(graph.settlements.cells);
   const land = (c: number) => ctx.labels.label[c]! >= 0;

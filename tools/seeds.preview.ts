@@ -64,7 +64,8 @@ it('seed browser', () => {
     const w = generateCampaignWorld({ ...DEFAULT_PLANET_PARAMS, seed }, { grid });
     const ms = performance.now() - t0;
     const { detection, cast, validity } = w.campaign;
-    const placed = (side: string) => w.infrastructure.airbases.filter((a) => a.side === side).length;
+    const placed = (side: string) =>
+      w.infrastructure.airbases.filter((a) => a.side === side).length;
     if (!validity.valid) invalid++;
     const perKind = KINDS.map((k) => detection.selected.filter((t) => t.kind === k).length);
     KINDS.forEach((k, i) => (counts[k] += perKind[i]! > 0 ? 1 : 0));
