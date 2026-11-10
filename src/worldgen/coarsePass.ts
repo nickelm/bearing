@@ -5,7 +5,7 @@
  *   tectonic pipeline (plates … biomes) → drainage on the tectonic grid →
  *   strategic graph
  *
- * The coarse pass skips GPU erosion (decision 60): drainage runs on the
+ * The coarse pass skips GPU erosion (decision 61): drainage runs on the
  * tectonic heights, which is enough for the rivers that make barrier lines
  * and port scores. It runs on the CPU, in the worldgen worker, in Node tools
  * and in tests.

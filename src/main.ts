@@ -57,6 +57,7 @@ import type {
 } from './ui/debugGui';
 import { FrameTimeOverlay } from './ui/frameTimeOverlay';
 import { CampaignPanel } from './ui/campaignPanel';
+import { SeedBrowser } from './ui/seedBrowser';
 import { THEATER_LABELS } from './campaign/theaters';
 import type { StrategicWorld } from './worldgen/campaignWorld';
 import { PING_STREAM } from './workers/protocol';
@@ -390,10 +391,51 @@ async function main(): Promise<void> {
     },
   });
   gui.status.backend = 'WebGPU';
-  gui.addCampaign(campaignParams, (c) => {
-    globe.strategic.enabled = c.overlay;
-    campaignPanel.visible = c.briefing && campaignParams.seedUsed !== '—';
+  // Seed browser: its own worker, so scanning does not cancel the displayed world.
+  const scanner = new WorldgenClient();
+  const seedBrowser = new SeedBrowser((seed) => {
+    worldParams.seed = seed;
+    gui.refresh();
+    void regenerate();
   });
+  let nextScanSeed: bigint | null = null;
+  gui.addCampaign(
+    campaignParams,
+    (c) => {
+      globe.strategic.enabled = c.overlay;
+      campaignPanel.visible = c.briefing && campaignParams.seedUsed !== '—';
+    },
+    {
+      scan: (count) => {
+        // Numeric seeds continue from the current one; text seeds start at 1.
+        const current = /^\d+$/.test(worldParams.seed.trim())
+          ? BigInt(worldParams.seed.trim())
+          : 0n;
+        const from = nextScanSeed ?? current + 1n;
+        const seeds = Array.from({ length: count }, (_, i) => String(from + BigInt(i)));
+        nextScanSeed = from + BigInt(count);
+        seedBrowser.visible = true;
+        seedBrowser.status(`scanning ${seeds[0]}–${seeds[seeds.length - 1]}…`);
+        const params = {
+          ...DEFAULT_PLANET_PARAMS,
+          plateCount: worldParams.plateCount,
+          oceanFraction: worldParams.oceanFraction,
+          reliefScale: worldParams.reliefScale,
+          temperatureOffset: worldParams.temperatureOffset,
+          moistureScale: worldParams.moistureScale,
+          erosionStrength: worldParams.erosionStrength,
+        };
+        scanner
+          .scan(params, seeds, (row) => seedBrowser.add(row))
+          .then(() => seedBrowser.status('click a row to load that seed'))
+          .catch((err: unknown) => {
+            if (!(err instanceof GenerationCancelled)) console.error(err);
+            seedBrowser.status('stopped');
+          });
+      },
+      stop: () => scanner.cancel(),
+    },
+  );
   gui.addTimeControls(timeParams, daysPerYear(orbitParams), {
     dayChanged: (d) => {
       const lon = globe.orbit.lon;

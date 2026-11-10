@@ -4,17 +4,18 @@ Guidance for Claude Code sessions in this repository. `docs/design.md` is the so
 
 ## Commands
 
-| Task                     | Command                                                     |
-| ------------------------ | ----------------------------------------------------------- |
-| Dev server               | `npm run dev`                                               |
-| Unit tests               | `npm test` (watch: `npm run test:watch`)                    |
-| Type check               | `npm run typecheck`                                         |
-| Lint                     | `npm run lint`                                              |
-| Everything but build     | `npm run check`                                             |
-| Production build         | `npm run build` (runs the type check first)                 |
-| Serve production build   | `npm run preview` → `http://localhost:4173/bearing/`        |
-| Format                   | `npm run format`                                            |
-| Render world maps to PNG | `npm run maps` (env: `SEED`, `RES`, `MODES`) → `tools/out/` |
+| Task                     | Command                                                       |
+| ------------------------ | ------------------------------------------------------------- |
+| Dev server               | `npm run dev`                                                 |
+| Unit tests               | `npm test` (watch: `npm run test:watch`)                      |
+| Type check               | `npm run typecheck`                                           |
+| Lint                     | `npm run lint`                                                |
+| Everything but build     | `npm run check`                                               |
+| Production build         | `npm run build` (runs the type check first)                   |
+| Serve production build   | `npm run preview` → `http://localhost:4173/bearing/`          |
+| Format                   | `npm run format`                                              |
+| Render world maps to PNG | `npm run maps` (env: `SEED`, `RES`, `MODES`) → `tools/out/`   |
+| Seed browser (theaters)  | `npm run seeds` (env: `SEEDS`, `FROM`, `COUNT`, `BRIEFING=1`) |
 
 ## Directory map
 
@@ -23,8 +24,9 @@ docs/design.md      design doc (source of truth; do not reformat)
 docs/decisions.md   architecture decision log
 src/core/           units, float64 Vec3d, coordinates, seeded RNG. Leaf layer.
 src/worldgen/       planet generation pipeline stages (may use GPU compute)
+  coarsePass.ts     pipeline steps 1–9 at 256² on the CPU; campaignWorld.ts adds the validity retries
   strategic/        strategic graph types and builder: the only world view campaign logic gets
-src/campaign/       theater detection, casting, briefing (reads the strategic graph only)
+src/campaign/       theater detection, casting, briefing, validity check (reads the strategic graph only)
 src/sim/            headless simulation; runs in a worker
   command/          per-side command layer: intelligence picture, ATO (graph and cast only)
 src/render/         terrain, atmosphere, ocean, units, cameras (Three.js WebGPU + TSL)
@@ -93,7 +95,7 @@ Promotion expands a unit deterministically from its seed and current strength. D
 - Record any architectural decision, or any deviation from `docs/design.md`, in `docs/decisions.md` with the date, the decision and the reason.
 - Run `npm test` and `npm run typecheck` (or `npm run check`) before declaring a task complete.
 - Prefer small, reviewable commits with descriptive messages.
-- You cannot see the WebGPU view. To inspect generated worlds, run `npm run maps` and read the PNGs in `tools/out/` (equirectangular map plus both polar caps, any view mode).
+- You cannot see the WebGPU view. To inspect generated worlds, run `npm run maps` and read the PNGs in `tools/out/` (equirectangular map plus both polar caps, any view mode). `MODES=graph` draws the strategic graph and the cast's territory (and prints the briefing); `MODES=barrier` shows the front generator's barrier map.
 - When a task produces something visual, tell the user what they should see and how to check it in the browser (`npm run dev`, which GUI controls to use, and what would indicate a bug).
 
 ## Tooling notes
