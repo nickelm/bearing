@@ -11,7 +11,10 @@
  *   Deeper tiles read the level-MAX_BAKED_LEVEL ancestor (bilinear) and add
  *   render detail noise, a pure function of direction like the bake, so
  *   neighbors still agree.
- * - The sea is drawn flat at sea level; land is exaggerated.
+ * - The sea is drawn flat at sea level; land is exaggerated. `height` holds
+ *   the raw height (negative at sea) and the shader clamps it, so the
+ *   fragment stage gets an interpolated water depth and a coastline finer
+ *   than the vertex grid (decision 37).
  * - Geomorphing (CDLOD-style): `positionParent` holds the parent's surface
  *   under each vertex: the parent's own heights at even vertices, and the
  *   midpoint of the parent's edge or diagonal at odd ones. The shader blends
@@ -44,7 +47,7 @@ const STEP = TILE_TEXELS / TILE_SEGMENTS;
  * Vertex data of one tile. Exaggeration is applied in the vertex shader, so
  * changing it needs no rebuild; `displacedPosition` below is the same
  * formula on the CPU:
- *   own    = base + up · height · exaggeration
+ *   own    = base + up · max(height, 0) · exaggeration
  *   parent = parentBase + parentDisp · exaggeration
  *   position = mix(parent, own, morph)
  *   normal   = normalize(up − slope · exaggeration)
@@ -57,14 +60,16 @@ export interface TileMeshData {
   base: Float32Array;
   /** Unit radial direction. */
   up: Float32Array;
-  /** Displayed height before exaggeration: max(0, h), the sea flat at 0. */
+  /** Raw surface height (m, negative under the sea); the displayed height is max(0, h). */
   height: Float32Array;
+  /** Inland water coverage 0..1 (lakes), drawn as water by the shader. */
+  water: Float32Array;
   /** Morph target: the parent's surface, as base + displacement (before exaggeration). */
   parentBase: Float32Array;
   parentDisp: Float32Array;
   /** Surface gradient of the displayed height (before exaggeration), a tangent vector. */
   slope: Float32Array;
-  /** Linear RGB. */
+  /** Linear RGB albedo: biome on land, seabed under the sea (or a debug-mode color). */
   color: Float32Array;
   /** Displayed height range before exaggeration (m). */
   minHeight: number;
@@ -80,7 +85,7 @@ export function displacedPosition(
   out = new Vec3d(),
 ): Vec3d {
   const k = v * 3;
-  const h = m.height[v]! * exaggeration;
+  const h = Math.max(0, m.height[v]!) * exaggeration;
   const ox = m.base[k]! + m.up[k]! * h;
   const oy = m.base[k + 1]! + m.up[k + 1]! * h;
   const oz = m.base[k + 2]! + m.up[k + 2]! * h;
@@ -217,6 +222,12 @@ function surfaceSampler(
   };
 }
 
+/** Seabed albedo (sRGB): sand in the shallows, darker silt in deep water. */
+function seabedColor(h: number, reliefScale: number): Rgb {
+  const t = Math.min(1, -h / (200 * reliefScale));
+  return [0.66 - 0.3 * t, 0.6 - 0.28 * t, 0.46 - 0.2 * t];
+}
+
 function colorFor(
   mode: TileViewMode,
   h: number,
@@ -233,11 +244,10 @@ function colorFor(
     c = hsl((level * 0.13) % 1, 0.6, 0.5);
   } else {
     const biome = material & 0xff;
-    const lake = (material >> 16) & 1;
     if (h <= 0) {
-      const depth = Math.min(1, -h / (4000 * reliefScale));
-      c = [0.18 - 0.12 * depth, 0.42 - 0.25 * depth, 0.62 - 0.22 * depth];
-    } else if (lake) {
+      // The shader draws the water over it (decision 37).
+      c = seabedColor(h, reliefScale);
+    } else if (mode === 'borders' && (material >> 16) & 1) {
       c = BIOME_COLORS[Biome.Shelf]!;
     } else {
       const b = BIOME_COLORS[biome] ?? [1, 0, 1];
@@ -321,6 +331,7 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
   const base = new Float32Array(n3);
   const up = new Float32Array(n3);
   const height = new Float32Array(TILE_VERTEX_COUNT);
+  const water = new Float32Array(TILE_VERTEX_COUNT);
   const parentBase = new Float32Array(n3);
   const parentDisp = new Float32Array(n3);
   const slope = new Float32Array(n3);
@@ -360,7 +371,7 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
       up[k + 1] = uy;
       up[k + 2] = uz;
       const dh = display(hOwn[v]!);
-      height[v] = dh;
+      height[v] = hOwn[v]!;
       minH = Math.min(minH, dh);
       maxH = Math.max(maxH, dh);
       let a: number;
@@ -417,6 +428,7 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
       const fx = dox + sx * dscale;
       const fy = doy + sy * dscale;
       const mat = materialAt(sources.data, fx, fy);
+      water[v] = opts.mode === 'biome' && hOwn[v]! > 0 ? (mat >> 16) & 1 : 0;
       const river = riverAt(sources.data, fx, fy, footprint);
       const rgb = colorFor(opts.mode, hOwn[v]!, mat, river, t.level, edge, opts.reliefScale);
       color[v * 3] = srgbToLinear(rgb[0]);
@@ -442,6 +454,7 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
       for (const arr of [up, parentDisp, slope, color])
         arr.copyWithin(dst * 3, src * 3, src * 3 + 3);
       height[dst] = height[src]!;
+      water[dst] = water[src]!;
     }
   }
   return {
@@ -450,6 +463,7 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
     base,
     up,
     height,
+    water,
     parentBase,
     parentDisp,
     slope,

@@ -78,6 +78,15 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     localTime: 9,
   },
   {
+    name: 'coast',
+    dLat: -30 * DEG,
+    dLon: 0,
+    altitude: 80 * KM,
+    tilt: 45 * DEG,
+    heading: 180 * DEG,
+    localTime: 10.5,
+  },
+  {
     name: 'sunset',
     dLat: 0,
     dLon: 0,

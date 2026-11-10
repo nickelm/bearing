@@ -25,6 +25,7 @@ import {
 import {
   attribute,
   Fn,
+  max,
   mix,
   modelWorldMatrix,
   normalize,
@@ -52,6 +53,7 @@ import { Vec3d } from '../../core/vec3d';
 import { MAX_BAKED_LEVEL } from '../../worldgen/gpu/tileSynth';
 import type { TileData, TileSynthesizer } from '../../worldgen/gpu/tileSynth';
 import { PlanetLighting } from '../lighting/planetLighting';
+import { WaterShading } from '../water/waterShading';
 import { DEFAULT_LOD, selectTiles } from './quadtree';
 import type { LodOptions, LodView } from './quadtree';
 import { TileCache, TileLoader, TileRequestQueue } from './tileCache';
@@ -59,8 +61,8 @@ import { buildTileIndex, buildTileMesh, dataTileFor, TILE_VERTEX_COUNT } from '.
 import type { TileViewMode } from './tileMesh';
 
 const DATA_BYTES = TILE_STRIDE * TILE_STRIDE * 8;
-/** base, up, parentBase, parentDisp, slope, color (vec3) + height (float), float32. */
-const MESH_BYTES = TILE_VERTEX_COUNT * (6 * 3 + 1) * 4;
+/** base, up, parentBase, parentDisp, slope, color (vec3) + height, water (float), float32. */
+const MESH_BYTES = TILE_VERTEX_COUNT * (6 * 3 + 2) * 4;
 
 export interface TerrainStats {
   drawn: number;
@@ -100,6 +102,8 @@ export class TerrainRenderer {
   private detail: Noise3 = new Noise3(rng(0, 'render-detail'));
   private readonly index = new BufferAttribute(buildTileIndex(), 1);
   private readonly material: MeshBasicNodeMaterial;
+  /** Sea and lake shading inside the terrain material (decision 37). */
+  readonly water: WaterShading;
   private readonly data = new TileCache<TileData>(400 * 2 ** 20);
   private readonly meshes = new TileCache<Mesh>(200 * 2 ** 20, (e) => {
     this.group.remove(e.value);
@@ -123,7 +127,9 @@ export class TerrainRenderer {
     // changing the exaggeration is a uniform update, not a rebuild.
     const exaggeration = this.exaggerationUniform;
     const up = attribute('up', 'vec3');
-    const own = positionLocal.add(up.mul(attribute('height', 'float').mul(exaggeration)));
+    const rawHeight = attribute('height', 'float');
+    // The sea is drawn flat at 0 m; the raw height still reaches the fragment stage.
+    const own = positionLocal.add(up.mul(max(rawHeight, 0).mul(exaggeration)));
     const parent = attribute('parentBase', 'vec3').add(
       attribute('parentDisp', 'vec3').mul(exaggeration),
     );
@@ -140,11 +146,16 @@ export class TerrainRenderer {
     })();
     // Meshes carry no rotation or scale, so object space is world space.
     const normal = normalize(up.sub(attribute('slope', 'vec3').mul(exaggeration)));
-    this.material.colorNode = lighting.applyAerial(
-      lighting.shadeDiffuse(attribute('color', 'vec3'), normal, positionWorld),
-      apInscatter,
-      apTransmittance,
-    );
+    this.water = new WaterShading(lighting);
+    const surface = this.water.shade({
+      albedo: attribute('color', 'vec3'),
+      normal,
+      height: rawHeight,
+      lake: attribute('water', 'float'),
+      up: normalize(up),
+      relative: positionWorld,
+    });
+    this.material.colorNode = lighting.applyAerial(surface, apInscatter, apTransmittance);
     this.loader = new TileLoader<TileData>(
       this.data,
       this.queue,
@@ -163,6 +174,7 @@ export class TerrainRenderer {
   /** Shows a world (or nothing). Drops all cached tiles. */
   setWorld(world: TerrainWorld | null): void {
     this.world = world;
+    if (world) this.water.reliefScale.value = world.reliefScale;
     this.detail = new Noise3(rng(world?.seed ?? 0, 'render-detail'));
     this.data.clear();
     this.meshes.clear();
@@ -178,6 +190,7 @@ export class TerrainRenderer {
   setMode(mode: TileViewMode): void {
     if (mode === this.mode) return;
     this.mode = mode;
+    this.water.enabled.value = mode === 'biome' ? 1 : 0;
     this.meshes.clear();
     this.visible.clear();
   }
@@ -220,6 +233,7 @@ export class TerrainRenderer {
     g.setAttribute('position', new BufferAttribute(m.base, 3));
     g.setAttribute('up', new BufferAttribute(m.up, 3));
     g.setAttribute('height', new BufferAttribute(m.height, 1));
+    g.setAttribute('water', new BufferAttribute(m.water, 1));
     g.setAttribute('parentBase', new BufferAttribute(m.parentBase, 3));
     g.setAttribute('parentDisp', new BufferAttribute(m.parentDisp, 3));
     g.setAttribute('slope', new BufferAttribute(m.slope, 3));

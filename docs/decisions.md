@@ -508,3 +508,21 @@ The vertex shader computes `base + up · height · exaggeration`, morphs toward 
 - Scattering varies slowly across a surface. Per-vertex evaluation (as in O'Neil, GPU Gems 2) costs about 10 LUT samples per vertex rather than per pixel.
 - Terrain tiles are dense on screen by construction (screen-space error), so interpolation artefacts stay below a few pixels.
 - A per-pixel post pass with a depth buffer remains possible if long, coarse tiles near the limb show banding.
+
+### 37. The sea is shaded inside the terrain material
+
+**Date:** 2026-11-09
+**Decision:** There is no separate ocean mesh.
+
+- **Geometry.** The tile mesh's `height` attribute is now the raw height, negative under the sea. The vertex shader displaces by `max(height, 0)`, so the sea stays flat at 0 m as before.
+- **Mask and depth.** The fragment stage receives the interpolated raw height. Its h = 0 isoline, antialiased with `fwidth`, is the coastline, finer than the vertex grid, and its negative part is the water depth.
+- **Lakes.** Lakes arrive through a new per-vertex `water` attribute (coverage, 1 where the tile's lake flag is set on land). They are shaded as water of a nominal 18 m reference depth.
+- **Color** (`render/water/waterShading.ts`). Under water, the vertex color is the seabed albedo: sand in the shallows, silt deeper. The water's albedo blends that seabed into a deep-water color by Beer–Lambert transmittance over twice the depth, measured in reference meters (depth ÷ `reliefScale`, decision 14). Water uses a flat normal.
+- **Debug modes.** Debug color modes switch water shading off.
+- **Cost.** 80 bytes per vertex (was 76).
+
+**Reason:**
+
+- An ocean mesh would need its own LOD, accurate to centimeters against the coastline at 500 m altitude, and blending at the shore.
+- The terrain already covers the sea floor at the right resolution, and the raw height carries the depth for free.
+- Reference depths keep the shallow-to-deep color ramp Earth-like even though physical shelves are only about 20 m deep.

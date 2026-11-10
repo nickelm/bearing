@@ -37,7 +37,12 @@ const opts: MeshOptions = {
 const EX = 3;
 
 /** Synthetic tile data from an analytic height field (same function at every level). */
-function fakeData(k: TileKey, river?: (sx: number, sy: number) => boolean): TileData {
+function fakeData(
+  k: TileKey,
+  river?: (sx: number, sy: number) => boolean,
+  offset = 300,
+  lake?: (sx: number, sy: number) => boolean,
+): TileData {
   const height = new Float32Array(TILE_STRIDE * TILE_STRIDE);
   const material = new Uint32Array(TILE_STRIDE * TILE_STRIDE).fill(8);
   const d = new Vec3d();
@@ -45,9 +50,10 @@ function fakeData(k: TileKey, river?: (sx: number, sy: number) => boolean): Tile
     for (let sx = -TILE_BORDER; sx <= TILE_TEXELS + TILE_BORDER; sx++) {
       tileSampleDirection(k, sx, sy, d);
       height[(sy + TILE_BORDER) * TILE_STRIDE + sx + TILE_BORDER] =
-        300 + 200 * Math.sin(d.x * 400) * Math.cos(d.z * 300);
-      if (river?.(sx, sy))
-        material[(sy + TILE_BORDER) * TILE_STRIDE + sx + TILE_BORDER] = 8 | (255 << 8);
+        offset + 200 * Math.sin(d.x * 400) * Math.cos(d.z * 300);
+      const i = (sy + TILE_BORDER) * TILE_STRIDE + sx + TILE_BORDER;
+      if (river?.(sx, sy)) material[i] = 8 | (255 << 8);
+      if (lake?.(sx, sy)) material[i] = material[i]! | (1 << 16);
     }
   }
   return { key: k, height, material, minHeight: 0, maxHeight: 500 };
@@ -149,5 +155,37 @@ describe('buildTileMesh', () => {
       // Bluer than the same vertex without a river.
       expect(m.color[v * 3 + 2]!).toBeGreaterThan(plain.color[v * 3 + 2]! + 0.05);
     }
+  });
+
+  it('keeps raw sea depths but draws the sea flat; lakes only on land', () => {
+    // Heights from -200 to +200 m around a coast, a lake flag everywhere.
+    const t = tileKey(4, 6, 20, 30);
+    const all = () => true;
+    const m = buildTileMesh(
+      t,
+      {
+        data: fakeData(t, undefined, 0, all),
+        parentData: fakeData(parentTile(t)!, undefined, 0, all),
+      },
+      opts,
+    );
+    let sea = 0;
+    let land = 0;
+    for (let v = 0; v < V * V; v++) {
+      const h = m.height[v]!;
+      const radial = world(m, v).length() - R;
+      if (h < 0) {
+        sea++;
+        expect(radial).toBeCloseTo(0, 1);
+        expect(m.water[v]).toBe(0);
+      } else {
+        land++;
+        expect(radial).toBeCloseTo(h * EX, 0);
+        expect(m.water[v]).toBe(1);
+      }
+    }
+    expect(sea).toBeGreaterThan(100);
+    expect(land).toBeGreaterThan(100);
+    expect(m.minHeight).toBe(0);
   });
 });

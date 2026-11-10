@@ -76,7 +76,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [x] Single-scattering atmosphere: limb glow from orbit, sunset colors at the terminator
 - [x] Aerial perspective on terrain
 - [ ] Climate array texture (sea-level temperature, seasonal range, moisture, cloudiness) with a TSL cube-face lookup by direction
-- [ ] Ocean: depth-based color from bathymetry
+- [x] Ocean: depth-based color from bathymetry
 - [ ] Ocean: wave normal map and sun glint
 - [ ] Coastal foam
 - [ ] Checkpoint 3: owner review of day/night, sky, aerial perspective and ocean in the browser
