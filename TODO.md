@@ -1,6 +1,6 @@
 # TODO
 
-Tech-demo milestones from [docs/design.md](docs/design.md). Each task should take a few hours. Check tasks off as they are completed, and add subtasks as you discover them.
+Tech-demo milestones from [docs/design.md](docs/design.md) (revision 4: nine milestones, after a milestone 0 scaffold). Each task should take a few hours. Check tasks off as they are completed, and add subtasks as you discover them.
 
 ## Milestone 0: Scaffold
 
@@ -22,8 +22,8 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [x] Neighbor lookup across face seams and corners (4- and 8-neighborhoods), with tests
 - [x] Tile key type `(face, level, x, y)`: parent/child/neighbor math, texel ↔ direction, string key for streams and caches, with tests (decision 13)
 - [x] Seeded 3D noise (Perlin, fBm, ridged) and a deterministic min-heap in `core`
-- [x] Continental crust field around two near-antipodal continent centers (decisions 17, 18)
-- [x] Plate seeding steered into seeds inside the two continents (3 main, 2 second), the rest spread over the oceans (`rng("plates")`)
+- [x] Continental crust field around two near-antipodal continent centers (decisions 17, 18; replaced by crust from plate types, decision 45)
+- [x] Plate seeding steered into seeds inside the two continents (3 main, 2 second), the rest spread over the oceans (`rng("plates")`; replaced by unsteered plates, decision 45)
 - [x] Plate growth by randomized weighted flood fill; a motion vector (Euler pole) per plate
 - [x] Plate boundary detection and classification (convergent / divergent / transform × continental / oceanic)
 - [x] Uplift field: continental collision ranges, trenches and island arcs, mid-ocean ridges, with distance-to-boundary falloff
@@ -94,32 +94,74 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 
 - [ ] Intermittent GPU determinism flake in Vitest (about 1 run in 5–10 of the full suite): a GPU determinism test (`detailStage`, `tileSynth`) gets different results for two identical runs. Present at the M2 baseline; not reproduced by 40 back-to-back detail-stage runs under load. Tests now report how many values differ and whether they are zeros (a readback race in Dawn's Node bindings would show zeros). First report (2026-11-10): 24 of 221k cells differ, worst 0.23 m, no zeros, in the single-dispatch detail kernel (pure per cell, no in-place neighbor reads). So it is not a readback race; suspect the GPU or driver under concurrent load. Check whether it happens with `--no-file-parallelism`, and on another GPU.
 
-## Milestone 4: Geography and front
+## Milestone 4: Reading the world
 
-- [ ] Less-steered geography (decision 41): continents emerge from the crust field and plates without the forced two-continent layout; any number of continents
-- [ ] Landmass labeling (connected components) with size, shape and latitude statistics
-- [ ] Theater selection: choose the main continent (room for a front with depth) and the supply continent (across an ocean gap in range) from the landmasses that exist; the campaign adapts to the world
-- [ ] Ocean gap: shortest great-circle distance between the two chosen continents' coasts, islands ignored (decision 16)
-- [ ] Reject and retry with seeded sub-seeds (`fork("retry-n")`) only when no pair of landmasses qualifies, with a test for retry determinism
-- [ ] Coarse pass wired end to end before the full pass
-- [ ] Barrier map from river width, slope, ridge prominence and forest density
-- [ ] Coast-to-coast maximum-barrier path search with a 35/65–50/50 area-ratio constraint
-- [ ] Repeated search with corridor exclusion to get 3–4 defensive lines
-- [ ] Start line placed one line forward of the strongest barrier
-- [ ] Faction placement: NATO holds the side nearer the second continent
-- [ ] Invasion corridors: low-barrier segments with good access (refine with roads after milestone 5)
-- [ ] Pre-bake the contested region to tile level 7 (about 48 m) during world generation
-- [ ] Strategic map overlay for defensive lines, start line and corridors
+The strategic graph is the only view of the world that theater detection, casting and the command layer get (decision 51). Generation is unsteered (decision 45).
 
-## Milestone 5: Settlements, roads, airbases
+### Unsteered generation and the coarse pass
 
-- [ ] Settlement site scoring (river confluences, coasts, fertile lowlands); placement with population
-- [ ] Ports on the coasts facing the ocean gap
+- [ ] Unsteered generation: uniform plate seeding, plate types from `rng("plates")`, crust from plate types; remove the two-continent layout and `oceanGap` (decision 45)
+- [ ] Landmass labeling with statistics: area, centroid, coastline length, latitude span, terrain mix (extends `worldgen/landmasses.ts`)
+- [ ] Coarse pass end to end: stages 1–9 at 256² per face (tectonic grid plus a reduced global erosion and drainage pass) in the worker; time it and report it in the progress UI
+
+### Strategic graph
+
+- [ ] Graph types in `worldgen/strategic/graph.ts`: landmass and archipelago nodes, sea-lane edges, chokepoints, barrier lines; packed into transferable buffers and stored in the world record (bump `GENERATOR_VERSION`)
+- [ ] Airbase capacity per landmass: flat, low land (slope and height thresholds) counted as candidate airbase sites
+- [ ] Candidate port sites per landmass: sheltered coast with deep water close inshore
+- [ ] Archipelago nodes: merge islands under about 2,000 km² by coast-to-coast distance within strike range (single linkage)
+- [ ] Coarse ocean grid (about 25–50 km cells) with a cost field: open water, shallows, sea ice
+- [ ] Sea-lane edges: least-cost routes from port site to port site between landmass node pairs, with length and the minimum width of water along the route
+- [ ] Chokepoints: straits under about 150 km and islands that could host an airfield within about 300 km of a lane; record which lanes each one controls
+
+### Front generator
+
+- [ ] Barrier map per land cell from river width, slope, ridge prominence and forest density (decision 44)
+- [ ] Coast-to-coast maximum-barrier path search with the area constraint (each side at least 35% of the landmass)
+- [ ] Repeated search with exclusion corridors to get 3–4 roughly parallel defensive lines; store them as the landmass node's barrier lines
+- [ ] Start line one line forward of the strongest barrier; invasion corridors on weak segments of each line (refine with roads in milestone 5)
+
+### Theaters
+
+- [ ] Theater module interface (precondition on the graph, fit score, instantiation) and a registry
+- [ ] Continental front theater
+- [ ] Sea-lane theater (800–3,000 km lane from a rear-base landmass to a front)
+- [ ] Chokepoint theater (chokepoint on an active sea lane)
+- [ ] Island campaign theater (archipelago and small landmass nodes in mutual strike range, no front-sized landmass)
+- [ ] Strategic theater (industry and logistics targets, air defense belts)
+- [ ] Validity check: flat land for at least 15 airbases per side and at least one theater above its fit threshold; retry with seeded sub-seeds `fork("retry-n")`, with a test that each seed maps to exactly one world
+
+### Casting
+
+- [ ] Cast data type (theaters, territory per side, posture, range factor, logistics links, regions) stored with the world; theater selection above fit thresholds from `rng("casting")` (decision 46)
+- [ ] Territory assignment: the Pact takes mass and interior lines, the Alliance takes the side next to its rear base and sea lanes; island campaign variant
+- [ ] Posture (the Pact attacks by default) and logistics links between theaters (a cut lane starves a front, a lost chokepoint exposes convoys)
+- [ ] Range factor search in [0.35, 1.0] from the two reach targets (decision 50)
+- [ ] Industry, port and base regions for each side, consistent with territory and theaters (milestone 5 places the sites)
+- [ ] Briefing text generated from the cast: the theaters, the stakes in each, the first expected moves
+- [ ] Regional bake: pre-bake ground-combat regions to tile level 7 (about 48 m) during world generation
+
+### Tools and review
+
+- [ ] Strategic graph debug overlay on the globe: nodes, sea lanes, chokepoints, barrier lines, start line, corridors, theater boundaries
+- [ ] Graph overlay mode in `npm run maps`, so detection can be checked without a browser
+- [ ] Seed browser: a CLI table first (`npm run seeds`: theaters, fit scores, range factor, retries per seed), then a GUI panel
+- [ ] Tune the theater fit thresholds from seed browser statistics (design open question)
+- [ ] Determinism tests: graph and cast identical across runs; changing casting leaves the graph unchanged
+- [ ] Checkpoint 5: owner review of the graph overlay, theaters and briefings across many seeds
+
+## Milestone 5: Settlements, roads, ports, airbases (placed from the cast)
+
+- [ ] Settlement site scoring (river confluences, coasts, fertile lowlands); placement with population, denser in each side's industry regions
+- [ ] Ports at the cast's port sites (sea-lane ends, island ports)
 - [ ] Movement cost map from slope, terrain and water
 - [ ] Least-cost road paths between settlements, merged where they overlap
 - [ ] Bridges at river crossings, as targetable features
 - [ ] Airbase site search on flat, low terrain near roads
-- [ ] Airbase density by distance behind the front (densest 100–400 km back); strategic bomber bases far from the front
+- [ ] Airbase density by distance behind each front (densest 100–400 km back); strategic bomber bases far from the front
+- [ ] Island airfields and forward airfields at chokepoints
+- [ ] Industry and logistics sites as targets for the strategic theater
+- [ ] Refine invasion corridors with the road network
 - [ ] Road rendering
 - [ ] Settlement building clusters scaled by population
 - [ ] Night-side settlement lights
@@ -127,7 +169,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 
 ## Milestone 6: Simulation core and weather
 
-- [ ] Sim worker host: message protocol and state snapshots to the main thread (evaluate transferables vs. SharedArrayBuffer)
+- [ ] Sim worker host: message protocol and state snapshots to the main thread as transferable buffers (decision 40)
 - [ ] Float64 game clock and time acceleration (pause, 1×, 4×, 16×, 64×, 256×)
 - [ ] Discrete-event scheduler (priority queue with deterministic tie-breaking)
 - [ ] Fixed-tick processes (1 game minute) interleaved with events in time order
@@ -137,28 +179,68 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [ ] Weather fields for operations: cloud cover and ceiling, visibility, precipitation, wind at several levels
 - [ ] Weather determinism test across time acceleration
 - [ ] Clouds rendered from the live weather field (replaces the static M3 field)
+
+## Milestone 7: Air tasking and mission search
+
+### Data model and flight
+
+- [ ] Aircraft type table for both sides: fictional names, reference type, role, speeds, ceiling, combat radius before the range factor, loadouts
+- [ ] Squadrons, bases and inventories per side (aircraft, readiness, stocks)
+- [ ] Mission model: type, side, theater, package, target or station, phase timeline, originating need and score (decision 49), per-mission seed ready for promotion
+- [ ] Great-circle routes with climb and descent profiles; analytic position(t); fuel with the cast's range factor (decision 50)
+- [ ] Phase timeline per mission type (departure, climb-out, ingress, fence-in, on target or on station, egress, approach, recovery) as scheduled events
+
+### Intelligence (decision 52)
+
+- [ ] Per-side intelligence store: contacts with position, type, last seen, confidence and source; decay with age; determinism test
+- [ ] Reconnaissance satellites: analytic ground tracks and revisit times; optical imaging blocked by night and cloud, radar imaging through cloud
+- [ ] Radar air picture: ground radar and AWACS coverage with radar horizon and terrain masking; feeds Pact ground-controlled interception
+- [ ] Reconnaissance missions refresh contacts along their routes
+
+### Air tasking order (decision 49)
+
+- [ ] Need collection from fronts: CAS for segments under pressure, interdiction of supply behind the front (known contacts only)
+- [ ] Need collection from sea lanes, chokepoints, islands and strategic targets: CAP over high-value assets, convoy escort and attack, strikes on industry and air defenses, resupply and airlift
+- [ ] Priority score (theater weight × target value × urgency) with deterministic tie-breaking
+- [ ] Package builder: flights from squadrons in range; escort and SEAD when the target area is defended
+- [ ] Doctrine scheduler: Pact strikes in large waves, Alliance missions spread evenly; daily ATO plus a replanning tick every few game hours
+- [ ] Weather and daylight in tasking: cancellations below minimums, winds aloft in ground speed, night and bad-weather low-level strikes
+- [ ] Aggregate mission resolution: target damage and losses from package composition, defenses and weather
+- [ ] Concurrency cap so that 20–50 aircraft are airborne
+- [ ] Determinism tests: identical ATO at 1× and 64×, and independent of the viewing side (decision 47)
+
+### Mission search and display
+
+- [ ] Debug GUI toggle for the viewing side (developer tool until milestone 9)
+- [ ] Mission icons and route lines from orbit
+- [ ] Low-poly aircraft meshes below about 50 km altitude
+- [ ] Mission search panel: ongoing and upcoming missions of the viewing side
+- [ ] Filters: mission type, aircraft, theater, current phase, threat level, time until action
+- [ ] Focus the camera on a selected mission; smooth transition to a chase camera on one of its aircraft
+- [ ] Subscriptions: a saved query plus a phase triggers auto-slowdown to 1× and offers the mission
+- [ ] Intelligence overlay: the viewing side's contacts and satellite tracks
+- [ ] Follow representative sorties to judge the range factor (design open question)
+- [ ] Checkpoint 6: owner review of the ATO, mission search, subscriptions and the chase camera
+
+## Milestone 8: Ground and naval aggregates
+
+- [ ] Order of battle: division / brigade or regiment / battalion data model with per-unit seeds (ready for promotion)
+- [ ] Initial deployment along each front's start line, and island garrisons
+- [ ] Lanchester-style aggregate combat per tick, with terrain, posture, supply, artillery, air support (from mission resolution) and weather modifiers
+- [ ] Front segment movement by local force balance, slowed by barriers
+- [ ] Offensives by cast posture along the invasion corridors
+- [ ] Supply: interdiction cuts it, convoy arrivals deliver reinforcements and supplies to the receiving theater
+- [ ] Convoys on sea-lane routes between ports; analytic position(t)
+- [ ] Carrier groups and amphibious groups for island campaigns and chokepoint seizures
+- [ ] Display: unit symbols for battalions from orbit; low-poly ship meshes below about 50 km
 - [ ] Benchmark: how many battalions plus weather the worker handles at 256×
 
-## Milestone 7: Flights, convoys, formations
+## Milestone 9: Polish
 
-- [ ] Great-circle route math with climb and descent profiles; analytic position(t)
-- [ ] Flight scheduling between airbases (20–50 aircraft), with the range factor applied to fuel
-- [ ] Weather and daylight in flight operations: cancellations below minimums, winds aloft in ground speed, day/night sortie mix
-- [ ] Convoys on great-circle sea routes between ports
-- [ ] Order of battle: division / brigade / battalion data model with per-unit seeds (ready for promotion)
-- [ ] Initial deployment along the start line
-- [ ] Lanchester-style aggregate combat per tick, with terrain, posture, supply, support and weather modifiers
-- [ ] Front segment movement by local force balance, slowed by barriers
-- [ ] Scripted Pact offensive along the corridors
-- [ ] Display: faction icons and route lines from orbit; NATO-style unit symbols
-- [ ] Low-poly aircraft and ship meshes below about 50 km altitude
-- [ ] Smooth transition to a chase camera when a flight is selected
-
-## Milestone 8: Polish
-
+- [ ] Side selection at campaign start, with the generated briefing
+- [ ] Cache the strategic graph and the cast with the world in IndexedDB
 - [ ] Generation profiling and progress polish (no time budget, decision 12)
 - [ ] Rendering performance pass (GPU timestamp queries, frame budget); consider building tile meshes in a worker (decision 30)
-- [ ] Tree LOD: one cone per clump beyond about 2 km, or impostors (decision 45: ~6.6 M triangles over dense forest at the default 5 km range)
 - [ ] Bundle size and code splitting
 - [ ] Scripted flythrough camera path for screenshots, including a dawn and a weather front
 - [ ] Check every demo goal against the design doc and decisions
@@ -166,7 +248,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 ## After the demo
 
 - Entity promotion and ground behaviors
-- Cockpit flight for attack aircraft and helicopters
+- Cockpit flight and jump-in, then flight stick support
 - Air combat
 - Naval combat
 - The campaign economy

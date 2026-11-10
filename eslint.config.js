@@ -16,6 +16,12 @@ const GRAPHICS_PACKAGES = [
   { name: 'three/tsl', message: 'Headless layers must not depend on shader code.' },
   { name: 'lil-gui', message: 'Debug UI belongs in src/ui.' },
 ];
+const WORLD_DATA = {
+  // Any path through a `worldgen` directory, unless it continues into `worldgen/strategic`.
+  regex: '(^|/)worldgen(/(?!strategic(/|$)).*)?$',
+  message:
+    'Theater detection, casting and the command layer read the strategic graph only (decision 51). Add the fact to worldgen/strategic instead.',
+};
 const NO_MATH_RANDOM = [
   'error',
   {
@@ -80,6 +86,22 @@ export default tseslint.config(
         {
           paths: [{ name: 'lil-gui', message: 'Debug UI belongs in src/ui.' }],
           patterns: [RENDER_UI],
+        },
+      ],
+      'no-restricted-properties': NO_MATH_RANDOM,
+    },
+  },
+  {
+    // Campaign logic sees the world only through the strategic graph (decision 51).
+    // Flat config replaces a rule rather than merging it, so this repeats the
+    // restrictions that src/sim/** already has.
+    files: ['src/campaign/**', 'src/sim/command/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: GRAPHICS_PACKAGES,
+          patterns: [RENDER_UI, WORLD_DATA],
         },
       ],
       'no-restricted-properties': NO_MATH_RANDOM,

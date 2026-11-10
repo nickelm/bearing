@@ -691,6 +691,141 @@ Shaders sample it by direction through `cubeFaceUv`, a TSL mirror of `directionT
 - The design uses forest density in three places: rendering, line of sight and the barrier map.
 - A biome-level base plus deterministic per-sample variation is a pure function of direction like the rest of the tile (decision 24), so every consumer sees the same forests.
 
+### 45. Unsteered generation; the campaign is detected from the world
+
+**Date:** 2026-11-10
+**Decision:** World generation is unsteered (design revision 4). The campaign reads the generated world through the strategic graph and adapts to it.
+
+- **Supersedes:**
+  - decision 16, the ocean gap as a generation constraint;
+  - the continent layout of decision 17. The default `oceanFraction` stays 0.70 for now;
+  - the steered plate seeding of decision 18;
+  - decision 20, temperate east–west continents;
+  - the open point of decision 41. No steering remains.
+- **Plates.** Every plate seed is placed by best-candidate sampling over the whole sphere.
+  - Plate types come from `rng("plates")`: plates are taken in a random order and marked continental until their area reaches about 1.35 × the land fraction (capped at 0.9).
+  - There is at least one plate of each type.
+- **Crust.** Continentalness is derived from the plate types:
+  - start from the signed geodesic distance to the interface between continental and oceanic plates (two multi-source Dijkstra passes);
+  - sample it at a domain-warped position;
+  - roughen it with noise;
+  - threshold it at the `oceanFraction` area quantile.
+
+  The stream is `rng("crust")`, and the stage now runs after the plates. Since continental plates cover more area than the land, coasts lie inside them (passive margins), and boundaries between continental plates raise interior ranges.
+
+- **Parameters.** `oceanGap` is removed. Sea-lane lengths come from the strategic graph. `rangeFactor` leaves `PlanetParams` (decision 50).
+- **World info.** `mainContinent` now means the most inland cell of the largest landmass. It anchors the campaign calendar (decision 33), previews and tests until the strategic graph exists. Two fields are added: `landmassCount` (landmasses of at least 2,000 km²) and `largestLandmassArea`.
+- **Rejection.** The validity check (milestone 4) is the only rejection: enough flat land for 15 airbases per side and at least one theater above its fit threshold. A failed world regenerates from the seeded sub-seed `fork("retry-n")`, so each seed still maps to exactly one world.
+- `GENERATOR_VERSION` is 3.
+
+**Reason:** Owner's direction. The world comes first. One seed may give a supercontinent, two continents or an archipelago. Theater detection (design, _Theaters_) turns whatever exists into a war, rather than shaping the world to fit one war.
+
+### 46. Casting is automatic and cannot be confirmed or edited
+
+**Date:** 2026-11-10
+**Decision:** Casting turns detected theaters into a campaign: theaters, territory, posture, the range factor, industry, ports and bases, and a briefing.
+
+- It draws only from `rng("casting")` and its forks.
+- It reads only the strategic graph (decision 51).
+- It runs before the player picks a side.
+- The cast does not depend on that choice.
+- There is no confirm, re-roll or edit UI. A player who wants a different war picks a different seed.
+
+**Reason:** The same seed must always produce the same war, unfolding identically until the player intervenes. An editable cast would turn worlds into scenarios and make them impossible to share by seed.
+
+### 47. Both sides playable; the side is fixed for a campaign
+
+**Date:** 2026-11-10
+**Decision:**
+
+- **Choosing a side.** The player picks the Alliance or the Pact at campaign start (milestone 9) and keeps it for the campaign. There is no side switching, which settles that open question in the design.
+- **Symmetric code.** Both command layers run the same code. Doctrine (Pact waves and ground-controlled interception, Alliance AWACS and autonomy) lives in mission templates and planner weights, not in branches.
+- **The side is a view, not an input.** The sim never reads the player's side. It only filters the mission panel, subscriptions and the intelligence overlay.
+- **Debug toggle.** Until milestone 9, a debug GUI toggle sets the viewing side. It is a developer tool, not a feature.
+
+**Reason:** Owner's direction. Keeping the side out of the sim keeps decision 46's promise that the war does not depend on the choice.
+
+### 48. The player is a pilot only; the fidelity bubble follows the player
+
+**Date:** 2026-11-10
+**Decision:**
+
+- **No command.** The player does not command ground or naval forces, and there is no command UI. The player shapes the war only through the aircraft they fly.
+- **Jump-in and handback.** A mission accepts the player from climb-out to approach. Leaving hands the aircraft back to the AI with its current orders.
+- **Promotion bubble.**
+  - The player's own aircraft runs at full fidelity.
+  - Ground and air entities within about 15–25 km are promoted to the entity level.
+  - Everything else stays aggregate and low-fidelity.
+- **Before cockpit flight.** Until cockpit flight exists (after the demo), the bubble centers on the followed aircraft or the camera.
+
+**Reason:** Owner's direction. The player's attention rests on flying (design pillar 5), and simulation cost goes where the player is.
+
+### 49. A rule-based air tasking order
+
+**Date:** 2026-11-10
+**Decision:** Each side's command layer builds an ATO per game day and revises it at a fixed replanning tick every few game hours. It works in four steps:
+
+1. collect needs from the theaters;
+2. rank them by priority score (theater weight × target value × urgency);
+3. build packages from squadrons in range, adding escort and SEAD when the target area is defended;
+4. schedule them according to doctrine.
+
+- Ties break deterministically by stable ids, and every random draw comes from a per-side, per-day fork. It contains no search, optimization or learning.
+- Each mission records the need it serves and its score. The mission panel can then explain why a mission exists.
+- Planning considers only targets the side knows about (decision 52).
+
+**Reason:** The planner only has to produce a believable war, not win one (pillar 5). Rules are deterministic at any time acceleration, cheap enough for a worker, and legible to a player browsing missions.
+
+### 50. A per-world range factor chosen by casting
+
+**Date:** 2026-11-10
+**Decision:**
+
+- Casting chooses the range factor in [0.35, 1.0] for each campaign and stores it in the cast, not in `PlanetParams`.
+- Two targets set it:
+  - a medium strike aircraft from rear bases must reach the full depth of the enemy side of a front;
+  - a long-range bomber must reach across the widest contested sea lane.
+- It scales fuel capacity and burn rate only. Speeds, climb rates and weapon ranges stay real.
+- Supersedes decision 4's fixed 0.5. The principle of compressing range, not speed, stays.
+
+**Reason:** Geography now varies from world to world (decision 45), so no single factor keeps every set of theaters playable. Whether the result feels right is checked by flying sorties once milestone 7 works.
+
+### 51. The strategic graph is the only interface between world data and campaign logic
+
+**Date:** 2026-11-10
+**Decision:**
+
+- **Readers.** Theater detection, casting and the command layer read the strategic graph and the cast. They never read heightmaps, tiles, `WorldMaps`, `TileData` or `terrainHeight`.
+- **New facts.** If campaign logic needs a fact about the world, the graph builder computes it and adds it to the graph.
+- **Layout:**
+  - graph types and builder in `src/worldgen/strategic/` (the builder reads the maps);
+  - theaters, casting and briefing in `src/campaign/`;
+  - the command layer in `src/sim/command/`.
+- **Lint.** ESLint bans imports of `worldgen` from `src/campaign/**` and `src/sim/command/**`, except `worldgen/strategic/**`.
+- **Execution layer.** The sim's execution layer (flight paths, line of sight, ground movement) may still query terrain. Only planning is restricted.
+
+**Reason:**
+
+- The graph debug overlay and the seed browser can only judge what campaign logic sees if that logic sees nothing else.
+- The rule keeps campaign code independent of map resolution and tiling, so it can run on the coarse pass.
+- It makes decisions explainable in terms the player can see on the strategic map.
+
+### 52. A per-side intelligence picture from radar, satellites and reconnaissance
+
+**Date:** 2026-11-10
+**Decision:**
+
+- **What a side knows.** Each side plans against what it knows, not against ground truth. A per-side intelligence store holds contacts: object id, position, type, time last seen, confidence and source.
+- **Sources:**
+  - **Reconnaissance satellites.** Analytic orbital ground tracks give revisit times. Optical imaging needs daylight and clear sky from the weather field. Rarer radar-imaging satellites see through cloud.
+  - **Ground and airborne radar.** AWACS and ground radar coverage give the air picture, limited by the radar horizon and terrain masking. The air picture also drives the Pact's ground-controlled interception.
+  - **Reconnaissance missions.** They refresh contacts along their routes.
+- **Decay.** Confidence decays with age, fastest for moving units.
+- **Determinism.** Pass times are analytic, and detection rolls come from per-side forks of `rng("intel")`, so the picture is identical at any time acceleration.
+- **Display.** An overlay shows the viewing side's contacts and satellite tracks (milestone 7).
+
+**Reason:** Owner's direction. Radar and satellite imaging are central Cold War technology. Reconnaissance missions only make sense if targets must be found before they are struck.
+
 ### 45. Instanced tree clumps per level-9 tile
 
 **Date:** 2026-11-10

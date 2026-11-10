@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Guidance for Claude Code sessions in this repository. `docs/design.md` is the source of truth for scope and architecture. Read it before starting milestone work. `docs/decisions.md` records later decisions; where the two conflict, the later decision wins (e.g. no 30 s generation budget, tiled world data, relief scaled to the planet, day/night and weather in scope).
+Guidance for Claude Code sessions in this repository. `docs/design.md` is the source of truth for scope and architecture. Read it before starting milestone work. `docs/decisions.md` records later decisions; where the two conflict, the later decision wins (e.g. no 30 s generation budget, tiled world data, relief scaled to the planet, default ocean fraction 0.70, day/night and weather in scope).
 
 ## Commands
 
@@ -23,14 +23,16 @@ docs/design.md      design doc (source of truth; do not reformat)
 docs/decisions.md   architecture decision log
 src/core/           units, float64 Vec3d, coordinates, seeded RNG. Leaf layer.
 src/worldgen/       planet generation pipeline stages (may use GPU compute)
+  strategic/        strategic graph types and builder: the only world view campaign logic gets
+src/campaign/       theater detection, casting, briefing (reads the strategic graph only)
 src/sim/            headless simulation; runs in a worker
+  command/          per-side command layer: intelligence picture, ATO (graph and cast only)
 src/render/         terrain, atmosphere, ocean, units, cameras (Three.js WebGPU + TSL)
 src/ui/             lil-gui debug panel, overlays, time controls
 src/workers/        worker entry points and message protocols
 src/main.ts         app entry: WebGPU checks, renderer, scene, GUI
 tests/              Vitest unit tests (node); tests/gpu/ runs WGSL kernels on a real GPU via Dawn
 tools/              offline previews (npm run maps; terrain/bench *.preview.ts), output in tools/out/
-tools/              offline tools (map preview PNGs); run via vitest.tools.config.ts
 TODO.md             milestone task list
 ```
 
@@ -62,6 +64,13 @@ These are the project conventions. Lint enforces some of them (marked ⚙).
    - No `SharedArrayBuffer`, `Atomics.wait`, or anything else that needs cross-origin isolation (COOP/COEP).
    - Workers exchange data via `postMessage`, transferring `ArrayBuffer`s rather than copying them.
    - Never use root-absolute asset URLs. Load workers with `new Worker(new URL('./x.worker.ts', import.meta.url), { type: 'module' })` or a `?worker` import, and prefix other runtime paths with `import.meta.env.BASE_URL`.
+9. **The strategic graph is the only interface between world data and campaign logic** (decision 51).
+   - ⚙ Theater detection, casting and the command layer (`src/campaign/`, `src/sim/command/`) never import `worldgen` outside `worldgen/strategic/`.
+   - They do not read heightmaps, tiles, `WorldMaps`, `TileData` or `terrainHeight`, not even through a helper or a message that carries them.
+   - If campaign logic needs a new fact about the world, add it to the graph builder in `worldgen/strategic/` and to the graph types. The graph debug overlay then shows it too.
+   - The sim's execution layer (flight paths, line of sight, ground movement) may query terrain. The restriction covers planning only.
+   - ⚙ `Math.random()` is banned in `campaign` as well. Casting draws from `rng(worldSeed, "casting")`.
+10. **Unsteered generation** (decision 45). World generation never steers toward a particular geography. The only rejection is the validity check, which retries with a seeded sub-seed. Do not add biases to make a theater more likely. Theater detection adapts to the world instead.
 
 ## Fidelity as level of detail
 
@@ -73,8 +82,8 @@ Fidelity is a level of detail in both space and time.
 Every unit exists at one of three levels:
 
 - **Aggregate:** formation, flight or convoy. Always simulated, cheaply.
-- **Entity:** individual vehicles and squads. Simulated only inside a promotion bubble of about 15–25 km.
-- **Full:** physical simulation. Used only for the player's unit.
+- **Entity:** individual vehicles and squads. Simulated only inside a promotion bubble of about 15–25 km around the player (around the followed aircraft or the camera until cockpit flight exists, decision 48).
+- **Full:** physical simulation. Used only for the player's aircraft. The player flies and never commands ground or naval forces.
 
 Promotion expands a unit deterministically from its seed and current strength. Demotion folds entity losses back into aggregate strength, so nothing destroyed comes back. Design data models so that promotion is possible even before it is implemented.
 
