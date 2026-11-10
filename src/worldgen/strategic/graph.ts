@@ -97,6 +97,11 @@ export interface BarrierLine {
   airbaseOffset: Float32Array;
   /** Signed distance of each of the node's port sites, as for airbases. */
   portOffset: Float32Array;
+  /**
+   * Signed distance of every settlement in `StrategicGraph.settlements` from
+   * the line, as for airbases; NaN for settlements on other landmasses.
+   */
+  settlementOffset: Float32Array;
 }
 
 /** A weak segment of a barrier line, where an offensive would go through. */
@@ -111,6 +116,10 @@ export interface Corridor {
   width: number;
   /** Mean barrier strength over the segment. */
   strength: number;
+  /** Roads crossing the line within the segment. */
+  roads: number;
+  /** Crossings weighted by road class (highway 1, main 0.6, minor 0.3). */
+  roadScore: number;
 }
 
 /**
@@ -176,11 +185,79 @@ export interface Chokepoint {
   lanes: number[];
 }
 
+/**
+ * Towns and cities (milestone 5), struct-of-arrays, in placement order. They
+ * belong to the world, not to a side: casting derives ownership from
+ * territory.
+ */
+export interface SettlementList {
+  /** Coarse-grid cell of each settlement. */
+  cells: Int32Array;
+  /** Unit direction, xyz interleaved. */
+  points: Float64Array;
+  population: Float32Array;
+  /** Land node, or −1 for islands in no node. */
+  node: Int32Array;
+  /** SETTLEMENT_PORT | SETTLEMENT_RIVER | SETTLEMENT_COAST. */
+  flags: Uint8Array;
+  names: string[];
+}
+
+export const SETTLEMENT_PORT = 1;
+export const SETTLEMENT_RIVER = 2;
+export const SETTLEMENT_COAST = 4;
+
+export type SettlementKind = 'city' | 'town' | 'village';
+
+export function settlementKind(population: number): SettlementKind {
+  return population >= 200_000 ? 'city' : population >= 40_000 ? 'town' : 'village';
+}
+
+/** Road classes, widest first. */
+export const RoadClass = { Highway: 0, Main: 1, Minor: 2 } as const;
+export type RoadClass = (typeof RoadClass)[keyof typeof RoadClass];
+/** Paved width per road class (m). */
+export const ROAD_WIDTH: readonly number[] = [24, 12, 7];
+/** Weight of a road class when scoring corridors. */
+export const ROAD_CLASS_WEIGHT: readonly number[] = [1, 0.6, 0.3];
+
+/**
+ * A road network as polylines through coarse-cell centers. Polylines meet at
+ * shared end cells (junctions, settlements), so the network is connected
+ * wherever the roads are.
+ */
+export interface RoadNetwork {
+  count: number;
+  /** Point range of polyline k: [offsets[k], offsets[k + 1]). */
+  offsets: Uint32Array;
+  cells: Int32Array;
+  /** Unit directions, xyz interleaved. */
+  points: Float64Array;
+  /** RoadClass per polyline. */
+  roadClass: Uint8Array;
+  /** Summed √(pop_a · pop_b) of the settlement links routed over each polyline. */
+  traffic: Float32Array;
+}
+
+/** Road bridges over rivers at least BRIDGE_MIN_WIDTH wide: targetable features. */
+export interface BridgeList {
+  cells: Int32Array;
+  points: Float64Array;
+  /** Width of the river spanned (m). */
+  riverWidth: Float32Array;
+  /** Polyline of the road carried (in the network the bridge belongs to). */
+  road: Int32Array;
+  roadClass: Uint8Array;
+}
+
 export interface StrategicGraph {
   /** Coarse grid cells per face edge the graph was built on. */
   resolution: number;
   radius: number;
   nodes: LandNode[];
+  settlements: SettlementList;
+  roads: RoadNetwork;
+  bridges: BridgeList;
   lanes: SeaLane[];
   chokepoints: Chokepoint[];
   barrierLines: BarrierLine[];
@@ -269,8 +346,33 @@ export function graphBuffers(g: StrategicGraph): ArrayBuffer[] {
   }
   for (const l of g.lanes) out.push(l.points.buffer);
   for (const l of g.barrierLines) {
-    out.push(l.points.buffer, l.strength.buffer, l.airbaseOffset.buffer, l.portOffset.buffer);
+    out.push(
+      l.points.buffer,
+      l.strength.buffer,
+      l.airbaseOffset.buffer,
+      l.portOffset.buffer,
+      l.settlementOffset.buffer,
+    );
   }
+  const s = g.settlements;
+  out.push(s.cells.buffer, s.points.buffer, s.population.buffer, s.node.buffer, s.flags.buffer);
+  out.push(...roadBuffers(g.roads), ...bridgeBuffers(g.bridges));
   // A buffer may appear only once in a transfer list.
   return [...new Set(out)] as ArrayBuffer[];
+}
+
+export function roadBuffers(r: RoadNetwork): ArrayBufferLike[] {
+  return [r.offsets.buffer, r.cells.buffer, r.points.buffer, r.roadClass.buffer, r.traffic.buffer];
+}
+
+export function bridgeBuffers(b: BridgeList): ArrayBufferLike[] {
+  return [b.cells.buffer, b.points.buffer, b.riverWidth.buffer, b.road.buffer, b.roadClass.buffer];
+}
+
+export function settlementPoint(s: SettlementList, i: number): Point {
+  return [s.points[i * 3]!, s.points[i * 3 + 1]!, s.points[i * 3 + 2]!];
+}
+
+export function settlementCount(s: SettlementList): number {
+  return s.cells.length;
 }

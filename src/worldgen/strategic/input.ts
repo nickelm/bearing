@@ -3,6 +3,7 @@
  * lets the builder, and only the builder, read world data).
  */
 import type { CubeGrid } from '../../core/cubeGrid';
+import type { WorldSeed } from '../../core/rng';
 import { Biome } from '../biomes';
 import { FOREST_BASE } from '../forest';
 import type { LandmassLabels, LandmassStats } from '../landmasses';
@@ -18,6 +19,13 @@ export interface StrategicInput {
   lakeDepth: Float32Array;
   reliefScale: number;
   radius: number;
+  /**
+   * Downstream cell per cell from drainage (−1 at sea). Without it, the
+   * builder uses steepest descent.
+   */
+  receiver?: Int32Array;
+  /** World seed for the stages that draw random numbers (settlements). Default 0. */
+  seed?: WorldSeed;
 }
 
 /** Derived per-cell fields shared by the builder's stages. */
@@ -30,6 +38,29 @@ export interface StrategicContext extends StrategicInput {
   forest: Float32Array;
   /** Cell edge length (m) of an average cell. */
   cellSize: number;
+  /** Downstream cell per land cell (−1 at sea or where none is lower). */
+  receiver: Int32Array;
+}
+
+/** Steepest-descent receivers over 8-neighbors, for inputs without drainage. */
+export function steepestDescent(grid: CubeGrid, height: Float32Array): Int32Array {
+  const out = new Int32Array(grid.cellCount).fill(-1);
+  for (let c = 0; c < grid.cellCount; c++) {
+    if (height[c]! <= 0) continue;
+    let best = -1;
+    let drop = 0;
+    for (let k = 0; k < 8; k++) {
+      const nb = grid.neighbors8[c * 8 + k]!;
+      if (nb < 0) continue;
+      const d = (height[c]! - height[nb]!) / grid.angleBetween(c, nb);
+      if (d > drop) {
+        drop = d;
+        best = nb;
+      }
+    }
+    out[c] = best;
+  }
+  return out;
 }
 
 export function forestDensity(biome: Uint8Array): Float32Array {

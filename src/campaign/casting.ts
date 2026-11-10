@@ -26,6 +26,7 @@ import type { LandNode, Point, StrategicGraph } from '../worldgen/strategic/grap
 import {
   nodeDistance,
   polylinePoint,
+  settlementPoint,
   sitePoint,
   surfaceDistance,
 } from '../worldgen/strategic/graph';
@@ -68,6 +69,31 @@ const SIDES: readonly Side[] = ['alliance', 'pact'];
 function sideAt(owner: NodeOwner & { kind: 'split' }, off: number): Side {
   const lineSide = off < 0 ? 0 : 1;
   return lineSide === owner.pactSide ? 'pact' : 'alliance';
+}
+
+/** Settlements are summed within this radius to find industrial clusters (m). */
+const INDUSTRY_CLUSTER_RADIUS = 80e3;
+
+/** Settlements held by `side`, with their node and distance from the dividing line (0 for whole nodes). */
+export function settlementsOf(
+  graph: StrategicGraph,
+  owners: NodeOwner[],
+  side: Side,
+): { index: number; node: number; depth: number }[] {
+  const s = graph.settlements;
+  const out: { index: number; node: number; depth: number }[] = [];
+  for (let i = 0; i < s.cells.length; i++) {
+    const node = s.node[i]!;
+    if (node < 0) continue;
+    const owner = owners[node]!;
+    if (owner.kind === 'whole' && owner.side === side) out.push({ index: i, node, depth: 0 });
+    else if (owner.kind === 'split') {
+      const off = graph.barrierLines[owner.line]!.settlementOffset[i]!;
+      if (Number.isFinite(off) && off !== 0 && sideAt(owner, off) === side)
+        out.push({ index: i, node, depth: Math.abs(off) });
+    }
+  }
+  return out;
 }
 
 /** Airbase site indices of a node held by `side`, with their distance from the dividing line (0 for whole nodes). */
@@ -302,38 +328,60 @@ function castRegions(
   const regions: Region[] = [];
   const nodes = graph.nodes;
 
-  // Industry: up to three per side, deep in its territory, on flat lowland.
+  // Industry: up to three per side, deep in its territory, on its largest urban clusters.
   for (const side of SIDES) {
     const rs = r.fork(`industry-${side}`);
-    const cands: { node: number; index: number; key: number }[] = [];
-    for (let id = 0; id < nodes.length; id++) {
-      const sites = sitesOf(graph, owners, id, side);
-      const deepest = sites.reduce((m, s) => Math.max(m, s.depth), 0);
-      for (const s of sites) {
-        if (owners[id]!.kind === 'split' && s.depth < Math.min(400e3, 0.6 * deepest)) continue;
+    const towns = settlementsOf(graph, owners, side);
+    const pts = graph.settlements;
+    const cands: { point: Point; key: number }[] = [];
+    if (towns.length > 0) {
+      const deepest = new Map<number, number>();
+      for (const t of towns) deepest.set(t.node, Math.max(deepest.get(t.node) ?? 0, t.depth));
+      let maxMass = 0;
+      const mass = towns.map((t) => {
+        const p = settlementPoint(pts, t.index);
+        let m = 0;
+        for (const o of towns) {
+          if (surfaceDistance(p, settlementPoint(pts, o.index), R) <= INDUSTRY_CLUSTER_RADIUS)
+            m += pts.population[o.index]!;
+        }
+        maxMass = Math.max(maxMass, m);
+        return m;
+      });
+      towns.forEach((t, i) => {
+        const u = rs.nextFloat();
+        const split = owners[t.node]!.kind === 'split';
+        if (split && t.depth < Math.min(400e3, 0.6 * deepest.get(t.node)!)) return;
         cands.push({
-          node: id,
-          index: s.index,
-          key: nodes[id]!.airbases.scores[s.index]! * 0.5 + rs.nextFloat() * 0.5,
+          point: settlementPoint(pts, t.index),
+          key: Math.sqrt(mass[i]! / maxMass) * (0.75 + 0.5 * u),
         });
+      });
+    } else {
+      // No settlements (synthetic worlds): flat lowland sites, as before milestone 5.
+      for (let id = 0; id < nodes.length; id++) {
+        const sites = sitesOf(graph, owners, id, side);
+        const deepest = sites.reduce((m, x) => Math.max(m, x.depth), 0);
+        for (const x of sites) {
+          const u = rs.nextFloat();
+          if (owners[id]!.kind === 'split' && x.depth < Math.min(400e3, 0.6 * deepest)) continue;
+          cands.push({
+            point: sitePoint(nodes[id]!.airbases, x.index),
+            key: nodes[id]!.airbases.scores[x.index]! * 0.5 + u * 0.5,
+          });
+        }
       }
     }
     const pick = pickSpaced(
       cands,
       (c) => c.key,
-      (c) => sitePoint(nodes[c.node]!.airbases, c.index),
+      (c) => c.point,
       250e3,
       3,
       R,
     );
     for (const p of pick) {
-      regions.push({
-        kind: 'industry',
-        side,
-        point: sitePoint(nodes[p.node]!.airbases, p.index),
-        radius: 60e3,
-        theater: -1,
-      });
+      regions.push({ kind: 'industry', side, point: p.point, radius: 60e3, theater: -1 });
     }
   }
 

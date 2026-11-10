@@ -24,8 +24,17 @@
 import { MinHeap } from '../../core/heap';
 import { Vec3d } from '../../core/vec3d';
 import { riverWidth } from '../rivers';
-import { CORRIDOR_DEPTH, FRONT_MIN_AREA, FRONT_MIN_SIDE } from './graph';
-import type { BarrierLine, Corridor, FrontGeometry, LandNode, LineSide, Point } from './graph';
+import { CORRIDOR_DEPTH, FRONT_MIN_AREA, FRONT_MIN_SIDE, ROAD_CLASS_WEIGHT } from './graph';
+import type {
+  BarrierLine,
+  Corridor,
+  FrontGeometry,
+  LandNode,
+  LineSide,
+  Point,
+  RoadNetwork,
+  SettlementList,
+} from './graph';
 import { CapWalker, smoothstep } from './input';
 import type { StrategicContext } from './input';
 
@@ -77,17 +86,24 @@ function cellPoint(ctx: StrategicContext, c: number): Point {
 }
 
 /** Front geometry for every landmass node of at least FRONT_MIN_AREA. */
+/** Settlements and roads, which the front generator uses for offsets and corridors. */
+export interface FrontCivilian {
+  settlements: SettlementList;
+  roads: RoadNetwork;
+}
+
 export function buildFronts(
   ctx: StrategicContext,
   nodes: LandNode[],
   members: number[][],
   barrier: Float32Array,
+  civ: FrontCivilian,
 ): FrontResult {
   const lines: BarrierLine[] = [];
   const fronts: FrontGeometry[] = [];
   for (const node of nodes) {
     if (node.kind !== 'landmass' || node.area < FRONT_MIN_AREA) continue;
-    const front = landmassFront(ctx, node, members[node.id]![0]!, barrier, lines);
+    const front = landmassFront(ctx, node, members[node.id]![0]!, barrier, lines, civ);
     if (!front) continue;
     node.front = fronts.length;
     fronts.push(front);
@@ -101,6 +117,7 @@ function landmassFront(
   landmass: number,
   barrier: Float32Array,
   lines: BarrierLine[],
+  civ: FrontCivilian,
 ): FrontGeometry | null {
   const { grid, radius } = ctx;
   const label = ctx.labels.label;
@@ -269,7 +286,7 @@ function landmassFront(
     for (let c = end; c >= 0; c = prev[c]!) path.push(c);
     path.reverse();
 
-    const result = lineFromPath(ctx, node, landmass, cells, path, q, barrier);
+    const result = lineFromPath(ctx, node, landmass, cells, path, q, barrier, civ.settlements);
     if (!result) {
       // The path does not split the land (it wraps around an inland sea): rule out its cells and retry.
       for (const c of path) {
@@ -294,7 +311,9 @@ function landmassFront(
     f.line.id = lines.length;
     ids.push(f.line.id);
     lines.push(f.line);
-    corridors.push(...lineCorridors(ctx, f.line, f.side));
+    corridors.push(
+      ...lineCorridors(ctx, f.line, f.side, roadCrossings(ctx, f.path, f.side, civ.roads)),
+    );
   }
   let strongestIdx = 0;
   found.forEach((f, i) => {
@@ -346,6 +365,7 @@ function lineFromPath(
   path: number[],
   q: Float64Array,
   barrier: Float32Array,
+  settlements: SettlementList,
 ): { line: BarrierLine; side: Int8Array; distance: Float64Array } | null {
   const { grid, radius } = ctx;
   const label = ctx.labels.label;
@@ -492,12 +512,77 @@ function lineFromPath(
     sides,
     airbaseOffset: offsets(node.airbases.cells),
     portOffset: offsets(node.ports.cells),
+    settlementOffset: Float32Array.from(settlements.cells, (c) =>
+      label[c] === landmass ? offsets(Int32Array.of(c))[0]! : NaN,
+    ),
   };
   return { line, side, distance };
 }
 
-/** The weakest windows of a line, at most CORRIDORS_PER_LINE, CORRIDOR_SPACING apart, away from the coasts. */
-function lineCorridors(ctx: StrategicContext, line: BarrierLine, side: Int8Array): Corridor[] {
+/** A road crossing a barrier line: index of the nearest line point, and the road class. */
+interface Crossing {
+  index: number;
+  roadClass: number;
+}
+
+/**
+ * Where roads cross a line: a road's cells change side (skipping cells on
+ * the line itself). The crossing is placed at the line cell the road touched,
+ * or at the line cell next to the road's last cell before it changed side.
+ */
+function roadCrossings(
+  ctx: StrategicContext,
+  path: number[],
+  side: Int8Array,
+  roads: RoadNetwork,
+): Crossing[] {
+  const grid = ctx.grid;
+  const index = new Map<number, number>();
+  path.forEach((c, i) => index.set(c, i));
+  const out: Crossing[] = [];
+  for (let k = 0; k < roads.count; k++) {
+    let lastSide = -1;
+    let lastCell = -1;
+    let touched = -1;
+    for (let p = roads.offsets[k]!; p < roads.offsets[k + 1]!; p++) {
+      const c = roads.cells[p]!;
+      const onLine = index.get(c);
+      if (onLine !== undefined) {
+        touched = onLine;
+        continue;
+      }
+      const s = side[c]!;
+      if (s < 0) continue;
+      if (lastSide >= 0 && s !== lastSide) {
+        let at = touched;
+        if (at < 0) {
+          for (let j = 0; j < 8 && at < 0; j++)
+            at = index.get(grid.neighbors8[lastCell * 8 + j]!) ?? -1;
+        }
+        if (at >= 0) out.push({ index: at, roadClass: roads.roadClass[k]! });
+      }
+      lastSide = s;
+      lastCell = c;
+      touched = -1;
+    }
+  }
+  return out;
+}
+
+/**
+ * Invasion corridors (design, "Automatic Front Line"): weak, well-roaded
+ * windows of a line, at most CORRIDORS_PER_LINE, CORRIDOR_SPACING apart and
+ * away from the coasts. A window scores (1 − mean strength) × (0.35 + 0.65 ×
+ * min(1, road score)), where the road score sums ROAD_CLASS_WEIGHT over the
+ * roads crossing it; windows at or above the line's mean strength are taken
+ * only when roads cross them. A corridor centers on its best road crossing.
+ */
+function lineCorridors(
+  ctx: StrategicContext,
+  line: BarrierLine,
+  side: Int8Array,
+  crossings: Crossing[],
+): Corridor[] {
   const R = ctx.radius;
   const n = line.points.length / 3;
   const along = new Float64Array(n);
@@ -513,7 +598,14 @@ function lineCorridors(ctx: StrategicContext, line: BarrierLine, side: Int8Array
   }
   const total = along[n - 1]!;
   const margin = Math.max(30e3, ctx.cellSize);
-  const windows: { center: number; mean: number; width: number }[] = [];
+  const windows: {
+    center: number;
+    mean: number;
+    width: number;
+    roads: number;
+    roadScore: number;
+    score: number;
+  }[] = [];
   for (let i = 0; i < n; i++) {
     if (
       along[i]! < margin + CORRIDOR_WIDTH / 2 ||
@@ -533,13 +625,37 @@ function lineCorridors(ctx: StrategicContext, line: BarrierLine, side: Int8Array
         hi = Math.max(hi, along[j]!);
       }
     }
-    windows.push({ center: i, mean: sum / count, width: Math.max(hi - lo, ctx.cellSize) });
+    let roads = 0;
+    let roadScore = 0;
+    let best = -1;
+    for (const x of crossings) {
+      if (Math.abs(along[x.index]! - along[i]!) > CORRIDOR_WIDTH / 2) continue;
+      roads++;
+      roadScore += ROAD_CLASS_WEIGHT[x.roadClass]!;
+      if (
+        best < 0 ||
+        x.roadClass < crossings[best]!.roadClass ||
+        (x.roadClass === crossings[best]!.roadClass &&
+          Math.abs(x.index - i) < Math.abs(crossings[best]!.index - i))
+      ) {
+        best = crossings.indexOf(x);
+      }
+    }
+    const mean = sum / count;
+    windows.push({
+      center: best >= 0 ? crossings[best]!.index : i,
+      mean,
+      width: Math.max(hi - lo, ctx.cellSize),
+      roads,
+      roadScore,
+      score: (1 - mean) * (0.35 + 0.65 * Math.min(1, roadScore)),
+    });
   }
-  windows.sort((a, b) => a.mean - b.mean || a.center - b.center);
+  windows.sort((a, b) => b.score - a.score || a.center - b.center);
   const chosen: typeof windows = [];
   for (const w of windows) {
     if (chosen.length >= CORRIDORS_PER_LINE) break;
-    if (chosen.length > 0 && w.mean >= line.meanStrength) break;
+    if (w.mean >= line.meanStrength && w.roads === 0) continue;
     if (chosen.some((c) => Math.abs(along[c.center]! - along[w.center]!) < CORRIDOR_SPACING))
       continue;
     chosen.push(w);
@@ -567,6 +683,15 @@ function lineCorridors(ctx: StrategicContext, line: BarrierLine, side: Int8Array
     const flip = side[probeCell] === 0;
     const from = along(flip ? CORRIDOR_DEPTH : -CORRIDOR_DEPTH);
     const to = along(flip ? -CORRIDOR_DEPTH : CORRIDOR_DEPTH);
-    return { line: line.id, point: p, from, to, width: w.width, strength: w.mean };
+    return {
+      line: line.id,
+      point: p,
+      from,
+      to,
+      width: w.width,
+      strength: w.mean,
+      roads: w.roads,
+      roadScore: w.roadScore,
+    };
   });
 }

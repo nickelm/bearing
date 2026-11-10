@@ -15,7 +15,8 @@ import { computeDrainage } from './drainage';
 import type { PlanetParams } from './params';
 import { generateWorld } from './pipeline';
 import type { ProgressCallback, StageTiming, World } from './pipeline';
-import { buildStrategicGraph } from './strategic/builder';
+import { buildStrategicGraphWithContext } from './strategic/builder';
+import type { StrategicBuild } from './strategic/builder';
 import type { StrategicGraph } from './strategic/graph';
 
 export const COARSE_RESOLUTION = 256;
@@ -23,6 +24,8 @@ export const COARSE_RESOLUTION = 256;
 export interface CoarseWorld {
   world: World;
   graph: StrategicGraph;
+  /** Builder state for placement after casting; in-process only. */
+  build: StrategicBuild;
   timings: StageTiming[];
 }
 
@@ -50,15 +53,18 @@ export function coarsePass(params: PlanetParams, options: CoarseOptions = {}): C
   m.lakeDepth = drainage.lakeDepth;
   timings.push({ stage: 'coarse drainage', ms: performance.now() - t0 });
   options.onProgress?.('strategic graph', 0.85);
-  const graph = buildStrategicGraph({
+  const build = buildStrategicGraphWithContext({
     grid,
     height: m.height,
     biome: m.biome,
     discharge: drainage.discharge,
     lakeDepth: drainage.lakeDepth,
+    receiver: drainage.receiver,
     reliefScale: params.reliefScale,
     radius: params.radius,
+    seed: params.seed,
   });
+  const graph = build.graph;
   timings.push(...graph.timings.map((t) => ({ stage: `graph: ${t.stage}`, ms: t.ms })));
-  return { world, graph, timings };
+  return { world, graph, build, timings };
 }

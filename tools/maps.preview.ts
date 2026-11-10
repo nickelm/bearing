@@ -31,8 +31,10 @@ import { barrierMap } from '../src/worldgen/strategic/fronts';
 import type { StrategicGraph } from '../src/worldgen/strategic/graph';
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
 import type { Cast } from '../src/campaign/cast';
-import { labelLandmasses } from '../src/worldgen/landmasses';
-import { barrierColor, drawGraph } from './graphOverlay';
+import { buildTerritory } from '../src/worldgen/strategic/territory';
+import type { Territory } from '../src/worldgen/strategic/territory';
+import type { Infrastructure } from '../src/worldgen/strategic/infrastructure';
+import { barrierColor, drawGraph, drawInfrastructure } from './graphOverlay';
 import { MapCanvas } from './mapCanvas';
 import { encodePng } from './png';
 
@@ -116,51 +118,6 @@ function render(
 const ALLIANCE_TINT = [0.2, 0.4, 1] as const;
 const PACT_TINT = [1, 0.15, 0.1] as const;
 
-/**
- * Owner per cell for the graph map: 0 neutral or sea, 1 Alliance, 2 Pact. A
- * split landmass goes by the side of its nearest airbase site.
- */
-function territoryTint(
-  grid: CubeGrid,
-  world: World,
-  graph: StrategicGraph,
-  cast: Cast,
-): Uint8Array {
-  const labels = labelLandmasses(grid, world.maps.height, DEFAULT_PLANET_PARAMS.radius);
-  const nodeOf = new Int32Array(labels.landmasses.length).fill(-1);
-  graph.nodes.forEach((n, id) => {
-    for (const list of [n.airbases, n.ports])
-      for (const c of list.cells) nodeOf[labels.label[c]!] = id;
-  });
-  const out = new Uint8Array(grid.cellCount);
-  for (let c = 0; c < grid.cellCount; c++) {
-    const lm = labels.label[c]!;
-    if (lm < 0 || nodeOf[lm]! < 0) continue;
-    const id = nodeOf[lm]!;
-    const owner = cast.owners[id]!;
-    if (owner.kind === 'whole') out[c] = owner.side === 'alliance' ? 1 : 2;
-    else if (owner.kind === 'split') {
-      const sites = graph.nodes[id]!.airbases;
-      const off = graph.barrierLines[owner.line]!.airbaseOffset;
-      let best = -1;
-      let bestDot = -2;
-      for (let i = 0; i < sites.cells.length; i++) {
-        const d =
-          sites.points[i * 3]! * grid.centers[c * 3]! +
-          sites.points[i * 3 + 1]! * grid.centers[c * 3 + 1]! +
-          sites.points[i * 3 + 2]! * grid.centers[c * 3 + 2]!;
-        if (d > bestDot) {
-          bestDot = d;
-          best = i;
-        }
-      }
-      if (best >= 0 && off[best] !== 0)
-        out[c] = (off[best]! < 0 ? 0 : 1) === owner.pactSide ? 2 : 1;
-    }
-  }
-  return out;
-}
-
 it('render world maps', () => {
   const seed = process.env.SEED ?? String(DEFAULT_PLANET_PARAMS.seed);
   const res = Number(process.env.RES ?? 256);
@@ -179,12 +136,16 @@ it('render world maps', () => {
   let world: World;
   let graph: StrategicGraph | null = null;
   let cast: Cast | null = null;
+  let territory: Territory | null = null;
+  let infra: Infrastructure | null = null;
   if (needsGraph) {
     // The campaign world, so the map shows the seed that passed the validity check.
     const coarse = generateCampaignWorld(params, { grid });
     world = coarse.world;
     graph = coarse.graph;
     cast = coarse.campaign.cast;
+    territory = buildTerritory(coarse.build, cast);
+    infra = coarse.infrastructure;
     if (coarse.retries > 0)
       console.info(`seed ${seed}: retry ${coarse.retries} (${String(coarse.seed)})`);
     console.info(
@@ -198,17 +159,24 @@ it('render world maps', () => {
     const file = join(outDir, `${seed}-${res}-${mode}.png`);
     let img: Uint8Array;
     if (mode === 'graph') {
-      const tint = territoryTint(grid, world, graph!, cast!);
+      const tint = territory!.owner;
       const faces = faceColors(DEFAULT_PLANET_PARAMS.seed);
       img = render(world, grid, 'biome', (c) => {
         const t = tint[c];
-        if (t === 0) return null;
+        if (t! <= 0) return null;
         const b = cellColor('biome', world, c, faces[grid.faceOf(c)]!);
         const k = t === 1 ? ALLIANCE_TINT : PACT_TINT;
         return [0.4 * b[0] + 0.6 * k[0], 0.4 * b[1] + 0.6 * k[1], 0.4 * b[2] + 0.6 * k[2]];
       });
       const canvas = new MapCanvas(img, SIZE);
       drawGraph(canvas, graph!, { sites: process.env.SITES === '1' });
+      drawInfrastructure(canvas, infra!);
+      const count = (side: string) => infra!.airbases.filter((x) => x.side === side).length;
+      console.info(
+        `${graph!.settlements.cells.length} settlements, ${graph!.roads.count} roads, ` +
+          `${graph!.bridges.cells.length} bridges; airbases ${count('alliance')} / ${count('pact')}, ` +
+          `${infra!.ports.length} ports, ${infra!.targets.length} targets`,
+      );
       console.info(cast!.briefing);
     } else if (mode === 'barrier') {
       const m = world.maps;

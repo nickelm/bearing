@@ -29,7 +29,7 @@ export class SeedBrowser {
     this.caption.className = 'caption';
     const table = document.createElement('table');
     const head = table.createTHead().insertRow();
-    for (const h of ['seed', 'theaters (fit)', 'range', 'bases A/P', 'retries']) {
+    for (const h of ['seed', 'theaters (fit)', 'range', 'bases A/P', 'towns', 'retries']) {
       const th = document.createElement('th');
       th.textContent = h;
       head.appendChild(th);
@@ -63,7 +63,8 @@ export class SeedBrowser {
       row.seed,
       theaters || '—',
       row.rangeFactor.toFixed(2),
-      `${row.airbases.alliance}/${row.airbases.pact}`,
+      `${row.placed.alliance}/${row.placed.pact}`,
+      String(row.settlements),
       row.valid ? String(row.retries) : `${row.retries} (invalid)`,
     ];
     for (const c of cells) tr.insertCell().textContent = c;

@@ -80,19 +80,23 @@ function pickSpaced(
   return out;
 }
 
-export function airbaseSites(ctx: StrategicContext, walker: CapWalker): SiteList[] {
+/** Airbase suitability 0..1 of a cell (flat, low, dry land), or −1 where no airbase fits. */
+export function airbaseSuitability(ctx: StrategicContext, c: number): number {
   const { height, slope, biome, lakeDepth, reliefScale } = ctx;
-  const label = ctx.labels.label;
+  if (ctx.labels.label[c]! < 0 || lakeDepth[c]! > 0) return -1;
+  const b = biome[c]!;
+  if (b === Biome.IceSheet || b === Biome.Alpine) return -1;
+  const ref = height[c]! / reliefScale;
+  const s = slope[c]!;
+  if (s >= AIRBASE_MAX_SLOPE || ref >= AIRBASE_MAX_HEIGHT) return -1;
+  return (1 - s / AIRBASE_MAX_SLOPE) * Math.sqrt(1 - ref / AIRBASE_MAX_HEIGHT);
+}
+
+export function airbaseSites(ctx: StrategicContext, walker: CapWalker): SiteList[] {
   const candidates: Candidate[] = [];
   for (let c = 0; c < ctx.grid.cellCount; c++) {
-    if (label[c]! < 0 || lakeDepth[c]! > 0) continue;
-    const b = biome[c]!;
-    if (b === Biome.IceSheet || b === Biome.Alpine) continue;
-    const ref = height[c]! / reliefScale;
-    const s = slope[c]!;
-    if (s >= AIRBASE_MAX_SLOPE || ref >= AIRBASE_MAX_HEIGHT) continue;
-    const score = (1 - s / AIRBASE_MAX_SLOPE) * Math.sqrt(1 - ref / AIRBASE_MAX_HEIGHT);
-    candidates.push({ cell: c, score, sea: -1 });
+    const score = airbaseSuitability(ctx, c);
+    if (score >= 0) candidates.push({ cell: c, score, sea: -1 });
   }
   const picked = pickSpaced(ctx, walker, candidates, AIRBASE_SPACING);
   return ctx.labels.landmasses.map((m) => toSiteList(ctx, picked.get(m.id) ?? []));

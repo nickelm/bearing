@@ -64,6 +64,7 @@ it('seed browser', () => {
     const w = generateCampaignWorld({ ...DEFAULT_PLANET_PARAMS, seed }, { grid });
     const ms = performance.now() - t0;
     const { detection, cast, validity } = w.campaign;
+    const placed = (side: string) => w.infrastructure.airbases.filter((a) => a.side === side).length;
     if (!validity.valid) invalid++;
     const perKind = KINDS.map((k) => detection.selected.filter((t) => t.kind === k).length);
     KINDS.forEach((k, i) => (counts[k] += perKind[i]! > 0 ? 1 : 0));
@@ -92,7 +93,9 @@ it('seed browser', () => {
     lines.push(
       `${seed.padStart(6)}  retries ${w.retries}${validity.valid ? '' : ' INVALID'}  ` +
         `${cast.theaters.map((t) => `${SHORT[t.kind]}(${t.fit.toFixed(2)})`).join(' ')}  ` +
-        `range ${cast.rangeFactor.toFixed(2)}  bases ${cast.airbases.alliance}/${cast.airbases.pact}  ${(ms / 1000).toFixed(1)} s` +
+        `range ${cast.rangeFactor.toFixed(2)}  sites ${cast.airbases.alliance}/${cast.airbases.pact}  ` +
+        `bases ${placed('alliance')}/${placed('pact')}  towns ${w.graph.settlements.cells.length}  ` +
+        `roads ${w.graph.roads.count}  bridges ${w.graph.bridges.cells.length}  ${(ms / 1000).toFixed(1)} s` +
         (w.rejected.length
           ? `\n        rejected: ${w.rejected.map((r) => r.join('; ')).join(' | ')}`
           : ''),

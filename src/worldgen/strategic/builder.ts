@@ -5,16 +5,23 @@
  *
  *   landmasses and statistics → airbase and port sites → land nodes
  *   (landmasses and archipelagos) → ocean grid, sea lanes, chokepoints and
- *   node distances → barrier map and fronts
+ *   node distances → settlements → movement cost, roads and bridges →
+ *   barrier map and fronts (corridors use the roads)
  *
- * Deterministic: no randomness, ties broken by cell and node index.
+ * Deterministic: settlements draw from rng(seed, "settlements"); every other
+ * stage is free of randomness, with ties broken by cell and node index.
  */
 import { labelLandmasses, landmassStats, referenceSlope } from '../landmasses';
 import { barrierMap, buildFronts } from './fronts';
 import type { StrategicGraph } from './graph';
-import { CapWalker, forestDensity } from './input';
+import { CapWalker, forestDensity, steepestDescent } from './input';
 import type { StrategicContext, StrategicInput } from './input';
+import { movementCost } from './movement';
 import { buildNodes } from './nodes';
+import type { NodeBuild } from './nodes';
+import { buildRoads } from './roads';
+import type { RoadBuilder } from './roads';
+import { placeSettlements } from './settlements';
 import { buildSeaLanes } from './ocean';
 import { airbaseSites, portSites } from './sites';
 
@@ -30,10 +37,28 @@ export function strategicContext(input: StrategicInput): StrategicContext {
     slope,
     forest: forestDensity(biome),
     cellSize: (radius * Math.PI) / 2 / grid.n,
+    receiver: input.receiver ?? steepestDescent(grid, height),
   };
 }
 
 export function buildStrategicGraph(input: StrategicInput): StrategicGraph {
+  return buildStrategicGraphWithContext(input).graph;
+}
+
+/**
+ * What the builder knows beyond the graph, for placement after casting
+ * (infrastructure.ts). In-process only: not stored or transferred.
+ */
+export interface StrategicBuild {
+  graph: StrategicGraph;
+  ctx: StrategicContext;
+  nodes: NodeBuild;
+  /** The road builder with the civilian network's edges, for spur roads. */
+  roads: RoadBuilder;
+  walker: CapWalker;
+}
+
+export function buildStrategicGraphWithContext(input: StrategicInput): StrategicBuild {
   const timings: { stage: string; ms: number }[] = [];
   let t0 = performance.now();
   const lap = (stage: string) => {
@@ -51,13 +76,23 @@ export function buildStrategicGraph(input: StrategicInput): StrategicGraph {
   lap('nodes');
   const ocean = buildSeaLanes(ctx, nb);
   lap('sea lanes');
+  const settlements = placeSettlements(ctx, nb.nodes, nb.nodeOfLandmass, walker, input.seed ?? 0);
+  lap('settlements');
+  const roads = buildRoads(ctx, settlements, movementCost(ctx));
+  lap('roads');
   const barrier = barrierMap(ctx, walker);
-  const { lines, fronts } = buildFronts(ctx, nb.nodes, nb.members, barrier);
+  const { lines, fronts } = buildFronts(ctx, nb.nodes, nb.members, barrier, {
+    settlements,
+    roads: roads.network,
+  });
   lap('fronts');
-  return {
+  const graph: StrategicGraph = {
     resolution: ctx.grid.n,
     radius: ctx.radius,
     nodes: nb.nodes,
+    settlements,
+    roads: roads.network,
+    bridges: roads.bridges,
     lanes: ocean.lanes,
     chokepoints: ocean.chokepoints,
     barrierLines: lines,
@@ -66,4 +101,5 @@ export function buildStrategicGraph(input: StrategicInput): StrategicGraph {
     airbaseCapacity: nb.nodes.reduce((s, n) => s + n.airbases.cells.length, 0),
     timings,
   };
+  return { graph, ctx, nodes: nb, roads: roads.builder, walker };
 }
