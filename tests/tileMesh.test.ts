@@ -178,10 +178,13 @@ describe('buildTileMesh', () => {
         sea++;
         expect(radial).toBeCloseTo(0, 1);
         expect(m.water[v]).toBe(0);
+        // Coast distance: positive at sea.
+        expect(m.shore[v]).toBeGreaterThan(0);
       } else {
         land++;
         expect(radial).toBeCloseTo(h * EX, 0);
         expect(m.water[v]).toBe(1);
+        expect(m.shore[v]).toBeLessThanOrEqual(0);
       }
     }
     expect(sea).toBeGreaterThan(100);

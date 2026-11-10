@@ -550,3 +550,20 @@ The vertex shader computes `base + up · height · exaggeration`, morphs toward 
 - Planet-scale positions in float32 cannot carry meter-scale detail.
 - A per-mesh wrapped origin does, with no new vertex data and no seams, as long as every detail function is periodic in the same period.
 - A fixed wave set costs 32 cosines per water fragment. An FFT ocean is not needed at these altitudes.
+
+### 39. Coastal foam from a per-vertex coast distance
+
+**Date:** 2026-11-09
+**Decision:**
+
+- **Coast distance.** Tile meshes carry a signed coast-distance estimate per vertex, −h / |∇h| (m). It is positive at sea and negative on land, clamped to ±5 km, with the gradient taken from the raw tile samples.
+- **Foam pattern.** Foam fills a band of `foamWidth` (90 m) from the coast:
+  - surf lines every 14 m, moving shoreward;
+  - broken up by the crests of the shorter waves (decision 38).
+- **Filtering.** When the band is narrower than a few pixels, the pattern averages to 30% coverage and then thins with the band's pixel coverage, so from orbit coasts show only a faint light edge.
+- **Vertex layout.** WebGPU allows 8 vertex buffers. Raw height, lake coverage and coast distance travel packed in one vec3 attribute, `surface`. Meshes cost 84 bytes per vertex.
+- **GUI.** Lighting → "Coastal foam".
+
+- **Memory split.** Larger meshes made the mesh cache thrash at 2 km: about 400 meshes are drawn, plus fallback parents. The tile memory budget is now split 45% data, 55% meshes (was 65/35), and the renderer's own default matches the app's 600 MiB.
+
+**Reason:** The first version estimated the coast distance per fragment from screen derivatives (depth ÷ `fwidth(height)`). That is constant over each triangle, so the foam came out in visible triangle steps. A per-vertex estimate interpolates smoothly and costs one float.

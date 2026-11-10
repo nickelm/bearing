@@ -63,10 +63,16 @@ import type { TileViewMode } from './tileMesh';
 
 const DATA_BYTES = TILE_STRIDE * TILE_STRIDE * 8;
 const ZERO = new Vector3();
+/**
+ * Share of the tile memory budget for CPU tile data; the rest holds meshes.
+ * Low views draw about 400 meshes plus their fallback parents, against about
+ * 200 data tiles (deeper meshes share a level-7 data tile).
+ */
+const DATA_SHARE = 0.45;
 /** A planet coordinate modulo the wave period, in float64 (decision 38). */
 const wrapCoordinate = (x: number) => ((x % WAVE_PERIOD) + WAVE_PERIOD) % WAVE_PERIOD;
-/** base, up, parentBase, parentDisp, slope, color (vec3) + height, water (float), float32. */
-const MESH_BYTES = TILE_VERTEX_COUNT * (6 * 3 + 2) * 4;
+/** base, up, parentBase, parentDisp, slope, color (vec3) + height, water, shore (float), float32. */
+const MESH_BYTES = TILE_VERTEX_COUNT * (6 * 3 + 3) * 4;
 
 export interface TerrainStats {
   drawn: number;
@@ -108,8 +114,8 @@ export class TerrainRenderer {
   private readonly material: MeshBasicNodeMaterial;
   /** Sea and lake shading inside the terrain material (decision 37). */
   readonly water: WaterShading;
-  private readonly data = new TileCache<TileData>(400 * 2 ** 20);
-  private readonly meshes = new TileCache<Mesh>(200 * 2 ** 20, (e) => {
+  private readonly data = new TileCache<TileData>(DATA_SHARE * 600 * 2 ** 20);
+  private readonly meshes = new TileCache<Mesh>((1 - DATA_SHARE) * 600 * 2 ** 20, (e) => {
     this.group.remove(e.value);
     // The index buffer is shared by every tile: detach it, or dispose() would free it for all.
     e.value.geometry.setIndex(null);
@@ -131,7 +137,9 @@ export class TerrainRenderer {
     // changing the exaggeration is a uniform update, not a rebuild.
     const exaggeration = this.exaggerationUniform;
     const up = attribute('up', 'vec3');
-    const rawHeight = attribute('height', 'float');
+    // Packed per-vertex scalars (WebGPU allows 8 vertex buffers): raw height, lake, coast distance.
+    const surfaceAttr = attribute('surface', 'vec3');
+    const rawHeight = surfaceAttr.x;
     // The sea is drawn flat at 0 m; the raw height still reaches the fragment stage.
     const own = positionLocal.add(up.mul(max(rawHeight, 0).mul(exaggeration)));
     const parent = attribute('parentBase', 'vec3').add(
@@ -162,7 +170,8 @@ export class TerrainRenderer {
       albedo: attribute('color', 'vec3'),
       normal,
       height: rawHeight,
-      lake: attribute('water', 'float'),
+      lake: surfaceAttr.y,
+      shore: surfaceAttr.z,
       up: normalize(up),
       relative: positionWorld,
       wavePosition: wrapOrigin.add(local),
@@ -208,8 +217,8 @@ export class TerrainRenderer {
   }
 
   set budgetMiB(mib: number) {
-    this.data.budgetBytes = mib * 2 ** 20 * 0.65;
-    this.meshes.budgetBytes = mib * 2 ** 20 * 0.35;
+    this.data.budgetBytes = mib * 2 ** 20 * DATA_SHARE;
+    this.meshes.budgetBytes = mib * 2 ** 20 * (1 - DATA_SHARE);
   }
 
   /** Data needed to build tile t's mesh, if cached (marks it used). */
@@ -244,8 +253,13 @@ export class TerrainRenderer {
     const g = new BufferGeometry();
     g.setAttribute('position', new BufferAttribute(m.base, 3));
     g.setAttribute('up', new BufferAttribute(m.up, 3));
-    g.setAttribute('height', new BufferAttribute(m.height, 1));
-    g.setAttribute('water', new BufferAttribute(m.water, 1));
+    const surface = new Float32Array(TILE_VERTEX_COUNT * 3);
+    for (let v = 0; v < TILE_VERTEX_COUNT; v++) {
+      surface[v * 3] = m.height[v]!;
+      surface[v * 3 + 1] = m.water[v]!;
+      surface[v * 3 + 2] = m.shore[v]!;
+    }
+    g.setAttribute('surface', new BufferAttribute(surface, 3));
     g.setAttribute('parentBase', new BufferAttribute(m.parentBase, 3));
     g.setAttribute('parentDisp', new BufferAttribute(m.parentDisp, 3));
     g.setAttribute('slope', new BufferAttribute(m.slope, 3));

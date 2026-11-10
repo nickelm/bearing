@@ -343,6 +343,7 @@ async function main(): Promise<void> {
     skyLight: lighting.skyLight.value,
     nightLight: lighting.nightLight.value,
     waves: globe.terrain.water.waveStrength.value,
+    foam: globe.terrain.water.foamStrength.value,
   };
   gui.addLightingControls(lightParams, (l) => {
     lighting.atmosphere.enabled.value = l.atmosphere ? 1 : 0;
@@ -353,6 +354,7 @@ async function main(): Promise<void> {
     lighting.skyLight.value = l.skyLight;
     lighting.nightLight.value = l.nightLight;
     globe.terrain.water.waveStrength.value = l.waves;
+    globe.terrain.water.foamStrength.value = l.foam;
   });
 
   // World-generation compute shares three's device (decision 22).

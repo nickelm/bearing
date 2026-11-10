@@ -24,6 +24,12 @@
  *   of aliasing.
  * - Fresnel (Schlick, F0 = 0.02) mixes the water body with a reflection of
  *   the average sky.
+ *
+ * Coastal foam (decision 39): distance to the shore comes per vertex
+ * (tileMesh `shore`: depth ÷ depth gradient from the samples). Foam
+ * fills a band about `foamWidth` wide with surf lines moving shoreward, broken
+ * up by the wave field. Once the band is narrower than a pixel, it fades to
+ * its average coverage, so from orbit coasts get a faint light edge.
  */
 import { Color } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
@@ -111,6 +117,8 @@ export interface WaterInputs {
   height: F;
   /** Lake coverage 0..1. */
   lake: F;
+  /** Signed coast distance (m), positive at sea. */
+  shore: F;
   /** Unit radial direction at the fragment. */
   up: V3;
   /** Camera-relative position of the fragment. */
@@ -130,6 +138,10 @@ export class WaterShading {
   readonly waveStrength = uniform(1);
   /** Roughness of the water surface below the smallest wave. */
   readonly baseRoughness = uniform(0.04);
+  /** Width of the surf zone (m). */
+  readonly foamWidth = uniform(90);
+  /** Foam amount multiplier (0 = none). */
+  readonly foamStrength = uniform(1);
   readonly waves = waveSet();
 
   constructor(private readonly lighting: PlanetLighting) {}
@@ -151,7 +163,9 @@ export class WaterShading {
     const footprint = max(length(fwidth(i.wavePosition)), 1e-4);
     let grad: V3 = vec3(0);
     let unresolved: F = float(0);
-    for (const w of this.waves) {
+    // Crests of the shorter waves, for breaking up the foam.
+    let crest: F = float(0);
+    for (const [index, w] of this.waves.entries()) {
       const k = (2 * Math.PI) / WAVE_PERIOD;
       const kv = vec3(w.n[0] * k, w.n[1] * k, w.n[2] * k);
       const omega = Math.sqrt(GRAVITY * ((2 * Math.PI) / w.wavelength));
@@ -160,6 +174,7 @@ export class WaterShading {
       const phase = dot(kv, i.wavePosition).sub(time.mul(omega)).add(w.phase);
       const dir = vec3(w.n[0], w.n[1], w.n[2]).div(Math.hypot(...w.n));
       grad = grad.add(dir.mul(cos(phase).mul(s).mul(resolved))) as V3;
+      if (index >= this.waves.length / 2) crest = crest.add(cos(phase).mul(resolved)) as F;
       unresolved = unresolved.add(
         float(slopeVariance(w.slope))
           .mul(this.waveStrength.mul(this.waveStrength))
@@ -190,8 +205,32 @@ export class WaterShading {
       .skyIrradiance(dot(i.up, sun))
       .mul(L.sunIlluminance.mul(L.skyLight))
       .mul(fresnel);
-    const bodyLight = L.shadeDiffuse(body, i.up, i.relative).mul(float(1).sub(fresnel));
-    const water = bodyLight.add(sky).add(glint.mul(clamp(nDotL.mul(20), 0, 1)));
+    // Coastal foam.
+    const shoreDistance = max(i.shore, 0);
+    const band = this.foamWidth;
+    const inBand = float(1).sub(smoothstep(0, max(band, footprint.mul(1.5)), shoreDistance));
+    const surf = cos(shoreDistance.div(14).add(time.mul(0.8)))
+      .mul(0.5)
+      .add(0.5);
+    const breakup = crest
+      .div(Math.sqrt(this.waves.length / 2))
+      .mul(0.5)
+      .add(0.5);
+    const pattern = smoothstep(0.35, 0.75, surf.mul(0.55).add(breakup.mul(0.45)));
+    // Narrower than a few pixels: the pattern averages out, then the band thins.
+    const detail = smoothstep(1, 4, band.div(footprint));
+    const foam = inBand
+      .mul(mix(float(0.3), pattern, detail))
+      .mul(clamp(band.div(footprint), 0, 1))
+      .mul(this.foamStrength)
+      .mul(sea);
+    const foamy = clamp(foam, 0, 1);
+    const surface = mix(body, vec3(0.8, 0.82, 0.82), foamy) as V3;
+
+    const bodyLight = L.shadeDiffuse(surface, i.up, i.relative).mul(float(1).sub(fresnel));
+    const water = bodyLight.add(
+      sky.add(glint.mul(clamp(nDotL.mul(20), 0, 1))).mul(float(1).sub(foamy)),
+    );
 
     const land = L.shadeDiffuse(i.albedo, i.normal, i.relative);
     return mix(land, water, wet) as V3;

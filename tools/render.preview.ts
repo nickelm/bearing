@@ -105,6 +105,15 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     localTime: 16.8,
   },
   {
+    name: 'shore',
+    dLat: -32.6 * DEG,
+    dLon: -1.5 * DEG,
+    altitude: 900,
+    tilt: 60 * DEG,
+    heading: 250 * DEG,
+    localTime: 14,
+  },
+  {
     name: 'sunset',
     dLat: 0,
     dLon: 0,
@@ -143,6 +152,7 @@ it('renders preview views', async () => {
   scene.globe.setExaggeration(exaggeration);
   scene.terrain.setExaggeration(exaggeration);
   scene.terrain.buildBudgetMs = 10_000;
+  scene.terrain.budgetMiB = 600; // the app's default (GUI → Tile memory)
   const synth = new TileSynthesizer(global.grid, {
     seed: params.seed,
     reliefScale: params.reliefScale,

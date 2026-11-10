@@ -54,6 +54,8 @@ export interface LightingGuiParams {
   nightLight: number;
   /** Water wave slope multiplier (0 = mirror-flat). */
   waves: number;
+  /** Coastal foam multiplier (0 = none). */
+  foam: number;
 }
 
 export const TIME_RATES: Record<string, number> = {
@@ -227,6 +229,9 @@ export class DebugGui {
       .onChange(() => changed(light));
     f.add(light, 'waves', 0, 3, 0.05)
       .name('Water waves')
+      .onChange(() => changed(light));
+    f.add(light, 'foam', 0, 3, 0.05)
+      .name('Coastal foam')
       .onChange(() => changed(light));
   }
 

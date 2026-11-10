@@ -64,6 +64,12 @@ export interface TileMeshData {
   height: Float32Array;
   /** Inland water coverage 0..1 (lakes), drawn as water by the shader. */
   water: Float32Array;
+  /**
+   * Signed distance to the coastline estimate (m): −h / |∇h|, positive at sea,
+   * negative on land, clamped to ±SHORE_CLAMP. Interpolates smoothly, unlike
+   * screen-derivative estimates (coastal foam, decision 39).
+   */
+  shore: Float32Array;
   /** Morph target: the parent's surface, as base + displacement (before exaggeration). */
   parentBase: Float32Array;
   parentDisp: Float32Array;
@@ -304,6 +310,9 @@ function riverAt(data: TileData, fx: number, fy: number, footprint: number): num
   );
 }
 
+/** Largest coast distance stored per vertex (m). */
+export const SHORE_CLAMP = 5000;
+
 /** Exaggeration assumed for skirt depth (the GUI allows up to 40). */
 const SKIRT_EXAGGERATION = 40;
 
@@ -332,6 +341,7 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
   const up = new Float32Array(n3);
   const height = new Float32Array(TILE_VERTEX_COUNT);
   const water = new Float32Array(TILE_VERTEX_COUNT);
+  const shore = new Float32Array(TILE_VERTEX_COUNT);
   const parentBase = new Float32Array(n3);
   const parentDisp = new Float32Array(n3);
   const slope = new Float32Array(n3);
@@ -395,8 +405,9 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
   // out; it is a few meters at most.
   const [dox, doy] = mapSample(t, sources.data.key, 0, 0);
   const dscale = 2 ** (sources.data.key.level - t.level);
-  const flat = (sx: number, sy: number) =>
-    display(bilinear(sources.data, dox + sx * dscale, doy + sy * dscale));
+  const raw = (sx: number, sy: number) =>
+    bilinear(sources.data, dox + sx * dscale, doy + sy * dscale);
+  const flat = (sx: number, sy: number) => display(raw(sx, sy));
   const footprint = STEP * dscale;
   const tu = new Vec3d();
   const tv = new Vec3d();
@@ -424,6 +435,11 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
       slope[v * 3] = tu.x * sU + tv.x * sV;
       slope[v * 3 + 1] = tu.y * sU + tv.y * sV;
       slope[v * 3 + 2] = tu.z * sU + tv.z * sV;
+      // Coast distance from the raw height and its gradient (sample-scale differences).
+      const rU = (raw(sx + 1, sy) - raw(sx - 1, sy)) / (2 * du);
+      const rV = (raw(sx, sy + 1) - raw(sx, sy - 1)) / (2 * dv);
+      const g = Math.hypot(rU, rV);
+      shore[v] = Math.max(-SHORE_CLAMP, Math.min(SHORE_CLAMP, -raw(sx, sy) / Math.max(g, 1e-6)));
       const edge = i === 0 || j === 0 || i === TILE_SEGMENTS || j === TILE_SEGMENTS;
       const fx = dox + sx * dscale;
       const fy = doy + sy * dscale;
@@ -455,6 +471,7 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
         arr.copyWithin(dst * 3, src * 3, src * 3 + 3);
       height[dst] = height[src]!;
       water[dst] = water[src]!;
+      shore[dst] = shore[src]!;
     }
   }
   return {
@@ -464,6 +481,7 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
     up,
     height,
     water,
+    shore,
     parentBase,
     parentDisp,
     slope,
