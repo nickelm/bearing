@@ -77,7 +77,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [x] Aerial perspective on terrain
 - [ ] Climate array texture (sea-level temperature, seasonal range, moisture, cloudiness) with a TSL cube-face lookup by direction
 - [x] Ocean: depth-based color from bathymetry
-- [ ] Ocean: wave normal map and sun glint
+- [x] Ocean: wave normal map and sun glint
 - [ ] Coastal foam
 - [ ] Checkpoint 3: owner review of day/night, sky, aerial perspective and ocean in the browser
 - [ ] Terrain shading: biome color blended by slope (rock), altitude (snow) and moisture; triplanar mapping on cliffs

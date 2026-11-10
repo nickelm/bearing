@@ -526,3 +526,27 @@ The vertex shader computes `base + up · height · exaggeration`, morphs toward 
 - An ocean mesh would need its own LOD, accurate to centimeters against the coastline at 500 m altitude, and blending at the shore.
 - The terrain already covers the sea floor at the right resolution, and the raw height carries the depth for free.
 - Reference depths keep the shallow-to-deep color ramp Earth-like even though physical shelves are only about 20 m deep.
+
+### 38. Water surface: periodic waves on wrapped coordinates, glint by unresolved slope
+
+**Date:** 2026-11-09
+**Decision:**
+
+- **Wrapped coordinates.** Each terrain mesh carries a per-object uniform with its float64 origin modulo `WAVE_PERIOD` = 4,096 m. The vertex stage passes the mesh-local position as a varying, and their sum is a small, precise fragment coordinate.
+- **Waves.** The wave field is 32 plane waves in 3D whose wave vectors are integer multiples of 2π/4,096 m, so the field is periodic and seamless across tiles. A wave's slope projected onto the tangent plane tilts the normal.
+  - Wavelengths are log-spaced from 1.5 to 180 m, in fixed random directions (`rng(0, "render/waves")`).
+  - Phases follow deep-water dispersion, ω = √(g·k), on wall-clock time.
+  - Each wave has a peak slope of 0.044, which gives a total slope variance of about 0.03, Cox–Munk for a moderate breeze.
+- **Filtering.** A wave fades out once it is shorter than about 4 pixels (from `fwidth` of the wrapped position). Its slope variance moves into the GGX roughness (α² = α₀² + 2σ²), so the glint widens into the orbital sunglint instead of aliasing.
+- **Shading.**
+  - Specular: GGX with Schlick Fresnel (F0 = 0.02), with sunlight filtered by the atmosphere.
+  - Sky reflection: Fresnel × the average sky radiance from the irradiance LUT.
+  - Water body: diffuse, × (1 − F).
+- **GUI.** Lighting → "Water waves" scales every slope (0 = mirror).
+- **Later use.** The same wrapped coordinate will carry terrain detail noise (milestone 3 terrain shading).
+
+**Reason:**
+
+- Planet-scale positions in float32 cannot carry meter-scale detail.
+- A per-mesh wrapped origin does, with no new vertex data and no seams, as long as every detail function is periodic in the same period.
+- A fixed wave set costs 32 cosines per water fragment. An FFT ocean is not needed at these altitudes.

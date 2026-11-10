@@ -52,6 +52,8 @@ export interface LightingGuiParams {
   skyLight: number;
   /** Starlight and airglow on the night side. */
   nightLight: number;
+  /** Water wave slope multiplier (0 = mirror-flat). */
+  waves: number;
 }
 
 export const TIME_RATES: Record<string, number> = {
@@ -222,6 +224,9 @@ export class DebugGui {
       .onChange(() => changed(light));
     f.add(light, 'nightLight', 0, 0.1, 0.001)
       .name('Night light')
+      .onChange(() => changed(light));
+    f.add(light, 'waves', 0, 3, 0.05)
+      .name('Water waves')
       .onChange(() => changed(light));
   }
 

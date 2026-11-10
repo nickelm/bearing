@@ -21,6 +21,7 @@ import {
   Group,
   Mesh,
   MeshBasicNodeMaterial,
+  Vector3,
 } from 'three/webgpu';
 import {
   attribute,
@@ -53,7 +54,7 @@ import { Vec3d } from '../../core/vec3d';
 import { MAX_BAKED_LEVEL } from '../../worldgen/gpu/tileSynth';
 import type { TileData, TileSynthesizer } from '../../worldgen/gpu/tileSynth';
 import { PlanetLighting } from '../lighting/planetLighting';
-import { WaterShading } from '../water/waterShading';
+import { WAVE_PERIOD, WaterShading } from '../water/waterShading';
 import { DEFAULT_LOD, selectTiles } from './quadtree';
 import type { LodOptions, LodView } from './quadtree';
 import { TileCache, TileLoader, TileRequestQueue } from './tileCache';
@@ -61,6 +62,9 @@ import { buildTileIndex, buildTileMesh, dataTileFor, TILE_VERTEX_COUNT } from '.
 import type { TileViewMode } from './tileMesh';
 
 const DATA_BYTES = TILE_STRIDE * TILE_STRIDE * 8;
+const ZERO = new Vector3();
+/** A planet coordinate modulo the wave period, in float64 (decision 38). */
+const wrapCoordinate = (x: number) => ((x % WAVE_PERIOD) + WAVE_PERIOD) % WAVE_PERIOD;
 /** base, up, parentBase, parentDisp, slope, color (vec3) + height, water (float), float32. */
 const MESH_BYTES = TILE_VERTEX_COUNT * (6 * 3 + 2) * 4;
 
@@ -136,8 +140,15 @@ export class TerrainRenderer {
     // Aerial perspective per vertex (decision 35), handed to the fragment stage.
     const apInscatter = varyingProperty('vec3', 'vApInscatter');
     const apTransmittance = varyingProperty('vec3', 'vApTransmittance');
+    // Each mesh's origin modulo the wave period (float64 on the CPU): fragments
+    // evaluate periodic surface detail on small, precise coordinates (decision 38).
+    const wrapOrigin = uniform(new Vector3()).onObjectUpdate(
+      ({ object }) => ((object as Mesh | undefined)?.userData.wrap as Vector3 | undefined) ?? ZERO,
+    );
+    const local = varyingProperty('vec3', 'vLocal');
     this.material.positionNode = Fn(() => {
       const p = mix(parent, own, morph);
+      local.assign(p);
       const relative = modelWorldMatrix.mul(vec4(p, 1)).xyz;
       const ap = lighting.atmosphere.aerialPerspective(relative);
       apInscatter.assign(ap.inscatter);
@@ -154,6 +165,7 @@ export class TerrainRenderer {
       lake: attribute('water', 'float'),
       up: normalize(up),
       relative: positionWorld,
+      wavePosition: wrapOrigin.add(local),
     });
     this.material.colorNode = lighting.applyAerial(surface, apInscatter, apTransmittance);
     this.loader = new TileLoader<TileData>(
@@ -243,6 +255,11 @@ export class TerrainRenderer {
     mesh.frustumCulled = false;
     mesh.matrixAutoUpdate = true;
     mesh.userData.origin = m.origin;
+    mesh.userData.wrap = new Vector3(
+      wrapCoordinate(m.origin.x),
+      wrapCoordinate(m.origin.y),
+      wrapCoordinate(m.origin.z),
+    );
     mesh.userData.morph = 1;
     mesh.visible = false;
     this.group.add(mesh);

@@ -87,6 +87,24 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     localTime: 10.5,
   },
   {
+    name: 'glint',
+    dLat: -38 * DEG,
+    dLon: 0,
+    altitude: 40 * KM,
+    tilt: 62 * DEG,
+    heading: 250 * DEG,
+    localTime: 16.5,
+  },
+  {
+    name: 'sea',
+    dLat: -32 * DEG,
+    dLon: 1 * DEG,
+    altitude: 600,
+    tilt: 84 * DEG,
+    heading: 250 * DEG,
+    localTime: 16.8,
+  },
+  {
     name: 'sunset',
     dLat: 0,
     dLon: 0,
@@ -162,6 +180,9 @@ it('renders preview views', async () => {
     let last = '';
     const t0 = performance.now();
     for (let f = 0; f < 400 && stable < 3; f++) {
+      // The camera clamps to 2 km above the highest terrain until the ground under it
+      // has loaded; ask for the view's altitude again every frame.
+      o.altitude = o.targetAltitude = v.altitude;
       scene.render(0);
       await gpu.finish();
       await new Promise((r) => setTimeout(r, 2));

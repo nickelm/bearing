@@ -342,6 +342,7 @@ async function main(): Promise<void> {
     exposure: renderer.toneMappingExposure,
     skyLight: lighting.skyLight.value,
     nightLight: lighting.nightLight.value,
+    waves: globe.terrain.water.waveStrength.value,
   };
   gui.addLightingControls(lightParams, (l) => {
     lighting.atmosphere.enabled.value = l.atmosphere ? 1 : 0;
@@ -351,6 +352,7 @@ async function main(): Promise<void> {
     renderer.toneMappingExposure = l.exposure;
     lighting.skyLight.value = l.skyLight;
     lighting.nightLight.value = l.nightLight;
+    globe.terrain.water.waveStrength.value = l.waves;
   });
 
   // World-generation compute shares three's device (decision 22).
