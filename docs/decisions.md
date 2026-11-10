@@ -332,3 +332,28 @@ This replaces the TODO's "local erosion pass" on each tile. The same function ex
 - The CPU drainage and river pass also scales with cell count: at 2048² it would need about 330 MB of typed arrays in the worker.
 - A mid-range laptop GPU is perhaps 3–5× slower than this desktop, so 1024² still finishes erosion in one to two minutes, within decision 12.
 - Detail below 1.5 km comes from tile synthesis (decision 24), so the global grid only has to carry drainage-scale structure.
+
+### 28. Tile samples on the corner lattice; one synthesis kernel for all levels
+
+**Date:** 2026-11-09
+**Decision:**
+
+- **Sample lattice.** Tile samples sit on the tile's corner lattice: 257 × 257 per tile, plus a 2-sample border (261² values). They are not texel centers, which revises the texel convention of decision 13.
+  - Sample 0 and sample 256 lie exactly on the tile edges and are shared with the neighbor.
+  - A child's even samples are its parent's samples.
+- **One kernel.** The same GPU kernel (`worldgen/gpu/tileSynth.ts`) produces every tile, from level 0 to `MAX_BAKED_LEVEL` = 7 (about 48 m).
+  - At or above the global grid's level it adds no detail octaves, which is the "bake global maps into tiles" case.
+  - Below that level it adds octaves while their wavelength exceeds two sample spacings and 100 m.
+  - Finer detail is left to the renderer's shader noise, because float32 noise coordinates lose precision near 10 m wavelengths at R = 1,000 km.
+- **Rivers.** Channels are carved from Chaikin-smoothed river polylines, indexed by level-4 tile. The water surface follows the bicubic global height under the channel, so a channel is always cut into the terrain around it.
+
+**Reason:**
+
+- Mesh vertices, seams and geomorphing all want samples on tile edges and nested across levels.
+- With texel centers, neighboring tiles would have to interpolate across the edge, and a parent's samples would fall between its child's.
+
+**Measured** (Vitest on Dawn, seed 1983):
+
+- Neighboring tiles on one face match bit for bit in any batch order.
+- Across a cube-face seam, shared edge samples agree to under 5 cm.
+- Sixteen level-6 tiles generate in about 50 ms.

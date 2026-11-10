@@ -43,7 +43,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 
 - [x] Benchmark erosion memory and time on a global grid at 1024² and 2048² per face; choose the global grid resolution (decision 13): 1024², decision 27 (`tools/bench.preview.ts`)
 - [x] Global grid on the GPU with cross-face neighbor addressing (plain WGSL on a raw device, decision 26; self-tests run in Vitest on Dawn and from the GUI)
-- [ ] Bake global maps into tiles with borders (GPU textures); M1 renders straight from the grid
+- [x] Bake global maps into tiles with borders (GPU textures); M1 renders straight from the grid (same kernel as detail synthesis, no octaves at or above the global level; decision 28)
 - [x] Detail noise stage on the GPU: ridged multifractal amplified by uplift, domain warping on coasts and ridges (upsamples the tectonic grid; `tools/terrain.preview.ts` renders it offline)
 - [x] Hydraulic erosion compute pass on the global grid (stream power with rebound toward the tectonic height, Planchon–Darboux routing surface, gathered drainage; decision 23)
 - [x] Thermal erosion compute pass (talus angle; symmetric pairwise exchange, mass-conserving)
@@ -51,11 +51,11 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [ ] Checkpoint 1: owner review of eroded terrain, rivers and climate (in the browser and `tools/terrain.preview.ts`)
 - [x] Flow direction and flow accumulation maps (CPU in the worker: Priority-Flood+ε, D8, Turc–Pike runoff accumulated to m³/s, lakes; about 2 s at 1024²)
 - [x] River extraction: threshold the accumulation into vector polylines with a width per segment (w = 4·√Q m)
-  - [ ] Spatial index of river segments by tile key (needed by detail tile synthesis)
+  - [x] Spatial index of river segments by tile key (needed by detail tile synthesis)
 - [x] Climate stage proper: seasonal temperature range from axial tilt, prevailing-wind moisture with rain shadows, Whittaker biomes (replaces the provisional climate)
   - [x] Recompute biomes on the eroded global grid (lapse-corrected temperature, upsampled precipitation)
-- [ ] Detail tile synthesis on the GPU: global maps + detail noise + local erosion constrained by global rivers; per-tile `fork(tileKey)`
-- [ ] Tile borders and seam tests: neighboring tiles agree on shared texels whatever the generation order
+- [x] Detail tile synthesis on the GPU: global maps + detail noise + local erosion constrained by global rivers; per-tile `fork(tileKey)` (erosion filter and river carving as a pure function of direction, decisions 24, 28; `tools/tiles.preview.ts`)
+- [x] Tile borders and seam tests: neighboring tiles agree on shared texels whatever the generation order (bit-exact within a face, < 5 cm across face seams)
 - [ ] Tile cache: GPU/CPU LRU with a memory budget; on-demand generation queue
 - [ ] IndexedDB persistence for generated worlds and tiles, keyed by seed, parameters and generator version (moved from M8, decision 12)
 - [ ] Terrain quadtree per cube face on the same tile keys, refined by screen-space error

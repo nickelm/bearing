@@ -3,13 +3,21 @@
  *
  * A tile (face, level, x, y) covers face coordinates
  * u ∈ [x / 2^level, (x+1) / 2^level] and v ∈ [y / 2^level, (y+1) / 2^level].
- * Level 0 is a whole face. Every tile holds TILE_TEXELS² texels plus a border
- * of TILE_BORDER texels on each side, so that filtering and normals near a
- * tile edge never need the neighbor tile.
+ * Level 0 is a whole face.
  *
- * Texel coordinates (tx, ty) run from −TILE_BORDER to TILE_TEXELS + TILE_BORDER − 1.
- * Texel (tx, ty) is centered at ((tx + 0.5) / TILE_TEXELS) across the tile.
- * Border texels may lie on a neighboring face; their direction is still
+ * Samples lie on the tile's corner lattice (decision 28): TILE_SAMPLES =
+ * TILE_TEXELS + 1 per edge, so sample 0 and sample TILE_TEXELS sit exactly on
+ * the tile's edges and are shared with the neighbor, and a child's even
+ * samples coincide with its parent's. Every tile also carries TILE_BORDER
+ * extra samples on each side, so normals near an edge never need the
+ * neighbor tile. Sample coordinates (sx, sy) run from −TILE_BORDER to
+ * TILE_TEXELS + TILE_BORDER; a tile's data is TILE_STRIDE² values, row-major
+ * from (−TILE_BORDER, −TILE_BORDER).
+ *
+ * A sample's face coordinate comes from its integer global index at the
+ * level, u = (x · TILE_TEXELS + sx) / (TILE_TEXELS · 2^level), so adjacent
+ * tiles compute bit-identical coordinates for shared samples (decision 25).
+ * Border samples may lie on a neighboring face; their direction is still
  * well defined, because the equi-angular warp extends past the face edge.
  *
  * At R = 1,000 km, level 4 gives about 380 m per texel and level 7 about 48 m.
@@ -19,8 +27,13 @@ import type { CubeFace, CubeFaceUv } from './coords';
 import type { Meters } from './units';
 import { Vec3d } from './vec3d';
 
+/** Sample intervals per tile edge. */
 export const TILE_TEXELS = 256;
+/** Samples per tile edge, edges included. */
+export const TILE_SAMPLES = TILE_TEXELS + 1;
 export const TILE_BORDER = 2;
+/** Samples per row of a tile's data, borders included. */
+export const TILE_STRIDE = TILE_SAMPLES + 2 * TILE_BORDER;
 /** Deepest supported level (about 6 m texels at R = 1,000 km). */
 export const MAX_TILE_LEVEL = 10;
 
@@ -87,16 +100,21 @@ export function tileUvBounds(k: TileKey): [number, number, number, number] {
   return [k.x * s, k.y * s, (k.x + 1) * s, (k.y + 1) * s];
 }
 
-/** Face (u, v) of a texel center. tx and ty may be in the border range. */
-export function tileTexelUv(k: TileKey, tx: number, ty: number): [number, number] {
-  const s = 1 / (1 << k.level);
-  return [(k.x + (tx + 0.5) / TILE_TEXELS) * s, (k.y + (ty + 0.5) / TILE_TEXELS) * s];
+/** Face (u, v) of sample (sx, sy); sx and sy may be in the border range. */
+export function tileSampleUv(k: TileKey, sx: number, sy: number): [number, number] {
+  const d = TILE_TEXELS * (1 << k.level);
+  return [(k.x * TILE_TEXELS + sx) / d, (k.y * TILE_TEXELS + sy) / d];
 }
 
-/** Unit direction of a texel center, including border texels that lie on a neighboring face. */
-export function tileTexelDirection(k: TileKey, tx: number, ty: number, out = new Vec3d()): Vec3d {
-  const [u, v] = tileTexelUv(k, tx, ty);
+/** Unit direction of a sample, including border samples that lie on a neighboring face. */
+export function tileSampleDirection(k: TileKey, sx: number, sy: number, out = new Vec3d()): Vec3d {
+  const [u, v] = tileSampleUv(k, sx, sy);
   return cubeFaceUvToDirection(k.face, u, v, out);
+}
+
+/** Index of sample (sx, sy) in a tile's TILE_STRIDE² data. */
+export function tileSampleIndex(sx: number, sy: number): number {
+  return (sy + TILE_BORDER) * TILE_STRIDE + sx + TILE_BORDER;
 }
 
 const uvScratch: CubeFaceUv = { face: 0, u: 0, v: 0 };

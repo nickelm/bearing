@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   TILE_BORDER,
+  TILE_STRIDE,
   TILE_TEXELS,
   childTiles,
   neighborTile,
@@ -11,7 +12,9 @@ import {
   tileForDirection,
   tileKey,
   tileKeyString,
-  tileTexelDirection,
+  tileSampleDirection,
+  tileSampleIndex,
+  tileSampleUv,
   tileUvBounds,
 } from '../src/core/tiles';
 import type { TileKey } from '../src/core/tiles';
@@ -99,12 +102,38 @@ describe('tile keys', () => {
     }
   });
 
-  it('places border texels on the adjacent tile', () => {
+  it('places border samples on the adjacent tile', () => {
     const k = tileKey(4, 2, 3, 1); // touches the +u edge of face +Z
-    const inside = tileTexelDirection(k, TILE_TEXELS - 1, 100);
-    const border = tileTexelDirection(k, TILE_TEXELS + TILE_BORDER - 1, 100);
+    const inside = tileSampleDirection(k, TILE_TEXELS - 1, 100);
+    const border = tileSampleDirection(k, TILE_TEXELS + TILE_BORDER, 100);
     expect(tileEquals(tileForDirection(inside, 2), k)).toBe(true);
     expect(tileEquals(tileForDirection(border, 2), neighborTile(k, 1, 0))).toBe(true);
+  });
+
+  it('shares edge samples bit for bit with the same-face neighbor and the parent', () => {
+    const a = tileKey(1, 5, 9, 20);
+    const b = tileKey(1, 5, 10, 20);
+    for (let sy = -TILE_BORDER; sy <= TILE_TEXELS + TILE_BORDER; sy += 7) {
+      for (let s = -TILE_BORDER; s <= TILE_BORDER; s++) {
+        expect(tileSampleUv(a, TILE_TEXELS + s, sy)).toEqual(tileSampleUv(b, s, sy));
+      }
+    }
+    // A child's even samples are its parent's samples: child (19, 41) is the
+    // (+1, +1) quadrant of parent (9, 20).
+    const child = tileKey(1, 6, 19, 41);
+    const parent = parentTile(child)!;
+    for (let s = 0; s <= TILE_TEXELS; s += 2) {
+      expect(tileSampleUv(child, s, 20)).toEqual(
+        tileSampleUv(parent, TILE_TEXELS / 2 + s / 2, TILE_TEXELS / 2 + 10),
+      );
+    }
+  });
+
+  it('lays out tile data row-major from the border corner', () => {
+    expect(tileSampleIndex(-TILE_BORDER, -TILE_BORDER)).toBe(0);
+    expect(tileSampleIndex(TILE_TEXELS + TILE_BORDER, TILE_TEXELS + TILE_BORDER)).toBe(
+      TILE_STRIDE * TILE_STRIDE - 1,
+    );
   });
 
   it('matches the design texel sizes', () => {
