@@ -21,6 +21,7 @@ import type { WebGPURenderer } from 'three/webgpu';
 import type { CubeGrid } from '../core/cubeGrid';
 import { Vec3d } from '../core/vec3d';
 import { ClimateTexture } from './climateTexture';
+import { ForestLayer } from './forest/forestLayer';
 import { GlobeMesh } from './globeMesh';
 import { PlanetLighting } from './lighting/planetLighting';
 import { TerrainRenderer } from './terrain/terrainRenderer';
@@ -46,6 +47,8 @@ export class GlobeScene {
   readonly climate = new ClimateTexture();
   /** Tiled LOD terrain; drawn instead of the M1 grid mesh once a world has a global pass. */
   readonly terrain: TerrainRenderer;
+  /** Instanced tree clumps near the camera (decision 45). */
+  readonly forest: ForestLayer;
   /** Unit vector toward the sun, world frame. Set by the app from the ephemeris. */
   readonly sun = new Vec3d(1, 0.6, 0.8).normalize();
   /** Draw the tiled terrain when available (otherwise the M1 grid mesh). */
@@ -65,10 +68,11 @@ export class GlobeScene {
     this.orbit = new OrbitCamera(options.radius);
     this.lighting = new PlanetLighting(options.radius);
     this.terrain = new TerrainRenderer(this.lighting, this.climate);
+    this.forest = new ForestLayer(this.terrain, this.lighting, this.climate, this.terrain.land);
     // The sky: single scattering along each view ray, drawn behind everything (decision 35).
     this.scene.backgroundNode = this.lighting.atmosphere.skyNode();
     this.globe = new GlobeMesh(options.grid, options.radius);
-    this.scene.add(this.globe.group, this.terrain.group);
+    this.scene.add(this.globe.group, this.terrain.group, this.forest.group);
 
     // Scene lights serve only the M1 grid mesh (a debug view); the terrain lights itself.
     // Light directions are translation-invariant, so camera-relative offsets do not affect them.
@@ -131,6 +135,10 @@ export class GlobeScene {
         radius: o.radius,
         maxHeight: this.globe.maxDisplayedHeight,
       });
+      const ground = o.groundHeight ?? 0;
+      this.forest.update(o.eye, o.altitude - Math.max(0, ground));
+    } else {
+      this.forest.group.visible = false;
     }
 
     this.renderer.render(this.scene, this.camera);
@@ -140,5 +148,6 @@ export class GlobeScene {
     this.detachInput();
     this.globe.dispose();
     this.terrain.dispose();
+    this.forest.dispose();
   }
 }

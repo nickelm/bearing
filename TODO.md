@@ -85,7 +85,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [x] Terrain shading: biome color blended by slope (rock), altitude (snow) and moisture; triplanar mapping on cliffs
 - [x] Seasonal snow line and seasonal vegetation tint (plus frozen lakes)
 - [x] Forest density map (also used later by line of sight)
-- [ ] Instanced low-poly tree clusters within about 5 km of the camera
+- [x] Instanced low-poly tree clusters within about 5 km of the camera
 - [ ] River rendering from vector data (mask texture or decals); replaces the per-vertex river coverage from checkpoint 2
 - [ ] Cloud layer rendering, from a static field derived from moisture until live weather exists (M6)
 - [ ] Checkpoint 4: owner review of terrain shading, seasons, forests, rivers and clouds
@@ -158,6 +158,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 
 - [ ] Generation profiling and progress polish (no time budget, decision 12)
 - [ ] Rendering performance pass (GPU timestamp queries, frame budget); consider building tile meshes in a worker (decision 30)
+- [ ] Tree LOD: one cone per clump beyond about 2 km, or impostors (decision 45: ~6.6 M triangles over dense forest at the default 5 km range)
 - [ ] Bundle size and code splitting
 - [ ] Scripted flythrough camera path for screenshots, including a dawn and a weather front
 - [ ] Check every demo goal against the design doc and decisions

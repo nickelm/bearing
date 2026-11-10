@@ -207,7 +207,7 @@ function materialAt(data: TileData, fx: number, fy: number): number {
 }
 
 /** Map sample coordinates of tile `t` into the sample space of its ancestor/descendant `d`. */
-function mapSample(t: TileKey, d: TileKey, sx: number, sy: number): [number, number] {
+export function mapSample(t: TileKey, d: TileKey, sx: number, sy: number): [number, number] {
   // Global sample index at t's level, rescaled to d's level, relative to d.
   const scale = 2 ** (d.level - t.level);
   return [
@@ -224,14 +224,14 @@ export function renderDetailOctaves(level: number, radius: number): number[] {
 }
 
 /** Lake level of `src` at tile `t`'s sample coordinates. */
-function lakeSampler(t: TileKey, src: TileData): (sx: number, sy: number) => number {
+export function lakeSampler(t: TileKey, src: TileData): (sx: number, sy: number) => number {
   const [ox, oy] = mapSample(t, src.key, 0, 0);
   const scale = 2 ** (src.key.level - t.level);
   return (sx, sy) => lakeLevel(src, ox + sx * scale, oy + sy * scale);
 }
 
 /** Surface height (physical m) of `level`'s surface at tile `t`'s sample coordinates. */
-function surfaceSampler(
+export function surfaceSampler(
   t: TileKey,
   level: number,
   src: TileData,

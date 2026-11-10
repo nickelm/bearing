@@ -61,7 +61,7 @@ import { DEFAULT_LOD, selectTiles } from './quadtree';
 import type { LodOptions, LodView } from './quadtree';
 import { TileCache, TileLoader, TileRequestQueue } from './tileCache';
 import { buildTileIndex, buildTileMesh, dataTileFor, TILE_VERTEX_COUNT } from './tileMesh';
-import type { TileViewMode } from './tileMesh';
+import type { MeshOptions, TileViewMode } from './tileMesh';
 
 const DATA_BYTES = TILE_STRIDE * TILE_STRIDE * 8;
 const ZERO = new Vector3();
@@ -109,7 +109,8 @@ export class TerrainRenderer {
 
   private world: TerrainWorld | null = null;
   private exaggeration = 10;
-  private readonly exaggerationUniform = uniform(10);
+  /** Height exaggeration, shared with layers drawn on the terrain (trees). */
+  readonly exaggerationUniform = uniform(10);
   private mode: TileViewMode = 'biome';
   private detail: Noise3 = new Noise3(rng(0, 'render-detail'));
   private readonly index = new BufferAttribute(buildTileIndex(), 1);
@@ -214,6 +215,23 @@ export class TerrainRenderer {
       },
       8,
     );
+  }
+
+  /** The current world (null before one is set). */
+  get currentWorld(): TerrainWorld | null {
+    return this.world;
+  }
+
+  /** Mesh-building options for the current world, e.g. to sample the drawn surface. */
+  meshOptions(): MeshOptions | null {
+    const w = this.world;
+    if (!w) return null;
+    return { radius: w.radius, reliefScale: w.reliefScale, mode: this.mode, detail: this.detail };
+  }
+
+  /** Cached tile data (levels ≤ MAX_BAKED_LEVEL), marking it used; undefined if not loaded. */
+  dataTile(key: TileKey): TileData | undefined {
+    return this.data.get(key);
   }
 
   /** Shows a world (or nothing). Drops all cached tiles. */

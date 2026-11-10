@@ -690,3 +690,31 @@ Shaders sample it by direction through `cubeFaceUv`, a TSL mirror of `directionT
 
 - The design uses forest density in three places: rendering, line of sight and the barrier map.
 - A biome-level base plus deterministic per-sample variation is a pure function of direction like the rest of the tile (decision 24), so every consumer sees the same forests.
+
+### 45. Instanced tree clumps per level-9 tile
+
+**Date:** 2026-11-10
+**Decision:** `render/forest/forestLayer.ts` draws trees within `range` (default 5 km) of the camera while it is below 8 km above the ground.
+
+- **Placement.** Trees are placed per level-9 tile (about 3 km). Candidates sit on a jittered 40 m lattice from `rng(seed, "trees").fork(tileKey)`. Every candidate draws all its random values, so placement never depends on rejections.
+  - A candidate is kept if a draw falls below the forest density (decision 44), sampled bilinearly from the level-7 tile data.
+  - It is dropped at sea and in lakes.
+  - It stands on the same surface function the terrain mesh evaluates at level 10.
+- **Clumps.** An instance is a clump of four low-poly trees, about 40 triangles. Conifers grow in taiga and temperate rainforest, plus 30% of temperate forest; elsewhere trees are broadleaf. Trunks reach 3 m below the ground to hide small height mismatches.
+- **Instance data.** Ground point relative to the tile origin, up vector, and (raw height, scale, rotation, kind), in an `InstancedBufferGeometry`.
+- **Vertex shader.**
+  - It applies the terrain's exaggeration to the ground point only; trees keep their real size.
+  - It builds the tree frame and shrinks clumps over the last 1.2 km of the range.
+  - It computes aerial perspective per vertex (6 steps).
+- **Shading.** Same lighting as the terrain. Broadleaf crowns brown below 10 °C and go bare below 0 °C, and snow settles on upward crown faces (decision 43).
+- **Budget.** Tiles build within 4 ms per frame, nearest first, and are evicted 120 frames after they are last wanted.
+- **GUI.**
+  - View → Terrain tiles: "Trees" and "Tree range".
+  - Status: "Trees" shows clumps and tiles.
+
+**Reason:**
+
+- Instancing per tile keeps placement deterministic and local, and the tiles' forest density is already resident for the terrain.
+- Clumps rather than single trees give a forest's density at about a tenth of the instances.
+
+**Measured** (preview at 700 m over dense taiga): 33 tiles and 166,000 clumps, about 6.6 M triangles. That is fine on the owner's desktop GPU, and laptops should shorten the range. A coarser far LOD (one cone per clump) is a milestone 8 performance item.

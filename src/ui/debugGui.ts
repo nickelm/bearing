@@ -29,6 +29,10 @@ export interface ViewGuiParams {
   sse: number;
   /** Tile memory budget (MiB). */
   tileMemory: number;
+  /** Instanced tree clumps near the camera. */
+  trees: boolean;
+  /** Tree range (km). */
+  treeRange: number;
 }
 
 /** Preview clock controls (until the sim clock exists, milestone 6). */
@@ -86,6 +90,7 @@ export interface DebugGuiStatus {
   compute: string;
   worker: string;
   tiles: string;
+  trees: string;
 }
 
 export interface DebugGuiCallbacks {
@@ -114,6 +119,7 @@ export class DebugGui {
     compute: 'pending',
     worker: 'pending',
     tiles: '—',
+    trees: '—',
   };
 
   constructor(
@@ -177,6 +183,12 @@ export class DebugGui {
     t.add(view, 'tileMemory', 128, 2048, 64)
       .name('Tile memory (MiB)')
       .onFinishChange(() => callbacks.viewChanged(view));
+    t.add(view, 'trees')
+      .name('Trees')
+      .onChange(() => callbacks.viewChanged(view));
+    t.add(view, 'treeRange', 1, 8, 0.5)
+      .name('Tree range (km)')
+      .onFinishChange(() => callbacks.viewChanged(view));
 
     const st = this.gui.addFolder('Status');
     st.add(this.status, 'generation').name('Generation').disable().listen();
@@ -188,6 +200,7 @@ export class DebugGui {
     st.add(this.status, 'compute').name('GPU compute').disable().listen();
     st.add(this.status, 'worker').name('Sim worker').disable().listen();
     st.add(this.status, 'tiles').name('Tiles').disable().listen();
+    st.add(this.status, 'trees').name('Trees').disable().listen();
   }
 
   /** Adds a top-level folder above Status (lil-gui appends, so move its element). */

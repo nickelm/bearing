@@ -46,8 +46,11 @@ export interface PreviewView {
   localTime?: number;
   /** Days after the campaign start (default 0, mid-August local to the main continent). */
   day?: number;
-  /** Center on the deepest lake below 55° latitude instead of dLat/dLon. */
-  lake?: boolean;
+  /**
+   * Center on a feature instead of dLat/dLon: the deepest lake below 55°
+   * latitude, or the densely forested cell nearest the main continent.
+   */
+  target?: 'lake' | 'forest';
 }
 
 export const PREVIEW_VIEWS: PreviewView[] = [
@@ -132,7 +135,17 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     tilt: 30 * DEG,
     heading: 0,
     localTime: 13,
-    lake: true,
+    target: 'lake',
+  },
+  {
+    name: 'trees',
+    dLat: 0,
+    dLon: 0,
+    altitude: 700,
+    tilt: 80 * DEG,
+    heading: 0,
+    localTime: 15,
+    target: 'forest',
   },
   {
     name: 'winter',
@@ -219,29 +232,40 @@ it('renders preview views', async () => {
   const lon0 = Math.atan2(main.x, main.z);
   const calendar = defaultCampaignStart(main, params);
 
-  // The deepest lake away from the ice caps, for the lake view.
+  // Targets: the deepest lake away from the ice caps, and dense forest near the main continent.
   const n = global.n;
   const lakeDepth = global.finish.drainage.lakeDepth;
+  const forestMap = global.finish.forest;
   const cellDir = new Vec3d();
-  let lakeDir: Vec3d | null = null;
+  const targets: Record<'lake' | 'forest', Vec3d | null> = { lake: null, forest: null };
   let deepest = 0;
+  let nearest = -2;
   for (let c = 0; c < lakeDepth.length; c++) {
-    if (lakeDepth[c]! <= deepest) continue;
+    const lakeCandidate = lakeDepth[c]! > deepest;
+    const forestCandidate = forestMap[c]! > 220 && global.height[c]! > 30;
+    if (!lakeCandidate && !forestCandidate) continue;
     const face = Math.floor(c / (n * n)) as CubeFace;
     cubeFaceUvToDirection(face, ((c % n) + 0.5) / n, ((Math.floor(c / n) % n) + 0.5) / n, cellDir);
-    if (Math.abs(cellDir.y) > Math.sin(55 * DEG)) continue;
-    deepest = lakeDepth[c]!;
-    lakeDir = cellDir.clone();
+    if (lakeCandidate && Math.abs(cellDir.y) < Math.sin(55 * DEG)) {
+      deepest = lakeDepth[c]!;
+      targets.lake = cellDir.clone();
+    }
+    if (forestCandidate && cellDir.dot(main) > nearest) {
+      nearest = cellDir.dot(main);
+      targets.forest = cellDir.clone();
+    }
   }
   const outDir = join(import.meta.dirname, 'out');
   mkdirSync(outDir, { recursive: true });
 
   for (const v of views) {
     const o = scene.orbit;
-    if (v.lake && lakeDir) {
-      // Stand back from the lake, south of it, looking north.
-      o.lat = Math.asin(lakeDir.y) - (v.altitude * Math.tan(v.tilt)) / params.radius;
-      o.lon = Math.atan2(lakeDir.x, lakeDir.z);
+    const target = v.target ? targets[v.target] : null;
+    if (target) {
+      // Stand back from the target, south of it, looking north.
+      o.lat =
+        Math.asin(target.y) - (v.altitude * Math.tan(Math.min(v.tilt, 70 * DEG))) / params.radius;
+      o.lon = Math.atan2(target.x, target.z);
     } else {
       o.lat = lat0 + v.dLat;
       o.lon = lon0 + v.dLon;
@@ -272,7 +296,8 @@ it('renders preview views', async () => {
       const s = scene.terrain.stats;
       const sig = `${s.drawn}/${s.deepest}/${s.meshes}`;
       if (process.env.DEBUG) console.log(v.name, f, JSON.stringify(s), o.tilt, o.altitude);
-      stable = s.pending === 0 && sig === last ? stable + 1 : 0;
+      const treesPending = scene.forest.group.visible ? scene.forest.stats.pending : 0;
+      stable = s.pending === 0 && treesPending === 0 && sig === last ? stable + 1 : 0;
       last = sig;
     }
     scene.render(0);
@@ -280,6 +305,11 @@ it('renders preview views', async () => {
     const file = join(outDir, `render-${seed}-${v.name}.png`);
     writeFileSync(file, encodePng(width, height, rgb));
     const s = scene.terrain.stats;
+    if (scene.forest.stats.instances) {
+      console.log(
+        `  trees: ${scene.forest.stats.tiles} tiles, ${scene.forest.stats.instances} clumps`,
+      );
+    }
     console.log(
       `${v.name}: ${s.drawn} tiles, deepest ${s.deepest}, ${((performance.now() - t0) / 1000).toFixed(1)} s → ${file}`,
     );

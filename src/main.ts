@@ -105,6 +105,8 @@ async function main(): Promise<void> {
     geomorph: true,
     sse: DEFAULT_LOD.sseThreshold,
     tileMemory: 600,
+    trees: true,
+    treeRange: 5,
   };
 
   // Preview clock until the sim's game clock exists (milestone 6): GameTime and
@@ -325,6 +327,8 @@ async function main(): Promise<void> {
       globe.terrain.geomorph = v.geomorph;
       globe.terrain.lod.sseThreshold = v.sse;
       globe.terrain.budgetMiB = v.tileMemory;
+      globe.forest.enabled = v.trees;
+      globe.forest.range.value = v.treeRange * KM;
     },
     shapeChanged: (v) => {
       globe.globe.setExaggeration(v.exaggeration);
@@ -438,6 +442,10 @@ async function main(): Promise<void> {
     gui.status.lonDeg = o.lon / DEG;
     gui.status.tiltDeg = o.tilt / DEG;
     const ts = globe.terrain.stats;
+    const fs = globe.forest.stats;
+    gui.status.trees = globe.forest.group.visible
+      ? `${fs.instances} clumps in ${fs.tiles} tiles${fs.pending ? `, ${fs.pending} loading` : ''}`
+      : 'off (shown below 8 km)';
     gui.status.tiles = !globe.terrainReady
       ? 'waiting for the global pass'
       : tilesBlocked && viewParams.tiles
