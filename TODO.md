@@ -71,7 +71,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 ## Milestone 3: Atmosphere, ocean, forests, sky
 
 - [x] Headless render harness: three's `WebGPURenderer` on Dawn in Node, rendering fixed views to PNG (`tools/render.preview.ts`) and compiling every material in a test
-- [ ] Calendar and sun ephemeris in `core`: sun direction from `GameTime`, axial tilt, day length, year length and campaign start date, with tests (decision 15)
+- [x] Calendar and sun ephemeris in `core`: sun direction from `GameTime`, axial tilt, day length, year length and campaign start date, with tests (decision 15)
 - [ ] Day/night lighting driven by the sun ephemeris; time-of-day slider in the debug GUI
 - [ ] Single-scattering atmosphere: limb glow from orbit, sunset colors at the terminator
 - [ ] Aerial perspective on terrain
