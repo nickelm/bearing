@@ -3,8 +3,8 @@
  *
  * A record holds everything needed to show a world again without
  * regenerating it: the tectonic world, the eroded global height and uplift
- * (re-uploaded to the GPU for tile synthesis), and the CPU results
- * (drainage, rivers, biomes, display maps). Tiles are not stored: they
+ * (re-uploaded to the GPU for tile synthesis), the CPU results
+ * (drainage, rivers, biomes, display maps), and the strategic graph and cast. Tiles are not stored: they
  * synthesize faster than they load.
  *
  * Records are keyed by a hash of the planet parameters, both grid
@@ -12,12 +12,13 @@
  * alters output must bump the version.
  */
 import { hashString64 } from '../core/rng';
+import type { StrategicWorld } from './campaignWorld';
 import type { FinishResult } from './finishWorld';
 import type { PlanetParams } from './params';
 import type { World } from './pipeline';
 
 /** Bump whenever generation output changes, so cached worlds are regenerated. */
-export const GENERATOR_VERSION = 3;
+export const GENERATOR_VERSION = 4;
 
 const DB_NAME = 'bearing-worlds';
 const STORE = 'worlds';
@@ -27,6 +28,8 @@ export interface StoredWorld {
   version: number;
   savedAt: number;
   tectonic: World;
+  /** Graph and campaign from the coarse pass. Absent in offline tool caches (tools/previewWorld.ts). */
+  strategic?: StrategicWorld;
   global: {
     n: number;
     height: Float32Array;

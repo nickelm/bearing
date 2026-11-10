@@ -49,12 +49,16 @@ import type { World } from './worldgen/pipeline';
 import type { GlobalWorld } from './worldgen/globalPipeline';
 import { GPU_SELF_TESTS, runSelfTest } from './worldgen/gpu/selfTests';
 import type {
+  CampaignGuiParams,
   LightingGuiParams,
   TimeGuiParams,
   ViewGuiParams,
   WorldGuiParams,
 } from './ui/debugGui';
 import { FrameTimeOverlay } from './ui/frameTimeOverlay';
+import { CampaignPanel } from './ui/campaignPanel';
+import { THEATER_LABELS } from './campaign/theaters';
+import type { StrategicWorld } from './worldgen/campaignWorld';
 import { PING_STREAM } from './workers/protocol';
 import type { FromSimWorker, ToSimWorker } from './workers/protocol';
 import { GenerationCancelled, WorldgenClient } from './workers/worldgenClient';
@@ -123,6 +127,42 @@ async function main(): Promise<void> {
   globe.terrain.setExaggeration(viewParams.exaggeration);
   globe.terrain.budgetMiB = viewParams.tileMemory;
 
+  const campaignParams: CampaignGuiParams = {
+    overlay: true,
+    briefing: true,
+    seedUsed: '—',
+    theaters: '—',
+    rangeFactor: 0,
+    airbases: '—',
+    coarseSeconds: 0,
+  };
+  const campaignPanel = new CampaignPanel();
+  const showStrategic = (s: StrategicWorld | null) => {
+    globe.strategic.setWorld(s?.graph ?? null, s?.campaign.cast ?? null);
+    if (!s) {
+      campaignPanel.visible = false;
+      campaignParams.seedUsed = '—';
+      campaignParams.theaters = '—';
+      return;
+    }
+    const cast = s.campaign.cast;
+    campaignPanel.show(String(s.seed), s.retries, cast);
+    campaignPanel.visible = campaignParams.briefing;
+    campaignParams.seedUsed =
+      s.retries > 0 ? `${String(s.seed)} (retry ${s.retries})` : String(s.seed);
+    campaignParams.theaters = cast.theaters.map((t) => THEATER_LABELS[t.kind]).join(', ') || 'none';
+    campaignParams.rangeFactor = cast.rangeFactor;
+    campaignParams.airbases = `${cast.airbases.alliance} / ${cast.airbases.pact}`;
+    const total = s.timings.find((t) => t.stage === 'coarse pass total');
+    campaignParams.coarseSeconds = total ? total.ms / 1000 : 0;
+    if (!s.campaign.validity.valid) {
+      console.warn(
+        `World ${String(s.seed)} failed the validity check:`,
+        s.campaign.validity.reasons,
+      );
+    }
+  };
+
   const worldgen = new WorldgenClient();
   let generation = 0;
   /** The current world's global pass (eroded grid on the GPU, rivers...), once finished. */
@@ -168,7 +208,7 @@ async function main(): Promise<void> {
       calendar = defaultCampaignStart(new Vec3d(...world.info.mainContinent), orbitParams);
       gameTime = 0;
     };
-    const showGlobal = (world: World, global: GlobalWorld) => {
+    const showGlobal = (world: World, global: GlobalWorld, params: PlanetParams) => {
       // Switch the terrain to the new world first, then free the old one once any
       // tile batch still running on it has finished.
       const old = globalWorld;
@@ -214,6 +254,7 @@ async function main(): Promise<void> {
         info: { ...world.info, maxHeight },
       });
     };
+    showStrategic(null);
     const key = worldKey(params, resolution, globalN);
     try {
       // 0. A world generated before with the same parameters loads from IndexedDB.
@@ -222,17 +263,27 @@ async function main(): Promise<void> {
         return null;
       });
       if (token !== generation) return;
-      if (stored) {
+      if (stored?.strategic) {
         showTectonic(stored.tectonic);
-        showGlobal(stored.tectonic, restoreGlobalWorld(gpu, stored.global));
+        showStrategic(stored.strategic);
+        showGlobal(stored.tectonic, restoreGlobalWorld(gpu, stored.global), {
+          ...params,
+          seed: stored.strategic.seed,
+        });
         gui.status.generation = `cached (${((performance.now() - t0) / 1000).toFixed(1)} s)`;
         return;
       }
 
-      // 1. Tectonic pass in the worker, shown at once as a preview.
-      const world = await worldgen.generate(params, resolution, status);
+      // 1. Coarse pass (graph, theaters, casting, validity retries) and the tectonic
+      // world in the worker, shown at once as a preview.
+      const generated = await worldgen.generate(params, resolution, status);
       if (token !== generation) return;
+      const { strategic, ...world } = generated;
       showTectonic(world);
+      showStrategic(strategic);
+      // Everything after this uses the seed that passed the validity check.
+      const worldSeedParams: PlanetParams = { ...params, seed: strategic.seed };
+      console.table(strategic.timings.map((t) => ({ stage: t.stage, ms: Math.round(t.ms) })));
       console.info(
         `World ${worldParams.seed} @ ${resolution}: land ${(world.info.landFraction * 100).toFixed(1)}%, ` +
           `heights ${world.info.minHeight.toFixed(0)}..${world.info.maxHeight.toFixed(0)} m, ` +
@@ -241,7 +292,7 @@ async function main(): Promise<void> {
       console.table(world.info.timings.map((t) => ({ stage: t.stage, ms: Math.round(t.ms) })));
 
       // 2. Global pass: GPU detail and erosion here, drainage and rivers in the worker.
-      const global = await buildGlobalWorld(gpu, params, world, {
+      const global = await buildGlobalWorld(gpu, worldSeedParams, world, {
         n: globalN,
         finish: (input) => worldgen.finish(input),
         onProgress: (stage, f) => status(`global ${globalN}: ${stage}`, f),
@@ -251,7 +302,7 @@ async function main(): Promise<void> {
         global.grid.dispose();
         return;
       }
-      showGlobal(world, global);
+      showGlobal(world, global, worldSeedParams);
       const total = performance.now() - t0;
       gui.status.generation = `done in ${(total / 1000).toFixed(1)} s`;
       console.info(
@@ -272,6 +323,7 @@ async function main(): Promise<void> {
           version: GENERATOR_VERSION,
           savedAt: Date.now(),
           tectonic: world,
+          strategic,
           global: {
             n: global.n,
             height: global.height,
@@ -338,6 +390,10 @@ async function main(): Promise<void> {
     },
   });
   gui.status.backend = 'WebGPU';
+  gui.addCampaign(campaignParams, (c) => {
+    globe.strategic.enabled = c.overlay;
+    campaignPanel.visible = c.briefing && campaignParams.seedUsed !== '—';
+  });
   gui.addTimeControls(timeParams, daysPerYear(orbitParams), {
     dayChanged: (d) => {
       const lon = globe.orbit.lon;

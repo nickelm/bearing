@@ -12,6 +12,9 @@ import type { Campaign } from '../campaign';
 import { coarsePass } from './coarsePass';
 import type { CoarseOptions, CoarseWorld } from './coarsePass';
 import type { PlanetParams } from './params';
+import type { StageTiming } from './pipeline';
+import type { StrategicGraph } from './strategic/graph';
+import { graphBuffers } from './strategic/graph';
 
 /** Retries before giving up and keeping the seed's own world, marked invalid. */
 export const MAX_RETRIES = 8;
@@ -64,4 +67,34 @@ export function generateCampaignWorld(
     rejected.push(campaign.validity.reasons);
   }
   return { ...first!, rejected };
+}
+
+/**
+ * What the app keeps of a campaign world besides its maps: the seed actually
+ * generated, the graph and the campaign. Stored with the world (worldStore.ts).
+ */
+export interface StrategicWorld {
+  /** The seed actually generated (see CampaignWorld.seed). */
+  seed: WorldSeed;
+  retries: number;
+  rejected: string[][];
+  graph: StrategicGraph;
+  campaign: Campaign;
+  timings: StageTiming[];
+}
+
+export function strategicWorld(w: CampaignWorld): StrategicWorld {
+  return {
+    seed: w.seed,
+    retries: w.retries,
+    rejected: w.rejected,
+    graph: w.graph,
+    campaign: w.campaign,
+    timings: w.timings,
+  };
+}
+
+/** Typed arrays of a StrategicWorld, for a transfer list. */
+export function strategicBuffers(s: StrategicWorld): ArrayBuffer[] {
+  return graphBuffers(s.graph);
 }
