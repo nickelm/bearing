@@ -22,8 +22,8 @@ Tech-demo milestones from [docs/design.md](docs/design.md) (revision 4: nine mil
 - [x] Neighbor lookup across face seams and corners (4- and 8-neighborhoods), with tests
 - [x] Tile key type `(face, level, x, y)`: parent/child/neighbor math, texel ↔ direction, string key for streams and caches, with tests (decision 13)
 - [x] Seeded 3D noise (Perlin, fBm, ridged) and a deterministic min-heap in `core`
-- [x] Continental crust field around two near-antipodal continent centers (decisions 17, 18; replaced by crust from plate types, decision 45)
-- [x] Plate seeding steered into seeds inside the two continents (3 main, 2 second), the rest spread over the oceans (`rng("plates")`; replaced by unsteered plates, decision 45)
+- [x] Continental crust field around two near-antipodal continent centers (decisions 17, 18; replaced by crust from plate types, decision 46)
+- [x] Plate seeding steered into seeds inside the two continents (3 main, 2 second), the rest spread over the oceans (`rng("plates")`; replaced by unsteered plates, decision 46)
 - [x] Plate growth by randomized weighted flood fill; a motion vector (Euler pole) per plate
 - [x] Plate boundary detection and classification (convergent / divergent / transform × continental / oceanic)
 - [x] Uplift field: continental collision ranges, trenches and island arcs, mid-ocean ridges, with distance-to-boundary falloff
@@ -96,11 +96,11 @@ Tech-demo milestones from [docs/design.md](docs/design.md) (revision 4: nine mil
 
 ## Milestone 4: Reading the world
 
-The strategic graph is the only view of the world that theater detection, casting and the command layer get (decision 51). Generation is unsteered (decision 45).
+The strategic graph is the only view of the world that theater detection, casting and the command layer get (decision 52). Generation is unsteered (decision 46).
 
 ### Unsteered generation and the coarse pass
 
-- [ ] Unsteered generation: uniform plate seeding, plate types from `rng("plates")`, crust from plate types; remove the two-continent layout and `oceanGap` (decision 45)
+- [ ] Unsteered generation: uniform plate seeding, plate types from `rng("plates")`, crust from plate types; remove the two-continent layout and `oceanGap` (decision 46)
 - [ ] Landmass labeling with statistics: area, centroid, coastline length, latitude span, terrain mix (extends `worldgen/landmasses.ts`)
 - [ ] Coarse pass end to end: stages 1–9 at 256² per face (tectonic grid plus a reduced global erosion and drainage pass) in the worker; time it and report it in the progress UI
 
@@ -133,10 +133,10 @@ The strategic graph is the only view of the world that theater detection, castin
 
 ### Casting
 
-- [ ] Cast data type (theaters, territory per side, posture, range factor, logistics links, regions) stored with the world; theater selection above fit thresholds from `rng("casting")` (decision 46)
+- [ ] Cast data type (theaters, territory per side, posture, range factor, logistics links, regions) stored with the world; theater selection above fit thresholds from `rng("casting")` (decision 47)
 - [ ] Territory assignment: the Pact takes mass and interior lines, the Alliance takes the side next to its rear base and sea lanes; island campaign variant
 - [ ] Posture (the Pact attacks by default) and logistics links between theaters (a cut lane starves a front, a lost chokepoint exposes convoys)
-- [ ] Range factor search in [0.35, 1.0] from the two reach targets (decision 50)
+- [ ] Range factor search in [0.35, 1.0] from the two reach targets (decision 51)
 - [ ] Industry, port and base regions for each side, consistent with territory and theaters (milestone 5 places the sites)
 - [ ] Briefing text generated from the cast: the theaters, the stakes in each, the first expected moves
 - [ ] Regional bake: pre-bake ground-combat regions to tile level 7 (about 48 m) during world generation
@@ -186,18 +186,18 @@ The strategic graph is the only view of the world that theater detection, castin
 
 - [ ] Aircraft type table for both sides: fictional names, reference type, role, speeds, ceiling, combat radius before the range factor, loadouts
 - [ ] Squadrons, bases and inventories per side (aircraft, readiness, stocks)
-- [ ] Mission model: type, side, theater, package, target or station, phase timeline, originating need and score (decision 49), per-mission seed ready for promotion
-- [ ] Great-circle routes with climb and descent profiles; analytic position(t); fuel with the cast's range factor (decision 50)
+- [ ] Mission model: type, side, theater, package, target or station, phase timeline, originating need and score (decision 50), per-mission seed ready for promotion
+- [ ] Great-circle routes with climb and descent profiles; analytic position(t); fuel with the cast's range factor (decision 51)
 - [ ] Phase timeline per mission type (departure, climb-out, ingress, fence-in, on target or on station, egress, approach, recovery) as scheduled events
 
-### Intelligence (decision 52)
+### Intelligence (decision 53)
 
 - [ ] Per-side intelligence store: contacts with position, type, last seen, confidence and source; decay with age; determinism test
 - [ ] Reconnaissance satellites: analytic ground tracks and revisit times; optical imaging blocked by night and cloud, radar imaging through cloud
 - [ ] Radar air picture: ground radar and AWACS coverage with radar horizon and terrain masking; feeds Pact ground-controlled interception
 - [ ] Reconnaissance missions refresh contacts along their routes
 
-### Air tasking order (decision 49)
+### Air tasking order (decision 50)
 
 - [ ] Need collection from fronts: CAS for segments under pressure, interdiction of supply behind the front (known contacts only)
 - [ ] Need collection from sea lanes, chokepoints, islands and strategic targets: CAP over high-value assets, convoy escort and attack, strikes on industry and air defenses, resupply and airlift
@@ -207,7 +207,7 @@ The strategic graph is the only view of the world that theater detection, castin
 - [ ] Weather and daylight in tasking: cancellations below minimums, winds aloft in ground speed, night and bad-weather low-level strikes
 - [ ] Aggregate mission resolution: target damage and losses from package composition, defenses and weather
 - [ ] Concurrency cap so that 20–50 aircraft are airborne
-- [ ] Determinism tests: identical ATO at 1× and 64×, and independent of the viewing side (decision 47)
+- [ ] Determinism tests: identical ATO at 1× and 64×, and independent of the viewing side (decision 48)
 
 ### Mission search and display
 
@@ -241,6 +241,7 @@ The strategic graph is the only view of the world that theater detection, castin
 - [ ] Cache the strategic graph and the cast with the world in IndexedDB
 - [ ] Generation profiling and progress polish (no time budget, decision 12)
 - [ ] Rendering performance pass (GPU timestamp queries, frame budget); consider building tile meshes in a worker (decision 30)
+- [ ] Tree LOD: one cone per clump beyond about 2 km, or impostors (decision 45: ~6.6 M triangles over dense forest at the default 5 km range)
 - [ ] Bundle size and code splitting
 - [ ] Scripted flythrough camera path for screenshots, including a dawn and a weather front
 - [ ] Check every demo goal against the design doc and decisions
