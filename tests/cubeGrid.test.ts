@@ -52,18 +52,22 @@ describe('CubeGrid', () => {
       });
 
       it('gives 8 neighbors everywhere except the 24 cube-corner cells, which get 7', () => {
+        // Plain checks per cell and one assertion at the end: expect() per cell is slow.
         let sevens = 0;
-        for (let c = 0; c < g.cellCount; c++) {
+        const bad: string[] = [];
+        for (let c = 0; c < g.cellCount && bad.length < 5; c++) {
           const nbs = Array.from(g.neighbors8.subarray(c * 8, c * 8 + 8)).filter((x) => x >= 0);
-          expect(new Set(nbs).size).toBe(nbs.length);
-          expect(nbs).not.toContain(c);
+          if (new Set(nbs).size !== nbs.length) bad.push(`${c}: duplicate neighbors`);
+          if (nbs.includes(c)) bad.push(`${c}: is its own neighbor`);
           if (nbs.length === 7) sevens++;
-          else expect(nbs.length).toBe(8);
+          else if (nbs.length !== 8) bad.push(`${c}: ${nbs.length} neighbors`);
           for (const nb of nbs) {
-            const back = Array.from(g.neighbors8.subarray(nb * 8, nb * 8 + 8));
-            expect(back).toContain(c);
+            if (!g.neighbors8.subarray(nb * 8, nb * 8 + 8).includes(c)) {
+              bad.push(`${c}: not a neighbor of its neighbor ${nb}`);
+            }
           }
         }
+        expect(bad).toEqual([]);
         expect(sevens).toBe(24);
       });
     });

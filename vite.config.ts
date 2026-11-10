@@ -25,5 +25,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],
+    // Grid-wide CPU tests share the machine with the Dawn GPU tests; 5 s is too tight.
+    testTimeout: 30_000,
   },
 });
