@@ -15,6 +15,8 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { it } from 'vitest';
 import { defaultCampaignStart, sunDirection, withLocalTime } from '../src/core/calendar';
+import { cubeFaceUvToDirection } from '../src/core/coords';
+import type { CubeFace } from '../src/core/coords';
 import { CubeGrid } from '../src/core/cubeGrid';
 import { DEG, HOUR, KM } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
@@ -37,6 +39,8 @@ export interface PreviewView {
   heading: number;
   /** Local solar time at the camera, hours, on the campaign's first day (default 11:00). */
   localTime?: number;
+  /** Center on the deepest lake below 55° latitude instead of dLat/dLon. */
+  lake?: boolean;
 }
 
 export const PREVIEW_VIEWS: PreviewView[] = [
@@ -114,6 +118,16 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     localTime: 14,
   },
   {
+    name: 'lake',
+    dLat: 0,
+    dLon: 0,
+    altitude: 30 * KM,
+    tilt: 30 * DEG,
+    heading: 0,
+    localTime: 13,
+    lake: true,
+  },
+  {
     name: 'sunset',
     dLat: 0,
     dLon: 0,
@@ -159,6 +173,7 @@ it('renders preview views', async () => {
     radius: params.radius,
     biome: global.finish.biome,
     lakeDepth: global.finish.drainage.lakeDepth,
+    height: global.height,
     index: new RiverIndex(global.finish.rivers),
   });
   scene.terrain.setWorld({
@@ -173,13 +188,34 @@ it('renders preview views', async () => {
   const lat0 = Math.asin(main.y);
   const lon0 = Math.atan2(main.x, main.z);
   const calendar = defaultCampaignStart(main, params);
+
+  // The deepest lake away from the ice caps, for the lake view.
+  const n = global.n;
+  const lakeDepth = global.finish.drainage.lakeDepth;
+  const cellDir = new Vec3d();
+  let lakeDir: Vec3d | null = null;
+  let deepest = 0;
+  for (let c = 0; c < lakeDepth.length; c++) {
+    if (lakeDepth[c]! <= deepest) continue;
+    const face = Math.floor(c / (n * n)) as CubeFace;
+    cubeFaceUvToDirection(face, ((c % n) + 0.5) / n, ((Math.floor(c / n) % n) + 0.5) / n, cellDir);
+    if (Math.abs(cellDir.y) > Math.sin(55 * DEG)) continue;
+    deepest = lakeDepth[c]!;
+    lakeDir = cellDir.clone();
+  }
   const outDir = join(import.meta.dirname, 'out');
   mkdirSync(outDir, { recursive: true });
 
   for (const v of views) {
     const o = scene.orbit;
-    o.lat = lat0 + v.dLat;
-    o.lon = lon0 + v.dLon;
+    if (v.lake && lakeDir) {
+      // Stand back from the lake, south of it, looking north.
+      o.lat = Math.asin(lakeDir.y) - (v.altitude * Math.tan(v.tilt)) / params.radius;
+      o.lon = Math.atan2(lakeDir.x, lakeDir.z);
+    } else {
+      o.lat = lat0 + v.dLat;
+      o.lon = lon0 + v.dLon;
+    }
     o.altitude = o.targetAltitude = v.altitude;
     o.tilt = v.tilt;
     o.heading = v.heading;

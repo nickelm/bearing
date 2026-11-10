@@ -9,7 +9,9 @@
  *                                           so gullies run downhill, depth ∝ slope · wavelength
  *   then min(h, river banks)                channels from the smoothed vector rivers
  *
- * `fade` goes to zero on floodplains, so river valleys stay smooth. Octaves
+ * `fade` goes to zero on floodplains, so river valleys stay smooth. Detail
+ * amplitude on plains also falls with the global slope, so flat, sediment-filled
+ * lowlands stay smooth while hills and mountains stay rough. Octaves
  * are added while their wavelength stays above two sample spacings (and
  * above MIN_WAVELENGTH, the finest baked detail), so coarse tiles are a
  * low-pass version of fine ones. Tiles at or above the global grid's level
@@ -23,6 +25,10 @@
  * Output per tile, TILE_STRIDE² samples (row-major from the border corner):
  *   height   f32, physical meters above sea level
  *   material u32: biome | river coverage (0..255) << 8 | lake << 16
+ *   lake     f32, lake surface (m) where a lake is within about one global
+ *            cell, NO_LAKE elsewhere. The level is defined on dry ground near
+ *            the lake too, so level − height is a signed depth whose zero
+ *            crossing is the shoreline, following the fine terrain (decision 40).
  */
 import { Noise3 } from '../../core/noise';
 import { rng } from '../../core/rng';
@@ -45,6 +51,10 @@ export const TILE_SYNTH_TUNING = {
   /** Detail amplitude of the first octave (reference m) on plains, and per meter of uplift. */
   detailPlains: 25,
   detailPerUplift: 0.05,
+  /** Plains detail falls to this fraction where the global slope is below flatSlope[0]. */
+  lowlandDetail: 0.15,
+  /** Global slopes (m/m) over which plains detail ramps from lowlandDetail to full. */
+  flatSlope: [0.002, 0.015] as [number, number],
   /** Gully depth per (slope × wavelength). */
   gullies: 0.06,
   /** Floodplain half-width in channel widths, and at least this many meters. */
@@ -59,12 +69,17 @@ export const TILE_SYNTH_TUNING = {
 /** Deepest level with baked tiles (about 48 m samples at R = 1,000 km). */
 export const MAX_BAKED_LEVEL = 7;
 
+/** Lake level of a sample with no lake nearby. */
+export const NO_LAKE = -1e30;
+
 export interface TileData {
   key: TileKey;
   /** TILE_STRIDE² physical heights (m). */
   height: Float32Array;
   /** TILE_STRIDE² packed materials (see module doc). */
   material: Uint32Array;
+  /** TILE_STRIDE² lake surface heights (m), NO_LAKE where no lake is near. */
+  lake: Float32Array;
   minHeight: number;
   maxHeight: number;
 }
@@ -77,6 +92,8 @@ export interface TileSynthOptions {
   biome: Uint8Array;
   /** Lake depth per global cell (m). */
   lakeDepth: Float32Array;
+  /** Eroded height per global cell (m), the CPU copy of the grid's "height" map. */
+  height: Float32Array;
   index: RiverIndex;
   tuning?: Partial<typeof TILE_SYNTH_TUNING>;
 }
@@ -93,6 +110,7 @@ export class TileSynthesizer {
   readonly tuning: typeof TILE_SYNTH_TUNING;
   private readonly pipeline: GPUComputePipeline;
   private readonly perm: GPUBuffer;
+  /** Per global cell: packed material, and the lake level's f32 bits (WebGPU allows 8 storage buffers). */
   private readonly material: GPUBuffer;
   private readonly firstWavelength: number;
 
@@ -110,9 +128,14 @@ export class TileSynthesizer {
       packPermutations([new Noise3(r.fork('detail')), new Noise3(r.fork('gullies'))]),
       'tiles.perm',
     );
-    const packed = new Uint32Array(grid.cellCount);
-    for (let c = 0; c < packed.length; c++) {
-      packed[c] = opts.biome[c]! | (opts.lakeDepth[c]! > 0 ? 1 << 16 : 0);
+    // Per cell: biome | lake << 16, then the lake surface (the Priority-Flood fill
+    // level, terrain + depth) as f32 bits.
+    const packed = new Uint32Array(grid.cellCount * 2);
+    const levelBits = new Float32Array(packed.buffer);
+    for (let c = 0; c < grid.cellCount; c++) {
+      const depth = opts.lakeDepth[c]!;
+      packed[c * 2] = opts.biome[c]! | (depth > 0 ? 1 << 16 : 0);
+      levelBits[c * 2 + 1] = depth > 0 ? opts.height[c]! + depth : NO_LAKE;
     }
     this.material = gpu.storageFrom(packed, 'tiles.globalMaterial');
 
@@ -121,10 +144,11 @@ struct Tile { face: i32, level: i32, x: i32, y: i32, segStart: u32, segCount: u3
 @group(0) @binding(0) var<storage, read> perm: array<u32>;
 @group(0) @binding(1) var<storage, read> gHeight: array<f32>;
 @group(0) @binding(2) var<storage, read> gUplift: array<f32>;
-@group(0) @binding(3) var<storage, read> gMaterial: array<u32>;
+@group(0) @binding(3) var<storage, read> gMaterial: array<vec2u>;
 @group(0) @binding(4) var<storage, read> segs: array<f32>;
 @group(0) @binding(5) var<storage, read> tiles: array<Tile>;
-@group(0) @binding(6) var<storage, read_write> outHeight: array<f32>;
+// Per sample: height and lake level.
+@group(0) @binding(6) var<storage, read_write> outHeight: array<vec2f>;
 @group(0) @binding(7) var<storage, read_write> outMaterial: array<u32>;
 ${NOISE_WGSL}
 ${bicubicSamplerWgsl('sampleHeight', 'gHeight')}
@@ -138,6 +162,23 @@ const TEXELS: f32 = ${f(TILE_TEXELS)};
 const LAMBDA0: f32 = ${f(this.firstWavelength)};
 const SEG_FIELDS: u32 = ${RIVER_SEGMENT_FIELDS}u;
 const TWO_PI: f32 = 6.283185307;
+const NO_LAKE: f32 = ${NO_LAKE};
+
+// Lake surface near d: the highest level among the 3×3 global cells around d's cell
+// whose centers lie within about one cell of d, or NO_LAKE.
+fn lakeLevelAt(d: vec3f) -> f32 {
+  let c0 = dirCell(d);
+  let reach = cos(1.1 * 2.0 * QUARTER_PI / f32(N));
+  var level = NO_LAKE;
+  for (var k = -1; k < 8; k++) {
+    var c = c0;
+    if (k >= 0) { c = neighbor(c0, k); }
+    if (c < 0) { continue; }
+    let l = bitcast<f32>(gMaterial[c].y);
+    if (l > level && dot(cellDir(c), d) > reach) { level = l; }
+  }
+  return level;
+}
 
 fn heightAt(d: vec3f) -> f32 {
   let face = dirFace(d);
@@ -191,6 +232,10 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
 
   let base = heightAt(d);
   var h = base;
+  let lakeLevel = lakeLevelAt(d);
+  // Lake beds are sediment-filled: no detail where the smooth surface lies below the
+  // lake, so a lake reads as one body of water rather than puddles in rough ground.
+  let dryBed = 1.0 - clamp((lakeLevel - base) / 2.0, 0.0, 1.0);
   // Biome from the global cell under a noise-jittered position (about one cell),
   // so biome borders are organic rather than 1.5 km steps.
   let cellAngle = 2.0 * QUARTER_PI / f32(N);
@@ -203,7 +248,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     jf *= 2.7;
     ja *= 0.55;
   }
-  let mat = gMaterial[dirCell(normalize(d + 1.4 * cellAngle * jit))];
+  let mat = gMaterial[dirCell(normalize(d + 1.4 * cellAngle * jit))].x;
   var riverCover = 0.0;
 
   if (base > 0.0) {
@@ -251,10 +296,20 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
       reachW = 1.0 - smoothstep(0.6 * ${f(t.riverReach)}, ${f(t.riverReach)}, bestDist);
     }
 
+    // Global slope: shapes the gullies, and calms detail on flat lowlands.
+    let e0 = normalize(cross(vec3f(0.0, 1.0, 0.0), d) + vec3f(1e-7, 0.0, 0.0));
+    let n0 = cross(d, e0);
+    let dl = 0.5 * QUARTER_PI * 2.0 / f32(N);
+    let he = heightAt(normalize(d + dl * e0)) - heightAt(normalize(d - dl * e0));
+    let hn = heightAt(normalize(d + dl * n0)) - heightAt(normalize(d - dl * n0));
+    let grad = (he * e0 + hn * n0) / (2.0 * dl * R);
+    let slope = length(grad);
+
     // Detail octaves.
     let up = upliftAt(d);
     let mountain = smoothstep(500.0, 2500.0, up);
-    let a0 = ${f(t.detailPlains)} + ${f(t.detailPerUplift)} * max(up, 0.0);
+    let lowland = mix(${f(t.lowlandDetail)}, 1.0, smoothstep(${f(t.flatSlope[0])}, ${f(t.flatSlope[1])}, slope));
+    let a0 = ${f(t.detailPlains)} * lowland + ${f(t.detailPerUplift)} * max(up, 0.0);
     var detail = 0.0;
     var lambda = LAMBDA0;
     for (var o = 0u; o < tile.octaves; o++) {
@@ -267,13 +322,6 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
 
     // Gullies across the global slope.
     var gullies = 0.0;
-    let e0 = normalize(cross(vec3f(0.0, 1.0, 0.0), d) + vec3f(1e-7, 0.0, 0.0));
-    let n0 = cross(d, e0);
-    let dl = 0.5 * QUARTER_PI * 2.0 / f32(N);
-    let he = heightAt(normalize(d + dl * e0)) - heightAt(normalize(d - dl * e0));
-    let hn = heightAt(normalize(d + dl * n0)) - heightAt(normalize(d - dl * n0));
-    let grad = (he * e0 + hn * n0) / (2.0 * dl * R);
-    let slope = length(grad);
     if (slope > 1e-5) {
       let across = cross(d, grad / slope);
       lambda = LAMBDA0;
@@ -284,7 +332,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
       }
     }
 
-    h = base + (detail * RELIEF + gullies) * fade;
+    h = base + (detail * RELIEF + gullies) * fade * dryBed;
     // Rivers shape the terrain within reach; carving never raises it.
     h = mix(h, min(h, carve), reachW);
     // Coastal plains stay land, so detail does not pepper the coast with islands.
@@ -300,7 +348,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     }
     h = min(base + detail * RELIEF, -0.05);
   }
-  outHeight[slot] = h;
+  outHeight[slot] = vec2f(h, lakeLevel);
   outMaterial[slot] = (mat & 0xffu) | (u32(riverCover * 255.0) << 8u) | (mat & 0x10000u);
 }`;
     this.pipeline = gpu.kernel(code);
@@ -348,7 +396,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
 
     const tilesBuf = gpu.storageFrom(tileWords, 'tiles.params');
     const segBuf = gpu.storageFrom(segData, 'tiles.segments');
-    const outH = gpu.storage(keys.length * SAMPLES * 4, 'tiles.height');
+    const outH = gpu.storage(keys.length * SAMPLES * 8, 'tiles.heightLake');
     const outM = gpu.storage(keys.length * SAMPLES * 4, 'tiles.material');
     gpu.dispatch(
       this.pipeline,
@@ -364,9 +412,15 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
       ],
       [Math.ceil(SAMPLES / WORKGROUP_SIZE), 1, keys.length],
     );
-    const heights = new Float32Array(await gpu.read(outH));
+    const heightLake = new Float32Array(await gpu.read(outH));
     const materials = new Uint32Array(await gpu.read(outM));
     for (const b of [tilesBuf, segBuf, outH, outM]) b.destroy();
+    const heights = new Float32Array(keys.length * SAMPLES);
+    const lakes = new Float32Array(keys.length * SAMPLES);
+    for (let i = 0; i < heights.length; i++) {
+      heights[i] = heightLake[i * 2]!;
+      lakes[i] = heightLake[i * 2 + 1]!;
+    }
 
     return keys.map((key, slot) => {
       const height = heights.slice(slot * SAMPLES, (slot + 1) * SAMPLES);
@@ -380,6 +434,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
         key,
         height,
         material: materials.slice(slot * SAMPLES, (slot + 1) * SAMPLES),
+        lake: lakes.slice(slot * SAMPLES, (slot + 1) * SAMPLES),
         minHeight: lo,
         maxHeight: hi,
       };

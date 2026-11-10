@@ -79,7 +79,9 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [x] Ocean: depth-based color from bathymetry
 - [x] Ocean: wave normal map and sun glint
 - [x] Coastal foam
-- [ ] Checkpoint 3: owner review of day/night, sky, aerial perspective and ocean in the browser
+- [x] Checkpoint 3: owner review of day/night, sky, aerial perspective and ocean in the browser
+  - [x] Lakes: per-sample lake level from the tile kernel, drawn flat with a shoreline from the fine terrain (decision 40)
+  - [x] Smooth lowlands: plains detail scales with the global slope; lake beds carry no detail
 - [ ] Terrain shading: biome color blended by slope (rock), altitude (snow) and moisture; triplanar mapping on cliffs
 - [ ] Seasonal snow line and seasonal vegetation tint
 - [ ] Forest density map (also used later by line of sight)
@@ -94,10 +96,11 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 
 ## Milestone 4: Geography and front
 
-- [ ] Landmass labeling (connected components); identify the two largest landmasses
-- [ ] Ocean gap: shortest great-circle distance between the two continents' coasts, islands ignored (decision 16)
-- [ ] Main-continent size and depth checks
-- [ ] Reject and retry with seeded sub-seeds (`fork("retry-n")`), with a test for retry determinism
+- [ ] Less-steered geography (decision 41): continents emerge from the crust field and plates without the forced two-continent layout; any number of continents
+- [ ] Landmass labeling (connected components) with size, shape and latitude statistics
+- [ ] Theater selection: choose the main continent (room for a front with depth) and the supply continent (across an ocean gap in range) from the landmasses that exist; the campaign adapts to the world
+- [ ] Ocean gap: shortest great-circle distance between the two chosen continents' coasts, islands ignored (decision 16)
+- [ ] Reject and retry with seeded sub-seeds (`fork("retry-n")`) only when no pair of landmasses qualifies, with a test for retry determinism
 - [ ] Coarse pass wired end to end before the full pass
 - [ ] Barrier map from river width, slope, ridge prominence and forest density
 - [ ] Coast-to-coast maximum-barrier path search with a 35/65–50/50 area-ratio constraint

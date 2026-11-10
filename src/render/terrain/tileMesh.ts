@@ -29,7 +29,7 @@ import type { TileKey } from '../../core/tiles';
 import { Vec3d } from '../../core/vec3d';
 import { Biome } from '../../worldgen/biomes';
 import type { TileData } from '../../worldgen/gpu/tileSynth';
-import { MAX_BAKED_LEVEL } from '../../worldgen/gpu/tileSynth';
+import { MAX_BAKED_LEVEL, NO_LAKE } from '../../worldgen/gpu/tileSynth';
 import { BIOME_COLORS, HEIGHT_RAMP, hsl, ramp, srgbToLinear } from '../palette';
 import type { Rgb } from '../palette';
 import { TILE_SEGMENTS, vertexSpacing } from './quadtree';
@@ -47,7 +47,7 @@ const STEP = TILE_TEXELS / TILE_SEGMENTS;
  * Vertex data of one tile. Exaggeration is applied in the vertex shader, so
  * changing it needs no rebuild; `displacedPosition` below is the same
  * formula on the CPU:
- *   own    = base + up · max(height, 0) · exaggeration
+ *   own    = base + up · max(height + max(water, 0), 0) · exaggeration
  *   parent = parentBase + parentDisp · exaggeration
  *   position = mix(parent, own, morph)
  *   normal   = normalize(up − slope · exaggeration)
@@ -62,7 +62,12 @@ export interface TileMeshData {
   up: Float32Array;
   /** Raw surface height (m, negative under the sea); the displayed height is max(0, h). */
   height: Float32Array;
-  /** Inland water coverage 0..1 (lakes), drawn as water by the shader. */
+  /**
+   * Signed lake depth (m): lake level − height, positive under a lake,
+   * negative on dry ground near one, −LAKE_DRY far from any lake. Lakes are
+   * displayed flat at their level; the shader's shoreline is the zero
+   * crossing (decision 40).
+   */
   water: Float32Array;
   /**
    * Signed distance to the coastline estimate (m): −h / |∇h|, positive at sea,
@@ -91,7 +96,7 @@ export function displacedPosition(
   out = new Vec3d(),
 ): Vec3d {
   const k = v * 3;
-  const h = Math.max(0, m.height[v]!) * exaggeration;
+  const h = Math.max(0, m.height[v]! + Math.max(0, m.water[v]!)) * exaggeration;
   const ox = m.base[k]! + m.up[k]! * h;
   const oy = m.base[k + 1]! + m.up[k + 1]! * h;
   const oz = m.base[k + 2]! + m.up[k + 2]! * h;
@@ -175,6 +180,26 @@ function bilinear(data: TileData, fx: number, fy: number): number {
   return (a * (1 - tx) + b * tx) * (1 - ty) + (c * (1 - tx) + d * tx) * ty;
 }
 
+/** Signed lake depth stored for vertices with no lake nearby (m). */
+export const LAKE_DRY = 50;
+
+/**
+ * Lake level at fractional sample coordinates: the highest level among the
+ * four surrounding samples (levels are flat per lake), or NO_LAKE.
+ */
+function lakeLevel(data: TileData, fx: number, fy: number): number {
+  const lo = -TILE_BORDER;
+  const hi = TILE_TEXELS + TILE_BORDER;
+  const x0 = Math.min(hi - 1, Math.max(lo, Math.floor(fx)));
+  const y0 = Math.min(hi - 1, Math.max(lo, Math.floor(fy)));
+  const i00 = (y0 + TILE_BORDER) * TILE_STRIDE + x0 + TILE_BORDER;
+  const l = data.lake;
+  return Math.max(l[i00]!, l[i00 + 1]!, l[i00 + TILE_STRIDE]!, l[i00 + TILE_STRIDE + 1]!);
+}
+
+/** Displayed height before exaggeration: the sea flat at 0, lakes flat at their level. */
+const displayHeight = (h: number, level: number) => Math.max(0, h, level);
+
 function materialAt(data: TileData, fx: number, fy: number): number {
   const x = Math.min(TILE_TEXELS, Math.max(0, Math.round(fx)));
   const y = Math.min(TILE_TEXELS, Math.max(0, Math.round(fy)));
@@ -196,6 +221,13 @@ export function renderDetailOctaves(level: number, radius: number): number[] {
   const out: number[] = [];
   for (let lambda = 100; lambda >= 2 * vertexSpacing(level, radius); lambda /= 2) out.push(lambda);
   return level > MAX_BAKED_LEVEL ? out : [];
+}
+
+/** Lake level of `src` at tile `t`'s sample coordinates. */
+function lakeSampler(t: TileKey, src: TileData): (sx: number, sy: number) => number {
+  const [ox, oy] = mapSample(t, src.key, 0, 0);
+  const scale = 2 ** (src.key.level - t.level);
+  return (sx, sy) => lakeLevel(src, ox + sx * scale, oy + sy * scale);
 }
 
 /** Surface height (physical m) of `level`'s surface at tile `t`'s sample coordinates. */
@@ -320,19 +352,20 @@ const SKIRT_EXAGGERATION = 40;
 export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOptions): TileMeshData {
   const R = opts.radius;
   const own = surfaceSampler(t, t.level, sources.data, opts);
+  const ownLake = lakeSampler(t, sources.data);
   const parentKey = parentTile(t);
+  const parentSource =
+    parentKey !== null && t.level <= MAX_BAKED_LEVEL
+      ? (sources.parentData ?? sources.data)
+      : sources.data;
   const parentSurface =
-    parentKey === null
-      ? own
-      : t.level <= MAX_BAKED_LEVEL
-        ? surfaceSampler(t, t.level - 1, sources.parentData ?? sources.data, opts)
-        : surfaceSampler(t, t.level - 1, sources.data, opts);
+    parentKey === null ? own : surfaceSampler(t, t.level - 1, parentSource, opts);
+  const parentLake = parentKey === null ? ownLake : lakeSampler(t, parentSource);
 
   const fu = (s: number) => (t.x * TILE_TEXELS + s) / (TILE_TEXELS * (1 << t.level));
   const fv = (s: number) => (t.y * TILE_TEXELS + s) / (TILE_TEXELS * (1 << t.level));
   const dirAt = (sx: number, sy: number, out: Vec3d) =>
     cubeFaceUvToDirection(t.face, fu(sx), fv(sy), out);
-  const display = (h: number) => Math.max(0, h);
 
   const origin = dirAt(TILE_TEXELS / 2, TILE_TEXELS / 2, new Vec3d()).scale(R);
   const o3 = [origin.x, origin.y, origin.z];
@@ -350,6 +383,7 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
   // Grid: directions, own heights and parent heights (float64).
   const dirs = new Float64Array(GRID_VERTICES * 3);
   const hOwn = new Float64Array(GRID_VERTICES);
+  const lOwn = new Float64Array(GRID_VERTICES);
   const hPar = new Float64Array(GRID_VERTICES);
   const d = new Vec3d();
   for (let j = 0; j < V; j++) {
@@ -360,7 +394,13 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
       dirs[v * 3 + 1] = d.y;
       dirs[v * 3 + 2] = d.z;
       hOwn[v] = own(i * STEP, j * STEP, d);
-      if (i % 2 === 0 && j % 2 === 0) hPar[v] = parentSurface(i * STEP, j * STEP, d);
+      lOwn[v] = ownLake(i * STEP, j * STEP);
+      if (i % 2 === 0 && j % 2 === 0) {
+        hPar[v] = displayHeight(
+          parentSurface(i * STEP, j * STEP, d),
+          parentLake(i * STEP, j * STEP),
+        );
+      }
     }
   }
 
@@ -380,8 +420,9 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
       up[k] = ux;
       up[k + 1] = uy;
       up[k + 2] = uz;
-      const dh = display(hOwn[v]!);
+      const dh = displayHeight(hOwn[v]!, lOwn[v]!);
       height[v] = hOwn[v]!;
+      water[v] = lOwn[v]! > NO_LAKE / 2 ? Math.max(-LAKE_DRY, lOwn[v]! - hOwn[v]!) : -LAKE_DRY;
       minH = Math.min(minH, dh);
       maxH = Math.max(maxH, dh);
       let a: number;
@@ -390,9 +431,9 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
       else if (j % 2 === 0) [a, b] = [v - 1, v + 1];
       else if (i % 2 === 0) [a, b] = [v - V, v + V];
       else [a, b] = [v - V - 1, v + V + 1];
-      // Parent heights exist at even vertices only; a and b are always even.
-      const ha = display(hPar[a]!);
-      const hb = display(hPar[b]!);
+      // Parent heights (displayed) exist at even vertices only; a and b are always even.
+      const ha = hPar[a]!;
+      const hb = hPar[b]!;
       for (let c = 0; c < 3; c++) {
         parentBase[k + c] = (dirs[a * 3 + c]! + dirs[b * 3 + c]!) * 0.5 * R - o3[c]!;
         parentDisp[k + c] = (dirs[a * 3 + c]! * ha + dirs[b * 3 + c]! * hb) * 0.5;
@@ -407,7 +448,8 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
   const dscale = 2 ** (sources.data.key.level - t.level);
   const raw = (sx: number, sy: number) =>
     bilinear(sources.data, dox + sx * dscale, doy + sy * dscale);
-  const flat = (sx: number, sy: number) => display(raw(sx, sy));
+  const dataLake = lakeSampler(t, sources.data);
+  const flat = (sx: number, sy: number) => displayHeight(raw(sx, sy), dataLake(sx, sy));
   const footprint = STEP * dscale;
   const tu = new Vec3d();
   const tv = new Vec3d();
@@ -444,7 +486,6 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
       const fx = dox + sx * dscale;
       const fy = doy + sy * dscale;
       const mat = materialAt(sources.data, fx, fy);
-      water[v] = opts.mode === 'biome' && hOwn[v]! > 0 ? (mat >> 16) & 1 : 0;
       const river = riverAt(sources.data, fx, fy, footprint);
       const rgb = colorFor(opts.mode, hOwn[v]!, mat, river, t.level, edge, opts.reliefScale);
       color[v * 3] = srgbToLinear(rgb[0]);

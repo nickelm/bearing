@@ -7,7 +7,9 @@
  *   vertex grid, antialiased by fwidth;
  * - a depth per fragment, used for color.
  *
- * Lakes come from a per-vertex coverage attribute, at a nominal depth.
+ * Lakes work the same way (decision 40): meshes carry a signed lake depth
+ * (level − height), lakes are displayed flat at their level, and the zero
+ * crossing of the interpolated depth is the shoreline.
  *
  * Color is absorption over twice the depth (down to the bed and back up),
  * measured in reference meters (depth ÷ reliefScale). Decision 14 makes real
@@ -58,8 +60,6 @@ type V3 = Node<'vec3'>;
 
 /** Absorption of clear water per reference meter (red goes first, blue last). */
 const ABSORPTION: [number, number, number] = [0.35, 0.055, 0.022];
-/** Nominal reference depth for lakes (their depth is not carried per vertex). */
-const LAKE_DEPTH = 18;
 /** Wave field period (m): every wave vector is an integer multiple of 2π/WAVE_PERIOD. */
 export const WAVE_PERIOD = 4096;
 const GRAVITY = 9.81;
@@ -115,7 +115,7 @@ export interface WaterInputs {
   normal: V3;
   /** Raw surface height, interpolated (m; negative under the sea). */
   height: F;
-  /** Lake coverage 0..1. */
+  /** Signed lake depth (m): positive under a lake. */
   lake: F;
   /** Signed coast distance (m), positive at sea. */
   shore: F;
@@ -151,11 +151,13 @@ export class WaterShading {
     const L = this.lighting;
     const fw = max(fwidth(i.height), 1e-3);
     const sea = smoothstep(fw.negate(), fw, i.height.negate()).mul(this.enabled);
-    const lake = i.lake.mul(this.enabled);
+    const lfw = max(fwidth(i.lake), 1e-3);
+    const lake = smoothstep(lfw.negate(), lfw, i.lake).mul(this.enabled);
     const wet = max(sea, lake);
 
-    // Body color: the seabed seen through the water column.
-    const depth = mix(vec3(LAKE_DEPTH), vec3(max(i.height.negate(), 0).div(this.reliefScale)), sea);
+    // Body color: the bed seen through the water column (reference depth).
+    const waterDepth = mix(max(i.lake, 0), max(i.height.negate(), 0), sea);
+    const depth = vec3(waterDepth.div(this.reliefScale));
     const bedVisible = exp(depth.mul(vec3(...ABSORPTION)).mul(-2));
     const body = mix(this.deepColor, i.albedo, bedVisible) as V3;
 

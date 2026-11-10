@@ -175,6 +175,7 @@ async function main(): Promise<void> {
         radius: params.radius,
         biome: global.finish.biome,
         lakeDepth: global.finish.drainage.lakeDepth,
+        height: global.height,
         index: new RiverIndex(global.finish.rivers),
       });
       globe.terrain.setWorld({

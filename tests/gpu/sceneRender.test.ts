@@ -43,6 +43,7 @@ describe.skipIf(!gpu)('GlobeScene on Dawn', () => {
       radius: params.radius,
       biome: g.finish.biome,
       lakeDepth: g.finish.drainage.lakeDepth,
+      height: g.height,
       index: new RiverIndex(g.finish.rivers),
     });
     scene.terrain.setWorld({

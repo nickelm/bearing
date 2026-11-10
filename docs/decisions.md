@@ -579,3 +579,41 @@ The vertex shader computes `base + up · height · exaggeration`, morphs toward 
 - **Asset URLs.** Runtime paths must resolve under the base. Workers load via `new URL('./x.worker.ts', import.meta.url)`, which Vite rewrites. Shaders are inline WGSL strings. Any future `public/` file is addressed through `import.meta.env.BASE_URL`, never a root-absolute path.
 
 **Reason:** Static hosting needs no server, costs nothing and deploys from CI. The price is no shared memory between threads. Transferring buffers moves them without a copy, so per-tick sim snapshots and world-generation output can still cross the worker boundary cheaply.
+
+### 40. Lakes from a per-sample lake level; smooth lowlands
+
+**Date:** 2026-11-10
+**Decision:**
+
+- **Lake level.** The tile kernel writes a lake level per sample. That is the highest Priority-Flood fill level (terrain + `lakeDepth`) among the 3 × 3 global cells around the sample, counting only cells whose centers lie within about one cell.
+  - The level is defined on dry ground near a lake too, so level − height is a signed depth whose zero crossing is the shoreline. It follows the fine terrain, not the 1.5 km global cells.
+  - `TileData.lake` holds it, with `NO_LAKE` where no lake is near.
+  - To stay within 8 storage buffers, the global lake level rides as a second u32 per cell in the material buffer, and height and level are written as one vec2 per sample.
+- **Mesh and shading.** Meshes store the signed lake depth per vertex in place of the old 0/1 lake flag. Lakes are displayed flat at their level, parent morph targets and slopes included. The water shader treats lakes like the sea, with a zero-crossing mask and color by reference depth.
+- **Lake beds.** Where the smooth global surface lies below the lake level, the kernel drops the detail octaves (lake beds are sediment-filled). A lake then reads as one body of water, not puddles in rough ground.
+- **Lowland detail.** The plains detail amplitude falls to 15% where the eroded global slope is below 0.002 and ramps up to full by 0.015. Flat, sediment-filled lowlands are smooth, and hills and mountains keep their roughness.
+
+**Reason:** In the owner's review at checkpoint 3:
+
+- Lakes showed as staircases of 1.5 km cells. The tiles only had a per-cell lake flag, and the water was drawn on the lake bed.
+- The plains looked uniformly rough, flat lowlands included.
+
+### 41. Geography emerges; the campaign adapts to the world
+
+**Date:** 2026-11-10
+**Decision:**
+
+- World generation should steer less: there may be more than two continents.
+- The forced layout of decisions 17, 18 and 20 gives way to continents that emerge from the crust field and the plates:
+  - two near-antipodal continent centers;
+  - main and second continents of fixed sizes;
+  - an east–west elongated main continent at mid-latitudes.
+- The geography stage then selects the theater from what exists:
+  - a main continent with room for a front with depth on both sides;
+  - a supply continent across an ocean gap in range.
+- Reject-and-retry becomes the fallback for worlds where no pair qualifies.
+- This is scheduled as the first milestone 4 tasks. Milestone 3's rendering does not depend on it.
+
+**Reason:** Owner's direction: discover the world and adapt the campaign to it, rather than shape the world to fit the campaign.
+
+**Open:** How much steering remains, for example a bias toward temperate land or minimum land fraction, will be settled when the milestone 4 work starts.

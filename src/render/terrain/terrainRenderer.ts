@@ -137,11 +137,15 @@ export class TerrainRenderer {
     // changing the exaggeration is a uniform update, not a rebuild.
     const exaggeration = this.exaggerationUniform;
     const up = attribute('up', 'vec3');
-    // Packed per-vertex scalars (WebGPU allows 8 vertex buffers): raw height, lake, coast distance.
+    // Packed per-vertex scalars (WebGPU allows 8 vertex buffers): raw height,
+    // signed lake depth, coast distance.
     const surfaceAttr = attribute('surface', 'vec3');
     const rawHeight = surfaceAttr.x;
-    // The sea is drawn flat at 0 m; the raw height still reaches the fragment stage.
-    const own = positionLocal.add(up.mul(max(rawHeight, 0).mul(exaggeration)));
+    const lakeDepth = surfaceAttr.y;
+    // The sea is drawn flat at 0 m and lakes flat at their level; the raw height and
+    // lake depth still reach the fragment stage (decisions 37, 40).
+    const shown = max(rawHeight.add(max(lakeDepth, 0)), 0);
+    const own = positionLocal.add(up.mul(shown.mul(exaggeration)));
     const parent = attribute('parentBase', 'vec3').add(
       attribute('parentDisp', 'vec3').mul(exaggeration),
     );
@@ -170,7 +174,7 @@ export class TerrainRenderer {
       albedo: attribute('color', 'vec3'),
       normal,
       height: rawHeight,
-      lake: surfaceAttr.y,
+      lake: lakeDepth,
       shore: surfaceAttr.z,
       up: normalize(up),
       relative: positionWorld,

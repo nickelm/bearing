@@ -23,7 +23,9 @@ import {
   TILE_VERTEX_COUNT,
 } from '../src/render/terrain/tileMesh';
 import type { MeshOptions, TileMeshData } from '../src/render/terrain/tileMesh';
+import { NO_LAKE } from '../src/worldgen/gpu/tileSynth';
 import type { TileData } from '../src/worldgen/gpu/tileSynth';
+import { LAKE_DRY } from '../src/render/terrain/tileMesh';
 
 const R = PLANET_RADIUS;
 const V = TILE_SEGMENTS + 1;
@@ -41,10 +43,11 @@ function fakeData(
   k: TileKey,
   river?: (sx: number, sy: number) => boolean,
   offset = 300,
-  lake?: (sx: number, sy: number) => boolean,
+  lake?: (sx: number, sy: number) => number,
 ): TileData {
   const height = new Float32Array(TILE_STRIDE * TILE_STRIDE);
   const material = new Uint32Array(TILE_STRIDE * TILE_STRIDE).fill(8);
+  const lakeLevel = new Float32Array(TILE_STRIDE * TILE_STRIDE).fill(NO_LAKE);
   const d = new Vec3d();
   for (let sy = -TILE_BORDER; sy <= TILE_TEXELS + TILE_BORDER; sy++) {
     for (let sx = -TILE_BORDER; sx <= TILE_TEXELS + TILE_BORDER; sx++) {
@@ -53,10 +56,10 @@ function fakeData(
         offset + 200 * Math.sin(d.x * 400) * Math.cos(d.z * 300);
       const i = (sy + TILE_BORDER) * TILE_STRIDE + sx + TILE_BORDER;
       if (river?.(sx, sy)) material[i] = 8 | (255 << 8);
-      if (lake?.(sx, sy)) material[i] = material[i]! | (1 << 16);
+      if (lake) lakeLevel[i] = lake(sx, sy);
     }
   }
-  return { key: k, height, material, minHeight: 0, maxHeight: 500 };
+  return { key: k, height, material, lake: lakeLevel, minHeight: 0, maxHeight: 500 };
 }
 
 /** World position of vertex v, as the shader displaces it (morph 1 = own, 0 = parent). */
@@ -157,16 +160,12 @@ describe('buildTileMesh', () => {
     }
   });
 
-  it('keeps raw sea depths but draws the sea flat; lakes only on land', () => {
-    // Heights from -200 to +200 m around a coast, a lake flag everywhere.
+  it('keeps raw sea depths but draws the sea flat', () => {
+    // Heights from -200 to +200 m around a coast.
     const t = tileKey(4, 6, 20, 30);
-    const all = () => true;
     const m = buildTileMesh(
       t,
-      {
-        data: fakeData(t, undefined, 0, all),
-        parentData: fakeData(parentTile(t)!, undefined, 0, all),
-      },
+      { data: fakeData(t, undefined, 0), parentData: fakeData(parentTile(t)!, undefined, 0) },
       opts,
     );
     let sea = 0;
@@ -174,21 +173,55 @@ describe('buildTileMesh', () => {
     for (let v = 0; v < V * V; v++) {
       const h = m.height[v]!;
       const radial = world(m, v).length() - R;
+      expect(m.water[v]).toBe(-LAKE_DRY);
       if (h < 0) {
         sea++;
         expect(radial).toBeCloseTo(0, 1);
-        expect(m.water[v]).toBe(0);
         // Coast distance: positive at sea.
         expect(m.shore[v]).toBeGreaterThan(0);
       } else {
         land++;
         expect(radial).toBeCloseTo(h * EX, 0);
-        expect(m.water[v]).toBe(1);
         expect(m.shore[v]).toBeLessThanOrEqual(0);
       }
     }
     expect(sea).toBeGreaterThan(100);
     expect(land).toBeGreaterThan(100);
     expect(m.minHeight).toBe(0);
+  });
+
+  it('draws lakes flat at their level, with a signed depth for the shoreline', () => {
+    // Terrain 100..500 m; a lake at 300 m covering everything below it.
+    const t = tileKey(4, 6, 20, 30);
+    const level = () => 300;
+    const m = buildTileMesh(
+      t,
+      {
+        data: fakeData(t, undefined, 300, level),
+        parentData: fakeData(parentTile(t)!, undefined, 300, level),
+      },
+      opts,
+    );
+    let wet = 0;
+    let dry = 0;
+    for (let v = 0; v < V * V; v++) {
+      const h = m.height[v]!;
+      const radial = world(m, v).length() - R;
+      expect(m.water[v]).toBeCloseTo(Math.max(-LAKE_DRY, 300 - h), 3);
+      if (h < 300) {
+        wet++;
+        expect(radial).toBeCloseTo(300 * EX, 0);
+        // The lake surface is flat: no slope away from the shore.
+        if (h < 250) {
+          const s = Math.hypot(m.slope[v * 3]!, m.slope[v * 3 + 1]!, m.slope[v * 3 + 2]!);
+          expect(s).toBeLessThan(1e-6);
+        }
+      } else {
+        dry++;
+        expect(radial).toBeCloseTo(h * EX, 0);
+      }
+    }
+    expect(wet).toBeGreaterThan(100);
+    expect(dry).toBeGreaterThan(100);
   });
 });

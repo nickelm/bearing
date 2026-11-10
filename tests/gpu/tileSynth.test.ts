@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { projectToCubeFace } from '../../src/core/coords';
+import { cubeFaceUvToDirection, projectToCubeFace } from '../../src/core/coords';
+import type { CubeFace } from '../../src/core/coords';
 import {
   neighborTile,
   tileForDirection,
@@ -13,7 +14,7 @@ import type { TileKey } from '../../src/core/tiles';
 import { Vec3d } from '../../src/core/vec3d';
 import { finishWorld } from '../../src/worldgen/finishWorld';
 import { buildGlobalWorld } from '../../src/worldgen/globalPipeline';
-import { TileSynthesizer } from '../../src/worldgen/gpu/tileSynth';
+import { NO_LAKE, TileSynthesizer } from '../../src/worldgen/gpu/tileSynth';
 import { DEFAULT_PLANET_PARAMS } from '../../src/worldgen/params';
 import { generateWorld } from '../../src/worldgen/pipeline';
 import { RiverIndex } from '../../src/worldgen/riverIndex';
@@ -37,6 +38,7 @@ describe.skipIf(!gpu)('tile synthesis (GPU)', async () => {
         radius: params.radius,
         biome: g.finish.biome,
         lakeDepth: g.finish.drainage.lakeDepth,
+        height: g.height,
         index: new RiverIndex(g.finish.rivers),
       })
     : null;
@@ -141,5 +143,35 @@ describe.skipIf(!gpu)('tile synthesis (GPU)', async () => {
     }
     expect(inRiver).toBeGreaterThan(0);
     expect(riverSum / inRiver).toBeLessThan(landSum / land);
+  });
+
+  it('floods lakes to their level with a shoreline from the fine terrain', async () => {
+    // The deepest lake cell of the global grid.
+    const n = g!.n;
+    const depth = g!.finish.drainage.lakeDepth;
+    let best = -1;
+    for (let c = 0; c < depth.length; c++) if (depth[c]! > (best < 0 ? 0 : depth[best]!)) best = c;
+    expect(best).toBeGreaterThanOrEqual(0);
+    const dir = cubeFaceUvToDirection(
+      Math.floor(best / (n * n)) as CubeFace,
+      ((best % n) + 0.5) / n,
+      ((Math.floor(best / n) % n) + 0.5) / n,
+    );
+    const [tile] = await synth!.generate([tileForDirection(dir, 6)]);
+    let wet = 0;
+    let dryNear = 0;
+    let level = NO_LAKE;
+    for (let i = 0; i < tile!.lake.length; i++) {
+      const l = tile!.lake[i]!;
+      if (l <= NO_LAKE / 2) continue;
+      level = Math.max(level, l);
+      if (l > tile!.height[i]!) wet++;
+      else dryNear++;
+    }
+    // Water where the terrain lies below the level, and a dry margin with the level
+    // defined, so the shoreline is a zero crossing.
+    expect(wet).toBeGreaterThan(10);
+    expect(dryNear).toBeGreaterThan(0);
+    expect(level).toBeCloseTo(g!.height[best]! + depth[best]!, 3);
   });
 });
