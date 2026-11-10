@@ -4,18 +4,19 @@ Guidance for Claude Code sessions in this repository. `docs/design.md` is the so
 
 ## Commands
 
-| Task                     | Command                                                       |
-| ------------------------ | ------------------------------------------------------------- |
-| Dev server               | `npm run dev`                                                 |
-| Unit tests               | `npm test` (watch: `npm run test:watch`)                      |
-| Type check               | `npm run typecheck`                                           |
-| Lint                     | `npm run lint`                                                |
-| Everything but build     | `npm run check`                                               |
-| Production build         | `npm run build` (runs the type check first)                   |
-| Serve production build   | `npm run preview` → `http://localhost:4173/bearing/`          |
-| Format                   | `npm run format`                                              |
-| Render world maps to PNG | `npm run maps` (env: `SEED`, `RES`, `MODES`) → `tools/out/`   |
-| Seed browser (theaters)  | `npm run seeds` (env: `SEEDS`, `FROM`, `COUNT`, `BRIEFING=1`) |
+| Task                     | Command                                                         |
+| ------------------------ | --------------------------------------------------------------- |
+| Dev server               | `npm run dev`                                                   |
+| Unit tests               | `npm test` (watch: `npm run test:watch`)                        |
+| Type check               | `npm run typecheck`                                             |
+| Lint                     | `npm run lint`                                                  |
+| Everything but build     | `npm run check`                                                 |
+| Production build         | `npm run build` (runs the type check first)                     |
+| Serve production build   | `npm run preview` → `http://localhost:4173/bearing/`            |
+| Format                   | `npm run format`                                                |
+| Render world maps to PNG | `npm run maps` (env: `SEED`, `RES`, `MODES`) → `tools/out/`     |
+| Seed browser (theaters)  | `npm run seeds` (env: `SEEDS`, `FROM`, `COUNT`, `BRIEFING=1`)   |
+| Weather preview          | `npm run weather` (env: `SEED`, `HOURS`, `DAYS`) → `tools/out/` |
 
 ## Directory map
 
@@ -28,7 +29,9 @@ src/worldgen/       planet generation pipeline stages (may use GPU compute)
   strategic/        strategic graph types and builder (settlements, roads, bridges), and infrastructure
                     placed after casting: the only world view campaign logic gets
 src/campaign/       theater detection, casting, briefing, validity check (reads the strategic graph only)
-src/sim/            headless simulation; runs in a worker
+src/sim/            headless simulation; runs in a worker: event queue + fixed ticks (simulation.ts),
+                    time acceleration (host.ts), world factory (world.ts)
+  weather/          hourly weather model on a bordered 24² cube grid; WeatherView for queries
   command/          per-side command layer: intelligence picture, ATO (graph and cast only)
 src/render/         terrain, atmosphere, ocean, roads, buildings, units, cameras (Three.js WebGPU + TSL)
 src/ui/             lil-gui debug panel, overlays, time controls

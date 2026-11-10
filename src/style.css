@@ -122,3 +122,64 @@ body {
 .seed-browser tbody tr:hover {
   background: rgb(255 255 255 / 0.12);
 }
+
+.time-controls {
+  position: fixed;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100vw - 16px);
+  font:
+    12px/1.4 ui-monospace,
+    Consolas,
+    monospace;
+}
+
+.time-controls .rates {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: rgb(0 0 0 / 0.6);
+  border-radius: 4px;
+}
+
+.time-controls button {
+  min-width: 3.2em;
+  padding: 3px 6px;
+  border: 1px solid rgb(255 255 255 / 0.15);
+  border-radius: 3px;
+  background: rgb(255 255 255 / 0.06);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.time-controls button.active {
+  background: #2a6db0;
+  border-color: #6fa8e0;
+}
+
+.time-controls .clock {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 12px;
+  padding: 3px 8px;
+  background: rgb(0 0 0 / 0.6);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.time-controls .clock .local {
+  color: #f0e0a0;
+}
+
+.time-controls .notice {
+  padding: 4px 10px;
+  background: rgb(120 70 0 / 0.85);
+  border-radius: 4px;
+}

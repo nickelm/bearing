@@ -7,8 +7,8 @@
  *      any surface height
  *   G  seasonal half-range (K): (warmest − coldest month) / 2
  *   B  moisture 0..1
- *   A  cloudiness 0..1, from precipitation (static stand-in until the weather
- *      model exists, milestone 6)
+ *   A  cloudiness 0..1, from precipitation (unused since clouds follow the live
+ *      weather, decision 68)
  *
  * Texel (i, j) of layer f is tectonic cell (f, i, j): u runs along i, v along
  * j, row 0 at v = 0. `cubeFaceUv` mirrors core/coords.ts (face by the largest

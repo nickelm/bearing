@@ -22,6 +22,7 @@ import type { CubeGrid } from '../core/cubeGrid';
 import { Vec3d } from '../core/vec3d';
 import { ClimateTexture } from './climateTexture';
 import { CloudLayer } from './clouds/cloudLayer';
+import { WeatherTexture } from './clouds/weatherTexture';
 import { ForestLayer } from './forest/forestLayer';
 import { GlobeMesh } from './globeMesh';
 import { PlanetLighting } from './lighting/planetLighting';
@@ -49,13 +50,15 @@ export class GlobeScene {
   readonly lighting: PlanetLighting;
   /** Climate fields by direction for shaders (decision 42); set with the world. */
   readonly climate = new ClimateTexture();
+  /** Live cloud cover and precipitation from the sim (decision 68). */
+  readonly weather = new WeatherTexture();
   /** Tiled LOD terrain; drawn instead of the M1 grid mesh once a world has a global pass. */
   readonly terrain: TerrainRenderer;
   /** Instanced tree clumps near the camera (decision 45). */
   readonly forest: ForestLayer;
   /** Buildings of towns, airbases and industry near the camera (decision 65). */
   readonly structures: StructureLayer;
-  /** Cloud shell and cloud shadows (decision 55). */
+  /** Cloud shell and cloud shadows (decisions 55, 68). */
   readonly clouds: CloudLayer;
   /** Strategic graph and cast overlay (milestone 4). */
   readonly strategic: StrategicOverlay;
@@ -78,7 +81,7 @@ export class GlobeScene {
     this.orbit = new OrbitCamera(options.radius);
     this.lighting = new PlanetLighting(options.radius);
     // Clouds first: their shadow hook must be in place before lit materials are built.
-    this.clouds = new CloudLayer(options.radius, this.lighting, this.climate);
+    this.clouds = new CloudLayer(options.radius, this.lighting, this.weather);
     this.lighting.sunVisibility = (p) => this.clouds.shadow(p);
     this.terrain = new TerrainRenderer(this.lighting, this.climate);
     this.forest = new ForestLayer(this.terrain, this.lighting, this.climate, this.terrain.land);

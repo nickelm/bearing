@@ -1,17 +1,16 @@
 /**
- * Cloud layer (decision 55): a shell at CLOUD_ALTITUDE above sea level whose
- * coverage comes from a static field until live weather exists (milestone 6).
+ * Cloud layer (decisions 55, 59, 68): a shell at CLOUD_ALTITUDE above sea
+ * level whose coverage comes from the sim's live weather.
  *
- * - Coverage: 3D fractal noise for weather systems (base wavelength about
- *   300 km) and finer cells (about 33 km) that break up the edges,
- *   thresholded by the climate texture's cloudiness (from precipitation, decision
- *   42), so wet regions are cloudy and deserts clear.
- * - Motion: two independent fields turn rigidly about the polar axis, one
- *   eastward (westerlies, about 12 m/s at 45°) and one westward (trades and
- *   polar easterlies, about 7 m/s at 15°), blended by latitude band. Rigid
- *   motion has no shear, so clouds never stretch. Both evolve slowly in place.
- * - Climate: precipitation only shifts the odds of cloud, so wet regions and
- *   mountains still see the sun regularly.
+ * - Coverage: the weather texture gives the cloud cover fraction per weather
+ *   sample (about 65 km), interpolated in space and between game hours. A
+ *   detail field (about 150 km systems and 17 km cells) decides where inside
+ *   that area the cloud sits: a fragment is cloudy where the detail value is
+ *   below the cover fraction, so the mean coverage matches the weather.
+ * - Motion: the weather systems move the cover; the detail field turns
+ *   rigidly about the polar axis in two latitude bands (decision 59) and
+ *   evolves slowly, so cloud edges drift without stretching.
+ * - Precipitating cloud is darker.
  * - The shell is a cube-sphere mesh, drawn transparent and camera-relative
  *   (rule 4: the mesh sits at planet center − eye). Fragments compute coverage
  *   from their direction, so the mesh resolution does not limit the clouds.
@@ -55,7 +54,7 @@ import {
   vec4,
 } from 'three/tsl';
 import type { Vec3d } from '../../core/vec3d';
-import type { ClimateTexture } from '../climateTexture';
+import type { WeatherTexture } from './weatherTexture';
 import { buildCubeSphereArrays } from '../cubeSphereGeometry';
 import type { PlanetLighting } from '../lighting/planetLighting';
 
@@ -64,8 +63,8 @@ type V3 = Node<'vec3'>;
 
 /** Height of the cloud shell above sea level (m). */
 export const CLOUD_ALTITUDE = 5000;
-/** Base wavelength of the cloud noise (m). */
-const CLOUD_WAVELENGTH = 300_000;
+/** Base wavelength of the cloud detail noise (m); the weather grid supplies larger scales. */
+const CLOUD_WAVELENGTH = 150_000;
 /** Field speeds (m/s, eastward positive) at their reference latitudes: westerlies at 45°, trades at 15°. */
 const WESTERLY: [number, number] = [12, Math.PI / 4];
 const EASTERLY: [number, number] = [-7, Math.PI / 12];
@@ -91,7 +90,7 @@ export class CloudLayer {
   constructor(
     private readonly radius: number,
     private readonly lighting: PlanetLighting,
-    private readonly climate: ClimateTexture,
+    private readonly weather: WeatherTexture,
   ) {
     const arrays = buildCubeSphereArrays(48, radius + CLOUD_ALTITUDE);
     const g = new BufferGeometry();
@@ -106,19 +105,17 @@ export class CloudLayer {
   /** Cloud coverage 0..1 at a direction from the planet center (any length). */
   coverage(direction: V3): F {
     const dir = normalize(direction) as V3;
-    const cloudiness = this.climate.sample(dir).w;
-    // Two independent fields, each turned rigidly about the polar axis (no shear, so
-    // clouds never stretch): one eastward for the mid-latitude westerlies, one westward
-    // for the trades and polar easterlies. They blend across the band edges.
+    const cover = this.weather.sample(dir).cover.add(this.coverageBias);
+    // Detail: two independent fields, each turned rigidly about the polar axis (no
+    // shear, so clouds never stretch): one eastward for the mid-latitude westerlies,
+    // one westward for the trades and polar easterlies, blended across band edges.
     const lat = abs(asin(clamp(dir.y, -1, 1))).mul(180 / Math.PI);
     const westerlies = smoothstep(22, 32, lat).mul(float(1).sub(smoothstep(58, 68, lat)));
     const east = this.field(dir, WESTERLY, vec3(0, 0, 0));
     const west = this.field(dir, EASTERLY, vec3(41.7, 19.3, 73.1));
-    const n = mix(west, east, westerlies);
-    // Climate shifts the odds of cloud without saturating: the wettest regions are
-    // usually cloudy but still clear regularly, deserts usually clear.
-    const d = n.add(cloudiness.sub(0.4).mul(0.24)).add(this.coverageBias);
-    return smoothstep(0.5, 0.74, d).mul(this.enabled) as F;
+    // The detail value spread over roughly 0..1: cloudy where it is below the cover.
+    const q = clamp(mix(west, east, westerlies).sub(0.5).mul(2.2).add(0.5), 0.02, 0.98);
+    return smoothstep(q.sub(0.1), q.add(0.1), cover).mul(this.enabled) as F;
   }
 
   /**
@@ -182,7 +179,9 @@ export class CloudLayer {
     const sky = L.atmosphere.skyIrradiance(sunUp).mul(L.sunIlluminance.mul(L.skyLight));
     const night = vec3(0.55, 0.65, 1.0).mul(L.nightLight);
     const shade = mix(float(1), float(0.4).add(cover.oneMinus().mul(0.6)), this.below);
-    const albedo = vec3(0.9, 0.91, 0.93).mul(shade);
+    // Rain and snow clouds are thicker and darker.
+    const wet = float(1).sub(this.weather.sample(p).precip.mul(0.4));
+    const albedo = vec3(0.9, 0.91, 0.93).mul(shade).mul(wet);
     const radiance = albedo.mul(sunlight.add(sky).add(night)) as V3;
     m.colorNode = L.applyAerial(radiance, apInscatter as V3, apTransmittance as V3);
     m.opacityNode = cover.mul(0.95);

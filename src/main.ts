@@ -12,8 +12,8 @@ import {
 } from './core/calendar';
 import type { CampaignCalendar, OrbitParams } from './core/calendar';
 import { CubeGrid } from './core/cubeGrid';
-import { rng } from './core/rng';
 import { DEG, HOUR, KM } from './core/units';
+import { latLonToDirection } from './core/coords';
 import { Vec3d } from './core/vec3d';
 import { DEFAULT_PLANET_PARAMS } from './worldgen/params';
 import type { PlanetParams } from './worldgen/params';
@@ -61,8 +61,11 @@ import { CampaignPanel } from './ui/campaignPanel';
 import { SeedBrowser } from './ui/seedBrowser';
 import { THEATER_LABELS } from './campaign/theaters';
 import type { StrategicWorld } from './worldgen/campaignWorld';
-import { PING_STREAM } from './workers/protocol';
-import type { FromSimWorker, ToSimWorker } from './workers/protocol';
+import { SimClient } from './workers/simClient';
+import { SnapshotField } from './workers/protocol';
+import { buildWeatherClimate } from './sim/weather/climate';
+import { WeatherGrid } from './sim/weather/grid';
+import { TimeControls } from './ui/timeControls';
 import { GenerationCancelled, WorldgenClient } from './workers/worldgenClient';
 
 async function main(): Promise<void> {
@@ -116,12 +119,32 @@ async function main(): Promise<void> {
     buildings: true,
   };
 
-  // Preview clock until the sim's game clock exists (milestone 6): GameTime and
-  // the campaign calendar, which a new world resets (decision 33).
+  // The game clock lives in the sim worker (decision 67); the display time follows it.
+  // A new world resets the campaign calendar (decision 33) and restarts the sim.
   const orbitParams: OrbitParams = DEFAULT_PLANET_PARAMS;
   let calendar: CampaignCalendar = defaultCampaignStart(new Vec3d(0, 0.6, 0.8), orbitParams);
   let gameTime = 0;
-  const timeParams: TimeGuiParams = { day: 0, hours: 0, rate: 0, date: '' };
+  const timeParams: TimeGuiParams = {
+    day: 0,
+    hours: 0,
+    date: '',
+    autoSlowdown: true,
+    alarmHours: 1,
+    sim: 'no world yet',
+    weather: '—',
+  };
+  const sim = new SimClient();
+  const weatherGrid = new WeatherGrid();
+  /** Starts the simulation for a world: its climate drives the weather (decision 68). */
+  const startSim = (world: World, seed: string, radius: number) => {
+    const climate = buildWeatherClimate(
+      { ...world.maps, resolution: world.info.resolution, reliefScale: world.info.reliefScale },
+      weatherGrid,
+      radius,
+    );
+    sim.init(seed, radius, orbitParams, calendar, climate);
+  };
+  sim.onWeather = () => globe.weather.setFrames(sim.weather);
 
   let grid = new CubeGrid(worldParams.resolution);
   const globe = new GlobeScene(renderer, { radius: DEFAULT_PLANET_PARAMS.radius, grid });
@@ -210,6 +233,7 @@ async function main(): Promise<void> {
       globe.climate.setWorld(world);
       calendar = defaultCampaignStart(new Vec3d(...world.info.mainContinent), orbitParams);
       gameTime = 0;
+      globe.weather.fill(0);
     };
     const showGlobal = (
       world: World,
@@ -278,6 +302,7 @@ async function main(): Promise<void> {
       if (stored?.strategic) {
         showTectonic(stored.tectonic);
         showStrategic(stored.strategic);
+        startSim(stored.tectonic, String(stored.strategic.seed), params.radius);
         showGlobal(
           stored.tectonic,
           restoreGlobalWorld(gpu, stored.global),
@@ -295,6 +320,7 @@ async function main(): Promise<void> {
       const { strategic, ...world } = generated;
       showTectonic(world);
       showStrategic(strategic);
+      startSim(world, String(strategic.seed), params.radius);
       // Everything after this uses the seed that passed the validity check.
       const worldSeedParams: PlanetParams = { ...params, seed: strategic.seed };
       console.table(strategic.timings.map((t) => ({ stage: t.stage, ms: Math.round(t.ms) })));
@@ -453,12 +479,23 @@ async function main(): Promise<void> {
   gui.addTimeControls(timeParams, daysPerYear(orbitParams), {
     dayChanged: (d) => {
       const lon = globe.orbit.lon;
-      gameTime += (d - localDayOfYear(gameTime, lon, orbitParams, calendar)) * orbitParams.solarDay;
+      const days = d - localDayOfYear(gameTime, lon, orbitParams, calendar);
+      sim.seek(gameTime + days * orbitParams.solarDay);
     },
     hoursChanged: (h) => {
-      gameTime = withLocalTime(gameTime, globe.orbit.lon, h * HOUR, orbitParams, calendar);
+      sim.seek(withLocalTime(gameTime, globe.orbit.lon, h * HOUR, orbitParams, calendar));
+    },
+    autoSlowdownChanged: (enabled) => sim.setAutoSlowdown(enabled),
+    alarm: (hours) => {
+      const at = gameTime + hours * HOUR;
+      sim.alarm(at, `Test alarm (${formatLocalDate(at, globe.orbit.lon, orbitParams, calendar)})`);
     },
   });
+  const timeControls = new TimeControls((rate) => sim.setRate(rate));
+  sim.onFlagged = (n) => {
+    const labels = n.events.map((e) => e.label).join(', ');
+    timeControls.notify(n.slowed ? `Slowed to 1×: ${labels}` : labels);
+  };
   const lighting = globe.lighting;
   const lightParams: LightingGuiParams = {
     atmosphere: true,
@@ -513,25 +550,8 @@ async function main(): Promise<void> {
 
   const overlay = new FrameTimeOverlay();
 
-  // Sim worker stub: confirms bundling and cross-context determinism.
-  const simWorker = new Worker(new URL('./workers/sim.worker.ts', import.meta.url), {
-    type: 'module',
-  });
-  let expected = 0;
-  const pingWorker = (seed: string) => {
-    expected = rng(seed, PING_STREAM).nextUint32();
-    gui.status.worker = 'pending';
-    simWorker.postMessage({ type: 'ping', seed } satisfies ToSimWorker);
-  };
-  simWorker.onmessage = (e: MessageEvent<FromSimWorker>) => {
-    const ok = e.data.value === expected;
-    gui.status.worker = ok ? 'ok (deterministic)' : 'MISMATCH';
-    if (!ok) console.error('Sim worker RNG mismatch', e.data.value, expected);
-  };
-  simWorker.onerror = (e) => {
-    gui.status.worker = 'error';
-    console.error('Sim worker error', e);
-  };
+  sim.onStatus = (status) => (gui.status.worker = status);
+  const pingWorker = (seed: string) => sim.ping(seed);
 
   runComputeSmokeTest(renderer)
     .then((ok) => (gui.status.compute = ok ? 'ok' : 'WRONG RESULT'))
@@ -547,21 +567,37 @@ async function main(): Promise<void> {
   void regenerate();
 
   let last = performance.now();
+  let lastClockText = 0;
+  const here = new Vec3d();
   await renderer.setAnimationLoop((now) => {
     const frameMs = now - last;
     last = now;
     overlay.record(frameMs, now);
     const dt = Math.min(frameMs, 100) / 1000;
-    gameTime += dt * timeParams.rate;
+    gameTime = sim.displayTime(now);
     sunDirection(gameTime, orbitParams, calendar, globe.sun);
     globe.terrain.land.seasonPhase.value = seasonPhase(gameTime, orbitParams, calendar);
     globe.clouds.time.value = gameTime;
+    globe.weather.update(sim.weather, gameTime);
     globe.render(dt);
 
     const lon = globe.orbit.lon;
     timeParams.day = localDayOfYear(gameTime, lon, orbitParams, calendar);
     timeParams.hours = localSolarTime(gameTime, lon, orbitParams, calendar) / HOUR;
     timeParams.date = formatLocalDate(gameTime, lon, orbitParams, calendar);
+    if (now - lastClockText > 200) {
+      lastClockText = now;
+      latLonToDirection(globe.orbit.lat, globe.orbit.lon, here);
+      const weather = describeWeather(sim, here, gameTime);
+      timeParams.weather = weather;
+      timeParams.sim = describeSim(sim);
+      timeControls.update({
+        rate: sim.rate,
+        local: `${timeParams.date} local`,
+        campaign: `T+${campaignClock(gameTime, orbitParams.solarDay)}`,
+        weather,
+      });
+    }
 
     const o = globe.orbit;
     gui.status.altitudeKm = o.altitude / KM;
@@ -585,6 +621,48 @@ async function main(): Promise<void> {
           ? `${ts.drawn} drawn, L${ts.deepest} deepest, ${ts.meshes} meshes, ${ts.dataTiles} data, ${ts.pending} loading`
           : 'off';
   });
+}
+
+/** Time since campaign start as "2 d 06:30". */
+function campaignClock(t: number, day: number): string {
+  const d = Math.floor(t / day);
+  const rest = t - d * day;
+  const hh = Math.floor(rest / HOUR);
+  const mm = Math.floor((rest % HOUR) / 60);
+  return `${d} d ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+}
+
+/** Weather at a direction for the time bar: cover, ceiling, visibility, wind, temperature. */
+function describeWeather(sim: SimClient, dir: Vec3d, t: number): string {
+  if (!sim.weather.ready) return 'weather —';
+  const r = sim.weather.report(dir, t);
+  const w = sim.weather.wind(dir, 10, t);
+  const from = ((Math.atan2(-w.east, -w.north) / DEG + 360) % 360).toFixed(0).padStart(3, '0');
+  const speed = Math.hypot(w.east, w.north);
+  const ceiling = Number.isFinite(r.ceiling)
+    ? `ceiling ${Math.round(r.ceiling / 10) * 10} m`
+    : 'no ceiling';
+  const mmh = r.precipitation * HOUR * 1000;
+  const precip = mmh >= 0.1 ? `, ${r.snow > 0.5 ? 'snow' : 'rain'} ${mmh.toFixed(1)} mm/h` : '';
+  const vis =
+    r.visibility >= 10_000
+      ? `${Math.round(r.visibility / 1000)} km`
+      : `${(r.visibility / 1000).toFixed(1)} km`;
+  return (
+    `cloud ${Math.round(r.cloudCover * 100)}%, ${ceiling}, vis ${vis}, ` +
+    `wind ${from}° ${speed.toFixed(0)} m/s, ${r.temperature.toFixed(0)} °C${precip}`
+  );
+}
+
+/** Sim status for the GUI: rate, events and ticks run, pending events, weather systems. */
+function describeSim(sim: SimClient): string {
+  const h = sim.header;
+  if (!sim.started || !h) return 'no world yet';
+  const F = SnapshotField;
+  return (
+    `${h[F.Rate]}×, ${h[F.Events]} events, ${h[F.Ticks]} ticks, ${h[F.Pending]} pending, ` +
+    `${h[F.WeatherSystems]} weather systems, step ${h[F.StepMs]!.toFixed(1)} ms`
+  );
 }
 
 main().catch((err: unknown) => {

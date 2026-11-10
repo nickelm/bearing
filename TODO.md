@@ -185,16 +185,19 @@ Civilian geography (settlements, roads, bridges) joins the strategic graph befor
 
 ## Milestone 6: Simulation core and weather
 
-- [ ] Sim worker host: message protocol and state snapshots to the main thread as transferable buffers (decision 40)
-- [ ] Float64 game clock and time acceleration (pause, 1×, 4×, 16×, 64×, 256×)
-- [ ] Discrete-event scheduler (priority queue with deterministic tie-breaking)
-- [ ] Fixed-tick processes (1 game minute) interleaved with events in time order
-- [ ] Determinism test: 1× and 64× give identical state at a given game time
-- [ ] Time-control UI with calendar date and local time display, and auto-slowdown on flagged events
-- [ ] Weather model: coarse global grid (about 50–100 km cells), hourly ticks, `rng(seed, "weather")`, driven by the climate maps and season (decision 15)
-- [ ] Weather fields for operations: cloud cover and ceiling, visibility, precipitation, wind at several levels
-- [ ] Weather determinism test across time acceleration
-- [ ] Clouds rendered from the live weather field (replaces the static M3 field)
+- [x] Sim worker host: message protocol and state snapshots to the main thread as transferable buffers (decision 40, 67)
+- [x] Float64 game clock and time acceleration (pause, 1×, 4×, 16×, 64×, 256×)
+- [x] Discrete-event scheduler (priority queue with deterministic tie-breaking)
+- [x] Fixed-tick processes (1 game minute) interleaved with events in time order (one queue for both, decision 67)
+- [x] Determinism test: 1× and 64× give identical state at a given game time (`tests/sim.test.ts`; also one jump, auto-slowdown and backward seeks)
+- [x] Time-control UI with calendar date and local time display, and auto-slowdown on flagged events (time bar; GUI → Time: jumps, test alarm)
+- [x] Weather model: coarse global grid (about 50–100 km cells), hourly ticks, `rng(seed, "weather")`, driven by the climate maps and season (decision 15, 68)
+- [x] Weather fields for operations: cloud cover and ceiling, visibility, precipitation, wind at several levels
+- [x] Weather determinism test across time acceleration
+- [x] Clouds rendered from the live weather field (replaces the static M3 field)
+- [x] Tools: `tools/weather.preview.ts` draws cloud, precipitation, isobars and 850 hPa winds and prints statistics
+- [ ] Checkpoint 7: owner review of the time bar, auto-slowdown and clouds from live weather in the browser (the GPU cloud test and the render preview have not run on a GPU yet)
+- [ ] Weather fields not yet used: fog and visibility in the renderer, rain and snow on the ground, live winds for wave direction
 
 ## Milestone 7: Air tasking and mission search
 
@@ -240,7 +243,7 @@ Civilian geography (settlements, roads, bridges) joins the strategic graph befor
 - [ ] Subscriptions: a saved query plus a phase triggers auto-slowdown to 1× and offers the mission
 - [ ] Intelligence overlay: the viewing side's contacts and satellite tracks
 - [ ] Follow representative sorties to judge the range factor (design open question)
-- [ ] Checkpoint 7: owner review of the ATO, mission search, subscriptions and the chase camera
+- [ ] Checkpoint 8: owner review of the ATO, mission search, subscriptions and the chase camera
 
 ## Milestone 8: Ground and naval aggregates
 

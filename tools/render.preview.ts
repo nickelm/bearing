@@ -36,6 +36,9 @@ import { previewWorld } from './previewWorld';
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
 import { settlementPoint } from '../src/worldgen/strategic/graph';
 import { InfraScene } from '../src/render/infra/infraScene';
+import { buildWeatherClimate } from '../src/sim/weather/climate';
+import { WeatherGrid } from '../src/sim/weather/grid';
+import { createSimWorld } from '../src/sim/world';
 
 export interface PreviewView {
   name: string;
@@ -281,6 +284,27 @@ it('renders preview views', async () => {
   const lat0 = Math.asin(main.y);
   const lon0 = Math.atan2(main.x, main.z);
   const calendar = defaultCampaignStart(main, params);
+  // Live weather from the sim (decision 68), replayed to each view's time.
+  const climate = buildWeatherClimate(
+    { ...world.maps, resolution: world.info.resolution, reliefScale: world.info.reliefScale },
+    new WeatherGrid(),
+    params.radius,
+  );
+  const weatherConfig = {
+    seed: params.seed,
+    radius: params.radius,
+    orbit: params,
+    calendar,
+    climate,
+  };
+  let simWorld = createSimWorld(weatherConfig);
+  const weatherAt = (t: number) => {
+    if (t < simWorld.sim.time) simWorld = createSimWorld(weatherConfig);
+    simWorld.sim.advanceTo(t);
+    const view = simWorld.weather.view();
+    scene.weather.setFrames(view);
+    scene.weather.update(view, t);
+  };
 
   // Targets: the deepest lake away from the ice caps, and dense forest near the main continent.
   const n = global.n;
@@ -343,7 +367,9 @@ it('renders preview views', async () => {
     sunDirection(t, params, calendar, scene.sun);
     scene.terrain.land.seasonPhase.value = seasonPhase(t, params, calendar);
     // HOURS shifts only the clouds' clock (to see them move with the sun held fixed).
-    scene.clouds.time.value = t + Number(process.env.HOURS ?? 0) * HOUR;
+    const cloudTime = t + Number(process.env.HOURS ?? 0) * HOUR;
+    scene.clouds.time.value = cloudTime;
+    weatherAt(cloudTime);
     scene.clouds.enabled.value = process.env.CLOUDS === '0' ? 0 : 1;
     // Render until the terrain has loaded everything this view wants.
     let stable = 0;

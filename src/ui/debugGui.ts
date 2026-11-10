@@ -37,16 +37,22 @@ export interface ViewGuiParams {
   buildings: boolean;
 }
 
-/** Preview clock controls (until the sim clock exists, milestone 6). */
+/** Time folder: jumps of the sim clock, alarms and the sim status (milestone 6). */
 export interface TimeGuiParams {
   /** Local day of the year at the camera, 0-based. */
   day: number;
   /** Local solar time at the camera, hours. */
   hours: number;
-  /** Game seconds per real second. */
-  rate: number;
   /** Local date and time at the camera (read-only). */
   date: string;
+  /** Drop to 1× when a flagged event runs. */
+  autoSlowdown: boolean;
+  /** Hours from now for the test alarm. */
+  alarmHours: number;
+  /** Sim status: clock, events, ticks, weather systems (read-only). */
+  sim: string;
+  /** Weather under the camera (read-only). */
+  weather: string;
 }
 
 export interface LightingGuiParams {
@@ -94,18 +100,14 @@ export interface CampaignGuiParams {
   coarseSeconds: number;
 }
 
-export const TIME_RATES: Record<string, number> = {
-  paused: 0,
-  '1×': 1,
-  '1 min/s': 60,
-  '10 min/s': 600,
-  '1 h/s': 3600,
-  '1 day/s': 86_400,
-};
-
 export interface TimeGuiCallbacks {
+  /** Jumps to a local day of the year (seeks the sim; backward replays from campaign start). */
   dayChanged(day: number): void;
+  /** Jumps to a local time on the current day. */
   hoursChanged(hours: number): void;
+  autoSlowdownChanged(enabled: boolean): void;
+  /** Schedules a flagged test event `hours` from now. */
+  alarm(hours: number): void;
 }
 
 export interface DebugGuiStatus {
@@ -245,19 +247,26 @@ export class DebugGui {
     return f;
   }
 
-  /** Adds the Time folder: date, day of year, time of day and clock rate. */
+  /** Adds the Time folder: date, jumps by day and time of day, alarms and sim status. */
   addTimeControls(time: TimeGuiParams, daysPerYear: number, callbacks: TimeGuiCallbacks): void {
     const f = this.folderBeforeStatus('Time');
     f.add(time, 'date').name('Local date').disable().listen();
+    // Jumps apply on release: each one seeks the sim (backward replays from campaign start).
     f.add(time, 'day', 0, Math.ceil(daysPerYear) - 1, 1)
       .name('Day of year')
       .listen()
-      .onChange((d: number) => callbacks.dayChanged(d));
+      .onFinishChange((d: number) => callbacks.dayChanged(d));
     f.add(time, 'hours', 0, 24, 0.05)
       .name('Local time (h)')
       .listen()
-      .onChange((h: number) => callbacks.hoursChanged(h));
-    f.add(time, 'rate', TIME_RATES).name('Clock rate');
+      .onFinishChange((h: number) => callbacks.hoursChanged(h));
+    f.add(time, 'autoSlowdown')
+      .name('Auto-slowdown')
+      .onChange((v: boolean) => callbacks.autoSlowdownChanged(v));
+    f.add(time, 'alarmHours', 0.25, 48, 0.25).name('Alarm in (h)');
+    f.add({ alarm: () => callbacks.alarm(time.alarmHours) }, 'alarm').name('Set test alarm');
+    f.add(time, 'sim').name('Sim').disable().listen();
+    f.add(time, 'weather').name('Weather here').disable().listen();
   }
 
   /** Adds the Lighting folder: atmosphere, air density, exposure, sky and night light. */
