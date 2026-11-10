@@ -19,6 +19,7 @@ import { DEFAULT_PLANET_PARAMS } from '../../src/worldgen/params';
 import { generateWorld } from '../../src/worldgen/pipeline';
 import { testGpu } from './device';
 import { headlessRenderer } from './renderer';
+import type { HeadlessRenderer } from './renderer';
 
 const gpu = await testGpu();
 
@@ -26,8 +27,9 @@ const gpu = await testGpu();
 async function evaluate(
   dirs: Float32Array,
   body: (d: Node<'vec4'>) => Node<'vec4'>,
+  shared?: HeadlessRenderer,
 ): Promise<Float32Array> {
-  const head = await headlessRenderer(gpu!.device, 64, 64);
+  const head = shared ?? (await headlessRenderer(gpu!.device, 64, 64));
   const count = dirs.length / 4;
   const input = instancedArray(dirs, 'vec4');
   const output = instancedArray(count, 'vec4');
@@ -36,7 +38,7 @@ async function evaluate(
   })().compute(count);
   await head.renderer.computeAsync(kernel);
   const out = new Float32Array(await head.renderer.getArrayBufferAsync(output.value));
-  head.dispose();
+  if (!shared) head.dispose();
   return out;
 }
 
@@ -91,5 +93,27 @@ describe.skipIf(!gpu)('climate texture (TSL on Dawn)', () => {
         expect(Math.abs(out[c * 4 + k]! - want)).toBeLessThan(0.02 + Math.abs(want) * 2e-3);
       }
     }
+  });
+
+  it('resizes when a world arrives after the placeholder was already on the GPU', async () => {
+    // The app draws before any world exists, so the 1×1 placeholder is uploaded first.
+    const head = await headlessRenderer(gpu!.device, 64, 64);
+    const climate = new ClimateTexture();
+    const probe = new Float32Array([0, 0, 1, 0]);
+    await evaluate(probe, (p) => climate.sample(p.xyz), head);
+    const before = gpu!.errors.length;
+    const world = generateWorld({ ...DEFAULT_PLANET_PARAMS, seed: 5 }, { resolution: 16 });
+    climate.setWorld(world);
+    const n = world.info.resolution;
+    const c = (4 * n + n / 2) * n + n / 2; // a cell on face +Z
+    const d = cubeFaceUvToDirection(4, (n / 2 + 0.5) / n, (n / 2 + 0.5) / n);
+    const out = await evaluate(
+      new Float32Array([d.x, d.y, d.z, 0]),
+      (p) => climate.sample(p.xyz),
+      head,
+    );
+    head.dispose();
+    expect(gpu!.errors.slice(before)).toEqual([]);
+    expect(out[0]).toBeCloseTo(climateTexels(world)[c * 4]!, 1);
   });
 });

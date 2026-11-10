@@ -35,6 +35,9 @@ describe.skipIf(!gpu)('GlobeScene on Dawn', () => {
       input: false,
     });
     scene.resize(head.width, head.height);
+    // Like the app: frames are drawn before a world exists, so placeholders reach the GPU first.
+    scene.render(0);
+    await gpu!.finish();
     scene.globe.setWorld(world);
     scene.climate.setWorld(world);
     scene.terrain.buildBudgetMs = 10_000;

@@ -124,8 +124,10 @@ export class ClimateTexture {
   setWorld(world: World): void {
     const n = world.info.resolution;
     if (n !== this.n) {
-      // Resize in place: three re-creates the GPU texture when the image changes size.
+      // Three does not reallocate a GPU texture whose image changes size: free it, and the
+      // next upload creates one at the new size. (Materials keep the same texture object.)
       this.n = n;
+      this.texture.dispose();
       this.texture.image = { data: new Uint16Array(6 * n * n * 4), width: n, height: n, depth: 6 };
     }
     this.fill(climateTexels(world));
