@@ -173,6 +173,7 @@ async function main(): Promise<void> {
       // tile batch still running on it has finished.
       const old = globalWorld;
       const oldSynth = synth;
+      const riverIndex = new RiverIndex(global.finish.rivers);
       synth = new TileSynthesizer(global.grid, {
         seed: params.seed,
         reliefScale: params.reliefScale,
@@ -182,13 +183,14 @@ async function main(): Promise<void> {
         height: global.height,
         forest: global.finish.forest,
         treeline: global.finish.treeline,
-        index: new RiverIndex(global.finish.rivers),
+        index: riverIndex,
       });
       globe.terrain.setWorld({
         synth,
         seed: params.seed,
         radius: params.radius,
         reliefScale: params.reliefScale,
+        rivers: riverIndex,
       });
       globe.terrainReady = true;
       if (old || oldSynth) {
@@ -234,7 +236,7 @@ async function main(): Promise<void> {
       console.info(
         `World ${worldParams.seed} @ ${resolution}: land ${(world.info.landFraction * 100).toFixed(1)}%, ` +
           `heights ${world.info.minHeight.toFixed(0)}..${world.info.maxHeight.toFixed(0)} m, ` +
-          `continents ${((world.info.continentSeparation / Math.PI) * 180).toFixed(1)}° apart`,
+          `${world.info.landmassCount} landmasses, largest ${(world.info.largestLandmassArea / 1e6).toFixed(0)} km²`,
       );
       console.table(world.info.timings.map((t) => ({ stage: t.stage, ms: Math.round(t.ms) })));
 
@@ -356,6 +358,7 @@ async function main(): Promise<void> {
     foam: globe.terrain.water.foamStrength.value,
     temperatureShift: 0,
     detail: globe.terrain.land.detail.value,
+    riverLegibility: globe.terrain.riverStyle.legibility.value,
   };
   gui.addLightingControls(lightParams, (l) => {
     lighting.atmosphere.enabled.value = l.atmosphere ? 1 : 0;
@@ -369,6 +372,7 @@ async function main(): Promise<void> {
     globe.terrain.water.foamStrength.value = l.foam;
     globe.terrain.land.temperatureOffset.value = l.temperatureShift;
     globe.terrain.land.detail.value = l.detail;
+    globe.terrain.riverStyle.legibility.value = l.riverLegibility;
   });
 
   // World-generation compute shares three's device (decision 22).

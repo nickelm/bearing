@@ -25,7 +25,9 @@ import {
 } from 'three/webgpu';
 import {
   attribute,
+  fwidth,
   Fn,
+  length,
   max,
   mix,
   modelWorldMatrix,
@@ -55,7 +57,10 @@ import { MAX_BAKED_LEVEL } from '../../worldgen/gpu/tileSynth';
 import type { TileData, TileSynthesizer } from '../../worldgen/gpu/tileSynth';
 import { ClimateTexture } from '../climateTexture';
 import { PlanetLighting } from '../lighting/planetLighting';
+import { RiverShading, RiverStyle } from '../water/riverShading';
+import { RiverTables } from '../water/riverTables';
 import { WAVE_PERIOD, WaterShading } from '../water/waterShading';
+import type { RiverIndex } from '../../worldgen/riverIndex';
 import { LandShading } from './landShading';
 import { DEFAULT_LOD, selectTiles } from './quadtree';
 import type { LodOptions, LodView } from './quadtree';
@@ -90,6 +95,8 @@ export interface TerrainWorld {
   seed: WorldSeed;
   radius: number;
   reliefScale: number;
+  /** River segments to draw (decision 46); none when absent. */
+  rivers?: RiverIndex;
 }
 
 export class TerrainRenderer {
@@ -114,9 +121,12 @@ export class TerrainRenderer {
   private mode: TileViewMode = 'biome';
   private detail: Noise3 = new Noise3(rng(0, 'render-detail'));
   private readonly index = new BufferAttribute(buildTileIndex(), 1);
-  private readonly material: MeshBasicNodeMaterial;
+  private material: MeshBasicNodeMaterial;
+  private rivers: RiverTables | null = null;
   /** Sea and lake shading inside the terrain material (decision 37). */
   readonly water: WaterShading;
+  /** River drawing settings (decision 46). */
+  readonly riverStyle = new RiverStyle();
   /** Land albedo: moisture, rock, snow, season and detail (decision 43). */
   readonly land = new LandShading();
   private readonly data = new TileCache<TileData>(DATA_SHARE * 600 * 2 ** 20);
@@ -135,12 +145,31 @@ export class TerrainRenderer {
     readonly lighting = new PlanetLighting(),
     readonly climate = new ClimateTexture(),
   ) {
+    this.water = new WaterShading(lighting);
+    this.material = this.buildMaterial();
+    this.loader = new TileLoader<TileData>(
+      this.data,
+      this.queue,
+      async (tiles) => {
+        const w = this.world;
+        if (!w) return [];
+        const out = await w.synth.generate(tiles);
+        // A world switched while generating: drop the stale batch.
+        if (this.world !== w) return [];
+        return out.map((d) => ({ tile: d.key, value: d, bytes: DATA_BYTES }));
+      },
+      8,
+    );
+  }
+
+  /** The terrain material for the current world (its river tables are baked into storage buffers). */
+  private buildMaterial(): MeshBasicNodeMaterial {
     const morph = uniform(1).onObjectUpdate(({ object }) => {
       const m = (object as Mesh | undefined)?.userData.morph as number | undefined;
       return m ?? 1;
     });
     // Unlit material: the color node computes radiance itself (decision 34).
-    this.material = new MeshBasicNodeMaterial({ side: DoubleSide });
+    const material = new MeshBasicNodeMaterial({ side: DoubleSide });
     // Exaggeration and geomorphing in the vertex shader (see TileMeshData):
     // changing the exaggeration is a uniform update, not a rebuild.
     const exaggeration = this.exaggerationUniform;
@@ -162,25 +191,34 @@ export class TerrainRenderer {
     const apTransmittance = varyingProperty('vec3', 'vApTransmittance');
     // Each mesh's origin modulo the wave period (float64 on the CPU): fragments
     // evaluate periodic surface detail on small, precise coordinates (decision 38).
+    // Rivers from vector data (decision 46): each mesh's range in the segment lists.
+    const rivers = new RiverShading(this.rivers, this.world?.radius ?? 1e6, this.riverStyle);
+    const riverStart = uniform(0).onObjectUpdate(
+      ({ object }) =>
+        ((object as Mesh | undefined)?.userData.riverStart as number | undefined) ?? 0,
+    );
+    const riverCount = uniform(0).onObjectUpdate(
+      ({ object }) =>
+        ((object as Mesh | undefined)?.userData.riverCount as number | undefined) ?? 0,
+    );
     const wrapOrigin = uniform(new Vector3()).onObjectUpdate(
       ({ object }) => ((object as Mesh | undefined)?.userData.wrap as Vector3 | undefined) ?? ZERO,
     );
     const local = varyingProperty('vec3', 'vLocal');
-    this.material.positionNode = Fn(() => {
+    material.positionNode = Fn(() => {
       const p = mix(parent, own, morph);
       local.assign(p);
       const relative = modelWorldMatrix.mul(vec4(p, 1)).xyz;
-      const ap = lighting.atmosphere.aerialPerspective(relative);
+      const ap = this.lighting.atmosphere.aerialPerspective(relative);
       apInscatter.assign(ap.inscatter);
       apTransmittance.assign(ap.transmittance);
       return p;
     })();
     // Meshes carry no rotation or scale, so object space is world space.
     const normal = normalize(up.sub(attribute('slope', 'vec3').mul(exaggeration)));
-    this.water = new WaterShading(lighting);
     const radial = normalize(up);
     const wrapped = wrapOrigin.add(local);
-    const climateHere = climate.sample(radial);
+    const climateHere = this.climate.sample(radial);
     const bed = attribute('color', 'vec3');
     const surface = this.water.shade({
       albedo: this.land.albedo({
@@ -196,25 +234,19 @@ export class TerrainRenderer {
       normal,
       height: rawHeight,
       lake: lakeDepth,
+      river: rivers.coverage(
+        this.lighting.planetPosition(positionWorld),
+        riverStart,
+        riverCount,
+        length(fwidth(positionWorld)),
+      ),
       shore: surfaceAttr.z,
       up: radial,
       relative: positionWorld,
       wavePosition: wrapped,
     });
-    this.material.colorNode = lighting.applyAerial(surface, apInscatter, apTransmittance);
-    this.loader = new TileLoader<TileData>(
-      this.data,
-      this.queue,
-      async (tiles) => {
-        const w = this.world;
-        if (!w) return [];
-        const out = await w.synth.generate(tiles);
-        // A world switched while generating: drop the stale batch.
-        if (this.world !== w) return [];
-        return out.map((d) => ({ tile: d.key, value: d, bytes: DATA_BYTES }));
-      },
-      8,
-    );
+    material.colorNode = this.lighting.applyAerial(surface, apInscatter, apTransmittance);
+    return material;
   }
 
   /** The current world (null before one is set). */
@@ -241,6 +273,10 @@ export class TerrainRenderer {
       this.water.reliefScale.value = world.reliefScale;
       this.land.reliefScale.value = world.reliefScale;
     }
+    this.rivers = world?.rivers ? new RiverTables(world.rivers, world.radius) : null;
+    const old = this.material;
+    this.material = this.buildMaterial();
+    old.dispose();
     this.detail = new Noise3(rng(world?.seed ?? 0, 'render-detail'));
     this.data.clear();
     this.meshes.clear();
@@ -321,6 +357,9 @@ export class TerrainRenderer {
       wrapCoordinate(m.origin.z),
     );
     mesh.userData.morph = 1;
+    const river = this.rivers?.rangeFor(t);
+    mesh.userData.riverStart = river?.start ?? 0;
+    mesh.userData.riverCount = river?.count ?? 0;
     mesh.visible = false;
     this.group.add(mesh);
     this.meshes.set(t, mesh, MESH_BYTES);

@@ -60,6 +60,8 @@ type V3 = Node<'vec3'>;
 
 /** Absorption of clear water per reference meter (red goes first, blue last). */
 const ABSORPTION: [number, number, number] = [0.35, 0.055, 0.022];
+/** Nominal river depth (reference m) for color: deep enough to read as water, not land. */
+const RIVER_DEPTH = 30;
 /** Wave field period (m): every wave vector is an integer multiple of 2π/WAVE_PERIOD. */
 export const WAVE_PERIOD = 4096;
 const GRAVITY = 9.81;
@@ -121,6 +123,8 @@ export interface WaterInputs {
   height: F;
   /** Signed lake depth (m): positive under a lake. */
   lake: F;
+  /** River coverage 0..1 (decision 46). */
+  river: F;
   /** Signed coast distance (m), positive at sea. */
   shore: F;
   /** Unit radial direction at the fragment. */
@@ -157,10 +161,17 @@ export class WaterShading {
     const sea = smoothstep(fw.negate(), fw, i.height.negate()).mul(this.enabled);
     const lfw = max(fwidth(i.lake), 1e-3);
     const lake = smoothstep(lfw.negate(), lfw, i.lake).mul(this.enabled);
-    const wet = max(sea, lake);
+    const river = i.river.mul(this.enabled).mul(float(1).sub(sea));
+    const wet = max(max(sea, lake), river);
 
     // Body color: the bed seen through the water column (reference depth).
-    const waterDepth = mix(max(i.lake, 0), max(i.height.negate(), 0), sea);
+    // Rivers run in their carved channels at a nominal depth.
+    const standing = mix(max(i.lake, 0), max(i.height.negate(), 0), sea);
+    const waterDepth = mix(
+      standing,
+      float(RIVER_DEPTH).mul(this.reliefScale),
+      river.mul(float(1).sub(lake)),
+    );
     const depth = vec3(waterDepth.div(this.reliefScale));
     const bedVisible = exp(depth.mul(vec3(...ABSORPTION)).mul(-2));
     const body = mix(this.deepColor, i.bed, bedVisible) as V3;

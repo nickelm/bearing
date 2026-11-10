@@ -139,27 +139,6 @@ describe('buildTileMesh', () => {
     expect(m.maxHeight).toBeGreaterThan(m.minHeight);
   });
 
-  it('draws a one-sample diagonal river as a continuous line of vertices', () => {
-    const t = tileKey(1, 6, 10, 10);
-    // A river one sample wide running diagonally, offset from the vertex lattice.
-    const river = (sx: number, sy: number) => sx === sy + 1;
-    const m = buildTileMesh(
-      t,
-      { data: fakeData(t, river), parentData: fakeData(parentTile(t)!) },
-      opts,
-    );
-    const plain = buildTileMesh(
-      t,
-      { data: fakeData(t), parentData: fakeData(parentTile(t)!) },
-      opts,
-    );
-    for (let i = 1; i < TILE_SEGMENTS; i++) {
-      const v = i * V + i;
-      // Bluer than the same vertex without a river.
-      expect(m.color[v * 3 + 2]!).toBeGreaterThan(plain.color[v * 3 + 2]! + 0.05);
-    }
-  });
-
   it('keeps raw sea depths but draws the sea flat', () => {
     // Heights from -200 to +200 m around a coast.
     const t = tileKey(4, 6, 20, 30);

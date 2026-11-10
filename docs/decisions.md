@@ -853,3 +853,29 @@ Shaders sample it by direction through `cubeFaceUv`, a TSL mirror of `directionT
 - **Display.** An overlay shows the viewing side's contacts and satellite tracks (milestone 7).
 
 **Reason:** Owner's direction. Radar and satellite imaging are central Cold War technology. Reconnaissance missions only make sense if targets must be found before they are struck.
+
+### 54. Rivers drawn from vector data by per-fragment distance
+
+**Date:** 2026-11-10
+**Decision:** The terrain fragment shader draws rivers from the world's river polylines by exact distance to the centerline (`render/water/riverTables.ts`, `riverShading.ts`). This replaces the per-vertex river coverage from checkpoint 2. Carved channels stay.
+
+- **Segment table.** One storage buffer holds every smoothed river segment as two vec4 per segment (unit endpoints and half-widths), followed by coarse chords that each merge up to 8 consecutive connected segments (about 3 km).
+- **Lists.** Each mesh loops over one list of indices into the segment table:
+  - **Fine lists** per level-7 tile hold every segment that can reach into the tile (half-width + 150 m). Meshes at levels 7–10 use their ancestor's list, typically 0–60 segments.
+  - **Coarse lists** per level-4 tile hold chords of rivers at least 25 m wide, widest first, capped at 160. Meshes at levels 4–6 use them.
+  - Levels 0–3 draw no rivers.
+- **Per-mesh range.** Each mesh passes its list's start and count as per-object uniforms. The tables and the material are rebuilt per world (about 2.4 s for 175,000 segments at 1024²).
+- **Coverage.** Coverage comes from the signed distance to the bank in pixels.
+  - Rivers narrower than `minPixels` (default 2) are drawn that wide.
+  - `legibility` (default 0.8) scales them between their true pixel fraction (0) and full strength (1), so rivers stay readable as barriers from altitude.
+  - Rivers shade as water of a nominal 30 m reference depth, with waves and glint like the sea.
+- **GUI.** Lighting → "River legibility".
+- **Tests.**
+  - River tables on a synthetic straight river: listing by tile, the coarse width threshold, half-widths.
+  - Coverage as a TSL compute kernel on Dawn: inside and outside the banks, and sub-pixel fading.
+
+**Reason:**
+
+- An offset-field texture per tile (the plan) or a coverage mask is limited to the 48 m samples of level 7 and needs per-tile GPU textures.
+- Exact distance gives crisp banks at any zoom from a few megabytes of shared buffers, and costs a short loop per fragment.
+- Coarse chords keep the loop short where tiles are large: segments are only about 0.4 km long, and the first version's cap kept just a fragment of one river per level-4 tile.

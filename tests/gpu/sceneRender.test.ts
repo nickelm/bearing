@@ -38,6 +38,7 @@ describe.skipIf(!gpu)('GlobeScene on Dawn', () => {
     scene.globe.setWorld(world);
     scene.climate.setWorld(world);
     scene.terrain.buildBudgetMs = 10_000;
+    const riverIndex = new RiverIndex(g.finish.rivers);
     const synth = new TileSynthesizer(g.grid, {
       seed: params.seed,
       reliefScale: params.reliefScale,
@@ -47,13 +48,14 @@ describe.skipIf(!gpu)('GlobeScene on Dawn', () => {
       height: g.height,
       forest: g.finish.forest,
       treeline: g.finish.treeline,
-      index: new RiverIndex(g.finish.rivers),
+      index: riverIndex,
     });
     scene.terrain.setWorld({
       synth,
       seed: params.seed,
       radius: params.radius,
       reliefScale: params.reliefScale,
+      rivers: riverIndex,
     });
     const main = new Vec3d(...world.info.mainContinent);
     const o = scene.orbit;

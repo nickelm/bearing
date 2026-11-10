@@ -64,6 +64,8 @@ export interface LightingGuiParams {
   temperatureShift: number;
   /** Terrain albedo detail-noise strength. */
   detail: number;
+  /** How readable sub-pixel rivers are (0 = physically faint). */
+  riverLegibility: number;
 }
 
 export const TIME_RATES: Record<string, number> = {
@@ -255,6 +257,9 @@ export class DebugGui {
       .onChange(() => changed(light));
     f.add(light, 'detail', 0, 3, 0.05)
       .name('Ground detail')
+      .onChange(() => changed(light));
+    f.add(light, 'riverLegibility', 0, 1, 0.05)
+      .name('River legibility')
       .onChange(() => changed(light));
   }
 

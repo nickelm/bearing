@@ -278,7 +278,6 @@ function colorFor(
   mode: TileViewMode,
   h: number,
   material: number,
-  river: number,
   level: number,
   edge: boolean,
   reliefScale: number,
@@ -309,11 +308,8 @@ function colorFor(
         biomeColor[1] + (canopy[1] - biomeColor[1]) * forest,
         biomeColor[2] + (canopy[2] - biomeColor[2]) * forest,
       ];
-      c = [
-        b[0] + (0.15 - b[0]) * river,
-        b[1] + (0.35 - b[1]) * river,
-        b[2] + (0.75 - b[2]) * river,
-      ];
+      // Rivers are drawn by the shader from vector data (decision 46).
+      c = b;
     }
     if (mode === 'borders') {
       const l = hsl((level * 0.13) % 1, 0.7, 0.5);
@@ -322,44 +318,6 @@ function colorFor(
     }
   }
   return c;
-}
-
-/** River coverage 0..1 of a material sample. */
-function riverOf(data: TileData, sx: number, sy: number): number {
-  return ((data.material[(sy + TILE_BORDER) * TILE_STRIDE + sx + TILE_BORDER]! >> 8) & 0xff) / 255;
-}
-
-/**
- * River coverage at a vertex. A vertex spanning several samples takes the
- * strongest coverage within one vertex spacing, so thin rivers stay
- * continuous lines instead of stippling where they run diagonally. A vertex
- * finer than the samples interpolates bilinearly.
- */
-function riverAt(data: TileData, fx: number, fy: number, footprint: number): number {
-  const lo = -TILE_BORDER;
-  const hi = TILE_TEXELS + TILE_BORDER;
-  if (footprint >= 1) {
-    const r = Math.ceil(footprint);
-    const cx = Math.round(fx);
-    const cy = Math.round(fy);
-    let best = 0;
-    for (let y = Math.max(lo, cy - r); y <= Math.min(hi, cy + r); y++) {
-      for (let x = Math.max(lo, cx - r); x <= Math.min(hi, cx + r); x++) {
-        const d2 = (x - fx) ** 2 + (y - fy) ** 2;
-        if (d2 > footprint * footprint) continue;
-        best = Math.max(best, riverOf(data, x, y));
-      }
-    }
-    return best;
-  }
-  const x = Math.min(hi - 1, Math.max(lo, Math.floor(fx)));
-  const y = Math.min(hi - 1, Math.max(lo, Math.floor(fy)));
-  const tx = Math.min(1, Math.max(0, fx - x));
-  const ty = Math.min(1, Math.max(0, fy - y));
-  return (
-    (riverOf(data, x, y) * (1 - tx) + riverOf(data, x + 1, y) * tx) * (1 - ty) +
-    (riverOf(data, x, y + 1) * (1 - tx) + riverOf(data, x + 1, y + 1) * tx) * ty
-  );
 }
 
 /** Largest coast distance stored per vertex (m). */
@@ -470,7 +428,6 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
     bilinear(sources.data, dox + sx * dscale, doy + sy * dscale);
   const dataLake = lakeSampler(t, sources.data);
   const flat = (sx: number, sy: number) => displayHeight(raw(sx, sy), dataLake(sx, sy));
-  const footprint = STEP * dscale;
   const tu = new Vec3d();
   const tv = new Vec3d();
   const tmp = new Vec3d();
@@ -506,8 +463,7 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
       const fx = dox + sx * dscale;
       const fy = doy + sy * dscale;
       const mat = materialAt(sources.data, fx, fy);
-      const river = riverAt(sources.data, fx, fy, footprint);
-      const rgb = colorFor(opts.mode, hOwn[v]!, mat, river, t.level, edge, opts.reliefScale);
+      const rgb = colorFor(opts.mode, hOwn[v]!, mat, t.level, edge, opts.reliefScale);
       color[v * 3] = srgbToLinear(rgb[0]);
       color[v * 3 + 1] = srgbToLinear(rgb[1]);
       color[v * 3 + 2] = srgbToLinear(rgb[2]);

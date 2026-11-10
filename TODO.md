@@ -86,7 +86,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md) (revision 4: nine mil
 - [x] Seasonal snow line and seasonal vegetation tint (plus frozen lakes)
 - [x] Forest density map (also used later by line of sight)
 - [x] Instanced low-poly tree clusters within about 5 km of the camera
-- [ ] River rendering from vector data (mask texture or decals); replaces the per-vertex river coverage from checkpoint 2
+- [x] River rendering from vector data (per-fragment distance to segment lists, decision 54); replaces the per-vertex river coverage from checkpoint 2
 - [ ] Cloud layer rendering, from a static field derived from moisture until live weather exists (M6)
 - [ ] Checkpoint 4: owner review of terrain shading, seasons, forests, rivers and clouds
 

@@ -208,6 +208,7 @@ it('renders preview views', async () => {
   scene.terrain.setExaggeration(exaggeration);
   scene.terrain.buildBudgetMs = 10_000;
   scene.terrain.budgetMiB = 600; // the app's default (GUI → Tile memory)
+  const riverIndex = new RiverIndex(global.finish.rivers);
   const synth = new TileSynthesizer(global.grid, {
     seed: params.seed,
     reliefScale: params.reliefScale,
@@ -217,13 +218,14 @@ it('renders preview views', async () => {
     height: global.height,
     forest: global.finish.forest,
     treeline: global.finish.treeline,
-    index: new RiverIndex(global.finish.rivers),
+    index: riverIndex,
   });
   scene.terrain.setWorld({
     synth,
     seed: params.seed,
     radius: params.radius,
     reliefScale: params.reliefScale,
+    rivers: riverIndex,
   });
   scene.terrainReady = true;
 
@@ -305,6 +307,16 @@ it('renders preview views', async () => {
     const file = join(outDir, `render-${seed}-${v.name}.png`);
     writeFileSync(file, encodePng(width, height, rgb));
     const s = scene.terrain.stats;
+    if (process.env.DEBUG) {
+      let withRivers = 0;
+      let total = 0;
+      scene.terrain.group.traverse((m) => {
+        if (!m.visible || !(m as { isMesh?: boolean }).isMesh) return;
+        total++;
+        if ((m.userData.riverCount as number) > 0) withRivers++;
+      });
+      console.log(`  meshes ${total}, with rivers ${withRivers}`);
+    }
     if (scene.forest.stats.instances) {
       console.log(
         `  trees: ${scene.forest.stats.tiles} tiles, ${scene.forest.stats.instances} clumps`,
