@@ -39,7 +39,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [x] Review fixes: irregular polar caps, warped climate bands, temperate east–west continents (decisions 20, 21)
 - [x] Owner review in the browser: tune continent shapes, range widths and biome palette from feedback
 
-## Milestone 2: Erosion, rivers, tiles, LOD
+## Milestone 2: Erosion, rivers, tiles, LOD (done)
 
 - [x] Benchmark erosion memory and time on a global grid at 1024² and 2048² per face; choose the global grid resolution (decision 13): 1024², decision 27 (`tools/bench.preview.ts`)
 - [x] Global grid on the GPU with cross-face neighbor addressing (plain WGSL on a raw device, decision 26; self-tests run in Vitest on Dawn and from the GUI)
@@ -48,7 +48,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [x] Hydraulic erosion compute pass on the global grid (stream power with rebound toward the tectonic height, Planchon–Darboux routing surface, gathered drainage; decision 23)
 - [x] Thermal erosion compute pass (talus angle; symmetric pairwise exchange, mass-conserving)
 - [x] Wire the GPU stages into the app: main-thread orchestrator after the worker's tectonic pass, progress UI, downsampled display in the M1 globe
-- [ ] Checkpoint 1: owner review of eroded terrain, rivers and climate (in the browser and `tools/terrain.preview.ts`)
+- [x] Checkpoint 1: owner review of eroded terrain, rivers and climate (in the browser and `tools/terrain.preview.ts`)
 - [x] Flow direction and flow accumulation maps (CPU in the worker: Priority-Flood+ε, D8, Turc–Pike runoff accumulated to m³/s, lakes; about 2 s at 1024²)
 - [x] River extraction: threshold the accumulation into vector polylines with a width per segment (w = 4·√Q m)
   - [x] Spatial index of river segments by tile key (needed by detail tile synthesis)
@@ -62,7 +62,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [x] Tile meshes with skirts and a float64 origin per tile (camera-relative; built on the CPU, decision 30)
 - [x] Tile normals; shader detail noise below the finest baked level (CPU render-detail noise instead, decision 30)
 - [x] Geomorphing so LOD changes don't pop (morph toward the parent's actual surface)
-- [ ] Checkpoint 2: owner review of the tiled terrain in the browser, orbit to 500 m
+- [x] Checkpoint 2: owner review of the tiled terrain in the browser, orbit to 500 m
   - [x] Exaggeration changes without rebuilding meshes (decision 31)
   - [x] Thin rivers drawn as continuous lines on diagonals (wider coverage mask; true channels stay)
   - [x] One "Color by" list for grid and tiles; grid-only modes switch the display to the grid
