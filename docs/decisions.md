@@ -638,3 +638,32 @@ Shaders sample it by direction through `cubeFaceUv`, a TSL mirror of `directionT
 
 - Snow lines, seasonal tint, tree types and clouds need climate at any surface point, and the fields are smooth at the tectonic grid's ~6 km.
 - One texture lookup per fragment is cheaper than more per-vertex attributes, and it would not fit the 8-vertex-buffer limit anyway (decision 39).
+
+### 43. Land shading: moisture, rock, seasonal snow and tint, detail noise
+
+**Date:** 2026-11-10
+**Decision:** The terrain shader turns the vertex's biome color into a land albedo (`render/terrain/landShading.ts`):
+
+- **Moisture** from the climate texture: drier ground lighter and yellower, wetter ground darker and greener.
+- **Rock** where the reference slope (physical ÷ `reliefScale`) passes about 19–35°.
+- **Surface temperature today:**
+  - the climate texture's sea-level mean, lapse-corrected to the fragment's reference height;
+  - plus the seasonal half-range × cos(2π·(phase − warmest)), with the warmest day 30 days after the summer solstice and the sign set by hemisphere;
+  - plus a GUI offset;
+  - with the phase from the calendar (`seasonPhase(t)`).
+
+  It drives:
+  - **Snow:** none at 0 °C, full by −5 °C; not on cliffs, thin where moisture is very low.
+  - **Autumn and winter browning:** applies to green albedos (vegetation detected by color, since the shader has no biome id) as the temperature falls from 10 to 2 °C.
+  - **Frozen lakes:** from −1.5 °C (full at −4). Sea ice stays the static biome until weather exists in milestone 6.
+
+- **Detail noise.** Periodic value noise (cells of 16, 64 and 256 m) on the wrapped coordinates of decision 38 varies the albedo, rock and snow line. It fades where cells are smaller than a few pixels.
+  - It replaces the TODO's triplanar mapping. 3D noise needs no projection, so it cannot stretch on cliffs, and it needs no textures.
+- **Water beds.** Water bodies use the raw vertex color as their bed, so snow and rock do not tint the sea floor.
+- **Debug modes.** Debug color modes skip all of this.
+- **GUI → Lighting:** "Snow: temperature shift" and "Ground detail".
+
+**Reason:**
+
+- Seasons need per-fragment temperature at the true surface height, which the climate texture (decision 42) provides cheaply.
+- Snow and tint follow from the same climate the biomes came from, so they agree with the world.

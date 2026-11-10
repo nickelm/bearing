@@ -6,6 +6,7 @@ import {
   formatLocalDate,
   localDayOfYear,
   localSolarTime,
+  seasonPhase,
   sunDirection,
   withLocalTime,
 } from './core/calendar';
@@ -346,6 +347,8 @@ async function main(): Promise<void> {
     nightLight: lighting.nightLight.value,
     waves: globe.terrain.water.waveStrength.value,
     foam: globe.terrain.water.foamStrength.value,
+    temperatureShift: 0,
+    detail: globe.terrain.land.detail.value,
   };
   gui.addLightingControls(lightParams, (l) => {
     lighting.atmosphere.enabled.value = l.atmosphere ? 1 : 0;
@@ -357,6 +360,8 @@ async function main(): Promise<void> {
     lighting.nightLight.value = l.nightLight;
     globe.terrain.water.waveStrength.value = l.waves;
     globe.terrain.water.foamStrength.value = l.foam;
+    globe.terrain.land.temperatureOffset.value = l.temperatureShift;
+    globe.terrain.land.detail.value = l.detail;
   });
 
   // World-generation compute shares three's device (decision 22).
@@ -416,6 +421,7 @@ async function main(): Promise<void> {
     const dt = Math.min(frameMs, 100) / 1000;
     gameTime += dt * timeParams.rate;
     sunDirection(gameTime, orbitParams, calendar, globe.sun);
+    globe.terrain.land.seasonPhase.value = seasonPhase(gameTime, orbitParams, calendar);
     globe.render(dt);
 
     const lon = globe.orbit.lon;

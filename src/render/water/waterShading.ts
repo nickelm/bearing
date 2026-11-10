@@ -109,8 +109,12 @@ export function waveSet(count = 32): Wave[] {
 const slopeVariance = (s: number) => (s * s) / 2;
 
 export interface WaterInputs {
-  /** Land albedo, or the seabed under the sea (linear). */
+  /** Land albedo, shaded (rock, snow, season). */
   albedo: V3;
+  /** The bed under water: the vertex color (seabed under the sea, biome under lakes). */
+  bed: V3;
+  /** Surface temperature today (°C): lakes freeze below about −2 °C. */
+  temperature: F;
   /** Terrain normal (world). */
   normal: V3;
   /** Raw surface height, interpolated (m; negative under the sea). */
@@ -159,7 +163,7 @@ export class WaterShading {
     const waterDepth = mix(max(i.lake, 0), max(i.height.negate(), 0), sea);
     const depth = vec3(waterDepth.div(this.reliefScale));
     const bedVisible = exp(depth.mul(vec3(...ABSORPTION)).mul(-2));
-    const body = mix(this.deepColor, i.albedo, bedVisible) as V3;
+    const body = mix(this.deepColor, i.bed, bedVisible) as V3;
 
     // Waves: tangent-plane slope from resolved waves, variance from the rest.
     const footprint = max(length(fwidth(i.wavePosition)), 1e-4);
@@ -234,7 +238,10 @@ export class WaterShading {
       sky.add(glint.mul(clamp(nDotL.mul(20), 0, 1))).mul(float(1).sub(foamy)),
     );
 
+    // Lakes freeze in the cold season (sea ice stays a static biome until weather exists).
+    const frozen = smoothstep(-1.5, -4, i.temperature).mul(lake).mul(float(1).sub(sea));
+    const ice = L.shadeDiffuse(vec3(0.75, 0.8, 0.86), i.up, i.relative);
     const land = L.shadeDiffuse(i.albedo, i.normal, i.relative);
-    return mix(land, water, wet) as V3;
+    return mix(land, mix(water, ice, frozen), wet) as V3;
   }
 }

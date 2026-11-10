@@ -14,11 +14,16 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { it } from 'vitest';
-import { defaultCampaignStart, sunDirection, withLocalTime } from '../src/core/calendar';
+import {
+  defaultCampaignStart,
+  seasonPhase,
+  sunDirection,
+  withLocalTime,
+} from '../src/core/calendar';
 import { cubeFaceUvToDirection } from '../src/core/coords';
 import type { CubeFace } from '../src/core/coords';
 import { CubeGrid } from '../src/core/cubeGrid';
-import { DEG, HOUR, KM } from '../src/core/units';
+import { DAY, DEG, HOUR, KM } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
 import { GlobeScene } from '../src/render/globeScene';
 import { TileSynthesizer } from '../src/worldgen/gpu/tileSynth';
@@ -39,6 +44,8 @@ export interface PreviewView {
   heading: number;
   /** Local solar time at the camera, hours, on the campaign's first day (default 11:00). */
   localTime?: number;
+  /** Days after the campaign start (default 0, mid-August local to the main continent). */
+  day?: number;
   /** Center on the deepest lake below 55° latitude instead of dLat/dLon. */
   lake?: boolean;
 }
@@ -126,6 +133,26 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     heading: 0,
     localTime: 13,
     lake: true,
+  },
+  {
+    name: 'winter',
+    dLat: 0,
+    dLon: 0,
+    altitude: 1500 * KM,
+    tilt: 0,
+    heading: 0,
+    localTime: 12,
+    day: 150,
+  },
+  {
+    name: 'mountains',
+    dLat: 12 * DEG,
+    dLon: 0,
+    altitude: 25 * KM,
+    tilt: 65 * DEG,
+    heading: 0,
+    localTime: 14,
+    day: 0,
   },
   {
     name: 'sunset',
@@ -220,8 +247,15 @@ it('renders preview views', async () => {
     o.altitude = o.targetAltitude = v.altitude;
     o.tilt = v.tilt;
     o.heading = v.heading;
-    const t = withLocalTime(0, o.lon, (v.localTime ?? 11) * HOUR, params, calendar);
+    const t = withLocalTime(
+      (v.day ?? 0) * DAY,
+      o.lon,
+      (v.localTime ?? 11) * HOUR,
+      params,
+      calendar,
+    );
     sunDirection(t, params, calendar, scene.sun);
+    scene.terrain.land.seasonPhase.value = seasonPhase(t, params, calendar);
     // Render until the terrain has loaded everything this view wants.
     let stable = 0;
     let last = '';

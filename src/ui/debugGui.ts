@@ -56,6 +56,10 @@ export interface LightingGuiParams {
   waves: number;
   /** Coastal foam multiplier (0 = none). */
   foam: number;
+  /** Shifts surface temperatures for snow and season tint (°C). */
+  temperatureShift: number;
+  /** Terrain albedo detail-noise strength. */
+  detail: number;
 }
 
 export const TIME_RATES: Record<string, number> = {
@@ -232,6 +236,12 @@ export class DebugGui {
       .onChange(() => changed(light));
     f.add(light, 'foam', 0, 3, 0.05)
       .name('Coastal foam')
+      .onChange(() => changed(light));
+    f.add(light, 'temperatureShift', -20, 20, 0.5)
+      .name('Snow: temperature shift (°C)')
+      .onChange(() => changed(light));
+    f.add(light, 'detail', 0, 3, 0.05)
+      .name('Ground detail')
       .onChange(() => changed(light));
   }
 

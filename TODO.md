@@ -82,8 +82,8 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [x] Checkpoint 3: owner review of day/night, sky, aerial perspective and ocean in the browser
   - [x] Lakes: per-sample lake level from the tile kernel, drawn flat with a shoreline from the fine terrain (decision 40)
   - [x] Smooth lowlands: plains detail scales with the global slope; lake beds carry no detail
-- [ ] Terrain shading: biome color blended by slope (rock), altitude (snow) and moisture; triplanar mapping on cliffs
-- [ ] Seasonal snow line and seasonal vegetation tint
+- [x] Terrain shading: biome color blended by slope (rock), altitude (snow) and moisture; triplanar mapping on cliffs
+- [x] Seasonal snow line and seasonal vegetation tint (plus frozen lakes)
 - [ ] Forest density map (also used later by line of sight)
 - [ ] Instanced low-poly tree clusters within about 5 km of the camera
 - [ ] River rendering from vector data (mask texture or decals); replaces the per-vertex river coverage from checkpoint 2

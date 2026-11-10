@@ -56,6 +56,7 @@ import type { TileData, TileSynthesizer } from '../../worldgen/gpu/tileSynth';
 import { ClimateTexture } from '../climateTexture';
 import { PlanetLighting } from '../lighting/planetLighting';
 import { WAVE_PERIOD, WaterShading } from '../water/waterShading';
+import { LandShading } from './landShading';
 import { DEFAULT_LOD, selectTiles } from './quadtree';
 import type { LodOptions, LodView } from './quadtree';
 import { TileCache, TileLoader, TileRequestQueue } from './tileCache';
@@ -115,6 +116,8 @@ export class TerrainRenderer {
   private readonly material: MeshBasicNodeMaterial;
   /** Sea and lake shading inside the terrain material (decision 37). */
   readonly water: WaterShading;
+  /** Land albedo: moisture, rock, snow, season and detail (decision 43). */
+  readonly land = new LandShading();
   private readonly data = new TileCache<TileData>(DATA_SHARE * 600 * 2 ** 20);
   private readonly meshes = new TileCache<Mesh>((1 - DATA_SHARE) * 600 * 2 ** 20, (e) => {
     this.group.remove(e.value);
@@ -174,15 +177,28 @@ export class TerrainRenderer {
     // Meshes carry no rotation or scale, so object space is world space.
     const normal = normalize(up.sub(attribute('slope', 'vec3').mul(exaggeration)));
     this.water = new WaterShading(lighting);
+    const radial = normalize(up);
+    const wrapped = wrapOrigin.add(local);
+    const climateHere = climate.sample(radial);
+    const bed = attribute('color', 'vec3');
     const surface = this.water.shade({
-      albedo: attribute('color', 'vec3'),
+      albedo: this.land.albedo({
+        albedo: bed,
+        slope: attribute('slope', 'vec3'),
+        height: rawHeight,
+        up: radial,
+        climate: climateHere,
+        wrapped,
+      }),
+      bed,
+      temperature: this.land.surfaceTemperature(climateHere, rawHeight, radial),
       normal,
       height: rawHeight,
       lake: lakeDepth,
       shore: surfaceAttr.z,
-      up: normalize(up),
+      up: radial,
       relative: positionWorld,
-      wavePosition: wrapOrigin.add(local),
+      wavePosition: wrapped,
     });
     this.material.colorNode = lighting.applyAerial(surface, apInscatter, apTransmittance);
     this.loader = new TileLoader<TileData>(
@@ -203,7 +219,10 @@ export class TerrainRenderer {
   /** Shows a world (or nothing). Drops all cached tiles. */
   setWorld(world: TerrainWorld | null): void {
     this.world = world;
-    if (world) this.water.reliefScale.value = world.reliefScale;
+    if (world) {
+      this.water.reliefScale.value = world.reliefScale;
+      this.land.reliefScale.value = world.reliefScale;
+    }
     this.detail = new Noise3(rng(world?.seed ?? 0, 'render-detail'));
     this.data.clear();
     this.meshes.clear();
@@ -220,6 +239,7 @@ export class TerrainRenderer {
     if (mode === this.mode) return;
     this.mode = mode;
     this.water.enabled.value = mode === 'biome' ? 1 : 0;
+    this.land.enabled.value = mode === 'biome' ? 1 : 0;
     this.meshes.clear();
     this.visible.clear();
   }
