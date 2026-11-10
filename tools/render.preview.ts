@@ -163,6 +163,7 @@ it('renders preview views', async () => {
   });
   scene.resize(width, height);
   scene.globe.setWorld(world);
+  scene.climate.setWorld(world);
   scene.globe.setExaggeration(exaggeration);
   scene.terrain.setExaggeration(exaggeration);
   scene.terrain.buildBudgetMs = 10_000;

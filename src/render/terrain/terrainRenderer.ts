@@ -53,6 +53,7 @@ import type { TileKey } from '../../core/tiles';
 import { Vec3d } from '../../core/vec3d';
 import { MAX_BAKED_LEVEL } from '../../worldgen/gpu/tileSynth';
 import type { TileData, TileSynthesizer } from '../../worldgen/gpu/tileSynth';
+import { ClimateTexture } from '../climateTexture';
 import { PlanetLighting } from '../lighting/planetLighting';
 import { WAVE_PERIOD, WaterShading } from '../water/waterShading';
 import { DEFAULT_LOD, selectTiles } from './quadtree';
@@ -126,7 +127,10 @@ export class TerrainRenderer {
   private visible = new Set<Mesh>();
   private readonly scratch = new Vec3d();
 
-  constructor(readonly lighting = new PlanetLighting()) {
+  constructor(
+    readonly lighting = new PlanetLighting(),
+    readonly climate = new ClimateTexture(),
+  ) {
     const morph = uniform(1).onObjectUpdate(({ object }) => {
       const m = (object as Mesh | undefined)?.userData.morph as number | undefined;
       return m ?? 1;

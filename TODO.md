@@ -75,7 +75,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [x] Day/night lighting driven by the sun ephemeris; time-of-day slider in the debug GUI
 - [x] Single-scattering atmosphere: limb glow from orbit, sunset colors at the terminator
 - [x] Aerial perspective on terrain
-- [ ] Climate array texture (sea-level temperature, seasonal range, moisture, cloudiness) with a TSL cube-face lookup by direction
+- [x] Climate array texture (sea-level temperature, seasonal range, moisture, cloudiness) with a TSL cube-face lookup by direction
 - [x] Ocean: depth-based color from bathymetry
 - [x] Ocean: wave normal map and sun glint
 - [x] Coastal foam
@@ -92,7 +92,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 
 ### Known issues
 
-- [ ] Intermittent GPU determinism flake in Vitest (about 1 run in 5–10 of the full suite): a GPU determinism test (`detailStage`, `tileSynth`) gets different results for two identical runs. Present at the M2 baseline; not reproduced by 40 back-to-back detail-stage runs under load. Tests now report how many values differ and whether they are zeros (a readback race in Dawn's Node bindings would show zeros).
+- [ ] Intermittent GPU determinism flake in Vitest (about 1 run in 5–10 of the full suite): a GPU determinism test (`detailStage`, `tileSynth`) gets different results for two identical runs. Present at the M2 baseline; not reproduced by 40 back-to-back detail-stage runs under load. Tests now report how many values differ and whether they are zeros (a readback race in Dawn's Node bindings would show zeros). First report (2026-11-10): 24 of 221k cells differ, worst 0.23 m, no zeros, in the single-dispatch detail kernel (pure per cell, no in-place neighbor reads). So it is not a readback race; suspect the GPU or driver under concurrent load. Check whether it happens with `--no-file-parallelism`, and on another GPU.
 
 ## Milestone 4: Geography and front
 

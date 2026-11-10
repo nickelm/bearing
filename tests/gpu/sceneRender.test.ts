@@ -36,6 +36,7 @@ describe.skipIf(!gpu)('GlobeScene on Dawn', () => {
     });
     scene.resize(head.width, head.height);
     scene.globe.setWorld(world);
+    scene.climate.setWorld(world);
     scene.terrain.buildBudgetMs = 10_000;
     const synth = new TileSynthesizer(g.grid, {
       seed: params.seed,

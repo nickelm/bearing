@@ -161,6 +161,7 @@ async function main(): Promise<void> {
       }
       globe.globe.setFaceSeed(worldParams.seed);
       globe.globe.setWorld(world);
+      globe.climate.setWorld(world);
       calendar = defaultCampaignStart(new Vec3d(...world.info.mainContinent), orbitParams);
       gameTime = 0;
     };

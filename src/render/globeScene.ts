@@ -20,6 +20,7 @@ import {
 import type { WebGPURenderer } from 'three/webgpu';
 import type { CubeGrid } from '../core/cubeGrid';
 import { Vec3d } from '../core/vec3d';
+import { ClimateTexture } from './climateTexture';
 import { GlobeMesh } from './globeMesh';
 import { PlanetLighting } from './lighting/planetLighting';
 import { TerrainRenderer } from './terrain/terrainRenderer';
@@ -41,6 +42,8 @@ export class GlobeScene {
   readonly globe: GlobeMesh;
   /** Sun and camera uniforms shared by every lit planet material (decision 34). */
   readonly lighting: PlanetLighting;
+  /** Climate fields by direction for shaders (decision 42); set with the world. */
+  readonly climate = new ClimateTexture();
   /** Tiled LOD terrain; drawn instead of the M1 grid mesh once a world has a global pass. */
   readonly terrain: TerrainRenderer;
   /** Unit vector toward the sun, world frame. Set by the app from the ephemeris. */
@@ -61,7 +64,7 @@ export class GlobeScene {
     this.camera = new PerspectiveCamera(45, 1, 1, 2);
     this.orbit = new OrbitCamera(options.radius);
     this.lighting = new PlanetLighting(options.radius);
-    this.terrain = new TerrainRenderer(this.lighting);
+    this.terrain = new TerrainRenderer(this.lighting, this.climate);
     // The sky: single scattering along each view ray, drawn behind everything (decision 35).
     this.scene.backgroundNode = this.lighting.atmosphere.skyNode();
     this.globe = new GlobeMesh(options.grid, options.radius);

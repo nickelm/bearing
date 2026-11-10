@@ -617,3 +617,24 @@ The vertex shader computes `base + up · height · exaggeration`, morphs toward 
 **Reason:** Owner's direction: discover the world and adapt the campaign to it, rather than shape the world to fit the campaign.
 
 **Open:** How much steering remains, for example a bias toward temperate land or minimum land fraction, will be settled when the milestone 4 work starts.
+
+### 42. Climate fields as a cube-face array texture
+
+**Date:** 2026-11-10
+**Decision:** `render/climateTexture.ts` packs the tectonic grid's climate into a `DataArrayTexture`, one RGBA half-float layer per cube face at the tectonic resolution:
+
+- sea-level annual mean temperature: temperature plus lapse rate × reference height, so shaders can lapse-correct to any surface height;
+- seasonal half-range;
+- moisture;
+- cloudiness, from precipitation.
+
+Shaders sample it by direction through `cubeFaceUv`, a TSL mirror of `directionToCubeFace` (largest axis, equi-angular warp).
+
+- **Lookup test.** A GPU test runs the lookup as a TSL compute kernel through three's renderer on Dawn. It checks face and (u, v) against `core/coords` on 4,096 random directions, and that sampling at cell centers returns each cell's values.
+- **Access.** `GlobeScene.climate` is filled when a world loads and shared with the terrain (and later with trees and clouds).
+- **No new vertex data.** The meshes carry no climate data.
+
+**Reason:**
+
+- Snow lines, seasonal tint, tree types and clouds need climate at any surface point, and the fields are smooth at the tectonic grid's ~6 km.
+- One texture lookup per fragment is cheaper than more per-vertex attributes, and it would not fit the 8-vertex-buffer limit anyway (decision 39).
