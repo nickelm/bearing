@@ -14,6 +14,7 @@ import type { WebGPURenderer } from 'three/webgpu';
 import type { CubeGrid } from '../core/cubeGrid';
 import { Vec3d } from '../core/vec3d';
 import { GlobeMesh } from './globeMesh';
+import { TerrainRenderer } from './terrain/terrainRenderer';
 import { OrbitCamera, attachOrbitInput } from './orbitCamera';
 
 const PLANET_CENTER = new Vec3d(0, 0, 0);
@@ -28,6 +29,12 @@ export class GlobeScene {
   readonly camera: PerspectiveCamera;
   readonly orbit: OrbitCamera;
   readonly globe: GlobeMesh;
+  /** Tiled LOD terrain; drawn instead of the M1 grid mesh once a world has a global pass. */
+  readonly terrain = new TerrainRenderer();
+  /** Draw the tiled terrain when available (otherwise the M1 grid mesh). */
+  useTiles = true;
+  /** Whether the terrain has a world to draw (set by the app). */
+  terrainReady = false;
   private readonly detachInput: () => void;
   private readonly scratch = new Vec3d();
 
@@ -38,7 +45,7 @@ export class GlobeScene {
     this.camera = new PerspectiveCamera(45, 1, 1, 2);
     this.orbit = new OrbitCamera(options.radius);
     this.globe = new GlobeMesh(options.grid, options.radius);
-    this.scene.add(this.globe.group);
+    this.scene.add(this.globe.group, this.terrain.group);
 
     // Light directions are translation-invariant, so camera-relative offsets do not affect them.
     const sun = new DirectionalLight(0xffffff, 2.5);
@@ -76,11 +83,28 @@ export class GlobeScene {
     this.scratch.subVectors(PLANET_CENTER, o.eye);
     this.globe.group.position.set(this.scratch.x, this.scratch.y, this.scratch.z);
 
+    const tiles = this.useTiles && this.terrainReady;
+    this.globe.group.visible = !tiles;
+    this.terrain.group.visible = tiles;
+    if (tiles) {
+      this.terrain.update({
+        eye: o.eye,
+        forward: o.forward,
+        up: o.up,
+        fovY: (this.camera.fov * Math.PI) / 180,
+        aspect: this.camera.aspect,
+        viewportHeight: Math.max(1, this.renderer.domElement.clientHeight),
+        radius: o.radius,
+        maxHeight: this.globe.maxDisplayedHeight,
+      });
+    }
+
     this.renderer.render(this.scene, this.camera);
   }
 
   dispose(): void {
     this.detachInput();
     this.globe.dispose();
+    this.terrain.dispose();
   }
 }

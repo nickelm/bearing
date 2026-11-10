@@ -22,6 +22,14 @@ export interface ViewGuiParams {
   mode: string;
   exaggeration: number;
   wireframe: boolean;
+  /** Tiled LOD terrain instead of the M1 grid mesh. */
+  tiles: boolean;
+  tileMode: string;
+  geomorph: boolean;
+  /** Screen-space error threshold (pixels). */
+  sse: number;
+  /** Tile memory budget (MiB). */
+  tileMemory: number;
 }
 
 export interface DebugGuiStatus {
@@ -33,6 +41,7 @@ export interface DebugGuiStatus {
   backend: string;
   compute: string;
   worker: string;
+  tiles: string;
 }
 
 export interface DebugGuiCallbacks {
@@ -60,6 +69,7 @@ export class DebugGui {
     backend: '—',
     compute: 'pending',
     worker: 'pending',
+    tiles: '—',
   };
 
   constructor(
@@ -67,6 +77,7 @@ export class DebugGui {
     readonly view: ViewGuiParams,
     viewModes: readonly string[],
     callbacks: DebugGuiCallbacks,
+    private readonly tileModes: readonly string[] = [],
   ) {
     const regen = () => callbacks.regenerate();
 
@@ -108,8 +119,24 @@ export class DebugGui {
       .name('Height exaggeration')
       .onFinishChange(() => callbacks.shapeChanged(view));
     v.add(view, 'wireframe')
-      .name('Wireframe')
+      .name('Wireframe (grid)')
       .onChange(() => callbacks.viewChanged(view));
+    const t = v.addFolder('Terrain tiles');
+    t.add(view, 'tiles')
+      .name('Tiled terrain')
+      .onChange(() => callbacks.viewChanged(view));
+    t.add(view, 'tileMode', [...this.tileModes])
+      .name('Tile colors')
+      .onChange(() => callbacks.viewChanged(view));
+    t.add(view, 'geomorph')
+      .name('Geomorphing')
+      .onChange(() => callbacks.viewChanged(view));
+    t.add(view, 'sse', 0.5, 8, 0.25)
+      .name('Detail (error px)')
+      .onChange(() => callbacks.viewChanged(view));
+    t.add(view, 'tileMemory', 128, 2048, 64)
+      .name('Tile memory (MiB)')
+      .onFinishChange(() => callbacks.viewChanged(view));
 
     const st = this.gui.addFolder('Status');
     st.add(this.status, 'generation').name('Generation').disable().listen();
@@ -120,6 +147,7 @@ export class DebugGui {
     st.add(this.status, 'backend').name('Backend').disable().listen();
     st.add(this.status, 'compute').name('GPU compute').disable().listen();
     st.add(this.status, 'worker').name('Sim worker').disable().listen();
+    st.add(this.status, 'tiles').name('Tiles').disable().listen();
   }
 
   /**

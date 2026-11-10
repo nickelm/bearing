@@ -59,9 +59,10 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [x] Tile cache: GPU/CPU LRU with a memory budget; on-demand generation queue (`render/terrain/tileCache.ts`; textures attach in the tile renderer)
 - [x] IndexedDB persistence for generated worlds and tiles, keyed by seed, parameters and generator version (moved from M8, decision 12): worlds only, tiles regenerate faster than they load (decision 29)
 - [x] Terrain quadtree per cube face on the same tile keys, refined by screen-space error (conservative cap horizon culling, frustum culling, parent fallback while children load)
-- [ ] Tile meshes with skirts and a float64 origin per tile (camera-relative)
-- [ ] Tile normals; shader detail noise below the finest baked level
-- [ ] Geomorphing so LOD changes don't pop
+- [x] Tile meshes with skirts and a float64 origin per tile (camera-relative; built on the CPU, decision 30)
+- [x] Tile normals; shader detail noise below the finest baked level (CPU render-detail noise instead, decision 30)
+- [x] Geomorphing so LOD changes don't pop (morph toward the parent's actual surface)
+- [ ] Checkpoint 2: owner review of the tiled terrain in the browser, orbit to 500 m
 - [ ] Camera: terrain-aware near plane and ground clamp; flyable down to 500 m
 
 ## Milestone 3: Atmosphere, ocean, forests, sky
@@ -142,7 +143,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 ## Milestone 8: Polish
 
 - [ ] Generation profiling and progress polish (no time budget, decision 12)
-- [ ] Rendering performance pass (GPU timestamp queries, frame budget)
+- [ ] Rendering performance pass (GPU timestamp queries, frame budget); consider building tile meshes in a worker (decision 30)
 - [ ] Bundle size and code splitting
 - [ ] Scripted flythrough camera path for screenshots, including a dawn and a weather front
 - [ ] Check every demo goal against the design doc and decisions

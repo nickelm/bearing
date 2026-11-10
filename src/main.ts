@@ -23,6 +23,11 @@ import {
   RESOLUTIONS,
 } from './ui/debugGui';
 import { GpuContext } from './worldgen/gpu/gpuContext';
+import { TileSynthesizer } from './worldgen/gpu/tileSynth';
+import { RiverIndex } from './worldgen/riverIndex';
+import { DEFAULT_LOD } from './render/terrain/quadtree';
+import { TILE_VIEW_MODES } from './render/terrain/tileMesh';
+import type { TileViewMode } from './render/terrain/tileMesh';
 import {
   buildGlobalWorld,
   GlobalPassCancelled,
@@ -76,17 +81,29 @@ async function main(): Promise<void> {
     moistureScale: DEFAULT_PLANET_PARAMS.moistureScale,
     erosionStrength: DEFAULT_PLANET_PARAMS.erosionStrength,
   };
-  const viewParams: ViewGuiParams = { mode: 'biome', exaggeration: 10, wireframe: false };
+  const viewParams: ViewGuiParams = {
+    mode: 'biome',
+    exaggeration: 10,
+    wireframe: false,
+    tiles: true,
+    tileMode: 'biome',
+    geomorph: true,
+    sse: DEFAULT_LOD.sseThreshold,
+    tileMemory: 600,
+  };
 
   let grid = new CubeGrid(worldParams.resolution);
   const globe = new GlobeScene(renderer, { radius: DEFAULT_PLANET_PARAMS.radius, grid });
   globe.globe.setFaceSeed(worldParams.seed);
   globe.globe.setExaggeration(viewParams.exaggeration);
+  globe.terrain.setExaggeration(viewParams.exaggeration);
+  globe.terrain.budgetMiB = viewParams.tileMemory;
 
   const worldgen = new WorldgenClient();
   let generation = 0;
   /** The current world's global pass (eroded grid on the GPU, rivers...), once finished. */
   let globalWorld: GlobalWorld | null = null;
+  let synth: TileSynthesizer | null = null;
   const store = new WorldStore();
   // Cached worlds are large (about 150 MB at 1024²); ask the browser not to evict them.
   void navigator.storage?.persist?.().catch(() => false);
@@ -125,7 +142,31 @@ async function main(): Promise<void> {
       globe.globe.setWorld(world);
     };
     const showGlobal = (world: World, global: GlobalWorld) => {
-      globalWorld?.grid.dispose();
+      // Switch the terrain to the new world first, then free the old one once any
+      // tile batch still running on it has finished.
+      const old = globalWorld;
+      const oldSynth = synth;
+      synth = new TileSynthesizer(global.grid, {
+        seed: params.seed,
+        reliefScale: params.reliefScale,
+        radius: params.radius,
+        biome: global.finish.biome,
+        lakeDepth: global.finish.drainage.lakeDepth,
+        index: new RiverIndex(global.finish.rivers),
+      });
+      globe.terrain.setWorld({
+        synth,
+        seed: params.seed,
+        radius: params.radius,
+        reliefScale: params.reliefScale,
+      });
+      globe.terrainReady = true;
+      if (old || oldSynth) {
+        setTimeout(() => {
+          oldSynth?.dispose();
+          old?.grid.dispose();
+        }, 3000);
+      }
       globalWorld = global;
       const d = global.finish.display;
       let maxHeight = -Infinity;
@@ -218,25 +259,39 @@ async function main(): Promise<void> {
     }
   };
 
-  const gui = new DebugGui(worldParams, viewParams, VIEW_MODES, {
-    regenerate: () => void regenerate(),
-    clearCache: () => {
-      store
-        .clear()
-        .then(() => (gui.status.generation = 'world cache cleared'))
-        .catch((err: unknown) => console.warn('Could not clear the world cache', err));
+  const gui = new DebugGui(
+    worldParams,
+    viewParams,
+    VIEW_MODES,
+    {
+      regenerate: () => void regenerate(),
+      clearCache: () => {
+        store
+          .clear()
+          .then(() => (gui.status.generation = 'world cache cleared'))
+          .catch((err: unknown) => console.warn('Could not clear the world cache', err));
+      },
+      cancel: () => {
+        generation++;
+        worldgen.cancel();
+        gui.status.generation = 'cancelled';
+      },
+      viewChanged: (v) => {
+        globe.globe.setViewMode(v.mode as ViewMode);
+        globe.globe.wireframe = v.wireframe;
+        globe.useTiles = v.tiles;
+        globe.terrain.setMode(v.tileMode as TileViewMode);
+        globe.terrain.geomorph = v.geomorph;
+        globe.terrain.lod.sseThreshold = v.sse;
+        globe.terrain.budgetMiB = v.tileMemory;
+      },
+      shapeChanged: (v) => {
+        globe.globe.setExaggeration(v.exaggeration);
+        globe.terrain.setExaggeration(v.exaggeration);
+      },
     },
-    cancel: () => {
-      generation++;
-      worldgen.cancel();
-      gui.status.generation = 'cancelled';
-    },
-    viewChanged: (v) => {
-      globe.globe.setViewMode(v.mode as ViewMode);
-      globe.globe.wireframe = v.wireframe;
-    },
-    shapeChanged: (v) => globe.globe.setExaggeration(v.exaggeration),
-  });
+    TILE_VIEW_MODES,
+  );
   gui.status.backend = 'WebGPU';
 
   // World-generation compute shares three's device (decision 22).
@@ -300,6 +355,11 @@ async function main(): Promise<void> {
     gui.status.latDeg = o.lat / DEG;
     gui.status.lonDeg = o.lon / DEG;
     gui.status.tiltDeg = o.tilt / DEG;
+    const ts = globe.terrain.stats;
+    gui.status.tiles =
+      globe.terrainReady && globe.useTiles
+        ? `${ts.drawn} drawn, L${ts.deepest} deepest, ${ts.meshes} meshes, ${ts.dataTiles} data, ${ts.pending} loading`
+        : 'off';
   });
 }
 

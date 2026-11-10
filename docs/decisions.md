@@ -378,3 +378,23 @@ This replaces the TODO's "local erosion pass" on each tile. The same function ex
 - Persisting tiles would also add hundreds of megabytes per world, with eviction bookkeeping.
 - A world record is about 150 MB at 1024².
 - Revisit if tile synthesis becomes expensive, e.g. with a real local erosion pass.
+
+### 30. Terrain meshes built on the CPU; geomorphing in the vertex shader
+
+**Date:** 2026-11-09
+**Decision:**
+
+- Tile meshes (65² vertices plus skirts) are built on the main thread from the CPU copy of the tile data (`render/terrain/tileMesh.ts`).
+  - Positions are relative to a float64 tile origin, and the mesh sits at origin − eye (rule 4).
+  - Normals come from height slopes one sample apart, which the tile border makes possible.
+  - Colors are per vertex.
+- The only custom shader code blends `position` with `positionParent` by a per-mesh morph uniform (CDLOD-style). `positionParent` is the parent tile's actual surface, not the child's own even vertices, because each level adds noise octaves.
+- Below the finest baked level (7), meshes read the level-7 ancestor and add CPU render-detail noise, a pure function of direction. This replaces "shader detail noise" in the TODO.
+- A mesh costs about 4 ms to build. The renderer spends at most 8 ms per frame on builds, highest screen-space error first.
+- One shared index buffer serves every tile. It is detached before a tile's geometry is disposed, because three's dispose would otherwise free it for all tiles.
+
+**Reason:**
+
+- I cannot see the browser in these sessions. Keeping the vertex logic in TypeScript lets Vitest check seams, morph targets and normals. `tests/gpu/terrainRenderer.test.ts` drives the whole renderer on Dawn from orbit to 3 km.
+- The CPU data is resident anyway for ground-height queries.
+- Moving mesh building into a worker, or into a compute shader, is a performance item for milestone 8 if loading lags.
