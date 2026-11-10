@@ -19,7 +19,8 @@
     "format:check": "prettier --check .",
     "check": "npm run typecheck && npm run lint && npm test",
     "maps": "vitest run --config vitest.tools.config.ts tools/maps.preview.ts",
-    "seeds": "vitest run --config vitest.tools.config.ts tools/seeds.preview.ts"
+    "seeds": "vitest run --config vitest.tools.config.ts tools/seeds.preview.ts",
+    "weather": "vitest run --config vitest.tools.config.ts tools/weather.preview.ts"
   },
   "dependencies": {
     "lil-gui": "^0.21.0",
