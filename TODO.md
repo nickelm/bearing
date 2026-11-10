@@ -57,7 +57,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [x] Detail tile synthesis on the GPU: global maps + detail noise + local erosion constrained by global rivers; per-tile `fork(tileKey)` (erosion filter and river carving as a pure function of direction, decisions 24, 28; `tools/tiles.preview.ts`)
 - [x] Tile borders and seam tests: neighboring tiles agree on shared texels whatever the generation order (bit-exact within a face, < 5 cm across face seams)
 - [x] Tile cache: GPU/CPU LRU with a memory budget; on-demand generation queue (`render/terrain/tileCache.ts`; textures attach in the tile renderer)
-- [ ] IndexedDB persistence for generated worlds and tiles, keyed by seed, parameters and generator version (moved from M8, decision 12)
+- [x] IndexedDB persistence for generated worlds and tiles, keyed by seed, parameters and generator version (moved from M8, decision 12): worlds only, tiles regenerate faster than they load (decision 29)
 - [ ] Terrain quadtree per cube face on the same tile keys, refined by screen-space error
 - [ ] Tile meshes with skirts and a float64 origin per tile (camera-relative)
 - [ ] Tile normals; shader detail noise below the finest baked level

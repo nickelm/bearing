@@ -357,3 +357,24 @@ This replaces the TODO's "local erosion pass" on each tile. The same function ex
 - Neighboring tiles on one face match bit for bit in any batch order.
 - Across a cube-face seam, shared edge samples agree to under 5 cm.
 - Sixteen level-6 tiles generate in about 50 ms.
+
+### 29. Persist worlds, not tiles
+
+**Date:** 2026-11-09
+**Decision:**
+
+- IndexedDB (`worldgen/worldStore.ts`) stores each generated world as one record:
+  - the tectonic world;
+  - the eroded global height and uplift;
+  - drainage, rivers, biomes and display maps.
+- Records are keyed by a hash of the planet parameters, both resolutions and `GENERATOR_VERSION`. Any change that alters generation output must bump `GENERATOR_VERSION`.
+- On a hit the world is shown at once, and height and uplift are re-uploaded to the GPU for tile synthesis.
+- Tiles are not persisted, which narrows decision 12.
+- The app asks for persistent storage, best-effort.
+
+**Reason:**
+
+- A world costs about 30 s to generate, but a level-6 tile costs about 3 ms (decision 28) and holds about 545 KB. Reading a tile back from IndexedDB is no faster than synthesizing it.
+- Persisting tiles would also add hundreds of megabytes per world, with eviction bookkeeping.
+- A world record is about 150 MB at 1024².
+- Revisit if tile synthesis becomes expensive, e.g. with a real local erosion pass.

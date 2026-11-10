@@ -22,10 +22,12 @@ export const GLOBAL_STAGES = ['detail', 'erosion', 'readback', 'drainage, rivers
 
 export interface GlobalWorld {
   n: number;
-  /** The global grid, still on the GPU (height, uplift, precipitation, flow…), for tile baking. */
+  /** The global grid, kept on the GPU for tile synthesis: maps "height" and "uplift". */
   grid: GlobalGrid;
   /** Eroded physical height (m), CPU copy. */
   height: Float32Array;
+  /** Boundary uplift (reference m), CPU copy. */
+  uplift: Float32Array;
   finish: FinishResult;
   timings: { stage: string; ms: number }[];
 }
@@ -106,6 +108,7 @@ export async function buildGlobalWorld(
 
     opts.onProgress?.('readback', 0);
     const height = await grid.readF32('height');
+    const uplift = await grid.readF32('uplift');
     const input: FinishInput = {
       n,
       height: height.slice(),
@@ -125,9 +128,42 @@ export async function buildGlobalWorld(
     lap('drainage, rivers, biomes (worker)');
     check();
     opts.onProgress?.('done', 1);
-    return { n, grid, height, finish, timings };
+    releaseUnused(grid);
+    return { n, grid, height, uplift, finish, timings };
   } catch (err) {
     grid.dispose();
     throw err;
   }
+}
+
+/** Tile synthesis needs only height and uplift on the GPU; free the rest. */
+function releaseUnused(grid: GlobalGrid): void {
+  for (const name of [
+    'precipitation',
+    'runoff',
+    'seaLevelTemperature',
+    'temperatureRange',
+    'flow',
+    'receiver',
+  ]) {
+    if (grid.has(name)) grid.release(name);
+  }
+}
+
+/** Rebuilds a GlobalWorld from stored data (worldStore.ts): uploads height and uplift to the GPU. */
+export function restoreGlobalWorld(
+  gpu: GpuContext,
+  stored: { n: number; height: Float32Array; uplift: Float32Array; finish: FinishResult },
+): GlobalWorld {
+  const grid = new GlobalGrid(gpu, stored.n);
+  grid.upload('height', stored.height);
+  grid.upload('uplift', stored.uplift);
+  return {
+    n: stored.n,
+    grid,
+    height: stored.height,
+    uplift: stored.uplift,
+    finish: stored.finish,
+    timings: [],
+  };
 }

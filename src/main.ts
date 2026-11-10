@@ -23,7 +23,13 @@ import {
   RESOLUTIONS,
 } from './ui/debugGui';
 import { GpuContext } from './worldgen/gpu/gpuContext';
-import { buildGlobalWorld, GlobalPassCancelled } from './worldgen/globalPipeline';
+import {
+  buildGlobalWorld,
+  GlobalPassCancelled,
+  restoreGlobalWorld,
+} from './worldgen/globalPipeline';
+import { GENERATOR_VERSION, WorldStore, worldKey } from './worldgen/worldStore';
+import type { World } from './worldgen/pipeline';
 import type { GlobalWorld } from './worldgen/globalPipeline';
 import { GPU_SELF_TESTS, runSelfTest } from './worldgen/gpu/selfTests';
 import type { ViewGuiParams, WorldGuiParams } from './ui/debugGui';
@@ -81,6 +87,9 @@ async function main(): Promise<void> {
   let generation = 0;
   /** The current world's global pass (eroded grid on the GPU, rivers...), once finished. */
   let globalWorld: GlobalWorld | null = null;
+  const store = new WorldStore();
+  // Cached worlds are large (about 150 MB at 1024²); ask the browser not to evict them.
+  void navigator.storage?.persist?.().catch(() => false);
 
   const regenerate = async () => {
     const token = ++generation;
@@ -107,16 +116,50 @@ async function main(): Promise<void> {
     const status = (stage: string, f: number) => {
       if (token === generation) gui.status.generation = `${stage} (${Math.round(f * 100)}%)`;
     };
-    try {
-      // 1. Tectonic pass in the worker, shown at once as a preview.
-      const world = await worldgen.generate(params, resolution, status);
-      if (token !== generation) return;
+    const showTectonic = (world: World) => {
       if (grid.n !== resolution) {
         grid = new CubeGrid(resolution);
         globe.globe.setGrid(grid);
       }
       globe.globe.setFaceSeed(worldParams.seed);
       globe.globe.setWorld(world);
+    };
+    const showGlobal = (world: World, global: GlobalWorld) => {
+      globalWorld?.grid.dispose();
+      globalWorld = global;
+      const d = global.finish.display;
+      let maxHeight = -Infinity;
+      for (const h of d.height) maxHeight = Math.max(maxHeight, h);
+      globe.globe.setWorld({
+        maps: {
+          ...world.maps,
+          height: d.height,
+          biome: d.biome,
+          discharge: d.discharge,
+          lakeDepth: d.lakeDepth,
+        },
+        info: { ...world.info, maxHeight },
+      });
+    };
+    const key = worldKey(params, resolution, globalN);
+    try {
+      // 0. A world generated before with the same parameters loads from IndexedDB.
+      const stored = await store.load(key).catch((err: unknown) => {
+        console.warn('World cache unavailable', err);
+        return null;
+      });
+      if (token !== generation) return;
+      if (stored) {
+        showTectonic(stored.tectonic);
+        showGlobal(stored.tectonic, restoreGlobalWorld(gpu, stored.global));
+        gui.status.generation = `cached (${((performance.now() - t0) / 1000).toFixed(1)} s)`;
+        return;
+      }
+
+      // 1. Tectonic pass in the worker, shown at once as a preview.
+      const world = await worldgen.generate(params, resolution, status);
+      if (token !== generation) return;
+      showTectonic(world);
       console.info(
         `World ${worldParams.seed} @ ${resolution}: land ${(world.info.landFraction * 100).toFixed(1)}%, ` +
           `heights ${world.info.minHeight.toFixed(0)}..${world.info.maxHeight.toFixed(0)} m, ` +
@@ -135,21 +178,7 @@ async function main(): Promise<void> {
         global.grid.dispose();
         return;
       }
-      globalWorld?.grid.dispose();
-      globalWorld = global;
-      const d = global.finish.display;
-      let maxHeight = -Infinity;
-      for (const h of d.height) maxHeight = Math.max(maxHeight, h);
-      globe.globe.setWorld({
-        maps: {
-          ...world.maps,
-          height: d.height,
-          biome: d.biome,
-          discharge: d.discharge,
-          lakeDepth: d.lakeDepth,
-        },
-        info: { ...world.info, maxHeight },
-      });
+      showGlobal(world, global);
       const total = performance.now() - t0;
       gui.status.generation = `done in ${(total / 1000).toFixed(1)} s`;
       console.info(
@@ -162,6 +191,22 @@ async function main(): Promise<void> {
           ms: Math.round(t.ms),
         })),
       );
+
+      // 3. Cache it, so this world loads instantly next time.
+      store
+        .save({
+          key,
+          version: GENERATOR_VERSION,
+          savedAt: Date.now(),
+          tectonic: world,
+          global: {
+            n: global.n,
+            height: global.height,
+            uplift: global.uplift,
+            finish: global.finish,
+          },
+        })
+        .catch((err: unknown) => console.warn('Could not cache the world', err));
     } catch (err) {
       if (token !== generation) return;
       if (err instanceof GenerationCancelled || err instanceof GlobalPassCancelled) {
@@ -175,6 +220,12 @@ async function main(): Promise<void> {
 
   const gui = new DebugGui(worldParams, viewParams, VIEW_MODES, {
     regenerate: () => void regenerate(),
+    clearCache: () => {
+      store
+        .clear()
+        .then(() => (gui.status.generation = 'world cache cleared'))
+        .catch((err: unknown) => console.warn('Could not clear the world cache', err));
+    },
     cancel: () => {
       generation++;
       worldgen.cancel();

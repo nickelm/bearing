@@ -37,6 +37,8 @@ export interface DebugGuiStatus {
 
 export interface DebugGuiCallbacks {
   regenerate(): void;
+  /** Deletes all cached worlds from IndexedDB. */
+  clearCache(): void;
   cancel(): void;
   viewChanged(view: ViewGuiParams): void;
   shapeChanged(view: ViewGuiParams): void;
@@ -82,6 +84,7 @@ export class DebugGui {
       'randomize',
     ).name('Random seed');
     w.add({ cancel: () => callbacks.cancel() }, 'cancel').name('Cancel generation');
+    w.add({ clear: () => callbacks.clearCache() }, 'clear').name('Clear world cache');
     w.add(world, 'resolution', [...RESOLUTIONS])
       .name('Tectonic cells per face')
       .onFinishChange(regen);
