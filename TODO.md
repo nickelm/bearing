@@ -63,7 +63,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [x] Tile normals; shader detail noise below the finest baked level (CPU render-detail noise instead, decision 30)
 - [x] Geomorphing so LOD changes don't pop (morph toward the parent's actual surface)
 - [ ] Checkpoint 2: owner review of the tiled terrain in the browser, orbit to 500 m
-- [ ] Camera: terrain-aware near plane and ground clamp; flyable down to 500 m
+- [x] Camera: terrain-aware near plane and ground clamp; flyable down to 500 m (heading, WASD/QE/RF flight, tilt to 87° below 50 km)
 
 ## Milestone 3: Atmosphere, ocean, forests, sky
 

@@ -24,4 +24,25 @@ npm run preview      # serve the production build
 npm run maps         # render world map PNGs to tools/out/ (SEED, RES, MODES env vars)
 ```
 
-Append `?seed=<number or text>` to the URL to open a specific world.
+Append `?seed=<number or text>` to the URL to open a specific world. `&res=` sets the tectonic grid (64–512 cells per face edge) and `&gres=` the global grid (512, 1024 or 2048; default 1024). A world generated once with the same parameters loads from the browser's IndexedDB cache.
+
+GPU tests (`tests/gpu/`) run the WGSL kernels on your GPU through Dawn's Node bindings, and they skip when no GPU adapter is available. The offline previews in `tools/` render terrain and tiles without a browser:
+
+```sh
+npx vitest run --config vitest.tools.config.ts tools/terrain.preview.ts   # eroded globe, rivers, biomes
+npx vitest run --config vitest.tools.config.ts tools/tiles.preview.ts     # a mosaic of detail tiles
+npx vitest run --config vitest.tools.config.ts tools/bench.preview.ts     # global-grid benchmark
+```
+
+## Controls
+
+| Input                        | Action                                  |
+| ---------------------------- | --------------------------------------- |
+| Left drag                    | Move over the ground                    |
+| Right drag (or Shift + drag) | Up and down: tilt; left and right: turn |
+| Mouse wheel                  | Zoom (altitude)                         |
+| W / A / S / D                | Fly forward, left, back, right          |
+| Q / E                        | Turn left, right                        |
+| R / F                        | Climb, descend                          |
+
+The camera stays at least 500 m above the terrain under it.

@@ -68,7 +68,12 @@ export class GlobeScene {
   /** Advances camera easing and renders one frame. `dt` is real seconds since the last frame. */
   render(dt: number): void {
     const o = this.orbit;
+    const tiles = this.useTiles && this.terrainReady;
     o.terrainMaxHeight = this.globe.maxDisplayedHeight;
+    // Ground clamp and near plane from the tile data under the camera (null until loaded).
+    o.groundHeight = tiles
+      ? this.terrain.displayHeightAt(this.scratch.copy(o.eye).normalize())
+      : null;
     o.update(dt);
 
     // Camera at the origin, oriented from float64 vectors.
@@ -83,7 +88,6 @@ export class GlobeScene {
     this.scratch.subVectors(PLANET_CENTER, o.eye);
     this.globe.group.position.set(this.scratch.x, this.scratch.y, this.scratch.z);
 
-    const tiles = this.useTiles && this.terrainReady;
     this.globe.group.visible = !tiles;
     this.terrain.group.visible = tiles;
     if (tiles) {
