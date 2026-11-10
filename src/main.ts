@@ -359,6 +359,8 @@ async function main(): Promise<void> {
     temperatureShift: 0,
     detail: globe.terrain.land.detail.value,
     riverLegibility: globe.terrain.riverStyle.legibility.value,
+    clouds: true,
+    cloudCover: 0,
   };
   gui.addLightingControls(lightParams, (l) => {
     lighting.atmosphere.enabled.value = l.atmosphere ? 1 : 0;
@@ -373,6 +375,8 @@ async function main(): Promise<void> {
     globe.terrain.land.temperatureOffset.value = l.temperatureShift;
     globe.terrain.land.detail.value = l.detail;
     globe.terrain.riverStyle.legibility.value = l.riverLegibility;
+    globe.clouds.enabled.value = l.clouds ? 1 : 0;
+    globe.clouds.coverageBias.value = l.cloudCover;
   });
 
   // World-generation compute shares three's device (decision 22).
@@ -433,6 +437,7 @@ async function main(): Promise<void> {
     gameTime += dt * timeParams.rate;
     sunDirection(gameTime, orbitParams, calendar, globe.sun);
     globe.terrain.land.seasonPhase.value = seasonPhase(gameTime, orbitParams, calendar);
+    globe.clouds.time.value = gameTime;
     globe.render(dt);
 
     const lon = globe.orbit.lon;

@@ -215,7 +215,7 @@ export class WaterShading {
     const ggx = alpha2.div(d.mul(d).mul(Math.PI));
     const fresnel = float(0.02).add(float(0.98).mul(pow(float(1).sub(nDotV), 5)));
     // Specular radiance: π·E·D·F/(4·N·V) with E = π × the display sun illuminance (decision 34).
-    const sunLight = L.atmosphere.sunTransmittance(p).mul(L.sunIlluminance);
+    const sunLight = L.sunlightAt(p);
     const glint = sunLight.mul(ggx.mul(fresnel).mul(nDotL).div(nDotV.mul(4)).mul(Math.PI));
     // Sky reflection: the average sky radiance at this sun elevation.
     const sky = L.atmosphere

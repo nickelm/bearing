@@ -879,3 +879,26 @@ Shaders sample it by direction through `cubeFaceUv`, a TSL mirror of `directionT
 - An offset-field texture per tile (the plan) or a coverage mask is limited to the 48 m samples of level 7 and needs per-tile GPU textures.
 - Exact distance gives crisp banks at any zoom from a few megabytes of shared buffers, and costs a short loop per fragment.
 - Coarse chords keep the loop short where tiles are large: segments are only about 0.4 km long, and the first version's cap kept just a fragment of one river per level-4 tile.
+
+### 55. Cloud shell from a static field; cloud shadows through planet lighting
+
+**Date:** 2026-11-10
+**Decision:** Until the weather model exists (milestone 6), clouds are a transparent cube-sphere shell 5 km above sea level (`render/clouds/cloudLayer.ts`).
+
+- **Shell.** The shell is drawn camera-relative at planet center − eye. Fragments compute coverage from their own direction, so the mesh resolution does not limit the clouds.
+- **Coverage.**
+  - two fractal noises, for weather systems (about 300 km) and finer cells (about 33 km);
+  - plus the climate texture's cloudiness (from precipitation, decision 42), so wet regions are cloudy and deserts clear;
+  - plus a GUI bias, through a soft threshold.
+
+  The field drifts with game time at about 10 m/s.
+
+- **Lighting.** Sunlight is filtered by the atmosphere, so clouds turn orange at the terminator, plus sky light and per-vertex aerial perspective. Seen from below, thick cloud is darker.
+- **Shadows.** `PlanetLighting.sunVisibility` is a hook the cloud layer sets before any material is built. `sunlightAt(p)` multiplies sunlight by the coverage where the ray toward the sun crosses the shell (75% blocked under full cloud), so terrain, water glint and trees all receive cloud shadows.
+- **GUI → Lighting:** "Clouds" and "Cloud cover".
+
+**Reason:**
+
+- A 2D shell with a coverage function is what the design asks for until live weather.
+- Putting coverage behind one function means milestone 6 swaps the static field for the weather grid without touching the materials.
+- One sunlight function keeps the shadows consistent everywhere.

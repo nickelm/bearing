@@ -21,6 +21,7 @@ import type { WebGPURenderer } from 'three/webgpu';
 import type { CubeGrid } from '../core/cubeGrid';
 import { Vec3d } from '../core/vec3d';
 import { ClimateTexture } from './climateTexture';
+import { CloudLayer } from './clouds/cloudLayer';
 import { ForestLayer } from './forest/forestLayer';
 import { GlobeMesh } from './globeMesh';
 import { PlanetLighting } from './lighting/planetLighting';
@@ -49,6 +50,8 @@ export class GlobeScene {
   readonly terrain: TerrainRenderer;
   /** Instanced tree clumps near the camera (decision 45). */
   readonly forest: ForestLayer;
+  /** Cloud shell and cloud shadows (decision 55). */
+  readonly clouds: CloudLayer;
   /** Unit vector toward the sun, world frame. Set by the app from the ephemeris. */
   readonly sun = new Vec3d(1, 0.6, 0.8).normalize();
   /** Draw the tiled terrain when available (otherwise the M1 grid mesh). */
@@ -67,12 +70,15 @@ export class GlobeScene {
     this.camera = new PerspectiveCamera(45, 1, 1, 2);
     this.orbit = new OrbitCamera(options.radius);
     this.lighting = new PlanetLighting(options.radius);
+    // Clouds first: their shadow hook must be in place before lit materials are built.
+    this.clouds = new CloudLayer(options.radius, this.lighting, this.climate);
+    this.lighting.sunVisibility = (p) => this.clouds.shadow(p);
     this.terrain = new TerrainRenderer(this.lighting, this.climate);
     this.forest = new ForestLayer(this.terrain, this.lighting, this.climate, this.terrain.land);
     // The sky: single scattering along each view ray, drawn behind everything (decision 35).
     this.scene.backgroundNode = this.lighting.atmosphere.skyNode();
     this.globe = new GlobeMesh(options.grid, options.radius);
-    this.scene.add(this.globe.group, this.terrain.group, this.forest.group);
+    this.scene.add(this.globe.group, this.terrain.group, this.forest.group, this.clouds.group);
 
     // Scene lights serve only the M1 grid mesh (a debug view); the terrain lights itself.
     // Light directions are translation-invariant, so camera-relative offsets do not affect them.
@@ -116,6 +122,7 @@ export class GlobeScene {
     this.camera.updateProjectionMatrix();
 
     this.sunLight.position.set(this.sun.x, this.sun.y, this.sun.z);
+    this.clouds.update(o.eye);
     this.lighting.update(o.eye, this.sun);
 
     // World object placement: float64 subtraction first, then write float32.
@@ -149,5 +156,6 @@ export class GlobeScene {
     this.globe.dispose();
     this.terrain.dispose();
     this.forest.dispose();
+    this.clouds.dispose();
   }
 }

@@ -284,6 +284,8 @@ it('renders preview views', async () => {
     );
     sunDirection(t, params, calendar, scene.sun);
     scene.terrain.land.seasonPhase.value = seasonPhase(t, params, calendar);
+    scene.clouds.time.value = t;
+    scene.clouds.enabled.value = process.env.CLOUDS === '0' ? 0 : 1;
     // Render until the terrain has loaded everything this view wants.
     let stable = 0;
     let last = '';

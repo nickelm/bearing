@@ -87,7 +87,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md) (revision 4: nine mil
 - [x] Forest density map (also used later by line of sight)
 - [x] Instanced low-poly tree clusters within about 5 km of the camera
 - [x] River rendering from vector data (per-fragment distance to segment lists, decision 54); replaces the per-vertex river coverage from checkpoint 2
-- [ ] Cloud layer rendering, from a static field derived from moisture until live weather exists (M6)
+- [x] Cloud layer rendering, from a static field derived from moisture until live weather exists (M6) (decision 55)
 - [ ] Checkpoint 4: owner review of terrain shading, seasons, forests, rivers and clouds
 
 ### Known issues

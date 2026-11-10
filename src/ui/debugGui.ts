@@ -66,6 +66,9 @@ export interface LightingGuiParams {
   detail: number;
   /** How readable sub-pixel rivers are (0 = physically faint). */
   riverLegibility: number;
+  clouds: boolean;
+  /** Cloud coverage bias (positive is cloudier). */
+  cloudCover: number;
 }
 
 export const TIME_RATES: Record<string, number> = {
@@ -260,6 +263,12 @@ export class DebugGui {
       .onChange(() => changed(light));
     f.add(light, 'riverLegibility', 0, 1, 0.05)
       .name('River legibility')
+      .onChange(() => changed(light));
+    f.add(light, 'clouds')
+      .name('Clouds')
+      .onChange(() => changed(light));
+    f.add(light, 'cloudCover', -0.5, 0.5, 0.01)
+      .name('Cloud cover')
       .onChange(() => changed(light));
   }
 

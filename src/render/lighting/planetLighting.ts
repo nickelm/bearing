@@ -34,6 +34,11 @@ export class PlanetLighting {
   readonly nightLight = uniform(0.012);
   /** The air: transmittance LUT, sky and scattering (decision 35). */
   readonly atmosphere: AtmosphereNodes;
+  /**
+   * Optional fraction of sunlight that reaches a planet-centered point past
+   * the clouds (1 = clear). Set by the cloud layer before materials are built.
+   */
+  sunVisibility: ((p: Vec3Node) => Node<'float'>) | null = null;
 
   constructor(readonly radius = PLANET_RADIUS) {
     this.atmosphere = new AtmosphereNodes(earthLikeAtmosphere(radius), {
@@ -46,6 +51,12 @@ export class PlanetLighting {
   update(eye: Readonly<Vec3d>, sun: Readonly<Vec3d>): void {
     this.eye.value.set(eye.x, eye.y, eye.z);
     this.sunDirection.value.set(sun.x, sun.y, sun.z).normalize();
+  }
+
+  /** Sunlight at a planet-centered point: illuminance × atmosphere transmittance × clouds. */
+  sunlightAt(p: Vec3Node): Vec3Node {
+    const t = this.atmosphere.sunTransmittance(p).mul(this.sunIlluminance);
+    return (this.sunVisibility ? t.mul(this.sunVisibility(p)) : t) as Vec3Node;
   }
 
   /** Planet-centered position of a camera-relative world position. */
@@ -65,9 +76,7 @@ export class PlanetLighting {
     const p = this.planetPosition(relative);
     const up = normalize(p);
     const sunElevation = dot(up, this.sunDirection);
-    const direct = this.atmosphere
-      .sunTransmittance(p)
-      .mul(max(dot(normal, this.sunDirection), 0).mul(this.sunIlluminance));
+    const direct = this.sunlightAt(p).mul(max(dot(normal, this.sunDirection), 0));
     const skyFacing = dot(normal, up).mul(0.5).add(0.5);
     const sky = this.atmosphere
       .skyIrradiance(sunElevation)
