@@ -1101,3 +1101,23 @@ It skips GPU erosion. The design's "reduced global erosion pass" is left out: dr
 - **Known limitation.** Coarse rivers (256²) and the rendered rivers of the eroded 1024² world can run a few kilometers apart, so a bridge in the data may sit beside the river the player sees. Roads drawn over rendered rivers still read as crossings. Snapping bridges to rendered rivers is a later polish item.
 
 **Reason:** The design asks for settlements, roads, ports and airbases "according to the cast" and for corridors on "weak, well-roaded segments". Building the civilian geography first keeps the causality plausible (geography, then people and roads, then the war) and keeps every planning fact deterministic and inside the strategic graph (decision 52).
+
+### 66. Denser settlements and roads; rural night glow
+
+**Date:** 2026-11-10
+**Decision:** This revises decision 65 after the owner's first look in the browser: roads and night lights were too sparse to resemble Earth at night.
+
+- **Settlements.** One per 350 km² of habitability-weighted land (was 3,500), at most 3,000, at least 1.1 coarse cells (about 7 km) apart, at 70 people per weighted km² (was 30). A typical world now has about 2,000 settlements: some 20–30 cities, 70–140 towns, the rest villages.
+- **Two-tier roads.** The trunk network links towns and cities (at least 20,000 people, plus the three largest settlements of each node) as before. Every other settlement, largest first, then gets a feeder road: the cheapest route to any road or connected settlement within 120 km of route cost. Road length roughly doubles, and the extra roads are mostly minor.
+- **Habitability in the graph.** The graph stores habitability per coarse cell (`StrategicGraph.habitability`, 0..255): where people live outside towns.
+- **Night lights.**
+  - Town disks are twice the urban radius, and brighter.
+  - Light lists come in three tiers: per face only lights of at least 5 km radius, per level-2 tile those of at least 2 km, per level-4 tile all of them. Coarse meshes loop over few lights.
+  - A rural glow fills the land between towns: rescaled habitability^1.5 × village dots (2.5 km value-noise lattice) × clusters of settled land (30 km lattice). Where pixels are larger than about 1.5 km the dots fade to their mean, so orbit views show clustered glow, not a uniform wash. Paved roads glow faintly.
+- **Roads at altitude.** Coarse road lists (meshes at levels 4–6, roughly 20–200 km up) now hold every road, not only those at least 12 m wide; minor and feeder roads used to vanish there, which made the network look sparse.
+  - The habitability map reaches the shader as an R8 cube-face array texture (`render/infra/habitabilityTexture.ts`).
+- **Local lanes and villages (render-only).** Even 2,000 settlements leave one per 1,900 km², a road every 20–30 km. Near the camera (pixels under 400 m), the terrain shader adds a procedural layer: a seed per 4 km cell of a 3D lattice (cells within a thin shell around the sphere, seeds projected onto it), kept as a village where its hash falls below the habitability rescaled so that 0.4 and up count as fully settled (raw habitability peaks near 0.6 and is under 0.1 on half the land); country lanes (5 m, dirt-brown) link each fragment's nearest village to about three quarters of its lattice neighbors; each village has a small light (350 m) that replaces the rural speckle up close. The simulation never sees these; they are scenery, like the render-detail noise.
+- **Roads by day** are drawn at least 1.4 pixels wide with legibility 0.65 (was 1.2 and 0.45).
+- `GENERATOR_VERSION` is 6.
+
+**Reason:** On Earth, lights trace population density: dense webs of towns and roads, not a few hundred dots. A coarse 6 km grid cannot hold every village road, so the data carries a few thousand settlements and their feeder roads, and the shader fills in the rest from habitability.

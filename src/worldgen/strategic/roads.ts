@@ -203,11 +203,13 @@ export class RoadBuilder {
 export function settlementLinks(
   ctx: StrategicContext,
   s: SettlementList,
+  include: (i: number) => boolean = () => true,
 ): { a: number; b: number; d: number }[] {
   const label = ctx.labels.label;
   const R = ctx.radius;
   const groups = new Map<number, number[]>();
   for (let i = 0; i < s.cells.length; i++) {
+    if (!include(i)) continue;
     const id = label[s.cells[i]!]!;
     let g = groups.get(id);
     if (!g) groups.set(id, (g = []));
@@ -456,6 +458,50 @@ export function findBridges(
   return b;
 }
 
+/** Settlements on the trunk network: towns and cities, or the TRUNK_MIN_COUNT largest per landmass. */
+export const TRUNK_MIN_POPULATION = 20_000;
+const TRUNK_MIN_COUNT = 3;
+/** Feeder roads give up beyond this route cost (m of flat road). */
+const FEEDER_MAX_COST = 120e3;
+
+function trunkSettlements(s: SettlementList): Set<number> {
+  const out = new Set<number>();
+  const byNode = new Map<number, number[]>();
+  for (let i = 0; i < s.cells.length; i++) {
+    if (s.population[i]! >= TRUNK_MIN_POPULATION) out.add(i);
+    const key = s.node[i]!;
+    let l = byNode.get(key);
+    if (!l) byNode.set(key, (l = []));
+    l.push(i);
+  }
+  for (const l of byNode.values()) {
+    l.sort((a, b) => s.population[b]! - s.population[a]! || a - b);
+    for (const i of l.slice(0, TRUNK_MIN_COUNT)) out.add(i);
+  }
+  return out;
+}
+
+/**
+ * Feeder roads: each settlement off the trunk network, largest first, takes
+ * the cheapest route to any road or connected settlement within
+ * FEEDER_MAX_COST; later feeders can join earlier ones.
+ */
+function routeFeeders(builder: RoadBuilder, s: SettlementList, trunk: Set<number>): void {
+  const connected = new Set<number>(builder.cellsOnRoad());
+  for (const i of trunk) connected.add(s.cells[i]!);
+  const order = [...s.cells.keys()]
+    .filter((i) => !trunk.has(i))
+    .sort((a, b) => s.population[b]! - s.population[a]! || a - b);
+  for (const i of order) {
+    const c = s.cells[i]!;
+    if (connected.has(c)) continue;
+    const path = builder.route(c, -1, (x) => connected.has(x), FEEDER_MAX_COST);
+    if (!path) continue;
+    builder.addPath(path, s.population[i]! / 1000);
+    for (const x of path) connected.add(x);
+  }
+}
+
 export interface RoadResult {
   builder: RoadBuilder;
   network: RoadNetwork;
@@ -469,7 +515,14 @@ export function buildRoads(
   cost: Float32Array,
 ): RoadResult {
   const builder = new RoadBuilder(ctx, cost);
-  routeSettlementLinks(builder, settlements, settlementLinks(ctx, settlements));
+  // Trunk roads between towns; feeder roads from every village to the nearest road.
+  const trunk = trunkSettlements(settlements);
+  routeSettlementLinks(
+    builder,
+    settlements,
+    settlementLinks(ctx, settlements, (i) => trunk.has(i)),
+  );
+  routeFeeders(builder, settlements, trunk);
   const network = roadPolylines(ctx, builder.edges, new Set(settlements.cells));
   const bridges = findBridges(ctx, builder.rivers, builder.edges, network);
   return { builder, network, bridges };

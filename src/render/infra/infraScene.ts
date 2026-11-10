@@ -92,6 +92,9 @@ export class InfraScene {
   readonly segments: RiverSegments;
   readonly lights: Float32Array;
   readonly sites: BuiltSite[] = [];
+  /** Habitability per coarse cell and that grid's resolution, for the rural glow. */
+  readonly habitability: Uint8Array;
+  readonly habitabilityResolution: number;
   private readonly clearings = new Map<string, Clearing[]>();
 
   constructor(
@@ -99,6 +102,8 @@ export class InfraScene {
     infra: Infrastructure,
     readonly radius: number,
   ) {
+    this.habitability = graph.habitability;
+    this.habitabilityResolution = graph.resolution;
     const segs: number[] = [];
     const addRoads = (r: RoadNetwork) => {
       for (let k = 0; k < r.count; k++) {
@@ -184,7 +189,7 @@ export class InfraScene {
         key: `town-${i}`,
       });
       this.clear(p, p, 0.6 * r, false);
-      lights.push(p.x, p.y, p.z, 1.6 * r, Math.min(1, 0.25 + Math.sqrt(pop / 1e6)), 0, 0, 0);
+      lights.push(p.x, p.y, p.z, 2 * r, Math.min(1.2, 0.3 + Math.sqrt(pop / 7e5)), 0, 0, 0);
     }
     const seen = new Set<number>();
     for (const t of infra.targets) {

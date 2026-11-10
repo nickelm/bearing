@@ -26,6 +26,7 @@ import {
 import {
   attribute,
   clamp,
+  float,
   fwidth,
   Fn,
   length,
@@ -35,6 +36,7 @@ import {
   normalize,
   positionLocal,
   positionWorld,
+  pow,
   step,
   uniform,
   varyingProperty,
@@ -65,12 +67,15 @@ import { RiverTables } from '../water/riverTables';
 import { WAVE_PERIOD, WaterShading } from '../water/waterShading';
 import type { RiverIndex } from '../../worldgen/riverIndex';
 import type { InfraScene } from '../infra/infraScene';
+import { HabitabilityTexture } from '../infra/habitabilityTexture';
 import {
   LightShading,
   LightTables,
   nightFactor,
   RoadShading,
   RoadStyle,
+  localNetwork,
+  ruralSpeckle,
 } from '../infra/roadShading';
 import { LandShading } from './landShading';
 import { DEFAULT_LOD, selectTiles } from './quadtree';
@@ -138,6 +143,7 @@ export class TerrainRenderer {
   private rivers: RiverTables | null = null;
   private roads: RiverTables | null = null;
   private lights: LightTables | null = null;
+  private habitability = new HabitabilityTexture(null, 1);
   /** Road, pavement and night-light settings (decision 65). */
   readonly roadStyle = new RoadStyle();
   /** Sea and lake shading inside the terrain material (decision 37). */
@@ -277,6 +283,10 @@ export class TerrainRenderer {
     const planet = this.lighting.planetPosition(positionWorld);
     const footprint = length(fwidth(positionWorld));
     const paved = roads.coverage(planet, roadStart, roadCount, footprint);
+    // Habitability peaks near 0.6 and is under 0.1 on half the land: 0.4 and up count as fully settled.
+    const hab = clamp(this.habitability.sample(radial).div(0.4), 0, 1);
+    // Country lanes and villages near the camera (render-only, decision 66).
+    const lanes = localNetwork(planet, hab, footprint, radius, this.roadStyle);
     const dry = step(0.5, rawHeight).mul(step(lakeDepth, 0)).mul(this.land.enabled);
     const asphalt = vec3(0.075, 0.075, 0.08);
     const concrete = vec3(0.4, 0.39, 0.36);
@@ -286,16 +296,31 @@ export class TerrainRenderer {
       clamp(paved.y.div(max(paved.x, 1e-4)), 0, 1),
     ) as unknown as typeof normal;
     const roadRadiance = this.lighting.shadeDiffuse(roadAlbedo, normal, positionWorld);
-    const withRoads = mix(surface, roadRadiance, paved.x.mul(dry));
+    const laneAlbedo = vec3(0.22, 0.2, 0.17) as unknown as typeof normal;
+    const laneRadiance = this.lighting.shadeDiffuse(laneAlbedo, normal, positionWorld);
+    const withLanes = mix(surface, laneRadiance, lanes.x.mul(dry));
+    const withRoads = mix(withLanes, roadRadiance, paved.x.mul(dry));
     // Settlement lights on the night side (sodium orange), plus a glow along paved roads.
     const night = nightFactor(radial, this.lighting.sunDirection);
+    // Rural glow: habitability² broken into village-sized speckles, faded out
+    // where pixels are much larger than the speckles so orbit views keep a mean.
+    // Two scales: village dots (2.5 km) inside clusters of settled land (30 km);
+    // where pixels outgrow the dots, their mean takes over within the clusters.
+    const dots = clamp(ruralSpeckle(planet).sub(0.5).mul(3), 0, 1);
+    const clusters = clamp(ruralSpeckle(planet, 30_000).sub(0.45).mul(3), 0, 1);
+    const resolved = clamp(footprint.div(1500), 0, 1);
+    const villages = mix(dots, float(0.15), resolved).mul(clusters);
+    // Close up, the lit villages of the local network replace the speckle.
+    const near = clamp(float(400).sub(footprint).div(200), 0, 1);
+    const rural = mix(pow(hab, 1.5).mul(villages).mul(0.9), lanes.y.mul(0.8), near);
     const glow = lights
       .emission(planet, lightStart, lightCount, footprint)
-      .add(paved.x.mul(0.05))
+      .add(rural)
+      .add(paved.x.mul(0.12))
       .mul(night)
       .mul(dry)
       .mul(this.roadStyle.lights)
-      .mul(0.08);
+      .mul(0.12);
     const lit = withRoads.add(vec3(1, 0.7, 0.38).mul(glow));
     material.colorNode = this.lighting.applyAerial(lit, apInscatter, apTransmittance);
     return material;
@@ -327,12 +352,17 @@ export class TerrainRenderer {
     }
     this.rivers = world?.rivers ? new RiverTables(world.rivers, world.radius) : null;
     this.roads = world?.infra
-      ? new RiverTables(world.infra, world.radius, { coarseMinWidth: 12, coarseCap: 200 })
+      ? new RiverTables(world.infra, world.radius, { coarseMinWidth: 0, coarseCap: 300 })
       : null;
     this.lights = world?.infra ? new LightTables(world.infra.lights, world.radius) : null;
+    const oldHabitability = this.habitability;
+    this.habitability = world?.infra
+      ? new HabitabilityTexture(world.infra.habitability, world.infra.habitabilityResolution)
+      : new HabitabilityTexture(null, 1);
     const old = this.material;
     this.material = this.buildMaterial();
     old.dispose();
+    oldHabitability.dispose();
     this.detail = new Noise3(rng(world?.seed ?? 0, 'render-detail'));
     this.data.clear();
     this.meshes.clear();

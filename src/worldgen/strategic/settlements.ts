@@ -27,14 +27,14 @@ import { CapWalker, smoothstep } from './input';
 import type { StrategicContext } from './input';
 
 /** Habitability-weighted land per settlement (m²). */
-export const SETTLEMENT_AREA = 3500e6;
-export const MAX_SETTLEMENTS = 700;
+export const SETTLEMENT_AREA = 350e6;
+export const MAX_SETTLEMENTS = 3000;
 /** Minimum distance between settlements (m). */
-export const SETTLEMENT_SPACING = 18e3;
+export const SETTLEMENT_SPACING = 7e3;
 /** A port site with no settlement this close gets a port town (m). */
-const PORT_TOWN_REACH = 20e3;
+const PORT_TOWN_REACH = 15e3;
 /** People per km² of habitability-weighted land. */
-const POPULATION_DENSITY = 30;
+const POPULATION_DENSITY = 70;
 const ZIPF_EXPONENT = 0.9;
 /** Rivers with at least this discharge (m³/s) count as water access. */
 const RIVER_DISCHARGE = 20;
@@ -94,7 +94,7 @@ export function placeSettlements(
   nodeOfLandmass: Int32Array,
   walker: CapWalker,
   seed: WorldSeed,
-): SettlementList {
+): { settlements: SettlementList; habitability: Uint8Array } {
   const { grid, radius, discharge } = ctx;
   const label = ctx.labels.label;
   const portCells = new Set<number>();
@@ -120,7 +120,7 @@ export function placeSettlements(
   }
   keyed.sort((a, b) => b.key - a.key || a.cell - b.cell);
   const blocked = new Uint8Array(grid.cellCount);
-  const spacing = Math.max(SETTLEMENT_SPACING, 1.5 * ctx.cellSize) / radius;
+  const spacing = Math.max(SETTLEMENT_SPACING, 1.1 * ctx.cellSize) / radius;
   const chosen: number[] = [];
   const block = (c: number) => walker.walk(c, spacing, (x) => (blocked[x] = 1));
   for (const k of keyed) {
@@ -179,5 +179,5 @@ export function placeSettlements(
       if (label[grid.neighbors4[c * 4 + k]!]! < 0) flags |= SETTLEMENT_COAST;
     out.flags[i] = flags;
   });
-  return out;
+  return { settlements: out, habitability: Uint8Array.from(hab, (h) => Math.round(h * 255)) };
 }

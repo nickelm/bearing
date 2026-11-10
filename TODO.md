@@ -176,6 +176,7 @@ Civilian geography (settlements, roads, bridges) joins the strategic graph befor
 - [x] Night-side settlement lights
 - [x] Airbase runway meshes (drawn as concrete in the terrain shader, plus hangar and shelter meshes; decision 65)
 - [x] Tools: `npm run maps` graph mode draws settlements, roads, bridges, airbases, ports and targets; `npm run seeds` and the seed browser report them; render preview views `town`, `airbase`, `roads`, `night`
+- [x] Denser settlements (about 2,000), feeder roads, rural night glow (decision 66, after the owner's first look)
 - [ ] Snap bridges to the rendered (eroded) rivers, which can run a few kilometers from the coarse ones (decision 65)
 - [ ] Keep civilian roads off airfields (a road may cross a taxiway; route around airbase footprints or end them at the gate)
 - [ ] Flatten the terrain under runways (they follow the fine terrain's detail noise)

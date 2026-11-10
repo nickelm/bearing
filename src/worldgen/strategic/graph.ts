@@ -256,6 +256,11 @@ export interface StrategicGraph {
   radius: number;
   nodes: LandNode[];
   settlements: SettlementList;
+  /**
+   * Habitability 0..255 per coarse cell (fertile, flat, watered lowland
+   * high): where people live outside towns. Drives rural night lights.
+   */
+  habitability: Uint8Array;
   roads: RoadNetwork;
   bridges: BridgeList;
   lanes: SeaLane[];
@@ -356,6 +361,7 @@ export function graphBuffers(g: StrategicGraph): ArrayBuffer[] {
   }
   const s = g.settlements;
   out.push(s.cells.buffer, s.points.buffer, s.population.buffer, s.node.buffer, s.flags.buffer);
+  out.push(g.habitability.buffer);
   out.push(...roadBuffers(g.roads), ...bridgeBuffers(g.bridges));
   // A buffer may appear only once in a transfer list.
   return [...new Set(out)] as ArrayBuffer[];

@@ -76,7 +76,13 @@ export function buildStrategicGraphWithContext(input: StrategicInput): Strategic
   lap('nodes');
   const ocean = buildSeaLanes(ctx, nb);
   lap('sea lanes');
-  const settlements = placeSettlements(ctx, nb.nodes, nb.nodeOfLandmass, walker, input.seed ?? 0);
+  const { settlements, habitability } = placeSettlements(
+    ctx,
+    nb.nodes,
+    nb.nodeOfLandmass,
+    walker,
+    input.seed ?? 0,
+  );
   lap('settlements');
   const roads = buildRoads(ctx, settlements, movementCost(ctx));
   lap('roads');
@@ -91,6 +97,7 @@ export function buildStrategicGraphWithContext(input: StrategicInput): Strategic
     radius: ctx.radius,
     nodes: nb.nodes,
     settlements,
+    habitability,
     roads: roads.network,
     bridges: roads.bridges,
     lanes: ocean.lanes,

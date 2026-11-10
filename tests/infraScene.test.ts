@@ -64,7 +64,7 @@ describe('InfraScene from a generated world', () => {
     expect(scene.isClear(latLonToDirection(-89 * DEG, 0))).toBe(false);
   });
 
-  it('lists every light where it shines, coarse and fine', () => {
+  it('lists every light where it shines, larger lights in coarser tiers', () => {
     const lights = new LightTables(scene.lights, R);
     const count = scene.lights.length / 8;
     expect(count).toBe(
@@ -74,7 +74,10 @@ describe('InfraScene from a generated world', () => {
     );
     for (let i = 0; i < count; i += 7) {
       const p = new Vec3d(scene.lights[i * 8]!, scene.lights[i * 8 + 1]!, scene.lights[i * 8 + 2]!);
-      for (const level of [0, LIGHT_LEVEL, 9]) {
+      const r = scene.lights[i * 8 + 3]!;
+      // Coarse tiers list only larger lights; level 4 and finer list all.
+      const levels = r >= 5000 ? [0, LIGHT_LEVEL, 9] : r >= 2000 ? [LIGHT_LEVEL, 9] : [4, 9];
+      for (const level of levels) {
         const range = lights.rangeFor(tileForDirection(p, level));
         const ids = Array.from(lights.lists.subarray(range.start, range.start + range.count));
         expect(ids).toContain(i);
