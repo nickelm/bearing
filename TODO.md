@@ -67,6 +67,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md) (revision 4: nine mil
   - [x] Thin rivers drawn as continuous lines on diagonals (wider coverage mask; true channels stay)
   - [x] One "Color by" list for grid and tiles; grid-only modes switch the display to the grid
 - [x] Camera: terrain-aware near plane and ground clamp; flyable down to 500 m (heading, WASD/QE/RF flight, tilt to 87° below 50 km)
+  - [x] Touch input for tablets: one-finger drag, two-finger pan/pinch/twist about the midpoint, three-finger tilt (decision 60)
 
 ## Milestone 3: Atmosphere, ocean, forests, sky
 

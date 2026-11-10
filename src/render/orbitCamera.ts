@@ -132,6 +132,32 @@ export class OrbitCamera {
     this.heading = wrapAngle(this.heading + dxPixels * 0.005);
   }
 
+  /**
+   * Multiplies the altitude by `factor` at once (no easing), keeping the ground
+   * under the screen point (`ox`, `oy`) pixels from the viewport center in place.
+   * Exact when looking straight down; close enough when tilted. Pinch zoom uses this.
+   */
+  zoomAt(factor: number, ox: number, oy: number, radPerPixel: number): void {
+    const h0 = this.heightAboveGround;
+    this.altitude = this.targetAltitude = this.clampAltitude(this.altitude * factor);
+    const h1 = this.heightAboveGround;
+    // A ground point at offset o moves to o·h0/h1 on screen; drag it back by o·(h0 − h1)/h1.
+    const f = (h0 - h1) / h1;
+    this.drag(-ox * f, -oy * f, radPerPixel);
+  }
+
+  /**
+   * Rotates the view so screen content turns by `angle` (clockwise positive,
+   * screen y down) about the screen point (`ox`, `oy`) from the viewport center.
+   */
+  rotateAt(angle: Radians, ox: number, oy: number, radPerPixel: number): void {
+    this.heading = wrapAngle(this.heading - angle);
+    // Content rotated about the center; move the point that left (ox, oy) back there.
+    const c = Math.cos(angle);
+    const s = Math.sin(angle);
+    this.drag(ox - (c * ox - s * oy), oy - (s * ox + c * oy), radPerPixel);
+  }
+
   /** Multiplies the target altitude by exp(steps). Positive steps zoom out. */
   zoom(steps: number): void {
     this.targetAltitude = this.clampAltitude(this.targetAltitude * Math.exp(steps));
@@ -216,11 +242,50 @@ const KEYS: Record<string, [keyof OrbitInput, number]> = {
   KeyF: ['climb', -1],
 };
 
+/** Screen-space change between two finger pairs: centroid motion, scale and rotation. */
+export interface TwoFingerStep {
+  /** Centroid motion in pixels. */
+  dx: number;
+  dy: number;
+  /** New finger distance / old finger distance (> 1 when spreading). */
+  scale: number;
+  /** Change in the angle of the line between the fingers (clockwise positive, screen y down). */
+  rotation: Radians;
+  /** New centroid in the same coordinates as the inputs. */
+  cx: number;
+  cy: number;
+}
+
+interface Point {
+  x: number;
+  y: number;
+}
+
+export function twoFingerStep(a0: Point, b0: Point, a1: Point, b1: Point): TwoFingerStep {
+  const cx0 = (a0.x + b0.x) / 2;
+  const cy0 = (a0.y + b0.y) / 2;
+  const cx = (a1.x + b1.x) / 2;
+  const cy = (a1.y + b1.y) / 2;
+  const d0 = Math.hypot(b0.x - a0.x, b0.y - a0.y);
+  const d1 = Math.hypot(b1.x - a1.x, b1.y - a1.y);
+  // Fingers almost on top of each other give no usable scale or angle.
+  const ok = d0 > 8 && d1 > 8;
+  const rotation = ok
+    ? wrapAngle(Math.atan2(b1.y - a1.y, b1.x - a1.x) - Math.atan2(b0.y - a0.y, b0.x - a0.x))
+    : 0;
+  return { dx: cx - cx0, dy: cy - cy0, scale: ok ? d1 / d0 : 1, rotation, cx, cy };
+}
+
 /**
- * Wires mouse and keyboard input on `element` to an OrbitCamera. Left drag
- * moves, right (or shift) drag tilts vertically and turns horizontally,
- * the wheel zooms; W/A/S/D move, Q/E turn, R/F climb and descend. Returns a
- * function that detaches the listeners.
+ * Wires mouse, touch and keyboard input on `element` to an OrbitCamera.
+ *
+ * - Mouse: left drag moves, right (or shift) drag tilts vertically and turns
+ *   horizontally, the wheel zooms.
+ * - Touch: one finger drags the ground; two fingers pan, pinch-zoom and twist
+ *   about their midpoint, as in map apps; three fingers dragged up or down tilt.
+ * - Keys: W/A/S/D move, Q/E turn, R/F climb and descend.
+ *
+ * Returns a function that detaches the listeners.
  */
 export function attachOrbitInput(
   element: HTMLElement,
@@ -230,15 +295,50 @@ export function attachOrbitInput(
   let mode: 'rotate' | 'tilt' | null = null;
   let lastX = 0;
   let lastY = 0;
+  /** Active touch and pen contacts by pointer id, in client pixels. */
+  const touches = new Map<number, Point>();
 
   const onDown = (e: PointerEvent) => {
+    if (e.pointerType !== 'mouse') {
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      element.setPointerCapture(e.pointerId);
+      return;
+    }
     mode = e.button === 2 || e.shiftKey ? 'tilt' : e.button === 0 ? 'rotate' : null;
     if (!mode) return;
     lastX = e.clientX;
     lastY = e.clientY;
     element.setPointerCapture(e.pointerId);
   };
+  const onTouchMove = (e: PointerEvent) => {
+    const prev = touches.get(e.pointerId);
+    if (!prev) return;
+    const cur = { x: e.clientX, y: e.clientY };
+    if (cur.x === prev.x && cur.y === prev.y) return;
+    const rpp = radPerPixel();
+    if (touches.size === 1) {
+      camera.drag(cur.x - prev.x, cur.y - prev.y, rpp);
+    } else if (touches.size === 2) {
+      let other: Point = prev;
+      for (const [id, p] of touches) if (id !== e.pointerId) other = p;
+      const g = twoFingerStep(prev, other, cur, other);
+      const rect = element.getBoundingClientRect();
+      const ox = g.cx - (rect.left + rect.width / 2);
+      const oy = g.cy - (rect.top + rect.height / 2);
+      camera.drag(g.dx, g.dy, rpp);
+      if (g.scale !== 1) camera.zoomAt(1 / g.scale, ox, oy, rpp);
+      if (g.rotation !== 0) camera.rotateAt(g.rotation, ox, oy, rpp);
+    } else {
+      // Three or more fingers: the centroid's vertical motion tilts.
+      camera.tiltBy((cur.y - prev.y) / touches.size);
+    }
+    touches.set(e.pointerId, cur);
+  };
   const onMove = (e: PointerEvent) => {
+    if (e.pointerType !== 'mouse') {
+      onTouchMove(e);
+      return;
+    }
     if (!mode) return;
     const dx = e.clientX - lastX;
     const dy = e.clientY - lastY;
@@ -251,7 +351,8 @@ export function attachOrbitInput(
     }
   };
   const onUp = (e: PointerEvent) => {
-    mode = null;
+    if (e.pointerType !== 'mouse') touches.delete(e.pointerId);
+    else mode = null;
     if (element.hasPointerCapture(e.pointerId)) element.releasePointerCapture(e.pointerId);
   };
   const onWheel = (e: WheelEvent) => {
@@ -260,6 +361,8 @@ export function attachOrbitInput(
     camera.zoom(pixels * 0.0015);
   };
   const onContextMenu = (e: Event) => e.preventDefault();
+  // iOS Safari fires its own pinch gestures and may zoom the page despite touch-action.
+  const onGesture = (e: Event) => e.preventDefault();
   const held = new Set<string>();
   const applyKeys = () => {
     const inp = camera.input;
@@ -293,6 +396,7 @@ export function attachOrbitInput(
   element.addEventListener('pointercancel', onUp);
   element.addEventListener('wheel', onWheel, { passive: false });
   element.addEventListener('contextmenu', onContextMenu);
+  for (const t of GESTURE_EVENTS) element.addEventListener(t, onGesture);
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
   window.addEventListener('blur', onBlur);
@@ -303,11 +407,14 @@ export function attachOrbitInput(
     element.removeEventListener('pointercancel', onUp);
     element.removeEventListener('wheel', onWheel);
     element.removeEventListener('contextmenu', onContextMenu);
+    for (const t of GESTURE_EVENTS) element.removeEventListener(t, onGesture);
     window.removeEventListener('keydown', onKeyDown);
     window.removeEventListener('keyup', onKeyUp);
     window.removeEventListener('blur', onBlur);
   };
 }
+
+const GESTURE_EVENTS = ['gesturestart', 'gesturechange', 'gestureend'];
 
 function clamp(x: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, x));

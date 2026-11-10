@@ -977,3 +977,15 @@ Also at checkpoint 4: the tile kernel no longer carves river channels into lake 
 - **Test.** A GPU test samples coverage at 512 points over 12 days on Dawn. It checks that every point is mostly clear at least 15% of the time, that mean coverage lies between 0.15 and 0.55, and that the field changes more over 12 h than over 1 h. The wettest belts, the equator and the mid-latitude storm tracks, are the cloudiest and still clear about one time in six.
 
 **Reason:** Owner review: the latitude-dependent advection of decision 58 stretched clouds into streaks (shear between bands), and wet regions, mountains included, were solid white all the time.
+
+### 60. Touch gestures for the orbit camera follow map apps
+
+**Date:** 2026-11-10
+**Decision:** The orbit camera takes touch and pen input as well as mouse and keyboard. The RTS view is top-down, so touch maps to the gestures people know from map apps:
+
+- **One finger** drags the ground under it, like a left mouse drag.
+- **Two fingers** pan by the midpoint's motion, pinch-zoom and twist the heading. Zoom and twist pivot on the midpoint, so the ground under the fingers stays under them (exact at nadir, approximate when tilted). Pinch zoom sets the altitude at once (`OrbitCamera.zoomAt`) instead of easing, because easing would make the ground lag the fingers.
+- **Three fingers** dragged up or down tilt the view. Two-finger vertical drags already pan, so tilt needs its own finger count.
+- The page blocks browser zoom (`user-scalable=no`, Safari `gesture*` events) so pinches reach the canvas.
+
+**Reason:** Owner testing on a tablet: the old handler kept a single "last position" shared by all pointers, so a second finger made the view jump and pinch did nothing.

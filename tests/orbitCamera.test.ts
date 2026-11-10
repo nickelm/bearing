@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_ORBIT_LIMITS, OrbitCamera } from '../src/render/orbitCamera';
+import { DEFAULT_ORBIT_LIMITS, OrbitCamera, twoFingerStep } from '../src/render/orbitCamera';
 import { DEG, KM, PLANET_RADIUS } from '../src/core/units';
 
 const R = PLANET_RADIUS;
@@ -88,5 +88,66 @@ describe('OrbitCamera', () => {
     const meters = (cam.lat - lat0) * R;
     expect(meters).toBeGreaterThan(1500);
     expect(meters).toBeLessThan(2500);
+  });
+
+  it('pinch zoom changes altitude at once and keeps the ground under the pinch center', () => {
+    const rpp = (50 * DEG) / 1000;
+    const cam = new OrbitCamera(R, DEFAULT_ORBIT_LIMITS, 20 * KM);
+    cam.lat = 0;
+    cam.lon = 0;
+    cam.update(0);
+    // Ground point 200 px right of center (east at heading 0): 200·rpp·h meters east.
+    const groundEast = 200 * rpp * cam.heightAboveGround;
+    cam.zoomAt(0.5, 200, 0, rpp);
+    expect(cam.altitude).toBeCloseTo(10 * KM, 6);
+    expect(cam.targetAltitude).toBeCloseTo(10 * KM, 6);
+    // After zooming, that point is again 200 px right of center.
+    const camEast = cam.lon * R;
+    expect((groundEast - camEast) / (rpp * cam.heightAboveGround)).toBeCloseTo(200, 3);
+    expect(cam.lat).toBeCloseTo(0, 12);
+  });
+
+  it('twist about the center only turns the heading', () => {
+    const cam = new OrbitCamera(R, DEFAULT_ORBIT_LIMITS, 20 * KM);
+    const { lat, lon } = cam;
+    cam.rotateAt(0.3, 0, 0, 0.001);
+    expect(cam.heading).toBeCloseTo(-0.3, 12);
+    expect(cam.lat).toBe(lat);
+    expect(cam.lon).toBe(lon);
+  });
+
+  it('twist about an off-center point keeps that point fixed', () => {
+    const rpp = 0.001;
+    const cam = new OrbitCamera(R, DEFAULT_ORBIT_LIMITS, 20 * KM);
+    cam.lat = 0;
+    cam.lon = 0;
+    cam.update(0);
+    // Ground point 100 px right of center: east of the camera.
+    const k = rpp * cam.heightAboveGround;
+    const target = { east: 100 * k, north: 0 };
+    cam.rotateAt(Math.PI / 2, 100, 0, rpp);
+    // Heading is now west, so screen-right points north: the target must sit
+    // 100 px north of the camera, which puts the camera 100 px south of it.
+    expect(cam.heading).toBeCloseTo(-Math.PI / 2, 12);
+    expect((cam.lon * R) / k).toBeCloseTo(target.east / k, 2);
+    expect((cam.lat * R) / k).toBeCloseTo(target.north / k - 100, 2);
+  });
+});
+
+describe('twoFingerStep', () => {
+  it('reports spread, centroid motion and clockwise rotation', () => {
+    const g = twoFingerStep({ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 10, y: 0 }, { x: 10, y: 200 });
+    expect(g.scale).toBeCloseTo(2, 12);
+    expect(g.rotation).toBeCloseTo(Math.PI / 2, 12);
+    expect(g.cx).toBe(10);
+    expect(g.cy).toBe(100);
+    expect(g.dx).toBe(-40);
+    expect(g.dy).toBe(100);
+  });
+
+  it('ignores scale and rotation when the fingers nearly touch', () => {
+    const g = twoFingerStep({ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 0, y: 0 }, { x: 0, y: 50 });
+    expect(g.scale).toBe(1);
+    expect(g.rotation).toBe(0);
   });
 });
