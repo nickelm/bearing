@@ -25,6 +25,7 @@ import {
 } from 'three/webgpu';
 import {
   attribute,
+  clamp,
   fwidth,
   Fn,
   length,
@@ -34,8 +35,10 @@ import {
   normalize,
   positionLocal,
   positionWorld,
+  step,
   uniform,
   varyingProperty,
+  vec3,
   vec4,
 } from 'three/tsl';
 import { directionToCubeFace } from '../../core/coords';
@@ -61,6 +64,14 @@ import { RiverShading, RiverStyle } from '../water/riverShading';
 import { RiverTables } from '../water/riverTables';
 import { WAVE_PERIOD, WaterShading } from '../water/waterShading';
 import type { RiverIndex } from '../../worldgen/riverIndex';
+import type { InfraScene } from '../infra/infraScene';
+import {
+  LightShading,
+  LightTables,
+  nightFactor,
+  RoadShading,
+  RoadStyle,
+} from '../infra/roadShading';
 import { LandShading } from './landShading';
 import { DEFAULT_LOD, selectTiles } from './quadtree';
 import type { LodOptions, LodView } from './quadtree';
@@ -97,6 +108,8 @@ export interface TerrainWorld {
   reliefScale: number;
   /** River segments to draw (decision 46); none when absent. */
   rivers?: RiverIndex;
+  /** Roads, airfield pavement and settlement lights (decision 65); none when absent. */
+  infra?: InfraScene;
 }
 
 export class TerrainRenderer {
@@ -123,6 +136,10 @@ export class TerrainRenderer {
   private readonly index = new BufferAttribute(buildTileIndex(), 1);
   private material: MeshBasicNodeMaterial;
   private rivers: RiverTables | null = null;
+  private roads: RiverTables | null = null;
+  private lights: LightTables | null = null;
+  /** Road, pavement and night-light settings (decision 65). */
+  readonly roadStyle = new RoadStyle();
   /** Sea and lake shading inside the terrain material (decision 37). */
   readonly water: WaterShading;
   /** River drawing settings (decision 46). */
@@ -201,6 +218,17 @@ export class TerrainRenderer {
       ({ object }) =>
         ((object as Mesh | undefined)?.userData.riverCount as number | undefined) ?? 0,
     );
+    const radius = this.world?.radius ?? 1e6;
+    const roads = new RoadShading(this.roads, radius, this.roadStyle);
+    const lights = new LightShading(this.lights, radius);
+    const objectUniform = (key: string) =>
+      uniform(0).onObjectUpdate(
+        ({ object }) => ((object as Mesh | undefined)?.userData[key] as number | undefined) ?? 0,
+      );
+    const roadStart = objectUniform('roadStart');
+    const roadCount = objectUniform('roadCount');
+    const lightStart = objectUniform('lightStart');
+    const lightCount = objectUniform('lightCount');
     const wrapOrigin = uniform(new Vector3()).onObjectUpdate(
       ({ object }) => ((object as Mesh | undefined)?.userData.wrap as Vector3 | undefined) ?? ZERO,
     );
@@ -245,7 +273,31 @@ export class TerrainRenderer {
       relative: positionWorld,
       wavePosition: wrapped,
     });
-    material.colorNode = this.lighting.applyAerial(surface, apInscatter, apTransmittance);
+    // Roads and pavement over dry land and rivers (a road over a river reads as a bridge).
+    const planet = this.lighting.planetPosition(positionWorld);
+    const footprint = length(fwidth(positionWorld));
+    const paved = roads.coverage(planet, roadStart, roadCount, footprint);
+    const dry = step(0.5, rawHeight).mul(step(lakeDepth, 0)).mul(this.land.enabled);
+    const asphalt = vec3(0.075, 0.075, 0.08);
+    const concrete = vec3(0.4, 0.39, 0.36);
+    const roadAlbedo = mix(
+      asphalt,
+      concrete,
+      clamp(paved.y.div(max(paved.x, 1e-4)), 0, 1),
+    ) as unknown as typeof normal;
+    const roadRadiance = this.lighting.shadeDiffuse(roadAlbedo, normal, positionWorld);
+    const withRoads = mix(surface, roadRadiance, paved.x.mul(dry));
+    // Settlement lights on the night side (sodium orange), plus a glow along paved roads.
+    const night = nightFactor(radial, this.lighting.sunDirection);
+    const glow = lights
+      .emission(planet, lightStart, lightCount, footprint)
+      .add(paved.x.mul(0.05))
+      .mul(night)
+      .mul(dry)
+      .mul(this.roadStyle.lights)
+      .mul(0.08);
+    const lit = withRoads.add(vec3(1, 0.7, 0.38).mul(glow));
+    material.colorNode = this.lighting.applyAerial(lit, apInscatter, apTransmittance);
     return material;
   }
 
@@ -274,6 +326,10 @@ export class TerrainRenderer {
       this.land.reliefScale.value = world.reliefScale;
     }
     this.rivers = world?.rivers ? new RiverTables(world.rivers, world.radius) : null;
+    this.roads = world?.infra
+      ? new RiverTables(world.infra, world.radius, { coarseMinWidth: 12, coarseCap: 200 })
+      : null;
+    this.lights = world?.infra ? new LightTables(world.infra.lights, world.radius) : null;
     const old = this.material;
     this.material = this.buildMaterial();
     old.dispose();
@@ -360,6 +416,12 @@ export class TerrainRenderer {
     const river = this.rivers?.rangeFor(t);
     mesh.userData.riverStart = river?.start ?? 0;
     mesh.userData.riverCount = river?.count ?? 0;
+    const road = this.roads?.rangeFor(t);
+    mesh.userData.roadStart = road?.start ?? 0;
+    mesh.userData.roadCount = road?.count ?? 0;
+    const light = this.lights?.rangeFor(t);
+    mesh.userData.lightStart = light?.start ?? 0;
+    mesh.userData.lightCount = light?.count ?? 0;
     mesh.visible = false;
     this.group.add(mesh);
     this.meshes.set(t, mesh, MESH_BYTES);

@@ -37,7 +37,7 @@ export interface RiverSegments {
 const FIELDS = 8;
 
 /** Two Chaikin corner-cutting passes on a polyline of unit vectors with attributes. */
-function chaikin(pts: number[][], passes: number): number[][] {
+export function chaikin(pts: number[][], passes: number): number[][] {
   let p = pts;
   for (let pass = 0; pass < passes; pass++) {
     if (p.length < 3) return p;

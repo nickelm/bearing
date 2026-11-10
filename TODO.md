@@ -159,20 +159,26 @@ The strategic graph is the only view of the world that theater detection, castin
 
 ## Milestone 5: Settlements, roads, ports, airbases (placed from the cast)
 
-- [ ] Settlement site scoring (river confluences, coasts, fertile lowlands); placement with population, denser in each side's industry regions
-- [ ] Ports at the cast's port sites (sea-lane ends, island ports)
-- [ ] Movement cost map from slope, terrain and water
-- [ ] Least-cost road paths between settlements, merged where they overlap
-- [ ] Bridges at river crossings, as targetable features
-- [ ] Airbase site search on flat, low terrain near roads
-- [ ] Airbase density by distance behind each front (densest 100–400 km back); strategic bomber bases far from the front
-- [ ] Island airfields and forward airfields at chokepoints
-- [ ] Industry and logistics sites as targets for the strategic theater
-- [ ] Refine invasion corridors with the road network
-- [ ] Road rendering
-- [ ] Settlement building clusters scaled by population
-- [ ] Night-side settlement lights
-- [ ] Airbase runway meshes
+Civilian geography (settlements, roads, bridges) joins the strategic graph before casting; ports, airbases and targets follow the cast (decision 65). Everything runs on the coarse pass, on the CPU.
+
+- [x] Settlement site scoring (river confluences, coasts, fertile lowlands); placement with population, denser in each side's industry regions (casting puts industry regions on the largest urban clusters)
+- [x] Ports at the cast's port sites (sea-lane ends, island ports), plus commercial ports
+- [x] Movement cost map from slope, terrain and water
+- [x] Least-cost road paths between settlements, merged where they overlap
+- [x] Bridges at river crossings, as targetable features
+- [x] Airbase site search on flat, low terrain near roads
+- [x] Airbase density by distance behind each front (densest 100–400 km back); strategic bomber bases far from the front
+- [x] Island airfields and forward airfields at chokepoints
+- [x] Industry and logistics sites as targets for the strategic theater
+- [x] Refine invasion corridors with the road network
+- [x] Road rendering (terrain shader, like rivers)
+- [x] Settlement building clusters scaled by population
+- [x] Night-side settlement lights
+- [x] Airbase runway meshes (drawn as concrete in the terrain shader, plus hangar and shelter meshes; decision 65)
+- [x] Tools: `npm run maps` graph mode draws settlements, roads, bridges, airbases, ports and targets; `npm run seeds` and the seed browser report them; render preview views `town`, `airbase`, `roads`, `night`
+- [ ] Snap bridges to the rendered (eroded) rivers, which can run a few kilometers from the coarse ones (decision 65)
+- [ ] Flatten the terrain under runways (they follow the fine terrain's detail noise)
+- [ ] Checkpoint 6: owner review of towns, roads, airbases and night lights in the browser
 
 ## Milestone 6: Simulation core and weather
 
@@ -231,7 +237,7 @@ The strategic graph is the only view of the world that theater detection, castin
 - [ ] Subscriptions: a saved query plus a phase triggers auto-slowdown to 1× and offers the mission
 - [ ] Intelligence overlay: the viewing side's contacts and satellite tracks
 - [ ] Follow representative sorties to judge the range factor (design open question)
-- [ ] Checkpoint 6: owner review of the ATO, mission search, subscriptions and the chase camera
+- [ ] Checkpoint 7: owner review of the ATO, mission search, subscriptions and the chase camera
 
 ## Milestone 8: Ground and naval aggregates
 

@@ -25,11 +25,12 @@ docs/decisions.md   architecture decision log
 src/core/           units, float64 Vec3d, coordinates, seeded RNG. Leaf layer.
 src/worldgen/       planet generation pipeline stages (may use GPU compute)
   coarsePass.ts     pipeline steps 1–9 at 256² on the CPU; campaignWorld.ts adds the validity retries
-  strategic/        strategic graph types and builder: the only world view campaign logic gets
+  strategic/        strategic graph types and builder (settlements, roads, bridges), and infrastructure
+                    placed after casting: the only world view campaign logic gets
 src/campaign/       theater detection, casting, briefing, validity check (reads the strategic graph only)
 src/sim/            headless simulation; runs in a worker
   command/          per-side command layer: intelligence picture, ATO (graph and cast only)
-src/render/         terrain, atmosphere, ocean, units, cameras (Three.js WebGPU + TSL)
+src/render/         terrain, atmosphere, ocean, roads, buildings, units, cameras (Three.js WebGPU + TSL)
 src/ui/             lil-gui debug panel, overlays, time controls
 src/workers/        worker entry points and message protocols
 src/main.ts         app entry: WebGPU checks, renderer, scene, GUI
@@ -95,7 +96,7 @@ Promotion expands a unit deterministically from its seed and current strength. D
 - Record any architectural decision, or any deviation from `docs/design.md`, in `docs/decisions.md` with the date, the decision and the reason.
 - Run `npm test` and `npm run typecheck` (or `npm run check`) before declaring a task complete.
 - Prefer small, reviewable commits with descriptive messages.
-- You cannot see the WebGPU view. To inspect generated worlds, run `npm run maps` and read the PNGs in `tools/out/` (equirectangular map plus both polar caps, any view mode). `MODES=graph` draws the strategic graph and the cast's territory (and prints the briefing); `MODES=barrier` shows the front generator's barrier map.
+- You cannot see the WebGPU view. To inspect generated worlds, run `npm run maps` and read the PNGs in `tools/out/` (equirectangular map plus both polar caps, any view mode). `MODES=graph` draws the strategic graph, the cast's territory, settlements, roads, bridges, airbases, ports and targets (and prints the briefing); `MODES=barrier` shows the front generator's barrier map.
 - When a task produces something visual, tell the user what they should see and how to check it in the browser (`npm run dev`, which GUI controls to use, and what would indicate a bug).
 
 ## Tooling notes
@@ -105,7 +106,7 @@ Promotion expands a unit deterministically from its seed and current strength. D
   - Run compute with `Fn(() => …)().compute(count)` and `renderer.compute()` or `computeAsync()`.
   - Read back with `renderer.getArrayBufferAsync(storageNode.value)`.
 - **World-generation GPU code is plain WGSL on a raw `GPUDevice`** (`src/worldgen/gpu/`, decision 26). Vitest runs it on this machine's GPU through Dawn's Node bindings (the `webgpu` dev dependency); GPU tests skip without an adapter. With webgpu 0.6.2 on Windows, `queue.onSubmittedWorkDone()` and error scopes after a buffer map crash Node: use `GpuContext.finish()` and `GpuContext.errors`. Write kernel checks as self-tests in `worldgen/gpu/selfTests.ts`, so they also run in the browser (GUI → Self-tests).
-- **Seeing the rendered scene without a browser:** `npx vitest run --config vitest.tools.config.ts tools/render.preview.ts` draws the app's `GlobeScene` with three's `WebGPURenderer` on Dawn (decision 32) from fixed views (`VIEWS=orbit,limb,terminator,oblique,low,coast,glint,sea,shore,lake,trees,winter,mountains,sunset`; `CLOUDS=0` hides clouds) and writes `tools/out/render-*.png`. Read them to judge shading and atmosphere. The first run per world generates it (about 25 s); later runs load it from a disk cache in the OS temp directory.
+- **Seeing the rendered scene without a browser:** `npx vitest run --config vitest.tools.config.ts tools/render.preview.ts` draws the app's `GlobeScene` with three's `WebGPURenderer` on Dawn (decision 32) from fixed views (`VIEWS=orbit,limb,terminator,oblique,low,coast,glint,sea,shore,lake,trees,winter,mountains,sunset,town,airbase,roads,night`; `CLOUDS=0` hides clouds) and writes `tools/out/render-*.png`. Read them to judge shading and atmosphere. The first run per world generates it (about 25 s); later runs load it from a disk cache in the OS temp directory.
 - **Seeing terrain without a browser:** `npx vitest run --config vitest.tools.config.ts tools/terrain.preview.ts` runs the whole pipeline on Dawn and writes PNGs to `tools/out/`. Read them to judge changes.
 - **TypeScript is pinned to 6.0.** TypeScript 7 (the native compiler) is out, but typescript-eslint 8.x supports only `<6.1`. See `docs/decisions.md`.
 - Vite's cache lives in the OS temp directory (`cacheDir` in `vite.config.ts`), not `node_modules/.vite`, because the repo is in Dropbox and the in-tree cache fails with `EBUSY`. To clear it, delete `%TEMP%/vite-cache/bearing-*`.

@@ -33,6 +33,9 @@ import { testGpu } from '../tests/gpu/device';
 import { headlessRenderer } from '../tests/gpu/renderer';
 import { encodePng } from './png';
 import { previewWorld } from './previewWorld';
+import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
+import { settlementPoint } from '../src/worldgen/strategic/graph';
+import { InfraScene } from '../src/render/infra/infraScene';
 
 export interface PreviewView {
   name: string;
@@ -48,9 +51,10 @@ export interface PreviewView {
   day?: number;
   /**
    * Center on a feature instead of dLat/dLon: the deepest lake below 55°
-   * latitude, or the densely forested cell nearest the main continent.
+   * latitude, the densely forested cell nearest the main continent, the
+   * largest city, or the first main airbase (milestone 5).
    */
-  target?: 'lake' | 'forest';
+  target?: 'lake' | 'forest' | 'city' | 'airbase';
 }
 
 export const PREVIEW_VIEWS: PreviewView[] = [
@@ -176,6 +180,45 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     heading: 275 * DEG,
     localTime: 18.95,
   },
+  {
+    name: 'town',
+    dLat: 0,
+    dLon: 0,
+    altitude: 3 * KM,
+    tilt: 60 * DEG,
+    heading: 0,
+    localTime: 10,
+    target: 'city',
+  },
+  {
+    name: 'airbase',
+    dLat: 0,
+    dLon: 0,
+    altitude: 2 * KM,
+    tilt: 55 * DEG,
+    heading: 0,
+    localTime: 10,
+    target: 'airbase',
+  },
+  {
+    name: 'roads',
+    dLat: 0,
+    dLon: 0,
+    altitude: 60 * KM,
+    tilt: 0,
+    heading: 0,
+    localTime: 10,
+    target: 'city',
+  },
+  {
+    name: 'night',
+    dLat: 0,
+    dLon: 0,
+    altitude: 1500 * KM,
+    tilt: 0,
+    heading: 0,
+    localTime: 0,
+  },
 ];
 
 const env = (k: string, d: string) => process.env[k] ?? d;
@@ -192,8 +235,11 @@ it('renders preview views', async () => {
   const wanted = env('VIEWS', '');
   const views = PREVIEW_VIEWS.filter((v) => !wanted || wanted.split(',').includes(v.name));
 
-  const params = { ...DEFAULT_PLANET_PARAMS, seed };
+  // The campaign world first: the global pass uses the seed that passed the validity check.
+  const campaign = generateCampaignWorld({ ...DEFAULT_PLANET_PARAMS, seed });
+  const params = { ...DEFAULT_PLANET_PARAMS, seed: campaign.seed };
   const { world, global } = await previewWorld(gpu, params, tres, gres);
+  const infra = new InfraScene(campaign.graph, campaign.infrastructure, params.radius);
 
   const head = await headlessRenderer(gpu.device, width, height);
   const scene = new GlobeScene(head.renderer, {
@@ -226,7 +272,9 @@ it('renders preview views', async () => {
     radius: params.radius,
     reliefScale: params.reliefScale,
     rivers: riverIndex,
+    infra,
   });
+  scene.setInfrastructure(infra);
   scene.terrainReady = true;
 
   const main = new Vec3d(...world.info.mainContinent);
@@ -239,7 +287,17 @@ it('renders preview views', async () => {
   const lakeDepth = global.finish.drainage.lakeDepth;
   const forestMap = global.finish.forest;
   const cellDir = new Vec3d();
-  const targets: Record<'lake' | 'forest', Vec3d | null> = { lake: null, forest: null };
+  const sp = campaign.graph.settlements;
+  let biggest = 0;
+  for (let i = 1; i < sp.cells.length; i++)
+    if (sp.population[i]! > sp.population[biggest]!) biggest = i;
+  const base = campaign.infrastructure.airbases.find((a) => a.kind === 'main');
+  const targets: Record<NonNullable<PreviewView['target']>, Vec3d | null> = {
+    lake: null,
+    forest: null,
+    city: sp.cells.length ? new Vec3d(...settlementPoint(sp, biggest)) : null,
+    airbase: base ? new Vec3d(...base.point) : null,
+  };
   let deepest = 0;
   let nearest = -2;
   for (let c = 0; c < lakeDepth.length; c++) {
@@ -301,7 +359,9 @@ it('renders preview views', async () => {
       const s = scene.terrain.stats;
       const sig = `${s.drawn}/${s.deepest}/${s.meshes}`;
       if (process.env.DEBUG) console.log(v.name, f, JSON.stringify(s), o.tilt, o.altitude);
-      const treesPending = scene.forest.group.visible ? scene.forest.stats.pending : 0;
+      const treesPending =
+        (scene.forest.group.visible ? scene.forest.stats.pending : 0) +
+        (scene.structures.group.visible ? scene.structures.stats.pending : 0);
       stable = s.pending === 0 && treesPending === 0 && sig === last ? stable + 1 : 0;
       last = sig;
     }
@@ -319,6 +379,9 @@ it('renders preview views', async () => {
         if ((m.userData.riverCount as number) > 0) withRivers++;
       });
       console.log(`  meshes ${total}, with rivers ${withRivers}`);
+    }
+    if (scene.structures.stats.instances) {
+      console.log(`  buildings: ${scene.structures.stats.instances}`);
     }
     if (scene.forest.stats.instances) {
       console.log(

@@ -23,6 +23,7 @@ import {
 } from 'three/webgpu';
 import type { Cast, Region } from '../../campaign/cast';
 import type { Point, StrategicGraph } from '../../worldgen/strategic/graph';
+import type { Infrastructure } from '../../worldgen/strategic/infrastructure';
 import { polylinePoint } from '../../worldgen/strategic/graph';
 import { Vec3d } from '../../core/vec3d';
 
@@ -45,6 +46,10 @@ const REGION: Record<Region['kind'], Rgb> = {
   port: [0.3, 0.6, 1],
   ground: [1, 0.3, 0.3],
 };
+
+const TARGET: Rgb = [1, 0.55, 0.1];
+const BRIDGE: Rgb = [0.9, 0.9, 0.9];
+const PORT_MARK: Rgb = [0.3, 0.75, 1];
 
 function barrierColor(s: number): Rgb {
   return [1 - 0.4 * s, 0.75 * (1 - s), 0.1];
@@ -90,13 +95,12 @@ class LineBuilder {
   }
 
   /** Circle of surface radius `r` (m) around `center`; `dashed` skips every other segment. */
-  circle(center: Readonly<Point>, r: number, c: Readonly<Rgb>, dashed = false): void {
+  circle(center: Readonly<Point>, r: number, c: Readonly<Rgb>, dashed = false, k = 32): void {
     const ang = r / this.radius;
     const n = new Vec3d(...center);
     const ref = Math.abs(n.y) < 0.9 ? new Vec3d(0, 1, 0) : new Vec3d(1, 0, 0);
     const e1 = ref.clone().cross(n).normalize();
     const e2 = n.clone().cross(e1);
-    const k = 32;
     const at = (i: number): Point => {
       const t = (i / k) * 2 * Math.PI;
       const cs = Math.cos(ang);
@@ -130,7 +134,11 @@ export class StrategicOverlay {
     this.group.visible = false;
   }
 
-  setWorld(graph: StrategicGraph | null, cast: Cast | null): void {
+  setWorld(
+    graph: StrategicGraph | null,
+    cast: Cast | null,
+    infra: Infrastructure | null = null,
+  ): void {
     if (this.mesh) {
       this.group.remove(this.mesh);
       this.mesh.geometry.dispose();
@@ -187,6 +195,27 @@ export class StrategicOverlay {
         const line = graph.barrierLines[f.start]!;
         b.circle(line.sides[f.forwardSide].centroid, 80e3, PACT);
         b.circle(line.sides[f.forwardSide === 1 ? 0 : 1].centroid, 80e3, ALLIANCE);
+      }
+    }
+    if (infra) {
+      // Airbases as squares in the side's color (bomber bases larger), ports as
+      // diamonds, targets as small rings, bridges as small white rings.
+      for (const a of infra.airbases) {
+        const size = a.kind === 'bomber' ? 22e3 : a.kind === 'main' ? 14e3 : 10e3;
+        b.circle(a.point, size, a.side === 'alliance' ? ALLIANCE : PACT, false, 4);
+      }
+      for (const p of infra.ports)
+        b.circle(p.point, p.kind === 'military' ? 16e3 : 10e3, PORT_MARK, false, 4);
+      for (const t of infra.targets) b.circle(t.point, 6e3, TARGET, false, 8);
+      const br = graph.bridges;
+      for (let i = 0; i < br.cells.length; i++) {
+        b.circle(
+          [br.points[i * 3]!, br.points[i * 3 + 1]!, br.points[i * 3 + 2]!],
+          3e3,
+          BRIDGE,
+          false,
+          6,
+        );
       }
     }
     const geo = new BufferGeometry();

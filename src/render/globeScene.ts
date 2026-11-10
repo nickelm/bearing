@@ -28,6 +28,8 @@ import { PlanetLighting } from './lighting/planetLighting';
 import { TerrainRenderer } from './terrain/terrainRenderer';
 import { OrbitCamera, attachOrbitInput } from './orbitCamera';
 import { StrategicOverlay } from './strategic/strategicOverlay';
+import { StructureLayer } from './infra/structureLayer';
+import type { InfraScene } from './infra/infraScene';
 
 const PLANET_CENTER = new Vec3d(0, 0, 0);
 
@@ -51,6 +53,8 @@ export class GlobeScene {
   readonly terrain: TerrainRenderer;
   /** Instanced tree clumps near the camera (decision 45). */
   readonly forest: ForestLayer;
+  /** Buildings of towns, airbases and industry near the camera (decision 65). */
+  readonly structures: StructureLayer;
   /** Cloud shell and cloud shadows (decision 55). */
   readonly clouds: CloudLayer;
   /** Strategic graph and cast overlay (milestone 4). */
@@ -78,6 +82,7 @@ export class GlobeScene {
     this.lighting.sunVisibility = (p) => this.clouds.shadow(p);
     this.terrain = new TerrainRenderer(this.lighting, this.climate);
     this.forest = new ForestLayer(this.terrain, this.lighting, this.climate, this.terrain.land);
+    this.structures = new StructureLayer(this.terrain, this.lighting);
     // The sky: single scattering along each view ray, drawn behind everything (decision 35).
     this.scene.backgroundNode = this.lighting.atmosphere.skyNode();
     this.globe = new GlobeMesh(options.grid, options.radius);
@@ -86,6 +91,7 @@ export class GlobeScene {
       this.globe.group,
       this.terrain.group,
       this.forest.group,
+      this.structures.group,
       this.clouds.group,
       this.strategic.group,
     );
@@ -103,6 +109,15 @@ export class GlobeScene {
             this.orbit,
             () => (this.camera.fov * Math.PI) / 180 / this.viewportHeight,
           );
+  }
+
+  /**
+   * Infrastructure drawn on the terrain (decision 65): buildings and tree
+   * clearings here; roads and lights come with the terrain world.
+   */
+  setInfrastructure(scene: InfraScene | null): void {
+    this.structures.setScene(scene);
+    this.forest.setClearings(scene ? (d) => scene.isClear(d) : undefined);
   }
 
   resize(width: number, height: number): void {
@@ -154,8 +169,10 @@ export class GlobeScene {
       });
       const ground = o.groundHeight ?? 0;
       this.forest.update(o.eye, o.altitude - Math.max(0, ground));
+      this.structures.update(o.eye, o.altitude - Math.max(0, ground));
     } else {
       this.forest.group.visible = false;
+      this.structures.group.visible = false;
     }
 
     // Above the highest exaggerated terrain, so the lines are not buried.
@@ -169,6 +186,7 @@ export class GlobeScene {
     this.globe.dispose();
     this.terrain.dispose();
     this.forest.dispose();
+    this.structures.dispose();
     this.clouds.dispose();
     this.strategic.dispose();
   }

@@ -123,6 +123,8 @@ export function placeTrees(
   data: TileData,
   opts: MeshOptions,
   seed: WorldSeed,
+  /** Directions where no tree may stand (towns, airfields, roads; decision 65). */
+  clear?: (d: Readonly<Vec3d>) => boolean,
 ): TreeInstances {
   const R = opts.radius;
   const size = TILE_TEXELS * (1 << t.level);
@@ -161,6 +163,7 @@ export function placeTrees(
       const h = ground(sx, sy, d);
       const level = lake(sx, sy);
       if (h <= 0 || (level > NO_LAKE / 2 && level > h)) continue;
+      if (clear?.(d)) continue;
       // Conifers in taiga and temperate rainforest, a few in temperate forest.
       const biome =
         data.material[
@@ -218,6 +221,7 @@ export class ForestLayer {
   private frame = 0;
   private readonly scratch = new Vec3d();
   private lastWorld: unknown = null;
+  private clearings: ((d: Readonly<Vec3d>) => boolean) | undefined;
 
   constructor(
     private readonly terrain: TerrainRenderer,
@@ -291,6 +295,12 @@ export class ForestLayer {
     return m;
   }
 
+  /** Sets where trees must not stand, and rebuilds the trees. */
+  setClearings(clear: ((d: Readonly<Vec3d>) => boolean) | undefined): void {
+    this.clearings = clear;
+    this.clear();
+  }
+
   /** Builds, places and evicts tree tiles around the camera. Call once per frame after the terrain. */
   update(eye: Readonly<Vec3d>, heightAboveGround: number): void {
     this.frame++;
@@ -345,7 +355,7 @@ export class ForestLayer {
         pending++;
         continue;
       }
-      this.tiles.set(s, this.build(placeTrees(k, data, opts, world.seed)));
+      this.tiles.set(s, this.build(placeTrees(k, data, opts, world.seed, this.clearings)));
     }
     this.stats.pending = pending;
 

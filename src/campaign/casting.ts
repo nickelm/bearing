@@ -348,15 +348,17 @@ function castRegions(
         maxMass = Math.max(maxMass, m);
         return m;
       });
-      towns.forEach((t, i) => {
-        const u = rs.nextFloat();
-        const split = owners[t.node]!.kind === 'split';
-        if (split && t.depth < Math.min(400e3, 0.6 * deepest.get(t.node)!)) return;
-        cands.push({
-          point: settlementPoint(pts, t.index),
-          key: Math.sqrt(mass[i]! / maxMass) * (0.75 + 0.5 * u),
-        });
-      });
+      const all = towns.map((t, i) => ({
+        deep: !(
+          owners[t.node]!.kind === 'split' &&
+          t.depth < Math.min(400e3, 0.6 * deepest.get(t.node)!)
+        ),
+        point: settlementPoint(pts, t.index),
+        key: Math.sqrt(mass[i]! / maxMass) * (0.75 + 0.5 * rs.nextFloat()),
+      }));
+      // Deep in the territory where possible; anywhere it holds towns otherwise.
+      const deep = all.filter((c) => c.deep);
+      cands.push(...(deep.length > 0 ? deep : all));
     } else {
       // No settlements (synthetic worlds): flat lowland sites, as before milestone 5.
       for (let id = 0; id < nodes.length; id++) {

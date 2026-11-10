@@ -26,7 +26,7 @@
 import { tileForDirection, tileKey, tileKeyString } from '../../core/tiles';
 import type { TileKey } from '../../core/tiles';
 import { Vec3d } from '../../core/vec3d';
-import type { RiverIndex } from '../../worldgen/riverIndex';
+import type { RiverSegments } from '../../worldgen/riverIndex';
 
 export const FINE_LEVEL = 7;
 export const COARSE_LEVEL = 4;
@@ -38,6 +38,18 @@ export const COARSE_CAP = 160;
 export const COARSE_MERGE = 8;
 /** Extra reach in coarse lists (m): pixels are large where coarse tiles are drawn. */
 const COARSE_MARGIN = 2000;
+
+/**
+ * Options for other vector features drawn the same way (roads, decision 65).
+ * A negative width marks a segment for the caller's shader (e.g. concrete);
+ * reach and coarse thresholds use its magnitude.
+ */
+export interface SegmentTableOptions {
+  /** Narrowest feature kept in coarse lists (m); default COARSE_MIN_WIDTH. */
+  coarseMinWidth?: number;
+  /** Most chords per coarse list; default COARSE_CAP. */
+  coarseCap?: number;
+}
 
 export interface RiverRange {
   start: number;
@@ -52,7 +64,13 @@ export class RiverTables {
   private readonly fine = new Map<string, RiverRange>();
   private readonly coarse = new Map<string, RiverRange>();
 
-  constructor(index: RiverIndex, radius: number) {
+  constructor(
+    index: { readonly segments: RiverSegments },
+    radius: number,
+    options: SegmentTableOptions = {},
+  ) {
+    const coarseMinWidth = options.coarseMinWidth ?? COARSE_MIN_WIDTH;
+    const coarseCap = options.coarseCap ?? COARSE_CAP;
     const n = index.segments.count;
     const fineSrc = index.segments.data;
 
@@ -61,6 +79,7 @@ export class RiverTables {
     for (let s = 0; s < n;) {
       let e = s;
       let width = Math.max(fineSrc[s * 8 + 6]!, fineSrc[s * 8 + 7]!);
+      const sign = Math.sign(fineSrc[s * 8 + 6]!) || 1;
       while (e + 1 < n && e + 1 - s < COARSE_MERGE) {
         const o = e * 8;
         const q = (e + 1) * 8;
@@ -69,7 +88,7 @@ export class RiverTables {
           fineSrc[o + 4]! - fineSrc[q + 1]!,
           fineSrc[o + 5]! - fineSrc[q + 2]!,
         );
-        if (gap > 1e-9) break;
+        if (gap > 1e-9 || (Math.sign(fineSrc[(e + 1) * 8 + 6]!) || 1) !== sign) break;
         e++;
         width = Math.max(width, fineSrc[e * 8 + 6]!, fineSrc[e * 8 + 7]!);
       }
@@ -126,7 +145,7 @@ export class RiverTables {
     };
     const keys = new Set<string>();
     for (let s = 0; s < n; s++) {
-      const w = Math.max(src[s * 8 + 6]!, src[s * 8 + 7]!);
+      const w = Math.max(Math.abs(src[s * 8 + 6]!), Math.abs(src[s * 8 + 7]!));
       keys.clear();
       keysAround(FINE_LEVEL, w / 2 + FINE_MARGIN, s, keys);
       for (const key of keys) {
@@ -137,7 +156,7 @@ export class RiverTables {
     }
     for (let s = n; s < total; s++) {
       const w = src[s * 8 + 6]!;
-      if (w >= COARSE_MIN_WIDTH) {
+      if (w >= coarseMinWidth) {
         keys.clear();
         keysAround(COARSE_LEVEL, w / 2 + COARSE_MARGIN, s, keys);
         for (const key of keys) {
@@ -156,7 +175,7 @@ export class RiverTables {
     }
     for (const [key, c] of coarse) {
       const order = c.ids.map((_, i) => i).sort((x, y) => c.widths[y]! - c.widths[x]! || x - y);
-      const ids = order.slice(0, COARSE_CAP).map((i) => c.ids[i]!);
+      const ids = order.slice(0, coarseCap).map((i) => c.ids[i]!);
       this.coarse.set(key, { start: all.length, count: ids.length });
       for (const id of ids) all.push(id);
     }

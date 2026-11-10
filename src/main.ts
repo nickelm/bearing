@@ -18,6 +18,7 @@ import { Vec3d } from './core/vec3d';
 import { DEFAULT_PLANET_PARAMS } from './worldgen/params';
 import type { PlanetParams } from './worldgen/params';
 import { GlobeScene } from './render/globeScene';
+import { InfraScene } from './render/infra/infraScene';
 import { VIEW_MODES } from './render/globeMesh';
 import type { ViewMode } from './render/globeMesh';
 import { runComputeSmokeTest } from './render/computeSmokeTest';
@@ -112,6 +113,7 @@ async function main(): Promise<void> {
     tileMemory: 600,
     trees: true,
     treeRange: 5,
+    buildings: true,
   };
 
   // Preview clock until the sim's game clock exists (milestone 6): GameTime and
@@ -139,7 +141,7 @@ async function main(): Promise<void> {
   };
   const campaignPanel = new CampaignPanel();
   const showStrategic = (s: StrategicWorld | null) => {
-    globe.strategic.setWorld(s?.graph ?? null, s?.campaign.cast ?? null);
+    globe.strategic.setWorld(s?.graph ?? null, s?.campaign.cast ?? null, s?.infrastructure ?? null);
     if (!s) {
       campaignPanel.visible = false;
       campaignParams.seedUsed = '—';
@@ -209,7 +211,12 @@ async function main(): Promise<void> {
       calendar = defaultCampaignStart(new Vec3d(...world.info.mainContinent), orbitParams);
       gameTime = 0;
     };
-    const showGlobal = (world: World, global: GlobalWorld, params: PlanetParams) => {
+    const showGlobal = (
+      world: World,
+      global: GlobalWorld,
+      params: PlanetParams,
+      strategic: StrategicWorld,
+    ) => {
       // Switch the terrain to the new world first, then free the old one once any
       // tile batch still running on it has finished.
       const old = globalWorld;
@@ -226,13 +233,17 @@ async function main(): Promise<void> {
         treeline: global.finish.treeline,
         index: riverIndex,
       });
+      // Roads, airfields, lights and buildings from the coarse pass (decision 65).
+      const infra = new InfraScene(strategic.graph, strategic.infrastructure, params.radius);
       globe.terrain.setWorld({
         synth,
         seed: params.seed,
         radius: params.radius,
         reliefScale: params.reliefScale,
         rivers: riverIndex,
+        infra,
       });
+      globe.setInfrastructure(infra);
       globe.terrainReady = true;
       if (old || oldSynth) {
         setTimeout(() => {
@@ -267,10 +278,12 @@ async function main(): Promise<void> {
       if (stored?.strategic) {
         showTectonic(stored.tectonic);
         showStrategic(stored.strategic);
-        showGlobal(stored.tectonic, restoreGlobalWorld(gpu, stored.global), {
-          ...params,
-          seed: stored.strategic.seed,
-        });
+        showGlobal(
+          stored.tectonic,
+          restoreGlobalWorld(gpu, stored.global),
+          { ...params, seed: stored.strategic.seed },
+          stored.strategic,
+        );
         gui.status.generation = `cached (${((performance.now() - t0) / 1000).toFixed(1)} s)`;
         return;
       }
@@ -303,7 +316,7 @@ async function main(): Promise<void> {
         global.grid.dispose();
         return;
       }
-      showGlobal(world, global, worldSeedParams);
+      showGlobal(world, global, worldSeedParams, strategic);
       const total = performance.now() - t0;
       gui.status.generation = `done in ${(total / 1000).toFixed(1)} s`;
       console.info(
@@ -384,6 +397,7 @@ async function main(): Promise<void> {
       globe.terrain.budgetMiB = v.tileMemory;
       globe.forest.enabled = v.trees;
       globe.forest.range.value = v.treeRange * KM;
+      globe.structures.enabled = v.buildings;
     },
     shapeChanged: (v) => {
       globe.globe.setExaggeration(v.exaggeration);
@@ -457,6 +471,9 @@ async function main(): Promise<void> {
     temperatureShift: 0,
     detail: globe.terrain.land.detail.value,
     riverLegibility: globe.terrain.riverStyle.legibility.value,
+    roads: true,
+    roadLegibility: globe.terrain.roadStyle.legibility.value,
+    nightLights: globe.terrain.roadStyle.lights.value,
     clouds: true,
     cloudCover: 0,
   };
@@ -473,6 +490,9 @@ async function main(): Promise<void> {
     globe.terrain.land.temperatureOffset.value = l.temperatureShift;
     globe.terrain.land.detail.value = l.detail;
     globe.terrain.riverStyle.legibility.value = l.riverLegibility;
+    globe.terrain.roadStyle.enabled.value = l.roads ? 1 : 0;
+    globe.terrain.roadStyle.legibility.value = l.roadLegibility;
+    globe.terrain.roadStyle.lights.value = l.nightLights;
     globe.clouds.enabled.value = l.clouds ? 1 : 0;
     globe.clouds.coverageBias.value = l.cloudCover;
   });
@@ -553,6 +573,10 @@ async function main(): Promise<void> {
     gui.status.trees = globe.forest.group.visible
       ? `${fs.instances} clumps in ${fs.tiles} tiles${fs.pending ? `, ${fs.pending} loading` : ''}`
       : 'off (shown below 8 km)';
+    const bs = globe.structures.stats;
+    gui.status.buildings = globe.structures.group.visible
+      ? `${bs.instances} in ${bs.tiles} tiles${bs.pending ? `, ${bs.pending} loading` : ''}`
+      : 'off (shown below 15 km)';
     gui.status.tiles = !globe.terrainReady
       ? 'waiting for the global pass'
       : tilesBlocked && viewParams.tiles

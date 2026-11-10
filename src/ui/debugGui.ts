@@ -33,6 +33,8 @@ export interface ViewGuiParams {
   trees: boolean;
   /** Tree range (km). */
   treeRange: number;
+  /** Instanced buildings of towns, airbases and industry near the camera. */
+  buildings: boolean;
 }
 
 /** Preview clock controls (until the sim clock exists, milestone 6). */
@@ -66,6 +68,12 @@ export interface LightingGuiParams {
   detail: number;
   /** How readable sub-pixel rivers are (0 = physically faint). */
   riverLegibility: number;
+  /** Roads and airfield pavement drawn on the terrain. */
+  roads: boolean;
+  /** How readable sub-pixel roads are. */
+  roadLegibility: number;
+  /** Settlement lights on the night side (0 = off). */
+  nightLights: number;
   clouds: boolean;
   /** Cloud coverage bias (positive is cloudier). */
   cloudCover: number;
@@ -111,6 +119,7 @@ export interface DebugGuiStatus {
   worker: string;
   tiles: string;
   trees: string;
+  buildings: string;
 }
 
 export interface DebugGuiCallbacks {
@@ -140,6 +149,7 @@ export class DebugGui {
     worker: 'pending',
     tiles: '—',
     trees: '—',
+    buildings: '—',
   };
 
   constructor(
@@ -209,6 +219,9 @@ export class DebugGui {
     t.add(view, 'treeRange', 1, 8, 0.5)
       .name('Tree range (km)')
       .onFinishChange(() => callbacks.viewChanged(view));
+    t.add(view, 'buildings')
+      .name('Buildings')
+      .onChange(() => callbacks.viewChanged(view));
 
     const st = this.gui.addFolder('Status');
     st.add(this.status, 'generation').name('Generation').disable().listen();
@@ -221,6 +234,7 @@ export class DebugGui {
     st.add(this.status, 'worker').name('Sim worker').disable().listen();
     st.add(this.status, 'tiles').name('Tiles').disable().listen();
     st.add(this.status, 'trees').name('Trees').disable().listen();
+    st.add(this.status, 'buildings').name('Buildings').disable().listen();
   }
 
   /** Adds a top-level folder above Status (lil-gui appends, so move its element). */
@@ -278,6 +292,15 @@ export class DebugGui {
       .onChange(() => changed(light));
     f.add(light, 'riverLegibility', 0, 1, 0.05)
       .name('River legibility')
+      .onChange(() => changed(light));
+    f.add(light, 'roads')
+      .name('Roads and airfields')
+      .onChange(() => changed(light));
+    f.add(light, 'roadLegibility', 0, 1, 0.05)
+      .name('Road legibility')
+      .onChange(() => changed(light));
+    f.add(light, 'nightLights', 0, 3, 0.1)
+      .name('Night lights')
       .onChange(() => changed(light));
     f.add(light, 'clouds')
       .name('Clouds')
