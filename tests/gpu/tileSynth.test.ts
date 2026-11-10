@@ -39,6 +39,8 @@ describe.skipIf(!gpu)('tile synthesis (GPU)', async () => {
         biome: g.finish.biome,
         lakeDepth: g.finish.drainage.lakeDepth,
         height: g.height,
+        forest: g.finish.forest,
+        treeline: g.finish.treeline,
         index: new RiverIndex(g.finish.rivers),
       })
     : null;
@@ -172,6 +174,36 @@ describe.skipIf(!gpu)('tile synthesis (GPU)', async () => {
     // defined, so the shoreline is a zero crossing.
     expect(wet).toBeGreaterThan(10);
     expect(dryNear).toBeGreaterThan(0);
-    expect(level).toBeCloseTo(g!.height[best]! + depth[best]!, 3);
+    // The global table stores levels as half floats (about 1 m at these heights).
+    expect(Math.abs(level - (g!.height[best]! + depth[best]!))).toBeLessThan(1);
+  });
+
+  it('grows forest on land below the treeline, none at sea', async () => {
+    // A densely forested global cell (forest biome) and its tile.
+    const n = g!.n;
+    const forestMap = g!.finish.forest;
+    let cell = -1;
+    for (let c = 0; c < forestMap.length && cell < 0; c++) {
+      if (forestMap[c]! > 200 && g!.height[c]! > 20 && g!.finish.drainage.lakeDepth[c] === 0) {
+        cell = c;
+      }
+    }
+    expect(cell).toBeGreaterThanOrEqual(0);
+    const dir = cubeFaceUvToDirection(
+      Math.floor(cell / (n * n)) as CubeFace,
+      ((cell % n) + 0.5) / n,
+      ((Math.floor(cell / n) % n) + 0.5) / n,
+    );
+    const [tile] = await synth!.generate([tileForDirection(dir, 5)]);
+    let forested = 0;
+    let land = 0;
+    for (let i = 0; i < tile!.material.length; i++) {
+      const forest = tile!.material[i]! >>> 24;
+      if (tile!.height[i]! <= 0) expect(forest).toBe(0);
+      else land++;
+      if (forest > 0) forested++;
+    }
+    expect(land).toBeGreaterThan(0);
+    expect(forested).toBeGreaterThan(100);
   });
 });

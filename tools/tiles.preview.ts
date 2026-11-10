@@ -44,6 +44,8 @@ it('render tile mosaic', async () => {
     biome: g.finish.biome,
     lakeDepth: g.finish.drainage.lakeDepth,
     height: g.height,
+    forest: g.finish.forest,
+    treeline: g.finish.treeline,
     index: new RiverIndex(g.finish.rivers),
   });
 

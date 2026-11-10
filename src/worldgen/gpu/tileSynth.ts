@@ -25,6 +25,7 @@
  * Output per tile, TILE_STRIDE² samples (row-major from the border corner):
  *   height   f32, physical meters above sea level
  *   material u32: biome | river coverage (0..255) << 8 | lake << 16
+ *                 | forest density (0..255) << 24 (decision 44)
  *   lake     f32, lake surface (m) where a lake is within about one global
  *            cell, NO_LAKE elsewhere. The level is defined on dry ground near
  *            the lake too, so level − height is a signed depth whose zero
@@ -64,6 +65,11 @@ export const TILE_SYNTH_TUNING = {
   bankSlope: 0.04,
   /** Distance (m) beyond which a river no longer shapes the terrain. */
   riverReach: 2500,
+  /** Forest clumping: noise wavelengths (m) and strength. */
+  forestClumps: [1600, 500] as [number, number],
+  forestClumping: 0.9,
+  /** Forest thins out over this height band around the treeline (physical m). */
+  treelineBand: 30,
 };
 
 /** Deepest level with baked tiles (about 48 m samples at R = 1,000 km). */
@@ -71,6 +77,34 @@ export const MAX_BAKED_LEVEL = 7;
 
 /** Lake level of a sample with no lake nearby. */
 export const NO_LAKE = -1e30;
+/** The same, in the half-float global table. */
+const NO_LAKE_HALF = -60_000;
+
+/** IEEE half-float bits of x (round to nearest even), for packing global tables. */
+export function toHalf(x: number): number {
+  const f32 = new Float32Array(1);
+  const u32 = new Uint32Array(f32.buffer);
+  f32[0] = x;
+  const b = u32[0]!;
+  const sign = (b >>> 16) & 0x8000;
+  const exp = ((b >>> 23) & 0xff) - 127 + 15;
+  let mant = b & 0x7fffff;
+  if (exp >= 31) return sign | 0x7c00; // overflow → ±inf
+  if (exp <= 0) {
+    if (exp < -10) return sign; // underflow → ±0
+    mant |= 0x800000;
+    const shift = 14 - exp;
+    let h = mant >>> shift;
+    const rem = mant & ((1 << shift) - 1);
+    const half = 1 << (shift - 1);
+    if (rem > half || (rem === half && h & 1)) h++;
+    return sign | h;
+  }
+  let h = (exp << 10) | (mant >>> 13);
+  const rem = mant & 0x1fff;
+  if (rem > 0x1000 || (rem === 0x1000 && h & 1)) h++;
+  return sign | h;
+}
 
 export interface TileData {
   key: TileKey;
@@ -94,6 +128,10 @@ export interface TileSynthOptions {
   lakeDepth: Float32Array;
   /** Eroded height per global cell (m), the CPU copy of the grid's "height" map. */
   height: Float32Array;
+  /** Forest base density per global cell, 0..255 (decision 44). */
+  forest: Uint8Array;
+  /** Treeline height per global cell (physical m). */
+  treeline: Float32Array;
   index: RiverIndex;
   tuning?: Partial<typeof TILE_SYNTH_TUNING>;
 }
@@ -128,14 +166,16 @@ export class TileSynthesizer {
       packPermutations([new Noise3(r.fork('detail')), new Noise3(r.fork('gullies'))]),
       'tiles.perm',
     );
-    // Per cell: biome | lake << 16, then the lake surface (the Priority-Flood fill
-    // level, terrain + depth) as f32 bits.
+    // Per cell: biome | lake << 16 | forest << 24, then two half floats: the lake
+    // surface (the Priority-Flood fill level, terrain + depth) and the treeline.
+    // Half floats give about 1 m at these heights: lake levels are flat per lake and
+    // lakes are at least 3 m deep, so that is enough.
     const packed = new Uint32Array(grid.cellCount * 2);
-    const levelBits = new Float32Array(packed.buffer);
     for (let c = 0; c < grid.cellCount; c++) {
       const depth = opts.lakeDepth[c]!;
-      packed[c * 2] = opts.biome[c]! | (depth > 0 ? 1 << 16 : 0);
-      levelBits[c * 2 + 1] = depth > 0 ? opts.height[c]! + depth : NO_LAKE;
+      packed[c * 2] = opts.biome[c]! | (depth > 0 ? 1 << 16 : 0) | (opts.forest[c]! << 24);
+      const level = depth > 0 ? opts.height[c]! + depth : NO_LAKE_HALF;
+      packed[c * 2 + 1] = toHalf(level) | (toHalf(Math.max(-60_000, opts.treeline[c]!)) << 16);
     }
     this.material = gpu.storageFrom(packed, 'tiles.globalMaterial');
 
@@ -163,6 +203,7 @@ const LAMBDA0: f32 = ${f(this.firstWavelength)};
 const SEG_FIELDS: u32 = ${RIVER_SEGMENT_FIELDS}u;
 const TWO_PI: f32 = 6.283185307;
 const NO_LAKE: f32 = ${NO_LAKE};
+const NO_LAKE_HALF: f32 = ${f(NO_LAKE_HALF)};
 
 // Lake surface near d: the highest level among the 3×3 global cells around d's cell
 // whose centers lie within about one cell of d, or NO_LAKE.
@@ -174,8 +215,8 @@ fn lakeLevelAt(d: vec3f) -> f32 {
     var c = c0;
     if (k >= 0) { c = neighbor(c0, k); }
     if (c < 0) { continue; }
-    let l = bitcast<f32>(gMaterial[c].y);
-    if (l > level && dot(cellDir(c), d) > reach) { level = l; }
+    let l = unpack2x16float(gMaterial[c].y).x;
+    if (l > NO_LAKE_HALF * 0.5 && l > level && dot(cellDir(c), d) > reach) { level = l; }
   }
   return level;
 }
@@ -248,8 +289,12 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     jf *= 2.7;
     ja *= 0.55;
   }
-  let mat = gMaterial[dirCell(normalize(d + 1.4 * cellAngle * jit))].x;
+  let jitCell = gMaterial[dirCell(normalize(d + 1.4 * cellAngle * jit))];
+  let mat = jitCell.x;
+  let treeline = unpack2x16float(jitCell.y).y;
+  let sampleSpacing = R * 2.0 * QUARTER_PI / denom;
   var riverCover = 0.0;
+  var forest = 0.0;
 
   if (base > 0.0) {
     // Rivers: the nearest channel (relative to its floodplain) shapes the terrain.
@@ -337,6 +382,27 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     h = mix(h, min(h, carve), reachW);
     // Coastal plains stay land, so detail does not pepper the coast with islands.
     h = select(h, max(h, 0.05), base > 0.5);
+
+    // Forest (decision 44): the cell's base density, cut by the treeline at the fine
+    // height, steep slopes and water, then clumped into stands and clearings by noise
+    // where the clumps are resolved (coarse tiles keep the mean).
+    forest = f32((mat >> 24u) & 0xffu) / 255.0;
+    forest *= smoothstep(treeline + ${f(t.treelineBand)}, treeline - ${f(t.treelineBand)}, h);
+    forest *= 1.0 - smoothstep(0.6, 1.0, slope / RELIEF);
+    forest *= 1.0 - riverCover;
+    forest *= select(1.0, 0.0, h < lakeLevel || h <= 0.0);
+    var clump = 0.0;
+    var clumpAmp = 1.0;
+    var resolved = 0.0;
+    for (var o = 0; o < 2; o++) {
+      let lam = select(${f(t.forestClumps[1])}, ${f(t.forestClumps[0])}, o == 0);
+      let r = smoothstep(2.0, 4.0, lam / sampleSpacing);
+      clump += clumpAmp * r * noise3(d * (R / lam) + vec3f(91.3, 47.1, 13.7 + f32(o) * 29.0), 0u);
+      resolved = max(resolved, r);
+      clumpAmp *= 0.5;
+    }
+    let clumped = smoothstep(0.38, 0.62, forest + ${f(t.forestClumping)} * clump) * step(0.01, forest);
+    forest = mix(forest, clumped, resolved);
   } else {
     // Sea floor: gentle detail only.
     var lambda = LAMBDA0;
@@ -349,7 +415,8 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     h = min(base + detail * RELIEF, -0.05);
   }
   outHeight[slot] = vec2f(h, lakeLevel);
-  outMaterial[slot] = (mat & 0xffu) | (u32(riverCover * 255.0) << 8u) | (mat & 0x10000u);
+  outMaterial[slot] = (mat & 0xffu) | (u32(riverCover * 255.0) << 8u) | (mat & 0x10000u)
+    | (u32(clamp(forest, 0.0, 1.0) * 255.0) << 24u);
 }`;
     this.pipeline = gpu.kernel(code);
   }

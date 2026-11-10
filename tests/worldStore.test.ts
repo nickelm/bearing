@@ -41,6 +41,8 @@ describe('WorldStore', () => {
         downstream: new Int32Array(0),
       },
       biome: new Uint8Array(cells).fill(3),
+      forest: new Uint8Array(cells).fill(200),
+      treeline: new Float32Array(cells).fill(300),
       display: {
         height: new Float32Array(6 * 8 * 8),
         biome: new Uint8Array(6 * 8 * 8),

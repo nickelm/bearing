@@ -28,6 +28,8 @@ describe.skipIf(!gpu)('TerrainRenderer (Dawn synthesis, no drawing)', () => {
       biome: g.finish.biome,
       lakeDepth: g.finish.drainage.lakeDepth,
       height: g.height,
+      forest: g.finish.forest,
+      treeline: g.finish.treeline,
       index: new RiverIndex(g.finish.rivers),
     });
     const terrain = new TerrainRenderer();

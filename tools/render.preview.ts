@@ -202,6 +202,8 @@ it('renders preview views', async () => {
     biome: global.finish.biome,
     lakeDepth: global.finish.drainage.lakeDepth,
     height: global.height,
+    forest: global.finish.forest,
+    treeline: global.finish.treeline,
     index: new RiverIndex(global.finish.rivers),
   });
   scene.terrain.setWorld({

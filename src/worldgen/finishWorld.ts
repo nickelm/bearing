@@ -8,6 +8,7 @@ import { Biome, classifyBiome } from './biomes';
 import { LAPSE_RATE, potentialEvapotranspiration } from './climate';
 import { computeDrainage } from './drainage';
 import type { Drainage } from './drainage';
+import { forestMaps } from './forest';
 import { extractRivers } from './rivers';
 import type { Rivers } from './rivers';
 
@@ -42,6 +43,10 @@ export interface FinishResult {
   rivers: Rivers;
   /** Biome per global cell. */
   biome: Uint8Array;
+  /** Forest base density per global cell, 0..255 (decision 44). */
+  forest: Uint8Array;
+  /** Treeline height per global cell (physical m). */
+  treeline: Float32Array;
   display: DisplayMaps;
   timings: { stage: string; ms: number }[];
 }
@@ -128,5 +133,6 @@ export function finishWorld(input: FinishInput): FinishResult {
       drainage.lakeDepth,
     ),
   );
-  return { drainage, rivers, biome, display, timings };
+  const { forest, treeline } = time('forest', () => forestMaps(input, biome));
+  return { drainage, rivers, biome, forest, treeline, display, timings };
 }

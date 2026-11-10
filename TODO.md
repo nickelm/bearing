@@ -84,7 +84,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
   - [x] Smooth lowlands: plains detail scales with the global slope; lake beds carry no detail
 - [x] Terrain shading: biome color blended by slope (rock), altitude (snow) and moisture; triplanar mapping on cliffs
 - [x] Seasonal snow line and seasonal vegetation tint (plus frozen lakes)
-- [ ] Forest density map (also used later by line of sight)
+- [x] Forest density map (also used later by line of sight)
 - [ ] Instanced low-poly tree clusters within about 5 km of the camera
 - [ ] River rendering from vector data (mask texture or decals); replaces the per-vertex river coverage from checkpoint 2
 - [ ] Cloud layer rendering, from a static field derived from moisture until live weather exists (M6)

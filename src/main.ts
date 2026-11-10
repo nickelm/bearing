@@ -178,6 +178,8 @@ async function main(): Promise<void> {
         biome: global.finish.biome,
         lakeDepth: global.finish.drainage.lakeDepth,
         height: global.height,
+        forest: global.finish.forest,
+        treeline: global.finish.treeline,
         index: new RiverIndex(global.finish.rivers),
       });
       globe.terrain.setWorld({
@@ -292,8 +294,9 @@ async function main(): Promise<void> {
     height: 'height',
     'tile level': 'level',
     'tile borders': 'borders',
+    forest: 'forest',
   };
-  const COLOR_MODES = [...VIEW_MODES, 'tile level', 'tile borders'];
+  const COLOR_MODES = [...VIEW_MODES, 'forest', 'tile level', 'tile borders'];
   let tilesBlocked = false;
   const gui = new DebugGui(worldParams, viewParams, COLOR_MODES, {
     regenerate: () => void regenerate(),

@@ -34,7 +34,7 @@ import { BIOME_COLORS, HEIGHT_RAMP, hsl, ramp, srgbToLinear } from '../palette';
 import type { Rgb } from '../palette';
 import { TILE_SEGMENTS, vertexSpacing } from './quadtree';
 
-export const TILE_VIEW_MODES = ['biome', 'height', 'level', 'borders'] as const;
+export const TILE_VIEW_MODES = ['biome', 'height', 'level', 'borders', 'forest'] as const;
 export type TileViewMode = (typeof TILE_VIEW_MODES)[number];
 
 const V = TILE_SEGMENTS + 1;
@@ -260,6 +260,14 @@ function surfaceSampler(
   };
 }
 
+/** Canopy colors (sRGB) that forest cover blends toward. */
+const CANOPY_BROADLEAF: Rgb = [0.2, 0.33, 0.14];
+const CANOPY: Partial<Record<number, Rgb>> = {
+  [Biome.Taiga]: [0.13, 0.24, 0.16],
+  [Biome.TemperateRainforest]: [0.12, 0.27, 0.14],
+  [Biome.TropicalRainforest]: [0.11, 0.28, 0.1],
+};
+
 /** Seabed albedo (sRGB): sand in the shallows, darker silt in deep water. */
 function seabedColor(h: number, reliefScale: number): Rgb {
   const t = Math.min(1, -h / (200 * reliefScale));
@@ -280,6 +288,10 @@ function colorFor(
     c = ramp(HEIGHT_RAMP, h / reliefScale);
   } else if (mode === 'level') {
     c = hsl((level * 0.13) % 1, 0.6, 0.5);
+  } else if (mode === 'forest') {
+    // Forest density (decision 44): pale where bare, dark green where closed canopy.
+    const f = (material >>> 24) / 255;
+    c = h <= 0 ? [0.2, 0.3, 0.45] : [0.85 - 0.75 * f, 0.82 - 0.5 * f, 0.7 - 0.6 * f];
   } else {
     const biome = material & 0xff;
     if (h <= 0) {
@@ -288,7 +300,15 @@ function colorFor(
     } else if (mode === 'borders' && (material >> 16) & 1) {
       c = BIOME_COLORS[Biome.Shelf]!;
     } else {
-      const b = BIOME_COLORS[biome] ?? [1, 0, 1];
+      const biomeColor = BIOME_COLORS[biome] ?? [1, 0, 1];
+      // Forest canopy darkens the ground toward broadleaf or conifer green.
+      const forest = ((material >>> 24) / 255) * 0.7;
+      const canopy = CANOPY[biome] ?? CANOPY_BROADLEAF;
+      const b: Rgb = [
+        biomeColor[0] + (canopy[0] - biomeColor[0]) * forest,
+        biomeColor[1] + (canopy[1] - biomeColor[1]) * forest,
+        biomeColor[2] + (canopy[2] - biomeColor[2]) * forest,
+      ];
       c = [
         b[0] + (0.15 - b[0]) * river,
         b[1] + (0.35 - b[1]) * river,

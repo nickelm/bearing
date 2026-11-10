@@ -667,3 +667,26 @@ Shaders sample it by direction through `cubeFaceUv`, a TSL mirror of `directionT
 
 - Seasons need per-fragment temperature at the true surface height, which the climate texture (decision 42) provides cheaply.
 - Snow and tint follow from the same climate the biomes came from, so they agree with the world.
+
+### 44. Forest density: global base and treeline, per-sample stands in the tiles
+
+**Date:** 2026-11-10
+**Decision:**
+
+- **Global maps.** `finishWorld` adds two maps on the global grid, stored in the world record (`GENERATOR_VERSION` 2):
+  - `forest`: base density 0..255 by biome (forest biomes 0.75–0.95, savanna and shrubland about 0.2, grassland 0.1, tundra 0.03, else 0);
+  - `treeline`: the physical height where the warmest month cools to 10 °C, lapse-corrected through reference height.
+- **Per sample.** The tile kernel computes forest density per sample and packs it into material bits 24–31:
+  - the base density of the noise-jittered biome cell, so forest edges follow biome edges;
+  - × the treeline (±30 m band) at the fine height;
+  - × slope, gone by a reference slope of 1;
+  - × (1 − river coverage);
+  - zero in lakes and at sea;
+  - clumped into stands and clearings by two noise octaves (1,600 and 500 m) wherever they are resolved, so coarse tiles keep the mean.
+- **Packing.** To stay within 8 storage buffers, the global table packs biome, lake flag and forest into one u32. Lake level and treeline go into a second u32 as half floats, about 1 m precision, which is enough because lakes are flat and at least 3 m deep.
+- **Rendering.** In biome mode, forest blends the ground toward a canopy green (darker conifer green in taiga). "Color by → forest" shows the density.
+
+**Reason:**
+
+- The design uses forest density in three places: rendering, line of sight and the barrier map.
+- A biome-level base plus deterministic per-sample variation is a pure function of direction like the rest of the tile (decision 24), so every consumer sees the same forests.

@@ -48,6 +48,8 @@ function finishBuffers(r: FinishResult): ArrayBuffer[] {
     d.discharge.buffer,
     d.lakeDepth.buffer,
     r.biome.buffer,
+    r.forest.buffer,
+    r.treeline.buffer,
     ...Object.values(r.display).map((a: ArrayBufferView) => a.buffer),
     ...riverBuffers(r.rivers),
   ] as ArrayBuffer[];
