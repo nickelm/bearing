@@ -70,19 +70,23 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 
 ## Milestone 3: Atmosphere, ocean, forests, sky
 
+- [x] Headless render harness: three's `WebGPURenderer` on Dawn in Node, rendering fixed views to PNG (`tools/render.preview.ts`) and compiling every material in a test
 - [ ] Calendar and sun ephemeris in `core`: sun direction from `GameTime`, axial tilt, day length, year length and campaign start date, with tests (decision 15)
 - [ ] Day/night lighting driven by the sun ephemeris; time-of-day slider in the debug GUI
 - [ ] Single-scattering atmosphere: limb glow from orbit, sunset colors at the terminator
 - [ ] Aerial perspective on terrain
+- [ ] Climate array texture (sea-level temperature, seasonal range, moisture, cloudiness) with a TSL cube-face lookup by direction
 - [ ] Ocean: depth-based color from bathymetry
 - [ ] Ocean: wave normal map and sun glint
 - [ ] Coastal foam
+- [ ] Checkpoint 3: owner review of day/night, sky, aerial perspective and ocean in the browser
 - [ ] Terrain shading: biome color blended by slope (rock), altitude (snow) and moisture; triplanar mapping on cliffs
 - [ ] Seasonal snow line and seasonal vegetation tint
 - [ ] Forest density map (also used later by line of sight)
 - [ ] Instanced low-poly tree clusters within about 5 km of the camera
 - [ ] River rendering from vector data (mask texture or decals); replaces the per-vertex river coverage from checkpoint 2
 - [ ] Cloud layer rendering, from a static field derived from moisture until live weather exists (M6)
+- [ ] Checkpoint 4: owner review of terrain shading, seasons, forests, rivers and clouds
 
 ## Milestone 4: Geography and front
 

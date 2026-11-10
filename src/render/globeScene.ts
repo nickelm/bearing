@@ -22,6 +22,8 @@ const PLANET_CENTER = new Vec3d(0, 0, 0);
 export interface GlobeSceneOptions {
   radius: number;
   grid: CubeGrid;
+  /** Attach mouse and keyboard input to the canvas (default true; off for headless renders). */
+  input?: boolean;
 }
 
 export class GlobeScene {
@@ -37,6 +39,7 @@ export class GlobeScene {
   terrainReady = false;
   private readonly detachInput: () => void;
   private readonly scratch = new Vec3d();
+  private viewportHeight = 1;
 
   constructor(
     private readonly renderer: WebGPURenderer,
@@ -52,15 +55,19 @@ export class GlobeScene {
     sun.position.set(1, 0.6, 0.8);
     this.scene.add(sun, new AmbientLight(0xffffff, 0.35));
 
-    this.detachInput = attachOrbitInput(
-      renderer.domElement,
-      this.orbit,
-      () => (this.camera.fov * Math.PI) / 180 / Math.max(1, renderer.domElement.clientHeight),
-    );
+    this.detachInput =
+      options.input === false
+        ? () => {}
+        : attachOrbitInput(
+            renderer.domElement,
+            this.orbit,
+            () => (this.camera.fov * Math.PI) / 180 / this.viewportHeight,
+          );
   }
 
   resize(width: number, height: number): void {
     this.renderer.setSize(width, height, false);
+    this.viewportHeight = Math.max(1, height);
     this.camera.aspect = width / Math.max(1, height);
     this.camera.updateProjectionMatrix();
   }
@@ -97,7 +104,7 @@ export class GlobeScene {
         up: o.up,
         fovY: (this.camera.fov * Math.PI) / 180,
         aspect: this.camera.aspect,
-        viewportHeight: Math.max(1, this.renderer.domElement.clientHeight),
+        viewportHeight: this.viewportHeight,
         radius: o.radius,
         maxHeight: this.globe.maxDisplayedHeight,
       });
