@@ -40,10 +40,42 @@ export interface PreviewView {
 
 export const PREVIEW_VIEWS: PreviewView[] = [
   { name: 'orbit', dLat: 0, dLon: 0, altitude: 3000 * KM, tilt: 0, heading: 0, localTime: 11 },
-  { name: 'limb', dLat: -20 * DEG, dLon: 0, altitude: 900 * KM, tilt: 36 * DEG, heading: 0, localTime: 10 },
-  { name: 'terminator', dLat: 0, dLon: 0, altitude: 1500 * KM, tilt: 30 * DEG, heading: 90 * DEG, localTime: 18.2 },
-  { name: 'oblique', dLat: 0, dLon: 0, altitude: 20 * KM, tilt: 78 * DEG, heading: 30 * DEG, localTime: 15 },
-  { name: 'low', dLat: 0, dLon: 0, altitude: 2 * KM, tilt: 82 * DEG, heading: 200 * DEG, localTime: 9 },
+  {
+    name: 'limb',
+    dLat: -20 * DEG,
+    dLon: 0,
+    altitude: 900 * KM,
+    tilt: 36 * DEG,
+    heading: 0,
+    localTime: 10,
+  },
+  {
+    name: 'terminator',
+    dLat: 0,
+    dLon: 0,
+    altitude: 1500 * KM,
+    tilt: 30 * DEG,
+    heading: 90 * DEG,
+    localTime: 18.2,
+  },
+  {
+    name: 'oblique',
+    dLat: 0,
+    dLon: 0,
+    altitude: 20 * KM,
+    tilt: 78 * DEG,
+    heading: 30 * DEG,
+    localTime: 15,
+  },
+  {
+    name: 'low',
+    dLat: 0,
+    dLon: 0,
+    altitude: 2 * KM,
+    tilt: 82 * DEG,
+    heading: 200 * DEG,
+    localTime: 9,
+  },
 ];
 
 const env = (k: string, d: string) => process.env[k] ?? d;

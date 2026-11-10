@@ -31,6 +31,8 @@ export const SECOND = 1;
 export const MINUTE = 60;
 export const HOUR = 3600;
 export const DAY = 86_400;
+/** A 365-day year (Earth-like default; the planet's own year is a planet parameter). */
+export const YEAR = 365 * DAY;
 
 // Angle
 export const DEG = Math.PI / 180;
