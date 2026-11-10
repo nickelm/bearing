@@ -902,3 +902,48 @@ Shaders sample it by direction through `cubeFaceUv`, a TSL mirror of `directionT
 - A 2D shell with a coverage function is what the design asks for until live weather.
 - Putting coverage behind one function means milestone 6 swaps the static field for the weather grid without touching the materials.
 - One sunlight function keeps the shadows consistent everywhere.
+
+### 56. Owner clarifications on design revision 4
+
+**Date:** 2026-11-10
+**Decision:**
+
+- **Ocean fraction.** The default `oceanFraction` stays 0.70, not the 0.55 in the design's parameter table.
+- **Weather and day/night** remain in demo scope under decision 15, although revision 4's goals and milestones do not mention them. Weather stays in milestone 6.
+- **Carrier air wings fly ATO missions in the demo.**
+  - A carrier group is a mobile base: its squadrons belong to the group.
+  - A mission launches and recovers at the group's analytic position at those times. The planner measures range from the predicted position.
+  - There are no deck operations, which matches "no takeoff or landing by default".
+  - Casting assigns carrier groups to sides. Each air wing's aircraft come from its side's aircraft table.
+  - Carrier groups move on analytic sea routes from milestone 7, because the ATO needs them. Amphibious groups and theater tasking of naval groups stay in milestone 8, and naval combat after the demo.
+
+**Reason:** Owner's answers to the ambiguities listed after revision 4 was adopted.
+
+### 57. Reconnaissance satellites on fixed orbits, modeled on Cold War systems
+
+**Date:** 2026-11-10
+**Decision:** This refines decision 53. Satellites give each side periodic, delayed updates, not a live picture.
+
+- **Orbits.**
+  - Satellites fly fixed circular Keplerian orbits that never maneuver.
+  - Periods come from the planet's GM = g·R², with Earth's surface gravity (aircraft performance is real, decision 14). At 250 km altitude that is about 47 min, about 31 revolutions per day.
+  - Nodes precess at a fixed sun-synchronous rate, so each satellite passes at a fixed local solar time.
+  - Ground tracks and passes are analytic functions of `GameTime`, identical at any time acceleration.
+- **Revisit.** On a 1,000 km planet a low orbit circles the globe far more often than on Earth. So a sensor's field of regard (narrow off-nadir pointing) and the size of each constellation set the revisit time, tuned to Cold War values. A given target gets digital imaging about once or twice a day per side, and film-return deliveries every few days. These are constants, to be tuned with the seed browser and in milestone 7.
+- **Classes,** each modeled on real systems:
+
+  | Class                      | Reference                                                 | Sees                                                    | Delay from observation to contact                                 |
+  | -------------------------- | --------------------------------------------------------- | ------------------------------------------------------- | ----------------------------------------------------------------- |
+  | Film-return imaging        | KH-9 Hexagon, KH-8 Gambit; Zenit, Yantar-2K               | Wide area, high resolution; daylight and clear sky only | Until the next capsule recovery (every few days), plus processing |
+  | Digital electro-optical    | KH-11 Kennen (from 1976); Yantar-4KS1 Terilen (from 1982) | Narrow, high resolution; daylight and clear sky only    | Hours (relay and exploitation)                                    |
+  | Radar ocean reconnaissance | US-A (RORSAT)                                             | Ships, through cloud and at night                       | Minutes                                                           |
+  | ELINT ocean reconnaissance | US-P (EORSAT); White Cloud (NOSS)                         | Emitting ships and radars                               | Minutes to an hour                                                |
+  | Radar imaging              | Lacrosse (1988)                                           | Through cloud and at night, lower resolution            | Hours; rare                                                       |
+
+- **Per-side constellations.** They follow each side's references:
+  - The Alliance has few but capable digital imagers, ELINT triplets and, late in the period, radar imaging.
+  - The Pact relies on frequent short film-return missions and radar and ELINT ocean reconnaissance.
+  - Constellations are fixed at campaign start. There are no launches or losses in the demo, and satellites cannot be attacked (ASAT is out of scope).
+- **Contacts.** A satellite contact carries its _observation_ time but enters the side's picture only at its _delivery_ time. It is already stale when it arrives, and its confidence decays from the observation time (decision 53).
+
+**Reason:** Owner's direction. Satellites should give updates only every so often, with real delays, modeled on actual Cold War reconnaissance satellites. A Cold War commander planned against hours- or days-old imagery, and the delay is what makes tactical reconnaissance missions worth flying.

@@ -186,14 +186,18 @@ The strategic graph is the only view of the world that theater detection, castin
 
 - [ ] Aircraft type table for both sides: fictional names, reference type, role, speeds, ceiling, combat radius before the range factor, loadouts
 - [ ] Squadrons, bases and inventories per side (aircraft, readiness, stocks)
+- [ ] Carrier groups as mobile bases on analytic sea routes; air wings launch and recover at the group's predicted position (decision 56)
 - [ ] Mission model: type, side, theater, package, target or station, phase timeline, originating need and score (decision 50), per-mission seed ready for promotion
 - [ ] Great-circle routes with climb and descent profiles; analytic position(t); fuel with the cast's range factor (decision 51)
 - [ ] Phase timeline per mission type (departure, climb-out, ingress, fence-in, on target or on station, egress, approach, recovery) as scheduled events
 
-### Intelligence (decision 53)
+### Intelligence (decisions 53, 57)
 
 - [ ] Per-side intelligence store: contacts with position, type, last seen, confidence and source; decay with age; determinism test
-- [ ] Reconnaissance satellites: analytic ground tracks and revisit times; optical imaging blocked by night and cloud, radar imaging through cloud
+- [ ] Satellite orbits: circular Keplerian orbits from GM = g·R², sun-synchronous node precession, analytic ground tracks and passes over a point; tests for period and pass times
+- [ ] Satellite classes and per-side constellations modeled on Cold War systems (film-return, digital electro-optical, radar and ELINT ocean reconnaissance, late radar imaging); sensor field of regard tuned to Cold War revisit times, with a revisit-statistics test
+- [ ] Imaging conditions: optical needs daylight and clear sky from the weather field; radar ocean reconnaissance sees ships through cloud; ELINT sees only emitters
+- [ ] Delivery delays: film capsules on a recovery schedule, digital imagery after processing, ocean reconnaissance within minutes; contacts stamped at observation time and delivered later
 - [ ] Radar air picture: ground radar and AWACS coverage with radar horizon and terrain masking; feeds Pact ground-controlled interception
 - [ ] Reconnaissance missions refresh contacts along their routes
 
@@ -231,7 +235,7 @@ The strategic graph is the only view of the world that theater detection, castin
 - [ ] Offensives by cast posture along the invasion corridors
 - [ ] Supply: interdiction cuts it, convoy arrivals deliver reinforcements and supplies to the receiving theater
 - [ ] Convoys on sea-lane routes between ports; analytic position(t)
-- [ ] Carrier groups and amphibious groups for island campaigns and chokepoint seizures
+- [ ] Amphibious groups for island campaigns and chokepoint seizures; theater tasking of carrier groups (their movement and air wings come from milestone 7)
 - [ ] Display: unit symbols for battalions from orbit; low-poly ship meshes below about 50 km
 - [ ] Benchmark: how many battalions plus weather the worker handles at 256×
 
