@@ -54,10 +54,10 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     name: 'terminator',
     dLat: 0,
     dLon: 0,
-    altitude: 1500 * KM,
-    tilt: 30 * DEG,
-    heading: 90 * DEG,
-    localTime: 18.2,
+    altitude: 2500 * KM,
+    tilt: 0,
+    heading: 0,
+    localTime: 18,
   },
   {
     name: 'oblique',
@@ -76,6 +76,15 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     tilt: 82 * DEG,
     heading: 200 * DEG,
     localTime: 9,
+  },
+  {
+    name: 'sunset',
+    dLat: 0,
+    dLon: 0,
+    altitude: 3 * KM,
+    tilt: 84 * DEG,
+    heading: 275 * DEG,
+    localTime: 18.95,
   },
 ];
 

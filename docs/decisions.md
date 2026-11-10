@@ -463,3 +463,27 @@ The vertex shader computes `base + up · height · exaggeration`, morphs toward 
 
 - Sunlight and sky light depend on where a point sits relative to the terminator, and, once the atmosphere is in, on the air between the point and the sun (sunset reddening) and between the point and the camera (aerial perspective).
 - Scene lights cannot express either. A single shading function shared by every planet material keeps them consistent.
+
+### 35. Single-scattering atmosphere
+
+**Date:** 2026-11-09
+**Decision:**
+
+- **Model.** Earth-like air on the planet (decision 14), with Hillaire's (2020) coefficients:
+  - Rayleigh: β = (5.8, 13.6, 33.1)·10⁻⁶ m⁻¹, H = 8 km.
+  - Mie: scattering 4.0·10⁻⁶ m⁻¹, extinction 4.4·10⁻⁶ m⁻¹, H = 1.2 km, g = 0.8.
+  - Ozone: a tent profile 25 ± 15 km.
+  - The top of the atmosphere is 100 km above sea level.
+  - A density factor scales everything, for tuning.
+  - Owner's choice: real air, not thinned to look Earth-proportioned from orbit.
+- **Transmittance LUT.** 256 × 64, Bruneton's (r, μ) parameterization. It is computed on the CPU in `render/atmosphere/model.ts`, which Vitest checks against direct integration and the analytic zenith value, and uploaded as half floats.
+- **Sky.** The sky is `scene.backgroundNode`: a 32-step single-scattering march along each view ray, clipped by the planet sphere, plus a sun disk. Three draws the background on a unit sphere around the camera, which sits at the origin, so the geometry normal is the view direction. Nothing has to reach the far plane.
+- **Sunlight on surfaces.** Sunlight is multiplied by the LUT transmittance toward the sun and by a soft planet shadow with a penumbra about the sun's size. That gives red light at the terminator and none at night.
+- **No multiple scattering.** Twilight skies are darker than Earth's, and the night side is black apart from the material's night floor.
+- **Code layout.** `render/atmosphere/atmosphere.ts` (`AtmosphereNodes`) emits the TSL. `march()` is shared with aerial perspective.
+
+**Reason:**
+
+- Single scattering with a precomputed transmittance LUT gives the limb glow and sunset colors at little cost, and the CPU half of the model can be tested.
+- A per-pixel march for the sky alone costs about 32 LUT samples per sky pixel.
+- Hillaire's sky-view and aerial-perspective LUTs, or multiple scattering, can be added later if quality calls for them.

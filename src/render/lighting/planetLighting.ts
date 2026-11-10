@@ -14,7 +14,10 @@
 import { Vector3 } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import { dot, float, max, normalize, smoothstep, uniform, vec3 } from 'three/tsl';
+import { PLANET_RADIUS } from '../../core/units';
 import type { Vec3d } from '../../core/vec3d';
+import { AtmosphereNodes } from '../atmosphere/atmosphere';
+import { earthLikeAtmosphere } from '../atmosphere/model';
 
 export type Vec3Node = Node<'vec3'>;
 
@@ -29,6 +32,16 @@ export class PlanetLighting {
   readonly skyAmbient = uniform(0.45);
   /** Starlight and airglow on the night side, so terrain stays faintly visible. */
   readonly nightLight = uniform(0.012);
+  /** The air: transmittance LUT, sky and scattering (decision 35). */
+  readonly atmosphere: AtmosphereNodes;
+
+  constructor(readonly radius = PLANET_RADIUS) {
+    this.atmosphere = new AtmosphereNodes(earthLikeAtmosphere(radius), {
+      sunDirection: this.sunDirection,
+      sunIlluminance: this.sunIlluminance,
+      eye: this.eye,
+    });
+  }
 
   update(eye: Readonly<Vec3d>, sun: Readonly<Vec3d>): void {
     this.eye.value.set(eye.x, eye.y, eye.z);
@@ -41,20 +54,25 @@ export class PlanetLighting {
   }
 
   /**
-   * Radiance of a diffuse surface: sunlight by N·L, sky light fading through
-   * twilight by the sun's elevation at the point, and a faint night floor.
+   * Radiance of a diffuse surface: sunlight by N·L, filtered by the air
+   * between the point and the sun (red at sunset, zero in the planet's
+   * shadow); sky light fading through twilight by the sun's elevation at the
+   * point; and a faint night floor.
    * `normal` is a unit world-space normal; `relative` the camera-relative position.
    */
   shadeDiffuse(albedo: Vec3Node, normal: Vec3Node, relative: Vec3Node): Vec3Node {
-    const up = normalize(this.planetPosition(relative));
+    const p = this.planetPosition(relative);
+    const up = normalize(p);
     const sunElevation = dot(up, this.sunDirection);
-    const direct = max(dot(normal, this.sunDirection), 0).mul(this.sunIlluminance);
+    const direct = this.atmosphere
+      .sunTransmittance(p)
+      .mul(max(dot(normal, this.sunDirection), 0).mul(this.sunIlluminance));
     // Sky light: full by day, gone about 6° below the horizon (civil twilight).
     const daylight = smoothstep(float(-0.1), float(0.25), sunElevation);
     const skyFacing = dot(normal, up).mul(0.5).add(0.5);
     const sky = this.skyAmbient.mul(daylight).mul(skyFacing);
     const night = vec3(0.55, 0.65, 1.0).mul(this.nightLight);
-    const light = vec3(direct.add(sky)).add(night);
+    const light = direct.add(sky).add(night);
     return albedo.mul(light) as Vec3Node;
   }
 }
