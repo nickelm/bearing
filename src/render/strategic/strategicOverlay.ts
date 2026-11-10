@@ -123,7 +123,10 @@ export class StrategicOverlay {
   private readonly scratch = new Vec3d();
 
   constructor(private readonly radius: number) {
-    this.material.depthWrite = false;
+    // The lines must write depth: the cloud shell (transparent, drawn after the
+    // opaque pass) and anything else drawn later would otherwise paint over them.
+    // They float above the terrain, so the depth they write hides nothing below.
+    this.material.depthWrite = true;
     this.group.visible = false;
   }
 
