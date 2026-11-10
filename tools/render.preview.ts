@@ -14,8 +14,9 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { it } from 'vitest';
+import { defaultCampaignStart, sunDirection, withLocalTime } from '../src/core/calendar';
 import { CubeGrid } from '../src/core/cubeGrid';
-import { DEG, KM } from '../src/core/units';
+import { DEG, HOUR, KM } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
 import { GlobeScene } from '../src/render/globeScene';
 import { TileSynthesizer } from '../src/worldgen/gpu/tileSynth';
@@ -34,7 +35,7 @@ export interface PreviewView {
   altitude: number;
   tilt: number;
   heading: number;
-  /** Local solar time at the camera, hours (used once the sun follows game time). */
+  /** Local solar time at the camera, hours, on the campaign's first day (default 11:00). */
   localTime?: number;
 }
 
@@ -125,6 +126,7 @@ it('renders preview views', async () => {
   const main = new Vec3d(...world.info.mainContinent);
   const lat0 = Math.asin(main.y);
   const lon0 = Math.atan2(main.x, main.z);
+  const calendar = defaultCampaignStart(main, params);
   const outDir = join(import.meta.dirname, 'out');
   mkdirSync(outDir, { recursive: true });
 
@@ -135,6 +137,8 @@ it('renders preview views', async () => {
     o.altitude = o.targetAltitude = v.altitude;
     o.tilt = v.tilt;
     o.heading = v.heading;
+    const t = withLocalTime(0, o.lon, (v.localTime ?? 11) * HOUR, params, calendar);
+    sunDirection(t, params, calendar, scene.sun);
     // Render until the terrain has loaded everything this view wants.
     let stable = 0;
     let last = '';

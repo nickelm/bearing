@@ -442,3 +442,24 @@ The vertex shader computes `base + up · height · exaggeration`, morphs toward 
 
 - Owner's direction: the campaign opens in late summer and runs toward winter.
 - A stateless ephemeris gives the same sun at any time acceleration, in the sim and in the renderer.
+
+### 34. Planet materials light themselves
+
+**Date:** 2026-11-09
+**Decision:** Lit planet materials (terrain now; later ocean, trees and clouds) are `MeshBasicNodeMaterial`s whose `colorNode` computes radiance. They do not use three's scene lights.
+
+- `render/lighting/planetLighting.ts` (`PlanetLighting`) holds the shared uniforms (sun direction, camera eye, sun illuminance, sky light, night light) and the TSL shading functions.
+- A fragment's planet-centered position is `positionWorld + eye` in float32, because meshes are camera-relative (rule 4). Its error is about 0.1 m, which is fine for lighting.
+- The sun direction comes from the ephemeris (decision 33) each frame. `GlobeScene.sun` is set by the app, which runs a preview clock until the sim clock exists in milestone 6.
+- Output is tone-mapped with AgX. Exposure is a GUI control.
+- The M1 grid mesh, a debug view, keeps `MeshStandardNodeMaterial` with a directional light that follows the sun, plus ambient light so data views stay readable at night.
+- GUI → Time:
+  - local date at the camera (read-only);
+  - day of year and local solar time at the camera's longitude;
+  - clock rate, from paused to 1 day/s;
+  - exposure.
+
+**Reason:**
+
+- Sunlight and sky light depend on where a point sits relative to the terminator, and, once the atmosphere is in, on the air between the point and the sun (sunset reddening) and between the point and the camera (aerial perspective).
+- Scene lights cannot express either. A single shading function shared by every planet material keeps them consistent.

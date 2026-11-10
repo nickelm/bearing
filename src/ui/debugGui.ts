@@ -31,6 +31,34 @@ export interface ViewGuiParams {
   tileMemory: number;
 }
 
+/** Preview clock controls (until the sim clock exists, milestone 6). */
+export interface TimeGuiParams {
+  /** Local day of the year at the camera, 0-based. */
+  day: number;
+  /** Local solar time at the camera, hours. */
+  hours: number;
+  /** Game seconds per real second. */
+  rate: number;
+  /** Local date and time at the camera (read-only). */
+  date: string;
+  exposure: number;
+}
+
+export const TIME_RATES: Record<string, number> = {
+  paused: 0,
+  '1×': 1,
+  '1 min/s': 60,
+  '10 min/s': 600,
+  '1 h/s': 3600,
+  '1 day/s': 86_400,
+};
+
+export interface TimeGuiCallbacks {
+  dayChanged(day: number): void;
+  hoursChanged(hours: number): void;
+  exposureChanged(exposure: number): void;
+}
+
 export interface DebugGuiStatus {
   generation: string;
   altitudeKm: number;
@@ -143,6 +171,27 @@ export class DebugGui {
     st.add(this.status, 'compute').name('GPU compute').disable().listen();
     st.add(this.status, 'worker').name('Sim worker').disable().listen();
     st.add(this.status, 'tiles').name('Tiles').disable().listen();
+  }
+
+  /** Adds the Time folder: day of year, time of day, clock rate and exposure. */
+  addTimeControls(time: TimeGuiParams, daysPerYear: number, callbacks: TimeGuiCallbacks): void {
+    const f = this.gui.addFolder('Time');
+    // Placed above Status: lil-gui appends, so move the folder's element.
+    const status = this.gui.folders.find((x) => x._title === 'Status');
+    if (status) this.gui.$children.insertBefore(f.domElement, status.domElement);
+    f.add(time, 'date').name('Local date').disable().listen();
+    f.add(time, 'day', 0, Math.ceil(daysPerYear) - 1, 1)
+      .name('Day of year')
+      .listen()
+      .onChange((d: number) => callbacks.dayChanged(d));
+    f.add(time, 'hours', 0, 24, 0.05)
+      .name('Local time (h)')
+      .listen()
+      .onChange((h: number) => callbacks.hoursChanged(h));
+    f.add(time, 'rate', TIME_RATES).name('Clock rate');
+    f.add(time, 'exposure', 0.2, 4, 0.05)
+      .name('Exposure')
+      .onChange((e: number) => callbacks.exposureChanged(e));
   }
 
   /**

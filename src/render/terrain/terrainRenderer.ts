@@ -20,16 +20,9 @@ import {
   DoubleSide,
   Group,
   Mesh,
-  MeshStandardNodeMaterial,
+  MeshBasicNodeMaterial,
 } from 'three/webgpu';
-import {
-  attribute,
-  mix,
-  normalize,
-  positionLocal,
-  transformNormalToView,
-  uniform,
-} from 'three/tsl';
+import { attribute, mix, normalize, positionLocal, positionWorld, uniform } from 'three/tsl';
 import { directionToCubeFace } from '../../core/coords';
 import type { CubeFaceUv } from '../../core/coords';
 import { Noise3 } from '../../core/noise';
@@ -47,6 +40,7 @@ import type { TileKey } from '../../core/tiles';
 import { Vec3d } from '../../core/vec3d';
 import { MAX_BAKED_LEVEL } from '../../worldgen/gpu/tileSynth';
 import type { TileData, TileSynthesizer } from '../../worldgen/gpu/tileSynth';
+import { PlanetLighting } from '../lighting/planetLighting';
 import { DEFAULT_LOD, selectTiles } from './quadtree';
 import type { LodOptions, LodView } from './quadtree';
 import { TileCache, TileLoader, TileRequestQueue } from './tileCache';
@@ -94,7 +88,7 @@ export class TerrainRenderer {
   private mode: TileViewMode = 'biome';
   private detail: Noise3 = new Noise3(rng(0, 'render-detail'));
   private readonly index = new BufferAttribute(buildTileIndex(), 1);
-  private readonly material: MeshStandardNodeMaterial;
+  private readonly material: MeshBasicNodeMaterial;
   private readonly data = new TileCache<TileData>(400 * 2 ** 20);
   private readonly meshes = new TileCache<Mesh>(200 * 2 ** 20, (e) => {
     this.group.remove(e.value);
@@ -107,17 +101,13 @@ export class TerrainRenderer {
   private visible = new Set<Mesh>();
   private readonly scratch = new Vec3d();
 
-  constructor() {
+  constructor(readonly lighting = new PlanetLighting()) {
     const morph = uniform(1).onObjectUpdate(({ object }) => {
       const m = (object as Mesh | undefined)?.userData.morph as number | undefined;
       return m ?? 1;
     });
-    this.material = new MeshStandardNodeMaterial({
-      vertexColors: true,
-      roughness: 0.95,
-      metalness: 0,
-      side: DoubleSide,
-    });
+    // Unlit material: the color node computes radiance itself (decision 34).
+    this.material = new MeshBasicNodeMaterial({ side: DoubleSide });
     // Exaggeration and geomorphing in the vertex shader (see TileMeshData):
     // changing the exaggeration is a uniform update, not a rebuild.
     const exaggeration = this.exaggerationUniform;
@@ -127,8 +117,12 @@ export class TerrainRenderer {
       attribute('parentDisp', 'vec3').mul(exaggeration),
     );
     this.material.positionNode = mix(parent, own, morph);
-    this.material.normalNode = transformNormalToView(
-      normalize(up.sub(attribute('slope', 'vec3').mul(exaggeration))),
+    // Meshes carry no rotation or scale, so object space is world space.
+    const normal = normalize(up.sub(attribute('slope', 'vec3').mul(exaggeration)));
+    this.material.colorNode = lighting.shadeDiffuse(
+      attribute('color', 'vec3'),
+      normal,
+      positionWorld,
     );
     this.loader = new TileLoader<TileData>(
       this.data,

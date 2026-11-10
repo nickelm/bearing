@@ -1,5 +1,6 @@
 /**
- * Hello-globe scene: the debug cube-sphere, a sun and an orbit camera, rendered camera-relative.
+ * The globe scene: the M1 debug cube-sphere, the tiled terrain, the sun and an orbit camera,
+ * rendered camera-relative.
  *
  * CAMERA-RELATIVE RENDERING (the pattern every world-space object follows):
  *   - World positions are float64 (Vec3d), planet-centered, in meters.
@@ -9,11 +10,18 @@
  * This keeps the numbers the GPU sees small near the camera, where precision
  * matters. Do not put planet-scale coordinates into Object3D positions directly.
  */
-import { AmbientLight, DirectionalLight, PerspectiveCamera, Scene } from 'three/webgpu';
+import {
+  AgXToneMapping,
+  AmbientLight,
+  DirectionalLight,
+  PerspectiveCamera,
+  Scene,
+} from 'three/webgpu';
 import type { WebGPURenderer } from 'three/webgpu';
 import type { CubeGrid } from '../core/cubeGrid';
 import { Vec3d } from '../core/vec3d';
 import { GlobeMesh } from './globeMesh';
+import { PlanetLighting } from './lighting/planetLighting';
 import { TerrainRenderer } from './terrain/terrainRenderer';
 import { OrbitCamera, attachOrbitInput } from './orbitCamera';
 
@@ -31,8 +39,12 @@ export class GlobeScene {
   readonly camera: PerspectiveCamera;
   readonly orbit: OrbitCamera;
   readonly globe: GlobeMesh;
+  /** Sun and camera uniforms shared by every lit planet material (decision 34). */
+  readonly lighting = new PlanetLighting();
   /** Tiled LOD terrain; drawn instead of the M1 grid mesh once a world has a global pass. */
-  readonly terrain = new TerrainRenderer();
+  readonly terrain = new TerrainRenderer(this.lighting);
+  /** Unit vector toward the sun, world frame. Set by the app from the ephemeris. */
+  readonly sun = new Vec3d(1, 0.6, 0.8).normalize();
   /** Draw the tiled terrain when available (otherwise the M1 grid mesh). */
   useTiles = true;
   /** Whether the terrain has a world to draw (set by the app). */
@@ -40,6 +52,7 @@ export class GlobeScene {
   private readonly detachInput: () => void;
   private readonly scratch = new Vec3d();
   private viewportHeight = 1;
+  private readonly sunLight = new DirectionalLight(0xffffff, 2.5);
 
   constructor(
     private readonly renderer: WebGPURenderer,
@@ -50,10 +63,10 @@ export class GlobeScene {
     this.globe = new GlobeMesh(options.grid, options.radius);
     this.scene.add(this.globe.group, this.terrain.group);
 
+    // Scene lights serve only the M1 grid mesh (a debug view); the terrain lights itself.
     // Light directions are translation-invariant, so camera-relative offsets do not affect them.
-    const sun = new DirectionalLight(0xffffff, 2.5);
-    sun.position.set(1, 0.6, 0.8);
-    this.scene.add(sun, new AmbientLight(0xffffff, 0.35));
+    this.scene.add(this.sunLight, new AmbientLight(0xffffff, 0.35));
+    renderer.toneMapping = AgXToneMapping;
 
     this.detachInput =
       options.input === false
@@ -90,6 +103,9 @@ export class GlobeScene {
     this.camera.near = o.near;
     this.camera.far = o.far;
     this.camera.updateProjectionMatrix();
+
+    this.sunLight.position.set(this.sun.x, this.sun.y, this.sun.z);
+    this.lighting.update(o.eye, this.sun);
 
     // World object placement: float64 subtraction first, then write float32.
     this.scratch.subVectors(PLANET_CENTER, o.eye);

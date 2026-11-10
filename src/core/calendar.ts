@@ -65,6 +65,17 @@ export function dayOfYear(t: GameTime, orbit: OrbitParams, cal: CampaignCalendar
   return mod(planetTime(t, orbit, cal), orbit.year) / orbit.solarDay;
 }
 
+/** Whole day of the year (0-based) in local solar time at a longitude. */
+export function localDayOfYear(
+  t: GameTime,
+  lon: Radians,
+  orbit: OrbitParams,
+  cal: CampaignCalendar,
+): number {
+  const local = planetTime(t, orbit, cal) + (lon / (2 * Math.PI)) * orbit.solarDay;
+  return Math.floor(mod(local, orbit.year) / orbit.solarDay);
+}
+
 /** Fraction of the year since the northern vernal equinox, in [0, 1). */
 export function seasonPhase(t: GameTime, orbit: OrbitParams, cal: CampaignCalendar): number {
   return (
@@ -149,9 +160,8 @@ export function formatLocalDate(
   cal: CampaignCalendar,
 ): string {
   const days = daysPerYear(orbit);
-  const local = planetTime(t, orbit, cal) + (lon / (2 * Math.PI)) * orbit.solarDay;
-  const day = Math.floor(mod(local, orbit.year) / orbit.solarDay);
-  const tod = mod(local, orbit.solarDay);
+  const day = localDayOfYear(t, lon, orbit, cal);
+  const tod = localSolarTime(t, lon, orbit, cal);
   let d = (day / days) * 365;
   let month: string = MONTHS[0][0];
   for (const [name, len] of MONTHS) {

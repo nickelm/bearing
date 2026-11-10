@@ -1,8 +1,19 @@
 import './style.css';
 import { WebGPURenderer } from 'three/webgpu';
+import {
+  daysPerYear,
+  defaultCampaignStart,
+  formatLocalDate,
+  localDayOfYear,
+  localSolarTime,
+  sunDirection,
+  withLocalTime,
+} from './core/calendar';
+import type { CampaignCalendar, OrbitParams } from './core/calendar';
 import { CubeGrid } from './core/cubeGrid';
 import { rng } from './core/rng';
-import { DEG, KM } from './core/units';
+import { DEG, HOUR, KM } from './core/units';
+import { Vec3d } from './core/vec3d';
 import { DEFAULT_PLANET_PARAMS } from './worldgen/params';
 import type { PlanetParams } from './worldgen/params';
 import { GlobeScene } from './render/globeScene';
@@ -36,7 +47,7 @@ import { GENERATOR_VERSION, WorldStore, worldKey } from './worldgen/worldStore';
 import type { World } from './worldgen/pipeline';
 import type { GlobalWorld } from './worldgen/globalPipeline';
 import { GPU_SELF_TESTS, runSelfTest } from './worldgen/gpu/selfTests';
-import type { ViewGuiParams, WorldGuiParams } from './ui/debugGui';
+import type { TimeGuiParams, ViewGuiParams, WorldGuiParams } from './ui/debugGui';
 import { FrameTimeOverlay } from './ui/frameTimeOverlay';
 import { PING_STREAM } from './workers/protocol';
 import type { FromSimWorker, ToSimWorker } from './workers/protocol';
@@ -90,6 +101,13 @@ async function main(): Promise<void> {
     tileMemory: 600,
   };
 
+  // Preview clock until the sim's game clock exists (milestone 6): GameTime and
+  // the campaign calendar, which a new world resets (decision 33).
+  const orbitParams: OrbitParams = DEFAULT_PLANET_PARAMS;
+  let calendar: CampaignCalendar = defaultCampaignStart(new Vec3d(0, 0.6, 0.8), orbitParams);
+  let gameTime = 0;
+  const timeParams: TimeGuiParams = { day: 0, hours: 0, rate: 0, date: '', exposure: 1 };
+
   let grid = new CubeGrid(worldParams.resolution);
   const globe = new GlobeScene(renderer, { radius: DEFAULT_PLANET_PARAMS.radius, grid });
   globe.globe.setFaceSeed(worldParams.seed);
@@ -138,6 +156,8 @@ async function main(): Promise<void> {
       }
       globe.globe.setFaceSeed(worldParams.seed);
       globe.globe.setWorld(world);
+      calendar = defaultCampaignStart(new Vec3d(...world.info.mainContinent), orbitParams);
+      gameTime = 0;
     };
     const showGlobal = (world: World, global: GlobalWorld) => {
       // Switch the terrain to the new world first, then free the old one once any
@@ -301,6 +321,16 @@ async function main(): Promise<void> {
     },
   });
   gui.status.backend = 'WebGPU';
+  gui.addTimeControls(timeParams, daysPerYear(orbitParams), {
+    dayChanged: (d) => {
+      const lon = globe.orbit.lon;
+      gameTime += (d - localDayOfYear(gameTime, lon, orbitParams, calendar)) * orbitParams.solarDay;
+    },
+    hoursChanged: (h) => {
+      gameTime = withLocalTime(gameTime, globe.orbit.lon, h * HOUR, orbitParams, calendar);
+    },
+    exposureChanged: (e) => (renderer.toneMappingExposure = e),
+  });
 
   // World-generation compute shares three's device (decision 22).
   const gpu = new GpuContext(rendererDevice(renderer));
@@ -356,7 +386,15 @@ async function main(): Promise<void> {
     const frameMs = now - last;
     last = now;
     overlay.record(frameMs, now);
-    globe.render(Math.min(frameMs, 100) / 1000);
+    const dt = Math.min(frameMs, 100) / 1000;
+    gameTime += dt * timeParams.rate;
+    sunDirection(gameTime, orbitParams, calendar, globe.sun);
+    globe.render(dt);
+
+    const lon = globe.orbit.lon;
+    timeParams.day = localDayOfYear(gameTime, lon, orbitParams, calendar);
+    timeParams.hours = localSolarTime(gameTime, lon, orbitParams, calendar) / HOUR;
+    timeParams.date = formatLocalDate(gameTime, lon, orbitParams, calendar);
 
     const o = globe.orbit;
     gui.status.altitudeKm = o.altitude / KM;
