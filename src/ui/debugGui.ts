@@ -287,8 +287,15 @@ export class DebugGui {
       .onChange(() => changed(light));
   }
 
-  /** Adds the Campaign folder: overlay and briefing toggles and the cast summary. */
-  addCampaign(params: CampaignGuiParams, changed: (p: CampaignGuiParams) => void): void {
+  /**
+   * Adds the Campaign folder: overlay and briefing toggles, the cast summary
+   * and the seed browser (scan the next seeds, stop).
+   */
+  addCampaign(
+    params: CampaignGuiParams,
+    changed: (p: CampaignGuiParams) => void,
+    seedBrowser: { scan(count: number): void; stop(): void },
+  ): void {
     const f = this.folderBeforeStatus('Campaign');
     f.add(params, 'overlay')
       .name('Strategic graph')
@@ -301,6 +308,8 @@ export class DebugGui {
     f.add(params, 'rangeFactor').name('Range factor').decimals(2).disable().listen();
     f.add(params, 'airbases').name('Airbase sites A/P').disable().listen();
     f.add(params, 'coarseSeconds').name('Coarse pass (s)').decimals(1).disable().listen();
+    f.add({ scan: () => seedBrowser.scan(10) }, 'scan').name('Seed browser: scan next 10');
+    f.add({ stop: () => seedBrowser.stop() }, 'stop').name('Seed browser: stop');
   }
 
   /**

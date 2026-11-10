@@ -1,5 +1,5 @@
 /** Messages between the main thread and the world-generation worker. */
-import type { StrategicWorld } from '../worldgen/campaignWorld';
+import type { SeedSummary, StrategicWorld } from '../worldgen/campaignWorld';
 import type { FinishInput, FinishResult } from '../worldgen/finishWorld';
 import type { PlanetParams } from '../worldgen/params';
 import type { WorldInfo, WorldMaps } from '../worldgen/pipeline';
@@ -18,7 +18,26 @@ export interface FinishRequest {
   input: FinishInput;
 }
 
-export type ToWorldgenWorker = GenerateRequest | FinishRequest;
+/** Seed browser: the coarse pass and casting for each seed, one row at a time. */
+export interface ScanRequest {
+  type: 'scan';
+  id: number;
+  params: PlanetParams;
+  seeds: string[];
+}
+
+export type ToWorldgenWorker = GenerateRequest | FinishRequest | ScanRequest;
+
+export interface ScanRowMessage {
+  type: 'scanRow';
+  id: number;
+  row: SeedSummary;
+}
+
+export interface ScanDoneMessage {
+  type: 'scanDone';
+  id: number;
+}
 
 export interface ProgressMessage {
   type: 'progress';
@@ -49,4 +68,9 @@ export interface FinishResultMessage {
 }
 
 export type FromWorldgenWorker =
-  ProgressMessage | ResultMessage | FinishResultMessage | ErrorMessage;
+  | ProgressMessage
+  | ResultMessage
+  | FinishResultMessage
+  | ScanRowMessage
+  | ScanDoneMessage
+  | ErrorMessage;

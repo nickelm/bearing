@@ -103,53 +103,54 @@ The strategic graph is the only view of the world that theater detection, castin
 ### Unsteered generation and the coarse pass
 
 - [x] Unsteered generation: uniform plate seeding, plate types from `rng("plates")`, crust from plate types; remove the two-continent layout and `oceanGap` (decision 46)
-- [ ] Landmass labeling with statistics: area, centroid, coastline length, latitude span, terrain mix (extends `worldgen/landmasses.ts`)
-- [ ] Coarse pass end to end: stages 1–9 at 256² per face (tectonic grid plus a reduced global erosion and drainage pass) in the worker; time it and report it in the progress UI
+- [x] Landmass labeling with statistics: area, centroid, coastline length, latitude span, terrain mix (extends `worldgen/landmasses.ts`)
+- [x] Coarse pass end to end: stages 1–9 at 256² per face in the worker; time it and report it in the progress UI (CPU only, no erosion, about 4–6 s; decision 60)
 
 ### Strategic graph
 
-- [ ] Graph types in `worldgen/strategic/graph.ts`: landmass and archipelago nodes, sea-lane edges, chokepoints, barrier lines; packed into transferable buffers and stored in the world record (bump `GENERATOR_VERSION`)
-- [ ] Airbase capacity per landmass: flat, low land (slope and height thresholds) counted as candidate airbase sites
-- [ ] Candidate port sites per landmass: sheltered coast with deep water close inshore
-- [ ] Archipelago nodes: merge islands under about 2,000 km² by coast-to-coast distance within strike range (single linkage)
-- [ ] Coarse ocean grid (about 25–50 km cells) with a cost field: open water, shallows, sea ice
-- [ ] Sea-lane edges: least-cost routes from port site to port site between landmass node pairs, with length and the minimum width of water along the route
-- [ ] Chokepoints: straits under about 150 km and islands that could host an airfield within about 300 km of a lane; record which lanes each one controls
+- [x] Graph types in `worldgen/strategic/graph.ts`: landmass and archipelago nodes, sea-lane edges, chokepoints, barrier lines; packed into transferable buffers and stored in the world record (bump `GENERATOR_VERSION`)
+- [x] Airbase capacity per landmass: flat, low land (slope and height thresholds) counted as candidate airbase sites
+- [x] Candidate port sites per landmass: sheltered coast with deep water close inshore
+- [x] Archipelago nodes: merge islands under about 2,000 km² by coast-to-coast distance within strike range (single linkage)
+- [x] Coarse ocean grid (about 25–50 km cells) with a cost field: open water, shallows, sea ice
+- [x] Sea-lane edges: least-cost routes from port site to port site between landmass node pairs, with length and the minimum width of water along the route
+- [x] Chokepoints: straits under about 150 km and islands that could host an airfield within about 300 km of a lane; record which lanes each one controls
 
 ### Front generator
 
-- [ ] Barrier map per land cell from river width, slope, ridge prominence and forest density (decision 44)
-- [ ] Coast-to-coast maximum-barrier path search with the area constraint (each side at least 35% of the landmass)
-- [ ] Repeated search with exclusion corridors to get 3–4 roughly parallel defensive lines; store them as the landmass node's barrier lines
-- [ ] Start line one line forward of the strongest barrier; invasion corridors on weak segments of each line (refine with roads in milestone 5)
+- [x] Barrier map per land cell from river width, slope, ridge prominence and forest density (decision 44)
+- [x] Coast-to-coast maximum-barrier path search with the area constraint (each side at least 35% of the landmass)
+- [x] Repeated search with exclusion corridors to get 3–4 roughly parallel defensive lines; store them as the landmass node's barrier lines
+- [x] Start line one line forward of the strongest barrier; invasion corridors on weak segments of each line (refine with roads in milestone 5)
+- [ ] Ring-shaped continents around an inland or polar sea get no front: a single cut cannot split them (decision 61; seed 1983). Consider two cuts, or a front across the ring's narrowest part
 
 ### Theaters
 
-- [ ] Theater module interface (precondition on the graph, fit score, instantiation) and a registry
-- [ ] Continental front theater
-- [ ] Sea-lane theater (800–3,000 km lane from a rear-base landmass to a front)
-- [ ] Chokepoint theater (chokepoint on an active sea lane)
-- [ ] Island campaign theater (archipelago and small landmass nodes in mutual strike range, no front-sized landmass)
-- [ ] Strategic theater (industry and logistics targets, air defense belts)
-- [ ] Validity check: flat land for at least 15 airbases per side and at least one theater above its fit threshold; retry with seeded sub-seeds `fork("retry-n")`, with a test that each seed maps to exactly one world
+- [x] Theater module interface (precondition on the graph, fit score, instantiation) and a registry
+- [x] Continental front theater
+- [x] Sea-lane theater (800–3,000 km lane from a rear-base landmass to a front)
+- [x] Chokepoint theater (chokepoint on an active sea lane)
+- [x] Island campaign theater (archipelago and small landmass nodes in mutual strike range, no front-sized landmass)
+- [x] Strategic theater (industry and logistics targets, air defense belts)
+- [x] Validity check: flat land for at least 15 airbases per side and at least one theater above its fit threshold; retry with seeded sub-seeds `fork("retry-n")`, with a test that each seed maps to exactly one world
 
 ### Casting
 
-- [ ] Cast data type (theaters, territory per side, posture, range factor, logistics links, regions) stored with the world; theater selection above fit thresholds from `rng("casting")` (decision 47)
-- [ ] Territory assignment: the Pact takes mass and interior lines, the Alliance takes the side next to its rear base and sea lanes; island campaign variant
-- [ ] Posture (the Pact attacks by default) and logistics links between theaters (a cut lane starves a front, a lost chokepoint exposes convoys)
-- [ ] Range factor search in [0.35, 1.0] from the two reach targets (decision 51)
-- [ ] Industry, port and base regions for each side, consistent with territory and theaters (milestone 5 places the sites)
-- [ ] Briefing text generated from the cast: the theaters, the stakes in each, the first expected moves
-- [ ] Regional bake: pre-bake ground-combat regions to tile level 7 (about 48 m) during world generation
+- [x] Cast data type (theaters, territory per side, posture, range factor, logistics links, regions) stored with the world; theater selection above fit thresholds from `rng("casting")` (decision 47)
+- [x] Territory assignment: the Pact takes mass and interior lines, the Alliance takes the side next to its rear base and sea lanes; island campaign variant
+- [x] Posture (the Pact attacks by default) and logistics links between theaters (a cut lane starves a front, a lost chokepoint exposes convoys)
+- [x] Range factor search in [0.35, 1.0] from the two reach targets (decision 51)
+- [x] Industry, port and base regions for each side, consistent with territory and theaters (milestone 5 places the sites)
+- [x] Briefing text generated from the cast: the theaters, the stakes in each, the first expected moves
+- [x] Regional bake: pre-bake ground-combat regions to tile level 7 (about 48 m) during world generation (on-demand level-7 tiles already cover it; `regionTiles` lists them for prefetch, decision 63)
 
 ### Tools and review
 
-- [ ] Strategic graph debug overlay on the globe: nodes, sea lanes, chokepoints, barrier lines, start line, corridors, theater boundaries
-- [ ] Graph overlay mode in `npm run maps`, so detection can be checked without a browser
-- [ ] Seed browser: a CLI table first (`npm run seeds`: theaters, fit scores, range factor, retries per seed), then a GUI panel
+- [x] Strategic graph debug overlay on the globe: nodes, sea lanes, chokepoints, barrier lines, start line, corridors, theater boundaries (GUI → Campaign; not yet seen in a browser)
+- [x] Graph overlay mode in `npm run maps`, so detection can be checked without a browser (`MODES=graph,barrier`)
+- [x] Seed browser: a CLI table first (`npm run seeds`: theaters, fit scores, range factor, retries per seed), then a GUI panel (GUI → Campaign → "Seed browser: scan next 10")
 - [ ] Tune the theater fit thresholds from seed browser statistics (design open question)
-- [ ] Determinism tests: graph and cast identical across runs; changing casting leaves the graph unchanged
+- [x] Determinism tests: graph and cast identical across runs; changing casting leaves the graph unchanged
 - [ ] Checkpoint 5: owner review of the graph overlay, theaters and briefings across many seeds
 
 ## Milestone 5: Settlements, roads, ports, airbases (placed from the cast)

@@ -30,3 +30,4 @@ export function readWorld(graph: StrategicGraph, seed: WorldSeed): Campaign {
   const cast = castCampaign(graph, detection, seed);
   return { detection, cast, validity: checkValidity(detection, cast) };
 }
+export { regionTiles, GROUND_TILE_LEVEL } from './regions';

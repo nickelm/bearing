@@ -3,6 +3,7 @@ import { CubeGrid } from '../src/core/cubeGrid';
 import { readWorld } from '../src/campaign';
 import { castCampaign, RANGE_FACTOR_MAX, RANGE_FACTOR_MIN } from '../src/campaign/casting';
 import { compass } from '../src/campaign/briefing';
+import { regionTiles } from '../src/campaign/regions';
 import { detectTheaters, strikeClusters } from '../src/campaign/theaters';
 import { generateCampaignWorld, MAX_RETRIES, retrySeed } from '../src/worldgen/campaignWorld';
 import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
@@ -144,5 +145,31 @@ describe('validity check and retries', () => {
     expect(w.seed).toBe(w.retries === 0 ? 7 : retrySeed(7, w.retries));
     const again = generateCampaignWorld({ ...DEFAULT_PLANET_PARAMS, seed: 7 }, { grid });
     expect(castFingerprint(again.campaign.cast)).toBe(castFingerprint(w.campaign.cast));
+  });
+});
+
+describe('region tiles', () => {
+  it('covers a ground region with level-7 tiles, more for larger regions', () => {
+    const small = regionTiles(
+      [{ kind: 'ground', side: 'pact', point: [0, 0, 1], radius: 20e3, theater: 0 }],
+      RADIUS,
+    );
+    const large = regionTiles(
+      [{ kind: 'ground', side: 'pact', point: [0, 0, 1], radius: 100e3, theater: 0 }],
+      RADIUS,
+    );
+    expect(small.length).toBeGreaterThan(0);
+    expect(large.length).toBeGreaterThan(small.length);
+    expect(small.every((k) => large.includes(k))).toBe(true);
+    // Level-7 tiles are about 12 km across: a 100 km region needs on the order of 200.
+    expect(large.length).toBeGreaterThan(100);
+    expect(large.length).toBeLessThan(400);
+    // Other kinds are ignored by default.
+    expect(
+      regionTiles(
+        [{ kind: 'base', side: 'pact', point: [0, 0, 1], radius: 100e3, theater: 0 }],
+        RADIUS,
+      ),
+    ).toEqual([]);
   });
 });

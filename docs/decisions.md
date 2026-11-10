@@ -977,3 +977,88 @@ Also at checkpoint 4: the tile kernel no longer carves river channels into lake 
 - **Test.** A GPU test samples coverage at 512 points over 12 days on Dawn. It checks that every point is mostly clear at least 15% of the time, that mean coverage lies between 0.15 and 0.55, and that the field changes more over 12 h than over 1 h. The wettest belts, the equator and the mid-latitude storm tracks, are the cloudiest and still clear about one time in six.
 
 **Reason:** Owner review: the latitude-dependent advection of decision 58 stretched clouds into streaks (shear between bands), and wet regions, mountains included, were solid white all the time.
+
+### 60. The coarse pass runs on the CPU without erosion
+
+**Date:** 2026-11-10
+**Decision:** The coarse pass (design, pipeline steps 1–9) runs in the worldgen worker on the CPU at 256² per face (`worldgen/coarsePass.ts`):
+
+- the tectonic pipeline (plates to biomes) on the tectonic grid;
+- drainage (decision 23) on the tectonic heights, which fills `discharge` and `lakeDepth` in the tectonic maps;
+- the strategic graph (decision 61), theater detection, casting and the validity check (decision 62).
+
+It skips GPU erosion. The design's "reduced global erosion pass" is left out: drainage on the uneroded tectonic heights already gives the rivers that barrier lines and port scores need, and the coarse pass then runs the same in the worker, in Node tools and in tests, without a GPU.
+
+- **Timing.** About 4–6 s per world on the development container (5 s tectonic pipeline, 0.2 s drainage, 0.4–1.2 s graph, a few ms casting). The design's "about a second" is not met; decision 12 removed the time budget. The Campaign GUI folder and the console report it.
+- **Resolution.** The graph is always built at 256², whatever the displayed tectonic resolution. When the GUI asks for another resolution, the worker generates that world separately from the seed that passed the validity check.
+- **Seed.** The global pass, tiles and trees use the seed that passed (decision 62), so the eroded world matches the graph.
+- `GENERATOR_VERSION` is 4: world records also store the graph and the campaign.
+
+**Reason:** Campaign logic must run wherever the world is generated, including the seed browser over many seeds, and the graph only needs coarse facts (decision 52).
+
+### 61. Strategic graph construction
+
+**Date:** 2026-11-10
+**Decision:** `worldgen/strategic/` builds the graph from the coarse pass. Everything is deterministic and draws no random numbers; ties break by cell or node index.
+
+- **Landmass statistics** (`landmasses.ts`): area, centroid, coastline length, latitude span and terrain mix (plains, hills, mountains by reference height and slope; forest, desert and ice by biome).
+- **Airbase sites:** reference slope under 3 %, reference height under 1,200 m, no lake, ice sheet or alpine; picked greedily best first, at least 40 km apart within a landmass. The count is the landmass's airbase capacity.
+- **Port sites:** coastal land cells scored by shelter (land around about two-thirds of a 30 km circle), deep water within 15 km, a river mouth and flat ground; at least 120 km apart, at most 16 per landmass, and at least one per landmass.
+- **Nodes:** every landmass of at least 2,000 km², then archipelagos: smaller islands linked by single linkage within 300 km coast to coast, kept as a node when they total at least 1,000 km².
+- **Ocean grid:** a cube-sphere grid of about 33 km cells (48² per face). Cells with at least 25 % water are navigable. Cost per meter: 1 + 0.6 × shallows + 4 × sea ice + 1.5 × land.
+- **Sea lanes:** for each pair of nodes, the least-cost route from a port of one to a port of the other. Lanes between two major nodes (landmasses of at least 50,000 km²) are always kept. A lane involving a minor node is dropped if a third node lies on the way (via it costs at most 10 % more), which keeps archipelago worlds from filling with redundant lanes. Applying the rule to major nodes too would split a lane through a strait between two continents at a nearby port, and the strait would never be found.
+- **Width and straits:** at each route point the width is measured by marching across the route until land on both sides, skipping 150 km at each end. The narrowest point of each stretch under 150 km is a strait; straits within 150 km merge across lanes.
+- **Island chokepoints:** islands under 20,000 km² with at least one airbase site, within 300 km of a lane and more than 250 km from its ends; up to three per lane.
+- **Node distance:** coast-to-coast sea distance between all node pairs.
+- **Barrier map:** 1 − Π(1 − bᵢ) over river width (15–200 m), reference slope (3–15 %), ridge prominence over a 30 km mean (150–1,200 m), forest density × 0.35, and lakes (0.7). The first version weighted forest at 0.6, and lines then followed forest edges more than rivers and ridges.
+- **Front generator:** for each landmass of at least 250,000 km²:
+  - a principal axis (area covariance in an azimuthal projection about the centroid) and the area quantile q along it;
+  - a least-cost 8-connected path from the largest coastal stretch of the band q ∈ [0.2, 0.8] to the largest stretch on the other side of the band's midline, with step cost length × (0.15 + (1 − b)²);
+  - sides by 4-connected flood fill from both ends of the axis. A path that does not separate the land (around an inland sea) is excluded and the search retries;
+  - up to four lines, each excluding a corridor of max(60 km, band length / 8) around it, so lines cannot cross;
+  - lines ordered along the axis; the start line is the neighbor of the strongest line whose two sides both hold at least 35 %, preferring the one that gives the attacker more land. The forward side (away from the strongest line) is the attacker's;
+  - side depth is the distance from the line within which 90 % of the side's land lies, so remote peninsula tips do not set the range factor;
+  - corridors: the weakest 50 km windows of each line, below the line's mean strength, at least 150 km apart and away from the coasts, up to three per line.
+- **Known limitation:** a ring-shaped continent around a polar sea (seed 1983) has no single coast-to-coast cut that splits it. It gets no front, and the world falls to other theaters or to the validity retry.
+
+**Reason:** The design describes what the graph must contain but not how to find it. These choices are the simplest that produce plausible lines and lanes on the seeds checked with `npm run maps` (`MODES=graph,barrier`).
+
+### 62. Theater detection, casting and the validity check
+
+**Date:** 2026-11-10
+**Decision:**
+
+- **Registry** (`campaign/theaters.ts`), run in order; each module sees the theaters selected before it:
+
+  | Theater           | Precondition                                                                                | Fit                                                                         | Threshold |
+  | ----------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | --------- |
+  | Continental front | a start line exists                                                                         | size (250,000 km² → 1.5 M km²) × (0.7 + 0.3 × balance) × min(1, bases / 15) | 0.35      |
+  | Island campaign   | no front selected; a cluster of ≥ 2 nodes within 600 km of each other                       | nodes (1 → 5) × airbase sites (10 → 40)                                     | 0.35      |
+  | Sea lane          | a lane of 800–3,000 km from a selected front's defender side to another node; two per front | length (full between 1,200 and 2,400 km) × rear-base sites (5 → 30) × ice   | 0.4       |
+  | Chokepoint        | on a selected sea lane; two per lane                                                        | strait narrowness, or island airfields and distance                         | 0.4       |
+  | Strategic         | any other theater selected                                                                  | 1                                                                           | 0         |
+
+  "Balance" is how far the smaller side of the start line is above 35 %. The thresholds are first guesses, to be tuned with the seed browser (design open question).
+
+- **Territory:** a front's landmass is split along its start line, the Pact on the forward side. The front generator chooses the forward side so the attacker gets more land where it can, which stands in for "mass and interior lines". The Alliance takes each sea lane's rear base and each chokepoint island. In an island campaign the cluster splits around its most distant pair of nodes, and the Pact takes the group with more land. Other nodes stay neutral.
+- **Posture:** the Pact attacks everywhere; the strategic theater is mutual.
+- **Links:** sea lane → front ("supplies"), chokepoint → sea lane ("protects"), strategic → fronts and island campaigns ("industry").
+- **Range factor:** the smallest factor that meets every target, clamped to [0.35, 1]:
+  - fronts: from rear bases 250 km behind the line (or the side's depth if shallower) to the enemy side's depth, against a medium strike aircraft's 1,300 km radius (Tornado IDS, Su-24 hi-lo-hi);
+  - sea lanes: the lane length against a long-range bomber's 4,000 km radius;
+  - island campaigns: the farthest opposing node pair against the medium strike radius.
+
+  These reference radii stand in for the aircraft tables of milestone 7.
+
+- **Regions** for milestone 5: up to three industry regions per side deep in its territory (random among good sites, from `fork("regions")`), up to four base regions per side 100–400 km behind each front, ports at both ends of each lane and the best port on each side of a front, and ground-combat regions along the start line, on its corridors and on contested islands.
+- **Names and briefing:** invented names from `fork("names")`; one paragraph per theater, with compass directions, areas, depths, corridors and the range factor.
+- **Validity:** a world is valid with at least one theater besides the strategic one and at least 15 airbase sites in each side's territory. The per-side count needs the cast, so the check runs after casting. A failed world regenerates from `retrySeed(seed, n)`: two draws from `rng(seed, "validity").fork("retry-n")` as a decimal string, up to 8 retries. If all fail, the seed's own world is kept and marked invalid.
+
+**Reason:** The design fixes the theaters and their preconditions but leaves the fit scores and thresholds open. Simple, monotone fit functions make the seed browser's statistics easy to read and tune.
+
+### 63. The regional bake is the on-demand level-7 tiles
+
+**Date:** 2026-11-10
+**Decision:** The design's second bake at about 50 m over ground-combat regions needs no new bake. Tile synthesis already reaches level 7 (about 48 m samples) anywhere on demand (decision 28), and decision 29 found tiles faster to synthesize than to load. Casting marks ground-combat regions, and `regionTiles` (`campaign/regions.ts`) lists the level-7 tiles that cover them, so milestone 8 can prefetch those tiles for line of sight inside the promotion bubble.
+
+**Reason:** A persisted regional bake would duplicate what the tile cache produces and contradict decision 29.

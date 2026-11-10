@@ -3,7 +3,7 @@
  * at a time. Starting a new one, or calling cancel(), terminates the worker
  * and rejects the pending promise with a GenerationCancelled error.
  */
-import type { StrategicWorld } from '../worldgen/campaignWorld';
+import type { SeedSummary, StrategicWorld } from '../worldgen/campaignWorld';
 import type { FinishInput, FinishResult } from '../worldgen/finishWorld';
 import type { PlanetParams } from '../worldgen/params';
 import type { ProgressCallback, World } from '../worldgen/pipeline';
@@ -25,6 +25,8 @@ interface Pending {
   id: number;
   resolve: (w: GeneratedWorld) => void;
   resolveFinish?: (r: FinishResult) => void;
+  resolveScan?: () => void;
+  onRow?: (row: SeedSummary) => void;
   reject: (e: Error) => void;
   onProgress?: ProgressCallback;
 }
@@ -73,6 +75,21 @@ export class WorldgenClient {
     });
   }
 
+  /**
+   * Seed browser: runs the coarse pass and casting for each seed and reports
+   * one row per seed. Use a separate client, so scanning does not cancel
+   * generation of the displayed world.
+   */
+  scan(params: PlanetParams, seeds: string[], onRow: (row: SeedSummary) => void): Promise<void> {
+    this.cancel();
+    const worker = this.ensureWorker();
+    const id = this.nextId++;
+    return new Promise<void>((resolveScan, reject) => {
+      this.pending = { id, resolve: () => {}, resolveScan, onRow, reject };
+      worker.postMessage({ type: 'scan', id, params, seeds } satisfies ToWorldgenWorker);
+    });
+  }
+
   cancel(): void {
     if (!this.pending) return;
     const p = this.pending;
@@ -117,6 +134,13 @@ export class WorldgenClient {
       case 'finished':
         this.pending = null;
         p.resolveFinish?.(msg.result);
+        break;
+      case 'scanRow':
+        p.onRow?.(msg.row);
+        break;
+      case 'scanDone':
+        this.pending = null;
+        p.resolveScan?.();
         break;
       case 'error':
         this.pending = null;

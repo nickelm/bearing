@@ -3,7 +3,12 @@
  * and transfers the resulting typed arrays without copying. To cancel a
  * run, the main thread terminates the worker.
  */
-import { generateCampaignWorld, strategicBuffers, strategicWorld } from '../worldgen/campaignWorld';
+import {
+  generateCampaignWorld,
+  strategicBuffers,
+  strategicWorld,
+  summarizeSeed,
+} from '../worldgen/campaignWorld';
 import { COARSE_RESOLUTION } from '../worldgen/coarsePass';
 import { finishWorld } from '../worldgen/finishWorld';
 import type { FinishResult } from '../worldgen/finishWorld';
@@ -22,6 +27,26 @@ ctx.onmessage = (e) => {
     try {
       const result = finishWorld(msg.input);
       ctx.postMessage({ type: 'finished', id: msg.id, result }, finishBuffers(result));
+    } catch (err) {
+      ctx.postMessage({ type: 'error', id: msg.id, message: String(err) });
+    }
+    return;
+  }
+  if (msg.type === 'scan') {
+    try {
+      for (const seed of msg.seeds) {
+        const t0 = performance.now();
+        const cw = generateCampaignWorld(
+          { ...msg.params, seed },
+          { resolution: COARSE_RESOLUTION },
+        );
+        ctx.postMessage({
+          type: 'scanRow',
+          id: msg.id,
+          row: summarizeSeed(seed, cw, performance.now() - t0),
+        });
+      }
+      ctx.postMessage({ type: 'scanDone', id: msg.id });
     } catch (err) {
       ctx.postMessage({ type: 'error', id: msg.id, message: String(err) });
     }

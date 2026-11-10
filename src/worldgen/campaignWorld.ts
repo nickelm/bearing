@@ -98,3 +98,32 @@ export function strategicWorld(w: CampaignWorld): StrategicWorld {
 export function strategicBuffers(s: StrategicWorld): ArrayBuffer[] {
   return graphBuffers(s.graph);
 }
+
+/** One seed browser row (milestone 4): what a seed produces. */
+export interface SeedSummary {
+  seed: string;
+  /** The seed actually generated, after retries. */
+  seedUsed: string;
+  retries: number;
+  valid: boolean;
+  landFraction: number;
+  theaters: { kind: string; name: string; fit: number }[];
+  rangeFactor: number;
+  airbases: { alliance: number; pact: number };
+  ms: number;
+}
+
+export function summarizeSeed(seed: string, w: CampaignWorld, ms: number): SeedSummary {
+  const cast = w.campaign.cast;
+  return {
+    seed,
+    seedUsed: String(w.seed),
+    retries: w.retries,
+    valid: w.campaign.validity.valid,
+    landFraction: w.world.info.landFraction,
+    theaters: cast.theaters.map((t) => ({ kind: t.kind, name: t.name, fit: t.fit })),
+    rangeFactor: cast.rangeFactor,
+    airbases: { ...cast.airbases },
+    ms,
+  };
+}
