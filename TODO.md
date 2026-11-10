@@ -90,7 +90,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md) (revision 4: nine mil
 - [x] Cloud layer rendering, from a static field derived from moisture until live weather exists (M6) (decision 55)
 - [x] Checkpoint 4: owner review of terrain shading, seasons, forests, rivers and clouds
   - [x] No river channels carved into lake beds
-  - [x] Clouds advected by latitude-dependent zonal winds (decision 58)
+  - [x] Clouds moved by prevailing winds without stretching, and regularly clear everywhere (decisions 58, 59)
 
 ### Known issues
 

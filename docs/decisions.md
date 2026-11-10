@@ -961,3 +961,19 @@ Shaders sample it by direction through `cubeFaceUv`, a TSL mirror of `directionT
 **Reason:** Owner review at checkpoint 4: the clouds changed shape but did not drift.
 
 Also at checkpoint 4: the tile kernel no longer carves river channels into lake beds (carving × the lake-bed mask of decision 40). Rivers crossing a lake showed as dark lines through the water.
+
+### 59. Clouds: two rigidly moving fields, climate as odds
+
+**Date:** 2026-11-10
+**Decision:** This revises decision 58.
+
+- **Motion.** Cloud coverage blends two independent noise fields by latitude band, each turned rigidly about the polar axis:
+  - one eastward, the westerlies: about 12 m/s at 45°, between roughly 27° and 63°;
+  - one westward, the trades and polar easterlies: about 7 m/s at 15°.
+
+  Rigid motion has no shear, so clouds never stretch. At band edges the two fields slide past each other and cross-fade. Both evolve slowly in place, about one feature every 3 days. The re-seeding cycles of decision 58 are gone.
+
+- **Climate as odds.** The precipitation-derived cloudiness shifts the noise by ±0.15 at most (it was up to +0.63), so it changes how often a place is cloudy, not whether it ever clears.
+- **Test.** A GPU test samples coverage at 512 points over 12 days on Dawn. It checks that every point is mostly clear at least 15% of the time, that mean coverage lies between 0.15 and 0.55, and that the field changes more over 12 h than over 1 h. The wettest belts, the equator and the mid-latitude storm tracks, are the cloudiest and still clear about one time in six.
+
+**Reason:** Owner review: the latitude-dependent advection of decision 58 stretched clouds into streaks (shear between bands), and wet regions, mountains included, were solid white all the time.
