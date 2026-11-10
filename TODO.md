@@ -63,6 +63,9 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [x] Tile normals; shader detail noise below the finest baked level (CPU render-detail noise instead, decision 30)
 - [x] Geomorphing so LOD changes don't pop (morph toward the parent's actual surface)
 - [ ] Checkpoint 2: owner review of the tiled terrain in the browser, orbit to 500 m
+  - [x] Exaggeration changes without rebuilding meshes (decision 31)
+  - [x] Thin rivers drawn as continuous lines on diagonals (wider coverage mask; true channels stay)
+  - [x] One "Color by" list for grid and tiles; grid-only modes switch the display to the grid
 - [x] Camera: terrain-aware near plane and ground clamp; flyable down to 500 m (heading, WASD/QE/RF flight, tilt to 87° below 50 km)
 
 ## Milestone 3: Atmosphere, ocean, forests, sky
@@ -78,7 +81,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [ ] Seasonal snow line and seasonal vegetation tint
 - [ ] Forest density map (also used later by line of sight)
 - [ ] Instanced low-poly tree clusters within about 5 km of the camera
-- [ ] River rendering from vector data (mask texture or decals)
+- [ ] River rendering from vector data (mask texture or decals); replaces the per-vertex river coverage from checkpoint 2
 - [ ] Cloud layer rendering, from a static field derived from moisture until live weather exists (M6)
 
 ## Milestone 4: Geography and front

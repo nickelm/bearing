@@ -398,3 +398,17 @@ This replaces the TODO's "local erosion pass" on each tile. The same function ex
 - I cannot see the browser in these sessions. Keeping the vertex logic in TypeScript lets Vitest check seams, morph targets and normals. `tests/gpu/terrainRenderer.test.ts` drives the whole renderer on Dawn from orbit to 3 km.
 - The CPU data is resident anyway for ground-height queries.
 - Moving mesh building into a worker, or into a compute shader, is a performance item for milestone 8 if loading lags.
+
+### 31. Height exaggeration in the vertex shader
+
+**Date:** 2026-11-09
+**Decision:** This revises decision 30. Tile meshes store unexaggerated data:
+
+- the base point on the sphere;
+- the up vector;
+- the displayed height;
+- the parent surface as a base point plus a displacement;
+- the slope vector.
+
+The vertex shader computes `base + up · height · exaggeration`, morphs toward `parentBase + parentDisp · exaggeration`, and sets the normal to `normalize(up − slope · exaggeration)` through `normalNode = transformNormalToView(…)`. `displacedPosition` in `tileMesh.ts` applies the same formula on the CPU for the tests. Skirts are cut deep enough for the largest exaggeration the GUI allows.
+**Reason:** Owner review found flicker and regeneration when changing the exaggeration. Every mesh was rebuilt and the quadtree fell back to coarse tiles while that happened. Now a change is one uniform update. The cost is 76 bytes per vertex instead of 48.

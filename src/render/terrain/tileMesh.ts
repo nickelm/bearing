@@ -40,18 +40,54 @@ const SKIRT_VERTICES = 4 * V;
 export const TILE_VERTEX_COUNT = GRID_VERTICES + SKIRT_VERTICES;
 const STEP = TILE_TEXELS / TILE_SEGMENTS;
 
+/**
+ * Vertex data of one tile. Exaggeration is applied in the vertex shader, so
+ * changing it needs no rebuild; `displacedPosition` below is the same
+ * formula on the CPU:
+ *   own    = base + up · height · exaggeration
+ *   parent = parentBase + parentDisp · exaggeration
+ *   position = mix(parent, own, morph)
+ *   normal   = normalize(up − slope · exaggeration)
+ */
 export interface TileMeshData {
   tile: TileKey;
   /** Tile center on the sphere (m, planet-centered, float64). */
   origin: Vec3d;
-  position: Float32Array;
-  positionParent: Float32Array;
-  normal: Float32Array;
+  /** Point on the sphere (skirts: below it), relative to the origin. */
+  base: Float32Array;
+  /** Unit radial direction. */
+  up: Float32Array;
+  /** Displayed height before exaggeration: max(0, h), the sea flat at 0. */
+  height: Float32Array;
+  /** Morph target: the parent's surface, as base + displacement (before exaggeration). */
+  parentBase: Float32Array;
+  parentDisp: Float32Array;
+  /** Surface gradient of the displayed height (before exaggeration), a tangent vector. */
+  slope: Float32Array;
   /** Linear RGB. */
   color: Float32Array;
-  /** Displayed height range (m, exaggerated). */
+  /** Displayed height range before exaggeration (m). */
   minHeight: number;
   maxHeight: number;
+}
+
+/** Vertex `v`'s displaced position relative to the origin, as the shader computes it. */
+export function displacedPosition(
+  m: TileMeshData,
+  v: number,
+  exaggeration: number,
+  morph = 1,
+  out = new Vec3d(),
+): Vec3d {
+  const k = v * 3;
+  const h = m.height[v]! * exaggeration;
+  const ox = m.base[k]! + m.up[k]! * h;
+  const oy = m.base[k + 1]! + m.up[k + 1]! * h;
+  const oz = m.base[k + 2]! + m.up[k + 2]! * h;
+  const px = m.parentBase[k]! + m.parentDisp[k]! * exaggeration;
+  const py = m.parentBase[k + 1]! + m.parentDisp[k + 1]! * exaggeration;
+  const pz = m.parentBase[k + 2]! + m.parentDisp[k + 2]! * exaggeration;
+  return out.set(px + (ox - px) * morph, py + (oy - py) * morph, pz + (oz - pz) * morph);
 }
 
 export interface MeshSources {
@@ -64,7 +100,6 @@ export interface MeshSources {
 export interface MeshOptions {
   radius: number;
   reliefScale: number;
-  exaggeration: number;
   mode: TileViewMode;
   /** Render detail noise below the finest baked level (seeded per world). */
   detail: Noise3;
@@ -186,6 +221,7 @@ function colorFor(
   mode: TileViewMode,
   h: number,
   material: number,
+  river: number,
   level: number,
   edge: boolean,
   reliefScale: number,
@@ -197,7 +233,6 @@ function colorFor(
     c = hsl((level * 0.13) % 1, 0.6, 0.5);
   } else {
     const biome = material & 0xff;
-    const river = ((material >> 8) & 0xff) / 255;
     const lake = (material >> 16) & 1;
     if (h <= 0) {
       const depth = Math.min(1, -h / (4000 * reliefScale));
@@ -221,16 +256,56 @@ function colorFor(
   return c;
 }
 
+/** River coverage 0..1 of a material sample. */
+function riverOf(data: TileData, sx: number, sy: number): number {
+  return ((data.material[(sy + TILE_BORDER) * TILE_STRIDE + sx + TILE_BORDER]! >> 8) & 0xff) / 255;
+}
+
+/**
+ * River coverage at a vertex. A vertex spanning several samples takes the
+ * strongest coverage within one vertex spacing, so thin rivers stay
+ * continuous lines instead of stippling where they run diagonally. A vertex
+ * finer than the samples interpolates bilinearly.
+ */
+function riverAt(data: TileData, fx: number, fy: number, footprint: number): number {
+  const lo = -TILE_BORDER;
+  const hi = TILE_TEXELS + TILE_BORDER;
+  if (footprint >= 1) {
+    const r = Math.ceil(footprint);
+    const cx = Math.round(fx);
+    const cy = Math.round(fy);
+    let best = 0;
+    for (let y = Math.max(lo, cy - r); y <= Math.min(hi, cy + r); y++) {
+      for (let x = Math.max(lo, cx - r); x <= Math.min(hi, cx + r); x++) {
+        const d2 = (x - fx) ** 2 + (y - fy) ** 2;
+        if (d2 > footprint * footprint) continue;
+        best = Math.max(best, riverOf(data, x, y));
+      }
+    }
+    return best;
+  }
+  const x = Math.min(hi - 1, Math.max(lo, Math.floor(fx)));
+  const y = Math.min(hi - 1, Math.max(lo, Math.floor(fy)));
+  const tx = Math.min(1, Math.max(0, fx - x));
+  const ty = Math.min(1, Math.max(0, fy - y));
+  return (
+    (riverOf(data, x, y) * (1 - tx) + riverOf(data, x + 1, y) * tx) * (1 - ty) +
+    (riverOf(data, x, y + 1) * (1 - tx) + riverOf(data, x + 1, y + 1) * tx) * ty
+  );
+}
+
+/** Exaggeration assumed for skirt depth (the GUI allows up to 40). */
+const SKIRT_EXAGGERATION = 40;
+
 /** Builds the vertex data of tile `t`. */
 export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOptions): TileMeshData {
   const R = opts.radius;
-  const ex = opts.exaggeration;
   const own = surfaceSampler(t, t.level, sources.data, opts);
   const parentKey = parentTile(t);
   const parentSurface =
     parentKey === null
       ? own
-      : t.level - 1 <= MAX_BAKED_LEVEL && t.level <= MAX_BAKED_LEVEL
+      : t.level <= MAX_BAKED_LEVEL
         ? surfaceSampler(t, t.level - 1, sources.parentData ?? sources.data, opts)
         : surfaceSampler(t, t.level - 1, sources.data, opts);
 
@@ -238,20 +313,24 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
   const fv = (s: number) => (t.y * TILE_TEXELS + s) / (TILE_TEXELS * (1 << t.level));
   const dirAt = (sx: number, sy: number, out: Vec3d) =>
     cubeFaceUvToDirection(t.face, fu(sx), fv(sy), out);
-  const display = (h: number) => Math.max(0, h) * ex;
+  const display = (h: number) => Math.max(0, h);
 
   const origin = dirAt(TILE_TEXELS / 2, TILE_TEXELS / 2, new Vec3d()).scale(R);
-  const position = new Float32Array(TILE_VERTEX_COUNT * 3);
-  const positionParent = new Float32Array(TILE_VERTEX_COUNT * 3);
-  const normal = new Float32Array(TILE_VERTEX_COUNT * 3);
-  const color = new Float32Array(TILE_VERTEX_COUNT * 3);
+  const o3 = [origin.x, origin.y, origin.z];
+  const n3 = TILE_VERTEX_COUNT * 3;
+  const base = new Float32Array(n3);
+  const up = new Float32Array(n3);
+  const height = new Float32Array(TILE_VERTEX_COUNT);
+  const parentBase = new Float32Array(n3);
+  const parentDisp = new Float32Array(n3);
+  const slope = new Float32Array(n3);
+  const color = new Float32Array(n3);
 
   // Grid: directions, own heights and parent heights (float64).
   const dirs = new Float64Array(GRID_VERTICES * 3);
   const hOwn = new Float64Array(GRID_VERTICES);
   const hPar = new Float64Array(GRID_VERTICES);
   const d = new Vec3d();
-  const p = new Vec3d();
   for (let j = 0; j < V; j++) {
     for (let i = 0; i < V; i++) {
       const v = j * V + i;
@@ -263,19 +342,25 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
       if (i % 2 === 0 && j % 2 === 0) hPar[v] = parentSurface(i * STEP, j * STEP, d);
     }
   }
-  // Odd vertices: midpoint of the parent's edge or diagonal (the shared triangle split).
-  const pos = (v: number, h: number, out: Vec3d) =>
-    out.set(dirs[v * 3]!, dirs[v * 3 + 1]!, dirs[v * 3 + 2]!).scale(R + display(h));
-  const pa = new Vec3d();
-  const pb = new Vec3d();
+
+  // Base, up, height; parent: midpoint of the parent's edge or diagonal (the shared split).
   let minH = Infinity;
   let maxH = -Infinity;
   for (let j = 0; j < V; j++) {
     for (let i = 0; i < V; i++) {
       const v = j * V + i;
-      pos(v, hOwn[v]!, p).sub(origin);
-      position.set([p.x, p.y, p.z], v * 3);
+      const k = v * 3;
+      const ux = dirs[k]!;
+      const uy = dirs[k + 1]!;
+      const uz = dirs[k + 2]!;
+      base[k] = ux * R - origin.x;
+      base[k + 1] = uy * R - origin.y;
+      base[k + 2] = uz * R - origin.z;
+      up[k] = ux;
+      up[k + 1] = uy;
+      up[k + 2] = uz;
       const dh = display(hOwn[v]!);
+      height[v] = dh;
       minH = Math.min(minH, dh);
       maxH = Math.max(maxH, dh);
       let a: number;
@@ -285,35 +370,33 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
       else if (i % 2 === 0) [a, b] = [v - V, v + V];
       else [a, b] = [v - V - 1, v + V + 1];
       // Parent heights exist at even vertices only; a and b are always even.
-      pos(a, hPar[a]!, pa);
-      pos(b, hPar[b]!, pb);
-      pa.add(pb).scale(0.5).sub(origin);
-      positionParent.set([pa.x, pa.y, pa.z], v * 3);
+      const ha = display(hPar[a]!);
+      const hb = display(hPar[b]!);
+      for (let c = 0; c < 3; c++) {
+        parentBase[k + c] = (dirs[a * 3 + c]! + dirs[b * 3 + c]!) * 0.5 * R - o3[c]!;
+        parentDisp[k + c] = (dirs[a * 3 + c]! * ha + dirs[b * 3 + c]! * hb) * 0.5;
+      }
     }
   }
 
-  // Normals: height slopes one sample apart (bilinear in the data tile, inside its
-  // border) against tangents from the vertex grid's directions. Render detail is
-  // left out of normals; it is a few meters at most.
+  // Slopes: height differences one sample apart (bilinear in the data tile, inside its
+  // border) against tangents from the vertex grid's directions. Render detail is left
+  // out; it is a few meters at most.
   const [dox, doy] = mapSample(t, sources.data.key, 0, 0);
   const dscale = 2 ** (sources.data.key.level - t.level);
-  const base = (sx: number, sy: number) =>
+  const flat = (sx: number, sy: number) =>
     display(bilinear(sources.data, dox + sx * dscale, doy + sy * dscale));
-  // Physical length of one sample step, from the face-coordinate warp (nearly uniform).
+  const footprint = STEP * dscale;
   const tu = new Vec3d();
   const tv = new Vec3d();
-  const up = new Vec3d();
-  const nrm = new Vec3d();
+  const tmp = new Vec3d();
   const dirOf = (v: number, out: Vec3d) =>
     out.set(dirs[v * 3]!, dirs[v * 3 + 1]!, dirs[v * 3 + 2]!);
-  const tmp = new Vec3d();
   for (let j = 0; j < V; j++) {
     for (let i = 0; i < V; i++) {
       const v = j * V + i;
       const sx = i * STEP;
       const sy = j * STEP;
-      dirOf(v, up);
-      // Tangent along u and v from neighboring grid directions (one-sided at the edges).
       const iu0 = i > 0 ? v - 1 : v;
       const iu1 = i < TILE_SEGMENTS ? v + 1 : v;
       const jv0 = j > 0 ? v - V : v;
@@ -321,52 +404,55 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
       dirOf(iu1, tu).sub(dirOf(iu0, tmp));
       dirOf(jv1, tv).sub(dirOf(jv0, tmp));
       // Meters of surface per sample step along u and v.
-      const du = (tu.length() * R) / (((iu1 - iu0) / 1) * STEP);
+      const du = (tu.length() * R) / ((iu1 - iu0) * STEP);
       const dv = (tv.length() * R) / (((jv1 - jv0) / V) * STEP);
       tu.normalize();
       tv.normalize();
-      const sU = (base(sx + 1, sy) - base(sx - 1, sy)) / (2 * du);
-      const sV = (base(sx, sy + 1) - base(sx, sy - 1)) / (2 * dv);
-      nrm.copy(up).addScaled(tu, -sU).addScaled(tv, -sV).normalize();
-      normal[v * 3] = nrm.x;
-      normal[v * 3 + 1] = nrm.y;
-      normal[v * 3 + 2] = nrm.z;
+      const sU = (flat(sx + 1, sy) - flat(sx - 1, sy)) / (2 * du);
+      const sV = (flat(sx, sy + 1) - flat(sx, sy - 1)) / (2 * dv);
+      slope[v * 3] = tu.x * sU + tv.x * sV;
+      slope[v * 3 + 1] = tu.y * sU + tv.y * sV;
+      slope[v * 3 + 2] = tu.z * sU + tv.z * sV;
       const edge = i === 0 || j === 0 || i === TILE_SEGMENTS || j === TILE_SEGMENTS;
-      const mat = materialAt(sources.data, dox + sx * dscale, doy + sy * dscale);
-      const rgb = colorFor(opts.mode, hOwn[v]!, mat, t.level, edge, opts.reliefScale);
+      const fx = dox + sx * dscale;
+      const fy = doy + sy * dscale;
+      const mat = materialAt(sources.data, fx, fy);
+      const river = riverAt(sources.data, fx, fy, footprint);
+      const rgb = colorFor(opts.mode, hOwn[v]!, mat, river, t.level, edge, opts.reliefScale);
       color[v * 3] = srgbToLinear(rgb[0]);
       color[v * 3 + 1] = srgbToLinear(rgb[1]);
       color[v * 3 + 2] = srgbToLinear(rgb[2]);
     }
   }
 
-  // Skirts: copies of the edge vertices, lowered.
-  const skirt = Math.max(20, 4 * vertexSpacing(t.level, R) * 0.05 * ex) + (maxH - minH) * 0.02;
+  // Skirts: copies of the edge vertices with the base lowered, deep enough for any
+  // exaggeration the GUI allows.
+  const skirt =
+    Math.max(20, 4 * vertexSpacing(t.level, R) * 0.05 * SKIRT_EXAGGERATION) +
+    (maxH - minH) * 0.02 * SKIRT_EXAGGERATION;
   for (let e = 0; e < 4; e++) {
     for (let k = 0; k < V; k++) {
       const src = edgeVertex(e, k);
       const dst = GRID_VERTICES + e * V + k;
-      const ux = dirs[src * 3]!;
-      const uy = dirs[src * 3 + 1]!;
-      const uz = dirs[src * 3 + 2]!;
-      for (const [arr, base] of [
-        [position, position],
-        [positionParent, positionParent],
-      ] as const) {
-        arr[dst * 3] = base[src * 3]! - ux * skirt;
-        arr[dst * 3 + 1] = base[src * 3 + 1]! - uy * skirt;
-        arr[dst * 3 + 2] = base[src * 3 + 2]! - uz * skirt;
+      for (let c = 0; c < 3; c++) {
+        const u = dirs[src * 3 + c]!;
+        base[dst * 3 + c] = base[src * 3 + c]! - u * skirt;
+        parentBase[dst * 3 + c] = parentBase[src * 3 + c]! - u * skirt;
       }
-      normal.copyWithin(dst * 3, src * 3, src * 3 + 3);
-      color.copyWithin(dst * 3, src * 3, src * 3 + 3);
+      for (const arr of [up, parentDisp, slope, color])
+        arr.copyWithin(dst * 3, src * 3, src * 3 + 3);
+      height[dst] = height[src]!;
     }
   }
   return {
     tile: t,
     origin,
-    position,
-    positionParent,
-    normal,
+    base,
+    up,
+    height,
+    parentBase,
+    parentDisp,
+    slope,
     color,
     minHeight: minH,
     maxHeight: maxH,

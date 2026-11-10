@@ -222,7 +222,11 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
       let dist = length(d - p) * R;
       let w = mix(segs[o + 6u], segs[o + 7u], tt);
       let plain = max(${f(t.floodplainMin)}, ${f(t.floodplainWidths)} * w);
-      riverCover = max(riverCover, clamp(1.0 - dist / max(0.5 * w, 1.0), 0.0, 1.0));
+      // Coverage for drawing: at least ~2.5 samples wide with soft edges, so thin
+      // rivers stay continuous at this level (the carved channel keeps its true width).
+      let spacing = R * 2.0 * QUARTER_PI / denom;
+      let halfVis = max(0.5 * w, 1.25 * spacing);
+      riverCover = max(riverCover, 1.0 - smoothstep(halfVis - 0.75 * spacing, halfVis + 0.75 * spacing, dist));
       if (dist / plain < nearest) {
         nearest = dist / plain;
         bestDist = dist;

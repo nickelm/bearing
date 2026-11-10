@@ -24,7 +24,6 @@ export interface ViewGuiParams {
   wireframe: boolean;
   /** Tiled LOD terrain instead of the M1 grid mesh. */
   tiles: boolean;
-  tileMode: string;
   geomorph: boolean;
   /** Screen-space error threshold (pixels). */
   sse: number;
@@ -77,7 +76,6 @@ export class DebugGui {
     readonly view: ViewGuiParams,
     viewModes: readonly string[],
     callbacks: DebugGuiCallbacks,
-    private readonly tileModes: readonly string[] = [],
   ) {
     const regen = () => callbacks.regenerate();
 
@@ -124,9 +122,6 @@ export class DebugGui {
     const t = v.addFolder('Terrain tiles');
     t.add(view, 'tiles')
       .name('Tiled terrain')
-      .onChange(() => callbacks.viewChanged(view));
-    t.add(view, 'tileMode', [...this.tileModes])
-      .name('Tile colors')
       .onChange(() => callbacks.viewChanged(view));
     t.add(view, 'geomorph')
       .name('Geomorphing')

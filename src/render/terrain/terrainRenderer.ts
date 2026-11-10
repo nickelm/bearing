@@ -22,7 +22,14 @@ import {
   Mesh,
   MeshStandardNodeMaterial,
 } from 'three/webgpu';
-import { attribute, mix, positionLocal, uniform } from 'three/tsl';
+import {
+  attribute,
+  mix,
+  normalize,
+  positionLocal,
+  transformNormalToView,
+  uniform,
+} from 'three/tsl';
 import { directionToCubeFace } from '../../core/coords';
 import type { CubeFaceUv } from '../../core/coords';
 import { Noise3 } from '../../core/noise';
@@ -47,7 +54,8 @@ import { buildTileIndex, buildTileMesh, dataTileFor, TILE_VERTEX_COUNT } from '.
 import type { TileViewMode } from './tileMesh';
 
 const DATA_BYTES = TILE_STRIDE * TILE_STRIDE * 8;
-const MESH_BYTES = TILE_VERTEX_COUNT * 4 * 3 * 4;
+/** base, up, parentBase, parentDisp, slope, color (vec3) + height (float), float32. */
+const MESH_BYTES = TILE_VERTEX_COUNT * (6 * 3 + 1) * 4;
 
 export interface TerrainStats {
   drawn: number;
@@ -82,6 +90,7 @@ export class TerrainRenderer {
 
   private world: TerrainWorld | null = null;
   private exaggeration = 10;
+  private readonly exaggerationUniform = uniform(10);
   private mode: TileViewMode = 'biome';
   private detail: Noise3 = new Noise3(rng(0, 'render-detail'));
   private readonly index = new BufferAttribute(buildTileIndex(), 1);
@@ -109,7 +118,18 @@ export class TerrainRenderer {
       metalness: 0,
       side: DoubleSide,
     });
-    this.material.positionNode = mix(attribute('positionParent', 'vec3'), positionLocal, morph);
+    // Exaggeration and geomorphing in the vertex shader (see TileMeshData):
+    // changing the exaggeration is a uniform update, not a rebuild.
+    const exaggeration = this.exaggerationUniform;
+    const up = attribute('up', 'vec3');
+    const own = positionLocal.add(up.mul(attribute('height', 'float').mul(exaggeration)));
+    const parent = attribute('parentBase', 'vec3').add(
+      attribute('parentDisp', 'vec3').mul(exaggeration),
+    );
+    this.material.positionNode = mix(parent, own, morph);
+    this.material.normalNode = transformNormalToView(
+      normalize(up.sub(attribute('slope', 'vec3').mul(exaggeration))),
+    );
     this.loader = new TileLoader<TileData>(
       this.data,
       this.queue,
@@ -134,11 +154,10 @@ export class TerrainRenderer {
     this.visible.clear();
   }
 
+  /** Applied in the vertex shader: no meshes are rebuilt. */
   setExaggeration(x: number): void {
-    if (x === this.exaggeration) return;
     this.exaggeration = x;
-    this.meshes.clear();
-    this.visible.clear();
+    this.exaggerationUniform.value = x;
   }
 
   setMode(mode: TileViewMode): void {
@@ -179,14 +198,16 @@ export class TerrainRenderer {
     const m = buildTileMesh(t, src, {
       radius: w.radius,
       reliefScale: w.reliefScale,
-      exaggeration: this.exaggeration,
       mode: this.mode,
       detail: this.detail,
     });
     const g = new BufferGeometry();
-    g.setAttribute('position', new BufferAttribute(m.position, 3));
-    g.setAttribute('positionParent', new BufferAttribute(m.positionParent, 3));
-    g.setAttribute('normal', new BufferAttribute(m.normal, 3));
+    g.setAttribute('position', new BufferAttribute(m.base, 3));
+    g.setAttribute('up', new BufferAttribute(m.up, 3));
+    g.setAttribute('height', new BufferAttribute(m.height, 1));
+    g.setAttribute('parentBase', new BufferAttribute(m.parentBase, 3));
+    g.setAttribute('parentDisp', new BufferAttribute(m.parentDisp, 3));
+    g.setAttribute('slope', new BufferAttribute(m.slope, 3));
     g.setAttribute('color', new BufferAttribute(m.color, 3));
     g.setIndex(this.index);
     const mesh = new Mesh(g, this.material);

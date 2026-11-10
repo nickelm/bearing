@@ -19,9 +19,10 @@ import {
   buildTileIndex,
   buildTileMesh,
   dataTileFor,
+  displacedPosition,
   TILE_VERTEX_COUNT,
 } from '../src/render/terrain/tileMesh';
-import type { MeshOptions } from '../src/render/terrain/tileMesh';
+import type { MeshOptions, TileMeshData } from '../src/render/terrain/tileMesh';
 import type { TileData } from '../src/worldgen/gpu/tileSynth';
 
 const R = PLANET_RADIUS;
@@ -29,13 +30,14 @@ const V = TILE_SEGMENTS + 1;
 const opts: MeshOptions = {
   radius: R,
   reliefScale: 0.157,
-  exaggeration: 3,
   mode: 'biome',
   detail: new Noise3(rng(1, 'test-detail')),
 };
 
+const EX = 3;
+
 /** Synthetic tile data from an analytic height field (same function at every level). */
-function fakeData(k: TileKey): TileData {
+function fakeData(k: TileKey, river?: (sx: number, sy: number) => boolean): TileData {
   const height = new Float32Array(TILE_STRIDE * TILE_STRIDE);
   const material = new Uint32Array(TILE_STRIDE * TILE_STRIDE).fill(8);
   const d = new Vec3d();
@@ -44,13 +46,16 @@ function fakeData(k: TileKey): TileData {
       tileSampleDirection(k, sx, sy, d);
       height[(sy + TILE_BORDER) * TILE_STRIDE + sx + TILE_BORDER] =
         300 + 200 * Math.sin(d.x * 400) * Math.cos(d.z * 300);
+      if (river?.(sx, sy))
+        material[(sy + TILE_BORDER) * TILE_STRIDE + sx + TILE_BORDER] = 8 | (255 << 8);
     }
   }
   return { key: k, height, material, minHeight: 0, maxHeight: 500 };
 }
 
-const world = (m: { origin: Vec3d; position: Float32Array }, v: number, which = m.position) =>
-  new Vec3d(which[v * 3]!, which[v * 3 + 1]!, which[v * 3 + 2]!).add(m.origin);
+/** World position of vertex v, as the shader displaces it (morph 1 = own, 0 = parent). */
+const world = (m: TileMeshData, v: number, morph = 1) =>
+  displacedPosition(m, v, EX, morph).add(m.origin);
 
 const build = (t: TileKey) =>
   buildTileMesh(
@@ -68,8 +73,10 @@ describe('buildTileMesh', () => {
     expect(idx.length).toBe(TILE_SEGMENTS * TILE_SEGMENTS * 6 + 4 * TILE_SEGMENTS * 6);
     expect(Math.max(...idx)).toBe(TILE_VERTEX_COUNT - 1);
     const m = build(tileKey(4, 5, 10, 12));
-    expect(m.position.length).toBe(TILE_VERTEX_COUNT * 3);
-    expect(m.position.every(Number.isFinite)).toBe(true);
+    expect(m.base.length).toBe(TILE_VERTEX_COUNT * 3);
+    for (const a of [m.base, m.up, m.height, m.parentBase, m.parentDisp, m.slope, m.color]) {
+      expect(a.every(Number.isFinite)).toBe(true);
+    }
   });
 
   for (const level of [5, 9]) {
@@ -94,15 +101,15 @@ describe('buildTileMesh', () => {
     const half = TILE_SEGMENTS / 2;
     for (let j = 0; j < V; j += 2) {
       for (let i = 0; i < V; i += 2) {
-        const pc = world(mc, j * V + i, mc.positionParent);
+        const pc = world(mc, j * V + i, 0);
         const pp = world(mp, (half + j / 2) * V + half + i / 2);
         expect(pc.distanceTo(pp)).toBeLessThan(0.01);
       }
     }
     // Odd vertices sit on the midpoint of the parent's edge.
-    const m1 = world(mc, 1, mc.positionParent);
-    const mid = world(mc, 0, mc.positionParent)
-      .add(world(mc, 2, mc.positionParent))
+    const m1 = world(mc, 1, 0);
+    const mid = world(mc, 0, 0)
+      .add(world(mc, 2, 0))
       .scale(0.5);
     expect(m1.distanceTo(mid)).toBeLessThan(0.01);
   });
@@ -112,9 +119,35 @@ describe('buildTileMesh', () => {
     expect(m.origin.length()).toBeCloseTo(R, 3);
     const up = m.origin.clone().normalize();
     for (let v = 0; v < V * V; v += 97) {
-      const n = new Vec3d(m.normal[v * 3]!, m.normal[v * 3 + 1]!, m.normal[v * 3 + 2]!);
+      // The shader's normal: normalize(up − slope · exaggeration).
+      const n = new Vec3d(
+        m.up[v * 3]! - m.slope[v * 3]! * EX,
+        m.up[v * 3 + 1]! - m.slope[v * 3 + 1]! * EX,
+        m.up[v * 3 + 2]! - m.slope[v * 3 + 2]! * EX,
+      ).normalize();
       expect(n.dot(up)).toBeGreaterThan(0.5);
     }
     expect(m.maxHeight).toBeGreaterThan(m.minHeight);
+  });
+
+  it('draws a one-sample diagonal river as a continuous line of vertices', () => {
+    const t = tileKey(1, 6, 10, 10);
+    // A river one sample wide running diagonally, offset from the vertex lattice.
+    const river = (sx: number, sy: number) => sx === sy + 1;
+    const m = buildTileMesh(
+      t,
+      { data: fakeData(t, river), parentData: fakeData(parentTile(t)!) },
+      opts,
+    );
+    const plain = buildTileMesh(
+      t,
+      { data: fakeData(t), parentData: fakeData(parentTile(t)!) },
+      opts,
+    );
+    for (let i = 1; i < TILE_SEGMENTS; i++) {
+      const v = i * V + i;
+      // Bluer than the same vertex without a river.
+      expect(m.color[v * 3 + 2]!).toBeGreaterThan(plain.color[v * 3 + 2]! + 0.05);
+    }
   });
 });

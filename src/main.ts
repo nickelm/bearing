@@ -26,7 +26,6 @@ import { GpuContext } from './worldgen/gpu/gpuContext';
 import { TileSynthesizer } from './worldgen/gpu/tileSynth';
 import { RiverIndex } from './worldgen/riverIndex';
 import { DEFAULT_LOD } from './render/terrain/quadtree';
-import { TILE_VIEW_MODES } from './render/terrain/tileMesh';
 import type { TileViewMode } from './render/terrain/tileMesh';
 import {
   buildGlobalWorld,
@@ -86,7 +85,6 @@ async function main(): Promise<void> {
     exaggeration: 10,
     wireframe: false,
     tiles: true,
-    tileMode: 'biome',
     geomorph: true,
     sse: DEFAULT_LOD.sseThreshold,
     tileMemory: 600,
@@ -259,39 +257,49 @@ async function main(): Promise<void> {
     }
   };
 
-  const gui = new DebugGui(
-    worldParams,
-    viewParams,
-    VIEW_MODES,
-    {
-      regenerate: () => void regenerate(),
-      clearCache: () => {
-        store
-          .clear()
-          .then(() => (gui.status.generation = 'world cache cleared'))
-          .catch((err: unknown) => console.warn('Could not clear the world cache', err));
-      },
-      cancel: () => {
-        generation++;
-        worldgen.cancel();
-        gui.status.generation = 'cancelled';
-      },
-      viewChanged: (v) => {
-        globe.globe.setViewMode(v.mode as ViewMode);
-        globe.globe.wireframe = v.wireframe;
-        globe.useTiles = v.tiles;
-        globe.terrain.setMode(v.tileMode as TileViewMode);
-        globe.terrain.geomorph = v.geomorph;
-        globe.terrain.lod.sseThreshold = v.sse;
-        globe.terrain.budgetMiB = v.tileMemory;
-      },
-      shapeChanged: (v) => {
-        globe.globe.setExaggeration(v.exaggeration);
-        globe.terrain.setExaggeration(v.exaggeration);
-      },
+  /** "Color by" modes the tiles can show, and the tile coloring each maps to. */
+  const TILE_MODE_FOR: Record<string, TileViewMode> = {
+    biome: 'biome',
+    rivers: 'biome',
+    height: 'height',
+    'tile level': 'level',
+    'tile borders': 'borders',
+  };
+  const COLOR_MODES = [...VIEW_MODES, 'tile level', 'tile borders'];
+  let tilesBlocked = false;
+  const gui = new DebugGui(worldParams, viewParams, COLOR_MODES, {
+    regenerate: () => void regenerate(),
+    clearCache: () => {
+      store
+        .clear()
+        .then(() => (gui.status.generation = 'world cache cleared'))
+        .catch((err: unknown) => console.warn('Could not clear the world cache', err));
     },
-    TILE_VIEW_MODES,
-  );
+    cancel: () => {
+      generation++;
+      worldgen.cancel();
+      gui.status.generation = 'cancelled';
+    },
+    viewChanged: (v) => {
+      // One "Color by" list for both renderers: modes the tiles cannot show
+      // (they need tectonic-grid maps) switch the display to the grid mesh.
+      const tileMode = TILE_MODE_FOR[v.mode];
+      tilesBlocked = tileMode === undefined;
+      globe.globe.setViewMode(
+        ((VIEW_MODES as readonly string[]).includes(v.mode) ? v.mode : 'biome') as ViewMode,
+      );
+      globe.globe.wireframe = v.wireframe;
+      globe.useTiles = v.tiles && !tilesBlocked;
+      if (tileMode) globe.terrain.setMode(tileMode);
+      globe.terrain.geomorph = v.geomorph;
+      globe.terrain.lod.sseThreshold = v.sse;
+      globe.terrain.budgetMiB = v.tileMemory;
+    },
+    shapeChanged: (v) => {
+      globe.globe.setExaggeration(v.exaggeration);
+      globe.terrain.setExaggeration(v.exaggeration);
+    },
+  });
   gui.status.backend = 'WebGPU';
 
   // World-generation compute shares three's device (decision 22).
@@ -356,10 +364,13 @@ async function main(): Promise<void> {
     gui.status.lonDeg = o.lon / DEG;
     gui.status.tiltDeg = o.tilt / DEG;
     const ts = globe.terrain.stats;
-    gui.status.tiles =
-      globe.terrainReady && globe.useTiles
-        ? `${ts.drawn} drawn, L${ts.deepest} deepest, ${ts.meshes} meshes, ${ts.dataTiles} data, ${ts.pending} loading`
-        : 'off';
+    gui.status.tiles = !globe.terrainReady
+      ? 'waiting for the global pass'
+      : tilesBlocked && viewParams.tiles
+        ? 'off: this color mode needs the grid'
+        : globe.useTiles
+          ? `${ts.drawn} drawn, L${ts.deepest} deepest, ${ts.meshes} meshes, ${ts.dataTiles} data, ${ts.pending} loading`
+          : 'off';
   });
 }
 
