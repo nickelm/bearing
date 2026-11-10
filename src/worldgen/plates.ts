@@ -1,12 +1,13 @@
 /**
  * Stage: tectonic plates.
  *
- * Seeding is steered (decision 18): three plate seeds inside the main
- * continent and two inside the second, so collisions raise ranges inside
- * both. The remaining seeds are spread over the planet by best-candidate
- * sampling. Plates grow by a multi-source Dijkstra flood fill. Each plate
- * has its own growth rate, and a shared noise field roughens the
- * boundaries. Each plate rotates about its own Euler pole.
+ * Unsteered (decision 46): seeds are spread over the whole planet by
+ * best-candidate sampling. Plates grow by a multi-source Dijkstra flood
+ * fill. Each plate has its own growth rate, and a shared noise field
+ * roughens the boundaries. Each plate rotates about its own Euler pole.
+ * Plate types (continental or oceanic) are drawn after growth, in a random
+ * order, until continental plates cover a margin above the land fraction;
+ * the crust stage builds the continents from them.
  */
 import type { CubeGrid } from '../core/cubeGrid';
 import { MinHeap } from '../core/heap';
@@ -14,7 +15,6 @@ import { Noise3 } from '../core/noise';
 import { randomUnitVector } from '../core/coords';
 import type { Rng } from '../core/rng';
 import { Vec3d } from '../core/vec3d';
-import type { ContinentLayout } from './continents';
 import { clamp, neighborAngles8 } from './fields';
 
 export interface Plate {
@@ -25,23 +25,20 @@ export interface Plate {
   omega: number;
   /** Relative flood-fill growth rate. */
   growth: number;
+  /** Continental (true) or oceanic plate; set by assignPlateTypes. */
+  continental: boolean;
 }
 
-export const MAIN_CONTINENT_PLATES = 3;
-export const SECOND_CONTINENT_PLATES = 2;
-export const MIN_PLATES = MAIN_CONTINENT_PLATES + SECOND_CONTINENT_PLATES + 1;
+/** At least one continental and one oceanic plate. */
+export const MIN_PLATES = 2;
 export const MAX_PLATES = 64;
-
-/** Random direction within `maxAngle` of `center`, uniform over the cap. */
-function randomInCap(r: Rng, center: Readonly<Vec3d>, maxAngle: number): Vec3d {
-  const cosT = 1 - r.nextFloat() * (1 - Math.cos(maxAngle));
-  const sinT = Math.sqrt(Math.max(0, 1 - cosT * cosT));
-  const t = randomUnitVector(r);
-  t.addScaled(center, -t.dot(center));
-  if (t.lengthSq() < 1e-12) t.set(center.y, -center.x, center.z === 0 ? 1 : 0);
-  t.normalize();
-  return center.clone().scale(cosT).addScaled(t, sinT).normalize();
-}
+/**
+ * Continental plates are drawn until they cover this multiple of the land
+ * fraction, so the coastline threshold falls inside them (passive margins).
+ */
+export const CONTINENTAL_AREA_MARGIN = 1.35;
+/** Upper bound on the continental plate area fraction. */
+const MAX_CONTINENTAL_AREA = 0.9;
 
 function minAngleTo(p: Readonly<Vec3d>, others: readonly Plate[]): number {
   let best = Infinity;
@@ -64,7 +61,7 @@ function bestCandidate(plates: readonly Plate[], k: number, sample: () => Vec3d)
   return best;
 }
 
-export function seedPlates(plateCount: number, layout: ContinentLayout, r: Rng): Plate[] {
+export function seedPlates(plateCount: number, r: Rng): Plate[] {
   const count = Math.round(clamp(plateCount, MIN_PLATES, MAX_PLATES));
   const plates: Plate[] = [];
   const add = (seed: Vec3d) => {
@@ -74,14 +71,9 @@ export function seedPlates(plateCount: number, layout: ContinentLayout, r: Rng):
       pole: randomUnitVector(r),
       omega: r.range(0.3, 1.0) * (r.chance(0.5) ? 1 : -1),
       growth: r.range(0.7, 1.3),
+      continental: false,
     });
   };
-  for (let i = 0; i < MAIN_CONTINENT_PLATES; i++) {
-    add(bestCandidate(plates, 8, () => randomInCap(r, layout.main, layout.mainRadius * 0.65)));
-  }
-  for (let i = 0; i < SECOND_CONTINENT_PLATES; i++) {
-    add(bestCandidate(plates, 8, () => randomInCap(r, layout.second, layout.secondRadius * 0.6)));
-  }
   while (plates.length < count) {
     add(bestCandidate(plates, 24, () => randomUnitVector(r)));
   }
@@ -127,6 +119,42 @@ export function growPlates(grid: CubeGrid, plates: readonly Plate[], r: Rng): Ui
     }
   }
   return owner;
+}
+
+/**
+ * Marks plates continental in a random order until their area reaches
+ * CONTINENTAL_AREA_MARGIN × the land fraction. At least one plate of each type.
+ * Returns the continental area fraction.
+ */
+export function assignPlateTypes(
+  grid: CubeGrid,
+  plates: Plate[],
+  plateOf: Uint8Array,
+  landFraction: number,
+  r: Rng,
+): number {
+  const area = new Float64Array(plates.length);
+  let total = 0;
+  for (let c = 0; c < grid.cellCount; c++) {
+    area[plateOf[c]] += grid.areas[c];
+    total += grid.areas[c];
+  }
+  const order = plates.map((p) => p.id);
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = r.int(i + 1);
+    [order[i], order[j]] = [order[j]!, order[i]!];
+  }
+  const target = Math.min(MAX_CONTINENTAL_AREA, landFraction * CONTINENTAL_AREA_MARGIN) * total;
+  for (const p of plates) p.continental = false;
+  let covered = 0;
+  for (let k = 0; k < order.length; k++) {
+    // Leave at least one oceanic plate; always take at least one continental one.
+    if (k > 0 && (covered >= target || k === order.length - 1)) break;
+    const p = plates[order[k]!]!;
+    p.continental = true;
+    covered += area[p.id];
+  }
+  return covered / total;
 }
 
 /** Surface velocity of a plate at unit position x: ω (pole × x). */

@@ -11,10 +11,11 @@ import { rng } from '../core/rng';
 import { computeBiomes } from './biomes';
 import { computeClimate } from './climate';
 import { classifyBoundaries } from './boundaries';
-import { continentalCrust, layoutContinents } from './continents';
+import { continentalCrust } from './crust';
 import { computeElevation, computeUplift } from './elevation';
 import type { PlanetParams } from './params';
-import { growPlates, seedPlates } from './plates';
+import { labelLandmasses } from './landmasses';
+import { assignPlateTypes, growPlates, seedPlates } from './plates';
 
 /** Per-cell maps, indexed by CubeGrid cell. */
 export interface WorldMaps {
@@ -59,12 +60,18 @@ export interface StageTiming {
 export interface WorldInfo {
   resolution: number;
   plateCount: number;
-  /** Continent centers as [x, y, z] unit vectors. */
+  /** Number of continental plates (decision 46). */
+  continentalPlateCount: number;
+  /**
+   * Most inland point of the largest landmass, as an [x, y, z] unit vector
+   * (decision 46). Anchors the campaign calendar, previews and tests until the
+   * strategic graph exists.
+   */
   mainContinent: [number, number, number];
-  secondContinent: [number, number, number];
-  continentSeparation: number;
-  /** Shortest gap between the two continent ellipses before coastline noise (radians). */
-  nominalGap: number;
+  /** Landmasses of at least LANDMASS_MIN_AREA. */
+  landmassCount: number;
+  /** Area of the largest landmass (m²). */
+  largestLandmassArea: number;
   seaLevelReference: number;
   /** Multiplier from reference to physical elevation (decision 14). */
   reliefScale: number;
@@ -84,14 +91,17 @@ export type ProgressCallback = (stage: string, fraction: number) => void;
 
 export const PIPELINE_STAGES = [
   'grid',
-  'continents',
   'plates',
+  'crust',
   'boundaries',
   'uplift',
   'elevation',
   'climate',
   'biomes',
 ] as const;
+
+/** Smallest landmass counted in `WorldInfo.landmassCount` (design, "Reading the World"). */
+export const LANDMASS_MIN_AREA = 2000e6;
 
 export interface GenerateOptions {
   /** Cells per cube-face edge. */
@@ -119,16 +129,16 @@ export function generateWorld(params: PlanetParams, options: GenerateOptions): W
       ? options.grid
       : new CubeGrid(options.resolution),
   );
-  const { layout, continentalness } = stage('continents', () => {
-    const r = rng(seed, 'continents');
-    const layout = layoutContinents(params, r.fork('layout'));
-    return { layout, continentalness: continentalCrust(grid, params, layout, r.fork('crust')) };
-  });
   const { plates, plate } = stage('plates', () => {
     const r = rng(seed, 'plates');
-    const plates = seedPlates(params.plateCount, layout, r.fork('seeds'));
-    return { plates, plate: growPlates(grid, plates, r.fork('growth')) };
+    const plates = seedPlates(params.plateCount, r.fork('seeds'));
+    const plate = growPlates(grid, plates, r.fork('growth'));
+    assignPlateTypes(grid, plates, plate, 1 - params.oceanFraction, r.fork('types'));
+    return { plates, plate };
   });
+  const continentalness = stage('crust', () =>
+    continentalCrust(grid, params, plates, plate, rng(seed, 'crust')),
+  );
   const boundaries = stage('boundaries', () =>
     classifyBoundaries(grid, plates, plate, continentalness, params.radius),
   );
@@ -143,6 +153,10 @@ export function generateWorld(params: PlanetParams, options: GenerateOptions): W
   );
   const biome = stage('biomes', () => computeBiomes(grid, params, elevation.height, climate));
   options.onProgress?.('done', 1);
+
+  const { landmasses } = labelLandmasses(grid, elevation.height, params.radius);
+  const main = landmasses[0];
+  const anchor = grid.center(main ? main.interiorCell : 0);
 
   let minHeight = Infinity;
   let maxHeight = -Infinity;
@@ -177,10 +191,10 @@ export function generateWorld(params: PlanetParams, options: GenerateOptions): W
     info: {
       resolution: grid.n,
       plateCount: plates.length,
-      mainContinent: [layout.main.x, layout.main.y, layout.main.z],
-      secondContinent: [layout.second.x, layout.second.y, layout.second.z],
-      continentSeparation: layout.separation,
-      nominalGap: layout.nominalGap,
+      continentalPlateCount: plates.filter((p) => p.continental).length,
+      mainContinent: [anchor.x, anchor.y, anchor.z],
+      landmassCount: landmasses.filter((m) => m.area >= LANDMASS_MIN_AREA).length,
+      largestLandmassArea: main ? main.area : 0,
       seaLevelReference: elevation.seaLevelReference,
       reliefScale: params.reliefScale,
       minHeight,

@@ -100,7 +100,7 @@ The strategic graph is the only view of the world that theater detection, castin
 
 ### Unsteered generation and the coarse pass
 
-- [ ] Unsteered generation: uniform plate seeding, plate types from `rng("plates")`, crust from plate types; remove the two-continent layout and `oceanGap` (decision 46)
+- [x] Unsteered generation: uniform plate seeding, plate types from `rng("plates")`, crust from plate types; remove the two-continent layout and `oceanGap` (decision 46)
 - [ ] Landmass labeling with statistics: area, centroid, coastline length, latitude span, terrain mix (extends `worldgen/landmasses.ts`)
 - [ ] Coarse pass end to end: stages 1–9 at 256² per face (tectonic grid plus a reduced global erosion and drainage pass) in the worker; time it and report it in the progress UI
 

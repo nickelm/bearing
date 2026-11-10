@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { CubeGrid } from '../src/core/cubeGrid';
 import { hashString64 } from '../src/core/rng';
-import { DEG } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
 import { BoundaryType } from '../src/worldgen/boundaries';
-import { capRadius } from '../src/worldgen/continents';
+import { labelLandmasses } from '../src/worldgen/landmasses';
 import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
 import type { PlanetParams } from '../src/worldgen/params';
 import { generateWorld } from '../src/worldgen/pipeline';
@@ -46,12 +45,17 @@ describe('generateWorld', () => {
     expect(hashArray(wet.maps.moisture)).not.toBe(hashArray(base.maps.moisture));
   });
 
-  it('keeps stages independent: plate count does not move the continents', () => {
+  it('derives the crust from the plates: plate count moves the continents', () => {
     const more = gen({ plateCount: 22 });
-    expect(hashArray(more.maps.continentalness)).toBe(hashArray(base.maps.continentalness));
-    expect(more.info.mainContinent).toEqual(base.info.mainContinent);
     expect(hashArray(more.maps.plate)).not.toBe(hashArray(base.maps.plate));
+    expect(hashArray(more.maps.continentalness)).not.toBe(hashArray(base.maps.continentalness));
     expect(more.info.plateCount).toBe(22);
+  });
+
+  it('keeps stages independent: climate does not change plates or crust', () => {
+    const warm = gen({ temperatureOffset: 6 });
+    expect(hashArray(warm.maps.plate)).toBe(hashArray(base.maps.plate));
+    expect(hashArray(warm.maps.continentalness)).toBe(hashArray(base.maps.continentalness));
   });
 
   it('puts the sea level at the ocean fraction', () => {
@@ -60,28 +64,53 @@ describe('generateWorld', () => {
     expect(dry.info.landFraction).toBeCloseTo(0.5, 1);
   });
 
-  it('places two temperate continents across an ocean gap', () => {
+  it('draws both plate types, with continental plates covering more than the land', () => {
     for (const seed of [1983, 7, 42, 'Fulda']) {
       const w = seed === DEFAULT_PLANET_PARAMS.seed ? base : gen({ seed });
-      const a = new Vec3d(...w.info.mainContinent);
-      const b = new Vec3d(...w.info.secondContinent);
-      const sep = Math.acos(a.dot(b));
-      expect(sep).toBeCloseTo(w.info.continentSeparation, 9);
-      expect(sep).toBeGreaterThanOrEqual(100 * DEG - 1e-9);
-      expect(sep).toBeLessThanOrEqual(178 * DEG + 1e-9);
-      // Ellipse-to-ellipse gap near the middle of the 1,200–1,800 km range.
-      expect(w.info.nominalGap * DEFAULT_PLANET_PARAMS.radius).toBeGreaterThan(1200e3);
-      expect(w.info.nominalGap * DEFAULT_PLANET_PARAMS.radius).toBeLessThan(1800e3);
-      const latA = Math.abs(Math.asin(a.y) / DEG);
-      const latB = Math.abs(Math.asin(b.y) / DEG);
-      expect(latA).toBeGreaterThanOrEqual(32);
-      expect(latA).toBeLessThanOrEqual(45);
-      expect(latB).toBeGreaterThanOrEqual(22);
-      expect(latB).toBeLessThanOrEqual(55);
-      // Both centers are on continental crust.
-      expect(w.maps.continentalness[grid.cellOfDirection(a)]).toBeGreaterThan(0);
-      expect(w.maps.continentalness[grid.cellOfDirection(b)]).toBeGreaterThan(0);
+      expect(w.info.continentalPlateCount).toBeGreaterThanOrEqual(1);
+      expect(w.info.continentalPlateCount).toBeLessThan(w.info.plateCount);
+      // Land lies mostly on continental plates (passive margins inside them).
+      let onContinental = 0;
+      let land = 0;
+      const contPlates = new Set<number>();
+      for (let c = 0; c < grid.cellCount; c++) {
+        if (w.maps.continentalness[c] > 0) contPlates.add(w.maps.plate[c]);
+      }
+      for (let c = 0; c < grid.cellCount; c++) {
+        if (w.maps.height[c] <= 0) continue;
+        land += grid.areas[c];
+        if (contPlates.has(w.maps.plate[c])) onContinental += grid.areas[c];
+      }
+      expect(onContinental / land).toBeGreaterThan(0.9);
     }
+  });
+
+  it('anchors mainContinent inland on the largest landmass', () => {
+    for (const seed of [1983, 7, 42, 'Fulda']) {
+      const w = seed === DEFAULT_PLANET_PARAMS.seed ? base : gen({ seed });
+      const cell = grid.cellOfDirection(new Vec3d(...w.info.mainContinent));
+      expect(w.maps.height[cell]).toBeGreaterThan(0);
+      const { label, landmasses } = labelLandmasses(
+        grid,
+        w.maps.height,
+        DEFAULT_PLANET_PARAMS.radius,
+      );
+      expect(label[cell]).toBe(0);
+      expect(landmasses[0]!.area).toBeCloseTo(w.info.largestLandmassArea, 0);
+      expect(w.info.landmassCount).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('is unsteered: geography varies between seeds', () => {
+    const seeds = [1, 2, 3, 4, 5, 6, 7, 8];
+    const worlds = seeds.map((seed) => gen({ seed }));
+    const largest = worlds.map((w) => w.info.largestLandmassArea / (4 * Math.PI * 1e12));
+    const lats = worlds.map((w) => Math.asin(w.info.mainContinent[1]));
+    // The largest landmass ranges from a fragment to most of the land.
+    expect(Math.max(...largest) - Math.min(...largest)).toBeGreaterThan(0.05);
+    // The main landmass is not pinned to one latitude band or hemisphere.
+    expect(lats.some((l) => l > 0)).toBe(true);
+    expect(lats.some((l) => l < 0)).toBe(true);
   });
 
   it('scales relief to the planet', () => {
@@ -104,8 +133,8 @@ describe('generateWorld', () => {
   it('reports a timing per stage', () => {
     expect(base.info.timings.map((t) => t.stage)).toEqual([
       'grid',
-      'continents',
       'plates',
+      'crust',
       'boundaries',
       'uplift',
       'elevation',
@@ -116,10 +145,17 @@ describe('generateWorld', () => {
 });
 
 describe('helpers', () => {
-  it('computes cap radii from area fractions', () => {
-    expect(capRadius(0.5)).toBeCloseTo(Math.PI / 2, 12);
-    expect(capRadius(0)).toBe(0);
-    expect(capRadius(1)).toBeCloseTo(Math.PI, 12);
+  it('labels landmasses largest first, with an inland anchor', () => {
+    const g = new CubeGrid(8);
+    const h = new Float32Array(g.cellCount).fill(-1);
+    // Two islands on face 4 (+Z): a 3 × 3 block and a single cell.
+    for (let j = 2; j < 5; j++) for (let i = 2; i < 5; i++) h[g.index(4, i, j)] = 10;
+    h[g.index(4, 7, 7)] = 10;
+    const { label, landmasses } = labelLandmasses(g, h, 1);
+    expect(landmasses.map((m) => m.cellCount)).toEqual([9, 1]);
+    expect(landmasses[0]!.interiorCell).toBe(g.index(4, 3, 3));
+    expect(label[g.index(4, 7, 7)]).toBe(1);
+    expect(label[g.index(4, 0, 0)]).toBe(-1);
   });
 
   it('classifies biomes along the Whittaker axes', () => {

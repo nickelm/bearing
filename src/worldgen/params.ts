@@ -1,19 +1,15 @@
 /** Planet parameters (design doc, "Planet Parameters", amended by docs/decisions.md). */
 import type { WorldSeed } from '../core/rng';
 import type { Meters, Radians, Seconds } from '../core/units';
-import { DAY, DEG, EARTH_RADIUS, HOUR, KM, PLANET_RADIUS } from '../core/units';
+import { DAY, DEG, EARTH_RADIUS, HOUR, PLANET_RADIUS } from '../core/units';
 
 /** Planet parameters (design doc, "Planet Parameters"). SI units. */
 export interface PlanetParams {
   seed: WorldSeed;
   radius: Meters;
-  /** Scales aircraft fuel capacity and burn rate, not speed. */
-  rangeFactor: number;
   plateCount: number;
   /** Sea level is set at this height percentile. */
   oceanFraction: number;
-  /** Allowed width of the ocean between the two continents, [min, max]. */
-  oceanGap: readonly [Meters, Meters];
   erosionStrength: number;
   /** Kelvin offset applied to the temperature model (equal to °C offset). */
   temperatureOffset: number;
@@ -39,10 +35,8 @@ export interface PlanetParams {
 export const DEFAULT_PLANET_PARAMS: Readonly<PlanetParams> = {
   seed: 1983,
   radius: PLANET_RADIUS,
-  rangeFactor: 0.5,
   plateCount: 14,
   oceanFraction: 0.7,
-  oceanGap: [1200 * KM, 1800 * KM],
   erosionStrength: 1.0,
   temperatureOffset: 0,
   moistureScale: 1.0,
