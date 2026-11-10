@@ -88,7 +88,9 @@ Tech-demo milestones from [docs/design.md](docs/design.md) (revision 4: nine mil
 - [x] Instanced low-poly tree clusters within about 5 km of the camera
 - [x] River rendering from vector data (per-fragment distance to segment lists, decision 54); replaces the per-vertex river coverage from checkpoint 2
 - [x] Cloud layer rendering, from a static field derived from moisture until live weather exists (M6) (decision 55)
-- [ ] Checkpoint 4: owner review of terrain shading, seasons, forests, rivers and clouds
+- [x] Checkpoint 4: owner review of terrain shading, seasons, forests, rivers and clouds
+  - [x] No river channels carved into lake beds
+  - [x] Clouds advected by latitude-dependent zonal winds (decision 58)
 
 ### Known issues
 
@@ -246,6 +248,7 @@ The strategic graph is the only view of the world that theater detection, castin
 - [ ] Generation profiling and progress polish (no time budget, decision 12)
 - [ ] Rendering performance pass (GPU timestamp queries, frame budget); consider building tile meshes in a worker (decision 30)
 - [ ] Tree LOD: one cone per clump beyond about 2 km, or impostors (decision 45: ~6.6 M triangles over dense forest at the default 5 km range)
+- [ ] Denser forests: closer clump spacing in closed-canopy biomes, paid for by the tree LOD (owner request at checkpoint 4)
 - [ ] Bundle size and code splitting
 - [ ] Scripted flythrough camera path for screenshots, including a dawn and a weather front
 - [ ] Check every demo goal against the design doc and decisions

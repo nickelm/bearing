@@ -5,8 +5,12 @@
  * - Coverage: 3D fractal noise for weather systems (base wavelength about
  *   300 km) and finer cells (about 33 km) that break up the edges,
  *   thresholded by the climate texture's cloudiness (from precipitation, decision
- *   42), so wet regions are cloudy and deserts clear. The noise drifts with game
- *   time, about 10 m/s.
+ *   42), so wet regions are cloudy and deserts clear.
+ * - Motion: the field is advected around the polar axis by zonal winds that
+ *   depend on latitude (easterly trades, westerlies at mid-latitudes, polar
+ *   easterlies, about 6–12 m/s). Two copies half a two-day cycle apart are
+ *   cross-faded, and each re-seeds when its cycle ends. Clouds then travel
+ *   and evolve, and shear between bands never accumulates.
  * - The shell is a cube-sphere mesh, drawn transparent and camera-relative
  *   (rule 4: the mesh sits at planet center − eye). Fragments compute coverage
  *   from their direction, so the mesh resolution does not limit the clouds.
@@ -27,10 +31,15 @@ import {
 } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import {
+  abs,
+  asin,
   clamp,
+  cos,
   dot,
   float,
+  floor,
   Fn,
+  fract,
   length,
   max,
   mix,
@@ -39,6 +48,7 @@ import {
   normalize,
   positionLocal,
   positionWorld,
+  sin,
   smoothstep,
   uniform,
   varyingProperty,
@@ -57,8 +67,8 @@ type V3 = Node<'vec3'>;
 export const CLOUD_ALTITUDE = 5000;
 /** Base wavelength of the cloud noise (m). */
 const CLOUD_WAVELENGTH = 300_000;
-/** Drift speed of the cloud field (m/s). */
-const CLOUD_DRIFT = 10;
+/** Clouds are advected for at most this long before their copy re-seeds (s). */
+const ADVECTION_CYCLE = 2 * 86_400;
 
 export class CloudLayer {
   readonly group = new Group();
@@ -66,8 +76,10 @@ export class CloudLayer {
   readonly enabled = uniform(1);
   /** Shifts coverage: positive is cloudier. */
   readonly coverageBias = uniform(0);
-  /** Game time (s): the field drifts with it. */
+  /** Game time (s): the field moves with it. */
   readonly time = uniform(0);
+  /** Multiplies the prevailing winds that carry the clouds. */
+  readonly windScale = uniform(1);
   /** How much sunlight a full cloud blocks. */
   readonly shadowStrength = uniform(0.75);
   /** 1 while the camera is below the cloud shell (undersides darken). */
@@ -91,18 +103,47 @@ export class CloudLayer {
 
   /** Cloud coverage 0..1 at a direction from the planet center (any length). */
   coverage(direction: V3): F {
-    const dir = normalize(direction);
+    const dir = normalize(direction) as V3;
     const cloudiness = this.climate.sample(dir).w;
-    const drift = vec3(1, 0, 0.35).mul(this.time.mul(CLOUD_DRIFT / CLOUD_WAVELENGTH));
-    const q = dir.mul(this.radius / CLOUD_WAVELENGTH).add(drift);
-    // Large weather systems, plus finer cells that break up the edges.
-    const systems = mx_fractal_noise_float(q, 4, 2, 0.5).mul(0.5).add(0.5);
-    const cells = mx_fractal_noise_float(q.mul(9).add(vec3(13.1, 7.7, 3.3)), 4, 2.1, 0.55);
-    const density = systems
-      .add(cells.mul(0.18))
-      .add(cloudiness.sub(0.3).mul(0.9))
-      .add(this.coverageBias);
-    return smoothstep(0.42, 0.85, density).mul(this.enabled) as F;
+    // Zonal wind (m/s, eastward positive) by latitude: easterly trades, westerlies,
+    // polar easterlies. The field is advected around the polar axis.
+    const lat = abs(asin(clamp(dir.y, -1, 1))).mul(180 / Math.PI);
+    const wind = float(-6)
+      .add(smoothstep(20, 35, lat).mul(18))
+      .sub(smoothstep(55, 70, lat).mul(16))
+      .mul(this.windScale);
+    const omega = wind.div(this.radius); // rad/s about the polar axis
+    // Two copies half a cycle apart, each advected for at most one cycle and then
+    // re-seeded, cross-faded so shear between latitude bands never builds up.
+    const cycle = this.time.div(ADVECTION_CYCLE);
+    let density: F = float(0);
+    for (const offset of [0, 0.5]) {
+      const c = cycle.add(offset);
+      const phase = fract(c);
+      const weight = float(1).sub(abs(phase.mul(2).sub(1)));
+      // Sample upstream: the cloud now at longitude λ was at λ − ω·age.
+      const angle = omega.mul(phase.mul(ADVECTION_CYCLE)).negate();
+      const ca = cos(angle);
+      const sa = sin(angle);
+      const upstream = vec3(
+        dir.x.mul(ca).add(dir.z.mul(sa)),
+        dir.y,
+        dir.z.mul(ca).sub(dir.x.mul(sa)),
+      );
+      // A fresh field per cycle, so each copy evolves rather than repeating.
+      const seed = floor(c)
+        .mul(vec3(17.31, 5.13, 11.71))
+        .add(offset * 101.3);
+      const q = upstream.mul(this.radius / CLOUD_WAVELENGTH).add(fract(seed.mul(0.618)).mul(100));
+      // Large weather systems, plus finer cells that break up the edges.
+      const systems = mx_fractal_noise_float(q, 4, 2, 0.5).mul(0.5).add(0.5);
+      const cells = mx_fractal_noise_float(q.mul(9).add(vec3(13.1, 7.7, 3.3)), 4, 2.1, 0.55);
+      density = density.add(systems.add(cells.mul(0.18)).mul(weight)) as F;
+    }
+    // Cross-fading two fields lowers contrast mid-fade; restore it around the mean.
+    const n = density.sub(0.5).mul(1.25).add(0.5);
+    const d = n.add(cloudiness.sub(0.3).mul(0.9)).add(this.coverageBias);
+    return smoothstep(0.42, 0.85, d).mul(this.enabled) as F;
   }
 
   /** Fraction of sunlight reaching planet-centered point `p` past the clouds. */

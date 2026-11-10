@@ -284,7 +284,8 @@ it('renders preview views', async () => {
     );
     sunDirection(t, params, calendar, scene.sun);
     scene.terrain.land.seasonPhase.value = seasonPhase(t, params, calendar);
-    scene.clouds.time.value = t;
+    // HOURS shifts only the clouds' clock (to see them move with the sun held fixed).
+    scene.clouds.time.value = t + Number(process.env.HOURS ?? 0) * HOUR;
     scene.clouds.enabled.value = process.env.CLOUDS === '0' ? 0 : 1;
     // Render until the terrain has loaded everything this view wants.
     let stable = 0;

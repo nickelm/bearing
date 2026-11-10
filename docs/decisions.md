@@ -947,3 +947,17 @@ Shaders sample it by direction through `cubeFaceUv`, a TSL mirror of `directionT
 - **Contacts.** A satellite contact carries its _observation_ time but enters the side's picture only at its _delivery_ time. It is already stale when it arrives, and its confidence decays from the observation time (decision 53).
 
 **Reason:** Owner's direction. Satellites should give updates only every so often, with real delays, modeled on actual Cold War reconnaissance satellites. A Cold War commander planned against hours- or days-old imagery, and the delay is what makes tactical reconnaissance missions worth flying.
+
+### 58. Clouds move with prevailing zonal winds
+
+**Date:** 2026-11-10
+**Decision:** This revises decision 55. The static cloud field is advected around the polar axis by a zonal wind that depends on latitude, instead of translating the noise through the planet in 3D, which read as boiling rather than moving.
+
+- **Wind profile.** Easterly trades at −6 m/s, westerlies of about +12 m/s between 30° and 60°, and polar easterlies. A `windScale` uniform scales it.
+- **Advection.** Coverage is sampled upstream: the direction is rotated back about the axis by ω·age, with ω = wind / R.
+- **Cross-fading.** Two copies of the field run half of a two-day cycle apart, and each re-seeds its noise when its cycle ends. Their cross-fade keeps shear between latitude bands from piling up, and clouds evolve as they travel.
+- **Checks.** Preview renders 2 h apart show clouds shifting downwind (`HOURS` in `tools/render.preview.ts` offsets only the cloud clock). Milestone 6 replaces all of this with the weather grid's own winds.
+
+**Reason:** Owner review at checkpoint 4: the clouds changed shape but did not drift.
+
+Also at checkpoint 4: the tile kernel no longer carves river channels into lake beds (carving × the lake-bed mask of decision 40). Rivers crossing a lake showed as dark lines through the water.

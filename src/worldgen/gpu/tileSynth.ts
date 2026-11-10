@@ -379,7 +379,8 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
 
     h = base + (detail * RELIEF + gullies) * fade * dryBed;
     // Rivers shape the terrain within reach; carving never raises it.
-    h = mix(h, min(h, carve), reachW);
+    // Not under lakes: a river crossing a lake has no channel in the lake bed.
+    h = mix(h, min(h, carve), reachW * dryBed);
     // Coastal plains stay land, so detail does not pepper the coast with islands.
     h = select(h, max(h, 0.05), base > 0.5);
 
