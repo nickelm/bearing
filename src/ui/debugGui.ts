@@ -41,7 +41,17 @@ export interface TimeGuiParams {
   rate: number;
   /** Local date and time at the camera (read-only). */
   date: string;
+}
+
+export interface LightingGuiParams {
+  atmosphere: boolean;
+  /** Air density relative to Earth's (scales scattering and absorption). */
+  airDensity: number;
   exposure: number;
+  /** Multiplier on the atmosphere's sky light on surfaces. */
+  skyLight: number;
+  /** Starlight and airglow on the night side. */
+  nightLight: number;
 }
 
 export const TIME_RATES: Record<string, number> = {
@@ -56,7 +66,6 @@ export const TIME_RATES: Record<string, number> = {
 export interface TimeGuiCallbacks {
   dayChanged(day: number): void;
   hoursChanged(hours: number): void;
-  exposureChanged(exposure: number): void;
 }
 
 export interface DebugGuiStatus {
@@ -173,12 +182,17 @@ export class DebugGui {
     st.add(this.status, 'tiles').name('Tiles').disable().listen();
   }
 
-  /** Adds the Time folder: day of year, time of day, clock rate and exposure. */
-  addTimeControls(time: TimeGuiParams, daysPerYear: number, callbacks: TimeGuiCallbacks): void {
-    const f = this.gui.addFolder('Time');
-    // Placed above Status: lil-gui appends, so move the folder's element.
+  /** Adds a top-level folder above Status (lil-gui appends, so move its element). */
+  private folderBeforeStatus(title: string): GUI {
+    const f = this.gui.addFolder(title);
     const status = this.gui.folders.find((x) => x._title === 'Status');
     if (status) this.gui.$children.insertBefore(f.domElement, status.domElement);
+    return f;
+  }
+
+  /** Adds the Time folder: date, day of year, time of day and clock rate. */
+  addTimeControls(time: TimeGuiParams, daysPerYear: number, callbacks: TimeGuiCallbacks): void {
+    const f = this.folderBeforeStatus('Time');
     f.add(time, 'date').name('Local date').disable().listen();
     f.add(time, 'day', 0, Math.ceil(daysPerYear) - 1, 1)
       .name('Day of year')
@@ -189,9 +203,26 @@ export class DebugGui {
       .listen()
       .onChange((h: number) => callbacks.hoursChanged(h));
     f.add(time, 'rate', TIME_RATES).name('Clock rate');
-    f.add(time, 'exposure', 0.2, 4, 0.05)
+  }
+
+  /** Adds the Lighting folder: atmosphere, air density, exposure, sky and night light. */
+  addLightingControls(light: LightingGuiParams, changed: (l: LightingGuiParams) => void): void {
+    const f = this.folderBeforeStatus('Lighting');
+    f.add(light, 'atmosphere')
+      .name('Atmosphere')
+      .onChange(() => changed(light));
+    f.add(light, 'airDensity', 0, 4, 0.05)
+      .name('Air density (× Earth)')
+      .onFinishChange(() => changed(light));
+    f.add(light, 'exposure', 0.2, 4, 0.05)
       .name('Exposure')
-      .onChange((e: number) => callbacks.exposureChanged(e));
+      .onChange(() => changed(light));
+    f.add(light, 'skyLight', 0, 4, 0.05)
+      .name('Sky light')
+      .onChange(() => changed(light));
+    f.add(light, 'nightLight', 0, 0.1, 0.001)
+      .name('Night light')
+      .onChange(() => changed(light));
   }
 
   /**

@@ -7,6 +7,11 @@
  * - `march` integrates single scattering along a ray segment. It is shared
  *   by the sky (per pixel, behind everything) and aerial perspective on
  *   surfaces (per vertex).
+ * - Sky light on surfaces comes from a 1D irradiance LUT over the sun's
+ *   elevation (model.ts, also computed on the CPU).
+ * - Aerial perspective: `aerialPerspective` marches from the camera to a
+ *   surface point. Materials call it per vertex and pass the result to the
+ *   fragment stage as varyings, because scattering varies slowly.
  * - The sky is `scene.backgroundNode`. Three draws the background on a unit
  *   sphere at the camera, so with the camera at the origin the geometry
  *   normal is the view ray.
@@ -25,6 +30,7 @@ import {
 import type { Node, UniformNode, Vector3 } from 'three/webgpu';
 import {
   abs,
+  clamp,
   dot,
   exp,
   float,
@@ -33,6 +39,8 @@ import {
   length,
   Loop,
   max,
+  min,
+  mix,
   normalize,
   normalWorldGeometry,
   select,
@@ -43,7 +51,14 @@ import {
   vec2,
   vec3,
 } from 'three/tsl';
-import { computeTransmittanceLut, TRANSMITTANCE_HEIGHT, TRANSMITTANCE_WIDTH } from './model';
+import {
+  computeSkyIrradianceLut,
+  computeTransmittanceLut,
+  IRRADIANCE_MU_MIN,
+  IRRADIANCE_SIZE,
+  TRANSMITTANCE_HEIGHT,
+  TRANSMITTANCE_WIDTH,
+} from './model';
 import type { AtmosphereParams } from './model';
 
 type F = Node<'float'>;
@@ -65,8 +80,32 @@ export interface ScatterResult {
 /** Sun's angular radius, slightly enlarged so the disk reads at screen resolution. */
 const SUN_RADIUS = 0.6 * (Math.PI / 180);
 
+/** A linearly filtered, clamped half-float RGBA texture for a LUT. */
+function lutTexture(width: number, height: number): DataTexture {
+  const t = new DataTexture(
+    new Uint16Array(width * height * 4),
+    width,
+    height,
+    RGBAFormat,
+    HalfFloatType,
+  );
+  t.magFilter = LinearFilter;
+  t.minFilter = LinearFilter;
+  t.wrapS = ClampToEdgeWrapping;
+  t.wrapT = ClampToEdgeWrapping;
+  t.generateMipmaps = false;
+  return t;
+}
+
+function upload(t: DataTexture, data: Float32Array): void {
+  const half = t.image.data as Uint16Array;
+  for (let i = 0; i < data.length; i++) half[i] = DataUtils.toHalfFloat(data[i]!);
+  t.needsUpdate = true;
+}
+
 export class AtmosphereNodes {
-  readonly lut: DataTexture;
+  readonly lut = lutTexture(TRANSMITTANCE_WIDTH, TRANSMITTANCE_HEIGHT);
+  readonly irradiance = lutTexture(IRRADIANCE_SIZE, 1);
   /** Multiplies every coefficient in the shaders (the LUT is rebuilt to match). */
   readonly density = uniform(1);
   /** Atmosphere on (1) or off (0): off leaves sunlight unfiltered and the sky black. */
@@ -78,28 +117,45 @@ export class AtmosphereNodes {
     readonly params: AtmosphereParams,
     private readonly u: AtmosphereUniforms,
   ) {
-    this.lut = new DataTexture(
-      new Uint16Array(TRANSMITTANCE_WIDTH * TRANSMITTANCE_HEIGHT * 4),
-      TRANSMITTANCE_WIDTH,
-      TRANSMITTANCE_HEIGHT,
-      RGBAFormat,
-      HalfFloatType,
-    );
-    this.lut.magFilter = LinearFilter;
-    this.lut.minFilter = LinearFilter;
-    this.lut.wrapS = ClampToEdgeWrapping;
-    this.lut.wrapT = ClampToEdgeWrapping;
-    this.lut.generateMipmaps = false;
     this.rebuild();
   }
 
-  /** Recomputes the LUT after a parameter change (e.g. density). */
+  /** Recomputes the LUTs after a parameter change (e.g. density). */
   rebuild(): void {
-    const data = computeTransmittanceLut(this.params);
-    const half = this.lut.image.data as Uint16Array;
-    for (let i = 0; i < data.length; i++) half[i] = DataUtils.toHalfFloat(data[i]!);
+    const transmittance = computeTransmittanceLut(this.params);
+    upload(this.lut, transmittance);
+    upload(this.irradiance, computeSkyIrradianceLut(this.params, transmittance));
     this.density.value = this.params.density;
-    this.lut.needsUpdate = true;
+  }
+
+  /**
+   * Sky light on a surface per unit sun illuminance (already divided by π),
+   * for the sun-elevation cosine at the point. Horizontal-surface irradiance;
+   * the caller weights it by how much sky the normal sees.
+   */
+  skyIrradiance(muS: F): V3 {
+    const x = clamp(muS.sub(IRRADIANCE_MU_MIN).div(1 - IRRADIANCE_MU_MIN), 0, 1);
+    const u = x.mul(1 - 1 / IRRADIANCE_SIZE).add(0.5 / IRRADIANCE_SIZE);
+    return texture(this.irradiance, vec2(u, 0.5)).rgb.mul(this.enabled) as V3;
+  }
+
+  /**
+   * Aerial perspective between the camera and a surface point given
+   * camera-relative (`relative`). The in-scattered light is per unit sun
+   * illuminance. Emits a loop, so call it inside an Fn (e.g. a position node).
+   */
+  aerialPerspective(relative: V3, steps = 10): ScatterResult {
+    const ro = this.u.eye as unknown as V3;
+    const dist = length(relative);
+    const rd = relative.div(max(dist, 1e-3)) as V3;
+    const top = AtmosphereNodes.raySphere(ro, rd, this.params.topRadius);
+    const t0 = max(top.x, 0);
+    const t1 = max(min(dist, top.y), t0);
+    const s = this.march(ro, rd, t0 as F, t1 as F, steps);
+    return {
+      inscatter: s.inscatter.mul(this.enabled) as V3,
+      transmittance: mix(vec3(1), s.transmittance, this.enabled) as V3,
+    };
   }
 
   setDensity(d: number): void {

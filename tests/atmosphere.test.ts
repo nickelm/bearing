@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  computeSkyIrradianceLut,
   computeTransmittanceLut,
+  IRRADIANCE_MU_MIN,
+  IRRADIANCE_SIZE,
+  irradianceU,
   distanceToTop,
   earthLikeAtmosphere,
   rayHitsGround,
@@ -79,5 +83,35 @@ describe('atmosphere model', () => {
       const looked = sampleTransmittanceLut(a, lut, r, mu);
       for (let c = 0; c < 3; c++) expect(Math.abs(looked[c] - direct[c])).toBeLessThan(0.01);
     }
+  });
+});
+
+describe('sky irradiance', () => {
+  const lut = computeTransmittanceLut(a);
+  const irr = computeSkyIrradianceLut(a, lut);
+  const at = (muS: number) => {
+    const k = Math.min(
+      IRRADIANCE_SIZE - 1,
+      Math.floor(((muS - IRRADIANCE_MU_MIN) / (1 - IRRADIANCE_MU_MIN)) * IRRADIANCE_SIZE),
+    );
+    return [irr[k * 4]!, irr[k * 4 + 1]!, irr[k * 4 + 2]!];
+  };
+
+  it('is blue, grows with sun elevation and vanishes after twilight', () => {
+    const noon = at(0.95);
+    const low = at(0.2);
+    const night = at(-0.28);
+    expect(noon[2]).toBeGreaterThan(noon[0]);
+    expect(noon[2]).toBeGreaterThan(low[2]);
+    expect(night[2]).toBeLessThan(noon[2] * 0.01);
+    // Clear-sky diffuse light is a modest fraction of direct sunlight (about 10–20%).
+    const lum = (c: number[]) => 0.2126 * c[0]! + 0.7152 * c[1]! + 0.0722 * c[2]!;
+    expect(lum(noon) * Math.PI).toBeGreaterThan(0.04);
+    expect(lum(noon) * Math.PI).toBeLessThan(0.3);
+  });
+
+  it('maps sun-elevation cosines onto texel centers', () => {
+    expect(irradianceU(IRRADIANCE_MU_MIN)).toBeCloseTo(0.5 / IRRADIANCE_SIZE, 9);
+    expect(irradianceU(1)).toBeCloseTo(1 - 0.5 / IRRADIANCE_SIZE, 9);
   });
 });

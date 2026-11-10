@@ -47,7 +47,12 @@ import { GENERATOR_VERSION, WorldStore, worldKey } from './worldgen/worldStore';
 import type { World } from './worldgen/pipeline';
 import type { GlobalWorld } from './worldgen/globalPipeline';
 import { GPU_SELF_TESTS, runSelfTest } from './worldgen/gpu/selfTests';
-import type { TimeGuiParams, ViewGuiParams, WorldGuiParams } from './ui/debugGui';
+import type {
+  LightingGuiParams,
+  TimeGuiParams,
+  ViewGuiParams,
+  WorldGuiParams,
+} from './ui/debugGui';
 import { FrameTimeOverlay } from './ui/frameTimeOverlay';
 import { PING_STREAM } from './workers/protocol';
 import type { FromSimWorker, ToSimWorker } from './workers/protocol';
@@ -106,7 +111,7 @@ async function main(): Promise<void> {
   const orbitParams: OrbitParams = DEFAULT_PLANET_PARAMS;
   let calendar: CampaignCalendar = defaultCampaignStart(new Vec3d(0, 0.6, 0.8), orbitParams);
   let gameTime = 0;
-  const timeParams: TimeGuiParams = { day: 0, hours: 0, rate: 0, date: '', exposure: 1 };
+  const timeParams: TimeGuiParams = { day: 0, hours: 0, rate: 0, date: '' };
 
   let grid = new CubeGrid(worldParams.resolution);
   const globe = new GlobeScene(renderer, { radius: DEFAULT_PLANET_PARAMS.radius, grid });
@@ -329,7 +334,23 @@ async function main(): Promise<void> {
     hoursChanged: (h) => {
       gameTime = withLocalTime(gameTime, globe.orbit.lon, h * HOUR, orbitParams, calendar);
     },
-    exposureChanged: (e) => (renderer.toneMappingExposure = e),
+  });
+  const lighting = globe.lighting;
+  const lightParams: LightingGuiParams = {
+    atmosphere: true,
+    airDensity: lighting.atmosphere.params.density,
+    exposure: renderer.toneMappingExposure,
+    skyLight: lighting.skyLight.value,
+    nightLight: lighting.nightLight.value,
+  };
+  gui.addLightingControls(lightParams, (l) => {
+    lighting.atmosphere.enabled.value = l.atmosphere ? 1 : 0;
+    if (l.airDensity !== lighting.atmosphere.params.density) {
+      lighting.atmosphere.setDensity(l.airDensity);
+    }
+    renderer.toneMappingExposure = l.exposure;
+    lighting.skyLight.value = l.skyLight;
+    lighting.nightLight.value = l.nightLight;
   });
 
   // World-generation compute shares three's device (decision 22).

@@ -169,3 +169,115 @@ export function sampleTransmittanceLut(
   }
   return out;
 }
+
+/** Rayleigh phase function. */
+export function rayleighPhase(cosTheta: number): number {
+  return (3 / (16 * Math.PI)) * (1 + cosTheta * cosTheta);
+}
+
+/** Henyey–Greenstein phase function. */
+export function hgPhase(cosTheta: number, g: number): number {
+  return (1 - g * g) / (4 * Math.PI * Math.pow(1 + g * g - 2 * g * cosTheta, 1.5));
+}
+
+/** Smooth planet shadow on sunlight (CPU twin of the shader's penumbra). */
+function planetShadow(a: AtmosphereParams, r: number, muS: number): number {
+  const muH = -Math.sqrt(Math.max(0, 1 - (a.groundRadius / r) ** 2));
+  const x = Math.max(0, Math.min(1, (muS - (muH - 0.006)) / 0.012));
+  return x * x * (3 - 2 * x);
+}
+
+/**
+ * Single-scattered sky radiance per unit sun illuminance, seen from a point
+ * at radius r (on the y axis) along unit direction `d`, with the sun along `s`.
+ */
+export function skyRadiance(
+  a: AtmosphereParams,
+  lut: Float32Array,
+  r: number,
+  d: readonly [number, number, number],
+  s: readonly [number, number, number],
+  steps = 24,
+): Rgb {
+  const mu = d[1];
+  const dist = rayHitsGround(a, r, mu)
+    ? -r * mu - Math.sqrt(Math.max(0, r * r * (mu * mu - 1) + a.groundRadius ** 2))
+    : distanceToTop(a, r, mu);
+  const cosTheta = d[0] * s[0] + d[1] * s[1] + d[2] * s[2];
+  const pR = rayleighPhase(cosTheta);
+  const pM = hgPhase(cosTheta, a.mieG);
+  const dt = dist / steps;
+  const T: Rgb = [1, 1, 1];
+  const L: Rgb = [0, 0, 0];
+  const e: Rgb = [0, 0, 0];
+  for (let i = 0; i < steps; i++) {
+    const t = (i + 0.5) * dt;
+    const px = d[0] * t;
+    const py = r + d[1] * t;
+    const pz = d[2] * t;
+    const rp = Math.sqrt(px * px + py * py + pz * pz);
+    const h = Math.max(0, rp - a.groundRadius);
+    const muS = (px * s[0] + py * s[1] + pz * s[2]) / rp;
+    const sunT = sampleTransmittanceLut(a, lut, rp, muS);
+    const shadow = planetShadow(a, rp, muS);
+    const rhoR = Math.exp(-h / a.rayleighScaleHeight);
+    const rhoM = Math.exp(-h / a.mieScaleHeight);
+    extinctionAt(a, h, e);
+    for (let c = 0; c < 3; c++) {
+      const scat = a.density * (a.rayleighScattering[c]! * rhoR * pR + a.mieScattering * rhoM * pM);
+      const S = scat * sunT[c] * shadow;
+      const stepT = Math.exp(-e[c] * dt);
+      L[c] += (T[c] * (S - S * stepT)) / Math.max(e[c], 1e-12);
+      T[c] *= stepT;
+    }
+  }
+  return L;
+}
+
+export const IRRADIANCE_SIZE = 64;
+/** Sun-elevation cosine range covered by the sky-irradiance LUT. */
+export const IRRADIANCE_MU_MIN = -0.3;
+
+/**
+ * Sky light on the ground: for each sun-elevation cosine μs in
+ * [IRRADIANCE_MU_MIN, 1], the irradiance on a horizontal surface at sea level
+ * from the single-scattered sky, divided by π (so a Lambertian albedo times
+ * this, times the sun illuminance, is radiance). RGBA float32.
+ */
+export function computeSkyIrradianceLut(
+  a: AtmosphereParams,
+  lut: Float32Array,
+  zenithSteps = 8,
+  azimuthSteps = 16,
+): Float32Array {
+  const out = new Float32Array(IRRADIANCE_SIZE * 4);
+  const r = a.groundRadius + 1;
+  for (let k = 0; k < IRRADIANCE_SIZE; k++) {
+    const muS = IRRADIANCE_MU_MIN + ((k + 0.5) / IRRADIANCE_SIZE) * (1 - IRRADIANCE_MU_MIN);
+    const s: [number, number, number] = [Math.sqrt(1 - muS * muS), muS, 0];
+    const E: Rgb = [0, 0, 0];
+    // Midpoint rule over the upper hemisphere in (cos θ, φ): dω = d(cos θ) dφ.
+    const dMu = 1 / zenithSteps;
+    const dPhi = (2 * Math.PI) / azimuthSteps;
+    for (let zi = 0; zi < zenithSteps; zi++) {
+      const cz = (zi + 0.5) * dMu;
+      const sz = Math.sqrt(1 - cz * cz);
+      for (let ai = 0; ai < azimuthSteps; ai++) {
+        const phi = (ai + 0.5) * dPhi;
+        const L = skyRadiance(a, lut, r, [sz * Math.cos(phi), cz, sz * Math.sin(phi)], s);
+        for (let c = 0; c < 3; c++) E[c] += L[c] * cz * dMu * dPhi;
+      }
+    }
+    out[k * 4] = E[0] / Math.PI;
+    out[k * 4 + 1] = E[1] / Math.PI;
+    out[k * 4 + 2] = E[2] / Math.PI;
+    out[k * 4 + 3] = 1;
+  }
+  return out;
+}
+
+/** LUT u coordinate (texel-centered) for a sun-elevation cosine. */
+export function irradianceU(muS: number): number {
+  const x = Math.max(0, Math.min(1, (muS - IRRADIANCE_MU_MIN) / (1 - IRRADIANCE_MU_MIN)));
+  return toTexel(x, IRRADIANCE_SIZE);
+}

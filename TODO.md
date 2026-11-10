@@ -74,7 +74,7 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [x] Calendar and sun ephemeris in `core`: sun direction from `GameTime`, axial tilt, day length, year length and campaign start date, with tests (decision 15)
 - [x] Day/night lighting driven by the sun ephemeris; time-of-day slider in the debug GUI
 - [x] Single-scattering atmosphere: limb glow from orbit, sunset colors at the terminator
-- [ ] Aerial perspective on terrain
+- [x] Aerial perspective on terrain
 - [ ] Climate array texture (sea-level temperature, seasonal range, moisture, cloudiness) with a TSL cube-face lookup by direction
 - [ ] Ocean: depth-based color from bathymetry
 - [ ] Ocean: wave normal map and sun glint
@@ -87,6 +87,10 @@ Tech-demo milestones from [docs/design.md](docs/design.md). Each task should tak
 - [ ] River rendering from vector data (mask texture or decals); replaces the per-vertex river coverage from checkpoint 2
 - [ ] Cloud layer rendering, from a static field derived from moisture until live weather exists (M6)
 - [ ] Checkpoint 4: owner review of terrain shading, seasons, forests, rivers and clouds
+
+### Known issues
+
+- [ ] Intermittent GPU determinism flake in Vitest (about 1 run in 5–10 of the full suite): a GPU determinism test (`detailStage`, `tileSynth`) gets different results for two identical runs. Present at the M2 baseline; not reproduced by 40 back-to-back detail-stage runs under load. Tests now report how many values differ and whether they are zeros (a readback race in Dawn's Node bindings would show zeros).
 
 ## Milestone 4: Geography and front
 

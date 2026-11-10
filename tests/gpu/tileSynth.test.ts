@@ -55,8 +55,22 @@ describe.skipIf(!gpu)('tile synthesis (GPU)', async () => {
     const [a1] = await synth!.generate([a]);
     const [b2, a2] = await synth!.generate([b, a]);
     expect(gpu!.errors).toEqual([]);
-    expect(Buffer.from(a1!.height.buffer).equals(Buffer.from(a2!.height.buffer))).toBe(true);
-    expect(Buffer.from(a1!.material.buffer).equals(Buffer.from(a2!.material.buffer))).toBe(true);
+    // On a mismatch, report how many samples differ and where, not just "false".
+    const diff = (x: ArrayLike<number>, y: ArrayLike<number>) => {
+      let count = 0;
+      let first = -1;
+      let worst = 0;
+      for (let i = 0; i < x.length; i++) {
+        if (!Object.is(x[i], y[i])) {
+          count++;
+          if (first < 0) first = i;
+          worst = Math.max(worst, Math.abs(x[i]! - y[i]!));
+        }
+      }
+      return count === 0 ? 'identical' : `${count} differ, first at ${first}, worst ${worst}`;
+    };
+    expect(diff(a1!.height, a2!.height)).toBe('identical');
+    expect(diff(a1!.material, a2!.material)).toBe('identical');
     // Shared samples (the edge column and the borders around it) agree bit for bit.
     for (let sy = -TILE_BORDER; sy <= TILE_TEXELS + TILE_BORDER; sy++) {
       for (let s = -TILE_BORDER; s <= TILE_BORDER; s++) {

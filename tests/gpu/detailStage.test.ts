@@ -41,7 +41,20 @@ describe.skipIf(!gpu)('detail stage (GPU)', () => {
   it('is finite, deterministic and keeps the land fraction', async () => {
     const a = await run();
     const b = await run();
-    expect(Buffer.from(a.h.buffer).equals(Buffer.from(b.h.buffer))).toBe(true);
+    // On a mismatch, report how many cells differ and how (see TODO: intermittent GPU flake).
+    let differ = 0;
+    let zeros = 0;
+    let worst = 0;
+    for (let i = 0; i < a.h.length; i++) {
+      if (!Object.is(a.h[i], b.h[i])) {
+        differ++;
+        if (b.h[i] === 0 || a.h[i] === 0) zeros++;
+        worst = Math.max(worst, Math.abs(a.h[i]! - b.h[i]!));
+      }
+    }
+    expect(differ === 0 ? 'identical' : `${differ} differ (${zeros} zero), worst ${worst}`).toBe(
+      'identical',
+    );
     const grid = new CubeGrid(N);
     let land = 0;
     let total = 0;

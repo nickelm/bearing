@@ -22,7 +22,18 @@ import {
   Mesh,
   MeshBasicNodeMaterial,
 } from 'three/webgpu';
-import { attribute, mix, normalize, positionLocal, positionWorld, uniform } from 'three/tsl';
+import {
+  attribute,
+  Fn,
+  mix,
+  modelWorldMatrix,
+  normalize,
+  positionLocal,
+  positionWorld,
+  uniform,
+  varyingProperty,
+  vec4,
+} from 'three/tsl';
 import { directionToCubeFace } from '../../core/coords';
 import type { CubeFaceUv } from '../../core/coords';
 import { Noise3 } from '../../core/noise';
@@ -116,13 +127,23 @@ export class TerrainRenderer {
     const parent = attribute('parentBase', 'vec3').add(
       attribute('parentDisp', 'vec3').mul(exaggeration),
     );
-    this.material.positionNode = mix(parent, own, morph);
+    // Aerial perspective per vertex (decision 35), handed to the fragment stage.
+    const apInscatter = varyingProperty('vec3', 'vApInscatter');
+    const apTransmittance = varyingProperty('vec3', 'vApTransmittance');
+    this.material.positionNode = Fn(() => {
+      const p = mix(parent, own, morph);
+      const relative = modelWorldMatrix.mul(vec4(p, 1)).xyz;
+      const ap = lighting.atmosphere.aerialPerspective(relative);
+      apInscatter.assign(ap.inscatter);
+      apTransmittance.assign(ap.transmittance);
+      return p;
+    })();
     // Meshes carry no rotation or scale, so object space is world space.
     const normal = normalize(up.sub(attribute('slope', 'vec3').mul(exaggeration)));
-    this.material.colorNode = lighting.shadeDiffuse(
-      attribute('color', 'vec3'),
-      normal,
-      positionWorld,
+    this.material.colorNode = lighting.applyAerial(
+      lighting.shadeDiffuse(attribute('color', 'vec3'), normal, positionWorld),
+      apInscatter,
+      apTransmittance,
     );
     this.loader = new TileLoader<TileData>(
       this.data,

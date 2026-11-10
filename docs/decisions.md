@@ -487,3 +487,24 @@ The vertex shader computes `base + up · height · exaggeration`, morphs toward 
 - Single scattering with a precomputed transmittance LUT gives the limb glow and sunset colors at little cost, and the CPU half of the model can be tested.
 - A per-pixel march for the sky alone costs about 32 LUT samples per sky pixel.
 - Hillaire's sky-view and aerial-perspective LUTs, or multiple scattering, can be added later if quality calls for them.
+
+### 36. Aerial perspective per vertex; sky light from an irradiance LUT
+
+**Date:** 2026-11-09
+**Decision:**
+
+- **Aerial perspective.** The terrain's position node marches 10 steps of single scattering from the camera to each vertex (`AtmosphereNodes.aerialPerspective`) and writes the in-scattered light and the transmittance into varyings. The fragment stage then computes `L·T + inscatter·E_sun`.
+  - The camera-relative vertex position comes from `modelWorldMatrix`.
+  - From space, the march starts where the ray enters the atmosphere.
+- **Sky light.** Sky light on surfaces comes from a 64-texel LUT over the sun-elevation cosine (−0.3 to 1). It holds single-scattered sky irradiance on a horizontal surface at sea level, divided by π, and is integrated on the CPU over the hemisphere (8 × 16 directions). The normal's view of the sky weights it.
+- **Defaults.**
+  - "Sky light" is 1.6 × physical, standing in for the missing multiple scattering.
+  - Sun illuminance is 1.4 display units.
+  - Exposure is 1.
+- **GUI → Lighting:** atmosphere on/off, air density (rebuilds both LUTs), exposure, sky light, night light.
+
+**Reason:**
+
+- Scattering varies slowly across a surface. Per-vertex evaluation (as in O'Neil, GPU Gems 2) costs about 10 LUT samples per vertex rather than per pixel.
+- Terrain tiles are dense on screen by construction (screen-space error), so interpolation artefacts stay below a few pixels.
+- A per-pixel post pass with a depth buffer remains possible if long, coarse tiles near the limb show banding.
