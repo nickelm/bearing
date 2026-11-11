@@ -18,8 +18,8 @@
  *   normals, per fragment: flat ground keeps its fill color, slopes brighten or
  *   darken by the screen's upper-left light.
  * - **Palette.** Land takes the Part II biome fills from a blended cube-face texture
- *   (biomeFill.ts, decision 79), with steep rock on steep displayed slopes. The sea is
- *   one flat water color until the water task of S1.
+ *   (biomeFill.ts, decision 79), with steep rock on steep displayed slopes. Water has
+ *   flat depth bands, a dark coastline and lake outlines (mapWater.ts, decision 82).
  * - **Patterns.** Forest stipple and farmland with its field grid (decision 80), dune
  *   ripples, tundra tussocks, ice cracks, wetland reeds and steep-rock hatching
  *   (decision 81), all from patterns.ts, anchored to the ground and sized on screen.
@@ -29,7 +29,6 @@
 import {
   BufferAttribute,
   BufferGeometry,
-  Color,
   Group,
   Mesh,
   MeshBasicNodeMaterial,
@@ -48,8 +47,8 @@ import {
   normalize,
   positionLocal,
   positionWorld,
+  select,
   smoothstep,
-  step,
   uniform,
   vec3,
 } from 'three/tsl';
@@ -64,6 +63,7 @@ import { MAX_BAKED_LEVEL } from '../../worldgen/gpu/tileSynth';
 import { placeCameraRelative } from '../common/cameraRelative';
 import { HabitabilityTexture } from '../common/habitabilityTexture';
 import { BiomeFillTexture, hexToLinear, STEEP_ROCK_FILL } from './biomeFill';
+import { mapWaterNode } from './mapWater';
 import {
   crackNode,
   duneNode,
@@ -95,8 +95,8 @@ const DATA_BUDGET_MIB = 80;
 const MESH_BUDGET_MIB = 120;
 
 const DATA_BYTES = TILE_STRIDE * TILE_STRIDE * 8;
-/** position, up, parentBase, parentDisp, slope, color (vec3) + surface (vec3), float32. */
-const MESH_BYTES = TILE_VERTEX_COUNT * (6 * 3 + 3) * 4;
+/** position, up, parentBase, parentDisp, slope, color (vec3) + surface (vec4), float32. */
+const MESH_BYTES = TILE_VERTEX_COUNT * (6 * 3 + 4) * 4;
 /** Part II farmland fill and field-grid line colors (decision 80). */
 const FARM_FILL = hexToLinear(0xc9b57a);
 const FARM_LINE = hexToLinear(0xb3a066);
@@ -111,8 +111,6 @@ const TUSSOCK_MARK = hexToLinear(0x99957c);
 const CRACK_MARK = hexToLinear(0xc9d3d8);
 const REED_MARK = hexToLinear(0x6f8366);
 const HATCH_MARK = hexToLinear(0x7e766d);
-/** Placeholder sea color until the water task: Part II mid-depth water. */
-const WATER = new Color('#6C97AC');
 
 export interface StrategicReliefWorld {
   synth: TileSynthesizer;
@@ -170,6 +168,8 @@ export class StrategicRelief {
   readonly eye = uniform(new Vector3());
   /** Field-grid visibility: the Theater and Region bands' fades (set by the scene). */
   readonly gridVisibility = uniform(0);
+  /** The world's relief scale, for reference water depths (decision 14). */
+  readonly reliefScale = uniform(1);
   /** 1 draws the map patterns (forest stipple, farmland), 0 hides them. */
   readonly patterns = uniform(1);
   private detail = new Noise3(rng(0, 'render-detail'));
@@ -209,10 +209,13 @@ export class StrategicRelief {
     const material = new MeshBasicNodeMaterial();
     const ex = this.exaggeration;
     const up = attribute('up', 'vec3');
-    const surface = attribute('surface', 'vec3');
+    // Packed per-vertex scalars: raw height, signed lake depth, forest density, coast
+    // distance (decision 39).
+    const surface = attribute('surface', 'vec4');
     const rawHeight = surface.x;
     const lakeDepth = surface.y;
     const forest = surface.z;
+    const shore = surface.w;
     // Sea flat at 0 m and lakes flat at their level, as in the terrain renderer.
     const shown = max(rawHeight.add(max(lakeDepth, 0)), 0);
     const own = positionLocal.add(up.mul(shown.mul(ex)));
@@ -229,6 +232,15 @@ export class StrategicRelief {
       // sizes the patterns on screen (decision 80).
       const footprint = max(length(fwidth(positionWorld)), 1e-3).toVar();
       const plane = planeCoordsNode(positionWorld.add(this.eye), radial).toVar();
+      // Water depth and its change per pixel, for the bands and outlines (decision 82):
+      // reference depth, lake depth in lakes and sea depth elsewhere.
+      const lakeWidth = max(fwidth(lakeDepth), 1e-3).toVar();
+      const waterDepth = max(
+        select(lakeDepth.greaterThan(0), lakeDepth, rawHeight.negate()),
+        0,
+      ).div(this.reliefScale);
+      const depth = waterDepth.toVar();
+      const depthWidth = fwidth(waterDepth).toVar();
       // Map palette: the blended biome fill, and steep rock where the displayed (4×)
       // slope passes about 31° to 45° (decision 79). Debug modes keep the vertex colors.
       const fill = this.biomeFill.sample(radial);
@@ -274,8 +286,17 @@ export class StrategicRelief {
       const hatch = masked(steep.mul(this.patterns), () => hatchNode(plane, footprint));
       const mapLand = mix(mix(marked, rock, steep), rgb(HATCH_MARK), hatch);
       const land = mix(attribute('color', 'vec3'), mapLand, this.biomeMode);
-      // Water: at sea, and in lakes; flat, no relief light.
-      const wet = max(step(rawHeight, 0), step(0, lakeDepth)).mul(this.biomeMode);
+      // Water: flat depth bands with a dark coastline and lake outlines (decision 82);
+      // no relief light. Debug color modes show the vertex colors only.
+      const water = mapWaterNode({
+        lake: lakeDepth,
+        lakeWidth,
+        shore,
+        footprint,
+        depthWidth,
+        depth,
+      });
+      const wet = water.wet.mul(this.biomeMode);
       const shade = hillshadeNode(normal, radial, {
         right: this.screenRight,
         up: this.screenUp,
@@ -283,8 +304,8 @@ export class StrategicRelief {
         strength: this.hillshadeStrength,
         ambient: this.ambient,
       });
-      const water = vec3(WATER.r, WATER.g, WATER.b);
-      return mix(land.mul(shade), water, wet);
+      const surfaceColor = mix(land.mul(shade), water.color, wet);
+      return mix(surfaceColor, water.outlineColor, water.outline.mul(this.biomeMode));
     })();
     return material;
   }
@@ -296,7 +317,10 @@ export class StrategicRelief {
   /** Shows a world (or nothing). Drops all cached tiles. */
   setWorld(world: StrategicReliefWorld | null): void {
     this.world = world;
-    if (world) this.biomeFill.setBiomes(world.biome, world.biomeResolution);
+    if (world) {
+      this.biomeFill.setBiomes(world.biome, world.biomeResolution);
+      this.reliefScale.value = world.reliefScale;
+    }
     this.detail = new Noise3(rng(world?.seed ?? 0, 'render-detail'));
     this.data.clear();
     this.meshes.clear();
@@ -342,13 +366,14 @@ export class StrategicRelief {
     const g = new BufferGeometry();
     g.setAttribute('position', new BufferAttribute(m.base, 3));
     g.setAttribute('up', new BufferAttribute(m.up, 3));
-    const surface = new Float32Array(TILE_VERTEX_COUNT * 3);
+    const surface = new Float32Array(TILE_VERTEX_COUNT * 4);
     for (let v = 0; v < TILE_VERTEX_COUNT; v++) {
-      surface[v * 3] = m.height[v]!;
-      surface[v * 3 + 1] = m.water[v]!;
-      surface[v * 3 + 2] = m.forest[v]!;
+      surface[v * 4] = m.height[v]!;
+      surface[v * 4 + 1] = m.water[v]!;
+      surface[v * 4 + 2] = m.forest[v]!;
+      surface[v * 4 + 3] = m.shore[v]!;
     }
-    g.setAttribute('surface', new BufferAttribute(surface, 3));
+    g.setAttribute('surface', new BufferAttribute(surface, 4));
     g.setAttribute('parentBase', new BufferAttribute(m.parentBase, 3));
     g.setAttribute('parentDisp', new BufferAttribute(m.parentDisp, 3));
     g.setAttribute('slope', new BufferAttribute(m.slope, 3));

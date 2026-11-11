@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–81 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–82 are reflected in both.
 
 ---
 
@@ -1342,3 +1342,16 @@ The owner's amendment and the engineering calls made while adopting it:
 - **Check.** The CPU references of all seven patterns were drawn to a test image before the shader was wired. The first crack version, which used half the difference of the two nearest distances, left wedges at cell corners; the exact bisector distance replaced it.
 
 **Reason:** These complete the base map's pattern set in one framework. Masks blended like the fills keep pattern edges as soft as the color edges, and branching keeps the most expensive patterns from costing anything outside their biomes.
+
+### 82. Map water: three flat depth bands, a coastline from the coast distance, lakes alike
+
+**Date:** 2026-11-11
+**Decision:** `render/strategic/mapWater.ts` draws the strategic map's water:
+
+- **Bands.** Shelf (`#8DB5C4`) above a reference depth of 200 m, mid-depth (`#6C97AC`) to 3,000 m, deep (`#4F7A93`) below. Reference depth is the depth before relief scaling (decision 14), so the bands match Earth's continental shelf and abyssal plains whatever `reliefScale` is. Each band edge is antialiased over one pixel of depth change (`fwidth`). Water stays flat: no hillshade.
+- **Coastline.** A `#2F4756` line about 1.2 px wide where decision 39's coast distance (the per-vertex −h / |∇h| estimate, packed into the relief's `surface` attribute) crosses zero, measured in pixels by dividing by the fragment's footprint. The same distance antialiases the land–sea edge, which replaces the hard step on the interpolated height. Using the coast distance rather than the height keeps the line one pixel wide on steep and gentle coasts alike.
+- **Lakes.** The signed lake depth (lake level − height, decision 40) gives the lake's edge, outline (measured in pixels with its own `fwidth`) and depth band, in the same colors.
+- **Debug modes** keep the vertex colors, without water or outlines.
+- The coastal halo and parallel coastal lines, and rivers, are the next S1 task.
+
+**Reason:** Flat bands read as a printed chart and show where the shelf runs, which matters for naval operations later. A pixel-measured outline keeps the coast crisp at every zoom without any geometry.

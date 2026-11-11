@@ -91,7 +91,7 @@ The strategic view from [docs/visual-style.md](docs/visual-style.md) Part II: gl
 - [x] Remaining patterns: desert dune ripples, tundra tussocks, steep-slope rock hatching, wetland reeds, ice-cap cracks (decision 81)
   - [ ] Wetland mask: no wetland biome exists; derive wetlands (e.g. flat, wet lowland along large rivers and lakes) and fill the mask texture's alpha, which turns on the reeds and the wetland fill
   - [ ] Browser check: all patterns read well and frame time stays near 60 fps at the floor over ice caps and deserts (the costliest patterns)
-- [ ] Water: flat depth bands, a thin dark coastline outline (reuse the coast distance of decision 39), lakes
+- [x] Water: flat depth bands, a thin dark coastline outline (reuse the coast distance of decision 39), lakes (decision 82)
 - [ ] Coastal halo and parallel coastal lines; wide rivers with the water treatment, narrow rivers as lines by discharge
 - [ ] Day and night on the map: the ephemeris sun draws a terminator with a warm twilight band over the hillshade; a legible deep-blue night side; settlement, base and industry lights from the existing light lists (decisions 66, 71); seasonal snow line, sea ice and frozen lakes
 - [ ] Weather on the map: stylized soft cloud shapes and precipitation hatching from the live weather field (`weatherTexture`, `coverageBake`), at every band, moving with game time, on by default with a toggle
