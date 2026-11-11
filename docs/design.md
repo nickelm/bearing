@@ -1,12 +1,14 @@
 # Bearing: Design Doc
 
-*Revision 6, 2026-11-11. Brings in decisions 1–71 from `docs/decisions.md`; a decision that changes anything stated here updates this document in the same commit.*
+*Revision 7, 2026-11-11. Adopts Proposal 0001, two views (`docs/proposals/0001-two-views.md`, decision 72); revision 6 brought in decisions 1–71. A decision that changes anything stated here updates this document in the same commit.*
 
 ## Vision
 
 Bearing is a late-Cold-War air war on a procedurally generated, Earth-like planet. Two fictional blocs, the **Alliance** and the **Pact**, fight across whatever geography the seed produces: a single supercontinent, two continents divided by an ocean, or a scattered archipelago. Fourth-generation fighters, strike aircraft, attack helicopters, bombers, AWACS, tankers, and transports fly over a ground and naval war that runs under AI control.
 
 The player flies. The war runs itself. At any moment the player can search the ongoing missions of their side (a CAP over the front, a low-level interdiction strike, an attack helicopter CAS sortie, a combat airdrop) and jump into any aircraft involved. When the player leaves, the AI takes the aircraft back and the mission continues. The tone we're aiming for is *Red Storm Rising*: a theater-spanning war in which air power decides whether fronts hold and convoys get through.
+
+The war is seen in two views of the same world. The **strategic view** is an illustrated globe in the spirit of Civilization VI and Cold War operational maps. Exaggerated relief, painted biomes, mountain and city glyphs, a road hierarchy, and labels for cities, ranges, peaks, rivers, and seas show at a glance where the front runs, which roads feed it, and how far the bombers must fly. It also shows day and night and the weather, because both shape every sortie. The **simulation view** is the faceted, low-poly world under soft cinematic light where the player flies, from the ground to about 20 km. The map is where the player plans and chooses; the simulation view is where they fly. A short transition carries the camera from one to the other.
 
 ## Design Pillars
 
@@ -35,15 +37,17 @@ The player flies. The war runs itself. At any moment the player can search the o
 
 1. Generate a planet from a seed on a mid-range laptop, with per-stage progress, and cache it so each seed is generated once.
 2. Produce terrain with geological structure: continents, oceans, mountain ranges, canyons, plains, rivers, and distinct biomes.
-3. Render the planet continuously from orbit to 500 m altitude without visible seams or distracting popping.
-4. Build a strategic graph, detect theaters, and cast a campaign for any seed that passes the validity check.
-5. Place settlements and roads as world facts, then ports, airbases, and targets according to the cast.
-6. Generate air tasking for both sides and fly 20 to 50 aircraft on typed missions.
-7. List ongoing missions in a searchable panel and follow any of them with a chase camera.
-8. Show ground formations along any continental front and convoys along any sea lane.
-9. Run at 1× to at least 64× time acceleration without the simulation diverging.
-10. Show day and night, seasons, and live weather, and let weather and daylight constrain flight operations.
-11. Run in a desktop browser.
+3. Show an illustrated strategic map from the full globe down to its zoom floor (about 100 km altitude), crisp at every zoom.
+4. Render a simulation view from the ground to about 20 km altitude without visible seams or distracting popping.
+5. Name the world's geography (continents, seas, straits, mountain ranges, peaks, deserts, forests, rivers, lakes, corridors, roads) and label it on the map without overlaps.
+6. Build a strategic graph, detect theaters, and cast a campaign for any seed that passes the validity check.
+7. Place settlements and roads as world facts, then ports, airbases, and targets according to the cast.
+8. Generate air tasking for both sides and fly 20 to 50 aircraft on typed missions.
+9. List ongoing missions in a searchable panel, and follow any of them from the map into the simulation view with a chase camera.
+10. Show ground formations along any continental front and convoys along any sea lane.
+11. Run at 1× to at least 64× time acceleration without the simulation diverging.
+12. Show day and night, seasons, and live weather in both views, and let weather and daylight constrain flight operations.
+13. Run in a desktop browser.
 
 **Non-goals for the demo:** cockpit flight, combat between individual entities, the campaign economy, naval combat, sound, and multiplayer.
 
@@ -53,7 +57,7 @@ We keep a radius of about **1,000 km**, which gives a maximum surface distance o
 
 Since geography now varies, a fixed range factor no longer fits every world. The casting step chooses a **range factor** between 0.35 and 1.0 per campaign, so that the theaters it detected remain playable. Two targets set it: a medium strike aircraft operating from rear bases must reach the full depth of the enemy side of a front, and a long-range bomber must reach across the widest contested sea lane. The factor scales fuel capacity and burn rate only. Speeds, climb rates, and weapon ranges stay real.
 
-Relief is scaled to the planet: elevations and depths are Earth-like reference values times R / R_Earth ≈ 0.157, so the highest peaks reach about 1.4 km and the mean ocean depth is about 600 m. Climate (lapse rate, snow, tree line) uses the unscaled reference elevation. The atmosphere, aircraft performance, and service ceilings stay real.
+Relief is scaled to the planet: elevations and depths are Earth-like reference values times R / R_Earth ≈ 0.157, so the highest peaks reach about 1.4 km and the mean ocean depth is about 600 m. Climate (lapse rate, snow, tree line) uses the unscaled reference elevation. The atmosphere, aircraft performance, and service ceilings stay real. The strategic view exaggerates relief about 4× so ranges read on the map; the simulation view shows true scale.
 
 World data is tiled. Processes that need the whole planet (erosion, drainage, climate, rivers, the front) run on a global grid of 1024 × 1024 cells per face, about 1.5 km per cell. Below that, tiles of 256 × 256 samples, addressed by (face, level, x, y), are synthesized on demand on the GPU as a pure function of direction, down to level 7 at about 48 m. Level-7 tiles over the ground-combat regions the casting step marks serve as the high-resolution regional bake.
 
@@ -66,18 +70,21 @@ World data is tiled. Processes that need the whole planet (erosion, drainage, cl
 The architecture separates **simulation** from **presentation**.
 
 - **Simulation layer.** A headless model of the world, running in a worker that owns the game clock. It contains two parts: a **command layer** per side that plans missions against that side's intelligence picture, and an **execution layer** that moves and resolves everything (flights, formations, convoys, bases, weather).
-- **Presentation layer.** Cameras, renderers, and UI that read simulation state. The orbit view, the mission search panel, and the future cockpit view are three views onto the same world.
+- **Presentation layer.** Cameras, renderers, and UI that read simulation state. Two renderers draw the same world in different visual languages:
+  - The **strategic view** (`src/render/strategic/`) is an orbit camera from about 3,000 km down to a zoom floor of about 100 km, over an illustrated base map with glyphs, labels, and military overlays.
+  - The **simulation view** (`src/render/sim/`) covers 0 to about 20 km with chase, cockpit, and observer cameras. It is entered only through a unit: following a flight, jumping into an aircraft, or an observer camera at a base or ship. It draws terrain only within the horizon, at most about 200 km away.
+  - The mission search panel sits over the strategic view. A transition controller (`src/render/common/`) eases the map camera down toward a flight and dissolves through cloud into the simulation view in under two seconds, and back. Both scenes stay resident.
 - **World data.** The global grid's maps (height, biome, moisture, temperature, flow, forest density), tiles synthesized from them on demand, vector data (rivers, roads, settlements, fronts), and the strategic graph. Campaign logic reads only the strategic graph; the execution layer may also query terrain.
 
 Every unit exists at one of three fidelity levels:
 
 - **Aggregate:** a formation, flight, or convoy with a position, strength, supply, and orders. Always simulated, cheaply.
-- **Entity:** individual vehicles, aircraft, and infantry squads with positions, simple behaviors, and damage states. Simulated only inside a **promotion bubble** around the player's aircraft or the camera.
+- **Entity:** individual vehicles, aircraft, and infantry squads with positions, simple behaviors, and damage states. Simulated only inside a **promotion bubble** around the player's aircraft or the simulation view's camera.
 - **Full:** physical simulation, used only for the aircraft the player flies.
 
 Promotion expands an aggregate deterministically from its seed and current strength. Demotion folds entity losses back into aggregate strength, so a tank company the player destroyed stays destroyed.
 
-The renderer uses **camera-relative rendering**: positions are float64 on the CPU, and we subtract the camera position before uploading to the GPU.
+Both renderers use **camera-relative rendering**: positions are float64 on the CPU, and we subtract the camera position before uploading to the GPU.
 
 ## Time
 
@@ -121,12 +128,16 @@ Each stage feeds the next, so features have causes.
 4. **Hydraulic and thermal erosion.** A GPU stream-power pass on the global grid carves drainage networks and canyons and lays down alluvial plains; a talus-angle pass handles thermal erosion.
 5. **Climate and biomes.** Temperature from latitude and altitude with a seasonal range from the axial tilt; moisture from prevailing winds with rain shadows; biomes from a Whittaker-style table in a stylized palette; forest density and tree line.
 6. **Rivers.** Drainage recomputed exactly on the CPU after erosion (priority flood, D8), with flow accumulation thresholded into a river network with widths, and lakes.
-7. **Strategic graph.** See *Reading the World*. It includes the civilian geography: settlements, the road network, and bridges.
-8. **Theater detection and casting.** See *Theaters* and *Casting*.
-9. **Validity check.** The world must hold at least 15 airbase sites in each side's territory and at least one theater besides the strategic one. The per-side count needs the cast, so the check runs after casting. Worlds that fail derive a new sub-seed and regenerate, up to eight times. The retry sequence is seeded, so each seed still maps to exactly one world.
-10. **Infrastructure from the cast:** military and commercial ports, airbases, and strategic targets (factories, refineries, depots, rail yards).
+7. **Feature extraction.** The maps become named-feature records, each with geometry (point, polyline, or polygon), extent, and an importance score: continents, oceans, seas, bays, straits, islands and archipelagos, mountain ranges (connected high-uplift ridge regions), peaks (local maxima by prominence), deserts, major forests, wetlands, plains and plateaus, river main stems, and lakes.
+8. **Naming.** A toponymy generator from `rng("names")` builds names from syllable inventories and phonotactic rules, with one naming flavor per cultural region, so the two sides' names sound different without copying real languages. Generic terms complete each name: "the Varden Range", "Mount Kessar (4,210 m)", "the Oskel Waste", "Lake Brann", "the Teller Strait".
+9. **Strategic graph.** See *Reading the World*. It includes the civilian geography and its hierarchy: settlements with urban extents, roads in classes (motorway, trunk, secondary) from a gravity model of the populations they connect and the traffic routed over them, railways linking major cities, ports, and industry, and bridges. Invasion corridors get names (in the tradition of the Fulda Gap), major roads get route numbers ("R4", "M12"), and notable roads through passes or along coasts get names ("the Kessar Pass Road").
+10. **Theater detection and casting.** See *Theaters* and *Casting*.
+11. **Validity check.** The world must hold at least 15 airbase sites in each side's territory and at least one theater besides the strategic one. The per-side count needs the cast, so the check runs after casting. Worlds that fail derive a new sub-seed and regenerate, up to eight times. The retry sequence is seeded, so each seed still maps to exactly one world.
+12. **Infrastructure from the cast:** military and commercial ports, airbases, and strategic targets (factories, refineries, depots, rail yards).
 
-A coarse pass at 256 × 256 per face runs steps 1 to 10 on the CPU in the worker, without erosion, in about 4 to 6 seconds per world. Campaign facts come from this pass, so they are the same on every machine. The full pass (erosion and the eroded global maps) then runs on the GPU for the seed that passed. Tiles are synthesized on demand from the global maps (see *Scale and Range*). We cache each world, with its graph and cast, in IndexedDB; tiles are cheaper to regenerate than to load.
+Feature extraction, naming, and infrastructure stay headless. Label placement and glyph instancing belong to the strategic renderer.
+
+A coarse pass at 256 × 256 per face runs steps 1 to 12 on the CPU in the worker, without erosion, in about 4 to 6 seconds per world. Campaign facts come from this pass, so they are the same on every machine. The full pass (erosion and the eroded global maps) then runs on the GPU for the seed that passed. Tiles are synthesized on demand from the global maps (see *Scale and Range*). We cache each world, with its graph and cast, in IndexedDB; tiles are cheaper to regenerate than to load.
 
 ## Reading the World: The Strategic Graph
 
@@ -137,8 +148,9 @@ The strategic graph abstracts the generated world into the terms a commander use
 - **Chokepoints.** Places where a sea lane passes through a narrow strait (under about 150 km) or within about 300 km of an island that could host an airfield. Each chokepoint records which sea lanes it controls.
 - **Barrier lines.** For each large landmass, the coast-to-coast lines of high barrier strength (rivers, ridges, forest) found by the front generator described below.
 - **Civilian geography.** Settlements with population (city, town, village) and habitability, the road network in classes, and bridges where roads cross wide rivers. Settlements and roads are world facts placed before casting, so casting and invasion corridors can use them.
+- **Named features.** The named geography of pipeline steps 7 and 8 joins the graph as attributes, so briefings and mission names can use it ("interdiction strike on the Kessar Pass Road").
 
-A debug overlay draws the graph on the globe. It is the most important tool for judging whether theater detection makes sense.
+A debug overlay draws the graph on the globe. It is the most important tool for judging whether theater detection makes sense. The strategic view's military overlays draw the same graph for the player.
 
 ## Theaters
 
@@ -166,7 +178,7 @@ Casting turns the detected theaters into a campaign. It draws from `rng("casting
 2. **Assign territory.** The Pact receives mass and interior lines: the larger side of each front, the landmass farthest from the sea lanes, the larger island cluster. The Alliance receives the side adjacent to its rear base and its sea lanes. In island campaigns the Alliance holds a dispersed island network and the Pact assembles the armada.
 3. **Set posture.** By default the Pact attacks and the Alliance defends in every theater.
 4. **Set the range factor** as described in *Scale and Range*.
-5. **Mark industry, port, base, and ground-combat regions** for each side, consistent with its territory and theaters. Industry regions sit on each side's largest urban clusters. Infrastructure placement (pipeline step 10) then puts the sites inside these regions.
+5. **Mark industry, port, base, and ground-combat regions** for each side, consistent with its territory and theaters. Industry regions sit on each side's largest urban clusters. Infrastructure placement (pipeline step 12) then puts the sites inside these regions.
 6. **Write the briefing.** A generated summary of the war the world produced: the theaters, the stakes in each, and the first expected moves.
 
 Casting runs before the player picks a side, and the cast does not depend on that choice. The same seed always produces the same war, and it unfolds identically until the player intervenes.
@@ -248,7 +260,7 @@ Each mission records its type, side, theater, package, target or station, and a 
 
 ## Mission Search and Jump-In
 
-Mission search is the player's main interface to the war. A panel lists the ongoing and upcoming missions of the player's side, with filters for mission type, aircraft, theater, current phase, threat level, and time until action ("on target in under 5 minutes"). Selecting a mission focuses the camera on it; a second action jumps into one of its aircraft.
+Mission search is the player's main interface to the war. A panel lists the ongoing and upcoming missions of the player's side, with filters for mission type, aircraft, theater, current phase, threat level, and time until action ("on target in under 5 minutes"). Selecting a mission focuses the map on it and draws its route. *Follow* carries the camera through the transition into the simulation view, with a chase camera behind one of its aircraft; *Jump in* (after the demo) puts the player in its cockpit. Returning to the map lands the strategic camera above the flight's position.
 
 - **Jump-in window.** A mission accepts the player from climb-out until approach. Takeoff and landing stay with the AI, so joining puts the player in the air with the package already formed.
 - **Handback.** Leaving an aircraft returns it to the AI with its current orders, at any phase.
@@ -273,37 +285,89 @@ Convoys, carrier groups, and amphibious groups exist wherever the cast contains 
 
 ## Rendering
 
-How things look is specified in `docs/visual-style.md`.
+The two views share world data, the simulation, and camera-relative rendering, and differ in everything they draw. `docs/visual-style.md` specifies both.
 
-- **Terrain LOD.** A quadtree per cube face on the tile keys, refined by screen-space error, with skirts to hide cracks and geomorphing between levels. Height exaggeration is a shader uniform.
-- **Shading.** Biome color varied by moisture, with rock on steep slopes, a seasonal snow line, and seasonal tint. Rivers and roads render from vector data in the terrain shader. From altitude, forests read as dark canopy masses and towns as built-up patches.
-- **Forests.** Instanced low-poly trees near the camera, from the forest density map the line-of-sight system also uses.
-- **Settlements.** Low-poly buildings scaled by population near the camera; night lights by settlement, base, and a rural glow from habitability.
-- **Ocean.** Depth-based color, periodic waves with sun glint, and coastal foam, shaded inside the terrain material.
-- **Atmosphere.** Single-scattering shader for the limb glow and aerial perspective, with lighting from the sun ephemeris.
-- **Clouds.** A cloud shell whose coverage comes from the live weather, with cloud shadows on the ground.
-- **Strategic overlays.** Theater boundaries, fronts, sea lanes, chokepoints, and mission routes, drawn from orbit.
+### Strategic View
+
+*Specified in `docs/visual-style.md`, Part II.* An orbit camera from about 3,000 km down to a zoom floor of about 100 km, pitching from straight down at globe scale to about 50° at the floor. Content fades in and out by zoom band (globe, theater, region). A cube-sphere relief mesh with 4× exaggeration and a cartographic hillshade carries painted biomes with procedural patterns, banded water with coastal lines, low-poly glyphs for mountains, forests, and cities, a road hierarchy with casing, hierarchical labels with collision handling, and the military overlays: territory, the front line, defensive lines, named corridors, sea lanes, chokepoints, air defense rings, unit symbols, and flights. Day and night, seasons, and the live weather are always shown in stylized form: a terminator with a legible night side and settlement lights, and soft cloud shapes from the weather field. Individual trees and buildings never appear.
+
+### Simulation View
+
+*Specified in `docs/visual-style.md`, Part I.* Faceted, flat-shaded terrain at true scale from a quadtree limited to the horizon (about 200 km at 20 km altitude), the tree kit with LOD, box-building settlements and the base kit, procedurally built models, the physical sky with aerial perspective, ocean, volumetric-looking clouds from the live weather, and the full post-processing chain.
+
+### Transition
+
+Selecting a flight and choosing *Follow* or *Jump in* eases the strategic camera toward the flight down to the zoom floor. A quick dissolve through a cloud layer hides the switch, and the simulation view opens with a chase camera behind the aircraft. Returning reverses the sequence. The whole transition lasts under two seconds.
 
 ## Milestones
 
-1. **Globe skeleton.** Cube-sphere, unsteered plates, uplift, biome coloring, orbit camera, parameter sliders.
-2. **Erosion, rivers, LOD.** GPU erosion, river extraction, quadtree terrain, flyable down to 500 m.
-3. **Atmosphere, ocean, forests.** The milestone where the planet becomes memorable.
-4. **Reading the world.** Validity check, strategic graph, front generator, theater detection, casting, briefing text, and the graph debug overlay. Add a seed browser that lists the theaters each seed produces, to check detection across many worlds.
-5. **Settlements, roads, ports, airbases**, placed from the cast.
-6. **Simulation core.** Worker-based simulation with event scheduler, fixed ticks, and time acceleration.
-7. **Air tasking and mission search.** Rule-based ATO for both sides, mission model and phases, flights on routes, the search panel with filters and subscriptions, and the chase camera.
-8. **Ground and naval aggregates.** Battalions with aggregate combat along fronts; convoys and naval groups on sea routes.
-9. **Polish.** Generation caching, performance pass, side selection at campaign start, a short flythrough for screenshots.
+The roadmap splits into a foundation and three tracks that can advance in parallel, joined by an integration milestone. `TODO.md` tracks the tasks and their status.
+
+### Foundation
+
+- **F1. Globe skeleton.** Cube-sphere, unsteered plates, uplift, biome coloring, debug orbit camera, parameter sliders.
+- **F2. World data.** Erosion, rivers, climate, and biomes baked to the global grid and tiles, and cached.
+
+### Strategic Track
+
+- **S1. Illustrated base map.** Exaggerated relief, hillshade, biome painting with pattern textures, coasts and water bands, camera with zoom floor and tilt, zoom bands, and stylized day and night and weather.
+- **S2. Geography and names.** Feature extraction, toponymy, mountain and forest glyphs, and a label engine with typography, placement, and collision.
+- **S3. Reading the world.** Validity check, strategic graph, front generator, theater detection, casting, briefing text, the seed browser, and the strategic overlays for theaters, fronts, named corridors, sea lanes, and chokepoints.
+- **S4. Settlements and infrastructure.** Settlements with urban extents and city glyphs, road hierarchy with route names, railways, ports, airbases, and industry, with their symbols.
+
+### Simulation Core Track
+
+- **C1. Simulation core.** Worker-based simulation, event scheduler, fixed ticks, time acceleration, and the weather model.
+- **C2. Air tasking and mission search.** Rule-based ATO for both sides, intelligence, mission model, flights, the search panel with subscriptions, and flight icons and routes on the map.
+- **C3. Ground and naval aggregates.** Battalions and aggregate combat along fronts, convoys and naval groups, all shown as map symbols.
+
+### Flight View Track
+
+- **V1. Local terrain.** Quadtree LOD within the horizon, 0 to 20 km altitude, faceted flat-shaded terrain at true scale, high-resolution regional tiles, observer camera.
+- **V2. Atmosphere and nature.** Sky, aerial perspective, ocean, clouds, weather effects, and the tree kit.
+- **V3. Models and bases.** Procedural model builders from JSON specs, the model viewer page, settlements, and the base kit in the simulation view.
+- **V4. Transition and chase camera.** Follow a flight from mission search into the simulation view and back.
+
+### Integration
+
+- **I1. Polish.** Acceptance checks for both views, performance pass, side selection at campaign start, generation caching, and a short flythrough.
+
+### Dependencies and Order
+
+S1 and V1 both depend on F2. S3 depends on S2 for named corridors. V3 depends on S4 for settlement and base data. C2 depends on C1 and S4. V4 depends on C2 and V2.
+
+Suggested order: F1, F2, S1, V1, S2, V2, S3, C1, S4, V3, C2, V4, C3, I1. Alternating between the map and the flight view keeps both looking good as the project grows, and each milestone produces something visible.
+
+When the roadmap was adopted (revision 7), F1, F2, C1, and most of S3 and S4 were done, and V1's LOD and V2's atmosphere, ocean, and clouds existed in a single renderer that served orbit to ground. The remaining order is S1, V1 (adapting that renderer to the simulation view), S2, V2, the rest of S3 and S4, V3, C2, V4, C3, I1.
+
+### Mapping from the Old Milestones
+
+| Old | New |
+|---|---|
+| M1 Globe skeleton | F1 |
+| M2 Erosion, rivers, LOD | F2 (data), V1 (rendering) |
+| M3 Atmosphere, ocean, forests | V2 |
+| M4 Reading the world | S3 |
+| M5 Settlements, roads, ports, airbases | S4 (data and map), V3 (simulation view) |
+| M6 Simulation core and weather | C1 |
+| M7 Air tasking and mission search | C2, V4 (models to V3) |
+| M8 Ground and naval aggregates | C3 |
+| M9 Polish | I1 (tree kit and weather effects to V2) |
+| (new) | S1, S2 |
 
 **After the demo:** entity promotion and ground behaviors, cockpit flight, flight stick support, air combat, naval combat, the campaign economy.
 
 ## Open Questions
 
 - **Aggressor.** Should the Pact always attack, or should casting occasionally reverse the roles when the geography favors an Alliance offensive?
-- **Thresholds.** What are the right fit thresholds for each theater? The seed browser in milestone 4 will tell us how often each theater appears.
-- **Range factor.** Does the per-world range factor feel right? We should fly representative sorties once milestone 7 works.
+- **Thresholds.** What are the right fit thresholds for each theater? The seed browser (S3) tells us how often each theater appears.
+- **Range factor.** Does the per-world range factor feel right? We should fly representative sorties once C2 and V4 work. The first seed-browser run gives 1.0 for almost every seed, because fronts are deeper than a medium strike radius.
+- **Zoom floor.** Is about 100 km altitude close enough, or should the floor go lower at the cost of more glyph and pattern detail?
+- **Vertical exaggeration.** A fixed 4× on the map, or an exaggeration that increases as the camera pulls out?
+- **Naming flavor.** How many cultural naming regions per world, and should they follow faction territory or landmasses?
+- **Language of labels.** Should Pact-side names appear in a transliterated style, with an optional Cyrillic-like display font as flavor?
+- **Strategic animation.** How much motion belongs on the map: moving flight icons only, or also animated front pushes, smoke over battles, and convoy wakes?
 
 ## Later (Out of Scope)
 
-Campaign economy with factories, resources, pilot training, and resupply; air defense networks; cockpit flight and flight stick support; CSAR missions; carriers, surface combatants, and submarines in combat; multiplayer.
+Campaign economy with factories, resources, pilot training, and resupply; air defense networks; cockpit flight and flight stick support; CSAR missions; carriers, surface combatants, and submarines in combat; multiplayer. On the map: enemy territory that friendly reconnaissance has not covered recently drawn in a sketched, desaturated style, revealed by reconnaissance missions.

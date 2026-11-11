@@ -1,10 +1,19 @@
 # Bearing: Visual Style Guide
 
-*Revision 1, 2026-11-10. Companion to `docs/design.md`.*
+*Revision 2, 2026-11-11. Companion to `docs/design.md`. Revision 2 splits the guide into two parts for the two views (Proposal 0001, decision 72).*
 
 ## Summary
 
-Bearing renders a faceted, low-poly world under soft, cinematic light. Hard geometry meets soft air: aircraft, trees, buildings, and terrain are built from a small number of flat-shaded polygons with solid colors, while the atmosphere, clouds, haze, and light are smooth, warm, and painterly. The contrast between the two carries the style. The world should read like a sturdy, slightly toy-like model railway layout, photographed at golden hour.
+Bearing shows one world in two views, each with its own visual language.
+
+- **Part I, the simulation view** (ground to about 20 km), renders a faceted, low-poly world under soft, cinematic light. Hard geometry meets soft air: aircraft, trees, buildings, and terrain are built from a small number of flat-shaded polygons with solid colors, while the atmosphere, clouds, haze, and light are smooth, warm, and painterly. The contrast between the two carries the style. The world should read like a sturdy, slightly toy-like model railway layout, photographed at golden hour.
+- **Part II, the strategic view** (full globe down to a zoom floor of about 100 km), is an illustrated map in the spirit of Civilization VI and Cold War operational maps. It caricatures the world to convey strategic information: exaggerated relief, painted biomes with patterns, low-poly glyphs, a road hierarchy, and hierarchical labels, with day, night, and weather shown in stylized form.
+
+The two parts share the faction colors and the UI panels, and nothing else is assumed to carry over from one to the other.
+
+# Part I: Simulation View
+
+Everything in Part I applies to the simulation view: chase, cockpit, and observer cameras from the ground to about 20 km altitude, with terrain drawn only within the horizon (about 200 km at 20 km). Nothing in it is tuned for orbit; the globe belongs to Part II.
 
 ## Principles
 
@@ -44,7 +53,7 @@ Across all five, edges show slight stair-stepping and the image has faint grain,
 - **Farmland.** Near settlements and on flat lowland, a Voronoi field pattern assigns each cell a crop color (wheat, green crop, fallow, pasture). Field cells are a few hundred meters across with slight color variation.
 - **Rivers.** Rivers render as bright ribbons that mirror the sky color, with a narrow darker bank. They should be the most visible terrain feature from altitude, since they matter tactically.
 - **Roads.** Thin, muted gray-brown lines from vector data, visible below about 3 km altitude.
-- **Settlements.** Towns are grids of box buildings with pitched or flat roofs in a narrow palette of plaster and roof colors. Cities add a few taller blocks at the center. In the strategic view, towns are built-up patches in the terrain: blocks of the same roof and wall colors, with no building meshes (decision 71).
+- **Settlements.** Towns are grids of box buildings with pitched or flat roofs in a narrow palette of plaster and roof colors. Cities add a few taller blocks at the center. Beyond building range, towns are built-up patches in the terrain: blocks of the same roof and wall colors, with no building meshes (decision 71). The strategic view draws settlements its own way (Part II).
 
 ## Vegetation
 
@@ -78,7 +87,7 @@ Trees are the defining element of the landscape and deserve the most care. They 
 
 The transition at 5 km must be hidden by haze and by matching the cluster colors to the terrain's forest shade.
 
-The table applies to the simulator's views. The strategic view (the globe) draws no individual trees: forests are dark canopy masses in the terrain shading at every distance, with a sharp edge on the forest density contour (decision 71).
+Beyond 5 km, forests are dark canopy masses in the terrain shading with a sharp edge on the forest density contour (decision 71). The strategic view draws no individual trees at all (Part II).
 
 ## Water
 
@@ -91,7 +100,7 @@ The table applies to the simulator's views. The strategic view (the globe) draws
 - **Aerial perspective.** The single most important effect for scale. Distant terrain fades toward the horizon color of the sky, with a slight violet cast at dusk (references 2 and 5). Tune haze so ridges 30 to 60 km away read as layered silhouettes.
 - **Sky gradient.** A physically motivated single-scattering sky, then color-graded toward warm, painterly tones.
 - **Time of day.** Full day-night cycle. Golden hour and dusk are the showcase; midday uses a pale, slightly hazy sky (reference 3); night relies on emissive lights, moonlight, and a dark blue ambient.
-- **Clouds.** Soft, volumetric-looking cumulus and stratus layers that contrast with the hard geometry (references 2 and 4). Start with a raymarched 2.5D cloud layer at quarter resolution, driven by the moisture map and a weather noise field. Clouds catch warm light on top and stay cool and gray underneath.
+- **Clouds.** Soft, volumetric-looking cumulus and stratus layers that contrast with the hard geometry (references 2 and 4). Start with a raymarched 2.5D cloud layer at quarter resolution, driven by the live weather field (cover, cloud base, precipitation) with finer detail noise inside each weather cell. Clouds catch warm light on top and stay cool and gray underneath.
 
 ## Models
 
@@ -194,7 +203,7 @@ Starting values; final values get tuned in the model viewer and on the globe.
 
 - **Typeface.** A clean monospaced or pixel-style face under an open license (for example Share Tech Mono or JetBrains Mono for body text, with a pixel face for headings).
 - **Panels.** Dark translucent backgrounds (`#000000` at 55 to 70% opacity), white text, amber (`#FFB347`) for highlights and selected items. Square corners, no drop shadows.
-- **Map symbology.** NATO-style unit symbols for formations, with faction colors and simple vector icons for flights, convoys, and bases. Mission routes as thin dashed lines.
+- **Map symbology.** See Part II, *Military Overlays*. The panels and typeface here serve both views.
 - **Cinematic cards.** A short label line (base name, location) in the lower right, a status card (day, available aircraft) in the lower left, and an action hint at the bottom center (reference 5).
 
 ## Performance Budgets
@@ -218,12 +227,183 @@ Targets for a mid-range laptop in a desktop browser at 1080p:
 
 ## Acceptance Checks
 
-Before a visual milestone closes, capture these views and compare them with the reference board:
+Before a visual milestone with simulation-view work closes, capture these views and compare them with the reference board. The former orbit check moved to Part II.
 
-1. Orbit view at golden hour, showing a terminator and limb glow.
-2. 5 km altitude over a mixed landscape of forest, farmland, a river, and a town.
-3. 500 m altitude over conifer forest with a forest edge and a road.
-4. A mountain range at low sun, with faceted rock faces and layered haze.
-5. An airbase at dusk with lit runway and parked aircraft.
-6. Coastline with shallow water, a beach, and sun glint.
-7. Silhouette test: every aircraft model rendered solid black against a pale sky, where each type must be identifiable.
+1. 5 km altitude over a mixed landscape of forest, farmland, a river, and a town.
+2. 500 m altitude over conifer forest with a forest edge and a road.
+3. A mountain range at low sun, with faceted rock faces and layered haze.
+4. An airbase at dusk with lit runway and parked aircraft.
+5. Coastline with shallow water, a beach, and sun glint.
+6. Silhouette test: every aircraft model rendered solid black against a pale sky, where each type must be identifiable.
+
+Checks 1–5 are named views in `tools/render.preview.ts`; check 6 runs in the model viewer.
+
+# Part II: Strategic View
+
+The strategic view is where the player reads the war, finds missions, and follows events. It answers questions at a glance: where the front runs, which roads feed it, which mountains shield which bases, how far the bombers must fly. Photographic rendering hides these answers among detail; a map that abstracts, exaggerates, and labels shows them directly. Part I's facets, physical sky, aerial perspective, and post-processing chain do not apply here.
+
+## Strategic Principles
+
+1. **Abstract, exaggerate, label.** Show what a commander needs and drop what only reads up close. Relief, rivers, roads, and cities are drawn larger and clearer than life.
+2. **Illustrated, not photographic.** Painted fills, procedural patterns, and low-poly glyphs. Glyphs are flat-shaded with solid colors, the same model language as Part I at map scale.
+3. **Crisp at every zoom.** Patterns, glyphs, line widths, and text are sized in screen pixels within each zoom band, so nothing blurs or swims at the zoom floor.
+4. **Time and weather are information.** Night and cloud decide which sorties fly, so the map always shows them, styled so that the geography beneath stays readable.
+5. **Color carries meaning.** Faction colors are reserved for military information. Geography uses muted, natural tones.
+
+## Reference Board (Strategic)
+
+Civilization VI screenshots and Cold War operational maps (NATO planning maps, 1980s board wargames such as those behind *Red Storm Rising*) are to be added by the owner to `docs/style/references/`. Like the Part I board, they are local only and never ship (decision 70). Record each one's takeaways here once it is added.
+
+## Camera and Zoom
+
+- **Range.** From about 3,000 km altitude, where the full globe fills the screen, down to a floor of about 100 km, where the view spans roughly 200 km of ground. The floor is tuned so that glyphs, patterns, and labels stay sharp at the closest zoom.
+- **Tilt.** Straight down at globe scale, pitching smoothly to about 50° at the floor, so relief and glyphs read in perspective up close.
+- **Zoom bands.** Content appears and disappears by band, with short fades.
+
+| Band | Altitude | Content |
+|---|---|---|
+| Globe | above 1,500 km | Continents, oceans, theater names, territory tint, front lines, terminator and weather |
+| Theater | 400–1,500 km | Mountain ranges, deserts, major forests, major rivers, capitals and cities, sea lanes, chokepoints, airbases as icons |
+| Region | below 400 km | Peaks with elevations, all towns, named roads, minor rivers, bridges, ports, industry, air defense sites, unit symbols |
+
+## Base Map
+
+- **Relief.** A cube-sphere mesh displaced from the world's heights with 4× vertical exaggeration (tunable), and a moderate quadtree so the floor stays sharp.
+- **Hillshade.** A fixed light from the upper left of the screen, following cartographic convention, plus soft ambient light. The relief light never moves with the sun, so ranges always read the same way.
+- **Biome painting.** A softened, illustrative version of the biome palette (see *Strategic Palette*), with a procedural pattern per biome generated in the shader:
+  - stippled canopy for forests;
+  - dune ripples for sand deserts;
+  - a faint field grid for farmland;
+  - tussocks for tundra;
+  - reed marks for wetlands;
+  - cracked-ice lines for ice caps;
+  - rock hatching on steep slopes.
+  Biome boundaries blend over a few kilometers. Pattern scale is screen-stable, so a pattern looks the same at every zoom within a band.
+- **Coasts and water.** Water gets depth tints in a few flat bands, a lighter halo along coasts, and the faint parallel coastal lines of old printed maps. Coastlines carry a thin dark outline. Lakes and wide rivers use the same treatment; narrow rivers are blue lines whose width follows discharge, kept at least a pixel wide.
+- **Graticule.** Optional latitude and longitude lines, and range rings around a selected base or aircraft. There is no hex grid: hexes imply movement rules, and the simulation has none.
+
+## Day, Night, and Weather
+
+Planning sorties needs night and weather, so the map always shows both (an owner amendment to Proposal 0001, decision 72). They are stylized, not physical.
+
+- **Day and night.** The sun from the ephemeris draws a terminator across the map with a soft, warm twilight band. The night side darkens and shifts to a deep blue, but stays bright enough to read relief, coasts, and labels. Settlement, base, and industry lights glow on the night side, sized by population, as small warm points with a soft halo.
+- **Seasons.** The seasonal snow line, sea ice, and frozen lakes show in the base map.
+- **Clouds and precipitation.** Cloud cover from the live weather field draws as soft, translucent white shapes, thick enough to see where a front lies, never so opaque that the map vanishes. Precipitation adds a faint hatching under the cloud. Clouds move with game time. A toggle can hide them for a clean map; they are on by default.
+- **No physical sky.** No atmosphere scattering, aerial perspective, or limb haze. A thin, pale rim around the globe is enough to separate it from the background.
+
+## Geographic Glyphs
+
+- **Mountains.** Low-poly peak glyphs (faceted pyramids with snow caps above the snow line), instanced along ridge lines detected from uplift and prominence. Glyph size scales with prominence, and spacing keeps ranges legible as chains. Hills get smaller, rounded mounds.
+- **Forests.** Pattern fill everywhere, plus sparse, oversized forest tokens (clumps of three to seven stylized trees, each token about 2 to 5 km across) in the Region band only. Individual trees never appear.
+- **Other landforms.** Dune glyphs in sand deserts.
+
+## Settlements and Infrastructure
+
+- **Cities.** Each settlement's urban extent is a tinted fill. An oversized low-poly building cluster marks its center, with size and style set by class: village, town, city, capital. Capitals carry a star marker.
+- **Roads.** A road hierarchy (motorway, trunk, secondary) drawn as screen-space ribbons with a darker casing, colored and sized by class. Bridges are marked where roads cross rivers.
+- **Railways.** Thin dark lines with cross-ticks, linking major cities, ports, and industry, with rail yards marked.
+- **Military and industrial sites.** Airbases as runway glyphs with icons, ports as pier glyphs, and factories, refineries, depots, and rail yards as distinct symbols. They double as strike targets in mission search.
+
+## Labels
+
+- **Typography.** Cartographic conventions:
+  - water features in blue italic;
+  - landforms in brown, letter-spaced capitals;
+  - settlements in dark type with a light halo, sized by class;
+  - military features in faction colors.
+  Candidate faces under open licenses: a humanist serif italic for water (for example EB Garamond), and a sans with small caps for landforms and settlements (for example Fira Sans or Source Sans 3). Panels keep the Part I UI typeface.
+- **Placement.** Point labels for cities and peaks ("Mount Kessar 4,210 m"), curved labels along polylines for rivers, ranges, and roads, and widely spaced area labels across deserts, forests, seas, and regions.
+- **Collision.** A screen-space placement pass, run when the camera settles or changes band, ranks labels by importance and drops those that collide. Labels fade in and out rather than popping.
+- **Rendering.** MSDF text rendered by the WebGPU pipeline, so text stays sharp at any size. Check the library choice against three's current WebGPU support.
+
+## Military Overlays
+
+- Territory tint per faction.
+- The front line as a bold line with teeth on the attacker's side; defensive lines dashed.
+- Invasion corridors as named arrows.
+- Sea lanes as dashed routes with convoy icons; chokepoints marked.
+- Air defense coverage as faint rings.
+- Formations as NATO-style unit symbols in faction colors; flights as small aircraft icons with heading and short trails; convoys and bases as simple vector icons.
+- Mission routes as thin dashed lines on hover and selection.
+- Every layer can be toggled.
+
+## Strategic Palette
+
+Starting values, tuned on the globe. Land colors are lighter, softer versions of Part I's terrain shades.
+
+### Land and Water
+
+| Element | Fill | Pattern or line |
+|---|---|---|
+| Grassland | `#A3AE78` | none |
+| Farmland | `#C9B57A` | field grid `#B3A066` |
+| Temperate forest | `#6E8A5A` | stipple `#556F45` |
+| Conifer forest | `#5E7A5C` | stipple `#465F46` |
+| Rainforest | `#5F8A55` | stipple `#4A7142` |
+| Savanna | `#C2B57E` | none |
+| Desert | `#DCC195` | dune ripples `#C9AA7A` |
+| Tundra | `#B1AD94` | tussocks `#99957C` |
+| Wetland | `#8FA083` | reeds `#6F8366` |
+| Steep rock | `#9C948A` | hatching `#7E766D` |
+| Snow and ice cap | `#F1F3F2` | cracks `#C9D3D8` |
+| Urban extent | `#CBB8A0` | none |
+| Shelf water | `#8DB5C4` | coastal lines `#A9C9D4` |
+| Mid-depth water | `#6C97AC` | none |
+| Deep water | `#4F7A93` | none |
+| Coastal halo | `#B9D5DC` | coastline `#2F4756` |
+
+### Lines, Labels, and Time
+
+| Element | Color |
+|---|---|
+| Motorway | `#C0563A`, casing `#6A2E20` |
+| Trunk road | `#D99A4E`, casing `#7A5428` |
+| Secondary road | `#F2E6C8`, casing `#8A7B62` |
+| Railway | `#3E3A36` |
+| River | `#5D8FB0` |
+| Water labels | `#2F5F86` |
+| Landform labels | `#6B4A2E` |
+| Settlement labels | `#22252A`, halo `#F4EFE4` |
+| Night tint | `#1B2A4A`, as a multiply that keeps relief visible |
+| Twilight band | `#E3A06A` |
+| Night lights | `#FFD27A` |
+| Clouds | `#FFFFFF` at 35 to 60% opacity; precipitation hatching `#7C8FA6` |
+
+### Factions on the Map
+
+| Element | Alliance | Pact |
+|---|---|---|
+| Symbols, front teeth, labels | `#2F6FB5` | `#D0532B` |
+| Territory tint | `#2F6FB5` at about 15% | `#D0532B` at about 15% |
+
+Blue against orange-red stays distinct under protanopia, deuteranopia, and tritanopia; check every overlay against simulated color-vision deficiencies anyway (acceptance check 4). Neutral territory is `#8C8C8C`. The front line itself is `#2A2A2A`.
+
+## Strategic Post-Processing
+
+- A light vignette and a subtle, constant paper grain.
+- No bloom except a soft halo on night lights, no pixelation, and no physical tone curve per time of day.
+
+## Strategic Performance
+
+Targets for the same mid-range laptop at 1080p: 60 fps at every band, with glyphs instanced, under 300 draw calls, and the label placement pass within a few milliseconds when it runs.
+
+## What to Avoid on the Map
+
+- Photographic textures or physical haze that hides the map.
+- Individual trees and buildings.
+- A hex grid.
+- Overlapping or popping labels.
+- Faction colors on geography, and saturated fills outside the military overlays.
+- Night or cloud so dark or opaque that relief, coasts, and labels disappear.
+
+## Strategic Acceptance Checks
+
+Before a visual milestone with strategic-view work closes, capture and check:
+
+1. The Globe band with the terminator in view: a legible night side with settlement lights, weather clouds over the map, and readable theater names, territory tint, and front lines. This replaces the former orbit check.
+2. A screenshot at each zoom band with no overlapping labels.
+3. A legibility test: a new viewer finds the front line, the three largest mountain ranges, and the capital of each side within ten seconds.
+4. Faction colors and overlays distinguishable under common color-vision deficiencies.
+5. Glyphs, patterns, and text sharp at the zoom floor on a 1080p display.
+
+Checks 1, 2, 4, and 5 are named views in `tools/render.preview.ts`; check 4 renders them through simulated color-vision deficiencies, and check 2 also asserts that the placement pass reports no overlaps. Check 3 needs a person: the owner, at the milestone checkpoint.

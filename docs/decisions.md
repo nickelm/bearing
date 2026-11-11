@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–71 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–72 are reflected in both.
 
 ---
 
@@ -1200,3 +1200,29 @@ Measured on lavapipe at 512 × 288 (ratios only; a software rasterizer is about 
 - **Road color** follows the guide (`#7A7062`) instead of near-black asphalt.
 
 **Reason:** At strategic altitudes, individual trees and buildings cost frame time and add noise without information; the guide's own LOD bands already reduce forests to terrain color beyond 5 km. Patches make every road end at a visible place, and short local links make villages sit on roads that continue, as on real maps.
+
+### 72. Two views: an illustrated strategic map and a simulation view (Proposal 0001)
+
+**Date:** 2026-11-11
+**Decision:** The owner's Proposal 0001 (`docs/proposals/0001-two-views.md`) is accepted with one amendment. Bearing gets two views of the same world, each with its own renderer and visual language:
+
+- The **strategic view** is an illustrated globe from about 3,000 km down to a zoom floor of about 100 km. It has 4× relief, a cartographic hillshade, painted biomes with patterns, glyphs, a road hierarchy, named geography with labels, and the military overlays.
+- The **simulation view** covers 0 to about 20 km in the low-poly style, with terrain only within the horizon, and is entered through a unit.
+- A transition of under two seconds joins them.
+- **The roadmap changes.** Milestones M1–M9 become F1–F2, S1–S4, C1–C3, V1–V4 and I1. `docs/design.md` (revision 7) holds the roadmap and the mapping from old to new, `TODO.md` follows it, and earlier entries that cite milestone numbers keep them as history. `docs/visual-style.md` (revision 2) splits into Part I (simulation view) and Part II (strategic view). Part I's acceptance checks are renumbered 1–6 (the old checks 2–7), and Part II has five strategic checks, the first replacing the old orbit check.
+
+The owner's amendment and the engineering calls made while adopting it:
+
+- **Day, night and weather stay on the map (owner).** Planning sorties needs them, so the strategic view always shows a terminator, a legible night side with settlement lights, seasonal snow and ice, and stylized clouds and precipitation from the live weather. They are not the optional overlays the proposal describes. Only the relief hillshade uses the fixed upper-left light.
+- **Graph types stay in `worldgen/strategic/`.** Named-feature, road-class and rail types are graph types, so rule 9's lint keeps holding. Campaign code may import only `worldgen/strategic/`. Extraction and naming code may live in `worldgen/geography/` and `worldgen/names/`, called by the graph builder.
+- **No `worldgen/infrastructure/`.** Settlements, roads, bridges, airbases and sites stay in `worldgen/strategic/` (decisions 52, 65). The proposal's `worldgen/infrastructure/` means infrastructure work inside that folder until a later decision splits it.
+- **No code moves yet.** The `render/common/`, `render/sim/` and `render/strategic/` split is the first S1 task. The existing `render/strategic/strategicOverlay.ts` is the graph debug overlay.
+- **A debug free camera stays.** It is for development only and remains until V4 provides entry through units, because render previews and owner checks need low views before units exist. The proposal's "no free camera" applies to the player.
+- **The promotion bubble.** Decision 49's bubble "around the camera" now means the simulation view's camera.
+
+**Reason:**
+
+- _Clarity:_ a map that abstracts, exaggerates and labels answers strategic questions at a glance.
+- _Risk:_ one renderer that zooms continuously from orbit to 500 m was the hardest rendering problem in the project. The split bounds each renderer: the map never goes below its floor, and the simulation view never goes above the aircraft ceiling, so terrain within 200 km bounds streaming, LOD depth and memory.
+- _Identity:_ the map is where the player plans, and the cockpit is where they fly.
+- The amendment comes from the owner: night and weather decide which sorties fly, so the planning view must show them.

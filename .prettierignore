@@ -6,3 +6,5 @@ package-lock.json
 docs/design.md
 # Authored by hand; the source of truth for look, models and UI. Do not reformat.
 docs/visual-style.md
+# Owner proposals, authored by hand. Do not reformat.
+docs/proposals/

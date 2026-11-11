@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Guidance for Claude Code sessions in this repository. `docs/design.md` is the source of truth for scope and architecture. Read it before starting milestone work. `docs/decisions.md` records the decisions behind it, with dates and reasons. `docs/visual-style.md` is the source of truth for how the game looks: rendering, models and UI (rule 11).
+Guidance for Claude Code sessions in this repository. `docs/design.md` is the source of truth for scope and architecture. Read it before starting milestone work. `docs/decisions.md` records the decisions behind it, with dates and reasons. `docs/visual-style.md` is the source of truth for how the game looks: rendering, models and UI (rule 11). The game has two views of one world (decision 72): the illustrated **strategic view** (globe down to a ~100 km zoom floor; visual-style Part II) and the low-poly **simulation view** (0–20 km, entered through a unit; Part I). Owner proposals live in `docs/proposals/`; an accepted proposal is folded into the design doc and a decision.
 
 **Keep the documents in step with the decisions.** A decision that changes anything `docs/design.md` or `docs/visual-style.md` states must update that document in the same commit. Edit the statement in place rather than leaving the old text for readers to reconcile. If you find a document contradicting a decision anyway, the later decision wins: fix the document.
 
@@ -27,23 +27,32 @@ docs/design.md      design doc (source of truth; do not reformat)
 docs/decisions.md   architecture decision log
 docs/visual-style.md  visual style guide (source of truth for the look; do not reformat)
 docs/style/references/  reference screenshots: local only, gitignored, never shipped (decision 70)
-src/core/           units, float64 Vec3d, coordinates, seeded RNG. Leaf layer.
+docs/proposals/     owner proposals (do not reformat); 0001-two-views.md is accepted (decision 72)
+src/core/           units, float64 Vec3d, coordinates, seeded RNG, invented names. Leaf layer.
 src/worldgen/       planet generation pipeline stages (may use GPU compute)
-  coarsePass.ts     pipeline steps 1–9 at 256² on the CPU; campaignWorld.ts adds the validity retries
+  coarsePass.ts     the design's pipeline at 256² on the CPU; campaignWorld.ts adds the validity retries
   strategic/        strategic graph types and builder (settlements, roads, bridges), and infrastructure
-                    placed after casting: the only world view campaign logic gets
+                    placed after casting: the only world view campaign logic gets. Road hierarchy,
+                    railways and urban extents go here too, and the types of named features (decision 72)
+  geography/        (planned, S2) feature extraction: named-feature records with geometry and importance
+  names/            (planned, S2) toponymy generator from rng("names"), route numbering
 src/campaign/       theater detection, casting, briefing, validity check (reads the strategic graph only)
 src/sim/            headless simulation; runs in a worker: event queue + fixed ticks (simulation.ts),
                     time acceleration (host.ts), world factory (world.ts)
   weather/          hourly weather model on a bordered 24² cube grid; WeatherView for queries
   command/          per-side command layer: intelligence picture, ATO (graph and cast only)
-src/render/         terrain, atmosphere, ocean, roads, buildings, units, cameras (Three.js WebGPU + TSL)
+src/render/         Three.js WebGPU + TSL. Today one GlobeScene draws orbit to ground from terrain/,
+                    atmosphere/, water/, clouds/, forest/, infra/, lighting/; S1 splits it into:
+  common/           (planned) camera-relative rendering, shared materials, palette, transition controller
+  sim/              (planned) simulation view: local terrain LOD, vegetation, models, atmosphere,
+                    clouds, water (the current folders move here)
+  strategic/        strategic view: base map, glyphs, overlays, label engine (now: graph debug overlay)
 src/ui/             lil-gui debug panel, overlays, time controls
 src/workers/        worker entry points and message protocols
 src/main.ts         app entry: WebGPU checks, renderer, scene, GUI
 tests/              Vitest unit tests (node); tests/gpu/ runs WGSL kernels on a real GPU via Dawn
 tools/              offline previews (npm run maps; terrain/bench *.preview.ts), output in tools/out/
-TODO.md             milestone task list
+TODO.md             task list by milestone (F, S, C, V, I tracks; design.md, Milestones)
 ```
 
 ## Rules
@@ -81,8 +90,10 @@ These are the project conventions. Lint enforces some of them (marked ⚙).
    - The sim's execution layer (flight paths, line of sight, ground movement) may query terrain. The restriction covers planning only.
    - ⚙ `Math.random()` is banned in `campaign` as well. Casting draws from `rng(worldSeed, "casting")`.
 10. **Unsteered generation** (decision 46). World generation never steers toward a particular geography. The only rejection is the validity check, which retries with a seeded sub-seed. Do not add biases to make a theater more likely. Theater detection adapts to the world instead.
-11. **Visual style** (decision 70). All rendering, models and UI follow `docs/visual-style.md`.
-    - That covers flat shading, the palette, polygon budgets, tree and model construction, LOD distances, post-processing, UI panels and type, and its "What to avoid" list.
+11. **Visual style** (decisions 70, 72). All rendering, models and UI follow `docs/visual-style.md`: Part I for the simulation view, Part II for the strategic view.
+    - Part I covers flat shading, the palette, polygon budgets, tree and model construction, LOD distances, post-processing, UI panels and type, and its "What to avoid" list.
+    - Part II covers the strategic camera and zoom bands, the base map, glyphs, labels, overlays, day/night and weather on the map, its palette, and its own "What to avoid" list.
+    - Keep the two views separate. The map never draws individual trees or buildings, and the simulation view never goes above about 20 km.
     - Models are built in code from JSON specs, not modeled by hand or loaded as photographic assets.
     - If something must deviate from the guide, record it in `docs/decisions.md` and update the guide to match.
     - The reference screenshots in `docs/style/references/` are local only. Never commit them, import them from `src/`, or copy them into `public/` or `dist/`. `vite.config.ts` refuses to load anything under `docs/`.
@@ -97,7 +108,7 @@ Fidelity is a level of detail in both space and time.
 Every unit exists at one of three levels:
 
 - **Aggregate:** formation, flight or convoy. Always simulated, cheaply.
-- **Entity:** individual vehicles and squads. Simulated only inside a promotion bubble of about 15–25 km around the player (around the followed aircraft or the camera until cockpit flight exists, decision 49).
+- **Entity:** individual vehicles and squads. Simulated only inside a promotion bubble of about 15–25 km around the player (around the followed aircraft or the simulation view's camera until cockpit flight exists, decisions 49, 72).
 - **Full:** physical simulation. Used only for the player's aircraft. The player flies and never commands ground or naval forces.
 
 Promotion expands a unit deterministically from its seed and current strength. Demotion folds entity losses back into aggregate strength, so nothing destroyed comes back. Design data models so that promotion is possible even before it is implemented.
@@ -107,8 +118,9 @@ Promotion expands a unit deterministically from its seed and current strength. D
 - Work on one milestone task at a time. Keep `TODO.md` current: check off finished tasks and add subtasks you discover.
 - Record any architectural decision, or any deviation from `docs/design.md`, in `docs/decisions.md` with the date, the decision and the reason. In the same commit, update whatever `docs/design.md` or `docs/visual-style.md` says on the subject.
 - Run `npm test` and `npm run typecheck` (or `npm run check`) before declaring a task complete.
-- **Visual milestones close only after the acceptance checks** in `docs/visual-style.md`. A visual milestone is any milestone with rendering, model or UI tasks.
-  - Capture the seven acceptance views (checks 1–6 as `tools/render.preview.ts` views; check 7, the silhouette test, in the model viewer once aircraft models exist).
+- **Visual milestones close only after the acceptance checks** in `docs/visual-style.md` for the views they touch. A visual milestone is any milestone with rendering, model or UI tasks (all of S1–S4, V1–V4 and I1).
+  - Simulation view (Part I): checks 1–5 as `tools/render.preview.ts` views; check 6, the silhouette test, in the model viewer once aircraft models exist.
+  - Strategic view (Part II): checks 1, 2, 4 and 5 as preview views (4 through simulated color-vision deficiencies); check 3, the ten-second legibility test, with the owner.
   - Read the PNGs next to the reference board in `docs/style/references/` and report to the owner where they match and where they fall short.
   - Add a TODO task for each gap. The milestone's owner checkpoint comes after this comparison, not before.
 - Prefer small, reviewable commits with descriptive messages.
@@ -123,7 +135,7 @@ Promotion expands a unit deterministically from its seed and current strength. D
   - Run compute with `Fn(() => …)().compute(count)` and `renderer.compute()` or `computeAsync()`.
   - Read back with `renderer.getArrayBufferAsync(storageNode.value)`.
 - **World-generation GPU code is plain WGSL on a raw `GPUDevice`** (`src/worldgen/gpu/`, decision 26). Vitest runs it on this machine's GPU through Dawn's Node bindings (the `webgpu` dev dependency); GPU tests skip without an adapter. With webgpu 0.6.2 on Windows, `queue.onSubmittedWorkDone()` and error scopes after a buffer map crash Node: use `GpuContext.finish()` and `GpuContext.errors`. Write kernel checks as self-tests in `worldgen/gpu/selfTests.ts`, so they also run in the browser (GUI → Self-tests).
-- **Seeing the rendered scene without a browser:** `npx vitest run --config vitest.tools.config.ts tools/render.preview.ts` draws the app's `GlobeScene` with three's `WebGPURenderer` on Dawn (decision 32) from fixed views (`VIEWS=orbit,limb,terminator,oblique,low,coast,glint,sea,shore,lake,trees,winter,mountains,sunset,town,airbase,roads,night`; `CLOUDS=0` hides clouds) and writes `tools/out/render-*.png`. Read them to judge shading and atmosphere. The first run per world generates it (about 25 s); later runs load it from a disk cache in the OS temp directory.
+- **Seeing the rendered scene without a browser:** `npx vitest run --config vitest.tools.config.ts tools/render.preview.ts` draws the app's `GlobeScene` with three's `WebGPURenderer` on Dawn (decision 32) from fixed views (`VIEWS=orbit,limb,terminator,oblique,low,coast,glint,sea,shore,lake,trees,winter,mountains,sunset,town,airbase,roads,night`; `CLOUDS=0` hides clouds) and writes `tools/out/render-*.png`. Read them to judge shading and atmosphere. Until the S1 split these views span both envelopes; S1 and V1 sort them into strategic (≥ 100 km) and simulation (≤ 20 km) sets. The first run per world generates it (about 25 s); later runs load it from a disk cache in the OS temp directory.
 - **Seeing terrain without a browser:** `npx vitest run --config vitest.tools.config.ts tools/terrain.preview.ts` runs the whole pipeline on Dawn and writes PNGs to `tools/out/`. Read them to judge changes.
 - **TypeScript is pinned to 6.0.** TypeScript 7 (the native compiler) is out, but typescript-eslint 8.x supports only `<6.1`. See `docs/decisions.md`.
 - Vite's cache lives in the OS temp directory (`cacheDir` in `vite.config.ts`), not `node_modules/.vite`, because the repo is in Dropbox and the in-tree cache fails with `EBUSY`. To clear it, delete `%TEMP%/vite-cache/bearing-*`.
