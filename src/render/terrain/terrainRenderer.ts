@@ -70,12 +70,12 @@ import type { RiverIndex } from '../../worldgen/riverIndex';
 import type { InfraScene } from '../infra/infraScene';
 import { HabitabilityTexture } from '../infra/habitabilityTexture';
 import {
+  builtAlbedo,
   LightShading,
   LightTables,
   nightFactor,
   RoadShading,
   RoadStyle,
-  localNetwork,
   ruralSpeckle,
 } from '../infra/roadShading';
 import { LandShading } from './landShading';
@@ -202,8 +202,8 @@ export class TerrainRenderer {
     const exaggeration = this.exaggerationUniform;
     const up = attribute('up', 'vec3');
     // Packed per-vertex scalars (WebGPU allows 8 vertex buffers): raw height,
-    // signed lake depth, coast distance.
-    const surfaceAttr = attribute('surface', 'vec3');
+    // signed lake depth, coast distance, forest density.
+    const surfaceAttr = attribute('surface', 'vec4');
     const rawHeight = surfaceAttr.x;
     const lakeDepth = surfaceAttr.y;
     // The sea is drawn flat at 0 m and lakes flat at their level; the raw height and
@@ -270,15 +270,32 @@ export class TerrainRenderer {
       // Rivers draw on land only: skip their loop out at sea.
       const offshore = rawHeight.lessThan(heightWidth.negate());
       const river = rivers.coverage(planet, riverStart, riverCount, footprint, offshore.not());
-      const surface = this.water.shade({
-        albedo: this.land.albedo({
+      const dry = step(0.5, rawHeight).mul(step(lakeDepth, 0)).mul(this.land.enabled).toVar();
+      const isDry = dry.greaterThan(0);
+      // Towns and industry as built-up patches, and their night lights, in one
+      // pass over the light list (decision 71); dry land only.
+      const built = vec3(0).toVar();
+      If(isDry.and(lightCount.greaterThan(0)), () => {
+        built.assign(
+          lights.sample(planet, lightStart, lightCount, footprint, ruralSpeckle(planet, 2000)),
+        );
+      });
+      const builtCover = clamp(built.x.add(built.y), 0, 1).mul(dry);
+      const landAlbedo = mix(
+        this.land.albedo({
           albedo: bed,
           slope: attribute('slope', 'vec3'),
           height: rawHeight,
           up: radial,
           climate: climateHere,
           wrapped,
+          forest: surfaceAttr.w,
         }),
+        builtAlbedo(planet, footprint, built.y.div(max(built.x.add(built.y), 1e-4))),
+        builtCover,
+      );
+      const surface = this.water.shade({
+        albedo: landAlbedo as unknown as typeof normal,
         bed,
         temperature: this.land.surfaceTemperature(climateHere, rawHeight, radial),
         normal,
@@ -291,15 +308,12 @@ export class TerrainRenderer {
         wavePosition: wrapped,
         light: at,
       });
-      const dry = step(0.5, rawHeight).mul(step(lakeDepth, 0)).mul(this.land.enabled).toVar();
-      const isDry = dry.greaterThan(0);
       // Roads and pavement over dry land and rivers (a road over a river reads as a bridge).
       const paved = roads.coverage(planet, roadStart, roadCount, footprint, isDry).toVar();
       // Habitability peaks near 0.6 and is under 0.1 on half the land: 0.4 and up count as fully settled.
       const hab = clamp(this.habitability.sample(radial).div(0.4), 0, 1).toVar();
-      // Country lanes and villages near the camera (render-only, decision 66).
-      const lanes = localNetwork(planet, hab, footprint, radius, this.roadStyle, isDry).toVar();
-      const asphalt = vec3(0.075, 0.075, 0.08);
+      // Road color from docs/visual-style.md (#7A7062, linear).
+      const asphalt = vec3(0.195, 0.162, 0.122);
       const concrete = vec3(0.4, 0.39, 0.36);
       const roadAlbedo = mix(
         asphalt,
@@ -307,10 +321,7 @@ export class TerrainRenderer {
         clamp(paved.y.div(max(paved.x, 1e-4)), 0, 1),
       ) as unknown as typeof normal;
       const roadRadiance = L.shadeDiffuse(roadAlbedo, normal, positionWorld, at);
-      const laneAlbedo = vec3(0.22, 0.2, 0.17) as unknown as typeof normal;
-      const laneRadiance = L.shadeDiffuse(laneAlbedo, normal, positionWorld, at);
-      const withLanes = mix(surface, laneRadiance, lanes.x.mul(dry));
-      const withRoads = mix(withLanes, roadRadiance, paved.x.mul(dry));
+      const withRoads = mix(surface, roadRadiance, paved.x.mul(dry));
       // Settlement lights on the night side (sodium orange), plus a glow along paved roads.
       // By day, at sea and with lights off, none of it runs.
       const night = nightFactor(radial, L.sunDirection);
@@ -324,12 +335,9 @@ export class TerrainRenderer {
         const clusters = clamp(ruralSpeckle(planet, 30_000).sub(0.45).mul(3), 0, 1);
         const resolved = clamp(footprint.div(1500), 0, 1);
         const villages = mix(dots, float(0.15), resolved).mul(clusters);
-        // Close up, the lit villages of the local network replace the speckle.
-        const near = clamp(float(400).sub(footprint).div(200), 0, 1);
-        const rural = mix(pow(hab, 1.5).mul(villages).mul(0.9), lanes.y.mul(0.8), near);
+        const rural = pow(hab, 1.5).mul(villages).mul(0.9);
         glow.assign(
-          lights
-            .emission(planet, lightStart, lightCount, footprint)
+          built.z
             .add(rural)
             .add(paved.x.mul(0.12))
             .mul(night)
@@ -449,13 +457,14 @@ export class TerrainRenderer {
     const g = new BufferGeometry();
     g.setAttribute('position', new BufferAttribute(m.base, 3));
     g.setAttribute('up', new BufferAttribute(m.up, 3));
-    const surface = new Float32Array(TILE_VERTEX_COUNT * 3);
+    const surface = new Float32Array(TILE_VERTEX_COUNT * 4);
     for (let v = 0; v < TILE_VERTEX_COUNT; v++) {
-      surface[v * 3] = m.height[v]!;
-      surface[v * 3 + 1] = m.water[v]!;
-      surface[v * 3 + 2] = m.shore[v]!;
+      surface[v * 4] = m.height[v]!;
+      surface[v * 4 + 1] = m.water[v]!;
+      surface[v * 4 + 2] = m.shore[v]!;
+      surface[v * 4 + 3] = m.forest[v]!;
     }
-    g.setAttribute('surface', new BufferAttribute(surface, 3));
+    g.setAttribute('surface', new BufferAttribute(surface, 4));
     g.setAttribute('parentBase', new BufferAttribute(m.parentBase, 3));
     g.setAttribute('parentDisp', new BufferAttribute(m.parentDisp, 3));
     g.setAttribute('slope', new BufferAttribute(m.slope, 3));

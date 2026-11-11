@@ -335,7 +335,8 @@ interface BuiltTile {
 
 export class StructureLayer {
   readonly group = new Group();
-  enabled = true;
+  /** Off by default: the strategic view draws towns as built-up patches on the terrain (decision 71). */
+  enabled = false;
   /** Buildings appear within this distance of the camera (m). */
   readonly range = uniform(12_000);
   /** Buildings shrink away over this last stretch of the range (m). */

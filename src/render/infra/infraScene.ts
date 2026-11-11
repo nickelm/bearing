@@ -7,7 +7,9 @@
  *   pavement (runway, parallel taxiway, apron) with negative widths, which
  *   the road shader draws as concrete. Same 8-field layout as RiverSegments.
  * - `lights`: night lights per settlement and airbase, 8 floats each
- *   (direction xyz, radius; intensity, 0, 0, 0).
+ *   (direction xyz, radius; intensity, built-up radius, built-up kind, 0).
+ *   The terrain draws the built-up area as a patch by day (decision 71):
+ *   kind BUILT_TOWN or BUILT_INDUSTRY; radius 0 for none (airbases).
  * - `sites`: footprints for building clusters (towns, airbases, industry).
  * - `clearings`: where trees must not stand (urban cores, airfields, roads).
  *
@@ -44,6 +46,10 @@ export const TAXIWAY_OFFSET = 190;
 export const APRON_WIDTH = 140;
 export const APRON_LENGTH = 600;
 export const APRON_OFFSET = 420;
+
+/** Built-up kinds in the light records. */
+export const BUILT_TOWN = 0;
+export const BUILT_INDUSTRY = 1;
 
 /** Urban radius (m) of a settlement: about 3.2 km at 100,000 people. */
 export function urbanRadius(population: number): number {
@@ -189,7 +195,16 @@ export class InfraScene {
         key: `town-${i}`,
       });
       this.clear(p, p, 0.6 * r, false);
-      lights.push(p.x, p.y, p.z, 2 * r, Math.min(1.2, 0.3 + Math.sqrt(pop / 7e5)), 0, 0, 0);
+      lights.push(
+        p.x,
+        p.y,
+        p.z,
+        2 * r,
+        Math.min(1.2, 0.3 + Math.sqrt(pop / 7e5)),
+        r,
+        BUILT_TOWN,
+        0,
+      );
     }
     const seen = new Set<number>();
     for (const t of infra.targets) {
@@ -209,7 +224,7 @@ export class InfraScene {
         key: `industry-${t.id}`,
       });
       this.clear(p, p, 1000, false);
-      lights.push(p.x, p.y, p.z, 1200, 0.4, 0, 0, 0);
+      lights.push(p.x, p.y, p.z, 1200, 0.4, 900, BUILT_INDUSTRY, 0);
     }
     this.lights = Float32Array.from(lights);
   }

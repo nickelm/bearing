@@ -231,13 +231,13 @@ export class DebugGui {
       .name('Tile memory (MiB)')
       .onFinishChange(() => callbacks.viewChanged(view));
     t.add(view, 'trees')
-      .name('Trees')
+      .name('Trees (sim detail)')
       .onChange(() => callbacks.viewChanged(view));
     t.add(view, 'treeRange', 1, 8, 0.5)
       .name('Tree range (km)')
       .onFinishChange(() => callbacks.viewChanged(view));
     t.add(view, 'buildings')
-      .name('Buildings')
+      .name('Buildings (sim detail)')
       .onChange(() => callbacks.viewChanged(view));
 
     const st = this.gui.addFolder('Status');

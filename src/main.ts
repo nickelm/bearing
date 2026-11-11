@@ -126,9 +126,10 @@ async function main(): Promise<void> {
     geomorph: true,
     sse: DEFAULT_LOD.sseThreshold,
     tileMemory: 600,
-    trees: true,
+    // Individual trees and buildings are simulator detail (decision 71).
+    trees: false,
     treeRange: 5,
-    buildings: true,
+    buildings: false,
     renderScale: 'auto',
     targetFps: 30,
   };

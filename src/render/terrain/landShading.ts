@@ -61,6 +61,13 @@ export interface LandInputs {
   climate: V4;
   /** Fragment position modulo the wave period (decision 38). */
   wrapped: V3;
+  /** Forest density 0..1, interpolated from the vertices (decision 44). */
+  forest?: F;
+}
+
+/** sRGB hex to a linear color. */
+function linearHex(h: number): Color {
+  return new Color().setHex(h);
 }
 
 /** Hash of an integer lattice point in [0, 1) (inputs are small integers, so sin is precise). */
@@ -106,6 +113,12 @@ export class LandShading {
   readonly rockColor = uniform(new Color(0.13, 0.12, 0.105));
   readonly snowColor = uniform(new Color(0.82, 0.85, 0.9));
   readonly autumnColor = uniform(new Color(0.24, 0.13, 0.04));
+  /** Canopy shades from docs/visual-style.md: conifer, temperate broadleaf, rainforest (decision 71). */
+  readonly coniferCanopy = uniform(linearHex(0x2c4434));
+  readonly broadleafCanopy = uniform(linearHex(0x3b5a33));
+  readonly rainforestCanopy = uniform(linearHex(0x2e5a2e));
+  /** Forest density at which the canopy closes; the edge is sharp around it. */
+  readonly forestThreshold = uniform(0.42);
 
   /** Surface temperature (°C) today at a height (m) and direction, from the climate sample. */
   surfaceTemperature(climate: V4, height: F, up: V3): F {
@@ -147,10 +160,33 @@ export class LandShading {
     // Detail: ±12% brightness.
     a = a.mul(noise.mul(0.12).add(1)) as V3;
 
+    // Forest as dark canopy masses with a crisp edge (decision 71): the density
+    // is thresholded per fragment, so the edge follows its contour, not the mesh.
+    // Shade by the annual mean temperature: conifers in the cold, rainforest in
+    // the heat; a value shift (not a hue shift) breaks up large masses.
+    let evergreen: F = float(0);
+    if (i.forest) {
+      const meanT = i.climate.x.sub(max(i.height, 0).div(this.reliefScale).mul(LAPSE_RATE));
+      const conifer = smoothstep(9, 3, meanT);
+      const tropical = smoothstep(18, 24, meanT);
+      const shade = mix(
+        mix(this.broadleafCanopy, this.coniferCanopy, conifer),
+        this.rainforestCanopy,
+        tropical,
+      ).mul(noise.mul(0.18).add(1));
+      const canopy = smoothstep(
+        this.forestThreshold.sub(0.03),
+        this.forestThreshold.add(0.03),
+        i.forest.add(noise.mul(0.08)),
+      ) as F;
+      evergreen = max(conifer, tropical).mul(canopy) as F;
+      a = mix(a, shade, canopy) as V3;
+    }
+
     // Vegetation browns as it cools (deciduous autumn and winter).
     const t = this.surfaceTemperature(i.climate, i.height, i.up).add(noise.mul(1.5));
     const green = clamp(a.y.sub(max(a.x, a.z)).mul(12), 0, 1);
-    const autumn = smoothstep(10, 2, t).mul(green).mul(0.75);
+    const autumn = smoothstep(10, 2, t).mul(green).mul(0.75).mul(float(1).sub(evergreen));
     a = mix(a, this.autumnColor.mul(noise.mul(0.2).add(1)), autumn) as V3;
 
     // Rock on steep ground (reference slope: about 19° to 35°).
@@ -162,7 +198,11 @@ export class LandShading {
     const cold = smoothstep(0, -5, t);
     const sticks = float(1).sub(smoothstep(0.9, 1.5, steep));
     const wetEnough = smoothstep(0.03, 0.2, moisture);
-    const snow = cold.mul(sticks).mul(wetEnough);
+    // Snow lies under evergreen canopy more than on it: forests stay dark in winter.
+    const snow = cold
+      .mul(sticks)
+      .mul(wetEnough)
+      .mul(float(1).sub(evergreen.mul(0.6)));
     a = mix(a, this.snowColor, snow) as V3;
 
     return mix(i.albedo, a, this.enabled) as V3;

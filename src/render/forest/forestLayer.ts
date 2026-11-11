@@ -203,7 +203,8 @@ interface TreeTile {
 
 export class ForestLayer {
   readonly group = new Group();
-  enabled = true;
+  /** Off by default: the strategic view draws forests as canopy masses on the terrain (decision 71). */
+  enabled = false;
   /** Trees appear within this distance of the camera (m). */
   readonly range = uniform(5000);
   /** Clumps shrink away over this last stretch of the range (m). */

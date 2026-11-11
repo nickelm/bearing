@@ -405,6 +405,8 @@ it('renders preview views', async () => {
     scene.clouds.time.value = cloudTime;
     weatherAt(cloudTime);
     scene.clouds.enabled.value = process.env.CLOUDS === '0' ? 0 : 1;
+    // DETAIL=1 adds the instanced trees and buildings (off in the strategic view, decision 71).
+    scene.forest.enabled = scene.structures.enabled = process.env.DETAIL === '1';
     // Render until the terrain has loaded everything this view wants.
     let stable = 0;
     let last = '';

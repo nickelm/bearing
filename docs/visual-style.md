@@ -44,7 +44,7 @@ Across all five, edges show slight stair-stepping and the image has faint grain,
 - **Farmland.** Near settlements and on flat lowland, a Voronoi field pattern assigns each cell a crop color (wheat, green crop, fallow, pasture). Field cells are a few hundred meters across with slight color variation.
 - **Rivers.** Rivers render as bright ribbons that mirror the sky color, with a narrow darker bank. They should be the most visible terrain feature from altitude, since they matter tactically.
 - **Roads.** Thin, muted gray-brown lines from vector data, visible below about 3 km altitude.
-- **Settlements.** Towns are grids of box buildings with pitched or flat roofs in a narrow palette of plaster and roof colors. Cities add a few taller blocks at the center.
+- **Settlements.** Towns are grids of box buildings with pitched or flat roofs in a narrow palette of plaster and roof colors. Cities add a few taller blocks at the center. In the strategic view, towns are built-up patches in the terrain: blocks of the same roof and wall colors, with no building meshes (decision 71).
 
 ## Vegetation
 
@@ -77,6 +77,8 @@ Trees are the defining element of the landscape and deserve the most care. They 
 | Beyond 5 km | Terrain color only, darkened under forest, with a slight canopy height offset in the shading |
 
 The transition at 5 km must be hidden by haze and by matching the cluster colors to the terrain's forest shade.
+
+The table applies to the simulator's views. The strategic view (the globe) draws no individual trees: forests are dark canopy masses in the terrain shading at every distance, with a sharp edge on the forest density contour (decision 71).
 
 ## Water
 

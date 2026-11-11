@@ -177,6 +177,8 @@ Civilian geography (settlements, roads, bridges) joins the strategic graph befor
 - [x] Airbase runway meshes (drawn as concrete in the terrain shader, plus hangar and shelter meshes; decision 65)
 - [x] Tools: `npm run maps` graph mode draws settlements, roads, bridges, airbases, ports and targets; `npm run seeds` and the seed browser report them; render preview views `town`, `airbase`, `roads`, `night`
 - [x] Denser settlements (about 2,000), feeder roads, rural night glow (decision 66, after the owner's first look)
+- [x] Strategic view shows the big picture (decision 71, owner review): forests as canopy masses and towns as built-up patches in the terrain shader, guide palette; instanced trees and buildings off by default (simulator detail); procedural shader lanes removed; local roads link neighboring settlements (Gabriel graph, 70 km), so villages sit on through roads
+- [ ] Check decision 71 in the browser: forest edges, town patches from 500 m to orbit, road network continuity, frame time with trees and buildings off
 - [ ] Snap bridges to the rendered (eroded) rivers, which can run a few kilometers from the coarse ones (decision 65)
 - [ ] Keep civilian roads off airfields (a road may cross a taxiway; route around airbase footprints or end them at the gate)
 - [ ] Flatten the terrain under runways (they follow the fine terrain's detail noise)
@@ -282,8 +284,8 @@ Aircraft, vehicles, ships, buildings and trees are generated in code from small 
   - [ ] GPU timestamp queries per pass, to split terrain, clouds, sky and trees on real hardware
   - [ ] Per-object uniforms on terrain meshes (eight per tile) packed into fewer, if draw submission shows up in profiles
 - [ ] Weather in the renderer (from milestone 6): fog and visibility, rain and snow on the ground, live winds for wave direction
-- [ ] Tree kit from model specs ([docs/visual-style.md](docs/visual-style.md), Vegetation): conifer, broadleaf, birch/poplar, palm, acacia, shrub, dead/burnt, each within the guide's triangle budget and sturdy proportions (canopy width ≥ ½ height, trunk ≥ ⅒); per-instance scale 0.8–1.3, yaw, tilt under 4°, and a value-first shade shift within the biome's canopy shades; types assigned by biome; clustered placement with a sharp forest edge and a scattered fringe of trees and shrubs. Replaces the milestone 3 clump trees
-- [ ] Tree LOD, following the guide's bands: instanced trees casting shadows to 1.5 km, merged cluster meshes (10–30 trees each, no shadows) to 5 km, terrain forest shade beyond, with the 5 km seam hidden by haze and matched colors (decision 45: ~6.6 M triangles over dense forest at the default 5 km range today; budget under 2 M per frame and about 50,000 instances within 1.5 km)
+- [ ] (Simulator views, decision 71) Tree kit from model specs ([docs/visual-style.md](docs/visual-style.md), Vegetation): conifer, broadleaf, birch/poplar, palm, acacia, shrub, dead/burnt, each within the guide's triangle budget and sturdy proportions (canopy width ≥ ½ height, trunk ≥ ⅒); per-instance scale 0.8–1.3, yaw, tilt under 4°, and a value-first shade shift within the biome's canopy shades; types assigned by biome; clustered placement with a sharp forest edge and a scattered fringe of trees and shrubs. Replaces the milestone 3 clump trees
+- [ ] (Simulator views, decision 71) Tree LOD, following the guide's bands: instanced trees casting shadows to 1.5 km, merged cluster meshes (10–30 trees each, no shadows) to 5 km, terrain forest shade beyond, with the 5 km seam hidden by haze and matched colors (decision 45: ~6.6 M triangles over dense forest at the default 5 km range today; budget under 2 M per frame and about 50,000 instances within 1.5 km)
 - [ ] Denser forests: closer clump spacing in closed-canopy biomes, paid for by the tree LOD (owner request at checkpoint 4)
 - [ ] Bundle size and code splitting
 - [ ] Scripted flythrough camera path for screenshots, including a dawn and a weather front

@@ -4,7 +4,14 @@ import { latLonToDirection } from '../src/core/coords';
 import { tileForDirection } from '../src/core/tiles';
 import { DEG } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
-import { InfraScene, localFrame, offsetPoint, urbanRadius } from '../src/render/infra/infraScene';
+import {
+  BUILT_INDUSTRY,
+  BUILT_TOWN,
+  InfraScene,
+  localFrame,
+  offsetPoint,
+  urbanRadius,
+} from '../src/render/infra/infraScene';
 import { LIGHT_LEVEL, LightTables } from '../src/render/infra/roadShading';
 import { RiverTables } from '../src/render/water/riverTables';
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
@@ -83,6 +90,23 @@ describe('InfraScene from a generated world', () => {
         expect(ids).toContain(i);
       }
     }
+  });
+
+  it('gives towns and industry a built-up patch inside their light, airbases none', () => {
+    const count = scene.lights.length / 8;
+    let towns = 0;
+    let industry = 0;
+    for (let i = 0; i < count; i++) {
+      const light = scene.lights[i * 8 + 3]!;
+      const built = scene.lights[i * 8 + 5]!;
+      const kind = scene.lights[i * 8 + 6]!;
+      expect(built).toBeLessThanOrEqual(light);
+      if (built > 0 && kind === BUILT_TOWN) towns++;
+      if (built > 0 && kind === BUILT_INDUSTRY) industry++;
+    }
+    expect(towns).toBe(w.graph.settlements.cells.length);
+    expect(industry).toBe(scene.sites.filter((x) => x.kind === 'industry').length);
+    expect(count - towns - industry).toBe(bases.length);
   });
 
   it('keeps runways out of coarse road lists', () => {

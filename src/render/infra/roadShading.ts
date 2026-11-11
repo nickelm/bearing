@@ -10,8 +10,11 @@
  *   smooth falloff, in tiered lists (LightTables). A rural glow from the
  *   graph's habitability map, broken into village-sized speckles, fills the
  *   land between towns. The terrain adds both on the night side only.
+ * - **Built-up patches** ride on the same records (decision 71): each town
+ *   and industrial site is a patch of roofs and walls (or concrete) in the
+ *   terrain by day, in place of instanced buildings.
  */
-import { StorageBufferAttribute } from 'three/webgpu';
+import { Color, StorageBufferAttribute } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import {
   abs,
@@ -212,145 +215,94 @@ export class LightShading {
   }
 
   /**
-   * Light emitted at a planet-centered position (relative units, before
-   * color): Σ intensity × (1 − (d / r)²)², each disk at least `minPixels`
-   * pixels wide so towns stay visible from orbit.
+   * One pass over the light list at a planet-centered position:
+   * (town cover, industry cover, emission).
+   *
+   * - **Built-up patches** (decision 71): a disk of each record's built-up
+   *   radius, its edge broken by `edgeNoise` (0..1, a few km across) and
+   *   softened over a quarter radius. A patch is at least `minPixels` wide,
+   *   its cover thinned by the area ratio, so towns stay visible as dots from
+   *   altitude without growing.
+   * - **Emission** (relative units, before color): Σ intensity × (1 − (d / r)²)²,
+   *   each disk at least 1.5 pixels wide so towns stay visible from orbit.
    */
-  emission(planetPosition: V3, start: F, count: F, footprint: F): F {
+  sample(planetPosition: V3, start: F, count: F, footprint: F, edgeNoise: F): V3 {
     return Fn(() => {
       const p = normalize(planetPosition);
+      const town = float(0).toVar();
+      const industry = float(0).toVar();
       const total = float(0).toVar();
       const first = int(start);
       const minRadius = max(footprint, 1).mul(1.5);
+      const minBuilt = max(footprint, 1).mul(1.2);
+      const wobble = edgeNoise.sub(0.5).mul(0.5).add(1);
       Loop({ start: int(0), end: int(count), type: 'int' }, ({ i }) => {
         const id = this.lists.element(first.add(i)).toInt();
         const a = this.lights.element(id.mul(2));
         const b = this.lights.element(id.mul(2).add(1));
-        const r = max(a.w, minRadius);
-        // Spread over a wider disk, keep the light's total output.
-        const scale = min(a.w.div(r), 1);
         const d = length(p.sub(a.xyz)).mul(this.radius);
+        // Night light.
+        const r = max(a.w, minRadius);
+        const scale = min(a.w.div(r), 1);
         const x = clamp(float(1).sub(d.mul(d).div(r.mul(r))), 0, 1);
         total.addAssign(b.x.mul(x.mul(x)).mul(scale.mul(scale).mul(0.7).add(0.3)));
+        // Built-up patch.
+        const built = b.y.mul(wobble);
+        const shown = max(built, minBuilt);
+        const thin = min(built.div(shown), 1);
+        const edge = max(shown.mul(0.25), footprint);
+        const c = clamp(shown.sub(d).div(edge), 0, 1)
+          .mul(thin.mul(thin))
+          .mul(select(b.y.greaterThan(0), float(1), float(0)));
+        If(b.z.lessThan(0.5), () => town.assign(max(town, c))).Else(() =>
+          industry.assign(max(industry, c)),
+        );
       });
-      return total;
-    })() as F;
+      return vec3(town, industry, total);
+    })() as V3;
   }
+}
+
+/**
+ * Albedo of a built-up patch (decision 71): blocks of roofs and walls in the
+ * settlement palette of docs/visual-style.md on a BLOCK m lattice, fading to
+ * their mean where blocks shrink below a few pixels; industry in concrete.
+ * `industry` is the share of industrial cover.
+ */
+const BLOCK = 70;
+export function builtAlbedo(planetPosition: V3, footprint: F, industry: F): V3 {
+  return Fn(() => {
+    const lin = (h: number) => {
+      const c = new Color().setHex(h);
+      return vec3(c.r, c.g, c.b);
+    };
+    const roofRed = lin(0x8e5a48);
+    const roofGray = lin(0x5e5e62);
+    const wallA = lin(0xc9bfaf);
+    const wallB = lin(0xb5a898);
+    const concrete = lin(0x9a968e);
+    const h = fract(
+      sin(dot(floor(planetPosition.div(BLOCK)), vec3(127.1, 311.7, 74.7))).mul(43758.5453),
+    );
+    const block = select(
+      h.lessThan(0.3),
+      roofRed,
+      select(h.lessThan(0.55), roofGray, select(h.lessThan(0.8), wallA, wallB)),
+    );
+    const mean = roofRed.mul(0.3).add(roofGray.mul(0.25)).add(wallA.mul(0.25)).add(wallB.mul(0.2));
+    const resolved = clamp(
+      float(BLOCK / 3)
+        .div(max(footprint, 1e-3))
+        .sub(1),
+      0,
+      1,
+    );
+    const townColor = mix(mean, block, resolved);
+    return mix(townColor, concrete, industry);
+  })() as V3;
 }
 
 /** Selects a factor of 0 on the day side to 1 at night, from the sun's elevation at `up`. */
 export function nightFactor(up: V3, sunDirection: V3): F {
   return clamp(dot(up, sunDirection).mul(-1).add(0.03).div(0.15), 0, 1) as F;
-}
-
-/**
- * Local country lanes and villages, drawn by the shader only (decision 66):
- * the coarse grid cannot carry Earth's density of villages and lanes, so the
- * terrain adds them procedurally near the camera. Pure decoration; the
- * simulation never sees them.
- *
- * Seeds sit one per LOCAL_CELL lattice cell of a 3D lattice, keeping cells
- * whose center lies within a thin shell around the sphere, projected onto
- * the sphere. A seed is a village where its hash falls below the local
- * habitability (rescaled, 0..1); lanes link the nearest village to its lattice neighbors
- * (Delaunay-like), most of them kept. Returns (lane coverage, village light).
- * Above MAX_FOOTPRINT meters per pixel it returns zero: the rural speckle
- * covers far views.
- */
-export const LOCAL_CELL = 4000;
-const LOCAL_MAX_FOOTPRINT = 400;
-const LANE_HALF_WIDTH = 2.5;
-const VILLAGE_LIGHT_RADIUS = 350;
-
-function hash3(c: V3): V3 {
-  return fract(
-    sin(
-      vec3(
-        dot(c, vec3(127.1, 311.7, 74.7)),
-        dot(c, vec3(269.5, 183.3, 246.1)),
-        dot(c, vec3(113.5, 271.9, 124.6)),
-      ),
-    ).mul(43758.5453),
-  ) as V3;
-}
-
-export function localNetwork(
-  planetPosition: V3,
-  habitability: F,
-  footprint: F,
-  radius: number,
-  style: RoadStyle,
-  gate?: Node<'bool'>,
-): V2 {
-  return Fn(() => {
-    const out = vec2(0, 0).toVar();
-    const near = footprint.lessThan(LOCAL_MAX_FOOTPRINT).and(habitability.greaterThan(0.1));
-    If((gate ? near.and(gate) : near).and(style.enabled.greaterThan(0)), () => {
-      const p = normalize(planetPosition).mul(radius);
-      const base = floor(p.div(LOCAL_CELL));
-      const keep = habitability;
-      const seed = (c: V3): V3 =>
-        normalize(c.add(hash3(c).mul(0.7).add(0.15)).mul(LOCAL_CELL)).mul(radius) as V3;
-      const inShell = (c: V3) =>
-        abs(length(c.add(0.5).mul(LOCAL_CELL)).sub(radius)).lessThan(0.75 * LOCAL_CELL);
-      const isVillage = (c: V3) => fract(hash3(c.add(17.3)).x).lessThan(keep);
-      const offset = (i: Node<'int'>) =>
-        vec3(
-          i.mod(3).toFloat().sub(1),
-          i.div(3).mod(3).toFloat().sub(1),
-          i.div(9).toFloat().sub(1),
-        );
-      const best = vec3(0).toVar();
-      const bestCell = vec3(0).toVar();
-      const bestD = float(1e9).toVar();
-      Loop({ start: int(0), end: int(27), type: 'int' }, ({ i }) => {
-        const c = base.add(offset(i));
-        const s = seed(c);
-        const d = length(p.sub(s));
-        If(inShell(c).and(isVillage(c)).and(d.lessThan(bestD)), () => {
-          bestD.assign(d);
-          best.assign(s);
-          bestCell.assign(c);
-        });
-      });
-      const lane = float(1e9).toVar();
-      Loop({ start: int(0), end: int(27), type: 'int' }, ({ i }) => {
-        const c = base.add(offset(i));
-        const s = seed(c);
-        const ab = s.sub(best);
-        const len = length(ab);
-        // Neighbors only, and not every pair: lanes are irregular.
-        const pair = fract(hash3(c.add(bestCell)).y);
-        If(
-          inShell(c)
-            .and(isVillage(c))
-            .and(len.greaterThan(1))
-            .and(len.lessThan(1.7 * LOCAL_CELL))
-            .and(pair.lessThan(0.75)),
-          () => {
-            const t = clamp(dot(p.sub(best), ab).div(dot(ab, ab)), 0, 1);
-            lane.assign(min(lane, length(p.sub(best.add(ab.mul(t))))));
-          },
-        );
-      });
-      const fp = max(footprint, 0.05);
-      const drawn = max(float(LANE_HALF_WIDTH), fp.mul(style.minPixels).mul(0.5));
-      const strength = mix(min(float(LANE_HALF_WIDTH).div(drawn), 1), float(1), style.legibility);
-      const cover = clamp(float(0.5).sub(lane.sub(drawn).div(fp)), 0, 1)
-        .mul(strength)
-        .mul(0.8);
-      const x = bestD.div(VILLAGE_LIGHT_RADIUS);
-      const light = select(bestD.lessThan(1e8), float(1).div(x.mul(x).add(1)).mul(0.5), float(0));
-      // Fade in as pixels shrink below the limit.
-      const fade = clamp(
-        float(LOCAL_MAX_FOOTPRINT)
-          .sub(footprint)
-          .div(LOCAL_MAX_FOOTPRINT / 2),
-        0,
-        1,
-      );
-      out.assign(vec2(cover, light).mul(fade).mul(style.enabled));
-    });
-    return out;
-  })() as V2;
 }

@@ -80,8 +80,10 @@ export interface TileMeshData {
   parentDisp: Float32Array;
   /** Surface gradient of the displayed height (before exaggeration), a tangent vector. */
   slope: Float32Array;
-  /** Linear RGB albedo: biome on land, seabed under the sea (or a debug-mode color). */
+  /** Linear RGB albedo: open ground on land, seabed under the sea (or a debug-mode color). */
   color: Float32Array;
+  /** Forest density 0..1 (decision 44) in the biome view, 0 in debug views; the shader draws the canopy (decision 71). */
+  forest: Float32Array;
   /** Displayed height range before exaggeration (m), of this tile and of the parent surface it morphs to. */
   minHeight: number;
   maxHeight: number;
@@ -260,13 +262,22 @@ export function surfaceSampler(
   };
 }
 
-/** Canopy colors (sRGB) that forest cover blends toward. */
-const CANOPY_BROADLEAF: Rgb = [0.2, 0.33, 0.14];
-const CANOPY: Partial<Record<number, Rgb>> = {
-  [Biome.Taiga]: [0.13, 0.24, 0.16],
-  [Biome.TemperateRainforest]: [0.12, 0.27, 0.14],
-  [Biome.TropicalRainforest]: [0.11, 0.28, 0.1],
+/**
+ * Open ground (sRGB) in forest biomes, between the canopy masses the shader
+ * draws (decision 71): grassland and pasture shades from docs/visual-style.md,
+ * so clearings read as fields rather than pale forest.
+ */
+const OPEN_GROUND: Partial<Record<number, Rgb>> = {
+  [Biome.TemperateForest]: hexRgb(0x7f944f),
+  [Biome.TemperateRainforest]: hexRgb(0x6b7c40),
+  [Biome.Taiga]: hexRgb(0x6b7c40),
+  [Biome.TropicalSeasonalForest]: hexRgb(0x8a9a55),
+  [Biome.TropicalRainforest]: hexRgb(0x6e8b3d),
 };
+
+function hexRgb(h: number): Rgb {
+  return [((h >> 16) & 255) / 255, ((h >> 8) & 255) / 255, (h & 255) / 255];
+}
 
 /** Seabed albedo (sRGB): sand in the shallows, darker silt in deep water. */
 function seabedColor(h: number, reliefScale: number): Rgb {
@@ -299,17 +310,9 @@ function colorFor(
     } else if (mode === 'borders' && (material >> 16) & 1) {
       c = BIOME_COLORS[Biome.Shelf]!;
     } else {
-      const biomeColor = BIOME_COLORS[biome] ?? [1, 0, 1];
-      // Forest canopy darkens the ground toward broadleaf or conifer green.
-      const forest = ((material >>> 24) / 255) * 0.7;
-      const canopy = CANOPY[biome] ?? CANOPY_BROADLEAF;
-      const b: Rgb = [
-        biomeColor[0] + (canopy[0] - biomeColor[0]) * forest,
-        biomeColor[1] + (canopy[1] - biomeColor[1]) * forest,
-        biomeColor[2] + (canopy[2] - biomeColor[2]) * forest,
-      ];
-      // Rivers are drawn by the shader from vector data (decision 46).
-      c = b;
+      // The canopy is drawn by the shader from the forest density (decision 71);
+      // rivers from vector data (decision 46).
+      c = OPEN_GROUND[biome] ?? BIOME_COLORS[biome] ?? [1, 0, 1];
     }
     if (mode === 'borders') {
       const l = hsl((level * 0.13) % 1, 0.7, 0.5);
@@ -357,6 +360,7 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
   const parentDisp = new Float32Array(n3);
   const slope = new Float32Array(n3);
   const color = new Float32Array(n3);
+  const forest = new Float32Array(TILE_VERTEX_COUNT);
 
   // Grid: directions, own heights and parent heights (float64).
   const dirs = new Float64Array(GRID_VERTICES * 3);
@@ -471,6 +475,7 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
       color[v * 3] = srgbToLinear(rgb[0]);
       color[v * 3 + 1] = srgbToLinear(rgb[1]);
       color[v * 3 + 2] = srgbToLinear(rgb[2]);
+      forest[v] = opts.mode === 'biome' && hOwn[v]! > 0 ? (mat >>> 24) / 255 : 0;
     }
   }
 
@@ -493,6 +498,7 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
       height[dst] = height[src]!;
       water[dst] = water[src]!;
       shore[dst] = shore[src]!;
+      forest[dst] = forest[src]!;
     }
   }
   return {
@@ -507,6 +513,7 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
     parentDisp,
     slope,
     color,
+    forest,
     minHeight: minH,
     maxHeight: maxH,
   };
