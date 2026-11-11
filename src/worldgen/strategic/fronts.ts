@@ -133,7 +133,11 @@ function landmassFront(
     ref[2] * C[0] - ref[0] * C[2],
     ref[0] * C[1] - ref[1] * C[0],
   ];
-  const l1 = Math.hypot(...e1);
+  // No sin, cos, acos or hypot below: their results can differ in the last bit between
+  // V8's compilation tiers on some CPUs, and the band cut by sorted axis position turns
+  // a last-bit change into a different front (TODO.md Known issues; decision 86). Only
+  // +, −, ×, ÷, sqrt and atan2 (as in angleBetween) remain.
+  const l1 = Math.sqrt(e1[0] * e1[0] + e1[1] * e1[1] + e1[2] * e1[2]);
   e1 = [e1[0] / l1, e1[1] / l1, e1[2] / l1];
   const e2: Point = [
     C[1] * e1[2] - C[2] * e1[1],
@@ -150,14 +154,14 @@ function landmassFront(
   let wsum = 0;
   for (const c of cells) {
     const p = cellPoint(ctx, c);
-    const d = p[0] * C[0] + p[1] * C[1] + p[2] * C[2];
-    const theta = Math.acos(Math.max(-1, Math.min(1, d)));
-    const phi = Math.atan2(
-      p[0] * e2[0] + p[1] * e2[1] + p[2] * e2[2],
-      p[0] * e1[0] + p[1] * e1[1] + p[2] * e1[2],
-    );
-    px[c] = theta * Math.cos(phi);
-    py[c] = theta * Math.sin(phi);
+    // Azimuthal equidistant: angle from the centroid, along the direction (x, y).
+    const z = p[0] * C[0] + p[1] * C[1] + p[2] * C[2];
+    const x = p[0] * e1[0] + p[1] * e1[1] + p[2] * e1[2];
+    const y = p[0] * e2[0] + p[1] * e2[1] + p[2] * e2[2];
+    const r = Math.sqrt(x * x + y * y);
+    const theta = Math.atan2(r, z);
+    px[c] = r > 0 ? (theta * x) / r : 0;
+    py[c] = r > 0 ? (theta * y) / r : 0;
     const a = grid.areas[c]!;
     mx += px[c]! * a;
     my += py[c]! * a;
@@ -173,9 +177,11 @@ function landmassFront(
     syy += y * y * a;
     sxy += x * y * a;
   }
-  const alpha = 0.5 * Math.atan2(2 * sxy, sxx - syy);
-  const ca = Math.cos(alpha);
-  const sa = Math.sin(alpha);
+  // Principal axis at alpha = atan2(2·sxy, sxx − syy) / 2, by half-angle identities.
+  const h = Math.sqrt(4 * sxy * sxy + (sxx - syy) * (sxx - syy));
+  const cos2a = h > 0 ? (sxx - syy) / h : 1;
+  const ca = Math.sqrt(Math.max(0, (1 + cos2a) / 2));
+  const sa = (sxy < 0 ? -1 : 1) * Math.sqrt(Math.max(0, (1 - cos2a) / 2));
   const t = new Float64Array(grid.cellCount);
   const s = new Float64Array(grid.cellCount);
   for (const c of cells) {

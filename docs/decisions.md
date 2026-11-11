@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–85 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–86 are reflected in both.
 
 ---
 
@@ -1391,3 +1391,14 @@ The owner's amendment and the engineering calls made while adopting it:
 - **Sizes kept.** The old footprint read about 1.4× large on average, so every pattern and the coastal lines drew about 1.4× their nominal sizes, the look the owner approved. The nominal sizes are scaled by 1.4 to keep it: stipple 10 px, fields 22 px, hatching 7 px, dunes 12 px, tussocks 10 px, cracks 40 px, reeds 14 px, halo 11 px, lines at 7, 14 and 22 px. Rivers and the 1.2 px coastline keep their nominal sizes, so they draw a little thinner than before, at the guide's widths.
 
 **Reason:** Printed maps fix their decoration to the paper, so it should not move under the reader's eye. A per-frame map scale gives that while keeping the lines evenly spaced on screen at each zoom.
+
+### 86. The front generator's band cut avoids sin, cos and acos
+
+**Date:** 2026-11-11
+**Decision:** The CI-only determinism flake (TODO.md Known issues) was traced with stage-by-stage tests to the front generator. Two builds of one world in one process agreed on heights, biomes, discharge, nodes, settlements and roads, but not on the first barrier line's path. Each landmass's band is cut by sorting cells along a principal axis and thresholding at 20% and 80% of area, and the coast-to-coast path is searched inside that band. One cell crossing a threshold changes the band and the path, so a last-bit difference in a cell's axis coordinate is enough. That coordinate came from an azimuthal projection with `Math.acos`, `Math.cos` and `Math.sin`, and from a rotation by `cos` and `sin` of the principal angle. In recent V8, `sin` and `cos` have more than one implementation, which can differ in the last bit; which one runs can depend on the compilation tier, which depends on timing. That would fit a first build differing from a second only on some CPUs, though it could not be confirmed outside CI.
+
+- The projection now uses dot products, `sqrt` and `atan2` (the angle as `atan2(r, z)` and the direction as `(x, y) / r`), and the rotation uses half-angle identities with `sqrt`. The math is the same, but each remaining operation is correctly rounded (`sqrt`) or is the `atan2` that `CubeGrid.angleBetween` and the road search already use without divergence.
+- `GENERATOR_VERSION` becomes 8, since fronts may move slightly and cached worlds store the strategic graph.
+- If the flake recurs, the next step is to quantize the axis coordinate before sorting.
+
+**Reason:** Determinism is a project rule (rule 5), and a generator whose output turns on the last bit of a transcendental function breaks it in practice. Removing the sensitive calls from the one stage that amplifies them fixes the observed failure without slowing generation.
