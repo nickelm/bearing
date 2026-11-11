@@ -380,7 +380,7 @@ Blue against orange-red stays distinct under protanopia, deuteranopia, and trita
 
 ## Strategic Post-Processing
 
-- A light vignette and a subtle, constant paper grain.
+- A light vignette and a subtle, constant paper grain: corners darken by 8%, and each pixel varies by ±2.5%, fixed to the screen. A thin pale rim (`#D9E4E8`, about 1.5 px) outlines the globe against the background `#1E2630` (decision 92).
 - No bloom except a soft halo on night lights, no pixelation, and no physical tone curve per time of day.
 
 ## Strategic Performance

@@ -88,6 +88,8 @@ export interface MapGuiParams {
   graticule: boolean;
   /** Range rings around the clicked point; Escape clears it. */
   rangeRings: boolean;
+  /** Vignette and paper grain strength (decision 92). */
+  finish: number;
 }
 
 export interface LightingGuiParams {
@@ -360,6 +362,9 @@ export class DebugGui {
       .onChange(() => changed(map));
     f.add(map, 'rangeRings')
       .name('Range rings (click; Esc)')
+      .onChange(() => changed(map));
+    f.add(map, 'finish', 0, 1, 0.05)
+      .name('Paper finish')
       .onChange(() => changed(map));
     f.close();
   }

@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–91 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–92 are reflected in both.
 
 ---
 
@@ -1460,3 +1460,15 @@ The owner's amendment and the engineering calls made while adopting it:
 - **Colors.** Part II names none. The graticule is the water-label blue `#2F5F86` at 35% by day and the coastal-line blue `#A9C9D4` by night; rings are the settlement-label dark `#22252A` at 75% by day and the label halo `#F4EFE4` by night, so both stay visible on the night side.
 
 **Reason:** Range rings answer the planning question "what can reach what" at a glance, and the graticule orients the reader on a globe without coastlines in view. Drawing both in the relief shader keeps them on the ground, one pixel wide at any zoom, at no extra draw calls.
+
+### 92. The map's finish in its own shaders: vignette, paper grain, a pale rim
+
+**Date:** 2026-11-11
+**Decision:** Part II's post-processing is applied in the map's shaders (`render/strategic/mapFinish.ts`), not in a separate pass:
+
+- **Vignette and grain.** The relief's final color and the background are multiplied by a vignette that darkens corners by up to 8% (starting 45% of the way from center to corner) and by a constant per-pixel grain of ±2.5% (a hash of the drawing-buffer pixel), fixed to the screen like paper.
+- **Rim.** The background becomes a node: flat `#1E2630`, with a thin pale rim `#D9E4E8` just outside the globe's silhouette. For each background ray it takes the angle outside the limb, divides by radians per pixel, and draws a Gaussian about 1.5 px wide at 85%. This replaces the limb glow; there is still no atmosphere on the map.
+- **Halo.** The night lights' additive halo (decision 88) stays the only glow.
+- **Control.** GUI → Map → Paper finish scales vignette and grain from 0 to 1.
+
+**Reason:** A post-processing pass would add a render target and a full-screen pass for three multiplies. In the map's own shaders the finish costs a hash and a smoothstep per pixel. The night lights, which draw additively over the relief, are not grained, which keeps them clean points.
