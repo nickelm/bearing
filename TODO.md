@@ -92,9 +92,10 @@ The strategic view from [docs/visual-style.md](docs/visual-style.md) Part II: gl
   - [ ] Wetland mask: no wetland biome exists; derive wetlands (e.g. flat, wet lowland along large rivers and lakes) and fill the mask texture's alpha, which turns on the reeds and the wetland fill
   - [ ] Browser check: all patterns read well and frame time stays near 60 fps at the floor over ice caps and deserts (the costliest patterns)
 - [x] Water: flat depth bands, a thin dark coastline outline (reuse the coast distance of decision 39), lakes (decision 82)
-- [ ] Coastal halo and parallel coastal lines; wide rivers with the water treatment, narrow rivers as lines by discharge
+- [x] Coastal halo and parallel coastal lines; wide rivers with the water treatment, narrow rivers as lines by discharge
   - [x] Coastal halo and parallel coastal lines (decision 83)
-  - [ ] Rivers: wide rivers with the water treatment, narrow rivers as lines by discharge
+  - [x] Rivers: wide rivers with the water treatment, narrow rivers as lines by discharge (decision 84)
+  - [ ] Browser check: river density per band (60 m and 15 m thresholds), line widths, and frame time over river-dense regions
   - [ ] Browser check: outer coastal lines at Theater zoom follow the 1.5 km coast-distance grid and may show slight steps; if they do, refine (finer field near coasts, or subcell coast positions)
   - [ ] Move the coast-distance transform (about 0.6 s at 1024²) into the worldgen worker
 - [ ] Day and night on the map: the ephemeris sun draws a terminator with a warm twilight band over the hillshade; a legible deep-blue night side; settlement, base and industry lights from the existing light lists (decisions 66, 71); seasonal snow line, sea ice and frozen lakes

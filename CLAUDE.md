@@ -46,9 +46,10 @@ src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Bo
                     still draws orbit to ground.
   common/           shared by both views: camera-relative placement, orbit camera, cell-grid debug
                     globe, palette, climate and habitability textures, render scale, cube-sphere
-                    geometry, WebGPU checks, terrain/ (tile quadtree, tile meshes, tile cache);
+                    geometry, WebGPU checks, terrain/ (tile quadtree, tile meshes, tile cache),
+                    water/ (river segment tables and river shading);
                     later the transition controller
-  sim/              simulation view: GlobeScene, terrain/ (TerrainRenderer), atmosphere/, water/,
+  sim/              simulation view: GlobeScene, terrain/ (TerrainRenderer), atmosphere/, water/ (sea),
                     clouds/, forest/, infra/, lighting/
   strategic/        strategic view: StrategicScene, StrategicCamera, zoom bands, relief mesh, hillshade,
                     biome fill, patterns, graph debug overlay; later base map,

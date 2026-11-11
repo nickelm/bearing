@@ -622,6 +622,7 @@ async function renderStrategic(
     biome: global.finish.biome,
     biomeResolution: global.n,
     height: global.height,
+    rivers: new RiverIndex(global.finish.rivers),
   });
   scene.relief.buildBudgetMs = 10_000;
   const main = new Vec3d(...world.info.mainContinent);

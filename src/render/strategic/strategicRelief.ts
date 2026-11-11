@@ -36,7 +36,9 @@ import {
 } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import {
+  abs,
   attribute,
+  clamp,
   float,
   Fn,
   If,
@@ -64,7 +66,17 @@ import { placeCameraRelative } from '../common/cameraRelative';
 import { HabitabilityTexture } from '../common/habitabilityTexture';
 import { BiomeFillTexture, hexToLinear, STEEP_ROCK_FILL } from './biomeFill';
 import { CoastDistanceTexture } from './coastDistance';
-import { mapWaterNode } from './mapWater';
+import { COASTLINE_PX, mapWaterNode, SHELF_WATER } from './mapWater';
+import {
+  MAJOR_MIN_WIDTH,
+  MapRiverShading,
+  nearerRiver,
+  REGIONAL_MIN_WIDTH,
+  riverCoverage,
+  riverWideness,
+} from './mapRivers';
+import { RiverTables } from '../common/water/riverTables';
+import type { RiverSegments } from '../../worldgen/riverIndex';
 import {
   crackNode,
   duneNode,
@@ -106,6 +118,9 @@ const FARM_LINE = hexToLinear(0xb3a066);
  * colors are about 0.78 of their fills in sRGB for all three forest rows.
  */
 const STIPPLE_DARKEN = 0.58;
+/** Part II river line color, and wide rivers' water fill (decision 84). */
+const RIVER_LINE = hexToLinear(0x5d8fb0);
+const SHELF_FILL = hexToLinear(SHELF_WATER);
 /** Part II pattern marks (decision 81): dune ripples, tussocks, ice cracks, reeds, rock hatching. */
 const DUNE_MARK = hexToLinear(0xc9aa7a);
 const TUSSOCK_MARK = hexToLinear(0x99957c);
@@ -123,6 +138,8 @@ export interface StrategicReliefWorld {
   biomeResolution: number;
   /** Global heights (m) on the same grid, for the coast distance (decision 83). */
   height: Float32Array;
+  /** River segments to draw (decision 84); none when absent. */
+  rivers?: { readonly segments: RiverSegments };
 }
 
 export interface StrategicReliefStats {
@@ -173,15 +190,21 @@ export class StrategicRelief {
   readonly habitability = new HabitabilityTexture(null, 1);
   /** Camera eye, planet-centered (set by the scene each frame): patterns are anchored to the ground. */
   readonly eye = uniform(new Vector3());
-  /** Field-grid visibility: the Theater and Region bands' fades (set by the scene). */
-  readonly gridVisibility = uniform(0);
+  /**
+   * Visibility of content shown from the Theater band down (field grid, rivers): the
+   * Theater and Region bands' fades (set by the scene).
+   */
+  readonly belowGlobe = uniform(0);
   /** The world's relief scale, for reference water depths (decision 14). */
   readonly reliefScale = uniform(1);
   /** 1 draws the map patterns (forest stipple, farmland), 0 hides them. */
   readonly patterns = uniform(1);
   private detail = new Noise3(rng(0, 'render-detail'));
   private readonly index = new BufferAttribute(buildTileIndex(), 1);
-  private readonly material: MeshBasicNodeMaterial;
+  private material: MeshBasicNodeMaterial;
+  /** Major and regional river tables (decision 84), built with the coast field. */
+  private majorRivers: RiverTables | null = null;
+  private regionalRivers: RiverTables | null = null;
   private readonly data = new TileCache<TileData>(DATA_BUDGET_MIB * 2 ** 20);
   private readonly meshes = new TileCache<Mesh>(MESH_BUDGET_MIB * 2 ** 20, (e) => {
     this.group.remove(e.value);
@@ -234,11 +257,24 @@ export class StrategicRelief {
     const slope = attribute('slope', 'vec3');
     const rgb = (c: readonly number[]) => vec3(c[0]!, c[1]!, c[2]!);
     const rock = rgb(hexToLinear(STEEP_ROCK_FILL));
+    // River tables for this world (null before the map's first frame).
+    const radius = this.world?.radius ?? 1e6;
+    const majorRivers = new MapRiverShading(this.majorRivers, radius);
+    const regionalRivers = new MapRiverShading(this.regionalRivers, radius);
+    const objectUniform = (key: string) =>
+      uniform(0).onObjectUpdate(
+        ({ object }) => ((object as Mesh | undefined)?.userData[key] as number | undefined) ?? 0,
+      );
+    const majorStart = objectUniform('majorStart');
+    const majorCount = objectUniform('majorCount');
+    const regionalStart = objectUniform('regionalStart');
+    const regionalCount = objectUniform('regionalCount');
     material.colorNode = Fn(() => {
       // Derivatives first, in uniform control flow: the pixel footprint (m per px)
       // sizes the patterns on screen (decision 80).
       const footprint = max(length(fwidth(positionWorld)), 1e-3).toVar();
-      const plane = planeCoordsNode(positionWorld.add(this.eye), radial).toVar();
+      const planet = positionWorld.add(this.eye).toVar();
+      const plane = planeCoordsNode(planet, radial).toVar();
       // Water depth and its change per pixel, for the bands and outlines (decision 82):
       // reference depth, lake depth in lakes and sea depth elsewhere.
       const lakeWidth = max(fwidth(lakeDepth), 1e-3).toVar();
@@ -268,7 +304,7 @@ export class StrategicRelief {
         });
         return out;
       };
-      const grid = masked(farm.mul(this.gridVisibility), () => gridNode(plane, footprint));
+      const grid = masked(farm.mul(this.belowGlobe), () => gridNode(plane, footprint));
       const farmed = mix(fields, rgb(FARM_LINE), grid);
       // Forest stipple: darker dots of the canopy color, at every band.
       const dots = masked(forestCover.mul(open), () => stippleNode(plane, footprint));
@@ -312,7 +348,21 @@ export class StrategicRelief {
         strength: this.hillshadeStrength,
         ambient: this.ambient,
       });
-      const surfaceColor = mix(land.mul(shade), water.color, wet);
+      // Rivers on dry land, from the Theater band down (decision 84): narrow ones as
+      // blue lines, wide ones as water with the dark outline. Flat, like all water.
+      const dry = rawHeight.greaterThan(0).and(lakeDepth.lessThan(0));
+      const gate = dry.and(this.belowGlobe.mul(this.biomeMode).greaterThan(1e-3));
+      const river = nearerRiver(
+        majorRivers.sample(planet, majorStart, majorCount, footprint, gate),
+        regionalRivers.sample(planet, regionalStart, regionalCount, footprint, gate),
+      );
+      const riverOn = this.belowGlobe.mul(this.biomeMode);
+      const wide = riverWideness(river);
+      const riverColor = mix(rgb(RIVER_LINE), rgb(SHELF_FILL), wide);
+      const shadedLand = mix(land.mul(shade), riverColor, riverCoverage(river).mul(riverOn));
+      const riverBank = clamp(float(COASTLINE_PX / 2 + 0.5).sub(abs(river.edgePx)), 0, 1);
+      const withRivers = mix(shadedLand, water.outlineColor, riverBank.mul(wide).mul(riverOn));
+      const surfaceColor = mix(withRivers, water.color, wet);
       return mix(surfaceColor, water.outlineColor, water.outline.mul(this.biomeMode));
     })();
     return material;
@@ -394,6 +444,13 @@ export class StrategicRelief {
     mesh.userData.morph = 1;
     mesh.userData.minHeight = m.minHeight;
     mesh.userData.maxHeight = m.maxHeight;
+    // Rivers: the major table below level 4, the regional one from level 4 (decision 84).
+    const major = t.level < RIVER_REGIONAL_LEVEL ? this.majorRivers?.rangeFor(t) : undefined;
+    const regional = t.level >= RIVER_REGIONAL_LEVEL ? this.regionalRivers?.rangeFor(t) : undefined;
+    mesh.userData.majorStart = major?.start ?? 0;
+    mesh.userData.majorCount = major?.count ?? 0;
+    mesh.userData.regionalStart = regional?.start ?? 0;
+    mesh.userData.regionalCount = regional?.count ?? 0;
     mesh.visible = false;
     this.group.add(mesh);
     this.meshes.set(t, mesh, MESH_BYTES);
@@ -408,9 +465,31 @@ export class StrategicRelief {
       return;
     }
     if (this.coastPending) {
+      // Per-world data the hidden map does not need: built on its first frame, before
+      // any mesh of this world exists, so the new material reaches every mesh.
       this.coastPending = false;
       const w = this.world;
       this.coastDistance.setHeights(w.height, w.biomeResolution, w.radius);
+      this.majorRivers = w.rivers
+        ? new RiverTables(w.rivers, w.radius, {
+            coarseLevel: 1,
+            coarseMerge: 64,
+            coarseMargin: 20_000,
+            coarseMinWidth: MAJOR_MIN_WIDTH,
+            coarseCap: 400,
+            fineLists: false,
+          })
+        : null;
+      this.regionalRivers = w.rivers
+        ? new RiverTables(w.rivers, w.radius, {
+            coarseMinWidth: REGIONAL_MIN_WIDTH,
+            coarseCap: 300,
+            fineLists: false,
+          })
+        : null;
+      const old = this.material;
+      this.material = this.buildMaterial();
+      old.dispose();
     }
     const x = this.exaggeration.value;
     const v: LodView = { ...view, exaggeration: x };
@@ -476,3 +555,6 @@ export class StrategicRelief {
     this.coastDistance.dispose();
   }
 }
+
+/** Mesh level from which the regional river table applies (its coarse level). */
+const RIVER_REGIONAL_LEVEL = 4;

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { latLonToDirection } from '../src/core/coords';
 import { neighborTile, tileForDirection } from '../src/core/tiles';
 import { DEG, PLANET_RADIUS } from '../src/core/units';
-import { COARSE_MIN_WIDTH, FINE_LEVEL, RiverTables } from '../src/render/sim/water/riverTables';
+import { COARSE_MIN_WIDTH, FINE_LEVEL, RiverTables } from '../src/render/common/water/riverTables';
 import { RiverIndex } from '../src/worldgen/riverIndex';
 import { straightRiver } from './helpers/rivers';
 
@@ -42,5 +42,27 @@ describe('river tables', () => {
     const t5 = tileForDirection(latLonToDirection(0, 10.25 * DEG), 5);
     expect(narrow.rangeFor(t5).count).toBe(0);
     expect(wide.rangeFor(t5).count).toBeGreaterThan(0);
+  });
+
+  it("builds the strategic map's major-river lists on coarse tiles, without fine lists", () => {
+    const major = new RiverTables(new RiverIndex(straightRiver(80)), PLANET_RADIUS, {
+      coarseLevel: 1,
+      coarseMerge: 64,
+      coarseMargin: 20_000,
+      coarseMinWidth: 60,
+      fineLists: false,
+    });
+    const here = (level: number) => tileForDirection(latLonToDirection(0, 10.25 * DEG), level);
+    for (const level of [1, 2, 3]) expect(major.rangeFor(here(level)).count).toBeGreaterThan(0);
+    expect(major.rangeFor(here(0)).count).toBe(0);
+    expect(major.rangeFor(here(FINE_LEVEL)).count).toBe(0);
+    // Eight segments merge into a single chord at this length.
+    expect(major.rangeFor(here(1)).count).toBe(1);
+    const minor = new RiverTables(new RiverIndex(straightRiver(40)), PLANET_RADIUS, {
+      coarseLevel: 1,
+      coarseMinWidth: 60,
+      fineLists: false,
+    });
+    expect(minor.rangeFor(here(2)).count).toBe(0);
   });
 });

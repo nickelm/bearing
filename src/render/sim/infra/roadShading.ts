@@ -42,7 +42,7 @@ import {
 import { tileForDirection, tileKey, tileKeyString } from '../../../core/tiles';
 import type { TileKey } from '../../../core/tiles';
 import { Vec3d } from '../../../core/vec3d';
-import type { RiverRange, RiverTables } from '../water/riverTables';
+import type { RiverRange, RiverTables } from '../../common/water/riverTables';
 import { localFrame } from './infraScene';
 
 type F = Node<'float'>;

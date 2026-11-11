@@ -188,7 +188,7 @@ export class StrategicScene {
     // Patterns are anchored to the ground (decision 80); the field grid shows from the
     // Theater band down, fading with the bands.
     this.relief.eye.value.set(o.eye.x, o.eye.y, o.eye.z);
-    this.relief.gridVisibility.value = this.bands.fade('theater') + this.bands.fade('region');
+    this.relief.belowGlobe.value = this.bands.fade('theater') + this.bands.fade('region');
 
     const tiles = this.useTiles && this.relief.hasWorld;
     this.globe.group.visible = !tiles;

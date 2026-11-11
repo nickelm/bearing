@@ -49,6 +49,16 @@ export interface SegmentTableOptions {
   coarseMinWidth?: number;
   /** Most chords per coarse list; default COARSE_CAP. */
   coarseCap?: number;
+  /**
+   * Coarse-list tile level (default COARSE_LEVEL), segments merged per chord (default
+   * COARSE_MERGE) and extra reach (m, default 2,000). The strategic map builds a
+   * major-river table on level-1 tiles with long chords (decision 84).
+   */
+  coarseLevel?: number;
+  coarseMerge?: number;
+  coarseMargin?: number;
+  /** Build the fine lists (default true); the strategic map draws no level-7 tiles. */
+  fineLists?: boolean;
 }
 
 export interface RiverRange {
@@ -63,6 +73,7 @@ export class RiverTables {
   readonly lists: Uint32Array;
   private readonly fine = new Map<string, RiverRange>();
   private readonly coarse = new Map<string, RiverRange>();
+  private readonly coarseLevel: number;
 
   constructor(
     index: { readonly segments: RiverSegments },
@@ -71,6 +82,10 @@ export class RiverTables {
   ) {
     const coarseMinWidth = options.coarseMinWidth ?? COARSE_MIN_WIDTH;
     const coarseCap = options.coarseCap ?? COARSE_CAP;
+    const coarseLevel = (this.coarseLevel = options.coarseLevel ?? COARSE_LEVEL);
+    const coarseMerge = options.coarseMerge ?? COARSE_MERGE;
+    const coarseMargin = options.coarseMargin ?? COARSE_MARGIN;
+    const fineLists = options.fineLists ?? true;
     const n = index.segments.count;
     const fineSrc = index.segments.data;
 
@@ -80,7 +95,7 @@ export class RiverTables {
       let e = s;
       let width = Math.max(fineSrc[s * 8 + 6]!, fineSrc[s * 8 + 7]!);
       const sign = Math.sign(fineSrc[s * 8 + 6]!) || 1;
-      while (e + 1 < n && e + 1 - s < COARSE_MERGE) {
+      while (e + 1 < n && e + 1 - s < coarseMerge) {
         const o = e * 8;
         const q = (e + 1) * 8;
         const gap = Math.hypot(
@@ -144,7 +159,7 @@ export class RiverTables {
       }
     };
     const keys = new Set<string>();
-    for (let s = 0; s < n; s++) {
+    for (let s = 0; fineLists && s < n; s++) {
       const w = Math.max(Math.abs(src[s * 8 + 6]!), Math.abs(src[s * 8 + 7]!));
       keys.clear();
       keysAround(FINE_LEVEL, w / 2 + FINE_MARGIN, s, keys);
@@ -158,7 +173,7 @@ export class RiverTables {
       const w = src[s * 8 + 6]!;
       if (w >= coarseMinWidth) {
         keys.clear();
-        keysAround(COARSE_LEVEL, w / 2 + COARSE_MARGIN, s, keys);
+        keysAround(coarseLevel, w / 2 + coarseMargin, s, keys);
         for (const key of keys) {
           let c = coarse.get(key);
           if (!c) coarse.set(key, (c = { ids: [], widths: [] }));
@@ -188,11 +203,10 @@ export class RiverTables {
       const s = t.level - FINE_LEVEL;
       return this.fine.get(tileKeyString(tileKey(t.face, FINE_LEVEL, t.x >> s, t.y >> s))) ?? NONE;
     }
-    if (t.level >= COARSE_LEVEL) {
-      const s = t.level - COARSE_LEVEL;
-      return (
-        this.coarse.get(tileKeyString(tileKey(t.face, COARSE_LEVEL, t.x >> s, t.y >> s))) ?? NONE
-      );
+    const L = this.coarseLevel;
+    if (t.level >= L) {
+      const s = t.level - L;
+      return this.coarse.get(tileKeyString(tileKey(t.face, L, t.x >> s, t.y >> s))) ?? NONE;
     }
     return NONE;
   }

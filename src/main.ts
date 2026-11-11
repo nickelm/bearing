@@ -334,6 +334,7 @@ async function main(): Promise<void> {
         biome: global.finish.biome,
         biomeResolution: global.n,
         height: global.height,
+        rivers: riverIndex,
       });
       if (old || oldSynth) {
         setTimeout(() => {

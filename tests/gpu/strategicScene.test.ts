@@ -108,6 +108,7 @@ describe.skipIf(!gpu)('StrategicScene on Dawn', () => {
       biome: g.finish.biome,
       biomeResolution: g.n,
       height: g.height,
+      rivers: new RiverIndex(g.finish.rivers),
     });
     scene.relief.buildBudgetMs = 10_000;
     const main = new Vec3d(...world.info.mainContinent);

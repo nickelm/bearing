@@ -13,7 +13,7 @@ import {
   urbanRadius,
 } from '../src/render/sim/infra/infraScene';
 import { LIGHT_LEVEL, LightTables } from '../src/render/sim/infra/roadShading';
-import { RiverTables } from '../src/render/sim/water/riverTables';
+import { RiverTables } from '../src/render/common/water/riverTables';
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
 import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
 

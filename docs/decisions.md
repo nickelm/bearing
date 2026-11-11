@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–83 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–84 are reflected in both.
 
 ---
 
@@ -1367,3 +1367,15 @@ The owner's amendment and the engineering calls made while adopting it:
 - **Lakes** get the outline (decision 82) but no halo or lines.
 
 **Reason:** The halo and lines are what make a coast read as printed, but they need distances in screen pixels out to tens of kilometers at globe scale, beyond the reach of the per-vertex estimate. A distance field computed once per world gives that range, and the per-vertex estimate keeps the lines exact where they are close enough to the coast to show any error.
+
+### 84. Map rivers: two segment tables by band, lines by discharge, wide rivers as water
+
+**Date:** 2026-11-11
+**Decision:** The strategic map draws rivers from the world's river segments (decision 46), with `render/strategic/mapRivers.ts`:
+
+- **Tables.** `riverTables.ts` and `riverShading.ts` move to `render/common/water/`, and the table builder gains options for the coarse level, chord length, reach and whether to build fine lists. The map builds two tables on its first frame, alongside the coast field. Major rivers (at least 60 m wide, discharge above about 225 m³/s) go in chords of 64 segments (about 25 km) listed on level-1 tiles, for meshes of levels 1 to 3. Regional rivers (at least 15 m wide) go in chords of 8 segments (about 3 km) on level-4 tiles, for levels 4 to 6. Neither builds fine lists, so the build touches only chords. The material is rebuilt with the new buffers before any mesh of the world exists.
+- **Lines.** Narrow rivers are `#5D8FB0` lines 1 px wide at 25 m, a pixel wider per fourfold width (two doublings of discharge, since width is 4·√Q), at most 3.5 px. The minimum keeps minor rivers continuous at a pixel, as the guide asks.
+- **Wide rivers.** Once a river's true width passes about 4 px (fading in from 3 px), it is drawn at true width in the shelf-water color, with the 1.2 px dark outline at its banks, like lakes (decision 82).
+- **Bands.** Rivers fade in with the Theater and Region bands (the same visibility as the field grid, now called `belowGlobe`); the Globe band shows none. The loop runs only on dry land, and only for the one table that matches the mesh's level.
+
+**Reason:** Part II lists major rivers in the Theater band and minor rivers in the Region band. Two tables matched to the tile levels drawn in those bands keep each fragment's loop short: long chords for the few major rivers at continental scale, and finer chords for the many minor ones up close. Exact distances to the polylines keep lines crisp at any zoom, as for the coastline.
