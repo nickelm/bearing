@@ -30,6 +30,7 @@ import { STRATEGIC_EXAGGERATION, StrategicRelief } from './strategicRelief';
 import type { StrategicReliefWorld } from './strategicRelief';
 import { StrategicOverlay } from './strategicOverlay';
 import { mapLightList, MapLights } from './mapLights';
+import type { WeatherField } from '../common/weatherField';
 import { ZOOM_BANDS, ZoomBands } from './zoomBands';
 
 /** Flat background behind the globe; Part II has no physical sky. */
@@ -40,6 +41,8 @@ export interface StrategicSceneOptions {
   grid: CubeGrid;
   /** Attach mouse and keyboard input to the canvas (default true; off for headless renders). */
   input?: boolean;
+  /** The live cloud field for the map's weather (decision 89); none when absent. */
+  weather?: WeatherField;
 }
 
 export class StrategicScene {
@@ -48,7 +51,8 @@ export class StrategicScene {
   /** Focus, altitude, heading; tilt follows the altitude (decision 75). */
   readonly orbit: StrategicCamera;
   /** Tiled relief mesh at 4× (decision 77); drawn once a terrain world is set. */
-  readonly relief = new StrategicRelief();
+  readonly relief: StrategicRelief;
+  private readonly weather: WeatherField | null;
   /** Fallback base map before the global pass: the cell-grid globe. */
   readonly globe: GlobeMesh;
   /** Draw the relief tiles when a terrain world exists (otherwise the cell-grid globe). */
@@ -85,6 +89,8 @@ export class StrategicScene {
     options: StrategicSceneOptions,
   ) {
     this.camera = new PerspectiveCamera(45, 1, 1, 2);
+    this.weather = options.weather ?? null;
+    this.relief = new StrategicRelief(this.weather);
     this.orbit = new StrategicCamera(options.radius);
     this.bands = new ZoomBands(this.orbit.altitude);
     for (const b of ZOOM_BANDS) this.bandFade[b].value = this.bands.fade(b);
@@ -253,6 +259,8 @@ export class StrategicScene {
       });
     }
     this.overlay.update(o.eye, this.globe.maxDisplayedHeight + 2000);
+    // Weather moves with game time: re-bake the cloud field while the map is on screen.
+    this.weather?.bake(this.renderer, performance.now());
     this.renderer.render(this.scene, this.camera);
   }
 

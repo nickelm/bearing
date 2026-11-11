@@ -179,6 +179,8 @@ async function main(): Promise<void> {
     radius: DEFAULT_PLANET_PARAMS.radius,
     grid,
     input: false,
+    // The map's clouds come from the simulation view's cloud field (decision 89).
+    weather: globe.clouds,
   });
   strategicView.setFaceSeed(worldParams.seed);
   strategicView.bands.onChange((band, previous) =>
@@ -591,6 +593,7 @@ async function main(): Promise<void> {
     night: 1,
     twilight: 1,
     seasons: true,
+    weather: true,
   };
   gui.addMapControls(mapParams, (m) => {
     // The relief applies exaggeration in its shader; the fallback grid globe rebuilds.
@@ -605,6 +608,7 @@ async function main(): Promise<void> {
     relief.nightStrength.value = m.night;
     relief.twilightStrength.value = m.twilight;
     relief.seasons.value = m.seasons ? 1 : 0;
+    relief.weatherOn.value = m.weather ? 1 : 0;
   });
   const lighting = globe.lighting;
   const lightParams: LightingGuiParams = {

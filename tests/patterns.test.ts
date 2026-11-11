@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   crackCoverage,
+  rainCoverage,
   duneCoverage,
   hatchCoverage,
   reedCoverage,
@@ -98,6 +99,11 @@ describe('biome and rock patterns', () => {
   it('draws one-pixel lines: hatching, dune ripples and ice cracks', () => {
     // A one-pixel line every period covers 1/64 of the plane.
     expect(mean(hatchCoverage)).toBeCloseTo(1 / 64, 2);
+    // Precipitation hatching runs the other diagonal, as densely.
+    expect(mean(rainCoverage)).toBeCloseTo(1 / 64, 2);
+    expect(rainCoverage(0, 0, 64, 1)).toBe(1);
+    expect(hatchCoverage(10, -10, 64, 1)).toBe(1);
+    expect(rainCoverage(10, -10, 64, 1)).toBe(0);
     const dunes = mean(duneCoverage);
     expect(dunes).toBeGreaterThan(1 / 64);
     expect(dunes).toBeLessThan(1.5 / 64);

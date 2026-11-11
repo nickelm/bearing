@@ -80,6 +80,8 @@ export interface MapGuiParams {
   twilight: number;
   /** Seasonal snow, sea ice and lake ice. */
   seasons: boolean;
+  /** Clouds and precipitation hatching from the live weather (decision 89). */
+  weather: boolean;
 }
 
 export interface LightingGuiParams {
@@ -340,6 +342,9 @@ export class DebugGui {
       .onChange(() => changed(map));
     f.add(map, 'seasons')
       .name('Seasons (snow, ice)')
+      .onChange(() => changed(map));
+    f.add(map, 'weather')
+      .name('Weather (clouds, rain)')
       .onChange(() => changed(map));
     f.close();
   }

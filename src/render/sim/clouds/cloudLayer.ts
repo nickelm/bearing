@@ -35,6 +35,7 @@ import {
   BufferGeometry,
 } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
+import type { WeatherField } from '../../common/weatherField';
 import {
   abs,
   asin,
@@ -83,7 +84,7 @@ const EVOLVE = 3 * 86_400;
 /** Below this camera altitude (m) the shell evaluates the cloud field per fragment. */
 const DETAIL_ALTITUDE = 40_000;
 
-export class CloudLayer {
+export class CloudLayer implements WeatherField {
   readonly group = new Group();
   /** 1 draws clouds and their shadows. */
   readonly enabled = uniform(1);
@@ -177,6 +178,11 @@ export class CloudLayer {
     const underneath = smoothstep(CLOUD_ALTITUDE + 200, CLOUD_ALTITUDE - 200, height);
     const cover = this.baked.sample(crossing).x;
     return float(1).sub(cover.mul(this.shadowStrength).mul(underneath)) as F;
+  }
+
+  /** Baked (coverage, precipitation) at a direction: the strategic map's clouds (decision 89). */
+  sampleCoverage(direction: V3): Node<'vec2'> {
+    return this.baked.sample(direction);
   }
 
   /**

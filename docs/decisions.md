@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–88 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–89 are reflected in both.
 
 ---
 
@@ -1428,3 +1428,16 @@ The owner's amendment and the engineering calls made while adopting it:
 - **Visibility.** Lights fade in across civil twilight on the night side (decision 87) and follow the GUI's Night strength. They draw without a depth test, so terrain never hides them, and a horizon test removes those on the far side of the globe.
 
 **Reason:** Lights show where people and bases are at night, the moment the map is otherwise darkest. Pixel-sized points with a halo read at every zoom, and drawing them as one instanced mesh costs a single draw call.
+
+### 89. Weather on the map from the simulation view's baked cloud field
+
+**Date:** 2026-11-11
+**Decision:** The strategic map draws stylized weather from the live cloud field:
+
+- **Source.** The simulation view's cloud layer already bakes coverage and precipitation from the weather model and its cloud detail into a cube-face atlas of about 2 km texels, moving with game time (decisions 68, 69). The map samples the same bake through a small `WeatherField` interface in `render/common/weatherField.ts`, which the cloud layer implements and the app passes to `StrategicScene`, so `strategic/` imports nothing from `sim/`. While the map is the active view it calls the bake each frame; the bake itself skips work until the clouds have moved.
+- **Clouds.** White, with opacity rising from 0 at coverage 0.3 to 35% by 0.75 and 60% by 0.95: soft shapes thick enough to show a front, never opaque.
+- **Precipitation.** Part II's hatching `#7C8FA6`: one-pixel anti-diagonal lines about 8 px apart (the pattern framework's nested lines, decision 80), at 70% of the precipitation fraction under cloud, drawn under the cloud tint so it shows through.
+- **Order.** Weather goes over the finished surface (patterns, water, outlines) and under day and night, so clouds darken with the night tint.
+- **Toggle.** GUI → Map → Weather (clouds, rain), on by default.
+
+**Reason:** One weather field for both views keeps them consistent: a front seen on the map is the cloud the player flies into. Reusing the bake costs the map one texture fetch per fragment.

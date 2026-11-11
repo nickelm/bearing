@@ -103,7 +103,8 @@ The strategic view from [docs/visual-style.md](docs/visual-style.md) Part II: gl
   - [x] Terminator, twilight band, night tint; seasonal snow, sea ice and lake ice (decision 87)
   - [x] Settlement, base and industry lights on the night side, sized by population, with a soft halo (decision 88)
   - [ ] Browser check: night legibility and twilight warmth (GUI → Map → Night, Twilight), snow line and sea ice through the year (Time → day)
-- [ ] Weather on the map: stylized soft cloud shapes and precipitation hatching from the live weather field (`weatherTexture`, `coverageBake`), at every band, moving with game time, on by default with a toggle
+- [x] Weather on the map: stylized soft cloud shapes and precipitation hatching from the live weather field (`weatherTexture`, `coverageBake`), at every band, moving with game time, on by default with a toggle (decision 89)
+  - [ ] Browser check: cloud opacity and softness at each band, hatching density, and fronts readable at globe scale; the bake's 2 km texels may look soft at the floor
 - [ ] Graticule toggle and range rings around a selected point
 - [ ] Post-processing: light vignette and paper grain; a soft halo on night lights only; a thin pale rim around the globe instead of the limb glow
 - [ ] Strategic preview views (globe band with the terminator, theater band, region band at the floor) in `tools/render.preview.ts`, plus a color-vision-deficiency filter (Part II check 4) and a 1920 × 1080 sharpness view at the floor (check 5); move the old `orbit`, `limb` and `terminator` views here

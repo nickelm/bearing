@@ -68,6 +68,8 @@ export const DUNE_SPACING_PX = 12;
 export const TUSSOCK_SPACING_PX = 10;
 export const CRACK_SPACING_PX = 40;
 export const REED_SPACING_PX = 14;
+/** Precipitation hatching under rain and snow clouds (decision 89). */
+export const RAIN_SPACING_PX = 8;
 /** Tussock dot radius and the share of cells that get one. */
 export const TUSSOCK_RADIUS = 0.2;
 export const TUSSOCK_SHARE = 0.55;
@@ -372,4 +374,16 @@ export function reedNode(p: V2, footprint: F): F {
     const dy = abs(q.y.sub(c.y));
     return edgeNode(length(vec2(dx, dy)).sub(f.mul(0.5)) as F, f).mul(keep) as F;
   });
+}
+
+/** Precipitation hatching: anti-diagonal lines, one pixel wide (decision 89). */
+export function rainCoverage(x: number, y: number, period: number, footprint: number): number {
+  return edge(lineDist((x - y) * Math.SQRT1_2, period) - footprint / 2, footprint);
+}
+
+/** `rainCoverage` in TSL. */
+export function rainNode(p: V2, footprint: F): F {
+  return nestedLines(p, footprint, RAIN_SPACING_PX, (q, period, f) =>
+    edgeNode(lineDistNode(q.x.sub(q.y).mul(Math.SQRT1_2) as F, period).sub(f.mul(0.5)) as F, f),
+  );
 }

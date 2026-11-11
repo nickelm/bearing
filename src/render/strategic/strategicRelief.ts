@@ -55,6 +55,7 @@ import {
   select,
   smoothstep,
   uniform,
+  vec2,
   vec3,
 } from 'three/tsl';
 import { Noise3 } from '../../core/noise';
@@ -67,6 +68,7 @@ import type { TileData, TileSynthesizer } from '../../worldgen/gpu/tileSynth';
 import { MAX_BAKED_LEVEL } from '../../worldgen/gpu/tileSynth';
 import { placeCameraRelative } from '../common/cameraRelative';
 import { HabitabilityTexture } from '../common/habitabilityTexture';
+import type { WeatherField } from '../common/weatherField';
 import { BiomeFillTexture, hexToLinear, STEEP_ROCK_FILL } from './biomeFill';
 import { COAST_DISTANCE_MAX, CoastDistanceTexture } from './coastDistance';
 import { daylightNode, lakeIceNode, SEA_ICE, seaIceNode, SNOW, snowNode } from './mapDaylight';
@@ -95,6 +97,7 @@ import {
   gridNode,
   hatchNode,
   planeCoordsNode,
+  rainNode,
   reedNode,
   stippleNode,
   tussockNode,
@@ -139,6 +142,8 @@ const TUSSOCK_MARK = hexToLinear(0x99957c);
 const CRACK_MARK = hexToLinear(0xc9d3d8);
 const REED_MARK = hexToLinear(0x6f8366);
 const HATCH_MARK = hexToLinear(0x7e766d);
+/** Part II precipitation hatching color (decision 89). */
+const RAIN_MARK = 0x7c8fa6;
 
 export interface StrategicReliefWorld {
   synth: TileSynthesizer;
@@ -220,6 +225,8 @@ export class StrategicRelief {
   /** Night and twilight strength 0..1 (GUI); 0 shows the whole globe in daylight. */
   readonly nightStrength = uniform(1);
   readonly twilightStrength = uniform(1);
+  /** 1 draws the weather's clouds and precipitation hatching (decision 89); 0 hides them. */
+  readonly weatherOn = uniform(1);
   /** 1 draws seasonal snow, sea ice and lake ice; 0 hides them. */
   readonly seasons = uniform(1);
   /** Climate by direction for the seasons; set from the tectonic world by the scene. */
@@ -241,7 +248,11 @@ export class StrategicRelief {
   private readonly loader: TileLoader<TileData>;
   private visible = new Set<Mesh>();
 
-  constructor() {
+  /**
+   * `weather` is the live cloud field (the simulation view's cloud layer, decision 89);
+   * without it the map draws no clouds.
+   */
+  constructor(private readonly weather: WeatherField | null = null) {
     this.material = this.buildMaterial();
     this.loader = new TileLoader<TileData>(
       this.data,
@@ -432,8 +443,20 @@ export class StrategicRelief {
       const surfaceColor = mix(withRivers, waterColor, wet);
       const outlined = mix(surfaceColor, water.outlineColor, water.outline.mul(this.biomeMode));
       // Day and night: the night tint and the warm twilight band (decision 87).
+      // Weather (decision 89): faint precipitation hatching under soft, translucent
+      // clouds from the live cloud field, 35% to 60% opaque.
+      const field = this.weather ? this.weather.sampleCoverage(radial) : vec2(0, 0);
+      const weatherOn = this.weatherOn.mul(this.biomeMode);
+      const cover = field.x;
+      const rain = masked(field.y.mul(smoothstep(0.3, 0.6, cover)).mul(weatherOn), () =>
+        rainNode(plane, footprint),
+      ).mul(0.7);
+      const cloud = smoothstep(0.3, 0.75, cover)
+        .mul(mix(float(0.35), float(0.6), smoothstep(0.6, 0.95, cover)))
+        .mul(weatherOn);
+      const weathered = mix(mix(outlined, rgb(hexToLinear(RAIN_MARK)), rain), vec3(1, 1, 1), cloud);
       return daylightNode(
-        outlined,
+        weathered,
         dot(radial, this.sunDirection),
         this.nightStrength.mul(this.biomeMode),
         this.twilightStrength.mul(this.biomeMode),
