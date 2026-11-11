@@ -1,6 +1,8 @@
 # CLAUDE.md
 
-Guidance for Claude Code sessions in this repository. `docs/design.md` is the source of truth for scope and architecture. Read it before starting milestone work. `docs/decisions.md` records later decisions; where the two conflict, the later decision wins (e.g. no 30 s generation budget, tiled world data, relief scaled to the planet, default ocean fraction 0.70, day/night and weather in scope). `docs/visual-style.md` is the source of truth for how the game looks: rendering, models and UI (rule 11).
+Guidance for Claude Code sessions in this repository. `docs/design.md` is the source of truth for scope and architecture. Read it before starting milestone work. `docs/decisions.md` records the decisions behind it, with dates and reasons. `docs/visual-style.md` is the source of truth for how the game looks: rendering, models and UI (rule 11).
+
+**Keep the documents in step with the decisions.** A decision that changes anything `docs/design.md` or `docs/visual-style.md` states must update that document in the same commit. Edit the statement in place rather than leaving the old text for readers to reconcile. If you find a document contradicting a decision anyway, the later decision wins: fix the document.
 
 ## Commands
 
@@ -103,7 +105,7 @@ Promotion expands a unit deterministically from its seed and current strength. D
 ## Working rules
 
 - Work on one milestone task at a time. Keep `TODO.md` current: check off finished tasks and add subtasks you discover.
-- Record any architectural decision, or any deviation from `docs/design.md`, in `docs/decisions.md` with the date, the decision and the reason.
+- Record any architectural decision, or any deviation from `docs/design.md`, in `docs/decisions.md` with the date, the decision and the reason. In the same commit, update whatever `docs/design.md` or `docs/visual-style.md` says on the subject.
 - Run `npm test` and `npm run typecheck` (or `npm run check`) before declaring a task complete.
 - **Visual milestones close only after the acceptance checks** in `docs/visual-style.md`. A visual milestone is any milestone with rendering, model or UI tasks.
   - Capture the seven acceptance views (checks 1–6 as `tools/render.preview.ts` views; check 7, the silhouette test, in the model viewer once aircraft models exist).

@@ -2,6 +2,8 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–71 are reflected in both.
+
 ---
 
 ### 1. Three.js with the WebGPU renderer, not Godot or Unity

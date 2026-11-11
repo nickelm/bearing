@@ -1,6 +1,6 @@
 # Bearing: Design Doc
 
-*Revision 5, 2026-11-10.*
+*Revision 6, 2026-11-11. Brings in decisions 1–71 from `docs/decisions.md`; a decision that changes anything stated here updates this document in the same commit.*
 
 ## Vision
 
@@ -22,25 +22,28 @@ The player flies. The war runs itself. At any moment the player can search the o
 - **Planet:** Earth-like, about 1,000 km radius, generated from a seed with no steering toward a particular geography.
 - **Campaign:** Detected from the generated world as a set of theaters; one world can contain several.
 - **Casting:** Automatic and deterministic. Players get the war their seed produces and do not confirm or edit it.
-- **Sides:** Alliance and Pact are both playable. The player picks a side at campaign start.
+- **Sides:** Alliance and Pact are both playable. The player picks a side at campaign start and keeps it for the campaign. The side is a view: the simulation never reads it.
 - **Player role:** Pilot, not commander. The player does not command ground or naval forces.
 - **Core loop:** Search ongoing missions, jump in, fly, hand back. No takeoff or landing by default.
 - **Ranges:** Aircraft ranges compressed by a factor that the casting step adapts to each world; speeds stay real.
 - **Time:** Variable time acceleration from the first demo.
+- **Day, night, seasons, and weather:** In demo scope. They shape air operations: night sorties, weather cancellations, seasonal snow.
+- **Generation time:** No time budget. Generation may take minutes, and finished worlds are cached.
 - **Hosting:** Static site on GitHub Pages. No server, no SharedArrayBuffer.
 
 ## Demo Goals
 
-1. Generate a planet from a seed in under 30 seconds on a mid-range laptop.
+1. Generate a planet from a seed on a mid-range laptop, with per-stage progress, and cache it so each seed is generated once.
 2. Produce terrain with geological structure: continents, oceans, mountain ranges, canyons, plains, rivers, and distinct biomes.
 3. Render the planet continuously from orbit to 500 m altitude without visible seams or distracting popping.
 4. Build a strategic graph, detect theaters, and cast a campaign for any seed that passes the validity check.
-5. Place settlements, roads, ports, and airbases according to the cast.
+5. Place settlements and roads as world facts, then ports, airbases, and targets according to the cast.
 6. Generate air tasking for both sides and fly 20 to 50 aircraft on typed missions.
 7. List ongoing missions in a searchable panel and follow any of them with a chase camera.
 8. Show ground formations along any continental front and convoys along any sea lane.
 9. Run at 1× to at least 64× time acceleration without the simulation diverging.
-10. Run in a desktop browser.
+10. Show day and night, seasons, and live weather, and let weather and daylight constrain flight operations.
+11. Run in a desktop browser.
 
 **Non-goals for the demo:** cockpit flight, combat between individual entities, the campaign economy, naval combat, sound, and multiplayer.
 
@@ -50,19 +53,21 @@ We keep a radius of about **1,000 km**, which gives a maximum surface distance o
 
 Since geography now varies, a fixed range factor no longer fits every world. The casting step chooses a **range factor** between 0.35 and 1.0 per campaign, so that the theaters it detected remain playable. Two targets set it: a medium strike aircraft operating from rear bases must reach the full depth of the enemy side of a front, and a long-range bomber must reach across the widest contested sea lane. The factor scales fuel capacity and burn rate only. Speeds, climb rates, and weapon ranges stay real.
 
-At 4096 × 4096 texels per cube face, the global bake gives about 380 m per texel. We run a second, higher-resolution bake (about 50 m per texel) over regions the casting step marks as ground-combat areas.
+Relief is scaled to the planet: elevations and depths are Earth-like reference values times R / R_Earth ≈ 0.157, so the highest peaks reach about 1.4 km and the mean ocean depth is about 600 m. Climate (lapse rate, snow, tree line) uses the unscaled reference elevation. The atmosphere, aircraft performance, and service ceilings stay real.
+
+World data is tiled. Processes that need the whole planet (erosion, drainage, climate, rivers, the front) run on a global grid of 1024 × 1024 cells per face, about 1.5 km per cell. Below that, tiles of 256 × 256 samples, addressed by (face, level, x, y), are synthesized on demand on the GPU as a pure function of direction, down to level 7 at about 48 m. Level-7 tiles over the ground-combat regions the casting step marks serve as the high-resolution regional bake.
 
 ## Technology
 
-**TypeScript + Three.js with the WebGPU renderer and TSL shaders**, built with Vite and hosted as a static site on GitHub Pages. Compute shaders handle erosion, terrain baking, and line-of-sight queries. Long-running CPU tasks run in Web Workers. Workers exchange state with `postMessage` and transferable buffers, since GitHub Pages cannot set the headers that SharedArrayBuffer requires. A Gamepad API binding later gives us flight stick support.
+**TypeScript + Three.js with the WebGPU renderer and TSL shaders**, built with Vite and hosted as a static site on GitHub Pages. Compute shaders handle erosion, tile synthesis, and line-of-sight queries; world-generation kernels are plain WGSL on the render device, tested in Node on Dawn. Long-running CPU tasks run in Web Workers. Workers exchange state with `postMessage` and transferable buffers, since GitHub Pages cannot set the headers that SharedArrayBuffer requires. A Gamepad API binding later gives us flight stick support.
 
 ## Architecture
 
 The architecture separates **simulation** from **presentation**.
 
-- **Simulation layer.** A headless model of the world, running in a worker. It contains two parts: a **command layer** per side that plans missions, and an **execution layer** that moves and resolves everything (flights, formations, convoys, bases).
+- **Simulation layer.** A headless model of the world, running in a worker that owns the game clock. It contains two parts: a **command layer** per side that plans missions against that side's intelligence picture, and an **execution layer** that moves and resolves everything (flights, formations, convoys, bases, weather).
 - **Presentation layer.** Cameras, renderers, and UI that read simulation state. The orbit view, the mission search panel, and the future cockpit view are three views onto the same world.
-- **World data.** Baked planet maps (height, biome, moisture, temperature, flow), vector data (rivers, roads, settlements, fronts), and the strategic graph, shared by both layers.
+- **World data.** The global grid's maps (height, biome, moisture, temperature, flow, forest density), tiles synthesized from them on demand, vector data (rivers, roads, settlements, fronts), and the strategic graph. Campaign logic reads only the strategic graph; the execution layer may also query terrain.
 
 Every unit exists at one of three fidelity levels:
 
@@ -79,9 +84,13 @@ The renderer uses **camera-relative rendering**: positions are float64 on the CP
 The simulation combines two clocks:
 
 - **Discrete events** for anything with a predictable outcome. Flight and convoy positions follow analytically from their routes and departure times. Takeoffs, arrivals, mission phase changes, and engagement starts are scheduled events.
-- **Fixed ticks** for processes that need iteration: aggregate ground combat (one tick per game minute), front movement, the command layer's replanning (every few game hours), and later the economy. Entity simulation inside the promotion bubble ticks at 10 to 30 Hz of game time.
+- **Fixed ticks** for processes that need iteration: aggregate ground combat (one tick per game minute), front movement, weather (one tick per game hour), the command layer's replanning (every few game hours), and later the economy. Entity simulation inside the promotion bubble ticks at 10 to 30 Hz of game time.
 
-Under acceleration, the simulation processes more events and ticks per real second, so the aggregate outcome stays the same at 1× and 64×. Above about 16×, the promotion bubble collapses. Above about 256×, the view falls back to icons.
+Events and ticks share one priority queue ordered by game time, so their interleaving is exact. Under acceleration, the simulation processes more events and ticks per real second, so the state at a given game time is the same at 1×, 64×, and after a jump. Rates run from pause through 1×, 4×, 16× and 64× to 256×. Above about 16×, the promotion bubble collapses. At 256×, the view falls back to icons.
+
+**Calendar and sun.** A 24-hour solar day, a 23.44° axial tilt, and a 365-day year. The sun direction is an analytic function of game time. The campaign opens in late summer in the main landmass's hemisphere and runs toward winter.
+
+**Weather.** A synoptic model of lows and highs on a coarse cube grid (about 65 km), driven by the climate maps and the season, gives cloud cover and ceiling, visibility, precipitation, temperature, and winds aloft. Flight operations and the clouds on screen read the same fields.
 
 - **Auto-slowdown:** the simulation drops to 1× on events the player has subscribed to (see *Mission Search and Jump-In*).
 - **Cockpit cap:** while the player flies, acceleration is limited to cruise phases (up to 8×) and cancels on any threat.
@@ -93,10 +102,12 @@ Under acceleration, the simulation processes more events and ticks per real seco
 | Seed | random | Reproducible worlds |
 | Radius | 1,000 km | Strategic depth |
 | Plate count | 14 | Number and size of landmasses |
-| Ocean fraction | 0.55 | Sea level, set by height percentile |
+| Ocean fraction | 0.70 | Sea level, set by height percentile |
+| Relief scale | 0.157 (R / R_Earth) | Elevations and depths relative to Earth |
 | Erosion strength | 1.0 | Erosion iterations and sediment capacity |
 | Temperature offset | 0 °C | Ice age to hothouse |
 | Moisture scale | 1.0 | Arid to lush |
+| Axial tilt | 23.44° | Seasons |
 
 The planet parameters shape the kind of war indirectly. Few plates with a low ocean fraction tend toward a supercontinent and a land war; many plates with a high ocean fraction tend toward archipelagos and an island campaign. The parameters never select a scenario directly.
 
@@ -104,18 +115,18 @@ The planet parameters shape the kind of war indirectly. Few plates with a low oc
 
 Each stage feeds the next, so features have causes.
 
-1. **Cube-sphere grid.** Six cube faces projected onto the sphere.
-2. **Tectonic plates.** Seed points grow into plates by flood fill, with types and drift vectors drawn from `rng("plates")` and no steering. Convergent continental boundaries raise mountain ranges, convergent oceanic boundaries form trenches and island arcs, and divergent boundaries form rifts and mid-ocean ridges.
-3. **Detail noise.** Ridged multifractal noise amplified by uplift, plus domain warping on coastlines and ridges.
-4. **Hydraulic and thermal erosion.** A GPU compute pass carves drainage networks and canyons and lays down alluvial plains.
-5. **Climate and biomes.** Temperature from latitude and altitude; moisture from prevailing-wind bands with rain shadows; biomes from a Whittaker-style table in a stylized palette.
-6. **Rivers.** Flow accumulation from erosion, thresholded into a river network with widths.
-7. **Validity check.** The world must have enough flat land to host at least 15 airbases per side and must support at least one theater above its fit threshold. Worlds that fail derive a new sub-seed and regenerate. The retry sequence is seeded, so each seed still maps to exactly one world. In practice only extreme parameters (nearly all ocean) trigger it.
-8. **Strategic graph.** See *Reading the World*.
-9. **Theater detection and casting.** See *Theaters* and *Casting*.
-10. **Settlements, roads, ports, and airbases**, placed according to the cast.
+1. **Cube-sphere grid.** Six cube faces projected onto the sphere with an equi-angular warp.
+2. **Tectonic plates.** Seed points spread over the whole sphere grow into plates by flood fill, with types and drift vectors drawn from `rng("plates")` and no steering. Continental crust follows the continental plates, with coasts inside them. Convergent continental boundaries raise mountain ranges, convergent oceanic boundaries form trenches and island arcs, and divergent boundaries form rifts and mid-ocean ridges.
+3. **Detail noise.** Ridged multifractal noise amplified by uplift, plus domain warping on coastlines and ridges, on the global grid.
+4. **Hydraulic and thermal erosion.** A GPU stream-power pass on the global grid carves drainage networks and canyons and lays down alluvial plains; a talus-angle pass handles thermal erosion.
+5. **Climate and biomes.** Temperature from latitude and altitude with a seasonal range from the axial tilt; moisture from prevailing winds with rain shadows; biomes from a Whittaker-style table in a stylized palette; forest density and tree line.
+6. **Rivers.** Drainage recomputed exactly on the CPU after erosion (priority flood, D8), with flow accumulation thresholded into a river network with widths, and lakes.
+7. **Strategic graph.** See *Reading the World*. It includes the civilian geography: settlements, the road network, and bridges.
+8. **Theater detection and casting.** See *Theaters* and *Casting*.
+9. **Validity check.** The world must hold at least 15 airbase sites in each side's territory and at least one theater besides the strategic one. The per-side count needs the cast, so the check runs after casting. Worlds that fail derive a new sub-seed and regenerate, up to eight times. The retry sequence is seeded, so each seed still maps to exactly one world.
+10. **Infrastructure from the cast:** military and commercial ports, airbases, and strategic targets (factories, refineries, depots, rail yards).
 
-A coarse pass at 256 × 256 per face runs steps 1 to 9 in about a second. Only the full pass bakes the high-resolution maps. We cache baked maps, vector data, and the cast in IndexedDB.
+A coarse pass at 256 × 256 per face runs steps 1 to 10 on the CPU in the worker, without erosion, in about 4 to 6 seconds per world. Campaign facts come from this pass, so they are the same on every machine. The full pass (erosion and the eroded global maps) then runs on the GPU for the seed that passed. Tiles are synthesized on demand from the global maps (see *Scale and Range*). We cache each world, with its graph and cast, in IndexedDB; tiles are cheaper to regenerate than to load.
 
 ## Reading the World: The Strategic Graph
 
@@ -125,6 +136,7 @@ The strategic graph abstracts the generated world into the terms a commander use
 - **Sea lane edges.** Between pairs of landmass nodes, a least-cost route over a coarse ocean grid from port site to port site, with its length and the minimum width of water along it.
 - **Chokepoints.** Places where a sea lane passes through a narrow strait (under about 150 km) or within about 300 km of an island that could host an airfield. Each chokepoint records which sea lanes it controls.
 - **Barrier lines.** For each large landmass, the coast-to-coast lines of high barrier strength (rivers, ridges, forest) found by the front generator described below.
+- **Civilian geography.** Settlements with population (city, town, village) and habitability, the road network in classes, and bridges where roads cross wide rivers. Settlements and roads are world facts placed before casting, so casting and invasion corridors can use them.
 
 A debug overlay draws the graph on the globe. It is the most important tool for judging whether theater detection makes sense.
 
@@ -154,7 +166,7 @@ Casting turns the detected theaters into a campaign. It draws from `rng("casting
 2. **Assign territory.** The Pact receives mass and interior lines: the larger side of each front, the landmass farthest from the sea lanes, the larger island cluster. The Alliance receives the side adjacent to its rear base and its sea lanes. In island campaigns the Alliance holds a dispersed island network and the Pact assembles the armada.
 3. **Set posture.** By default the Pact attacks and the Alliance defends in every theater.
 4. **Set the range factor** as described in *Scale and Range*.
-5. **Place industry, ports, and bases** for each side, consistent with its territory and theaters.
+5. **Mark industry, port, base, and ground-combat regions** for each side, consistent with its territory and theaters. Industry regions sit on each side's largest urban clusters. Infrastructure placement (pipeline step 10) then puts the sites inside these regions.
 6. **Write the briefing.** A generated summary of the war the world produced: the theaters, the stakes in each, and the first expected moves.
 
 Casting runs before the player picks a side, and the cast does not depend on that choice. The same seed always produces the same war, and it unfolds identically until the player intervenes.
@@ -195,7 +207,21 @@ Each side's command layer produces an **air tasking order** (ATO) for each game 
 3. **Build packages.** Assign flights from squadrons within range, adding escort and SEAD to strikes when the target area is defended.
 4. **Schedule** missions so that the result matches the doctrine of the side: Pact strikes in large waves, Alliance missions spread more evenly.
 
-The planner never searches or learns. It must produce a plausible war, and its decisions must be legible to a player browsing missions.
+The planner never searches or learns. It must produce a plausible war, and its decisions must be legible to a player browsing missions: each mission records the need it serves and its score. Ties break by stable ids, and random draws come from per-side, per-day forks.
+
+- **Known targets only.** Each side plans against its intelligence picture (see *Intelligence*), not against ground truth.
+- **Weather and daylight.** Missions are cancelled below their weather minimums, winds aloft change ground speeds, and low-level strikes favor night and bad weather.
+- **Carriers.** A carrier group is a mobile base on an analytic sea route. Its air wing flies ATO missions, launching and recovering at the group's predicted position, with no deck operations.
+
+## Intelligence
+
+Each side keeps an intelligence picture of contacts (position, type, time last seen, confidence, source), and its confidence decays with age, fastest for moving units.
+
+- **Reconnaissance satellites** fly fixed circular orbits modeled on Cold War systems (film-return and digital imaging, radar and ELINT ocean reconnaissance, late radar imaging). Optical imaging needs daylight and clear sky. A contact carries its observation time but reaches the picture only after its delivery delay, from minutes for ocean reconnaissance to days for film return.
+- **Ground radar and AWACS** give the air picture within the radar horizon and terrain masking. The air picture also drives the Pact's ground-controlled interception.
+- **Reconnaissance missions** refresh contacts along their routes.
+
+Pass times are analytic and detection rolls come from per-side forks, so the picture is identical at any time acceleration. An overlay shows the viewing side's contacts and satellite tracks.
 
 ### Mission Types
 
@@ -237,23 +263,25 @@ The ground war exists wherever the cast contains a continental front, chokepoint
 - **Order of battle.** Divisions contain brigades or regiments, which contain battalions. Battalions are the aggregate unit: type (tank, mechanized infantry, motorized infantry, artillery, air defense, logistics), strength, supply, and posture.
 - **Aggregate combat.** Lanchester-style attrition each tick, modified by terrain, posture, supply, artillery, and air support. Interdiction cuts supply; CAS reduces strength directly.
 - **Entities.** Inside the promotion bubble, battalions expand into tank and IFV platoons, infantry squads with MANPADS teams, artillery, short-range air defense, and logistics columns on roads. Air defense entities matter most, since they decide whether an attack run survives.
-- **Line of sight.** Attack helicopters fight by terrain masking, so line-of-sight queries use the high-resolution heightmap and forest cover, batched on the GPU within the bubble.
+- **Line of sight.** Attack helicopters fight by terrain masking, so line-of-sight queries use the level-7 tiles (about 48 m) and forest density, batched on the GPU within the bubble.
 
 The demo shows battalions as unit symbols moving along the front under the aggregate model. Entity promotion comes later, but the data model supports it from the start.
 
 ## Naval Forces
 
-Convoys, carrier groups, and amphibious groups exist wherever the cast contains a sea lane, chokepoint, or island campaign. AI controls them. They are targets and protectees for air missions, and convoy arrivals deliver reinforcements and supplies to the receiving theater. The demo shows them as aggregate units on analytic sea routes. Naval combat comes later.
+Convoys, carrier groups, and amphibious groups exist wherever the cast contains a sea lane, chokepoint, or island campaign. AI controls them. They are targets and protectees for air missions, and convoy arrivals deliver reinforcements and supplies to the receiving theater. Casting assigns carrier groups to sides, and their air wings fly ATO missions (see *Air Tasking*). The demo shows naval groups as aggregate units on analytic sea routes. Naval combat comes later.
 
 ## Rendering
 
-- **Terrain LOD.** A quadtree per cube face, refined by screen-space error, with skirts to hide cracks. High-resolution regional bakes replace the global bake where available.
-- **Shading.** Biome color blended by slope, altitude, and moisture, with triplanar mapping on cliffs. Rivers and roads render from vector data.
-- **Forests.** Instanced low-poly tree clusters within about 5 km of the camera, from a density map the line-of-sight system also uses.
-- **Settlements.** Clusters of low-poly buildings scaled by population.
-- **Ocean.** Depth-based color, a wave normal map, and coastal foam.
-- **Atmosphere.** Single-scattering shader for the limb glow and aerial perspective.
-- **Clouds (stretch).** A 2D cloud shell driven by the moisture map.
+How things look is specified in `docs/visual-style.md`.
+
+- **Terrain LOD.** A quadtree per cube face on the tile keys, refined by screen-space error, with skirts to hide cracks and geomorphing between levels. Height exaggeration is a shader uniform.
+- **Shading.** Biome color varied by moisture, with rock on steep slopes, a seasonal snow line, and seasonal tint. Rivers and roads render from vector data in the terrain shader. From altitude, forests read as dark canopy masses and towns as built-up patches.
+- **Forests.** Instanced low-poly trees near the camera, from the forest density map the line-of-sight system also uses.
+- **Settlements.** Low-poly buildings scaled by population near the camera; night lights by settlement, base, and a rural glow from habitability.
+- **Ocean.** Depth-based color, periodic waves with sun glint, and coastal foam, shaded inside the terrain material.
+- **Atmosphere.** Single-scattering shader for the limb glow and aerial perspective, with lighting from the sun ephemeris.
+- **Clouds.** A cloud shell whose coverage comes from the live weather, with cloud shadows on the ground.
 - **Strategic overlays.** Theater boundaries, fronts, sea lanes, chokepoints, and mission routes, drawn from orbit.
 
 ## Milestones
@@ -273,7 +301,6 @@ Convoys, carrier groups, and amphibious groups exist wherever the cast contains 
 ## Open Questions
 
 - **Aggressor.** Should the Pact always attack, or should casting occasionally reverse the roles when the geography favors an Alliance offensive?
-- **Side switching.** Is the side fixed for a campaign, or can the player switch at any time?
 - **Thresholds.** What are the right fit thresholds for each theater? The seed browser in milestone 4 will tell us how often each theater appears.
 - **Range factor.** Does the per-world range factor feel right? We should fly representative sorties once milestone 7 works.
 
