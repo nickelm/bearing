@@ -6,8 +6,8 @@
  *
  * The base map is the relief mesh (strategicRelief.ts, decision 77) once the world's
  * global pass exists; before that, the cell-grid globe (common/globeMesh.ts) at the
- * same 4× relief stands in. Until the hillshade task, both are lit by a placeholder
- * light fixed at the screen's upper left.
+ * same 4× relief stands in. The relief has the cartographic hillshade (decision 78); the
+ * fallback globe has a scene light fixed at the screen's upper left.
  * There is no physical sky, aerial perspective or atmosphere here (Part II), only a
  * flat background. Everything is placed camera-relative (common/cameraRelative.ts).
  */
@@ -180,7 +180,9 @@ export class StrategicScene {
       .addScaled(o.forward, -0.8)
       .normalize();
     this.reliefLight.position.set(this.lightDir.x, this.lightDir.y, this.lightDir.z);
-    this.relief.lightDirection.value.set(this.lightDir.x, this.lightDir.y, this.lightDir.z);
+    // The hillshade light comes from the screen's upper left at every point (decision 78).
+    this.relief.screenRight.value.set(right.x, right.y, right.z);
+    this.relief.screenUp.value.set(o.up.x, o.up.y, o.up.z);
 
     const tiles = this.useTiles && this.relief.hasWorld;
     this.globe.group.visible = !tiles;

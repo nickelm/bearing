@@ -78,9 +78,11 @@ The strategic view from [docs/visual-style.md](docs/visual-style.md) Part II: gl
   - [ ] Owner check on a tablet: pinch, twist and pan feel at the floor, where zoom about the fingers is approximate under tilt
 - [x] Zoom bands (globe above 1,500 km, theater 400–1,500 km, region below 400 km): band from altitude with hysteresis, per-band fade factors as uniforms and a change event; tests (decision 76)
 - [x] Relief mesh: reuse `quadtree.ts` and `tileMesh.ts` with a level cap chosen for the floor and its own exaggeration uniform (default 4×); measure tile count and frame time at globe scale and at the floor (decision 77)
-  - [ ] Owner: frame time in the browser at the ceiling and at the floor (Status → Tiles shows the map's tile count); `SCENE=strategic VIEWS=orbit,floor` on a GPU for the preview's numbers
+  - [x] Owner: frame time in the browser at the ceiling and at the floor (2026-11-11: 70+ fps, 16.75 ms mean and 16.90 ms worst frame at the floor, 41 tiles at the floor with 50° tilt; no holes or gaps; level debug view works)
+  - [ ] `SCENE=strategic VIEWS=orbit,floor` on a GPU for the preview's numbers
   - [ ] Share tile data between the two views' caches, or extract the common tile-set logic of `TerrainRenderer` and `StrategicRelief` (duplicated selection, build and eviction loop)
-- [ ] Cartographic hillshade: a light fixed at the screen's upper left (view-space direction) on the 4× normals, plus soft ambient; decide between a bake and per-fragment shading and log it; no physical sky or aerial perspective in this scene
+- [x] Cartographic hillshade: a light fixed at the screen's upper left (view-space direction) on the 4× normals, plus soft ambient; decide between a bake and per-fragment shading and log it; no physical sky or aerial perspective in this scene (decision 78: per fragment)
+  - [ ] Owner: tune GUI → Map (strategic view) → Hillshade strength, Light elevation, Shadow floor and Relief exaggeration in the browser; fold the chosen values into the defaults
 - [ ] Strategic biome palette (Part II) and biome boundary blending over a few kilometers
 - [ ] Pattern framework: procedural shader patterns with screen-stable scaling per band; forest stipple and farmland grid first
 - [ ] Remaining patterns: desert dune ripples, tundra tussocks, steep-slope rock hatching, wetland reeds, ice-cap cracks

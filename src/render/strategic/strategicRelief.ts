@@ -14,9 +14,10 @@
  *   vertex shader as in the terrain renderer.
  * - **Its own caches.** TileData and meshes are cached apart from the simulation
  *   view's, with a smaller budget; only the active view loads tiles.
- * - **Placeholder shading.** Lambert from `lightDirection` (set by the scene to the
- *   screen's upper left) plus ambient, on the vertex color; the sea is one flat
- *   water color. The hillshade, biome palette and water tasks of S1 replace this.
+ * - **Shading.** The cartographic hillshade (hillshade.ts, decision 78) on the 4×
+ *   normals, per fragment: flat ground keeps the vertex color, slopes brighten or
+ *   darken by the screen's upper-left light. The sea is one flat water color until the
+ *   palette and water tasks of S1.
  *
  * Geomorphing works as in the terrain renderer, so splits do not pop.
  */
@@ -29,19 +30,7 @@ import {
   MeshBasicNodeMaterial,
   Vector3,
 } from 'three/webgpu';
-import {
-  attribute,
-  clamp,
-  dot,
-  Fn,
-  max,
-  mix,
-  normalize,
-  positionLocal,
-  step,
-  uniform,
-  vec3,
-} from 'three/tsl';
+import { attribute, Fn, max, mix, normalize, positionLocal, step, uniform, vec3 } from 'three/tsl';
 import { Noise3 } from '../../core/noise';
 import { rng } from '../../core/rng';
 import type { WorldSeed } from '../../core/rng';
@@ -51,6 +40,7 @@ import { Vec3d } from '../../core/vec3d';
 import type { TileData, TileSynthesizer } from '../../worldgen/gpu/tileSynth';
 import { MAX_BAKED_LEVEL } from '../../worldgen/gpu/tileSynth';
 import { placeCameraRelative } from '../common/cameraRelative';
+import { DEFAULT_HILLSHADE, hillshadeNode } from './hillshade';
 import { DEFAULT_LOD, selectTiles } from '../sim/terrain/quadtree';
 import type { LodOptions, LodView } from '../sim/terrain/quadtree';
 import { TileCache, TileLoader, TileRequestQueue } from '../sim/terrain/tileCache';
@@ -107,10 +97,15 @@ export class StrategicRelief {
   buildBudgetMs = 6;
   /** Relief exaggeration, applied in the vertex shader. */
   readonly exaggeration = uniform(STRATEGIC_EXAGGERATION);
-  /** Unit direction toward the relief light, world frame (set by the scene each frame). */
-  readonly lightDirection = uniform(new Vector3(0, 0, 1));
-  /** Ambient share of the placeholder shading. */
-  readonly ambient = uniform(0.45);
+  /** The camera's screen right, world frame (set by the scene each frame). */
+  readonly screenRight = uniform(new Vector3(1, 0, 0));
+  /** The camera's screen up, world frame (set by the scene each frame). */
+  readonly screenUp = uniform(new Vector3(0, 1, 0));
+  /** Hillshade settings (decision 78). */
+  readonly hillshadeElevation = uniform(DEFAULT_HILLSHADE.elevation);
+  readonly hillshadeStrength = uniform(DEFAULT_HILLSHADE.strength);
+  /** Darkest a slope facing away from the light gets, relative to flat ground. */
+  readonly ambient = uniform(DEFAULT_HILLSHADE.ambient);
 
   private world: StrategicReliefWorld | null = null;
   private mode: TileViewMode = 'biome';
@@ -162,13 +157,18 @@ export class StrategicRelief {
     material.positionNode = mix(parent, own, morph);
     // Meshes carry no rotation or scale: object space is world space.
     const normal = normalize(up.sub(attribute('slope', 'vec3').mul(ex)));
-    const light = this.lightDirection;
+    const radial = normalize(up);
     material.colorNode = Fn(() => {
       const land = attribute('color', 'vec3');
       // Water: at sea, and in lakes; flat, no relief light.
       const wet = max(step(rawHeight, 0), step(0, lakeDepth)).mul(this.waterEnabled);
-      const lambert = clamp(dot(normal, light), 0, 1);
-      const shade = this.ambient.add(lambert.mul(this.ambient.oneMinus()).mul(1.4));
+      const shade = hillshadeNode(normal, radial, {
+        right: this.screenRight,
+        up: this.screenUp,
+        elevation: this.hillshadeElevation,
+        strength: this.hillshadeStrength,
+        ambient: this.ambient,
+      });
       const water = vec3(WATER.r, WATER.g, WATER.b);
       return mix(land.mul(shade), water, wet);
     })();

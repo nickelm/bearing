@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–77 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–78 are reflected in both.
 
 ---
 
@@ -1289,3 +1289,17 @@ The owner's amendment and the engineering calls made while adopting it:
 - **Frame time** has to be measured on a GPU. GUI → Status → Tiles shows the map's tile count in the strategic view, and `SCENE=strategic` in `tools/render.preview.ts` prints tiles and milliseconds per frame for each view, including a new `floor` view (100 km, 50° tilt).
 
 **Reason:** The terrain tiles already give seam-free, geomorphed, cached relief at any level, so the map needs only a cap and its own material. Level 6 is where the selection settles at the floor on a 1080p screen. Going deeper would cost tiles without detail a 4× illustrated map shows.
+
+### 78. Cartographic hillshade per fragment, relative to flat ground
+
+**Date:** 2026-11-11
+**Decision:** The strategic relief is shaded by `render/strategic/hillshade.ts`:
+
+- **Light.** The light comes from the screen's upper left at 45° above the local ground, at every point of the globe. Its horizontal part is the screen's up-left direction projected onto the tangent plane there. The scene sets the camera's screen right and up as uniforms each frame. A single fixed light direction would darken the globe toward the limb and change the look of flat land with position.
+- **Relative to flat.** The factor is n·L / sin(elevation), blended from 1 by `strength` and clamped between `ambient` (0.3, the shadow floor) and 1.35. Flat ground is exactly 1 and keeps its palette color anywhere. Slopes facing the light brighten and slopes facing away darken.
+- **Default strength 1.5.** The owner found the first relief subtle. At 4×, a typical steep slope of the quadtree's model (5%) is about 11°, which shades about ±18% at strength 1 and about ±25% at 1.5.
+- **Per fragment, not baked.** The shading is one dot product on the interpolated 4× normals. The light turns with the camera every frame, so a bake would be invalid after every heading change. The cell-grid fallback globe keeps a scene light from the upper left.
+- **Tuning.** GUI → Map (strategic view) has Relief exaggeration, Hillshade strength, Light elevation and Shadow floor, all uniforms, so tuning rebuilds nothing on the relief.
+- There is no physical sky, aerial perspective or sun lighting in this scene. Day and night come later as their own map treatment (Part II).
+
+**Reason:** Cartographic hillshades (Imhof; the 315°, 45° convention of GIS tools) shade relief relative to a flat plane so that the map's colors stay true and only form reads as light and shadow. Doing it per point on a sphere keeps that property at globe scale.

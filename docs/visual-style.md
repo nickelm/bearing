@@ -269,7 +269,7 @@ Civilization VI screenshots and Cold War operational maps (NATO planning maps, 1
 ## Base Map
 
 - **Relief.** A cube-sphere mesh displaced from the world's heights with 4× vertical exaggeration (tunable), and a moderate quadtree so the floor stays sharp: the terrain tiles capped at level 6, vertices about 380 m apart (decision 77).
-- **Hillshade.** A fixed light from the upper left of the screen, following cartographic convention, plus soft ambient light. The relief light never moves with the sun, so ranges always read the same way.
+- **Hillshade.** A fixed light from the upper left of the screen, following cartographic convention, plus soft ambient light. The relief light never moves with the sun, so ranges always read the same way. It stands 45° above the local ground at every point of the globe, and shading is relative to flat ground, so flat land keeps its palette color everywhere and only slopes brighten or darken (decision 78).
 - **Biome painting.** A softened, illustrative version of the biome palette (see *Strategic Palette*), with a procedural pattern per biome generated in the shader:
   - stippled canopy for forests;
   - dune ripples for sand deserts;

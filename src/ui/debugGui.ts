@@ -63,6 +63,18 @@ export interface TimeGuiParams {
   weather: string;
 }
 
+/** Map folder: the strategic view's relief and hillshade (decisions 77, 78). */
+export interface MapGuiParams {
+  /** Relief exaggeration on the map (Part II default 4×). */
+  exaggeration: number;
+  /** 0 = no relief shading, 1 = full cartographic hillshade. */
+  hillshade: number;
+  /** Light elevation above the ground (degrees). */
+  lightElevation: number;
+  /** Darkest a shadowed slope gets, relative to flat ground. */
+  ambient: number;
+}
+
 export interface LightingGuiParams {
   atmosphere: boolean;
   /** Air density relative to Earth's (scales scattering and absorption). */
@@ -295,6 +307,24 @@ export class DebugGui {
   }
 
   /** Adds the Lighting folder: atmosphere, air density, exposure, sky and night light. */
+  /** Adds the Map folder: the strategic view's relief and hillshade. */
+  addMapControls(map: MapGuiParams, changed: (m: MapGuiParams) => void): void {
+    const f = this.folderBeforeStatus('Map (strategic view)');
+    f.add(map, 'exaggeration', 1, 12, 0.5)
+      .name('Relief exaggeration')
+      .onChange(() => changed(map));
+    f.add(map, 'hillshade', 0, 2, 0.05)
+      .name('Hillshade strength')
+      .onChange(() => changed(map));
+    f.add(map, 'lightElevation', 15, 75, 1)
+      .name('Light elevation (°)')
+      .onChange(() => changed(map));
+    f.add(map, 'ambient', 0, 1, 0.05)
+      .name('Shadow floor')
+      .onChange(() => changed(map));
+    f.close();
+  }
+
   addLightingControls(light: LightingGuiParams, changed: (l: LightingGuiParams) => void): void {
     const f = this.folderBeforeStatus('Lighting');
     f.add(light, 'atmosphere')

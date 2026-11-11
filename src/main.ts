@@ -56,6 +56,7 @@ import { GPU_SELF_TESTS, runSelfTest } from './worldgen/gpu/selfTests';
 import type {
   CampaignGuiParams,
   LightingGuiParams,
+  MapGuiParams,
   TimeGuiParams,
   ViewGuiParams,
   WorldGuiParams,
@@ -576,6 +577,23 @@ async function main(): Promise<void> {
     const labels = n.events.map((e) => e.label).join(', ');
     timeControls.notify(n.slowed ? `Slowed to 1×: ${labels}` : labels);
   };
+  const relief = strategicView.relief;
+  const mapParams: MapGuiParams = {
+    exaggeration: relief.exaggeration.value,
+    hillshade: relief.hillshadeStrength.value,
+    lightElevation: Math.round(relief.hillshadeElevation.value / DEG),
+    ambient: relief.ambient.value,
+  };
+  gui.addMapControls(mapParams, (m) => {
+    // The relief applies exaggeration in its shader; the fallback grid globe rebuilds.
+    if (m.exaggeration !== relief.exaggeration.value) {
+      relief.exaggeration.value = m.exaggeration;
+      strategicView.globe.setExaggeration(m.exaggeration);
+    }
+    relief.hillshadeStrength.value = m.hillshade;
+    relief.hillshadeElevation.value = m.lightElevation * DEG;
+    relief.ambient.value = m.ambient;
+  });
   const lighting = globe.lighting;
   const lightParams: LightingGuiParams = {
     atmosphere: true,
