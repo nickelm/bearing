@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–86 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–87 are reflected in both.
 
 ---
 
@@ -1402,3 +1402,17 @@ The owner's amendment and the engineering calls made while adopting it:
 - If the flake recurs, the next step is to quantize the axis coordinate before sorting.
 
 **Reason:** Determinism is a project rule (rule 5), and a generator whose output turns on the last bit of a transcendental function breaks it in practice. Removing the sensitive calls from the one stage that amplifies them fixes the observed failure without slowing generation.
+
+### 87. Day, night and seasons on the map
+
+**Date:** 2026-11-11
+**Decision:** The strategic relief shades day and night and the seasons (`render/strategic/mapDaylight.ts`), stylized, after the patterns, water and outlines:
+
+- **Terminator.** With μ = n · sun from the ephemeris (the same sun as the simulation view), day blends into night across civil twilight, μ from −sin 6° to +sin 6°. The relief light stays the cartographic hillshade; the sun never lights the relief.
+- **Night.** A multiply by Part II's night tint `#1B2A4A`, scaled to its brightest channel and set to 0.62 in sRGB, which gives a linear multiplier of about (0.04, 0.10, 0.34). The night side is deep blue at about a third of daylight's brightness in blue, so relief, coasts and outlines remain readable.
+- **Twilight.** A warm tint (`#E3A06A` scaled to its brightest channel), at most 50%, peaking on the terminator with a Gaussian of about ±4°.
+- **Seasons.** `render/common/seasons.ts` now holds the seasonal surface temperature both views use (lapse-rate corrected, the hemispheres half a year apart; the simulation view's `WARMEST_PHASE` moves there). The map draws snow on land below about 0 °C (thin where dry or steep), sea ice where the sea-level air temperature falls below −3 to −8 °C, and lake ice below −1.5 to −4 °C at the lake surface. Snow takes the snow fill `#F1F3F2`; sea ice `#E4ECF0`, a little bluer, since Part II names no sea-ice color. The sea-ice threshold sits below freezing because the climate's sea-level temperature is air temperature, and sea ice needs a sustained cold season.
+- **Controls.** GUI → Map has Night and Twilight strengths and a Seasons toggle. The render preview's strategic views now set the sun and season from each view's local time and day.
+- Settlement, base and industry lights are the next commit of this task.
+
+**Reason:** Part II keeps day, night and seasons on the map because they decide which sorties fly (decision 72). A multiply keeps the map's colors and hillshade, so a coast reads the same by night, only darker and bluer.

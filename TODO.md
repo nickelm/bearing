@@ -100,6 +100,9 @@ The strategic view from [docs/visual-style.md](docs/visual-style.md) Part II: gl
   - [ ] Browser check: outer coastal lines at Theater zoom follow the 1.5 km coast-distance grid and may show slight steps; if they do, refine (finer field near coasts, or subcell coast positions)
   - [ ] Move the coast-distance transform (about 0.6 s at 1024²) into the worldgen worker
 - [ ] Day and night on the map: the ephemeris sun draws a terminator with a warm twilight band over the hillshade; a legible deep-blue night side; settlement, base and industry lights from the existing light lists (decisions 66, 71); seasonal snow line, sea ice and frozen lakes
+  - [x] Terminator, twilight band, night tint; seasonal snow, sea ice and lake ice (decision 87)
+  - [ ] Settlement, base and industry lights on the night side, sized by population, with a soft halo
+  - [ ] Browser check: night legibility and twilight warmth (GUI → Map → Night, Twilight), snow line and sea ice through the year (Time → day)
 - [ ] Weather on the map: stylized soft cloud shapes and precipitation hatching from the live weather field (`weatherTexture`, `coverageBake`), at every band, moving with game time, on by default with a toggle
 - [ ] Graticule toggle and range rings around a selected point
 - [ ] Post-processing: light vignette and paper grain; a soft halo on night lights only; a thin pale rim around the globe instead of the limb glow

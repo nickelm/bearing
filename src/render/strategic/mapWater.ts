@@ -111,6 +111,8 @@ export interface MapWater {
   outline: F;
   /** The outline color (linear). */
   outlineColor: V3;
+  /** Lake share of the water (0 at sea), for lake ice (decision 87). */
+  lake: F;
 }
 
 /** The map's water at a fragment (see the header). Takes no derivatives itself. */
@@ -142,5 +144,5 @@ export function mapWaterNode(i: MapWaterInputs): MapWater {
   ) as V3;
   const dist = min(abs(shorePx), abs(lakePx));
   const outline = clamp(float(COASTLINE_PX / 2 + 0.5).sub(dist), 0, 1) as F;
-  return { color, wet, outline, outlineColor: rgb(COASTLINE) };
+  return { color, wet, outline, outlineColor: rgb(COASTLINE), lake: lakeCover as F };
 }

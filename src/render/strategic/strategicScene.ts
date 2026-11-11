@@ -61,7 +61,7 @@ export class StrategicScene {
    * opacity by its band's factor, so it fades in and out with the band.
    */
   readonly bandFade = { globe: uniform(1), theater: uniform(0), region: uniform(0) };
-  /** Unit vector toward the sun, world frame. Unused until day and night reach the map. */
+  /** Unit vector toward the sun, world frame; set by the app from the ephemeris. */
   readonly sun = new Vec3d(1, 0.6, 0.8).normalize();
   private detachInput: (() => void) | null = null;
   private viewportHeight = 1;
@@ -155,6 +155,8 @@ export class StrategicScene {
     }
     if (this.pendingWorld) {
       this.globe.setWorld(this.pendingWorld.world);
+      // Climate for the seasonal snow line, sea ice and lake ice (decision 87).
+      if (this.pendingWorld.world) this.relief.climate.setWorld(this.pendingWorld.world);
       this.pendingWorld = null;
     }
 
@@ -188,6 +190,8 @@ export class StrategicScene {
     // Patterns are anchored to the ground (decision 80); the field grid shows from the
     // Theater band down, fading with the bands.
     this.relief.eye.value.set(o.eye.x, o.eye.y, o.eye.z);
+    // The ephemeris sun decides day and night on the map (decision 87).
+    this.relief.sunDirection.value.set(this.sun.x, this.sun.y, this.sun.z);
     // Map scale at the screen center, in drawing-buffer pixels like the shader's
     // derivatives: the coastal halo and lines are placed with it (decision 85).
     const fovY = (this.camera.fov * Math.PI) / 180;

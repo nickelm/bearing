@@ -628,6 +628,7 @@ async function renderStrategic(
   const main = new Vec3d(...world.info.mainContinent);
   const lat0 = Math.asin(main.y);
   const lon0 = Math.atan2(main.x, main.z);
+  const calendar = defaultCampaignStart(main, params);
   const outDir = join(import.meta.dirname, 'out');
   mkdirSync(outDir, { recursive: true });
   for (const v of o.views) {
@@ -636,6 +637,13 @@ async function renderStrategic(
     cam.lon = lon0 + v.dLon;
     cam.altitude = cam.targetAltitude = v.altitude;
     cam.heading = v.heading;
+    // The sun and season at the view's local time and day, as in the simulation previews.
+    const localAt = (day: number) =>
+      withLocalTime(day * DAY, cam.lon, (v.localTime ?? 11) * HOUR, params, calendar);
+    let when = localAt(v.day ?? 0);
+    if (when < 0) when = localAt((v.day ?? 0) + 1);
+    sunDirection(when, params, calendar, scene.sun);
+    scene.relief.seasonPhase.value = seasonPhase(when, params, calendar);
     // Render until every tile this view wants has loaded.
     let stable = 0;
     let last = '';

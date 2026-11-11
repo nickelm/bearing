@@ -41,6 +41,7 @@ import {
   clamp,
   dFdx,
   dFdy,
+  dot,
   float,
   Fn,
   If,
@@ -68,6 +69,9 @@ import { placeCameraRelative } from '../common/cameraRelative';
 import { HabitabilityTexture } from '../common/habitabilityTexture';
 import { BiomeFillTexture, hexToLinear, STEEP_ROCK_FILL } from './biomeFill';
 import { COAST_DISTANCE_MAX, CoastDistanceTexture } from './coastDistance';
+import { daylightNode, lakeIceNode, SEA_ICE, seaIceNode, SNOW, snowNode } from './mapDaylight';
+import { ClimateTexture } from '../common/climateTexture';
+import { surfaceTemperatureNode } from '../common/seasons';
 import {
   COASTLINE_PX,
   mapWaterNode,
@@ -209,6 +213,17 @@ export class StrategicRelief {
   readonly reliefScale = uniform(1);
   /** 1 draws the map patterns (forest stipple, farmland), 0 hides them. */
   readonly patterns = uniform(1);
+  /** Unit direction toward the sun, world frame (set by the scene each frame, decision 87). */
+  readonly sunDirection = uniform(new Vector3(1, 0, 0));
+  /** Fraction of the year since the northern vernal equinox (calendar.seasonPhase). */
+  readonly seasonPhase = uniform(0.4);
+  /** Night and twilight strength 0..1 (GUI); 0 shows the whole globe in daylight. */
+  readonly nightStrength = uniform(1);
+  readonly twilightStrength = uniform(1);
+  /** 1 draws seasonal snow, sea ice and lake ice; 0 hides them. */
+  readonly seasons = uniform(1);
+  /** Climate by direction for the seasons; set from the tectonic world by the scene. */
+  readonly climate = new ClimateTexture();
   private detail = new Noise3(rng(0, 'render-detail'));
   private readonly index = new BufferAttribute(buildTileIndex(), 1);
   private material: MeshBasicNodeMaterial;
@@ -352,7 +367,18 @@ export class StrategicRelief {
       // Steep rock with its hatching.
       const hatch = masked(steep.mul(this.patterns), () => hatchNode(plane, footprint));
       const mapLand = mix(mix(marked, rock, steep), rgb(HATCH_MARK), hatch);
-      const land = mix(attribute('color', 'vec3'), mapLand, this.biomeMode);
+      // Seasonal snow over the land colors, below the hillshade (decision 87).
+      const climate = this.climate.sample(radial);
+      const seasonsOn = this.seasons.mul(this.biomeMode);
+      const landTemperature = surfaceTemperatureNode(
+        climate,
+        rawHeight.div(this.reliefScale),
+        radial,
+        this.seasonPhase,
+      );
+      const snow = snowNode(landTemperature, climate.z, steep).mul(seasonsOn);
+      const snowy = mix(mapLand, rgb(hexToLinear(SNOW)), snow);
+      const land = mix(attribute('color', 'vec3'), snowy, this.biomeMode);
       // Water: flat depth bands with a dark coastline and lake outlines (decision 82);
       // no relief light. Debug color modes show the vertex colors only.
       const water = mapWaterNode({
@@ -389,8 +415,29 @@ export class StrategicRelief {
       const shadedLand = mix(land.mul(shade), riverColor, riverCoverage(river).mul(riverOn));
       const riverBank = clamp(float(COASTLINE_PX / 2 + 0.5).sub(abs(river.edgePx)), 0, 1);
       const withRivers = mix(shadedLand, water.outlineColor, riverBank.mul(wide).mul(riverOn));
-      const surfaceColor = mix(withRivers, water.color, wet);
-      return mix(surfaceColor, water.outlineColor, water.outline.mul(this.biomeMode));
+      // Sea ice and lake ice over the water, by the season (decision 87).
+      const seaIce = seaIceNode(
+        surfaceTemperatureNode(climate, float(0), radial, this.seasonPhase),
+      );
+      const lakeIce = lakeIceNode(
+        surfaceTemperatureNode(
+          climate,
+          rawHeight.add(max(lakeDepth, 0)).div(this.reliefScale),
+          radial,
+          this.seasonPhase,
+        ),
+      );
+      const ice = mix(seaIce, lakeIce, water.lake).mul(seasonsOn);
+      const waterColor = mix(water.color, rgb(hexToLinear(SEA_ICE)), ice);
+      const surfaceColor = mix(withRivers, waterColor, wet);
+      const outlined = mix(surfaceColor, water.outlineColor, water.outline.mul(this.biomeMode));
+      // Day and night: the night tint and the warm twilight band (decision 87).
+      return daylightNode(
+        outlined,
+        dot(radial, this.sunDirection),
+        this.nightStrength.mul(this.biomeMode),
+        this.twilightStrength.mul(this.biomeMode),
+      );
     })();
     return material;
   }
@@ -580,6 +627,7 @@ export class StrategicRelief {
     this.biomeFill.dispose();
     this.habitability.dispose();
     this.coastDistance.dispose();
+    this.climate.texture.dispose();
   }
 }
 

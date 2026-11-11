@@ -40,13 +40,13 @@ import {
 } from 'three/tsl';
 import { LAPSE_RATE } from '../../../worldgen/climate';
 import { WAVE_PERIOD } from '../water/waterShading';
+import { WARMEST_PHASE } from '../../common/seasons';
 
 type F = Node<'float'>;
 type V3 = Node<'vec3'>;
 type V4 = Node<'vec4'>;
 
 /** Season phase of the warmest day after the northern vernal equinox (solstice + ~30 days). */
-const WARMEST_PHASE = 0.25 + 30 / 365;
 
 export interface LandInputs {
   /** Biome albedo (linear), from the vertex. */

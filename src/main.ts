@@ -588,6 +588,9 @@ async function main(): Promise<void> {
     lightElevation: Math.round(relief.hillshadeElevation.value / DEG),
     ambient: relief.ambient.value,
     patterns: true,
+    night: 1,
+    twilight: 1,
+    seasons: true,
   };
   gui.addMapControls(mapParams, (m) => {
     // The relief applies exaggeration in its shader; the fallback grid globe rebuilds.
@@ -599,6 +602,9 @@ async function main(): Promise<void> {
     relief.hillshadeElevation.value = m.lightElevation * DEG;
     relief.ambient.value = m.ambient;
     relief.patterns.value = m.patterns ? 1 : 0;
+    relief.nightStrength.value = m.night;
+    relief.twilightStrength.value = m.twilight;
+    relief.seasons.value = m.seasons ? 1 : 0;
   });
   const lighting = globe.lighting;
   const lightParams: LightingGuiParams = {
@@ -690,6 +696,9 @@ async function main(): Promise<void> {
     gameTime = sim.displayTime(now);
     sunDirection(gameTime, orbitParams, calendar, globe.sun);
     globe.terrain.land.seasonPhase.value = seasonPhase(gameTime, orbitParams, calendar);
+    // The map shares the sun and the season (decision 87).
+    strategicView.sun.copy(globe.sun);
+    strategicView.relief.seasonPhase.value = globe.terrain.land.seasonPhase.value;
     globe.clouds.time.value = gameTime;
     globe.weather.update(sim.weather, gameTime);
     if (activeView === 'strategic') strategicView.render(dt);

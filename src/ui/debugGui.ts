@@ -75,6 +75,11 @@ export interface MapGuiParams {
   ambient: number;
   /** Forest stipple and farmland with its field grid (decision 80). */
   patterns: boolean;
+  /** Night tint and twilight strength 0..1 (decision 87). */
+  night: number;
+  twilight: number;
+  /** Seasonal snow, sea ice and lake ice. */
+  seasons: boolean;
 }
 
 export interface LightingGuiParams {
@@ -326,6 +331,15 @@ export class DebugGui {
       .onChange(() => changed(map));
     f.add(map, 'patterns')
       .name('Patterns (forest, farmland)')
+      .onChange(() => changed(map));
+    f.add(map, 'night', 0, 1, 0.05)
+      .name('Night')
+      .onChange(() => changed(map));
+    f.add(map, 'twilight', 0, 1, 0.05)
+      .name('Twilight')
+      .onChange(() => changed(map));
+    f.add(map, 'seasons')
+      .name('Seasons (snow, ice)')
       .onChange(() => changed(map));
     f.close();
   }
