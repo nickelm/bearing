@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–82 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–83 are reflected in both.
 
 ---
 
@@ -1355,3 +1355,15 @@ The owner's amendment and the engineering calls made while adopting it:
 - The coastal halo and parallel coastal lines, and rivers, are the next S1 task.
 
 **Reason:** Flat bands read as a printed chart and show where the shelf runs, which matters for naval operations later. A pixel-measured outline keeps the coast crisp at every zoom without any geometry.
+
+### 83. Coastal halo and parallel coastal lines from a coast-distance field
+
+**Date:** 2026-11-11
+**Decision:** The strategic map's sea gets a lighter halo along coasts (`#B9D5DC`, fading out over the first 8 px) and three faint parallel lines (`#A9C9D4` at 70%, one pixel wide, 5, 10 and 16 px out), all measured in pixels from the coast:
+
+- **Distance near the coast.** Within 2.5 km of the coast the per-vertex coast distance of decision 39 is used, so the halo and the first lines hug the fine tile coastline that the outline follows. Between 2.5 and 4.5 km it blends into the field below. That estimate is clamped at 5 km and is only good near the coast.
+- **Distance farther out.** `render/strategic/coastDistance.ts` runs an exact Euclidean distance transform (Felzenszwalb and Huttenlocher) per cube face on the global height grid, with a margin read from the neighboring faces so distances agree across seams. It stores sea-to-land distance (capped at 60 km) as an R16F cube-face texture of up to 1024² per face, sampled bilinearly. The 16 px outer line lies about 50 km out at the ceiling and about 1.6 km out at the floor, so the field serves the Globe and Theater bands and the per-vertex distance serves the Region band.
+- **Cost.** About 0.6 s on the main thread at 1024², computed on the map's first frame after a world loads, so the simulation view never pays it. Moving it into the worldgen worker is a TODO.
+- **Lakes** get the outline (decision 82) but no halo or lines.
+
+**Reason:** The halo and lines are what make a coast read as printed, but they need distances in screen pixels out to tens of kilometers at globe scale, beyond the reach of the per-vertex estimate. A distance field computed once per world gives that range, and the per-vertex estimate keeps the lines exact where they are close enough to the coast to show any error.

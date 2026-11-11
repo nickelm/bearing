@@ -63,6 +63,7 @@ import { MAX_BAKED_LEVEL } from '../../worldgen/gpu/tileSynth';
 import { placeCameraRelative } from '../common/cameraRelative';
 import { HabitabilityTexture } from '../common/habitabilityTexture';
 import { BiomeFillTexture, hexToLinear, STEEP_ROCK_FILL } from './biomeFill';
+import { CoastDistanceTexture } from './coastDistance';
 import { mapWaterNode } from './mapWater';
 import {
   crackNode,
@@ -120,6 +121,8 @@ export interface StrategicReliefWorld {
   /** Biome per global cell and the global grid's cells per face edge, for the map palette. */
   biome: Uint8Array;
   biomeResolution: number;
+  /** Global heights (m) on the same grid, for the coast distance (decision 83). */
+  height: Float32Array;
 }
 
 export interface StrategicReliefStats {
@@ -162,6 +165,10 @@ export class StrategicRelief {
   private readonly biomeMode = uniform(1);
   /** Part II land fills by direction, blended across biome boundaries (decision 79). */
   readonly biomeFill = new BiomeFillTexture();
+  /** Sea-to-land distance for the coastal halo and lines (decision 83). */
+  readonly coastDistance = new CoastDistanceTexture();
+  /** Built on the map's first frame, so a hidden map costs nothing (about 0.6 s at 1024²). */
+  private coastPending = false;
   /** The strategic graph's habitability, for farmland (decision 80). */
   readonly habitability = new HabitabilityTexture(null, 1);
   /** Camera eye, planet-centered (set by the scene each frame): patterns are anchored to the ground. */
@@ -295,6 +302,7 @@ export class StrategicRelief {
         footprint,
         depthWidth,
         depth,
+        coastField: this.coastDistance.sample(radial),
       });
       const wet = water.wet.mul(this.biomeMode);
       const shade = hillshadeNode(normal, radial, {
@@ -320,6 +328,7 @@ export class StrategicRelief {
     if (world) {
       this.biomeFill.setBiomes(world.biome, world.biomeResolution);
       this.reliefScale.value = world.reliefScale;
+      this.coastPending = true;
     }
     this.detail = new Noise3(rng(world?.seed ?? 0, 'render-detail'));
     this.data.clear();
@@ -398,6 +407,11 @@ export class StrategicRelief {
       this.visible.clear();
       return;
     }
+    if (this.coastPending) {
+      this.coastPending = false;
+      const w = this.world;
+      this.coastDistance.setHeights(w.height, w.biomeResolution, w.radius);
+    }
     const x = this.exaggeration.value;
     const v: LodView = { ...view, exaggeration: x };
     this.data.beginFrame();
@@ -459,5 +473,6 @@ export class StrategicRelief {
     this.material.dispose();
     this.biomeFill.dispose();
     this.habitability.dispose();
+    this.coastDistance.dispose();
   }
 }

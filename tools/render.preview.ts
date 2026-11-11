@@ -621,6 +621,7 @@ async function renderStrategic(
     reliefScale: params.reliefScale,
     biome: global.finish.biome,
     biomeResolution: global.n,
+    height: global.height,
   });
   scene.relief.buildBudgetMs = 10_000;
   const main = new Vec3d(...world.info.mainContinent);

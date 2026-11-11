@@ -11,12 +11,17 @@
  *   land–sea edge, so the coast is as sharp as the line.
  * - **Lakes.** The signed lake depth (lake level − height) gives the lake's edge,
  *   outline and depth band, with the same colors and line.
+ * - **Coastal halo and lines** (decision 83). At sea, a lighter halo fades out over
+ *   the first `HALO_PX` pixels from the coast, and faint lines run parallel to it at
+ *   `COASTAL_LINES_PX`, as on old printed maps. Distance comes from the per-vertex
+ *   coast distance within a few kilometers of the coast (it follows the fine tile
+ *   coastline) and from the coast-distance texture beyond (coastDistance.ts).
  * - Water is flat: no hillshade, no relief light.
  *
  * `waterBandWeights` and `lineCoverage` are the CPU reference for tests.
  */
 import type { Node } from 'three/webgpu';
-import { abs, clamp, float, max, min, mix, vec3 } from 'three/tsl';
+import { abs, clamp, float, max, min, mix, smoothstep, vec3 } from 'three/tsl';
 import { hexToLinear } from './biomeFill';
 
 type F = Node<'float'>;
@@ -33,6 +38,17 @@ export const SHELF_WATER = 0x8db5c4;
 export const MID_WATER = 0x6c97ac;
 export const DEEP_WATER = 0x4f7a93;
 export const COASTLINE = 0x2f4756;
+export const COASTAL_HALO = 0xb9d5dc;
+export const COASTAL_LINE = 0xa9c9d4;
+/** Halo: full at the coast, gone by this many pixels out. */
+export const HALO_PX = 8;
+/** Parallel coastal lines: distances from the coast (px), each a pixel wide. */
+export const COASTAL_LINES_PX = [5, 10, 16] as const;
+/** Coastal-line opacity: faint, as the guide asks. */
+export const COASTAL_LINE_OPACITY = 0.7;
+/** Coast distance (m) below which the per-vertex estimate is used, blending to the texture by `SHORE_BLEND_HI`. */
+export const SHORE_BLEND_LO = 2500;
+export const SHORE_BLEND_HI = 4500;
 
 /** Weight of the coarser band past an edge at `edge`, for a value `x` changing `width` per pixel. */
 const bandStep = (x: number, edge: number, width: number) =>
@@ -43,6 +59,13 @@ export function waterBandWeights(depth: number, widthPerPx = 1e-9): [number, num
   const mid = bandStep(depth, SHELF_DEPTH, widthPerPx);
   const deep = bandStep(depth, DEEP_DEPTH, widthPerPx);
   return [1 - mid, mid - deep, deep];
+}
+
+/** Distance (m) to the coast at sea: the per-vertex estimate near it, the texture farther out. */
+export function blendedCoastDistance(shore: number, field: number): number {
+  const t = Math.min(1, Math.max(0, (shore - SHORE_BLEND_LO) / (SHORE_BLEND_HI - SHORE_BLEND_LO)));
+  const w = 1 - t * t * (3 - 2 * t);
+  return field + (Math.max(0, shore) - field) * w;
 }
 
 /** Coverage of a line `px` pixels wide at a distance of `distPx` pixels from its center. */
@@ -66,6 +89,8 @@ export interface MapWaterInputs {
   depthWidth: F;
   /** Reference depth (m) of the water here: lake depth in lakes, sea depth elsewhere. */
   depth: F;
+  /** Sea-to-land distance from the coast-distance texture (m). */
+  coastField: F;
 }
 
 export interface MapWater {
@@ -88,10 +113,23 @@ export function mapWaterNode(i: MapWaterInputs): MapWater {
   const wet = max(sea, lakeCover) as F;
   const step = (edge: number) =>
     clamp(i.depth.sub(edge).div(max(i.depthWidth, 1e-6)).add(0.5), 0, 1);
-  const color = mix(
+  const bands = mix(
     mix(rgb(SHELF_WATER), rgb(MID_WATER), step(SHELF_DEPTH)),
     rgb(DEEP_WATER),
     step(DEEP_DEPTH),
+  );
+  // Halo and parallel lines at sea, in pixels from the coast (not in lakes).
+  const near = smoothstep(SHORE_BLEND_LO, SHORE_BLEND_HI, i.shore).oneMinus();
+  const coastPx = mix(i.coastField, max(i.shore, 0), near).div(i.footprint);
+  const atSea = sea.mul(lakeCover.oneMinus());
+  const halo = smoothstep(0, HALO_PX, coastPx).oneMinus().mul(atSea);
+  let lines: F = float(0) as F;
+  for (const px of COASTAL_LINES_PX)
+    lines = max(lines, clamp(float(1).sub(abs(coastPx.sub(px))), 0, 1)) as F;
+  const color = mix(
+    mix(bands, rgb(COASTAL_HALO), halo),
+    rgb(COASTAL_LINE),
+    lines.mul(atSea).mul(COASTAL_LINE_OPACITY),
   ) as V3;
   const dist = min(abs(shorePx), abs(lakePx));
   const outline = clamp(float(COASTLINE_PX / 2 + 0.5).sub(dist), 0, 1) as F;

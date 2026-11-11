@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  blendedCoastDistance,
+  SHORE_BLEND_HI,
+  SHORE_BLEND_LO,
   COASTLINE_PX,
   DEEP_DEPTH,
   lineCoverage,
@@ -39,5 +42,17 @@ describe('coastline', () => {
     const step = 0.01;
     for (let d = -5; d <= 5; d += step) sum += lineCoverage(d) * step;
     expect(sum).toBeCloseTo(COASTLINE_PX, 2);
+  });
+});
+
+describe('coast distance for the halo and coastal lines', () => {
+  it('follows the per-vertex estimate near the coast and the texture farther out', () => {
+    expect(blendedCoastDistance(800, 2000)).toBe(800);
+    expect(blendedCoastDistance(SHORE_BLEND_LO, 9000)).toBe(SHORE_BLEND_LO);
+    // The per-vertex estimate is clamped at 5 km: beyond the blend, the texture rules.
+    expect(blendedCoastDistance(5000, 23_000)).toBe(23_000);
+    const mid = blendedCoastDistance((SHORE_BLEND_LO + SHORE_BLEND_HI) / 2, 10_000);
+    expect(mid).toBeGreaterThan(3500);
+    expect(mid).toBeLessThan(10_000);
   });
 });

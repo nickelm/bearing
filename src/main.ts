@@ -333,6 +333,7 @@ async function main(): Promise<void> {
         reliefScale: params.reliefScale,
         biome: global.finish.biome,
         biomeResolution: global.n,
+        height: global.height,
       });
       if (old || oldSynth) {
         setTimeout(() => {
