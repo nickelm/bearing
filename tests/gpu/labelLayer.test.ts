@@ -69,10 +69,10 @@ describe.skipIf(!gpu)('LabelLayer on Dawn', () => {
         if (v > 200) light++;
       }
     }
-    // Dark letters with a light halo, right of the anchor. The readback encodes sRGB twice
-    // (the background 0x80 reads 188), so #22252A ink reads about 102 when no tone curve
+    // Dark letters with a light halo, right of the anchor. The readback encodes sRGB once
+    // (decision 100), so #22252A ink reads its own red, 0x22 = 34, when no tone curve
     // touches it; under AgX it would read lighter.
-    expect(Math.abs(Math.min(...rgb) - 102)).toBeLessThan(8);
+    expect(Math.abs(Math.min(...rgb) - 0x22)).toBeLessThan(8);
     expect(dark).toBeGreaterThan(40);
     expect(light).toBeGreaterThan(80);
     expect(darkRight).toBe(dark);
