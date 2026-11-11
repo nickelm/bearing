@@ -8,8 +8,13 @@ import { CubeGrid } from '../../src/core/cubeGrid';
 import { Vec3d } from '../../src/core/vec3d';
 import { STRATEGIC_CEILING, STRATEGIC_FLOOR } from '../../src/render/strategic/strategicCamera';
 import { StrategicScene } from '../../src/render/strategic/strategicScene';
+import { STRATEGIC_MAX_LEVEL } from '../../src/render/strategic/strategicRelief';
 import { DEFAULT_PLANET_PARAMS } from '../../src/worldgen/params';
 import { generateWorld } from '../../src/worldgen/pipeline';
+import { finishWorld } from '../../src/worldgen/finishWorld';
+import { buildGlobalWorld } from '../../src/worldgen/globalPipeline';
+import { TileSynthesizer } from '../../src/worldgen/gpu/tileSynth';
+import { RiverIndex } from '../../src/worldgen/riverIndex';
 import { testGpu } from './device';
 import { headlessRenderer } from './renderer';
 
@@ -68,4 +73,60 @@ describe.skipIf(!gpu)('StrategicScene on Dawn', () => {
     scene.dispose();
     head.dispose();
   }, 120_000);
+
+  it('draws the relief mesh at the floor within the level cap', async () => {
+    const params = { ...DEFAULT_PLANET_PARAMS, erosionStrength: 0.2 };
+    const world = generateWorld(params, { resolution: 64 });
+    const g = await buildGlobalWorld(gpu!, params, world, {
+      n: 256,
+      finish: async (input) => finishWorld(input),
+    });
+    const head = await headlessRenderer(gpu!.device, 256, 128);
+    const scene = new StrategicScene(head.renderer, {
+      radius: params.radius,
+      grid: new CubeGrid(64),
+      input: false,
+    });
+    scene.resize(head.width, head.height);
+    scene.setWorld(world);
+    const synth = new TileSynthesizer(g.grid, {
+      seed: params.seed,
+      reliefScale: params.reliefScale,
+      radius: params.radius,
+      biome: g.finish.biome,
+      lakeDepth: g.finish.drainage.lakeDepth,
+      height: g.height,
+      forest: g.finish.forest,
+      treeline: g.finish.treeline,
+      index: new RiverIndex(g.finish.rivers),
+    });
+    scene.setTerrainWorld({
+      synth,
+      seed: params.seed,
+      radius: params.radius,
+      reliefScale: params.reliefScale,
+    });
+    scene.relief.buildBudgetMs = 10_000;
+    const main = new Vec3d(...world.info.mainContinent);
+    const o = scene.orbit;
+    o.lat = Math.asin(main.y);
+    o.lon = Math.atan2(main.x, main.z);
+    o.altitude = o.targetAltitude = STRATEGIC_FLOOR;
+    for (let f = 0; f < 60; f++) {
+      scene.render(0);
+      await gpu!.finish();
+      await new Promise((r) => setTimeout(r, 2));
+    }
+    const rgb = await head.readRgb();
+    let lit = 0;
+    for (let i = 0; i < rgb.length; i += 3) if (rgb[i]! + rgb[i + 1]! + rgb[i + 2]! > 30) lit++;
+    expect(gpu!.errors).toEqual([]);
+    expect(scene.relief.stats.drawn).toBeGreaterThan(0);
+    expect(scene.relief.stats.deepest).toBeLessThanOrEqual(STRATEGIC_MAX_LEVEL);
+    expect(lit / (rgb.length / 3)).toBeGreaterThan(0.9);
+    scene.dispose();
+    synth.dispose();
+    g.grid.dispose();
+    head.dispose();
+  }, 300_000);
 });

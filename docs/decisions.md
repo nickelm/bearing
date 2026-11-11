@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–76 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–77 are reflected in both.
 
 ---
 
@@ -1276,3 +1276,16 @@ The owner's amendment and the engineering calls made while adopting it:
 - **Interfaces.** `StrategicScene.bands` exposes the band and an `onChange(band, previous)` event; label placement and band content tables (S2) will run on it. `StrategicScene.bandFade.{globe,theater,region}` are TSL uniforms with the eased factors for shaders. GUI → Status → Zoom band shows the band, and the console logs each change.
 
 **Reason:** Fading by altitude alone would leave content half-visible while the camera rests between bands, and a hard edge would make labels pop when the camera eases across it. A margin plus a short timed crossfade gives one clear band at any rest altitude and smooth transitions, and the change event gives the label engine one moment to re-place labels.
+
+### 77. Strategic relief mesh: the terrain tiles capped at level 6
+
+**Date:** 2026-11-11
+**Decision:** `render/strategic/strategicRelief.ts` draws the map's relief from the same tiles as the simulation view's terrain (decision 13), once the world's global pass exists. Before that, the cell-grid globe stands in, also at 4×.
+
+- **Reuse.** Tile selection is `selectTiles` from `sim/terrain/quadtree.ts` and meshes come from `buildTileMesh` in `sim/terrain/tileMesh.ts`, with data from the world's `TileSynthesizer`. Geomorphing works as in the terrain renderer. Exaggeration is a uniform, `STRATEGIC_EXAGGERATION` = 4, applied in the vertex shader, so changing it rebuilds nothing.
+- **Level cap 6.** Vertices sit about 380 m apart on the 1,000 km planet. Measured with the CPU selection (`tests/strategicRelief.test.ts`, 16:9, 45° field of view, screen-space error 2 px, every tile ready): 16 tiles at the 3,000 km ceiling, 32 at 1,500 km, 50 at 800 km, 70 at 400 km, 62 at 200 km and 74 at the 100 km floor, where the selection reaches level 6 on its own at 1,080 CSS pixels. At 2,160 CSS pixels (a 4K monitor at pixel ratio 1) the cap holds the floor to about 150 tiles. All levels up to 7 are baked, so no map tile needs render detail noise.
+- **Own caches.** The map keeps its own data (80 MiB) and mesh (120 MiB) caches. Only the active view loads and builds tiles. The synthesizer allocates its buffers per batch, so the two views' loaders can overlap safely after a switch. Sharing the data cache, or extracting the common selection, build and eviction loop from `TerrainRenderer`, is a TODO.
+- **Placeholder shading.** Lambert from the scene's upper-left relief light plus ambient on the tiles' vertex colors, and one flat water color (`#6C97AC`) at sea and in lakes. The hillshade, palette and water tasks of S1 replace it.
+- **Frame time** has to be measured on a GPU. GUI → Status → Tiles shows the map's tile count in the strategic view, and `SCENE=strategic` in `tools/render.preview.ts` prints tiles and milliseconds per frame for each view, including a new `floor` view (100 km, 50° tilt).
+
+**Reason:** The terrain tiles already give seam-free, geomorphed, cached relief at any level, so the map needs only a cap and its own material. Level 6 is where the selection settles at the floor on a 1080p screen. Going deeper would cost tiles without detail a 4× illustrated map shows.

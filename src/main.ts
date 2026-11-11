@@ -324,6 +324,13 @@ async function main(): Promise<void> {
       });
       globe.setInfrastructure(infra);
       globe.terrainReady = true;
+      // The map's relief mesh draws from the same synthesizer (decision 77).
+      strategicView.setTerrainWorld({
+        synth,
+        seed: params.seed,
+        radius: params.radius,
+        reliefScale: params.reliefScale,
+      });
       if (old || oldSynth) {
         setTimeout(() => {
           oldSynth?.dispose();
@@ -477,7 +484,11 @@ async function main(): Promise<void> {
       setActiveView(v.scene);
       globe.globe.wireframe = v.wireframe;
       globe.useTiles = v.tiles && !tilesBlocked;
-      if (tileMode) globe.terrain.setMode(tileMode);
+      strategicView.useTiles = v.tiles && !tilesBlocked;
+      if (tileMode) {
+        globe.terrain.setMode(tileMode);
+        strategicView.relief.setMode(tileMode);
+      }
       globe.terrain.geomorph = v.geomorph;
       globe.terrain.lod.sseThreshold = v.sse;
       globe.terrain.budgetMiB = v.tileMemory;
@@ -693,12 +704,18 @@ async function main(): Promise<void> {
     gui.status.buildings = globe.structures.group.visible
       ? `${bs.instances} in ${bs.tiles} tiles${bs.pending ? `, ${bs.pending} loading` : ''}`
       : 'off (shown below 15 km)';
+    const rs = strategicView.relief.stats;
+    const tileText =
+      activeView === 'strategic'
+        ? `map: ${rs.drawn} drawn, L${rs.deepest} deepest, ${rs.meshes} meshes, ${rs.dataTiles} data, ${rs.pending} loading`
+        : `${ts.drawn} drawn, L${ts.deepest} deepest, ${ts.meshes} meshes, ${ts.dataTiles} data, ${ts.pending} loading`;
+    const tilesOn = activeView === 'strategic' ? strategicView.useTiles : globe.useTiles;
     gui.status.tiles = !globe.terrainReady
       ? 'waiting for the global pass'
       : tilesBlocked && viewParams.tiles
         ? 'off: this color mode needs the grid'
-        : globe.useTiles
-          ? `${ts.drawn} drawn, L${ts.deepest} deepest, ${ts.meshes} meshes, ${ts.dataTiles} data, ${ts.pending} loading`
+        : tilesOn
+          ? tileText
           : 'off';
   });
 }

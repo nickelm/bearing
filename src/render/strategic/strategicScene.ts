@@ -4,9 +4,10 @@
  * scene and camera and stays resident beside the simulation view's GlobeScene; the app
  * renders whichever view is active (decision 74).
  *
- * This is the S1 skeleton. Until the S1 base-map tasks replace them:
- *   - the base map is the cell-grid globe (common/globeMesh.ts) at 4× relief;
- *   - a scene light fixed at the screen's upper left stands in for the hillshade.
+ * The base map is the relief mesh (strategicRelief.ts, decision 77) once the world's
+ * global pass exists; before that, the cell-grid globe (common/globeMesh.ts) at the
+ * same 4× relief stands in. Until the hillshade task, both are lit by a placeholder
+ * light fixed at the screen's upper left.
  * There is no physical sky, aerial perspective or atmosphere here (Part II), only a
  * flat background. Everything is placed camera-relative (common/cameraRelative.ts).
  */
@@ -25,11 +26,10 @@ import { GlobeMesh } from '../common/globeMesh';
 import type { ViewMode } from '../common/globeMesh';
 import { attachOrbitInput } from '../common/orbitCamera';
 import { StrategicCamera } from './strategicCamera';
+import { STRATEGIC_EXAGGERATION, StrategicRelief } from './strategicRelief';
+import type { StrategicReliefWorld } from './strategicRelief';
 import { StrategicOverlay } from './strategicOverlay';
 import { ZOOM_BANDS, ZoomBands } from './zoomBands';
-
-/** Relief exaggeration on the map (Part II, Base Map; tunable). */
-export const STRATEGIC_EXAGGERATION = 4;
 
 /** Flat background behind the globe; Part II has no physical sky. */
 const BACKGROUND = new Color('#1E2630');
@@ -46,8 +46,12 @@ export class StrategicScene {
   readonly camera: PerspectiveCamera;
   /** Focus, altitude, heading; tilt follows the altitude (decision 75). */
   readonly orbit: StrategicCamera;
-  /** Placeholder base map: the cell-grid globe with exaggerated relief. */
+  /** Tiled relief mesh at 4× (decision 77); drawn once a terrain world is set. */
+  readonly relief = new StrategicRelief();
+  /** Fallback base map before the global pass: the cell-grid globe. */
   readonly globe: GlobeMesh;
+  /** Draw the relief tiles when a terrain world exists (otherwise the cell-grid globe). */
+  useTiles = true;
   /** Strategic graph and cast overlay. */
   readonly overlay: StrategicOverlay;
   /** Zoom band from the camera altitude, with fades and a change event (decision 76). */
@@ -80,7 +84,7 @@ export class StrategicScene {
     this.globe.setExaggeration(STRATEGIC_EXAGGERATION);
     this.overlay = new StrategicOverlay(options.radius);
     this.scene.background = BACKGROUND;
-    this.scene.add(this.globe.group, this.overlay.group);
+    this.scene.add(this.globe.group, this.relief.group, this.overlay.group);
     this.scene.add(this.reliefLight, new AmbientLight(0xffffff, 0.55));
     this.inputEnabled = options.input !== false;
   }
@@ -119,6 +123,11 @@ export class StrategicScene {
 
   setViewMode(mode: ViewMode): void {
     this.globe.setViewMode(mode);
+  }
+
+  /** The world's tiles for the relief mesh (null until the global pass, or for none). */
+  setTerrainWorld(world: StrategicReliefWorld | null): void {
+    this.relief.setWorld(world);
   }
 
   /** Strategic graph, cast and infrastructure for the overlay. */
@@ -171,8 +180,24 @@ export class StrategicScene {
       .addScaled(o.forward, -0.8)
       .normalize();
     this.reliefLight.position.set(this.lightDir.x, this.lightDir.y, this.lightDir.z);
+    this.relief.lightDirection.value.set(this.lightDir.x, this.lightDir.y, this.lightDir.z);
 
+    const tiles = this.useTiles && this.relief.hasWorld;
+    this.globe.group.visible = !tiles;
+    this.relief.group.visible = tiles;
     placePlanetCentered(this.globe.group, o.eye);
+    if (tiles) {
+      this.relief.update({
+        eye: o.eye,
+        forward: o.forward,
+        up: o.up,
+        fovY: (this.camera.fov * Math.PI) / 180,
+        aspect: this.camera.aspect,
+        viewportHeight: this.viewportHeight,
+        radius: o.radius,
+        maxHeight: this.globe.maxDisplayedHeight,
+      });
+    }
     this.overlay.update(o.eye, this.globe.maxDisplayedHeight + 2000);
     this.renderer.render(this.scene, this.camera);
   }
@@ -180,6 +205,7 @@ export class StrategicScene {
   dispose(): void {
     this.inputEnabled = false;
     this.globe.dispose();
+    this.relief.dispose();
     this.overlay.dispose();
   }
 }

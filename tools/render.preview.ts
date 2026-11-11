@@ -13,7 +13,8 @@
  *          (on a software adapter only the ratios mean anything),
  *        PROF=<file> also writes a V8 CPU profile of those frames (.cpuprofile),
  *        SCENE=strategic draws the strategic view (StrategicScene, decision 74) instead,
- *          from the views at or above its 100 km floor (orbit, limb, terminator, winter, night)
+ *          from the views at or above its 100 km floor (orbit, limb, terminator, winter, floor,
+ *          night), with tile counts and frame times per view
  *
  * Output: tools/out/render-<seed>-<view>.png, or render-<seed>-strategic-<view>.png (gitignored).
  */
@@ -220,6 +221,15 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     heading: 0,
     localTime: 10,
     target: 'city',
+  },
+  {
+    name: 'floor',
+    dLat: 0,
+    dLon: 0,
+    altitude: 100 * KM,
+    tilt: 50 * DEG,
+    heading: 0,
+    localTime: 11,
   },
   {
     name: 'night',
@@ -592,6 +602,25 @@ async function renderStrategic(
     info: { ...world.info, maxHeight },
   });
   scene.setStrategic(campaign.graph, campaign.campaign.cast, campaign.infrastructure);
+  // The relief mesh (decision 77) from the same synthesizer as the terrain.
+  const synth = new TileSynthesizer(global.grid, {
+    seed: params.seed,
+    reliefScale: params.reliefScale,
+    radius: params.radius,
+    biome: global.finish.biome,
+    lakeDepth: global.finish.drainage.lakeDepth,
+    height: global.height,
+    forest: global.finish.forest,
+    treeline: global.finish.treeline,
+    index: new RiverIndex(global.finish.rivers),
+  });
+  scene.setTerrainWorld({
+    synth,
+    seed: params.seed,
+    radius: params.radius,
+    reliefScale: params.reliefScale,
+  });
+  scene.relief.buildBudgetMs = 10_000;
   const main = new Vec3d(...world.info.mainContinent);
   const lat0 = Math.asin(main.y);
   const lon0 = Math.atan2(main.x, main.z);
@@ -603,15 +632,38 @@ async function renderStrategic(
     cam.lon = lon0 + v.dLon;
     cam.altitude = cam.targetAltitude = v.altitude;
     cam.heading = v.heading;
-    scene.render(0);
-    await gpu.finish();
+    // Render until every tile this view wants has loaded.
+    let stable = 0;
+    let last = '';
+    for (let f = 0; f < 300 && stable < 3; f++) {
+      scene.render(0);
+      await gpu.finish();
+      await new Promise((r) => setTimeout(r, 2));
+      const s = scene.relief.stats;
+      const sig = `${s.drawn}/${s.deepest}/${s.meshes}`;
+      stable = s.pending === 0 && sig === last ? stable + 1 : 0;
+      last = sig;
+    }
+    // Frame time of the loaded view (ms until the GPU is done; on a software adapter
+    // only ratios between views mean anything).
+    const frames = 20;
+    const p0 = performance.now();
+    for (let f = 0; f < frames; f++) {
+      scene.render(0);
+      await gpu.finish();
+    }
+    const ms = (performance.now() - p0) / frames;
     const rgb = await head.readRgb();
     const file = join(outDir, `render-${o.seed}-strategic-${v.name}.png`);
     writeFileSync(file, encodePng(width, height, rgb));
-    console.log(`strategic ${v.name} → ${file}`);
+    const s = scene.relief.stats;
+    console.log(
+      `strategic ${v.name}: ${s.drawn} tiles, deepest L${s.deepest}, ${ms.toFixed(1)} ms/frame → ${file}`,
+    );
   }
   if (gpu.errors.length) throw new Error(`GPU errors: ${gpu.errors.join(' | ')}`);
   scene.dispose();
+  synth.dispose();
   global.grid.dispose();
   head.dispose();
 }
