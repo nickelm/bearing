@@ -257,7 +257,7 @@ Civilization VI screenshots and Cold War operational maps (NATO planning maps, 1
 ## Camera and Zoom
 
 - **Range.** From about 3,000 km altitude, where the full globe fills the screen, down to a floor of about 100 km, where the view spans roughly 200 km of ground. The floor is tuned so that glyphs, patterns, and labels stay sharp at the closest zoom.
-- **Tilt.** Straight down at globe scale, pitching smoothly to about 50° at the floor, so relief and glyphs read in perspective up close.
+- **Tilt.** Straight down at globe scale, pitching smoothly to about 50° at the floor, so relief and glyphs read in perspective up close. Tilt follows the altitude and is never set by hand; the player pans, zooms, and turns the heading (decision 75).
 - **Zoom bands.** Content appears and disappears by band, with short fades.
 
 | Band | Altitude | Content |

@@ -6,7 +6,6 @@
  *
  * This is the S1 skeleton. Until the S1 base-map tasks replace them:
  *   - the base map is the cell-grid globe (common/globeMesh.ts) at 4× relief;
- *   - the camera is the orbit camera clamped to the strategic range and tilt;
  *   - a scene light fixed at the screen's upper left stands in for the hillshade.
  * There is no physical sky, aerial perspective or atmosphere here (Part II), only a
  * flat background. Everything is placed camera-relative (common/cameraRelative.ts).
@@ -16,7 +15,6 @@ import type { WebGPURenderer } from 'three/webgpu';
 import type { Cast } from '../../campaign/cast';
 import type { CubeGrid } from '../../core/cubeGrid';
 import type { WorldSeed } from '../../core/rng';
-import { DEG, KM } from '../../core/units';
 import { Vec3d } from '../../core/vec3d';
 import type { World } from '../../worldgen/pipeline';
 import type { StrategicGraph } from '../../worldgen/strategic/graph';
@@ -24,26 +22,12 @@ import type { Infrastructure } from '../../worldgen/strategic/infrastructure';
 import { placePlanetCentered } from '../common/cameraRelative';
 import { GlobeMesh } from '../common/globeMesh';
 import type { ViewMode } from '../common/globeMesh';
-import { attachOrbitInput, OrbitCamera } from '../common/orbitCamera';
-import type { OrbitCameraLimits } from '../common/orbitCamera';
+import { attachOrbitInput } from '../common/orbitCamera';
+import { StrategicCamera } from './strategicCamera';
 import { StrategicOverlay } from './strategicOverlay';
 
-/** The zoom floor: the strategic camera never goes lower (Part II, Camera and Zoom). */
-export const STRATEGIC_FLOOR = 100 * KM;
-/** The highest strategic altitude, where the whole globe fills the screen. */
-export const STRATEGIC_CEILING = 3000 * KM;
-/** Steepest tilt, reached at the floor. */
-export const STRATEGIC_MAX_TILT = 50 * DEG;
 /** Relief exaggeration on the map (Part II, Base Map; tunable). */
 export const STRATEGIC_EXAGGERATION = 4;
-
-/** Orbit-camera limits for the strategic range, until the strategic camera replaces them. */
-export const STRATEGIC_ORBIT_LIMITS: OrbitCameraLimits = {
-  minAltitude: STRATEGIC_FLOOR,
-  maxAltitude: STRATEGIC_CEILING,
-  maxTilt: STRATEGIC_MAX_TILT,
-  maxLatitude: 89.9 * DEG,
-};
 
 /** Flat background behind the globe; Part II has no physical sky. */
 const BACKGROUND = new Color('#1E2630');
@@ -58,7 +42,8 @@ export interface StrategicSceneOptions {
 export class StrategicScene {
   readonly scene = new Scene();
   readonly camera: PerspectiveCamera;
-  readonly orbit: OrbitCamera;
+  /** Focus, altitude, heading; tilt follows the altitude (decision 75). */
+  readonly orbit: StrategicCamera;
   /** Placeholder base map: the cell-grid globe with exaggerated relief. */
   readonly globe: GlobeMesh;
   /** Strategic graph and cast overlay. */
@@ -79,7 +64,7 @@ export class StrategicScene {
     options: StrategicSceneOptions,
   ) {
     this.camera = new PerspectiveCamera(45, 1, 1, 2);
-    this.orbit = new OrbitCamera(options.radius, STRATEGIC_ORBIT_LIMITS);
+    this.orbit = new StrategicCamera(options.radius);
     this.globe = new GlobeMesh(options.grid, options.radius);
     this.globe.setExaggeration(STRATEGIC_EXAGGERATION);
     this.overlay = new StrategicOverlay(options.radius);
@@ -153,7 +138,6 @@ export class StrategicScene {
 
     const o = this.orbit;
     o.terrainMaxHeight = this.globe.maxDisplayedHeight;
-    o.groundHeight = null;
     o.update(dt);
 
     // Camera at the origin, oriented from float64 vectors.

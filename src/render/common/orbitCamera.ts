@@ -50,7 +50,25 @@ export interface OrbitInput {
 
 const WORLD_UP = new Vec3d(0, 1, 0);
 
-export class OrbitCamera {
+/**
+ * What `attachOrbitInput` drives: the debug orbit camera and the strategic camera
+ * (decision 75) both implement it, so mouse, touch and keyboard behave the same.
+ */
+export interface CameraControls {
+  readonly input: OrbitInput;
+  /** Moves the ground under the cursor by a screen drag. `radPerPixel` = vertical FOV / viewport height. */
+  drag(dxPixels: number, dyPixels: number, radPerPixel: number): void;
+  /** Zooms by `factor` at once, keeping the ground under the screen point (`ox`, `oy`) in place. */
+  zoomAt(factor: number, ox: number, oy: number, radPerPixel: number): void;
+  /** Turns the view by `angle` (clockwise positive) about the screen point (`ox`, `oy`). */
+  rotateAt(angle: Radians, ox: number, oy: number, radPerPixel: number): void;
+  tiltBy(dyPixels: number): void;
+  turnBy(dxPixels: number): void;
+  /** Eased zoom: positive steps zoom out. */
+  zoom(steps: number): void;
+}
+
+export class OrbitCamera implements CameraControls {
   lat: Radians = 30 * DEG;
   lon: Radians = 0;
   /** Current altitude above the reference sphere. */
@@ -277,7 +295,7 @@ export function twoFingerStep(a0: Point, b0: Point, a1: Point, b1: Point): TwoFi
 }
 
 /**
- * Wires mouse, touch and keyboard input on `element` to an OrbitCamera.
+ * Wires mouse, touch and keyboard input on `element` to a camera (OrbitCamera or StrategicCamera).
  *
  * - Mouse: left drag moves, right (or shift) drag tilts vertically and turns
  *   horizontally, the wheel zooms.
@@ -289,7 +307,7 @@ export function twoFingerStep(a0: Point, b0: Point, a1: Point, b1: Point): TwoFi
  */
 export function attachOrbitInput(
   element: HTMLElement,
-  camera: OrbitCamera,
+  camera: CameraControls,
   radPerPixel: () => number,
 ): () => void {
   let mode: 'rotate' | 'tilt' | null = null;

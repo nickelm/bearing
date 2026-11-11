@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–74 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–75 are reflected in both.
 
 ---
 
@@ -1252,3 +1252,15 @@ The owner's amendment and the engineering calls made while adopting it:
 - **Previews.** `SCENE=strategic` in `tools/render.preview.ts` draws the strategic scene from the views at or above the floor (orbit, limb, terminator, winter, night) to `render-<seed>-strategic-<view>.png`. `tests/gpu/strategicScene.test.ts` renders it on Dawn at the ceiling and the floor.
 
 **Reason:** The base-map, camera and zoom-band tasks need a scene of their own to land in, without disturbing the simulation view the owner checks today. Building on the existing globe and camera keeps this step small and lets each later S1 task replace one placeholder.
+
+### 75. Strategic camera: a focus point, with tilt that follows the altitude
+
+**Date:** 2026-11-11
+**Decision:** `render/strategic/strategicCamera.ts` replaces decision 74's clamped orbit camera in the strategic view:
+
+- **Focus point.** The camera orbits a focus on the sea-level sphere, which stays at the screen center, at an eye altitude between `STRATEGIC_FLOOR` (100 km) and `STRATEGIC_CEILING` (3,000 km). Zoom changes the altitude and panning moves the focus. The eye sits at range ρ from the focus along the tilted vertical, with ρ = −R cos t + √(R² cos² t + h² + 2Rh), so its altitude is exactly h at any tilt.
+- **Tilt follows the altitude.** `strategicTilt` is 0 at and above `STRATEGIC_TILT_START` (1,500 km, the Globe band's lower edge) and 50° at the floor, with a smoothstep in log altitude in between (half the tilt at about 390 km). There is no manual tilt. Right drag turns the heading and its vertical part does nothing; three-finger drags do nothing. One-finger drag, two-finger pan, pinch and twist (decision 60), the wheel, W/A/S/D, Q/E and R/F work as in the orbit camera. Panning speed and drag scale follow the range to the focus, with the drag along the screen divided by cos t for foreshortening.
+- **Shared input.** `attachOrbitInput` now drives a `CameraControls` interface, which both cameras implement.
+- **Horizon at the floor.** At 100 km and 50° tilt on the 1,000 km planet, the top of a 45° frame sits about 1° below the horizon, so the ground fills a landscape window. A unit test guards this. A taller field of view or a lower floor would show space above the horizon.
+
+**Reason:** Part II asks for a camera that looks straight down at globe scale and pitches toward the floor. Deriving the tilt from altitude gives every player the same readable view at each zoom, and keeps the horizon out of the frame on a small planet. Orbiting a focus keeps the point the player zooms into at the center, as map apps do.

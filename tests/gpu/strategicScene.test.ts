@@ -6,11 +6,8 @@
 import { describe, expect, it } from 'vitest';
 import { CubeGrid } from '../../src/core/cubeGrid';
 import { Vec3d } from '../../src/core/vec3d';
-import {
-  STRATEGIC_CEILING,
-  STRATEGIC_FLOOR,
-  StrategicScene,
-} from '../../src/render/strategic/strategicScene';
+import { STRATEGIC_CEILING, STRATEGIC_FLOOR } from '../../src/render/strategic/strategicCamera';
+import { StrategicScene } from '../../src/render/strategic/strategicScene';
 import { DEFAULT_PLANET_PARAMS } from '../../src/worldgen/params';
 import { generateWorld } from '../../src/worldgen/pipeline';
 import { testGpu } from './device';
@@ -51,7 +48,6 @@ describe.skipIf(!gpu)('StrategicScene on Dawn', () => {
     };
     const frame = async (altitude: number) => {
       o.altitude = o.targetAltitude = altitude;
-      o.tilt = 0;
       scene.render(0);
       await gpu!.finish();
       return head.readRgb();
@@ -59,7 +55,7 @@ describe.skipIf(!gpu)('StrategicScene on Dawn', () => {
 
     // At the ceiling the whole globe shows, with background around it.
     const ceiling = covered(await frame(STRATEGIC_CEILING));
-    // At the floor, looking straight down, ground fills the frame: nothing is black.
+    // At the floor, tilted 50°, ground still fills a landscape frame: the horizon is just out of view.
     const rgb = await frame(STRATEGIC_FLOOR);
     let lit = 0;
     for (let i = 0; i < rgb.length; i += 3) if (rgb[i]! + rgb[i + 1]! + rgb[i + 2]! > 30) lit++;

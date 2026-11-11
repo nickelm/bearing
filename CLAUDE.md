@@ -49,7 +49,7 @@ src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Bo
                     later the transition controller
   sim/              simulation view: GlobeScene, terrain/ (LOD), atmosphere/, water/, clouds/, forest/,
                     infra/, lighting/
-  strategic/        strategic view: StrategicScene (skeleton), graph debug overlay; later base map,
+  strategic/        strategic view: StrategicScene (skeleton), StrategicCamera, graph debug overlay; later base map,
                     glyphs, overlays, label engine
 src/ui/             lil-gui debug panel, overlays, time controls
 src/workers/        worker entry points and message protocols

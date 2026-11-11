@@ -5,7 +5,13 @@
  * are placed camera-relative (see common/cameraRelative.ts).
  */
 export { GlobeScene } from './sim/globeScene';
-export { StrategicScene, STRATEGIC_FLOOR, STRATEGIC_CEILING } from './strategic/strategicScene';
+export { StrategicScene } from './strategic/strategicScene';
+export {
+  StrategicCamera,
+  strategicTilt,
+  STRATEGIC_FLOOR,
+  STRATEGIC_CEILING,
+} from './strategic/strategicCamera';
 export type { GlobeSceneOptions } from './sim/globeScene';
 export { GlobeMesh, VIEW_MODES } from './common/globeMesh';
 export type { ViewMode } from './common/globeMesh';

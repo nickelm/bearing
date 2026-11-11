@@ -32,7 +32,8 @@ import { CubeGrid } from '../src/core/cubeGrid';
 import { DAY, DEG, HOUR, KM } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
 import { GlobeScene } from '../src/render/sim/globeScene';
-import { STRATEGIC_FLOOR, StrategicScene } from '../src/render/strategic/strategicScene';
+import { StrategicScene } from '../src/render/strategic/strategicScene';
+import { STRATEGIC_FLOOR } from '../src/render/strategic/strategicCamera';
 import { TileSynthesizer } from '../src/worldgen/gpu/tileSynth';
 import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
 import { RiverIndex } from '../src/worldgen/riverIndex';
@@ -601,7 +602,6 @@ async function renderStrategic(
     cam.lat = lat0 + v.dLat;
     cam.lon = lon0 + v.dLon;
     cam.altitude = cam.targetAltitude = v.altitude;
-    cam.tilt = v.tilt;
     cam.heading = v.heading;
     scene.render(0);
     await gpu.finish();
