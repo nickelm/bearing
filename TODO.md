@@ -112,6 +112,8 @@ The strategic view from [docs/visual-style.md](docs/visual-style.md) Part II: gl
 - [x] Strategic preview views (globe band with the terminator, theater band, region band at the floor) in `tools/render.preview.ts`, plus a color-vision-deficiency filter (Part II check 4) and a 1920 × 1080 sharpness view at the floor (check 5); move the old `orbit`, `limb` and `terminator` views here (decision 93)
   - [x] Owner: run `SCENE=strategic CVD=1` on a GPU and share the PNGs from `tools/out/` (first run 2026-11-11; review in decision 99)
   - [ ] Re-run the previews after decision 99 (no tone curve, coast field in km) and send all seven views, the CVD images and the console's frame times
+  - [x] Previews were sRGB-encoded twice (too pale); fixed in tests/gpu/renderer.ts (decision 100)
+  - [x] Night lights blew out at globe scale; they thin out with scale (decision 100)
   - [ ] Retune hillshade strength, night darkness and cloud opacity without the AgX curve (they were tuned under it)
   - [ ] Check 1 gaps: territory tint, front lines and theater names wait for S3's strategic overlays; the terminator view moved to 18:30 so the terminator crosses the globe
   - [ ] Clouds read as blurry fog at the floor (2 km bake): give them a crisper stylized edge band, as printed weather maps do

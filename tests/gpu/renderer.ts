@@ -7,7 +7,7 @@
  * stub canvas is enough. Its animation loop wants requestAnimationFrame, which
  * Node lacks; a context that never schedules a frame stands in.
  */
-import { RenderTarget, SRGBColorSpace, UnsignedByteType, WebGPURenderer } from 'three/webgpu';
+import { LinearSRGBColorSpace, RenderTarget, UnsignedByteType, WebGPURenderer } from 'three/webgpu';
 
 export interface HeadlessRenderer {
   readonly renderer: WebGPURenderer;
@@ -45,7 +45,10 @@ export async function headlessRenderer(
   animation.setContext({ requestAnimationFrame: () => 0, cancelAnimationFrame() {} });
 
   const target = new RenderTarget(width, height, { type: UnsignedByteType, depthBuffer: true });
-  target.texture.colorSpace = SRGBColorSpace;
+  // The renderer already encodes its output to sRGB in the shader, as for a canvas. An
+  // sRGB target would encode again in hardware, so the bytes would be encoded twice
+  // (every preview too pale before decision 100). The target stores the shader's bytes.
+  target.texture.colorSpace = LinearSRGBColorSpace;
   renderer.setOutputRenderTarget(target);
   renderer.setRenderTarget(target);
 

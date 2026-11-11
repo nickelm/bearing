@@ -56,6 +56,18 @@ const LIGHT = [0xff, 0xd2, 0x7a].map((c) => srgbToLinear(c / 255));
 const BASE_RADIUS_PX = 1.4;
 const TARGET_RADIUS_PX = 1.1;
 
+/** Halo strength at the core (decision 100: 0.45 stacked into a blowout at globe scale). */
+const HALO_STRENGTH = 0.3;
+
+/**
+ * Smallest light core radius (px) shown at a map scale (m per px, decision 100):
+ * none below 300 m per px, rising by 0.6 px per doubling of the scale, at most 2.5 px.
+ * At the ceiling (about 2.6 km per px) only lights of about 1.9 px and up remain.
+ */
+export function minLightRadiusPx(metersPerPx: number): number {
+  return Math.min(2.5, Math.max(0, 0.6 * Math.log2(Math.max(metersPerPx, 1) / 300)));
+}
+
 /** Core radius (px) of a settlement's light by population: 0.9 px for villages, up to 3.5 px. */
 export function lightRadiusPx(population: number): number {
   return Math.min(3.5, Math.max(0.9, 0.9 + 0.7 * Math.log2(Math.max(population, 1) / 2000)));
@@ -104,6 +116,8 @@ export class MapLights {
   readonly screenRight = uniform(new Vector3(1, 0, 0));
   readonly screenUp = uniform(new Vector3(0, 1, 0));
   readonly strength = uniform(1);
+  /** Lights with a smaller core radius (px) fade out: `minLightRadiusPx` of the map scale. */
+  readonly minRadiusPx = uniform(0);
   private mesh: Mesh | null = null;
   private readonly material: MeshBasicNodeMaterial;
 
@@ -138,9 +152,12 @@ export class MapLights {
     const facing = smoothstep(0, 0.05, dot(dir, view));
     const r = length(corner.xy).mul(HALO); // in core radii
     const core = clamp(float(1).sub(r).mul(radiusPx).add(0.5), 0, 1);
-    const halo = exp(r.mul(0.5).pow(2).negate()).mul(0.45);
+    const halo = exp(r.mul(0.5).pow(2).negate()).mul(HALO_STRENGTH);
     m.colorNode = vec3(LIGHT[0]!, LIGHT[1]!, LIGHT[2]!);
-    m.opacityNode = max(core, halo).mul(night).mul(facing).mul(this.strength);
+    // Thinned by scale (decision 100): lights smaller than the threshold fade out, so
+    // the globe shows the larger towns and the floor shows every village.
+    const shown = smoothstep(this.minRadiusPx.sub(0.3), this.minRadiusPx.add(0.2), radiusPx);
+    m.opacityNode = max(core, halo).mul(night).mul(facing).mul(this.strength).mul(shown);
     this.material = m;
   }
 
@@ -186,6 +203,7 @@ export class MapLights {
     this.eye.value.set(eye.x, eye.y, eye.z);
     this.sunDirection.value.set(sun.x, sun.y, sun.z);
     this.pixelAngle.value = pixelAngle;
+    this.minRadiusPx.value = minLightRadiusPx(pixelAngle * Math.max(1, eye.length() - this.radius));
   }
 
   dispose(): void {

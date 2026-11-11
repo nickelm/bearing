@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–99 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–100 are reflected in both.
 
 ---
 
@@ -1596,3 +1596,14 @@ The engineering calls made while adopting it:
   - Each gap is a TODO under S1.
 
 **Reason:** Part II specifies colors, not a camera response; a filmic curve built for the physically lit simulation view has no place on an illustrated map. Keeping the review in the log ties each TODO to the images that raised it.
+
+### 100. Previews encoded sRGB twice; night lights thin out with scale
+
+**Date:** 2026-11-11
+**Decision:**
+
+- **Double encoding.** The headless renderer of `tools/render.preview.ts` and the GPU tests (`tests/gpu/renderer.ts`, decision 32) rendered into an sRGB render target. Three already encodes its output to sRGB in the shader, as for a canvas, so the bytes were encoded twice: linear 0.0135 (`#1E2630`'s red) read back as 97 instead of 30. Every preview image so far has been too pale, the simulation view's shading previews included. The browser draws to a canvas with one encode and was not affected. The target now stores the shader's bytes as they are, and `tests/gpu/outputEncoding.test.ts` checks three known values. The strategic images' slate background and pastel colors (decision 99) were this bug, not AgX; the previews never set a tone curve. Decision 99's map pass without a tone curve still matters in the browser.
+- **Night lights.** With no tone curve on the map, the additive halos of hundreds of towns stacked past white at globe scale. Lights now fade out below a core radius that grows with the map scale: none below 300 m per px, plus 0.6 px per doubling, at most 2.5 px. At the ceiling (about 2.6 km per px) only towns of about 16,000 people and up show, and at the floor every village. The halo's strength drops from 0.45 to 0.3.
+- **Debugging without a GPU.** A cloud session can now run the previews on Mesa's software Vulkan driver (CLAUDE.md), which is how the double encoding was found.
+
+**Reason:** Previews are how the map is judged against Part II, so they must show the colors the browser shows. Thinning lights by scale keeps them points on the night side, as Part II asks, instead of a glow that hides the map.
