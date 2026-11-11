@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Guidance for Claude Code sessions in this repository. `docs/design.md` is the source of truth for scope and architecture. Read it before starting milestone work. `docs/decisions.md` records later decisions; where the two conflict, the later decision wins (e.g. no 30 s generation budget, tiled world data, relief scaled to the planet, default ocean fraction 0.70, day/night and weather in scope).
+Guidance for Claude Code sessions in this repository. `docs/design.md` is the source of truth for scope and architecture. Read it before starting milestone work. `docs/decisions.md` records later decisions; where the two conflict, the later decision wins (e.g. no 30 s generation budget, tiled world data, relief scaled to the planet, default ocean fraction 0.70, day/night and weather in scope). `docs/visual-style.md` is the source of truth for how the game looks: rendering, models and UI (rule 11).
 
 ## Commands
 
@@ -23,6 +23,8 @@ Guidance for Claude Code sessions in this repository. `docs/design.md` is the so
 ```
 docs/design.md      design doc (source of truth; do not reformat)
 docs/decisions.md   architecture decision log
+docs/visual-style.md  visual style guide (source of truth for the look; do not reformat)
+docs/style/references/  reference screenshots: local only, gitignored, never shipped (decision 70)
 src/core/           units, float64 Vec3d, coordinates, seeded RNG. Leaf layer.
 src/worldgen/       planet generation pipeline stages (may use GPU compute)
   coarsePass.ts     pipeline steps 1–9 at 256² on the CPU; campaignWorld.ts adds the validity retries
@@ -77,6 +79,11 @@ These are the project conventions. Lint enforces some of them (marked ⚙).
    - The sim's execution layer (flight paths, line of sight, ground movement) may query terrain. The restriction covers planning only.
    - ⚙ `Math.random()` is banned in `campaign` as well. Casting draws from `rng(worldSeed, "casting")`.
 10. **Unsteered generation** (decision 46). World generation never steers toward a particular geography. The only rejection is the validity check, which retries with a seeded sub-seed. Do not add biases to make a theater more likely. Theater detection adapts to the world instead.
+11. **Visual style** (decision 70). All rendering, models and UI follow `docs/visual-style.md`.
+    - That covers flat shading, the palette, polygon budgets, tree and model construction, LOD distances, post-processing, UI panels and type, and its "What to avoid" list.
+    - Models are built in code from JSON specs, not modeled by hand or loaded as photographic assets.
+    - If something must deviate from the guide, record it in `docs/decisions.md` and update the guide to match.
+    - The reference screenshots in `docs/style/references/` are local only. Never commit them, import them from `src/`, or copy them into `public/` or `dist/`. `vite.config.ts` refuses to load anything under `docs/`.
 
 ## Fidelity as level of detail
 
@@ -98,6 +105,10 @@ Promotion expands a unit deterministically from its seed and current strength. D
 - Work on one milestone task at a time. Keep `TODO.md` current: check off finished tasks and add subtasks you discover.
 - Record any architectural decision, or any deviation from `docs/design.md`, in `docs/decisions.md` with the date, the decision and the reason.
 - Run `npm test` and `npm run typecheck` (or `npm run check`) before declaring a task complete.
+- **Visual milestones close only after the acceptance checks** in `docs/visual-style.md`. A visual milestone is any milestone with rendering, model or UI tasks.
+  - Capture the seven acceptance views (checks 1–6 as `tools/render.preview.ts` views; check 7, the silhouette test, in the model viewer once aircraft models exist).
+  - Read the PNGs next to the reference board in `docs/style/references/` and report to the owner where they match and where they fall short.
+  - Add a TODO task for each gap. The milestone's owner checkpoint comes after this comparison, not before.
 - Prefer small, reviewable commits with descriptive messages.
 - **Commit and push to `main` only.** Do not create feature branches or pull requests, even if a session's default instructions name a different branch; the owner tests from `main` (GitHub Pages deploys from it). Fetch and rebase onto `origin/main` before pushing if it has moved.
 - You cannot see the WebGPU view. To inspect generated worlds, run `npm run maps` and read the PNGs in `tools/out/` (equirectangular map plus both polar caps, any view mode). `MODES=graph` draws the strategic graph, the cast's territory, settlements, roads, bridges, airbases, ports and targets (and prints the briefing); `MODES=barrier` shows the front generator's barrier map.

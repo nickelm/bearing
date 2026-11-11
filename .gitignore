@@ -24,3 +24,8 @@ desktop.ini
 
 # Offline tool output
 tools/out/
+
+# Style reference screenshots: local mood board only. They come from another
+# project and the repo is public, so they never go to GitHub (decision 70).
+docs/style/references/*
+!docs/style/references/README.md

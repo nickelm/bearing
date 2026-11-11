@@ -181,6 +181,8 @@ Civilian geography (settlements, roads, bridges) joins the strategic graph befor
 - [ ] Keep civilian roads off airfields (a road may cross a taxiway; route around airbase footprints or end them at the gate)
 - [ ] Flatten the terrain under runways (they follow the fine terrain's detail noise)
 - [ ] Island campaigns can leave the Alliance under 15 airbases (seed 11: 9), since its islands have little flat land; tied to the lopsided island split noted under milestone 4
+- [ ] Acceptance views from [docs/visual-style.md](docs/visual-style.md) (checks 1–6: golden-hour orbit, 5 km mixed landscape, 500 m conifer edge with a road, mountains at low sun, airbase at dusk, coast with glint) as named views in `tools/render.preview.ts` (decision 70)
+- [ ] Style audit: compare those views with the reference board and the guide (terrain facets and shade quantization, farmland, rivers, ocean, haze, trees, towns, lights); the milestone 3 and 5 rendering predates the guide (smooth shading, triplanar cliffs, clump trees). Add a task per gap
 - [ ] Checkpoint 6: owner review of towns, roads, airbases and night lights in the browser
 
 ## Milestone 6: Simulation core and weather (done)
@@ -232,11 +234,21 @@ Civilian geography (settlements, roads, bridges) joins the strategic graph befor
 - [ ] Concurrency cap so that 20–50 aircraft are airborne
 - [ ] Determinism tests: identical ATO at 1× and 64×, and independent of the viewing side (decision 48)
 
+### Models ([docs/visual-style.md](docs/visual-style.md), decision 70)
+
+Aircraft, vehicles, ships, buildings and trees are generated in code from small JSON specs, flat-shaded with vertex colors.
+
+- [ ] Model spec JSON format and types: lofted fuselages from 6–8-sided cross-sections along the length; wings and tails as extruded planforms with sweep, dihedral, thickness and a sharp leading edge; primitives (box, beveled box, pyramid stack, coarse icosphere blob, cylinder); mirroring; named face groups; camouflage schemes mapping face groups to palette colors; emissive points (afterburners, navigation lights). Validation with clear errors, and tests
+- [ ] Procedural model builder: spec → non-indexed, flat-shaded `BufferGeometry` with vertex colors and baked per-vertex AO, plus emissive anchors; deterministic (same spec, same bytes); fails a test when a model exceeds its class's triangle budget from the guide
+- [ ] Faction palettes and camouflage schemes from the guide's palette tables, as data shared by the builder and the viewer
+- [ ] Debug model-viewer page: renders any spec with a turntable, sun direction and time of day, sky light and exposure controls, wireframe, triangle count, and a silhouette mode (solid black on a pale sky, acceptance check 7); hot-reloads specs in dev; reachable from the debug GUI and built as a second Vite page under `/bearing/`
+- [ ] First specs: one fighter and one strike aircraft per side, checked in the viewer and the silhouette test
+
 ### Mission search and display
 
 - [ ] Debug GUI toggle for the viewing side (developer tool until milestone 9)
 - [ ] Mission icons and route lines from orbit
-- [ ] Low-poly aircraft meshes below about 50 km altitude
+- [ ] Low-poly aircraft meshes below about 50 km altitude, built from model specs
 - [ ] Mission search panel: ongoing and upcoming missions of the viewing side
 - [ ] Filters: mission type, aircraft, theater, current phase, threat level, time until action
 - [ ] Focus the camera on a selected mission; smooth transition to a chase camera on one of its aircraft
@@ -270,7 +282,8 @@ Civilian geography (settlements, roads, bridges) joins the strategic graph befor
   - [ ] GPU timestamp queries per pass, to split terrain, clouds, sky and trees on real hardware
   - [ ] Per-object uniforms on terrain meshes (eight per tile) packed into fewer, if draw submission shows up in profiles
 - [ ] Weather in the renderer (from milestone 6): fog and visibility, rain and snow on the ground, live winds for wave direction
-- [ ] Tree LOD: one cone per clump beyond about 2 km, or impostors (decision 45: ~6.6 M triangles over dense forest at the default 5 km range)
+- [ ] Tree kit from model specs ([docs/visual-style.md](docs/visual-style.md), Vegetation): conifer, broadleaf, birch/poplar, palm, acacia, shrub, dead/burnt, each within the guide's triangle budget and sturdy proportions (canopy width ≥ ½ height, trunk ≥ ⅒); per-instance scale 0.8–1.3, yaw, tilt under 4°, and a value-first shade shift within the biome's canopy shades; types assigned by biome; clustered placement with a sharp forest edge and a scattered fringe of trees and shrubs. Replaces the milestone 3 clump trees
+- [ ] Tree LOD, following the guide's bands: instanced trees casting shadows to 1.5 km, merged cluster meshes (10–30 trees each, no shadows) to 5 km, terrain forest shade beyond, with the 5 km seam hidden by haze and matched colors (decision 45: ~6.6 M triangles over dense forest at the default 5 km range today; budget under 2 M per frame and about 50,000 instances within 1.5 km)
 - [ ] Denser forests: closer clump spacing in closed-canopy biomes, paid for by the tree LOD (owner request at checkpoint 4)
 - [ ] Bundle size and code splitting
 - [ ] Scripted flythrough camera path for screenshots, including a dawn and a weather front

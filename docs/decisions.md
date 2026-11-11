@@ -1171,3 +1171,16 @@ It skips GPU erosion. The design's "reduced global erosion pass" is left out: dr
 Measured on lavapipe at 512 × 288 (ratios only; a software rasterizer is about two orders of magnitude slower than a desktop GPU): the orbit view went from 125 to 42 ms per frame, oblique (20 km) from 460 to 230, coast (80 km) from 750 to 220, roads (60 km) from 660 to 190, night from 440 to 93. The tile-bounds fix comes on top of that in views below the tallest exaggerated peak, and cuts CPU time per frame there by about the same factor as the draw count (three's WebGPU backend spends about 25–30 µs of CPU per draw).
 
 **Reason:** The terrain material is one large fragment shader, so its cost multiplies by every pixel and every redundant subgraph. Caching what changes slowly (cloud coverage over game time, tile bounds over frames), computing shared terms once, and skipping layers that contribute nothing keeps the look unchanged while removing most of the work. Adaptive resolution then absorbs what remains on any GPU.
+
+### 70. Visual style guide; reference board stays local; models from JSON specs
+
+**Date:** 2026-11-11
+**Decision:** `docs/visual-style.md` (revision 1, from the owner) is binding for all rendering, models and UI (CLAUDE.md rule 11).
+
+- **Acceptance checks gate visual milestones.** A milestone with rendering, model or UI work closes only after the guide's seven acceptance views are captured and compared with the reference board. Checks 1–6 become named views in `tools/render.preview.ts`; check 7, the silhouette test, runs in the model viewer.
+- **The reference board is local only.** The five screenshots in `docs/style/references/` come from another project and the repository is public, so `.gitignore` excludes them (only the folder's README is tracked) and they sync through the owner's Dropbox. They also stay out of the build: Vite bundles only what `index.html` imports, there is no `public/` folder, Pages deploys `dist/` from a git checkout, and a `vite.config.ts` plugin refuses to load any module under `docs/`.
+- **Models from JSON specs.** Aircraft, vehicles, ships, buildings and trees will be built in code from small JSON specs (cross-section lofts, extruded planforms, primitives, face groups, camouflage schemes) by a procedural builder, with a debug model-viewer page (milestone 7). The tree kit replaces the milestone 3 clump trees and comes with the guide's LOD bands (milestone 9).
+- **Existing rendering predates the guide.** Smooth-shaded terrain, triplanar cliffs and clump trees from milestones 3 and 5 differ from it. A style audit before checkpoint 6 lists each gap as a task rather than reworking everything at once.
+- `docs/visual-style.md` is in `.prettierignore`, like `docs/design.md`.
+
+**Reason:** One documented look keeps every session's rendering work consistent, and the acceptance views make "done" checkable without a browser. The screenshots are not ours to publish. Spec-built models suit the low-poly style, stay reviewable as text and make new fictional types cheap.

@@ -4,3 +4,5 @@ coverage
 package-lock.json
 # Authored by hand; the source of truth for scope. Do not reformat.
 docs/design.md
+# Authored by hand; the source of truth for look, models and UI. Do not reformat.
+docs/visual-style.md
