@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,6 +15,20 @@ const projectHash = createHash('sha1')
 
 /** Shared with vitest.tools.config.ts. */
 export const cacheDir = join(tmpdir(), 'vite-cache', `bearing-${projectHash}`);
+
+/**
+ * The commit a build comes from: GitHub Actions sets GITHUB_SHA; locally ask git.
+ * Shown on screen with the build time, so a tester can tell a new deploy took hold.
+ */
+function buildCommit(): string {
+  const sha = process.env.GITHUB_SHA;
+  if (sha) return sha.slice(0, 7);
+  try {
+    return execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim();
+  } catch {
+    return 'unknown';
+  }
+}
 
 const docsDir = normalizePath(join(import.meta.dirname, 'docs')) + '/';
 
@@ -39,6 +54,11 @@ export default defineConfig(({ command, isPreview }) => ({
   base: command === 'build' || isPreview ? '/bearing/' : '/',
   cacheDir,
   plugins: [keepDocsOutOfBuild()],
+  // Build stamp (src/ui/buildStamp.ts): the dev server shows "dev" instead.
+  define: {
+    __BUILD_TIME__: JSON.stringify(command === 'build' ? new Date().toISOString() : ''),
+    __BUILD_COMMIT__: JSON.stringify(command === 'build' ? buildCommit() : 'dev'),
+  },
   build: {
     // WebGPU-only project: every supported browser handles modern syntax and top-level await.
     target: 'esnext',

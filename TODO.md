@@ -399,6 +399,7 @@ Aircraft, vehicles, ships, buildings and trees are generated in code from small 
 ## Known issues
 
 - [ ] Intermittent GPU determinism flake in Vitest (about 1 run in 5–10 of the full suite): a GPU determinism test (`detailStage`, `tileSynth`) gets different results for two identical runs. Present at the M2 baseline; not reproduced by 40 back-to-back detail-stage runs under load. Tests now report how many values differ and whether they are zeros (a readback race in Dawn's Node bindings would show zeros). First report (2026-11-10): 24 of 221k cells differ, worst 0.23 m, no zeros, in the single-dispatch detail kernel (pure per cell, no in-place neighbor reads). So it is not a readback race; suspect the GPU or driver under concurrent load. Check whether it happens with `--no-file-parallelism`, and on another GPU.
+- [ ] CPU determinism flake in CI (2026-11-11, deploy run 15 for `6274249`): `tests/infrastructure.test.ts` "is deterministic" built `riverWorld(1983)` twice in one process and got different graphs. Only `barrierLines[1].sides[0]` differed (area 5.815e11 vs 5.910e11 m², fraction, depth); the line's endpoints and width matched, so the side flood fill or the path between equal endpoints changed, worth about 35 cells at resolution 96. The commit touched only rendering. Not reproduced locally in 6 runs of the file and a full suite, on Node 22 and on Node 24 (CI's version). Suspects: an earlier test in the file mutating shared state, or tie-breaking in the barrier path search. If it recurs, log the path cells of both builds.
 
 ## After the demo
 

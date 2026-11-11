@@ -61,6 +61,7 @@ import type {
   WorldGuiParams,
 } from './ui/debugGui';
 import { FrameTimeOverlay } from './ui/frameTimeOverlay';
+import { BuildStamp } from './ui/buildStamp';
 import { CampaignPanel } from './ui/campaignPanel';
 import { SeedBrowser } from './ui/seedBrowser';
 import { THEATER_LABELS } from './campaign/theaters';
@@ -73,6 +74,8 @@ import { TimeControls } from './ui/timeControls';
 import { GenerationCancelled, WorldgenClient } from './workers/worldgenClient';
 
 async function main(): Promise<void> {
+  // First, so the deployed version shows even if WebGPU is missing.
+  new BuildStamp(__BUILD_COMMIT__, __BUILD_TIME__);
   const probe = await probeWebGpu();
   if ('problem' in probe) {
     showWebGpuRequired(probe.problem);
@@ -195,7 +198,8 @@ async function main(): Promise<void> {
 
   const campaignParams: CampaignGuiParams = {
     overlay: true,
-    briefing: true,
+    // Off by default: the panel covers much of the screen (GUI → Campaign → Briefing).
+    briefing: false,
     seedUsed: '—',
     theaters: '—',
     rangeFactor: 0,

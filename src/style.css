@@ -183,3 +183,19 @@ body {
   background: rgb(120 70 0 / 0.85);
   border-radius: 4px;
 }
+
+.build-stamp {
+  position: fixed;
+  top: 32px;
+  left: 8px;
+  padding: 2px 8px;
+  background: rgb(0 0 0 / 0.45);
+  border-radius: 4px;
+  font:
+    11px/1.4 ui-monospace,
+    Consolas,
+    monospace;
+  color: #a8b0ba;
+  pointer-events: none;
+  white-space: nowrap;
+}
