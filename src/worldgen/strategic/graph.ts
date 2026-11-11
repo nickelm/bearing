@@ -62,6 +62,10 @@ export interface LandNode {
   airbases: SiteList;
   /** Index into `StrategicGraph.fronts`, or −1 if the node has no barrier lines. */
   front: number;
+  /** The node's named feature (continent, island or archipelago) in `StrategicGraph.features`. */
+  feature: number;
+  /** Naming flavor of the node's region (decision 96; worldgen/names/flavors.ts). */
+  flavor: number;
 }
 
 /** Per-side statistics of a barrier line. Side 0 is the side toward the low end of the landmass axis. */
@@ -120,6 +124,8 @@ export interface Corridor {
   roads: number;
   /** Crossings weighted by road class (highway 1, main 0.6, minor 0.3). */
   roadScore: number;
+  /** Name from the toponymy stage, e.g. "the Kessar Gap" (decision 96). */
+  name: string;
 }
 
 /**
@@ -250,6 +256,143 @@ export interface BridgeList {
   roadClass: Uint8Array;
 }
 
+// ---- Named features (design pipeline steps 7 and 8; decisions 95, 96) ----
+
+/** Kinds of named feature. Codes are stored in `FeatureList.kind`. */
+export const FeatureKind = {
+  Continent: 0,
+  Island: 1,
+  Archipelago: 2,
+  Ocean: 3,
+  Sea: 4,
+  Bay: 5,
+  Strait: 6,
+  Lake: 7,
+  Range: 8,
+  Peak: 9,
+  Hills: 10,
+  Plain: 11,
+  Plateau: 12,
+  Desert: 13,
+  Forest: 14,
+  Wetland: 15,
+  River: 16,
+} as const;
+export type FeatureKind = (typeof FeatureKind)[keyof typeof FeatureKind];
+export const FEATURE_KIND_COUNT = 17;
+export const FEATURE_KIND_NAMES: readonly string[] = [
+  'continent',
+  'island',
+  'archipelago',
+  'ocean',
+  'sea',
+  'bay',
+  'strait',
+  'lake',
+  'range',
+  'peak',
+  'hills',
+  'plain',
+  'plateau',
+  'desert',
+  'forest',
+  'wetland',
+  'river',
+];
+
+export type FeatureGeometry = 'point' | 'polyline' | 'polygon';
+
+/**
+ * Geometry per kind. Polygons are rasters on the coarse grid: a feature's cells are
+ * those whose entry in its layer (`FEATURE_LAYER`) holds its id; an archipelago is
+ * the union of its islands (features whose `parent` is the archipelago). Their
+ * polyline (`offsets`, `points`) is a label axis: the longest chord through the
+ * anchor along the feature's principal direction. Points have no polyline.
+ */
+export const FEATURE_GEOMETRY: readonly FeatureGeometry[] = [
+  'polygon', // continent
+  'polygon', // island
+  'polygon', // archipelago (union of its islands)
+  'polygon', // ocean
+  'polygon', // sea
+  'polygon', // bay
+  'point', // strait
+  'polygon', // lake
+  'polygon', // range (with its ridge line as the polyline)
+  'point', // peak
+  'polygon', // hills
+  'polygon', // plain
+  'polygon', // plateau
+  'polygon', // desert
+  'polygon', // forest
+  'polygon', // wetland
+  'polyline', // river
+];
+
+/** Raster layers of polygon features; each cell belongs to at most one feature per layer. */
+export type FeatureLayer = 'land' | 'water' | 'relief' | 'cover';
+export const FEATURE_LAYER: readonly (FeatureLayer | null)[] = [
+  'land',
+  'land',
+  null,
+  'water',
+  'water',
+  'water',
+  null,
+  'water',
+  'relief',
+  null,
+  'relief',
+  'relief',
+  'relief',
+  'cover',
+  'cover',
+  'cover',
+  null,
+];
+
+/**
+ * The world's named geography, struct-of-arrays in id order (decision 95).
+ *
+ * Per-kind meaning of `height` and `measure`:
+ *
+ * | Kind | height (m, physical) | measure |
+ * |---|---|---|
+ * | peak | summit height | prominence (m, physical) |
+ * | range, hills, plateau | highest point | mean height (m) |
+ * | river | source height | discharge at the mouth (m³/s) |
+ * | strait | 0 | width of water (m) |
+ * | sea, bay, ocean | 0 | greatest distance from land (m) |
+ * | lake | surface height | greatest depth (m) |
+ * | desert | highest point | hot (sand) share of its cells, 0..1 |
+ * | others | highest point | 0 |
+ */
+export interface FeatureList {
+  count: number;
+  kind: Uint8Array;
+  /** 0..1, comparable across kinds: labels rank by it. */
+  importance: Float32Array;
+  /** Label anchor, xyz interleaved unit directions: a point inside the feature. */
+  anchor: Float64Array;
+  /** Radius of a cap around the anchor that holds the feature (m). */
+  extent: Float32Array;
+  /** Area (m²) of polygons, length (m) of rivers, 0 for points. */
+  size: Float32Array;
+  height: Float32Array;
+  measure: Float32Array;
+  /** Enclosing feature: a peak's range, an island's archipelago; −1 if none. */
+  parent: Int32Array;
+  /** Naming region: the land node the feature lies on or next to (−1 if none). */
+  region: Int32Array;
+  /** Polyline of feature k: points [offsets[k], offsets[k + 1]). */
+  offsets: Uint32Array;
+  /** Unit directions, xyz interleaved. */
+  points: Float64Array;
+  /** Feature id per coarse cell in each raster layer, −1 for none. */
+  layers: Record<FeatureLayer, Int16Array>;
+  names: string[];
+}
+
 export interface StrategicGraph {
   /** Coarse grid cells per face edge the graph was built on. */
   resolution: number;
@@ -263,6 +406,8 @@ export interface StrategicGraph {
   habitability: Uint8Array;
   roads: RoadNetwork;
   bridges: BridgeList;
+  /** Named geography (decision 95). */
+  features: FeatureList;
   lanes: SeaLane[];
   chokepoints: Chokepoint[];
   barrierLines: BarrierLine[];
@@ -362,7 +507,7 @@ export function graphBuffers(g: StrategicGraph): ArrayBuffer[] {
   const s = g.settlements;
   out.push(s.cells.buffer, s.points.buffer, s.population.buffer, s.node.buffer, s.flags.buffer);
   out.push(g.habitability.buffer);
-  out.push(...roadBuffers(g.roads), ...bridgeBuffers(g.bridges));
+  out.push(...roadBuffers(g.roads), ...bridgeBuffers(g.bridges), ...featureBuffers(g.features));
   // A buffer may appear only once in a transfer list.
   return [...new Set(out)] as ArrayBuffer[];
 }
@@ -381,4 +526,99 @@ export function settlementPoint(s: SettlementList, i: number): Point {
 
 export function settlementCount(s: SettlementList): number {
   return s.cells.length;
+}
+
+export function featureBuffers(f: FeatureList): ArrayBufferLike[] {
+  return [
+    f.kind.buffer,
+    f.importance.buffer,
+    f.anchor.buffer,
+    f.extent.buffer,
+    f.size.buffer,
+    f.height.buffer,
+    f.measure.buffer,
+    f.parent.buffer,
+    f.region.buffer,
+    f.offsets.buffer,
+    f.points.buffer,
+    f.layers.land.buffer,
+    f.layers.water.buffer,
+    f.layers.relief.buffer,
+    f.layers.cover.buffer,
+  ];
+}
+
+export function featureAnchor(f: FeatureList, i: number): Point {
+  return [f.anchor[i * 3]!, f.anchor[i * 3 + 1]!, f.anchor[i * 3 + 2]!];
+}
+
+/** The polyline of feature i (a subarray view, xyz interleaved). */
+export function featurePolyline(f: FeatureList, i: number): Float64Array {
+  return f.points.subarray(f.offsets[i]! * 3, f.offsets[i + 1]! * 3);
+}
+
+/** Feature ids of the given kinds. */
+export function featuresOfKind(f: FeatureList, ...kinds: FeatureKind[]): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < f.count; i++) if (kinds.includes(f.kind[i] as FeatureKind)) out.push(i);
+  return out;
+}
+
+/** The feature of a layer at a coarse cell, or −1. */
+export function featureAt(f: FeatureList, layer: FeatureLayer, cell: number): number {
+  return f.layers[layer][cell]!;
+}
+
+/** Display text of a name on the map: cartographic labels drop the leading article. */
+export function labelText(name: string): string {
+  return name.startsWith('the ') ? name.slice(4) : name;
+}
+
+/** The feature of the given kinds whose anchor is nearest to `p`, within `within` (m), or −1. */
+export function nearestFeature(
+  g: StrategicGraph,
+  p: Readonly<Point>,
+  kinds: readonly FeatureKind[],
+  within = Infinity,
+): number {
+  const f = g.features;
+  let best = -1;
+  let bestD = within;
+  for (let i = 0; i < f.count; i++) {
+    if (!kinds.includes(f.kind[i] as FeatureKind)) continue;
+    const d = surfaceDistance(p, featureAnchor(f, i), g.radius);
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  }
+  return best;
+}
+
+/**
+ * Features of the given kinds that run along a polyline: at least `share` of the
+ * feature's own polyline (its anchor, for points) lies within `within` (m) of the
+ * line. Most important first.
+ */
+export function featuresAlong(
+  g: StrategicGraph,
+  line: Float64Array,
+  kinds: readonly FeatureKind[],
+  within: number,
+  share = 0.3,
+): number[] {
+  const f = g.features;
+  const out: number[] = [];
+  for (let i = 0; i < f.count; i++) {
+    if (!kinds.includes(f.kind[i] as FeatureKind)) continue;
+    const own = featurePolyline(f, i);
+    const pts = own.length > 0 ? own : f.anchor.subarray(i * 3, i * 3 + 3);
+    const n = pts.length / 3;
+    let near = 0;
+    for (let k = 0; k < n; k++) {
+      if (distanceToPolyline(polylinePoint(pts, k), line, g.radius) <= within) near++;
+    }
+    if (near >= share * n) out.push(i);
+  }
+  return out.sort((a, b) => f.importance[b]! - f.importance[a]! || a - b);
 }

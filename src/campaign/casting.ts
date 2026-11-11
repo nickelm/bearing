@@ -24,6 +24,9 @@ import { rng } from '../core/rng';
 import type { Rng, WorldSeed } from '../core/rng';
 import type { LandNode, Point, StrategicGraph } from '../worldgen/strategic/graph';
 import {
+  FeatureKind,
+  labelText,
+  nearestFeature,
   nodeDistance,
   polylinePoint,
   settlementPoint,
@@ -165,14 +168,16 @@ function pickSpaced<T>(
   return out;
 }
 
-function nodeName(names: NameGenerator, n: LandNode): string {
+/** A node's name is its feature's (decision 96); a generated one only if it has none. */
+function nodeName(graph: StrategicGraph, names: NameGenerator, n: LandNode): string {
+  if (n.feature >= 0) return graph.features.names[n.feature]!;
   return n.kind === 'archipelago' ? `the ${names.short()} Islands` : names.land();
 }
 
 export function castCampaign(graph: StrategicGraph, detection: Detection, seed: WorldSeed): Cast {
   const r = rng(seed, 'casting');
   const names = new NameGenerator(r.fork('names'));
-  const nodeNames = graph.nodes.map((n) => nodeName(names, n));
+  const nodeNames = graph.nodes.map((n) => nodeName(graph, names, n));
 
   // 1. Theaters.
   const theaters: Theater[] = detection.selected.map((c: TheaterCandidate, id) => ({
@@ -309,10 +314,36 @@ function theaterName(
       return `${nodeNames[c.nodes[0]!]}–${nodeNames[c.nodes[1]!]} sea lane`.replace(/the /g, '');
     case 'chokepoint': {
       const cp = graph.chokepoints[c.chokepoint!]!;
+      // The strait or island feature at the chokepoint, if there is one (decision 96).
+      const kinds = cp.kind === 'strait' ? [FeatureKind.Strait] : [FeatureKind.Island];
+      const f = nearestFeature(graph, cp.point, kinds, cp.kind === 'strait' ? 150e3 : 100e3);
+      if (f >= 0) {
+        const name = labelText(graph.features.names[f]!);
+        return cp.kind === 'island' && !/Island$/.test(name) ? `${name} Island` : name;
+      }
       return cp.kind === 'strait' ? `${names.short()} Strait` : `${names.short()} Island`;
     }
-    case 'island-campaign':
-      return `${names.short()} Sea campaign`;
+    case 'island-campaign': {
+      // Named after the sea the islands lie in (decision 96).
+      let x = 0;
+      let y = 0;
+      let z = 0;
+      for (const id of c.nodes) {
+        const p = graph.nodes[id]!.centroid;
+        x += p[0];
+        y += p[1];
+        z += p[2];
+      }
+      const l = Math.hypot(x, y, z) || 1;
+      const sea = nearestFeature(
+        graph,
+        [x / l, y / l, z / l],
+        [FeatureKind.Sea, FeatureKind.Ocean, FeatureKind.Bay],
+      );
+      return sea >= 0
+        ? `${labelText(graph.features.names[sea]!)} campaign`
+        : `${names.short()} Sea campaign`;
+    }
     case 'strategic':
       return 'Strategic theater';
   }

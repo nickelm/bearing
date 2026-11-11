@@ -12,6 +12,7 @@
  *   $env:SEED="7"; $env:MODES="biome,plates"; npm run maps   (PowerShell)
  *   SEED=7 MODES=biome,temperature RES=128 npm run maps       (POSIX)
  *   SEED=7 MODES=graph,barrier npm run maps   strategic graph overlay, barrier map
+ *   SEED=7 MODES=features npm run maps         named features (and a table of names)
  *
  * Output goes to tools/out/<seed>-<res>-<mode>.png (gitignored).
  */
@@ -35,11 +36,12 @@ import { buildTerritory } from '../src/worldgen/strategic/territory';
 import type { Territory } from '../src/worldgen/strategic/territory';
 import type { Infrastructure } from '../src/worldgen/strategic/infrastructure';
 import { barrierColor, drawGraph, drawInfrastructure } from './graphOverlay';
+import { drawFeatures, featureCellColor, featureTable } from './featureOverlay';
 import { MapCanvas } from './mapCanvas';
 import { encodePng } from './png';
 
-/** Extra modes beyond the globe's view modes: the strategic graph overlay and the barrier map. */
-const EXTRA_MODES = ['graph', 'barrier'] as const;
+/** Extra modes beyond the globe's view modes: the strategic graph overlay, the barrier map, named features. */
+const EXTRA_MODES = ['graph', 'barrier', 'features'] as const;
 type MapMode = ViewMode | (typeof EXTRA_MODES)[number];
 
 const SIZE = 1024;
@@ -178,6 +180,22 @@ it('render world maps', () => {
           `${infra!.ports.length} ports, ${infra!.targets.length} targets`,
       );
       console.info(cast!.briefing);
+    } else if (mode === 'features') {
+      const f = graph!.features;
+      img = render(world, grid, 'biome', (c) => {
+        const k = featureCellColor(f, c);
+        if (!k) return null;
+        const b = cellColor(
+          'biome',
+          world,
+          c,
+          faceColors(DEFAULT_PLANET_PARAMS.seed)[grid.faceOf(c)]!,
+        );
+        return [0.35 * b[0] + 0.65 * k[0], 0.35 * b[1] + 0.65 * k[1], 0.35 * b[2] + 0.65 * k[2]];
+      });
+      const canvas = new MapCanvas(img, SIZE);
+      drawFeatures(canvas, f);
+      console.info(featureTable(f, Number(process.env.TOP ?? 80)));
     } else if (mode === 'barrier') {
       const m = world.maps;
       const barrier = barrierMap(

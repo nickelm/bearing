@@ -6,9 +6,11 @@
  *   landmasses and statistics → airbase and port sites → land nodes
  *   (landmasses and archipelagos) → ocean grid, sea lanes, chokepoints and
  *   node distances → settlements → movement cost, roads and bridges →
- *   barrier map and fronts (corridors use the roads)
+ *   barrier map and fronts (corridors use the roads) → named features
+ *   (geography/) → names (names/)
  *
- * Deterministic: settlements draw from rng(seed, "settlements"); every other
+ * Deterministic: settlements draw from rng(seed, "settlements"), names from
+ * rng(seed, "names"); every other
  * stage is free of randomness, with ties broken by cell and node index.
  */
 import { labelLandmasses, landmassStats, referenceSlope } from '../landmasses';
@@ -24,6 +26,8 @@ import type { RoadBuilder } from './roads';
 import { placeSettlements } from './settlements';
 import { buildSeaLanes } from './ocean';
 import { airbaseSites, portSites } from './sites';
+import { extractFeatures } from '../geography';
+import { nameWorld } from '../names';
 
 export function strategicContext(input: StrategicInput): StrategicContext {
   const { grid, height, biome, reliefScale, radius } = input;
@@ -92,6 +96,15 @@ export function buildStrategicGraphWithContext(input: StrategicInput): Strategic
     roads: roads.network,
   });
   lap('fronts');
+  const features = extractFeatures({
+    ctx,
+    nodes: nb.nodes,
+    nodeOfLandmass: nb.nodeOfLandmass,
+    members: nb.members,
+    chokepoints: ocean.chokepoints,
+    timings,
+  });
+  lap('features');
   const graph: StrategicGraph = {
     resolution: ctx.grid.n,
     radius: ctx.radius,
@@ -100,6 +113,7 @@ export function buildStrategicGraphWithContext(input: StrategicInput): Strategic
     habitability,
     roads: roads.network,
     bridges: roads.bridges,
+    features,
     lanes: ocean.lanes,
     chokepoints: ocean.chokepoints,
     barrierLines: lines,
@@ -108,5 +122,7 @@ export function buildStrategicGraphWithContext(input: StrategicInput): Strategic
     airbaseCapacity: nb.nodes.reduce((s, n) => s + n.airbases.cells.length, 0),
     timings,
   };
+  nameWorld(graph, input.seed ?? 0);
+  lap('names');
   return { graph, ctx, nodes: nb, roads: roads.builder, walker };
 }

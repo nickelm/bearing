@@ -1515,3 +1515,36 @@ The engineering calls made while adopting it:
 - _Symmetry:_ one flight director and one flight model keep the AI and the player on equal physical terms and make taking control and handing back trivial. Following and flying become the same experience.
 - _Browser budget:_ one exterior model and a 2D overlay cost far less than a detailed interior with its own lighting and render pass.
 - The cost is immersion and some realism: the chase camera gives more awareness than a real pilot has, especially to the rear. That advantage is accepted in a single-player game against AI.
+
+### 95. Named features: a list in the graph, raster polygons, extraction in the builder
+
+**Date:** 2026-11-11
+**Decision:** Pipeline step 7 (`worldgen/geography/`) turns the coarse maps into a `FeatureList` in the strategic graph (`worldgen/strategic/graph.ts`), so the types live with the graph (decision 72) and campaign logic reads them like any other graph fact.
+
+- **Records.** Struct-of-arrays: kind (17 kinds), importance 0..1, anchor, extent, size, `height` and `measure` (per-kind meaning, documented on the type), parent (a peak's range, an island's archipelago, a tributary's stem), naming region, an optional polyline and the name. Every array transfers.
+- **Polygons are rasters.** Each polygon feature owns cells in one of four `Int16Array` layers on the coarse grid (land, water, relief, cover), with a label axis (the longest chord through the anchor along the principal direction) as its polyline. Tracing outlines on the cube sphere buys nothing the renderer and the briefing need; the layers answer "what is here" in one lookup. An archipelago is the union of its islands.
+- **Anchors** are the most interior cell (farthest from the edge, nearest the centroid on ties), so a ring-shaped sea anchors in its water.
+- **Water.** Oceans, seas and bays come from a watershed on D, the distance to land. A basin that meets a deeper one stays separate only if the saddle's openness is at most 60% of its own peak; basins under 6,000 km² merge across their highest saddle. Oceans need 1.2 million km² and 250 km of open water, seas 50,000 km². Straits are the saddles between two water features narrower than 150 km with a sea or ocean on one side, plus the graph's strait chokepoints, merged within 120 km. Lakes are lake cells over 400 km².
+- **Relief.** Classes per cell in reference meters and slope (the units of `landmasses.ts`): plateau (≥ 900 m, flat at the cell and its neighbors, so a ridge crest is not a plateau), mountain, hills, plain. Ranges are mountain components with one-cell gaps bridged, over 3,000 km²; the ridge line joins the ends of the range's longest geodesic along high ground. Peaks come from topographic prominence on the coarse grid (at least 500 m reference prominence and 1,000 m height); a peak's `height` is physical (decision 14), so labels show what the altimeter will read.
+- **Cover.** Deserts (hot and cold; `measure` is the sand share), forests and wetlands as biome components over a size threshold. There is no wetland biome, so wetlands are flat, low, watered land next to big rivers, lakes or a low coast.
+- **Rivers.** Main stems from each mouth with at least the larger of 100 m³/s and the 60th-largest mouth's discharge, upstream through the largest donor; big tributaries start stems of their own.
+- **Importance** is a per-kind log scale of the feature's magnitude times a kind weight (oceans and continents 1, ranges 0.9, wetlands 0.5), so labels can rank across kinds.
+- **Cost.** About 1 s per world at 256² on the session's machine, mostly the water watershed and two full-grid distance fields.
+- **Fix found on the way.** Two Dijkstra searches in `territory.ts` stored distances in a `Float32Array` and compared the float64 heap key against them, so a key rounded down skipped its cell. They now compare in float32. Infrastructure placement can shift slightly; `GENERATOR_VERSION` goes to 9 for the new graph anyway.
+
+**Reason:** The design's step 7 asks for records with geometry, extent and importance. Raster polygons keep extraction simple and exact on the grid the graph already uses, and putting the list in the graph keeps rule 9: the briefing and casting read features without touching world maps.
+
+### 96. Toponymy: five flavors, one per naming region; names for features, settlements and corridors
+
+**Date:** 2026-11-11
+**Decision:** Pipeline step 8 (`worldgen/names/`) names the world from `rng(seed, "names")`.
+
+- **Flavors.** Five syllable inventories with phonotactic rules (`names/flavors.ts`): A (northern), B (eastern), C (southern), D (steppe) and E (islands). Labels describe sound, not real cultures, and names stay ASCII so every label font covers them. Stems run 3–9 letters, with no run of three consonants or three vowels and a short blocklist of English words and slurs.
+- **Regions.** Answering the design's open question for now: one flavor per land node. Landmass nodes, largest first, cycle through A–D in an order shuffled by `names/flavors`, so the largest two always differ; archipelagos take E. Water and stray islands take the flavor of the node whose land is nearest. `LandNode.flavor` records it.
+- **Generic terms.** English: "the X Range" or "the X Mountains", "Mount X", "the X Hills", "the X Plain", "the X Plateau", "the X Desert" (sand) or "the X Waste" (cold), "the X Forest" or "the X Woods", "the X Marshes" or "the X Fens", "the X Ocean", "the X Sea", "X Bay" or "the Gulf of X", "the X Strait" or "the X Narrows", "Lake X", "the X River", "X Island" or a land name, "the X Islands", and continents with a flavor ending ("Stedargard"). Corridors are "the X Gap". Map labels drop the leading "the" (`labelText`).
+- **Streams.** Features draw from `names/features` in id order, settlements from `names/settlements`, corridors from `names/corridors`, so one list's changes leave the others alone. Every full name in a world is unique.
+- **Settlement names move here** from `rng("settlements").fork("names")`, so towns sound like their region. Placement does not change; only the names do.
+- **Campaign.** Land nodes take their feature's name instead of a casting draw. Chokepoint theaters take the name of the strait or island there, and an island campaign the name of the sea around it. The briefing names the corridors ("through the Beith Gap, the Fator Gap and the Vath Gap") and the ranges or rivers along the strongest line, through `featuresAlong` and `nearestFeature` in the graph module.
+- **Also fixed:** the briefing printed node areas in "million km²" divided by 10⁶ instead of 10¹².
+
+**Reason:** Names make the map and the briefing read like a real theater. Drawing every list from its own fork keeps rule 5, and keeping campaign naming on graph data keeps rule 9.

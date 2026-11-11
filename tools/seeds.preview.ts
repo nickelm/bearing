@@ -11,6 +11,8 @@
  * Writes tools/out/seeds.tsv (one row per seed) and a summary of how often
  * each theater appears, to tune the fit thresholds (design open question).
  */
+import { FEATURE_KIND_NAMES } from '../src/worldgen/strategic/graph';
+import type { FeatureList } from '../src/worldgen/strategic/graph';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { it } from 'vitest';
@@ -37,6 +39,13 @@ function seedList(): string[] {
   return Array.from({ length: count }, (_, i) => String(from + i));
 }
 
+/** Named features per kind, e.g. "range 15, peak 44, …" (S2). */
+function featureCounts(f: FeatureList): string {
+  const n = new Array<number>(FEATURE_KIND_NAMES.length).fill(0);
+  for (let i = 0; i < f.count; i++) n[f.kind[i]!]!++;
+  return FEATURE_KIND_NAMES.map((k, i) => `${k} ${n[i]}`).join(', ');
+}
+
 it('seed browser', () => {
   const res = Number(process.env.RES ?? COARSE_RESOLUTION);
   const grid = new CubeGrid(res);
@@ -52,6 +61,7 @@ it('seed browser', () => {
     'best fits',
     'range',
     'bases A/P',
+    'features',
     'ms',
   ];
   rows.push(header.join('\t'));
@@ -88,6 +98,7 @@ it('seed browser', () => {
       best,
       cast.rangeFactor.toFixed(2),
       `${cast.airbases.alliance}/${cast.airbases.pact}`,
+      featureCounts(w.graph.features),
       ms.toFixed(0),
     ];
     rows.push(row.join('\t'));
@@ -97,6 +108,7 @@ it('seed browser', () => {
         `range ${cast.rangeFactor.toFixed(2)}  sites ${cast.airbases.alliance}/${cast.airbases.pact}  ` +
         `bases ${placed('alliance')}/${placed('pact')}  towns ${w.graph.settlements.cells.length}  ` +
         `roads ${w.graph.roads.count}  bridges ${w.graph.bridges.cells.length}  ${(ms / 1000).toFixed(1)} s` +
+        `\n        features: ${featureCounts(w.graph.features)}` +
         (w.rejected.length
           ? `\n        rejected: ${w.rejected.map((r) => r.join('; ')).join(' | ')}`
           : ''),

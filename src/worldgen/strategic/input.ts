@@ -24,6 +24,8 @@ export interface StrategicInput {
    * builder uses steepest descent.
    */
   receiver?: Int32Array;
+  /** Boundary uplift (reference m), for mountain ranges; optional. */
+  uplift?: Float32Array;
   /** World seed for the stages that draw random numbers (settlements). Default 0. */
   seed?: WorldSeed;
 }

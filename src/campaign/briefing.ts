@@ -4,7 +4,13 @@
  * one paragraph per theater, written for either side's player.
  */
 import type { Point, StrategicGraph } from '../worldgen/strategic/graph';
-import { pointLatLon, polylinePoint, surfaceDistance } from '../worldgen/strategic/graph';
+import {
+  FeatureKind,
+  featuresAlong,
+  pointLatLon,
+  polylinePoint,
+  surfaceDistance,
+} from '../worldgen/strategic/graph';
 import type { Cast, Theater } from './cast';
 import type { NameGenerator } from './names';
 
@@ -64,17 +70,29 @@ function frontParagraph(g: StrategicGraph, cast: Cast, t: Theater, names: NameGe
   const alliance = start.sides[f.forwardSide === 1 ? 0 : 1];
   const strongest = g.barrierLines[f.strongest]!;
   const mid = (pts: Float64Array) => polylinePoint(pts, Math.floor(pts.length / 6));
+  const along = (line: Float64Array) => {
+    const ids = featuresAlong(
+      g,
+      line,
+      [FeatureKind.Range, FeatureKind.River, FeatureKind.Hills],
+      40e3,
+    );
+    const named = ids.slice(0, 2).map((i) => g.features.names[i]!);
+    return named.length > 0 ? `, along ${named.join(' and ')}` : '';
+  };
   const fallback =
     f.strongest !== f.start
-      ? ` About ${km(surfaceDistance(mid(start.points), mid(strongest.points), g.radius))} behind it lies the strongest natural line on ${name}, where the defense can hold if the start line breaks.`
-      : ' The start line is also the strongest natural line on the continent; there is no prepared position behind it.';
+      ? ` About ${km(surfaceDistance(mid(start.points), mid(strongest.points), g.radius))} behind it lies the strongest natural line on ${name}${along(strongest.points)}, where the defense can hold if the start line breaks.`
+      : ` The start line is also the strongest natural line on the continent${along(start.points)}; there is no prepared position behind it.`;
   const corridors = f.corridors.filter((c) => c.line === f.start);
+  const list = (xs: string[]) =>
+    xs.length <= 1 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs[xs.length - 1]}`;
   const thrust =
     corridors.length > 0
-      ? `Expect Pact armored thrusts through ${corridors.length === 1 ? 'one weak sector' : `${corridors.length} weak sectors`} of the line (Operation ${names.operation()}), with close air support and interdiction of the roads behind them.`
+      ? `Expect Pact armored thrusts through ${list(corridors.map((c) => c.name || 'a weak sector'))} (Operation ${names.operation()}), with close air support and interdiction of the roads behind them.`
       : 'The line has no obvious weak sector; expect a broad-front assault prepared by heavy interdiction.';
   return (
-    `${t.name.toUpperCase()}. ${name} (${(node.area / 1e6).toFixed(1)} million km² around ${latitude(node.centroid)}) is split by the start line, ${km(start.length)} from coast to coast. ` +
+    `${t.name.toUpperCase()}. ${name} (${(node.area / 1e12).toFixed(1)} million km² around ${latitude(node.centroid)}) is split by the start line, ${km(start.length)} from coast to coast. ` +
     `The Pact holds the ${compass(alliance.centroid, pact.centroid)} (${pct(pact.fraction)} of the land, up to ${km(pact.depth)} deep) and attacks; ` +
     `the Alliance holds the ${compass(pact.centroid, alliance.centroid)} (${pct(alliance.fraction)}, up to ${km(alliance.depth)} deep).` +
     `${fallback} ${thrust}`
@@ -136,7 +154,7 @@ export function writeBriefing(g: StrategicGraph, cast: Cast, names: NameGenerato
   const geography =
     largest.length === 0
       ? 'The world has no landmass larger than 2,000 km², only scattered islands.'
-      : `The world has ${largest.length} landmass${largest.length === 1 ? '' : 'es'} larger than 2,000 km²; the largest, ${cast.nodeNames[0]}, covers ${(largest[0]!.area / 1e6).toFixed(1)} million km². ` +
+      : `The world has ${largest.length} landmass${largest.length === 1 ? '' : 'es'} larger than 2,000 km²; the largest, ${cast.nodeNames[0]}, covers ${(largest[0]!.area / 1e12).toFixed(1)} million km². ` +
         `${g.nodes.length - largest.length} archipelago${g.nodes.length - largest.length === 1 ? '' : 's'}, ${g.lanes.length} sea lane${g.lanes.length === 1 ? '' : 's'} and ${g.chokepoints.length} chokepoint${g.chokepoints.length === 1 ? '' : 's'} complete the map.`;
   const paragraphs = [geography];
   if (cast.theaters.length === 0) {

@@ -169,6 +169,8 @@ export function buildNodes(
       ports: mergeSites(g.members.map((m) => ports[m]!.list)),
       airbases: mergeSites(g.members.map((m) => airbases[m]!)),
       front: -1,
+      feature: -1,
+      flavor: 0,
     });
     const seas = g.members.map((m) => ports[m]!.sea);
     const sea = new Int32Array(seas.reduce((s, a) => s + a.length, 0));

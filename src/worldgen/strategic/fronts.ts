@@ -698,6 +698,7 @@ function lineCorridors(
       strength: w.mean,
       roads: w.roads,
       roadScore: w.roadScore,
+      name: '',
     };
   });
 }

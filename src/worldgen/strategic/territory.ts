@@ -135,7 +135,7 @@ export function buildTerritory(build: StrategicBuild, cast: Cast): Territory {
     while (heap.size > 0) {
       const dd = heap.peekKey();
       const c = heap.pop();
-      if (dd > frontDepth[c]!) continue;
+      if (Math.fround(dd) > frontDepth[c]!) continue;
       for (let k = 0; k < 8; k++) {
         const x = grid.neighbors8[c * 8 + k]!;
         if (x < 0 || label[x] !== lm) continue;
@@ -172,7 +172,8 @@ export function distanceFrom(
   while (heap.size > 0) {
     const d = heap.peekKey();
     const c = heap.pop();
-    if (d > out[c]!) continue;
+    // Compare in float32: `out` rounds the key, and a key rounded down must not skip the cell.
+    if (Math.fround(d) > out[c]!) continue;
     for (let k = 0; k < 8; k++) {
       const x = grid.neighbors8[c * 8 + k]!;
       if (x < 0 || !through(x)) continue;

@@ -35,8 +35,10 @@ src/worldgen/       planet generation pipeline stages (may use GPU compute)
   strategic/        strategic graph types and builder (settlements, roads, bridges), and infrastructure
                     placed after casting: the only world view campaign logic gets. Road hierarchy,
                     railways and urban extents go here too, and the types of named features (decision 72)
-  geography/        (planned, S2) feature extraction: named-feature records with geometry and importance
-  names/            (planned, S2) toponymy generator from rng("names"), route numbering
+  geography/        feature extraction (S2): named-feature records with geometry and importance, run by
+                    the graph builder; types in strategic/graph.ts
+  names/            toponymy generator from rng("names"): flavors, generic terms; names features,
+                    settlements and corridors (route numbering in S4)
 src/campaign/       theater detection, casting, briefing, validity check (reads the strategic graph only)
 src/sim/            headless simulation; runs in a worker: event queue + fixed ticks (simulation.ts),
                     time acceleration (host.ts), world factory (world.ts)

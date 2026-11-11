@@ -117,16 +117,18 @@ The strategic view from [docs/visual-style.md](docs/visual-style.md) Part II: gl
 
 ### S2. Geography and names
 
-- [ ] Named-feature types in `worldgen/strategic/graph.ts` (kind, point / polyline / polygon geometry, extent, importance), packed into transferable buffers; bump `GENERATOR_VERSION`; round-trip test (decision 72: types live with the graph)
-- [ ] Water features in `worldgen/geography/`: oceans, seas, bays, straits (from the ocean grid and chokepoints), lakes
-- [ ] Land features: continents, islands and archipelagos from the landmass and archipelago nodes; plains and plateaus
-- [ ] Mountain ranges (connected high-uplift ridge regions with ridge polylines) and peaks by prominence; tests on synthetic height fields
-- [ ] Deserts, major forests and wetlands as polygons from biome components above a size threshold
-- [ ] River main stems from flow accumulation, with importance by discharge
-- [ ] Naming regions: one flavor per landmass for now (design open question); assignment test
-- [ ] Toponymy generator in `worldgen/names/` from `rng("names")`: syllable inventories and phonotactic rules per flavor, generic terms ("the X Range", "Mount X (4,210 m)", "Lake X", "the X Strait", "the X Waste"); determinism and uniqueness tests. Decide whether settlement names move to it (today `core/names.ts` from `rng("settlements").fork("names")`); moving them changes settlement names only
-- [ ] Name every feature and the invasion corridors ("the X Gap"); the briefing uses feature names
-- [ ] Tools: `npm run maps MODES=features` draws features and names; `npm run seeds` reports feature counts
+- [x] Named-feature types in `worldgen/strategic/graph.ts` (kind, point / polyline / polygon geometry, extent, importance), packed into transferable buffers; bump `GENERATOR_VERSION`; round-trip test (decision 72: types live with the graph; decision 95: polygons are raster layers)
+- [x] Water features in `worldgen/geography/`: oceans, seas, bays (watershed on distance to land), straits (saddles and chokepoints), lakes
+- [x] Land features: continents, islands and archipelagos from the landmass and archipelago nodes; plains and plateaus (and hills)
+- [x] Mountain ranges (connected high-uplift ridge regions with ridge polylines) and peaks by prominence; tests on synthetic height fields
+- [x] Deserts, major forests and wetlands as polygons from biome components above a size threshold (wetlands from flat, low, watered land; no wetland biome yet)
+- [x] River main stems from flow accumulation, with importance by discharge
+- [x] Naming regions: one flavor per landmass for now (design open question); assignment test (decision 96)
+- [x] Toponymy generator in `worldgen/names/` from `rng("names")`: syllable inventories and phonotactic rules per flavor, generic terms; determinism and uniqueness tests. Settlement names moved to it (decision 96)
+- [x] Name every feature and the invasion corridors ("the X Gap"); the briefing uses feature names
+- [x] Tools: `npm run maps MODES=features` draws features and prints the name table; `npm run seeds` reports feature counts
+  - [ ] Tune extraction thresholds from several seeds' feature maps (first look, seeds 7, 11, 1983: 1 ocean, 2–5 seas, 9–11 bays, 4–7 straits, 6–13 ranges, 30–52 peaks, 38–58 lakes, 57–65 rivers per world; lakes may be too many)
+  - [ ] Wetland reed marks on the base map (decision 81) can now read the cover layer
 - [ ] Mountain glyphs: faceted pyramids with snow caps above the snow line, instanced along ridge lines, sized by prominence, spaced as chains; rounded mounds for hills
 - [ ] Forest tokens (region band, 3–7 stylized trees, 2–5 km across) and dune glyphs
 - [ ] MSDF text spike: check libraries against three r187 WebGPU, or generate an MSDF atlas offline and render it with a TSL shader; record the choice in a decision

@@ -57,6 +57,7 @@ export function coarsePass(params: PlanetParams, options: CoarseOptions = {}): C
     grid,
     height: m.height,
     biome: m.biome,
+    uplift: m.uplift,
     discharge: drainage.discharge,
     lakeDepth: drainage.lakeDepth,
     receiver: drainage.receiver,
