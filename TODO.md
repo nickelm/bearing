@@ -122,7 +122,7 @@ The strategic view from [docs/visual-style.md](docs/visual-style.md) Part II: gl
 - [ ] Acceptance checks 1, 4 and 5 (Part II) against the reference board; ask the owner to add the Civilization VI and Cold War map references
 - [ ] Checkpoint: owner review of the base map in the browser
 
-### S2. Geography and names
+### S2. Geography and names (done)
 
 - [x] Named-feature types in `worldgen/strategic/graph.ts` (kind, point / polyline / polygon geometry, extent, importance), packed into transferable buffers; bump `GENERATOR_VERSION`; round-trip test (decision 72: types live with the graph; decision 95: polygons are raster layers)
 - [x] Water features in `worldgen/geography/`: oceans, seas, bays (watershed on distance to land), straits (saddles and chokepoints), lakes
@@ -134,24 +134,29 @@ The strategic view from [docs/visual-style.md](docs/visual-style.md) Part II: gl
 - [x] Toponymy generator in `worldgen/names/` from `rng("names")`: syllable inventories and phonotactic rules per flavor, generic terms; determinism and uniqueness tests. Settlement names moved to it (decision 96)
 - [x] Name every feature and the invasion corridors ("the X Gap"); the briefing uses feature names
 - [x] Tools: `npm run maps MODES=features` draws features and prints the name table; `npm run seeds` reports feature counts
-  - [ ] Tune extraction thresholds from several seeds' feature maps (first look, seeds 7, 11, 1983: 1 ocean, 2–5 seas, 9–11 bays, 4–7 straits, 6–13 ranges, 30–52 peaks, 38–58 lakes, 57–65 rivers per world; lakes may be too many)
-  - [ ] Wetland reed marks on the base map (decision 81) can now read the cover layer
 - [x] Mountain glyphs: faceted pyramids with snow caps above the snow line, instanced along ridge lines, sized by prominence, spaced as chains; rounded mounds for hills (decision 97)
 - [x] Forest tokens (region band, 3–7 stylized trees, 2–5 km across) and dune glyphs (decision 97)
-  - [ ] Browser check: chains read as ranges at the Theater and Region bands; glyphs do not float above or sink into the tiled relief (they stand on the display maps' heights)
-  - [ ] Theater-band chains still read as scattered pyramids on very broad ranges (seed 1983 preview); consider fewer, larger glyphs or fill by slope at that band too
+  - [x] Browser check (owner, 2026-11-11)
 - [x] MSDF text spike: check libraries against three r187 WebGPU, or generate an MSDF atlas offline and render it with a TSL shader; record the choice in a decision (decision 98: a single-channel SDF atlas built at load time)
 - [x] Label renderer: glyph atlas, point labels with halo, Part II typography styles, size by class
 - [x] Curved labels along polylines (rivers, ranges, roads) and widely spaced area labels (roads come with S4)
 - [x] Placement and collision pass in screen space, run when the camera settles or changes band, ranked by importance, with fades; tests on synthetic layouts, including a no-overlap assertion
 - [x] Band content tables (globe, theater, region) wired to the zoom bands
-  - [ ] Range ring distance labels (S1 subtask) with the label engine
-  - [ ] Build the atlas in a worker if its 0.3 s on the main thread shows as a hitch
-- [ ] Acceptance checks 2 (no overlapping labels at any band) and 3 (ten-second legibility test with the owner)
+- [x] Acceptance checks 2 (no overlapping labels at any band) and 3 (ten-second legibility test with the owner)
   - [x] Check 2 in Node: no overlaps at 3,000, 900, 250 and 100 km on a generated world (tests/labels.test.ts)
-  - [ ] Check 2 on screenshots of each band (`SCENE=strategic` previews) and in the browser. First previews (seed 1983, on lavapipe): no overlaps at globe, theater, region and floor; the Globe band shows the continent and the front but no ocean name yet
-  - [ ] The whole strategic view goes through the simulation view's AgX tone curve (`renderer.toneMapping` is global), so Part II's hex colors are not shown exactly; labels draw in a second pass without it (decision 98). Owner: should the map render without a tone curve?
-- [ ] Checkpoint: owner review of names, glyphs and labels across several seeds
+  - [x] Check 2 on screenshots of each band (seed 1983 previews: globe, theater, region, floor) and in the browser (owner, 2026-11-11: no overlaps)
+  - [x] Check 3 with the owner (2026-11-11): the front line and the largest mountain ranges found "easily"; capitals wait for S4's settlement classes, so that part of the check reruns with S4
+  - [x] Tone curve: the map renders without one (decision 99); labels draw in their own pass without it (decision 98)
+- [x] Checkpoint: owner review of names, glyphs and labels (2026-11-11: "beautiful", no big problems)
+
+#### S2 follow-ups (not blocking)
+
+- [ ] The Globe band shows no ocean name on seed 1983 (the ocean's area label finds no fit); check the axis and level fallback for very large water features
+- [ ] Theater-band mountain chains read as scattered pyramids on very broad ranges; fewer, larger glyphs, or fill by slope at that band too (see also decision 99's glyph gaps under S1)
+- [ ] Tune extraction thresholds across more seeds (lakes may be too many)
+- [ ] Wetland reed marks on the base map (decision 81) from the cover layer
+- [ ] Range ring distance labels with the label engine
+- [ ] Build the font atlas in a worker if its 0.3 s on the main thread shows as a hitch
 
 ### S3. Reading the world (mostly done; old M4)
 
