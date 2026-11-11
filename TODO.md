@@ -69,9 +69,11 @@ Suggested order for the remaining work: S1, V1, S2, V2, the rest of S3 and S4, V
 
 The strategic view from [docs/visual-style.md](docs/visual-style.md) Part II: globe to a ~100 km zoom floor, its own scene, camera and look. Day, night and weather stay on the map (decision 72).
 
-- [ ] Check decision 71 in the browser: forest edges, town patches from 500 m to orbit, road network continuity, frame time with trees and buildings off (carried from old M5)
+- [x] Check decision 71 in the browser: forest edges, town patches from 500 m to orbit, road network continuity, frame time with trees and buildings off (carried from old M5)
 - [x] Split `src/render/` into `common/` (camera-relative helpers, shared materials, palette, render scale), `sim/` (the current terrain, atmosphere, water, clouds, forest and infra folders) and `strategic/`; no behavior change, tests and previews still pass; update CLAUDE.md's directory map
-- [ ] `StrategicScene` beside the existing scene (later `SimScene`), both resident; debug GUI view switch; `SCENE=` env in `tools/render.preview.ts`
+- [x] `StrategicScene` beside the existing scene (later `SimScene`), both resident; debug GUI view switch; `SCENE=` env in `tools/render.preview.ts` (decision 74)
+  - [ ] Run `SCENE=strategic` previews and `tests/gpu/strategicScene.test.ts` on a machine with a GPU (the cloud container has none)
+  - [ ] Rename `GlobeScene` to `SimScene` once it no longer draws orbit views (V1)
 - [ ] Strategic camera: altitude 100–3,000 km (floor a tunable constant), tilt eased from 0° above about 1,500 km to about 50° at the floor, heading, mouse and keyboard, and decision 60's touch gestures; unit tests for the clamps and the tilt curve
 - [ ] Zoom bands (globe above 1,500 km, theater 400–1,500 km, region below 400 km): band from altitude with hysteresis, per-band fade factors as uniforms and a change event; tests
 - [ ] Relief mesh: reuse `quadtree.ts` and `tileMesh.ts` with a level cap chosen for the floor and its own exaggeration uniform (default 4×); measure tile count and frame time at globe scale and at the floor

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_ORBIT_LIMITS, OrbitCamera, twoFingerStep } from '../src/render/sim/orbitCamera';
+import { DEFAULT_ORBIT_LIMITS, OrbitCamera, twoFingerStep } from '../src/render/common/orbitCamera';
 import { DEG, KM, PLANET_RADIUS } from '../src/core/units';
 
 const R = PLANET_RADIUS;

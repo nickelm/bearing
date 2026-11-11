@@ -11,9 +11,11 @@
  *        PERF=n times n more frames per view once loaded: ms per frame until the GPU is
  *          done, CPU in scene.render and its parts, terrain loop lengths, draw statistics
  *          (on a software adapter only the ratios mean anything),
- *        PROF=<file> also writes a V8 CPU profile of those frames (.cpuprofile)
+ *        PROF=<file> also writes a V8 CPU profile of those frames (.cpuprofile),
+ *        SCENE=strategic draws the strategic view (StrategicScene, decision 74) instead,
+ *          from the views at or above its 100 km floor (orbit, limb, terminator, winter, night)
  *
- * Output: tools/out/render-<seed>-<view>.png (gitignored).
+ * Output: tools/out/render-<seed>-<view>.png, or render-<seed>-strategic-<view>.png (gitignored).
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -30,6 +32,7 @@ import { CubeGrid } from '../src/core/cubeGrid';
 import { DAY, DEG, HOUR, KM } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
 import { GlobeScene } from '../src/render/sim/globeScene';
+import { STRATEGIC_FLOOR, StrategicScene } from '../src/render/strategic/strategicScene';
 import { TileSynthesizer } from '../src/worldgen/gpu/tileSynth';
 import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
 import { RiverIndex } from '../src/worldgen/riverIndex';
@@ -272,7 +275,12 @@ it('renders preview views', async () => {
   const height = Number(env('H', '576'));
   const exaggeration = Number(env('EX', '10'));
   const wanted = env('VIEWS', '');
-  const views = PREVIEW_VIEWS.filter((v) => !wanted || wanted.split(',').includes(v.name));
+  const strategic = env('SCENE', 'sim') === 'strategic';
+  const views = PREVIEW_VIEWS.filter(
+    (v) =>
+      (!wanted || wanted.split(',').includes(v.name)) &&
+      (!strategic || (!v.target && v.altitude >= STRATEGIC_FLOOR)),
+  );
 
   // The campaign world first: the global pass uses the seed that passed the validity check.
   const campaign = generateCampaignWorld({ ...DEFAULT_PLANET_PARAMS, seed });
@@ -281,6 +289,19 @@ it('renders preview views', async () => {
   const infra = new InfraScene(campaign.graph, campaign.infrastructure, params.radius);
 
   const head = await headlessRenderer(gpu.device, width, height);
+  if (strategic) {
+    await renderStrategic(head, gpu, {
+      world,
+      global,
+      campaign,
+      params,
+      seed,
+      width,
+      height,
+      views,
+    });
+    return;
+  }
   const scene = new GlobeScene(head.renderer, {
     radius: params.radius,
     grid: new CubeGrid(tres),
@@ -530,3 +551,67 @@ it('renders preview views', async () => {
   global.grid.dispose();
   head.dispose();
 });
+
+/**
+ * SCENE=strategic: the strategic view's scene from the views at or above its floor.
+ * The map needs only the display maps of the global pass and the strategic graph.
+ */
+async function renderStrategic(
+  head: Awaited<ReturnType<typeof headlessRenderer>>,
+  gpu: NonNullable<Awaited<ReturnType<typeof testGpu>>>,
+  o: {
+    world: Awaited<ReturnType<typeof previewWorld>>['world'];
+    global: Awaited<ReturnType<typeof previewWorld>>['global'];
+    campaign: ReturnType<typeof generateCampaignWorld>;
+    params: typeof DEFAULT_PLANET_PARAMS;
+    seed: number;
+    width: number;
+    height: number;
+    views: PreviewView[];
+  },
+): Promise<void> {
+  const { world, global, campaign, params, width, height } = o;
+  const scene = new StrategicScene(head.renderer, {
+    radius: params.radius,
+    grid: new CubeGrid(world.info.resolution),
+    input: false,
+  });
+  scene.resize(width, height);
+  const d = global.finish.display;
+  let maxHeight = -Infinity;
+  for (const h of d.height) maxHeight = Math.max(maxHeight, h);
+  scene.setWorld({
+    maps: {
+      ...world.maps,
+      height: d.height,
+      biome: d.biome,
+      discharge: d.discharge,
+      lakeDepth: d.lakeDepth,
+    },
+    info: { ...world.info, maxHeight },
+  });
+  scene.setStrategic(campaign.graph, campaign.campaign.cast, campaign.infrastructure);
+  const main = new Vec3d(...world.info.mainContinent);
+  const lat0 = Math.asin(main.y);
+  const lon0 = Math.atan2(main.x, main.z);
+  const outDir = join(import.meta.dirname, 'out');
+  mkdirSync(outDir, { recursive: true });
+  for (const v of o.views) {
+    const cam = scene.orbit;
+    cam.lat = lat0 + v.dLat;
+    cam.lon = lon0 + v.dLon;
+    cam.altitude = cam.targetAltitude = v.altitude;
+    cam.tilt = v.tilt;
+    cam.heading = v.heading;
+    scene.render(0);
+    await gpu.finish();
+    const rgb = await head.readRgb();
+    const file = join(outDir, `render-${o.seed}-strategic-${v.name}.png`);
+    writeFileSync(file, encodePng(width, height, rgb));
+    console.log(`strategic ${v.name} → ${file}`);
+  }
+  if (gpu.errors.length) throw new Error(`GPU errors: ${gpu.errors.join(' | ')}`);
+  scene.dispose();
+  global.grid.dispose();
+  head.dispose();
+}

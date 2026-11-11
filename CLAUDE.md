@@ -41,13 +41,16 @@ src/sim/            headless simulation; runs in a worker: event queue + fixed t
                     time acceleration (host.ts), world factory (world.ts)
   weather/          hourly weather model on a bordered 24² cube grid; WeatherView for queries
   command/          per-side command layer: intelligence picture, ATO (graph and cast only)
-src/render/         Three.js WebGPU + TSL, split by view (decision 72). Until StrategicScene exists,
-                    sim/'s GlobeScene still draws orbit to ground.
-  common/           shared by both views: camera-relative placement, palette, climate texture,
-                    render scale, cube-sphere geometry, WebGPU checks; later the transition controller
-  sim/              simulation view: GlobeScene, orbit camera, terrain/ (LOD), atmosphere/, water/,
-                    clouds/, forest/, infra/, lighting/, and the M1 cell-grid debug globe
-  strategic/        strategic view: base map, glyphs, overlays, label engine (now: graph debug overlay)
+src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Both scenes stay resident;
+                    the app renders the active one (GUI → View → View). Until V1, sim/'s GlobeScene
+                    still draws orbit to ground.
+  common/           shared by both views: camera-relative placement, orbit camera, cell-grid debug
+                    globe, palette, climate texture, render scale, cube-sphere geometry, WebGPU checks;
+                    later the transition controller
+  sim/              simulation view: GlobeScene, terrain/ (LOD), atmosphere/, water/, clouds/, forest/,
+                    infra/, lighting/
+  strategic/        strategic view: StrategicScene (skeleton), graph debug overlay; later base map,
+                    glyphs, overlays, label engine
 src/ui/             lil-gui debug panel, overlays, time controls
 src/workers/        worker entry points and message protocols
 src/main.ts         app entry: WebGPU checks, renderer, scene, GUI
@@ -136,7 +139,7 @@ Promotion expands a unit deterministically from its seed and current strength. D
   - Run compute with `Fn(() => …)().compute(count)` and `renderer.compute()` or `computeAsync()`.
   - Read back with `renderer.getArrayBufferAsync(storageNode.value)`.
 - **World-generation GPU code is plain WGSL on a raw `GPUDevice`** (`src/worldgen/gpu/`, decision 26). Vitest runs it on this machine's GPU through Dawn's Node bindings (the `webgpu` dev dependency); GPU tests skip without an adapter. With webgpu 0.6.2 on Windows, `queue.onSubmittedWorkDone()` and error scopes after a buffer map crash Node: use `GpuContext.finish()` and `GpuContext.errors`. Write kernel checks as self-tests in `worldgen/gpu/selfTests.ts`, so they also run in the browser (GUI → Self-tests).
-- **Seeing the rendered scene without a browser:** `npx vitest run --config vitest.tools.config.ts tools/render.preview.ts` draws the app's `GlobeScene` with three's `WebGPURenderer` on Dawn (decision 32) from fixed views (`VIEWS=orbit,limb,terminator,oblique,low,coast,glint,sea,shore,lake,trees,winter,mountains,sunset,town,airbase,roads,night`; `CLOUDS=0` hides clouds) and writes `tools/out/render-*.png`. Read them to judge shading and atmosphere. Until the S1 split these views span both envelopes; S1 and V1 sort them into strategic (≥ 100 km) and simulation (≤ 20 km) sets. The first run per world generates it (about 25 s); later runs load it from a disk cache in the OS temp directory.
+- **Seeing the rendered scene without a browser:** `npx vitest run --config vitest.tools.config.ts tools/render.preview.ts` draws the app's `GlobeScene` with three's `WebGPURenderer` on Dawn (decision 32) from fixed views (`VIEWS=orbit,limb,terminator,oblique,low,coast,glint,sea,shore,lake,trees,winter,mountains,sunset,town,airbase,roads,night`; `CLOUDS=0` hides clouds) and writes `tools/out/render-*.png`. `SCENE=strategic` draws the strategic view's `StrategicScene` instead, from the views at or above its 100 km floor. Read them to judge shading and atmosphere. Until the S1 split these views span both envelopes; S1 and V1 sort them into strategic (≥ 100 km) and simulation (≤ 20 km) sets. The first run per world generates it (about 25 s); later runs load it from a disk cache in the OS temp directory.
 - **Seeing terrain without a browser:** `npx vitest run --config vitest.tools.config.ts tools/terrain.preview.ts` runs the whole pipeline on Dawn and writes PNGs to `tools/out/`. Read them to judge changes.
 - **TypeScript is pinned to 6.0.** TypeScript 7 (the native compiler) is out, but typescript-eslint 8.x supports only `<6.1`. See `docs/decisions.md`.
 - Vite's cache lives in the OS temp directory (`cacheDir` in `vite.config.ts`), not `node_modules/.vite`, because the repo is in Dropbox and the in-tree cache fails with `EBUSY`. To clear it, delete `%TEMP%/vite-cache/bearing-*`.

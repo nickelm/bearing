@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–73 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–74 are reflected in both.
 
 ---
 
@@ -1239,3 +1239,16 @@ The owner's amendment and the engineering calls made while adopting it:
 - Earlier decisions keep the old paths as history.
 
 **Reason:** The strategic view needs a home that does not import the simulation view's atmosphere or LOD code, and a shared helper keeps rule 4 in one place instead of six.
+
+### 74. StrategicScene skeleton beside GlobeScene; the active view takes input
+
+**Date:** 2026-11-11
+**Decision:** `render/strategic/strategicScene.ts` adds the strategic view's own scene and camera (the first step of S1):
+
+- **Both scenes stay resident** (design, Architecture). The app renders only the active one, chosen with GUI → View → View (`simulation` or `strategic`; `?view=strategic` opens the map). Switching keeps the camera's latitude, longitude and heading, so the new view opens over the same place. Only the active view's camera listens to mouse, touch and keyboard: both scenes now have an `inputEnabled` switch.
+- **The strategic scene builds lazily.** It stores the world and builds its globe on its first rendered frame, so a hidden map costs no CPU time per regeneration.
+- **Placeholders until the base-map tasks.** The base map is the F1 cell-grid globe at the guide's 4× relief (`STRATEGIC_EXAGGERATION`), lit by a scene light fixed at the screen's upper left plus ambient light, over a flat `#1E2630` background with no atmosphere. The camera is the orbit camera with `STRATEGIC_ORBIT_LIMITS`: altitude between `STRATEGIC_FLOOR` (100 km) and `STRATEGIC_CEILING` (3,000 km), tilt up to 50°. The strategic camera task replaces it with the altitude-driven tilt curve. The strategic scene has its own graph debug overlay, toggled with the simulation view's.
+- **`orbitCamera.ts`, `globeMesh.ts` and `cellColors.ts` move to `render/common/`**, amending decision 73: both views use the orbit camera and the cell-grid globe's debug color modes, and `strategic/` must not import from `sim/`.
+- **Previews.** `SCENE=strategic` in `tools/render.preview.ts` draws the strategic scene from the views at or above the floor (orbit, limb, terminator, winter, night) to `render-<seed>-strategic-<view>.png`. `tests/gpu/strategicScene.test.ts` renders it on Dawn at the ceiling and the floor.
+
+**Reason:** The base-map, camera and zoom-band tasks need a scene of their own to land in, without disturbing the simulation view the owner checks today. Building on the existing globe and camera keeps this step small and lets each later S1 task replace one placeholder.

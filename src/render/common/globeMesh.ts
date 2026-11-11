@@ -23,10 +23,10 @@ import {
 import type { CubeGrid } from '../../core/cubeGrid';
 import type { WorldSeed } from '../../core/rng';
 import type { World } from '../../worldgen/pipeline';
-import { buildCornerCells, buildCubeSphereArrays } from '../common/cubeSphereGeometry';
+import { buildCornerCells, buildCubeSphereArrays } from './cubeSphereGeometry';
 import { cellColor } from './cellColors';
 import type { ViewMode } from './cellColors';
-import { faceColors, srgbToLinear } from '../common/palette';
+import { faceColors, srgbToLinear } from './palette';
 
 export { VIEW_MODES } from './cellColors';
 export type { ViewMode } from './cellColors';

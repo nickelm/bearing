@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEG, KM, PLANET_RADIUS } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
 import { tileSampleDirection, TILE_TEXELS } from '../src/core/tiles';
-import { OrbitCamera } from '../src/render/sim/orbitCamera';
+import { OrbitCamera } from '../src/render/common/orbitCamera';
 import {
   capBeyondHorizon,
   DEFAULT_LOD,

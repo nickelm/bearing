@@ -18,9 +18,10 @@ import { Vec3d } from './core/vec3d';
 import { DEFAULT_PLANET_PARAMS } from './worldgen/params';
 import type { PlanetParams } from './worldgen/params';
 import { GlobeScene } from './render/sim/globeScene';
+import { StrategicScene } from './render/strategic/strategicScene';
 import { InfraScene } from './render/sim/infra/infraScene';
-import { VIEW_MODES } from './render/sim/globeMesh';
-import type { ViewMode } from './render/sim/globeMesh';
+import { VIEW_MODES } from './render/common/globeMesh';
+import type { ViewMode } from './render/common/globeMesh';
 import { runComputeSmokeTest } from './render/common/computeSmokeTest';
 import { RenderScaleController } from './render/common/renderScale';
 import {
@@ -132,6 +133,7 @@ async function main(): Promise<void> {
     buildings: false,
     renderScale: 'auto',
     targetFps: 30,
+    scene: query.get('view') === 'strategic' ? 'strategic' : 'simulation',
   };
 
   // The game clock lives in the sim worker (decision 67); the display time follows it.
@@ -167,6 +169,29 @@ async function main(): Promise<void> {
   globe.globe.setExaggeration(viewParams.exaggeration);
   globe.terrain.setExaggeration(viewParams.exaggeration);
   globe.terrain.budgetMiB = viewParams.tileMemory;
+  // The strategic view (decision 72): its own scene and camera, resident beside the
+  // simulation view; only the active view renders and takes input (decision 74).
+  const strategicView = new StrategicScene(renderer, {
+    radius: DEFAULT_PLANET_PARAMS.radius,
+    grid,
+    input: false,
+  });
+  strategicView.setFaceSeed(worldParams.seed);
+  let activeView: 'simulation' | 'strategic' = 'simulation';
+  /** The camera of the view on screen; the clock and status read their position from it. */
+  const activeOrbit = () => (activeView === 'strategic' ? strategicView.orbit : globe.orbit);
+  const setActiveView = (view: 'simulation' | 'strategic') => {
+    if (view === activeView) return;
+    // Keep the place: the new view's camera starts over the same point, with the same heading.
+    const from = activeOrbit();
+    activeView = view;
+    const to = activeOrbit();
+    to.lat = from.lat;
+    to.lon = from.lon;
+    to.heading = from.heading;
+    globe.inputEnabled = view === 'simulation';
+    strategicView.inputEnabled = view === 'strategic';
+  };
 
   const campaignParams: CampaignGuiParams = {
     overlay: true,
@@ -180,6 +205,11 @@ async function main(): Promise<void> {
   const campaignPanel = new CampaignPanel();
   const showStrategic = (s: StrategicWorld | null) => {
     globe.strategic.setWorld(s?.graph ?? null, s?.campaign.cast ?? null, s?.infrastructure ?? null);
+    strategicView.setStrategic(
+      s?.graph ?? null,
+      s?.campaign.cast ?? null,
+      s?.infrastructure ?? null,
+    );
     if (!s) {
       campaignPanel.visible = false;
       campaignParams.seedUsed = '—';
@@ -242,9 +272,12 @@ async function main(): Promise<void> {
       if (grid.n !== resolution) {
         grid = new CubeGrid(resolution);
         globe.globe.setGrid(grid);
+        strategicView.setGrid(grid);
       }
       globe.globe.setFaceSeed(worldParams.seed);
       globe.globe.setWorld(world);
+      strategicView.setFaceSeed(worldParams.seed);
+      strategicView.setWorld(world);
       globe.climate.setWorld(world);
       calendar = defaultCampaignStart(new Vec3d(...world.info.mainContinent), orbitParams);
       gameTime = 0;
@@ -294,7 +327,7 @@ async function main(): Promise<void> {
       const d = global.finish.display;
       let maxHeight = -Infinity;
       for (const h of d.height) maxHeight = Math.max(maxHeight, h);
-      globe.globe.setWorld({
+      const display: World = {
         maps: {
           ...world.maps,
           height: d.height,
@@ -303,7 +336,9 @@ async function main(): Promise<void> {
           lakeDepth: d.lakeDepth,
         },
         info: { ...world.info, maxHeight },
-      });
+      };
+      globe.globe.setWorld(display);
+      strategicView.setWorld(display);
     };
     showStrategic(null);
     const key = worldKey(params, resolution, globalN);
@@ -427,9 +462,12 @@ async function main(): Promise<void> {
       // (they need tectonic-grid maps) switch the display to the grid mesh.
       const tileMode = TILE_MODE_FOR[v.mode];
       tilesBlocked = tileMode === undefined;
-      globe.globe.setViewMode(
-        ((VIEW_MODES as readonly string[]).includes(v.mode) ? v.mode : 'biome') as ViewMode,
-      );
+      const gridMode = (
+        (VIEW_MODES as readonly string[]).includes(v.mode) ? v.mode : 'biome'
+      ) as ViewMode;
+      globe.globe.setViewMode(gridMode);
+      strategicView.setViewMode(gridMode);
+      setActiveView(v.scene);
       globe.globe.wireframe = v.wireframe;
       globe.useTiles = v.tiles && !tilesBlocked;
       if (tileMode) globe.terrain.setMode(tileMode);
@@ -448,6 +486,7 @@ async function main(): Promise<void> {
       globe.terrain.setExaggeration(v.exaggeration);
     },
   });
+  setActiveView(viewParams.scene); // ?view=strategic opens the map
   gui.status.backend = `WebGPU on ${describeAdapter(probe.adapter)}`;
   console.info(`WebGPU adapter: ${describeAdapter(probe.adapter)}`, probe.adapter.info);
   // Seed browser: its own worker, so scanning does not cancel the displayed world.
@@ -462,6 +501,7 @@ async function main(): Promise<void> {
     campaignParams,
     (c) => {
       globe.strategic.enabled = c.overlay;
+      strategicView.overlay.enabled = c.overlay;
       campaignPanel.visible = c.briefing && campaignParams.seedUsed !== '—';
     },
     {
@@ -497,17 +537,20 @@ async function main(): Promise<void> {
   );
   gui.addTimeControls(timeParams, daysPerYear(orbitParams), {
     dayChanged: (d) => {
-      const lon = globe.orbit.lon;
+      const lon = activeOrbit().lon;
       const days = d - localDayOfYear(gameTime, lon, orbitParams, calendar);
       sim.seek(gameTime + days * orbitParams.solarDay);
     },
     hoursChanged: (h) => {
-      sim.seek(withLocalTime(gameTime, globe.orbit.lon, h * HOUR, orbitParams, calendar));
+      sim.seek(withLocalTime(gameTime, activeOrbit().lon, h * HOUR, orbitParams, calendar));
     },
     autoSlowdownChanged: (enabled) => sim.setAutoSlowdown(enabled),
     alarm: (hours) => {
       const at = gameTime + hours * HOUR;
-      sim.alarm(at, `Test alarm (${formatLocalDate(at, globe.orbit.lon, orbitParams, calendar)})`);
+      sim.alarm(
+        at,
+        `Test alarm (${formatLocalDate(at, activeOrbit().lon, orbitParams, calendar)})`,
+      );
     },
   });
   const timeControls = new TimeControls((rate) => sim.setRate(rate));
@@ -581,6 +624,7 @@ async function main(): Promise<void> {
 
   const onResize = () => {
     globe.resize(window.innerWidth, window.innerHeight);
+    strategicView.resize(window.innerWidth, window.innerHeight);
     const size = renderer.getDrawingBufferSize(new Vector2());
     gui.status.resolution = `${size.x}×${size.y} (${Math.round(renderScale.scale * 100)}% of ${window.devicePixelRatio}×)`;
   };
@@ -606,15 +650,16 @@ async function main(): Promise<void> {
     globe.terrain.land.seasonPhase.value = seasonPhase(gameTime, orbitParams, calendar);
     globe.clouds.time.value = gameTime;
     globe.weather.update(sim.weather, gameTime);
-    globe.render(dt);
+    if (activeView === 'strategic') strategicView.render(dt);
+    else globe.render(dt);
 
-    const lon = globe.orbit.lon;
+    const lon = activeOrbit().lon;
     timeParams.day = localDayOfYear(gameTime, lon, orbitParams, calendar);
     timeParams.hours = localSolarTime(gameTime, lon, orbitParams, calendar) / HOUR;
     timeParams.date = formatLocalDate(gameTime, lon, orbitParams, calendar);
     if (now - lastClockText > 200) {
       lastClockText = now;
-      latLonToDirection(globe.orbit.lat, globe.orbit.lon, here);
+      latLonToDirection(activeOrbit().lat, activeOrbit().lon, here);
       const weather = describeWeather(sim, here, gameTime);
       timeParams.weather = weather;
       timeParams.sim = describeSim(sim);
@@ -626,7 +671,7 @@ async function main(): Promise<void> {
       });
     }
 
-    const o = globe.orbit;
+    const o = activeOrbit();
     gui.status.altitudeKm = o.altitude / KM;
     gui.status.latDeg = o.lat / DEG;
     gui.status.lonDeg = o.lon / DEG;

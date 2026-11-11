@@ -5,10 +5,11 @@
  * are placed camera-relative (see common/cameraRelative.ts).
  */
 export { GlobeScene } from './sim/globeScene';
+export { StrategicScene, STRATEGIC_FLOOR, STRATEGIC_CEILING } from './strategic/strategicScene';
 export type { GlobeSceneOptions } from './sim/globeScene';
-export { GlobeMesh, VIEW_MODES } from './sim/globeMesh';
-export type { ViewMode } from './sim/globeMesh';
-export { OrbitCamera, attachOrbitInput, DEFAULT_ORBIT_LIMITS } from './sim/orbitCamera';
+export { GlobeMesh, VIEW_MODES } from './common/globeMesh';
+export type { ViewMode } from './common/globeMesh';
+export { OrbitCamera, attachOrbitInput, DEFAULT_ORBIT_LIMITS } from './common/orbitCamera';
 export { placeCameraRelative, placePlanetCentered } from './common/cameraRelative';
 export { buildCubeSphereArrays } from './common/cubeSphereGeometry';
 export {

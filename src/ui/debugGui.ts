@@ -41,6 +41,8 @@ export interface ViewGuiParams {
   renderScale: RenderScaleSetting;
   /** Frame rate the automatic render scale holds. */
   targetFps: number;
+  /** Which view is on screen (decision 72): the strategic map or the simulation view. */
+  scene: 'simulation' | 'strategic';
 }
 
 /** Time folder: jumps of the sim clock, alarms and the sim status (milestone 6). */
@@ -202,6 +204,9 @@ export class DebugGui {
     w.add(world, 'moistureScale', 0.2, 2, 0.05).name('Moisture scale').onFinishChange(regen);
 
     const v = this.gui.addFolder('View');
+    v.add(view, 'scene', ['simulation', 'strategic'])
+      .name('View')
+      .onChange(() => callbacks.viewChanged(view));
     v.add(view, 'mode', [...viewModes])
       .name('Color by')
       .onChange(() => callbacks.viewChanged(view));

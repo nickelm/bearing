@@ -15,8 +15,8 @@ import {
   UPLIFT_RAMP,
   plateColor,
   ramp,
-} from '../common/palette';
-import type { Rgb } from '../common/palette';
+} from './palette';
+import type { Rgb } from './palette';
 
 export const VIEW_MODES = [
   'biome',

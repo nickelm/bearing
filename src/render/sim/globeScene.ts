@@ -18,10 +18,10 @@ import { ClimateTexture } from '../common/climateTexture';
 import { CloudLayer } from './clouds/cloudLayer';
 import { WeatherTexture } from './clouds/weatherTexture';
 import { ForestLayer } from './forest/forestLayer';
-import { GlobeMesh } from './globeMesh';
+import { GlobeMesh } from '../common/globeMesh';
 import { PlanetLighting } from './lighting/planetLighting';
 import { TerrainRenderer } from './terrain/terrainRenderer';
-import { OrbitCamera, attachOrbitInput } from './orbitCamera';
+import { OrbitCamera, attachOrbitInput } from '../common/orbitCamera';
 import { StrategicOverlay } from '../strategic/strategicOverlay';
 import { StructureLayer } from './infra/structureLayer';
 import type { InfraScene } from './infra/infraScene';
@@ -60,7 +60,7 @@ export class GlobeScene {
   useTiles = true;
   /** Whether the terrain has a world to draw (set by the app). */
   terrainReady = false;
-  private readonly detachInput: () => void;
+  private detachInput: (() => void) | null = null;
   private readonly scratch = new Vec3d();
   private viewportHeight = 1;
   private readonly sunLight = new DirectionalLight(0xffffff, 2.5);
@@ -96,14 +96,29 @@ export class GlobeScene {
     this.scene.add(this.sunLight, new AmbientLight(0xffffff, 0.35));
     renderer.toneMapping = AgXToneMapping;
 
-    this.detachInput =
-      options.input === false
-        ? () => {}
-        : attachOrbitInput(
-            renderer.domElement,
-            this.orbit,
-            () => (this.camera.fov * Math.PI) / 180 / this.viewportHeight,
-          );
+    this.inputEnabled = options.input !== false;
+  }
+
+  /**
+   * Whether mouse, touch and keyboard drive this scene's camera. Both views share one
+   * canvas, so only the active view listens (decision 74).
+   */
+  get inputEnabled(): boolean {
+    return this.detachInput !== null;
+  }
+
+  set inputEnabled(on: boolean) {
+    if (on === this.inputEnabled) return;
+    if (on) {
+      this.detachInput = attachOrbitInput(
+        this.renderer.domElement,
+        this.orbit,
+        () => (this.camera.fov * Math.PI) / 180 / this.viewportHeight,
+      );
+    } else {
+      this.detachInput!();
+      this.detachInput = null;
+    }
   }
 
   /**
@@ -178,7 +193,7 @@ export class GlobeScene {
   }
 
   dispose(): void {
-    this.detachInput();
+    this.inputEnabled = false;
     this.globe.dispose();
     this.terrain.dispose();
     this.forest.dispose();
