@@ -20,6 +20,7 @@ import {
   placeInfrastructure,
 } from '../src/worldgen/strategic/infrastructure';
 import { BRIDGE_MIN_DISCHARGE } from '../src/worldgen/strategic/movement';
+import { LOCAL_LINK, localLinks } from '../src/worldgen/strategic/roads';
 import { buildTerritory, territoryCode } from '../src/worldgen/strategic/territory';
 import { boxWorld, graphFingerprint, RADIUS } from './helpers/syntheticWorld';
 
@@ -113,6 +114,43 @@ describe('settlements, roads and bridges in the strategic graph', () => {
     expect(connectedOver(graph.roads, onMain)).toBe(true);
     for (const c of graph.roads.cells) expect(label[c]).toBeGreaterThanOrEqual(0);
     expect(Array.from(graph.roads.roadClass)).toContain(RoadClass.Highway);
+  });
+
+  it('links neighboring settlements along a Gabriel graph, so roads pass through villages', () => {
+    const links = localLinks(ctx, s);
+    expect(links.length).toBeGreaterThan(s.cells.length * 0.8);
+    const P = s.points;
+    const dist = (i: number, j: number) =>
+      surfaceDistance(
+        [P[i * 3]!, P[i * 3 + 1]!, P[i * 3 + 2]!],
+        [P[j * 3]!, P[j * 3 + 1]!, P[j * 3 + 2]!],
+        ctx.radius,
+      );
+    let tooLong = 0;
+    let witnessed = 0;
+    for (const { a, b, d } of links) {
+      if (d > LOCAL_LINK) tooLong++;
+      for (let k = 0; k < s.cells.length; k++) {
+        if (k !== a && k !== b && dist(a, k) ** 2 + dist(b, k) ** 2 < d * d * (1 - 1e-9))
+          witnessed++;
+      }
+    }
+    expect(tooLong).toBe(0);
+    expect(witnessed).toBe(0);
+    // Most settlements sit on a road that continues past them.
+    const degree = new Map<number, Set<number>>();
+    const r = graph.roads;
+    for (let k = 0; k < r.count; k++)
+      for (let p = r.offsets[k]! + 1; p < r.offsets[k + 1]!; p++) {
+        const x = r.cells[p - 1]!;
+        const y = r.cells[p]!;
+        if (!degree.has(x)) degree.set(x, new Set());
+        if (!degree.has(y)) degree.set(y, new Set());
+        degree.get(x)!.add(y);
+        degree.get(y)!.add(x);
+      }
+    const through = Array.from(s.cells).filter((c) => (degree.get(c)?.size ?? 0) >= 2).length;
+    expect(through / s.cells.length).toBeGreaterThan(0.5);
   });
 
   it('bridges the river where roads cross it, and only there', () => {

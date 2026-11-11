@@ -1,10 +1,14 @@
 /**
  * Roads and bridges (milestone 5).
  *
- * - **Links.** Within each landmass, settlements are linked along the edges
- *   of their relative neighborhood graph (pairs up to MAX_LINK apart) plus
- *   the minimum spanning tree, so every landmass's network is connected and
- *   sparse, like a real road map.
+ * - **Trunk links.** Within each landmass, towns and cities are linked along
+ *   the edges of their relative neighborhood graph (pairs up to MAX_LINK
+ *   apart) plus the minimum spanning tree, so every landmass's trunk network
+ *   is connected and sparse, like a real road map.
+ * - **Local links.** Every settlement then links to its Gabriel-graph
+ *   neighbors up to LOCAL_LINK apart (decision 71), so roads pass through
+ *   villages and form loops instead of ending at them. A feeder road joins any
+ *   village group still off the trunk network.
  * - **Routing.** Links are routed most important first (√(pop_a · pop_b) /
  *   distance) by A* over the coarse grid's 8-neighbors. A step costs its
  *   length × the mean movement cost of its cells (movement.ts); entering a
@@ -70,6 +74,10 @@ export class RoadBuilder {
     this.prev = new Int32Array(n);
     this.stamp = new Int32Array(n);
     this.closed = new Int32Array(n);
+  }
+
+  get cellCount(): number {
+    return this.ctx.grid.cellCount;
   }
 
   edgeKey(a: number, b: number): number {
@@ -461,6 +469,10 @@ export function findBridges(
 /** Settlements on the trunk network: towns and cities, or the TRUNK_MIN_COUNT largest per landmass. */
 export const TRUNK_MIN_POPULATION = 20_000;
 const TRUNK_MIN_COUNT = 3;
+/** Longest local link between neighboring settlements (m). */
+export const LOCAL_LINK = 70e3;
+/** A local link is dropped if its route costs more than this × its length (a detour round a mountain or a bay). */
+const LOCAL_DETOUR = 2.5;
 /** Feeder roads give up beyond this route cost (m of flat road). */
 const FEEDER_MAX_COST = 120e3;
 
@@ -482,23 +494,142 @@ function trunkSettlements(s: SettlementList): Set<number> {
 }
 
 /**
- * Feeder roads: each settlement off the trunk network, largest first, takes
- * the cheapest route to any road or connected settlement within
- * FEEDER_MAX_COST; later feeders can join earlier ones.
+ * Local links: the Gabriel graph of all settlements on a
+ * landmass, restricted to pairs at most LOCAL_LINK apart. Each village gets
+ * links to its natural neighbors, so roads run through villages to the next
+ * one instead of ending at them; the graph has loops, as real country roads
+ * do. Neighbors come from a bucket grid, so this is near-linear.
+ */
+export function localLinks(
+  ctx: StrategicContext,
+  s: SettlementList,
+): { a: number; b: number; d: number }[] {
+  const label = ctx.labels.label;
+  const R = ctx.radius;
+  const P = s.points;
+  const n = s.cells.length;
+  const reach = LOCAL_LINK / R;
+  const bucket = (i: number) => [0, 1, 2].map((k) => Math.floor(P[i * 3 + k]! / reach));
+  const grid = new Map<string, number[]>();
+  for (let i = 0; i < n; i++) {
+    const key = bucket(i).join(',');
+    let l = grid.get(key);
+    if (!l) grid.set(key, (l = []));
+    l.push(i);
+  }
+  const dist = (i: number, j: number) => {
+    const dot =
+      P[i * 3]! * P[j * 3]! + P[i * 3 + 1]! * P[j * 3 + 1]! + P[i * 3 + 2]! * P[j * 3 + 2]!;
+    return R * Math.acos(Math.max(-1, Math.min(1, dot)));
+  };
+  // Neighbors within LOCAL_LINK on the same landmass, with distances.
+  const near: { j: number; d: number }[][] = [];
+  for (let i = 0; i < n; i++) {
+    const [x, y, z] = bucket(i) as [number, number, number];
+    const l: { j: number; d: number }[] = [];
+    for (let dx = -1; dx <= 1; dx++)
+      for (let dy = -1; dy <= 1; dy++)
+        for (let dz = -1; dz <= 1; dz++) {
+          for (const j of grid.get(`${x + dx},${y + dy},${z + dz}`) ?? []) {
+            if (j === i || label[s.cells[j]!] !== label[s.cells[i]!]) continue;
+            const d = dist(i, j);
+            if (d <= LOCAL_LINK) l.push({ j, d });
+          }
+        }
+    l.sort((a, b) => a.d - b.d || a.j - b.j);
+    near.push(l);
+  }
+  const links: { a: number; b: number; d: number }[] = [];
+  for (let i = 0; i < n; i++) {
+    for (const { j, d } of near[i]!) {
+      if (j <= i) continue;
+      // Gabriel graph: no witness inside the circle on ij as diameter
+      // (d_ik² + d_jk² < d²). Such a witness lies within d of i, so among i's neighbors.
+      let ok = true;
+      for (const { j: k, d: dik } of near[i]!) {
+        if (dik >= d) break;
+        const djk = dist(j, k);
+        if (k !== j && dik * dik + djk * djk < d * d) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) links.push({ a: i, b: j, d });
+    }
+  }
+  return links;
+}
+
+/** Routes local links, most important first; a link whose route detours too far is dropped. */
+function routeLocalLinks(
+  builder: RoadBuilder,
+  s: SettlementList,
+  links: { a: number; b: number; d: number }[],
+): void {
+  const order = links
+    .map((l, i) => ({
+      ...l,
+      i,
+      traffic: Math.sqrt(s.population[l.a]! * s.population[l.b]!) / 1000,
+    }))
+    .sort((x, y) => y.traffic / y.d - x.traffic / x.d || x.i - y.i);
+  for (const l of order) {
+    const path = builder.route(s.cells[l.a]!, s.cells[l.b]!, null, l.d * LOCAL_DETOUR);
+    if (path) builder.addPath(path, l.traffic);
+  }
+}
+
+/**
+ * Feeder roads, the fallback for settlements that local links left off the
+ * trunk network: each road component without a trunk settlement, and each
+ * settlement on no road, largest first, takes the cheapest route from its
+ * largest settlement to the trunk network (or failing that any road) within
+ * FEEDER_MAX_COST.
  */
 function routeFeeders(builder: RoadBuilder, s: SettlementList, trunk: Set<number>): void {
-  const connected = new Set<number>(builder.cellsOnRoad());
-  for (const i of trunk) connected.add(s.cells[i]!);
-  const order = [...s.cells.keys()]
-    .filter((i) => !trunk.has(i))
-    .sort((a, b) => s.population[b]! - s.population[a]! || a - b);
+  // Union-find over road cells.
+  const parent = new Map<number, number>();
+  const find = (x: number): number => {
+    let r = x;
+    while (parent.get(r)! !== r) r = parent.get(r)!;
+    while (parent.get(x)! !== r) {
+      const nx = parent.get(x)!;
+      parent.set(x, r);
+      x = nx;
+    }
+    return r;
+  };
+  const union = (a: number, b: number) => {
+    for (const x of [a, b]) if (!parent.has(x)) parent.set(x, x);
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent.set(Math.max(ra, rb), Math.min(ra, rb));
+  };
+  const cellCount = builder.cellCount;
+  for (const k of [...builder.edges.keys()].sort((a, b) => a - b)) {
+    union(Math.floor(k / cellCount), k % cellCount);
+  }
+  for (const c of s.cells) if (!parent.has(c)) parent.set(c, c);
+  const mainRoots = new Set<number>();
+  for (const i of trunk) mainRoots.add(find(s.cells[i]!));
+  const order = [...s.cells.keys()].sort((a, b) => s.population[b]! - s.population[a]! || a - b);
   for (const i of order) {
     const c = s.cells[i]!;
-    if (connected.has(c)) continue;
-    const path = builder.route(c, -1, (x) => connected.has(x), FEEDER_MAX_COST);
+    if (mainRoots.has(find(c))) continue;
+    const own = find(c);
+    let path = builder.route(
+      c,
+      -1,
+      (x) => parent.has(x) && mainRoots.has(find(x)),
+      FEEDER_MAX_COST,
+    );
+    // No trunk in reach (an island of villages): join any other road.
+    path ??= builder.route(c, -1, (x) => builder.hasRoadAt(x) && find(x) !== own, FEEDER_MAX_COST);
     if (!path) continue;
     builder.addPath(path, s.population[i]! / 1000);
-    for (const x of path) connected.add(x);
+    const joinsMain = mainRoots.has(find(path[path.length - 1]!));
+    for (let k = 1; k < path.length; k++) union(path[k - 1]!, path[k]!);
+    if (joinsMain) mainRoots.add(find(c));
   }
 }
 
@@ -515,13 +646,15 @@ export function buildRoads(
   cost: Float32Array,
 ): RoadResult {
   const builder = new RoadBuilder(ctx, cost);
-  // Trunk roads between towns; feeder roads from every village to the nearest road.
+  // Trunk roads between towns, then local roads between neighboring
+  // settlements, then feeders for anything still off the network.
   const trunk = trunkSettlements(settlements);
   routeSettlementLinks(
     builder,
     settlements,
     settlementLinks(ctx, settlements, (i) => trunk.has(i)),
   );
+  routeLocalLinks(builder, settlements, localLinks(ctx, settlements));
   routeFeeders(builder, settlements, trunk);
   const network = roadPolylines(ctx, builder.edges, new Set(settlements.cells));
   const bridges = findBridges(ctx, builder.rivers, builder.edges, network);
