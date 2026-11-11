@@ -96,6 +96,7 @@ The strategic view from [docs/visual-style.md](docs/visual-style.md) Part II: gl
   - [x] Coastal halo and parallel coastal lines (decision 83)
   - [x] Rivers: wide rivers with the water treatment, narrow rivers as lines by discharge (decision 84)
   - [ ] Browser check: river density per band (60 m and 15 m thresholds), line widths, and frame time over river-dense regions
+  - [x] Owner: rings of coastal lines in the open ocean and lines sliding while orbiting (fixed, decision 85)
   - [ ] Browser check: outer coastal lines at Theater zoom follow the 1.5 km coast-distance grid and may show slight steps; if they do, refine (finer field near coasts, or subcell coast positions)
   - [ ] Move the coast-distance transform (about 0.6 s at 1024²) into the worldgen worker
 - [ ] Day and night on the map: the ephemeris sun draws a terminator with a warm twilight band over the hillshade; a legible deep-blue night side; settlement, base and industry lights from the existing light lists (decisions 66, 71); seasonal snow line, sea ice and frozen lakes

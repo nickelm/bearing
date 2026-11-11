@@ -39,6 +39,8 @@ import {
   abs,
   attribute,
   clamp,
+  dFdx,
+  dFdy,
   float,
   Fn,
   If,
@@ -65,8 +67,14 @@ import { MAX_BAKED_LEVEL } from '../../worldgen/gpu/tileSynth';
 import { placeCameraRelative } from '../common/cameraRelative';
 import { HabitabilityTexture } from '../common/habitabilityTexture';
 import { BiomeFillTexture, hexToLinear, STEEP_ROCK_FILL } from './biomeFill';
-import { CoastDistanceTexture } from './coastDistance';
-import { COASTLINE_PX, mapWaterNode, SHELF_WATER } from './mapWater';
+import { COAST_DISTANCE_MAX, CoastDistanceTexture } from './coastDistance';
+import {
+  COASTLINE_PX,
+  mapWaterNode,
+  SHELF_WATER,
+  SHORE_BLEND_HI,
+  SHORE_BLEND_LO,
+} from './mapWater';
 import {
   MAJOR_MIN_WIDTH,
   MapRiverShading,
@@ -195,6 +203,8 @@ export class StrategicRelief {
    * Theater and Region bands' fades (set by the scene).
    */
   readonly belowGlobe = uniform(0);
+  /** Meters per drawing-buffer pixel at the screen center (set by the scene each frame). */
+  readonly mapScale = uniform(1000);
   /** The world's relief scale, for reference water depths (decision 14). */
   readonly reliefScale = uniform(1);
   /** 1 draws the map patterns (forest stipple, farmland), 0 hides them. */
@@ -271,8 +281,12 @@ export class StrategicRelief {
     const regionalCount = objectUniform('regionalCount');
     material.colorNode = Fn(() => {
       // Derivatives first, in uniform control flow: the pixel footprint (m per px)
-      // sizes the patterns on screen (decision 80).
-      const footprint = max(length(fwidth(positionWorld)), 1e-3).toVar();
+      // sizes the patterns on screen (decision 80). The longer screen-axis derivative
+      // is independent of how the surface lies to the world axes (decision 85).
+      const footprint = max(
+        max(length(dFdx(positionWorld)), length(dFdy(positionWorld))),
+        1e-3,
+      ).toVar();
       const planet = positionWorld.add(this.eye).toVar();
       const plane = planeCoordsNode(planet, radial).toVar();
       // Water depth and its change per pixel, for the bands and outlines (decision 82):
@@ -284,6 +298,16 @@ export class StrategicRelief {
       ).div(this.reliefScale);
       const depth = waterDepth.toVar();
       const depthWidth = fwidth(waterDepth).toVar();
+      // Coast distance at sea for the halo and coastal lines (decisions 83, 85): the
+      // per-vertex estimate near the coast, the texture farther out, unknown at its cap.
+      const coastField = this.coastDistance.sample(radial).toVar();
+      const nearShore = smoothstep(SHORE_BLEND_LO, SHORE_BLEND_HI, shore).oneMinus();
+      const coastDist = mix(coastField, max(shore, 0), nearShore).toVar();
+      const coastDistWidth = max(fwidth(coastDist), 1e-3).toVar();
+      const coastKnown = max(
+        nearShore,
+        smoothstep(0.75 * COAST_DISTANCE_MAX, 0.95 * COAST_DISTANCE_MAX, coastField).oneMinus(),
+      ).toVar();
       // Map palette: the blended biome fill, and steep rock where the displayed (4×)
       // slope passes about 31° to 45° (decision 79). Debug modes keep the vertex colors.
       const fill = this.biomeFill.sample(radial);
@@ -338,7 +362,10 @@ export class StrategicRelief {
         footprint,
         depthWidth,
         depth,
-        coastField: this.coastDistance.sample(radial),
+        coastDist,
+        coastDistWidth,
+        coastKnown,
+        mapScale: this.mapScale,
       });
       const wet = water.wet.mul(this.biomeMode);
       const shade = hillshadeNode(normal, radial, {

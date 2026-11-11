@@ -52,18 +52,22 @@ type V3 = Node<'vec3'>;
 
 /** Pattern periods are PATTERN_BASE · 2^k meters. */
 export const PATTERN_BASE = 1;
+/**
+ * Sizes on screen (px). Decision 85 corrected the footprint estimate, which had read
+ * about 1.4× large; the sizes were scaled by 1.4 to keep the approved look.
+ */
 /** Forest stipple: dot spacing on screen (px) and dot radius as a share of the spacing. */
-export const STIPPLE_SPACING_PX = 7;
+export const STIPPLE_SPACING_PX = 10;
 export const STIPPLE_RADIUS = 0.24;
 /** Farmland grid: field size on screen (px) and line width (px). */
-export const GRID_SPACING_PX = 16;
+export const GRID_SPACING_PX = 22;
 export const GRID_LINE_PX = 1;
 /** Line spacing (px) of steep-rock hatching, dune ripples, tundra tussocks, ice cracks and reeds. */
-export const HATCH_SPACING_PX = 5;
-export const DUNE_SPACING_PX = 9;
-export const TUSSOCK_SPACING_PX = 7;
-export const CRACK_SPACING_PX = 28;
-export const REED_SPACING_PX = 10;
+export const HATCH_SPACING_PX = 7;
+export const DUNE_SPACING_PX = 12;
+export const TUSSOCK_SPACING_PX = 10;
+export const CRACK_SPACING_PX = 40;
+export const REED_SPACING_PX = 14;
 /** Tussock dot radius and the share of cells that get one. */
 export const TUSSOCK_RADIUS = 0.2;
 export const TUSSOCK_SHARE = 0.55;

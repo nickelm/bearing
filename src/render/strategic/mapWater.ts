@@ -11,11 +11,15 @@
  *   land–sea edge, so the coast is as sharp as the line.
  * - **Lakes.** The signed lake depth (lake level − height) gives the lake's edge,
  *   outline and depth band, with the same colors and line.
- * - **Coastal halo and lines** (decision 83). At sea, a lighter halo fades out over
- *   the first `HALO_PX` pixels from the coast, and faint lines run parallel to it at
- *   `COASTAL_LINES_PX`, as on old printed maps. Distance comes from the per-vertex
- *   coast distance within a few kilometers of the coast (it follows the fine tile
- *   coastline) and from the coast-distance texture beyond (coastDistance.ts).
+ * - **Coastal halo and lines** (decisions 83, 85). At sea, a lighter halo fades out
+ *   over the first `HALO_PX` pixels from the coast, and faint lines run parallel to it
+ *   at `COASTAL_LINES_PX`, as on old printed maps. Pixels here are the map scale at
+ *   the screen center (`mapScale`, one value per frame), so the lines stay fixed to
+ *   the ground while the camera orbits and only respace when it zooms; each line is
+ *   one local pixel wide. Distance comes from the per-vertex coast distance within a
+ *   few kilometers of the coast (it follows the fine tile coastline) and from the
+ *   coast-distance texture beyond (coastDistance.ts). Where the texture reaches its
+ *   cap, the true distance is unknown, so the halo and lines fade out there.
  * - Water is flat: no hillshade, no relief light.
  *
  * `waterBandWeights` and `lineCoverage` are the CPU reference for tests.
@@ -41,9 +45,9 @@ export const COASTLINE = 0x2f4756;
 export const COASTAL_HALO = 0xb9d5dc;
 export const COASTAL_LINE = 0xa9c9d4;
 /** Halo: full at the coast, gone by this many pixels out. */
-export const HALO_PX = 8;
+export const HALO_PX = 11;
 /** Parallel coastal lines: distances from the coast (px), each a pixel wide. */
-export const COASTAL_LINES_PX = [5, 10, 16] as const;
+export const COASTAL_LINES_PX = [7, 14, 22] as const;
 /** Coastal-line opacity: faint, as the guide asks. */
 export const COASTAL_LINE_OPACITY = 0.7;
 /** Coast distance (m) below which the per-vertex estimate is used, blending to the texture by `SHORE_BLEND_HI`. */
@@ -89,8 +93,13 @@ export interface MapWaterInputs {
   depthWidth: F;
   /** Reference depth (m) of the water here: lake depth in lakes, sea depth elsewhere. */
   depth: F;
-  /** Sea-to-land distance from the coast-distance texture (m). */
-  coastField: F;
+  /** Distance to the coast at sea (m): `blendedCoastDistance`, and its change per pixel. */
+  coastDist: F;
+  coastDistWidth: F;
+  /** 1 where the coast distance is known, fading to 0 toward the texture's cap. */
+  coastKnown: F;
+  /** Meters per pixel at the screen center: places the halo and lines. */
+  mapScale: F;
 }
 
 export interface MapWater {
@@ -118,14 +127,14 @@ export function mapWaterNode(i: MapWaterInputs): MapWater {
     rgb(DEEP_WATER),
     step(DEEP_DEPTH),
   );
-  // Halo and parallel lines at sea, in pixels from the coast (not in lakes).
-  const near = smoothstep(SHORE_BLEND_LO, SHORE_BLEND_HI, i.shore).oneMinus();
-  const coastPx = mix(i.coastField, max(i.shore, 0), near).div(i.footprint);
-  const atSea = sea.mul(lakeCover.oneMinus());
-  const halo = smoothstep(0, HALO_PX, coastPx).oneMinus().mul(atSea);
+  // Halo and parallel lines at sea, at map-scale pixels from the coast (not in lakes).
+  const atSea = sea.mul(lakeCover.oneMinus()).mul(i.coastKnown);
+  const halo = smoothstep(0, i.mapScale.mul(HALO_PX), i.coastDist).oneMinus().mul(atSea);
   let lines: F = float(0) as F;
-  for (const px of COASTAL_LINES_PX)
-    lines = max(lines, clamp(float(1).sub(abs(coastPx.sub(px))), 0, 1)) as F;
+  for (const px of COASTAL_LINES_PX) {
+    const off = abs(i.coastDist.sub(i.mapScale.mul(px))).div(i.coastDistWidth);
+    lines = max(lines, clamp(float(1).sub(off), 0, 1)) as F;
+  }
   const color = mix(
     mix(bands, rgb(COASTAL_HALO), halo),
     rgb(COASTAL_LINE),

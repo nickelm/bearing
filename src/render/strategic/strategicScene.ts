@@ -188,6 +188,11 @@ export class StrategicScene {
     // Patterns are anchored to the ground (decision 80); the field grid shows from the
     // Theater band down, fading with the bands.
     this.relief.eye.value.set(o.eye.x, o.eye.y, o.eye.z);
+    // Map scale at the screen center, in drawing-buffer pixels like the shader's
+    // derivatives: the coastal halo and lines are placed with it (decision 85).
+    const fovY = (this.camera.fov * Math.PI) / 180;
+    this.relief.mapScale.value =
+      (o.range * fovY) / (this.viewportHeight * this.renderer.getPixelRatio());
     this.relief.belowGlobe.value = this.bands.fade('theater') + this.bands.fade('region');
 
     const tiles = this.useTiles && this.relief.hasWorld;

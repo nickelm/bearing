@@ -36,7 +36,7 @@ import { cubeFaceUv } from '../common/climateTexture';
 type V3 = Node<'vec3'>;
 
 /** Largest distance stored (m): beyond the outermost coastal line at the ceiling. */
-export const COAST_DISTANCE_MAX = 60_000;
+export const COAST_DISTANCE_MAX = 100_000;
 /** Most texels per face edge in the texture. */
 const MAX_TEXELS = 1024;
 

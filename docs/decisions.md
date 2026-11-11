@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–84 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–85 are reflected in both.
 
 ---
 
@@ -1379,3 +1379,15 @@ The owner's amendment and the engineering calls made while adopting it:
 - **Bands.** Rivers fade in with the Theater and Region bands (the same visibility as the field grid, now called `belowGlobe`); the Globe band shows none. The loop runs only on dry land, and only for the one table that matches the mesh's level.
 
 **Reason:** Part II lists major rivers in the Theater band and minor rivers in the Region band. Two tables matched to the tile levels drawn in those bands keep each fragment's loop short: long chords for the few major rivers at continental scale, and finer chords for the many minor ones up close. Exact distances to the polylines keep lines crisp at any zoom, as for the coastline.
+
+### 85. Coastal lines fixed to the ground; the footprint no longer depends on world axes
+
+**Date:** 2026-11-11
+**Decision:** Three fixes after the owner's browser check of decision 83, which showed square rings of coastal lines in the open ocean that moved with zoom, and coastal lines sliding while the camera orbited:
+
+- **Unknown distance.** The coast-distance texture is capped, and the shader read the cap as a real distance. Wherever the cap divided by the pixel footprint came to 5, 10 or 16 px, a ring appeared. The halo and lines now fade out as the texture approaches its cap (75% to 95%), except within the per-vertex estimate's reach near the coast. The cap rises from 60 to 100 km.
+- **Footprint.** `length(fwidth(position))` sums absolute derivatives per world axis, so its value depended on how the surface lies to the world axes. That turned the rings into diamonds and changed pattern sizes across the globe by up to 1.7×. The footprint is now the longer of the two screen-axis derivative lengths, which is independent of world axes.
+- **Fixed to the ground.** The halo width and line offsets are now measured in `mapScale`, the map scale at the screen center (range × field of view / drawing-buffer height), one value per frame. They stay fixed to the ground while the camera orbits or pans, and respace only when it zooms. Each line stays one pixel wide through its own `fwidth`.
+- **Sizes kept.** The old footprint read about 1.4× large on average, so every pattern and the coastal lines drew about 1.4× their nominal sizes, the look the owner approved. The nominal sizes are scaled by 1.4 to keep it: stipple 10 px, fields 22 px, hatching 7 px, dunes 12 px, tussocks 10 px, cracks 40 px, reeds 14 px, halo 11 px, lines at 7, 14 and 22 px. Rivers and the 1.2 px coastline keep their nominal sizes, so they draw a little thinner than before, at the guide's widths.
+
+**Reason:** Printed maps fix their decoration to the paper, so it should not move under the reader's eye. A per-frame map scale gives that while keeping the lines evenly spaced on screen at each zoom.
