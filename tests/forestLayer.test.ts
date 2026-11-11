@@ -12,7 +12,7 @@ import { PLANET_RADIUS } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
 import { INSTANCE_FLOATS, placeTrees, treeDataTile } from '../src/render/sim/forest/forestLayer';
 import { treeClump } from '../src/render/sim/forest/treeGeometry';
-import type { MeshOptions } from '../src/render/sim/terrain/tileMesh';
+import type { MeshOptions } from '../src/render/common/terrain/tileMesh';
 import { Biome } from '../src/worldgen/biomes';
 import { NO_LAKE } from '../src/worldgen/gpu/tileSynth';
 import type { TileData } from '../src/worldgen/gpu/tileSynth';

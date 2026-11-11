@@ -73,6 +73,8 @@ export interface MapGuiParams {
   lightElevation: number;
   /** Darkest a shadowed slope gets, relative to flat ground. */
   ambient: number;
+  /** Forest stipple and farmland with its field grid (decision 80). */
+  patterns: boolean;
 }
 
 export interface LightingGuiParams {
@@ -321,6 +323,9 @@ export class DebugGui {
       .onChange(() => changed(map));
     f.add(map, 'ambient', 0, 1, 0.05)
       .name('Shadow floor')
+      .onChange(() => changed(map));
+    f.add(map, 'patterns')
+      .name('Patterns (forest, farmland)')
       .onChange(() => changed(map));
     f.close();
   }

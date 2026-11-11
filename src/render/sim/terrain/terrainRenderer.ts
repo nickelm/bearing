@@ -69,7 +69,7 @@ import { RiverTables } from '../water/riverTables';
 import { WAVE_PERIOD, WaterShading } from '../water/waterShading';
 import type { RiverIndex } from '../../../worldgen/riverIndex';
 import type { InfraScene } from '../infra/infraScene';
-import { HabitabilityTexture } from '../infra/habitabilityTexture';
+import { HabitabilityTexture } from '../../common/habitabilityTexture';
 import {
   builtAlbedo,
   LightShading,
@@ -80,11 +80,16 @@ import {
   ruralSpeckle,
 } from '../infra/roadShading';
 import { LandShading } from './landShading';
-import { DEFAULT_LOD, selectTiles } from './quadtree';
-import type { LodOptions, LodView } from './quadtree';
-import { TileCache, TileLoader, TileRequestQueue } from './tileCache';
-import { buildTileIndex, buildTileMesh, dataTileFor, TILE_VERTEX_COUNT } from './tileMesh';
-import type { MeshOptions, TileViewMode } from './tileMesh';
+import { DEFAULT_LOD, selectTiles } from '../../common/terrain/quadtree';
+import type { LodOptions, LodView } from '../../common/terrain/quadtree';
+import { TileCache, TileLoader, TileRequestQueue } from '../../common/terrain/tileCache';
+import {
+  buildTileIndex,
+  buildTileMesh,
+  dataTileFor,
+  TILE_VERTEX_COUNT,
+} from '../../common/terrain/tileMesh';
+import type { MeshOptions, TileViewMode } from '../../common/terrain/tileMesh';
 
 const DATA_BYTES = TILE_STRIDE * TILE_STRIDE * 8;
 const ZERO = new Vector3();

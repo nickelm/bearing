@@ -30,8 +30,8 @@ import { Vec3d } from '../../../core/vec3d';
 import { Biome } from '../../../worldgen/biomes';
 import type { TileData } from '../../../worldgen/gpu/tileSynth';
 import { MAX_BAKED_LEVEL, NO_LAKE } from '../../../worldgen/gpu/tileSynth';
-import { BIOME_COLORS, HEIGHT_RAMP, hsl, ramp, srgbToLinear } from '../../common/palette';
-import type { Rgb } from '../../common/palette';
+import { BIOME_COLORS, HEIGHT_RAMP, hsl, ramp, srgbToLinear } from '../palette';
+import type { Rgb } from '../palette';
 import { TILE_SEGMENTS, vertexSpacing } from './quadtree';
 
 export const TILE_VIEW_MODES = ['biome', 'height', 'level', 'borders', 'forest'] as const;

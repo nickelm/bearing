@@ -77,4 +77,16 @@ describe('strategic biome fill', () => {
       expect(texel(t, 1, I, 3)).toEqual(taiga.map((x) => expect.closeTo(x, 6)));
     for (const x of t) expect(Number.isFinite(x)).toBe(true);
   });
+
+  it('carries farmability in alpha: open lowland biomes, blended at their edges', () => {
+    const t = biomeFillTexels(
+      map((_f, i) => (i < N / 2 ? Biome.TemperateGrassland : Biome.Taiga)),
+      N,
+    );
+    const alpha = (I: number) => t[((2 * M + 5) * M + I) * 4 + 3]!;
+    expect(alpha(0)).toBeCloseTo(1, 6);
+    expect(alpha(M - 1)).toBeCloseTo(0, 6);
+    expect(alpha(M / 2)).toBeGreaterThan(0);
+    expect(alpha(M / 2)).toBeLessThan(1);
+  });
 });

@@ -15,7 +15,8 @@
  *   the fills are smooth at 9 km, so the step across a cube seam is slight.
  *
  * Colors are linear RGB in a half-float `DataArrayTexture`, laid out like the
- * climate texture (face-major, row j, column i).
+ * climate texture (face-major, row j, column i). Alpha holds farmability (decision 80):
+ * the blended share of open lowland biomes where fields may lie.
  */
 import {
   ClampToEdgeWrapping,
@@ -71,17 +72,33 @@ export function hexToLinear(h: number): [number, number, number] {
   ];
 }
 
-const FILL_LINEAR = STRATEGIC_BIOME_FILL.map((h) => (h === null ? null : hexToLinear(h)));
+/**
+ * Biomes where farmland can lie (decision 80): open and lightly wooded lowland
+ * biomes. The alpha channel carries this, blended like the colors, and the shader
+ * multiplies it with habitability to place fields.
+ */
+const FARMABLE: ReadonlySet<number> = new Set([
+  Biome.TemperateGrassland,
+  Biome.TemperateForest,
+  Biome.Shrubland,
+  Biome.Savanna,
+  Biome.TropicalSeasonalForest,
+]);
+
+/** Linear RGB and farmability per biome; null for sea biomes. */
+const FILL_LINEAR = STRATEGIC_BIOME_FILL.map((h, b) =>
+  h === null ? null : ([...hexToLinear(h), FARMABLE.has(b) ? 1 : 0] as const),
+);
 
 /**
- * Linear RGBA texels (alpha 1) of the blended fill for a biome map of `n` cells per
+ * Linear RGB texels of the blended fill, with farmability in alpha, for a biome map of `n` cells per
  * face edge, at `n / factor` texels per face edge.
  */
 export function biomeFillTexels(biome: Uint8Array, n: number, factor = 2): Float32Array {
   const m = Math.max(1, Math.floor(n / factor));
   const T = 6 * m * m;
   // 1. Land-weighted sums per texel.
-  const sum = new Float64Array(T * 3);
+  const sum = new Float64Array(T * 4);
   const w = new Float64Array(T);
   for (let face = 0; face < 6; face++) {
     for (let j = 0; j < n; j++) {
@@ -91,9 +108,7 @@ export function biomeFillTexels(biome: Uint8Array, n: number, factor = 2): Float
         if (!c) continue;
         const I = Math.min(m - 1, Math.floor(i / factor));
         const t = (face * m + J) * m + I;
-        sum[t * 3] += c[0];
-        sum[t * 3 + 1] += c[1];
-        sum[t * 3 + 2] += c[2];
+        for (let k = 0; k < 4; k++) sum[t * 4 + k] += c[k]!;
         w[t]! += 1;
       }
     }
@@ -114,9 +129,7 @@ export function biomeFillTexels(biome: Uint8Array, n: number, factor = 2): Float
             const II = horizontal ? Math.min(m - 1, Math.max(0, I + d)) : I;
             const JJ = horizontal ? J : Math.min(m - 1, Math.max(0, J + d));
             const s = (face * m + JJ) * m + II;
-            out[t * 3] += src[s * 3]! * k;
-            out[t * 3 + 1] += src[s * 3 + 1]! * k;
-            out[t * 3 + 2] += src[s * 3 + 2]! * k;
+            for (let ch = 0; ch < 4; ch++) out[t * 4 + ch] += src[s * 4 + ch]! * k;
             outW[t]! += srcW[s]! * k;
           }
         }
@@ -127,14 +140,12 @@ export function biomeFillTexels(biome: Uint8Array, n: number, factor = 2): Float
   const h = blur(sum, w, true);
   const v = blur(h.out, h.outW, false);
   // 3. Normalize; texels without land wait for dilation.
-  const rgb = new Float32Array(T * 3);
+  const rgba = new Float32Array(T * 4);
   const known = new Uint8Array(T);
   for (let t = 0; t < T; t++) {
     const wt = v.outW[t]!;
     if (wt <= 0) continue;
-    rgb[t * 3] = v.out[t * 3]! / wt;
-    rgb[t * 3 + 1] = v.out[t * 3 + 1]! / wt;
-    rgb[t * 3 + 2] = v.out[t * 3 + 2]! / wt;
+    for (let ch = 0; ch < 4; ch++) rgba[t * 4 + ch] = v.out[t * 4 + ch]! / wt;
     known[t] = 1;
   }
   // 4. Dilate land colors a few texels out to sea, then fall back to grassland.
@@ -145,9 +156,7 @@ export function biomeFillTexels(biome: Uint8Array, n: number, factor = 2): Float
         for (let I = 0; I < m; I++) {
           const t = (face * m + J) * m + I;
           if (known[t]) continue;
-          let r = 0;
-          let g = 0;
-          let b = 0;
+          const acc = [0, 0, 0, 0];
           let k = 0;
           for (const [di, dj] of [
             [1, 0],
@@ -160,31 +169,23 @@ export function biomeFillTexels(biome: Uint8Array, n: number, factor = 2): Float
             if (II < 0 || JJ < 0 || II >= m || JJ >= m) continue;
             const s = (face * m + JJ) * m + II;
             if (!known[s]) continue;
-            r += rgb[s * 3]!;
-            g += rgb[s * 3 + 1]!;
-            b += rgb[s * 3 + 2]!;
+            for (let ch = 0; ch < 4; ch++) acc[ch]! += rgba[s * 4 + ch]!;
             k++;
           }
           if (k === 0) continue;
-          rgb[t * 3] = r / k;
-          rgb[t * 3 + 1] = g / k;
-          rgb[t * 3 + 2] = b / k;
+          for (let ch = 0; ch < 4; ch++) rgba[t * 4 + ch] = acc[ch]! / k;
           next[t] = 1;
         }
       }
     }
     known.set(next);
   }
-  const fallback = hexToLinear(FALLBACK);
-  const out = new Float32Array(T * 4);
+  const fallback = [...hexToLinear(FALLBACK), 0];
   for (let t = 0; t < T; t++) {
-    const c = known[t] ? [rgb[t * 3]!, rgb[t * 3 + 1]!, rgb[t * 3 + 2]!] : fallback;
-    out[t * 4] = c[0]!;
-    out[t * 4 + 1] = c[1]!;
-    out[t * 4 + 2] = c[2]!;
-    out[t * 4 + 3] = 1;
+    if (known[t]) continue;
+    for (let ch = 0; ch < 4; ch++) rgba[t * 4 + ch] = fallback[ch]!;
   }
-  return out;
+  return rgba;
 }
 
 /** The blended fill as a cube-face texture array. */
@@ -195,7 +196,7 @@ export class BiomeFillTexture {
   constructor() {
     this.texture = BiomeFillTexture.make(1);
     const g = hexToLinear(FALLBACK);
-    this.fill(new Float32Array(6 * 4).map((_, i) => [g[0], g[1], g[2], 1][i % 4]!));
+    this.fill(new Float32Array(6 * 4).map((_, i) => [g[0], g[1], g[2], 0][i % 4]!));
   }
 
   private static make(m: number): DataArrayTexture {
@@ -228,10 +229,10 @@ export class BiomeFillTexture {
     this.fill(biomeFillTexels(biome, n, factor));
   }
 
-  /** Linear land fill at a direction. */
-  sample(dir: V3): V3 {
+  /** Linear land fill (rgb) and farmability (a) at a direction. */
+  sample(dir: V3): Node<'vec4'> {
     const { face, uv } = cubeFaceUv(dir);
-    return texture(this.texture, uv).depth(face).level(int(0)).rgb as V3;
+    return texture(this.texture, uv).depth(face).level(int(0)) as Node<'vec4'>;
   }
 
   dispose(): void {

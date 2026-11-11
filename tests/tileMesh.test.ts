@@ -14,18 +14,18 @@ import {
 import type { TileKey } from '../src/core/tiles';
 import { PLANET_RADIUS } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
-import { TILE_SEGMENTS } from '../src/render/sim/terrain/quadtree';
+import { TILE_SEGMENTS } from '../src/render/common/terrain/quadtree';
 import {
   buildTileIndex,
   buildTileMesh,
   dataTileFor,
   displacedPosition,
   TILE_VERTEX_COUNT,
-} from '../src/render/sim/terrain/tileMesh';
-import type { MeshOptions, TileMeshData } from '../src/render/sim/terrain/tileMesh';
+} from '../src/render/common/terrain/tileMesh';
+import type { MeshOptions, TileMeshData } from '../src/render/common/terrain/tileMesh';
 import { NO_LAKE } from '../src/worldgen/gpu/tileSynth';
 import type { TileData } from '../src/worldgen/gpu/tileSynth';
-import { LAKE_DRY } from '../src/render/sim/terrain/tileMesh';
+import { LAKE_DRY } from '../src/render/common/terrain/tileMesh';
 
 const R = PLANET_RADIUS;
 const V = TILE_SEGMENTS + 1;

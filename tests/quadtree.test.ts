@@ -8,8 +8,8 @@ import {
   DEFAULT_LOD,
   geometricError,
   selectTiles,
-} from '../src/render/sim/terrain/quadtree';
-import type { LodView } from '../src/render/sim/terrain/quadtree';
+} from '../src/render/common/terrain/quadtree';
+import type { LodView } from '../src/render/common/terrain/quadtree';
 
 const R = PLANET_RADIUS;
 

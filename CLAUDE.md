@@ -45,11 +45,13 @@ src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Bo
                     the app renders the active one (GUI → View → View). Until V1, sim/'s GlobeScene
                     still draws orbit to ground.
   common/           shared by both views: camera-relative placement, orbit camera, cell-grid debug
-                    globe, palette, climate texture, render scale, cube-sphere geometry, WebGPU checks;
+                    globe, palette, climate and habitability textures, render scale, cube-sphere
+                    geometry, WebGPU checks, terrain/ (tile quadtree, tile meshes, tile cache);
                     later the transition controller
-  sim/              simulation view: GlobeScene, terrain/ (LOD), atmosphere/, water/, clouds/, forest/,
-                    infra/, lighting/
-  strategic/        strategic view: StrategicScene, StrategicCamera, zoom bands, relief mesh, graph debug overlay; later base map,
+  sim/              simulation view: GlobeScene, terrain/ (TerrainRenderer), atmosphere/, water/,
+                    clouds/, forest/, infra/, lighting/
+  strategic/        strategic view: StrategicScene, StrategicCamera, zoom bands, relief mesh, hillshade,
+                    biome fill, patterns, graph debug overlay; later base map,
                     glyphs, overlays, label engine
 src/ui/             lil-gui debug panel, overlays, time controls
 src/workers/        worker entry points and message protocols

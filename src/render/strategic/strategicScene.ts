@@ -137,6 +137,8 @@ export class StrategicScene {
     infrastructure: Infrastructure | null,
   ): void {
     this.overlay.setWorld(graph, cast, infrastructure);
+    // Farmland lies on settled land (decision 80).
+    this.relief.habitability.set(graph?.habitability ?? null, graph?.resolution ?? 1);
   }
 
   resize(width: number, height: number): void {
@@ -183,6 +185,10 @@ export class StrategicScene {
     // The hillshade light comes from the screen's upper left at every point (decision 78).
     this.relief.screenRight.value.set(right.x, right.y, right.z);
     this.relief.screenUp.value.set(o.up.x, o.up.y, o.up.z);
+    // Patterns are anchored to the ground (decision 80); the field grid shows from the
+    // Theater band down, fading with the bands.
+    this.relief.eye.value.set(o.eye.x, o.eye.y, o.eye.z);
+    this.relief.gridVisibility.value = this.bands.fade('theater') + this.bands.fade('region');
 
     const tiles = this.useTiles && this.relief.hasWorld;
     this.globe.group.visible = !tiles;

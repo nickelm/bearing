@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–79 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–80 are reflected in both.
 
 ---
 
@@ -1316,3 +1316,17 @@ The owner's amendment and the engineering calls made while adopting it:
 - **Hillshade defaults** (amending decision 78, after the owner's tuning in the browser): strength 2 and light elevation 20°. The low light lengthens the shading on gentle slopes; the clamp at 1.35 caps lit faces.
 
 **Reason:** The tiles store one biome per sample from the global grid, so per-vertex colors step at the 1.5 km cell size and blur only by vertex interpolation, which changes with the tile level. A fill texture sampled by direction gives the same blended boundary at every zoom, and costs one texture fetch per fragment.
+
+### 80. Map patterns: anchored to the ground, sized on screen; forest stipple and farmland
+
+**Date:** 2026-11-11
+**Decision:** `render/strategic/patterns.ts` is the pattern framework of the strategic map:
+
+- **Screen-stable, not screen-space.** A pattern lives in world coordinates, so it never swims while the camera pans. Each fragment estimates its pixel footprint f (meters per pixel, from `fwidth` of the world position), wants a period of `targetPx · f`, and draws the pattern at the power of two of 1 m below that and at twice it, crossfaded by the fraction in between. The two periods lie within half and twice the target on screen at any zoom and tilt, and moving between powers of two is a smooth fade. Edges are antialiased over one pixel of footprint. This meets the guide's "same at every zoom within a band" within each band and across them; bands then choose which patterns show.
+- **Coordinates.** The two world axes across the point's dominant radial axis, in meters, so patterns step slightly along the cube's edges. Planet positions come from camera-relative positions plus the eye (a uniform); at map footprints of 50 m and more, float32 precision is ample.
+- **Forest stipple.** Jittered dots, one per cell, spaced about 7 px with a radius of 0.24 of the spacing, at every band. They cover forest where the tiles' forest density rises from 0.35 to 0.65. Dots are the fill color times 0.58 in linear light: Part II's three stipple colors are each about 0.78 of their fill in sRGB.
+- **Farmland.** Where the strategic graph's habitability rises from 0.25 to 0.45, in farmable biomes, outside forest and off steep slopes, the fill becomes Part II farmland (`#C9B57A`). Farmable biomes are temperate grassland, temperate forest, shrubland, savanna and tropical seasonal forest; the biome fill texture carries their blended share in its alpha channel. Fields get the grid (`#B3A066`, 1 px lines, about 16 px fields) from the Theater band down, faded in by the band fades. This answers decision 79's open farmland row from data the map already has; S4's urban extents and settlements may refine it.
+- **Shared tile code moves to `render/common/`.** `quadtree.ts`, `tileMesh.ts` and `tileCache.ts` move to `render/common/terrain/` and `habitabilityTexture.ts` to `render/common/`, since both views use them. This restores decision 74's rule that `strategic/` imports nothing from `sim/`, which decision 77's reuse had broken.
+- **Toggle.** GUI → Map (strategic view) → Patterns turns stipple and farmland off for comparison.
+
+**Reason:** Purely screen-space patterns would slide over the terrain while panning, and purely world-space ones would shrink to noise or grow to blobs with zoom. Choosing the period per fragment from its footprint gives both: anchored marks at a constant apparent size, as on printed maps redrawn for each scale.

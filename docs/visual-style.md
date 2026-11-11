@@ -278,7 +278,7 @@ Civilization VI screenshots and Cold War operational maps (NATO planning maps, 1
   - reed marks for wetlands;
   - cracked-ice lines for ice caps;
   - rock hatching on steep slopes.
-  Biome boundaries blend over a few kilometers. Pattern scale is screen-stable, so a pattern looks the same at every zoom within a band.
+  Biome boundaries blend over a few kilometers. Pattern scale is screen-stable, so a pattern looks the same at every zoom within a band: patterns are anchored to the ground, and each point picks its period from its pixel footprint, crossfading between powers of two. Farmland lies on settled land (the strategic graph's habitability) in open lowland biomes, outside forests; its field grid shows from the Theater band down (decision 80).
 - **Coasts and water.** Water gets depth tints in a few flat bands, a lighter halo along coasts, and the faint parallel coastal lines of old printed maps. Coastlines carry a thin dark outline. Lakes and wide rivers use the same treatment; narrow rivers are blue lines whose width follows discharge, kept at least a pixel wide.
 - **Graticule.** Optional latitude and longitude lines, and range rings around a selected base or aircraft. There is no hex grid: hexes imply movement rules, and the simulation has none.
 

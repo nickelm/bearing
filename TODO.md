@@ -60,7 +60,7 @@ Suggested order for the remaining work: S1, V1, S2, V2, the rest of S3 and S4, V
   - [x] Recompute biomes on the eroded global grid (lapse-corrected temperature, upsampled precipitation)
 - [x] Detail tile synthesis on the GPU: global maps + detail noise + local erosion constrained by global rivers; per-tile `fork(tileKey)` (erosion filter and river carving as a pure function of direction, decisions 24, 28; `tools/tiles.preview.ts`)
 - [x] Tile borders and seam tests: neighboring tiles agree on shared texels whatever the generation order (bit-exact within a face, < 5 cm across face seams)
-- [x] Tile cache: GPU/CPU LRU with a memory budget; on-demand generation queue (`render/sim/terrain/tileCache.ts`; textures attach in the tile renderer)
+- [x] Tile cache: GPU/CPU LRU with a memory budget; on-demand generation queue (`render/common/terrain/tileCache.ts`; textures attach in the tile renderer)
 - [x] IndexedDB persistence for generated worlds and tiles, keyed by seed, parameters and generator version (moved from old M8, decision 12): worlds only, tiles regenerate faster than they load (decision 29)
 
 ## Strategic track
@@ -84,8 +84,10 @@ The strategic view from [docs/visual-style.md](docs/visual-style.md) Part II: gl
 - [x] Cartographic hillshade: a light fixed at the screen's upper left (view-space direction) on the 4× normals, plus soft ambient; decide between a bake and per-fragment shading and log it; no physical sky or aerial perspective in this scene (decision 78: per fragment)
   - [ ] Owner: tune GUI → Map (strategic view) → Hillshade strength, Light elevation, Shadow floor and Relief exaggeration in the browser; fold the chosen values into the defaults
 - [x] Strategic biome palette (Part II) and biome boundary blending over a few kilometers (decision 79)
-  - [ ] Farmland, wetland and urban fills once data marks them (farmland from habitability or settlements, S4)
-- [ ] Pattern framework: procedural shader patterns with screen-stable scaling per band; forest stipple and farmland grid first
+  - [x] Farmland fill from the graph's habitability in open lowland biomes (decision 80)
+  - [ ] Wetland and urban fills once data marks them (urban extents in S4)
+- [x] Pattern framework: procedural shader patterns with screen-stable scaling per band; forest stipple and farmland grid first (decision 80)
+  - [ ] Browser check: patterns compile and read well; tune stipple and field sizes (`STIPPLE_SPACING_PX`, `GRID_SPACING_PX`) and the farmland habitability threshold
 - [ ] Remaining patterns: desert dune ripples, tundra tussocks, steep-slope rock hatching, wetland reeds, ice-cap cracks
 - [ ] Water: flat depth bands, a thin dark coastline outline (reuse the coast distance of decision 39), lakes
 - [ ] Coastal halo and parallel coastal lines; wide rivers with the water treatment, narrow rivers as lines by discharge

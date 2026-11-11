@@ -69,8 +69,8 @@ import type { ClimateTexture } from '../../common/climateTexture';
 import type { PlanetLighting } from '../lighting/planetLighting';
 import type { LandShading } from '../terrain/landShading';
 import type { TerrainRenderer } from '../terrain/terrainRenderer';
-import { lakeSampler, mapSample, surfaceSampler } from '../terrain/tileMesh';
-import type { MeshOptions } from '../terrain/tileMesh';
+import { lakeSampler, mapSample, surfaceSampler } from '../../common/terrain/tileMesh';
+import type { MeshOptions } from '../../common/terrain/tileMesh';
 import { treeClump } from './treeGeometry';
 import type { TreeGeometryData, TreeKind } from './treeGeometry';
 

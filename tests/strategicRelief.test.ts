@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { DEG, KM } from '../src/core/units';
-import { DEFAULT_LOD, selectTiles } from '../src/render/sim/terrain/quadtree';
+import { DEFAULT_LOD, selectTiles } from '../src/render/common/terrain/quadtree';
 import {
   StrategicCamera,
   STRATEGIC_CEILING,

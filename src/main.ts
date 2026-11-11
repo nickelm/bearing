@@ -42,8 +42,8 @@ import {
 import { GpuContext } from './worldgen/gpu/gpuContext';
 import { TileSynthesizer } from './worldgen/gpu/tileSynth';
 import { RiverIndex } from './worldgen/riverIndex';
-import { DEFAULT_LOD } from './render/sim/terrain/quadtree';
-import type { TileViewMode } from './render/sim/terrain/tileMesh';
+import { DEFAULT_LOD } from './render/common/terrain/quadtree';
+import type { TileViewMode } from './render/common/terrain/tileMesh';
 import {
   buildGlobalWorld,
   GlobalPassCancelled,
@@ -585,6 +585,7 @@ async function main(): Promise<void> {
     hillshade: relief.hillshadeStrength.value,
     lightElevation: Math.round(relief.hillshadeElevation.value / DEG),
     ambient: relief.ambient.value,
+    patterns: true,
   };
   gui.addMapControls(mapParams, (m) => {
     // The relief applies exaggeration in its shader; the fallback grid globe rebuilds.
@@ -595,6 +596,7 @@ async function main(): Promise<void> {
     relief.hillshadeStrength.value = m.hillshade;
     relief.hillshadeElevation.value = m.lightElevation * DEG;
     relief.ambient.value = m.ambient;
+    relief.patterns.value = m.patterns ? 1 : 0;
   });
   const lighting = globe.lighting;
   const lightParams: LightingGuiParams = {

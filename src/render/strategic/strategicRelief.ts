@@ -2,8 +2,8 @@
  * The strategic view's relief mesh (visual-style Part II, Base Map; decision 77).
  *
  * The same tiles as the simulation view's terrain: the quadtree selects by
- * screen-space error (sim/terrain/quadtree.ts), meshes come from
- * sim/terrain/tileMesh.ts and data from the world's TileSynthesizer. What differs:
+ * screen-space error (common/terrain/quadtree.ts), meshes come from
+ * common/terrain/tileMesh.ts and data from the world's TileSynthesizer. What differs:
  *
  * - **Level cap.** `STRATEGIC_MAX_LEVEL` (6, vertices about 380 m apart on the
  *   1,000 km planet). At the 100 km floor on a 1080p screen the selection reaches
@@ -20,6 +20,8 @@
  * - **Palette.** Land takes the Part II biome fills from a blended cube-face texture
  *   (biomeFill.ts, decision 79), with steep rock on steep displayed slopes. The sea is
  *   one flat water color until the water task of S1.
+ * - **Patterns.** Forest stipple and farmland with its field grid (patterns.ts,
+ *   decision 80), anchored to the ground and sized on screen.
  *
  * Geomorphing works as in the terrain renderer, so splits do not pop.
  */
@@ -35,11 +37,13 @@ import {
 import {
   attribute,
   Fn,
+  fwidth,
   length,
   max,
   mix,
   normalize,
   positionLocal,
+  positionWorld,
   smoothstep,
   step,
   uniform,
@@ -54,18 +58,20 @@ import { Vec3d } from '../../core/vec3d';
 import type { TileData, TileSynthesizer } from '../../worldgen/gpu/tileSynth';
 import { MAX_BAKED_LEVEL } from '../../worldgen/gpu/tileSynth';
 import { placeCameraRelative } from '../common/cameraRelative';
+import { HabitabilityTexture } from '../common/habitabilityTexture';
 import { BiomeFillTexture, hexToLinear, STEEP_ROCK_FILL } from './biomeFill';
+import { gridNode, planeCoordsNode, stippleNode } from './patterns';
 import { DEFAULT_HILLSHADE, hillshadeNode } from './hillshade';
-import { DEFAULT_LOD, selectTiles } from '../sim/terrain/quadtree';
-import type { LodOptions, LodView } from '../sim/terrain/quadtree';
-import { TileCache, TileLoader, TileRequestQueue } from '../sim/terrain/tileCache';
+import { DEFAULT_LOD, selectTiles } from '../common/terrain/quadtree';
+import type { LodOptions, LodView } from '../common/terrain/quadtree';
+import { TileCache, TileLoader, TileRequestQueue } from '../common/terrain/tileCache';
 import {
   buildTileIndex,
   buildTileMesh,
   dataTileFor,
   TILE_VERTEX_COUNT,
-} from '../sim/terrain/tileMesh';
-import type { TileViewMode } from '../sim/terrain/tileMesh';
+} from '../common/terrain/tileMesh';
+import type { TileViewMode } from '../common/terrain/tileMesh';
 
 /** Deepest tile level the map draws (see the header). */
 export const STRATEGIC_MAX_LEVEL = 6;
@@ -76,8 +82,16 @@ const DATA_BUDGET_MIB = 80;
 const MESH_BUDGET_MIB = 120;
 
 const DATA_BYTES = TILE_STRIDE * TILE_STRIDE * 8;
-/** position, up, parentBase, parentDisp, slope, color (vec3) + surface (vec2), float32. */
-const MESH_BYTES = TILE_VERTEX_COUNT * (6 * 3 + 2) * 4;
+/** position, up, parentBase, parentDisp, slope, color (vec3) + surface (vec3), float32. */
+const MESH_BYTES = TILE_VERTEX_COUNT * (6 * 3 + 3) * 4;
+/** Part II farmland fill and field-grid line colors (decision 80). */
+const FARM_FILL = hexToLinear(0xc9b57a);
+const FARM_LINE = hexToLinear(0xb3a066);
+/**
+ * Forest stipple: dots of the canopy color times this (linear). Part II's stipple
+ * colors are about 0.78 of their fills in sRGB for all three forest rows.
+ */
+const STIPPLE_DARKEN = 0.58;
 /** Placeholder sea color until the water task: Part II mid-depth water. */
 const WATER = new Color('#6C97AC');
 
@@ -131,6 +145,14 @@ export class StrategicRelief {
   private readonly biomeMode = uniform(1);
   /** Part II land fills by direction, blended across biome boundaries (decision 79). */
   readonly biomeFill = new BiomeFillTexture();
+  /** The strategic graph's habitability, for farmland (decision 80). */
+  readonly habitability = new HabitabilityTexture(null, 1);
+  /** Camera eye, planet-centered (set by the scene each frame): patterns are anchored to the ground. */
+  readonly eye = uniform(new Vector3());
+  /** Field-grid visibility: the Theater and Region bands' fades (set by the scene). */
+  readonly gridVisibility = uniform(0);
+  /** 1 draws the map patterns (forest stipple, farmland), 0 hides them. */
+  readonly patterns = uniform(1);
   private detail = new Noise3(rng(0, 'render-detail'));
   private readonly index = new BufferAttribute(buildTileIndex(), 1);
   private readonly material: MeshBasicNodeMaterial;
@@ -168,9 +190,10 @@ export class StrategicRelief {
     const material = new MeshBasicNodeMaterial();
     const ex = this.exaggeration;
     const up = attribute('up', 'vec3');
-    const surface = attribute('surface', 'vec2');
+    const surface = attribute('surface', 'vec3');
     const rawHeight = surface.x;
     const lakeDepth = surface.y;
+    const forest = surface.z;
     // Sea flat at 0 m and lakes flat at their level, as in the terrain renderer.
     const shown = max(rawHeight.add(max(lakeDepth, 0)), 0);
     const own = positionLocal.add(up.mul(shown.mul(ex)));
@@ -180,12 +203,30 @@ export class StrategicRelief {
     const normal = normalize(up.sub(attribute('slope', 'vec3').mul(ex)));
     const radial = normalize(up);
     const slope = attribute('slope', 'vec3');
-    const rock = hexToLinear(STEEP_ROCK_FILL);
+    const rgb = (c: readonly number[]) => vec3(c[0]!, c[1]!, c[2]!);
+    const rock = rgb(hexToLinear(STEEP_ROCK_FILL));
     material.colorNode = Fn(() => {
+      // Derivatives first, in uniform control flow: the pixel footprint (m per px)
+      // sizes the patterns on screen (decision 80).
+      const footprint = max(length(fwidth(positionWorld)), 1e-3).toVar();
+      const plane = planeCoordsNode(positionWorld.add(this.eye), radial).toVar();
       // Map palette: the blended biome fill, and steep rock where the displayed (4×)
       // slope passes about 31° to 45° (decision 79). Debug modes keep the vertex colors.
-      const steep = smoothstep(0.6, 1.0, length(slope).mul(ex));
-      const mapLand = mix(this.biomeFill.sample(radial), vec3(rock[0], rock[1], rock[2]), steep);
+      const fill = this.biomeFill.sample(radial);
+      const steep = smoothstep(0.6, 1.0, length(slope).mul(ex)).toVar();
+      const open = steep.oneMinus().mul(this.patterns).toVar();
+      const forestCover = smoothstep(0.35, 0.65, forest).toVar();
+      // Farmland: farmable biomes (fill alpha) on settled land, outside forests and off
+      // steep slopes, with the field grid from the Theater band down.
+      const settled = smoothstep(0.25, 0.45, this.habitability.sample(radial));
+      const farm = settled.mul(fill.a).mul(forestCover.oneMinus()).mul(open).toVar();
+      const fields = mix(fill.rgb, rgb(FARM_FILL), farm);
+      const grid = gridNode(plane, footprint).mul(farm).mul(this.gridVisibility);
+      const farmed = mix(fields, rgb(FARM_LINE), grid);
+      // Forest stipple: darker dots of the canopy color, at every band.
+      const dots = stippleNode(plane, footprint).mul(forestCover).mul(open);
+      const stippled = mix(farmed, farmed.mul(STIPPLE_DARKEN), dots);
+      const mapLand = mix(stippled, rock, steep);
       const land = mix(attribute('color', 'vec3'), mapLand, this.biomeMode);
       // Water: at sea, and in lakes; flat, no relief light.
       const wet = max(step(rawHeight, 0), step(0, lakeDepth)).mul(this.biomeMode);
@@ -255,12 +296,13 @@ export class StrategicRelief {
     const g = new BufferGeometry();
     g.setAttribute('position', new BufferAttribute(m.base, 3));
     g.setAttribute('up', new BufferAttribute(m.up, 3));
-    const surface = new Float32Array(TILE_VERTEX_COUNT * 2);
+    const surface = new Float32Array(TILE_VERTEX_COUNT * 3);
     for (let v = 0; v < TILE_VERTEX_COUNT; v++) {
-      surface[v * 2] = m.height[v]!;
-      surface[v * 2 + 1] = m.water[v]!;
+      surface[v * 3] = m.height[v]!;
+      surface[v * 3 + 1] = m.water[v]!;
+      surface[v * 3 + 2] = m.forest[v]!;
     }
-    g.setAttribute('surface', new BufferAttribute(surface, 2));
+    g.setAttribute('surface', new BufferAttribute(surface, 3));
     g.setAttribute('parentBase', new BufferAttribute(m.parentBase, 3));
     g.setAttribute('parentDisp', new BufferAttribute(m.parentDisp, 3));
     g.setAttribute('slope', new BufferAttribute(m.slope, 3));
@@ -345,5 +387,6 @@ export class StrategicRelief {
     this.setWorld(null);
     this.material.dispose();
     this.biomeFill.dispose();
+    this.habitability.dispose();
   }
 }

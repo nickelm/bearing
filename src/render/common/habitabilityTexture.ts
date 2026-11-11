@@ -2,7 +2,8 @@
  * The strategic graph's habitability map (decision 65) as a cube-face array
  * texture, one R8 layer per face at the coarse grid's resolution, sampled by
  * direction like the climate texture (decision 42). The terrain uses it for
- * the rural night glow between towns.
+ * the rural night glow between towns; the strategic map places farmland with it
+ * (decision 80).
  */
 import {
   ClampToEdgeWrapping,
@@ -13,7 +14,7 @@ import {
 } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import { int, texture } from 'three/tsl';
-import { cubeFaceUv } from '../../common/climateTexture';
+import { cubeFaceUv } from './climateTexture';
 
 type V3 = Node<'vec3'>;
 
@@ -33,6 +34,18 @@ export class HabitabilityTexture {
     t.generateMipmaps = false;
     t.needsUpdate = true;
     this.texture = t;
+  }
+
+  /**
+   * Replaces the map in place, so materials that sample this texture keep working
+   * (three does not reallocate a GPU texture whose image changes size: free it first).
+   */
+  set(cells: Uint8Array | null, n: number): void {
+    const data = cells && cells.length === 6 * n * n ? cells : new Uint8Array(6 * n * n);
+    const img = this.texture.image as { width: number };
+    if (img.width !== n) this.texture.dispose();
+    this.texture.image = { data, width: n, height: n, depth: 6 };
+    this.texture.needsUpdate = true;
   }
 
   /** Habitability 0..1 at a direction (need not be normalized). */

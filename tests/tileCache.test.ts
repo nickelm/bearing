@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { childTiles, tileKey } from '../src/core/tiles';
 import type { TileKey } from '../src/core/tiles';
-import { TileCache, TileLoader, TileRequestQueue } from '../src/render/sim/terrain/tileCache';
+import { TileCache, TileLoader, TileRequestQueue } from '../src/render/common/terrain/tileCache';
 
 const t = (level: number, x: number, y = 0): TileKey => tileKey(0, level, x, y);
 
