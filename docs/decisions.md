@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–92 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–94 are reflected in both.
 
 ---
 
@@ -1461,7 +1461,31 @@ The owner's amendment and the engineering calls made while adopting it:
 
 **Reason:** Range rings answer the planning question "what can reach what" at a glance, and the graticule orients the reader on a globe without coastlines in view. Drawing both in the relief shader keeps them on the ground, one pixel wide at any zoom, at no extra draw calls.
 
-### 92. Third-person flight without cockpits; one flight director for AI and player (Proposal 0002)
+### 92. The map's finish in its own shaders: vignette, paper grain, a pale rim
+
+**Date:** 2026-11-11
+**Decision:** Part II's post-processing is applied in the map's shaders (`render/strategic/mapFinish.ts`), not in a separate pass:
+
+- **Vignette and grain.** The relief's final color and the background are multiplied by a vignette that darkens corners by up to 8% (starting 45% of the way from center to corner) and by a constant per-pixel grain of ±2.5% (a hash of the drawing-buffer pixel), fixed to the screen like paper.
+- **Rim.** The background becomes a node: flat `#1E2630`, with a thin pale rim `#D9E4E8` just outside the globe's silhouette. For each background ray it takes the angle outside the limb, divides by radians per pixel, and draws a Gaussian about 1.5 px wide at 85%. This replaces the limb glow; there is still no atmosphere on the map.
+- **Halo.** The night lights' additive halo (decision 88) stays the only glow.
+- **Control.** GUI → Map → Paper finish scales vignette and grain from 0 to 1.
+
+**Reason:** A post-processing pass would add a render target and a full-screen pass for three multiplies. In the map's own shaders the finish costs a hash and a smoothstep per pixel. The night lights, which draw additively over the relief, are not grained, which keeps them clean points.
+
+### 93. Strategic preview views, a color-vision filter, and a stronger paper finish
+
+**Date:** 2026-11-11
+**Decision:**
+
+- **Views.** `tools/render.preview.ts` with `SCENE=strategic` renders its own list. `globe` is the Globe band at 3,000 km with the terminator in view (Part II check 1). `night` is the same at 22:00. `theater` is at 900 km, `region` at 250 km, `floor` at 100 km, and `winter` at 1,500 km on day 150. `sharp` is the floor at 1920 × 1080 (check 5). The old `orbit`, `limb`, `terminator` and `floor` views leave the simulation list; the rest of that list is sorted in V1.
+- **Clouds and sizes.** Each image size gets its own headless renderer and scene. The previews build a cloud layer fed by the sim's weather at each view's time, and force its bake with a synthetic clock, so check 1's weather shows.
+- **Color vision.** `CVD=1` also writes each image as seen with protanopia, deuteranopia and tritanopia (`tools/cvd.ts`: Machado, Oliveira and Fernandes 2009, severity 1, in linear RGB) for check 4. A test confirms that grays stay gray and that Part II's faction colors stay far apart under all three.
+- **Paper finish.** The owner saw neither the 8% vignette nor the ±2.5% grain of decision 92 in the browser, most likely because the AgX tone curve compresses small changes. Both are stronger by default: corners darken by 20%, grain is ±6%, and GUI → Map → Paper finish now reaches 3×. The previews will show whether the finish reaches the image at all.
+
+**Reason:** Visual milestones close only after the acceptance checks (CLAUDE.md). This gives the owner one command that produces every image S1's strategic checks need.
+
+### 94. Third-person flight without cockpits; one flight director for AI and player (Proposal 0002)
 
 **Date:** 2026-11-11
 **Decision:** The owner's Proposal 0002 (`docs/proposals/0002-third-person-flight.md`) is accepted. `docs/design.md` (revision 8) gains a _Flying_ section, `docs/visual-style.md` (revision 3) gains _The Controlled Aircraft_, _HUD and Displays_ and acceptance checks 7–10 in Part I, and Proposal 0001 is amended where it named cockpits.

@@ -597,6 +597,7 @@ async function main(): Promise<void> {
     cloudOpacity: 1,
     graticule: false,
     rangeRings: true,
+    finish: 1,
   };
   gui.addMapControls(mapParams, (m) => {
     // The relief applies exaggeration in its shader; the fallback grid globe rebuilds.
@@ -615,6 +616,7 @@ async function main(): Promise<void> {
     relief.cloudOpacity.value = m.cloudOpacity;
     strategicView.showGraticule = m.graticule;
     strategicView.showRings = m.rangeRings;
+    relief.finish.value = m.finish;
   });
   const lighting = globe.lighting;
   const lightParams: LightingGuiParams = {

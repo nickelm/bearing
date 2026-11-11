@@ -1,6 +1,6 @@
 # Bearing: Design Doc
 
-*Revision 8, 2026-11-11. Adopts Proposal 0002, third-person flight without cockpits (`docs/proposals/0002-third-person-flight.md`, decision 92); revision 7 adopted Proposal 0001, two views (`docs/proposals/0001-two-views.md`, decision 72); revision 6 brought in decisions 1–71. A decision that changes anything stated here updates this document in the same commit.*
+*Revision 8, 2026-11-11. Adopts Proposal 0002, third-person flight without cockpits (`docs/proposals/0002-third-person-flight.md`, decision 94); revision 7 adopted Proposal 0001, two views (`docs/proposals/0001-two-views.md`, decision 72); revision 6 brought in decisions 1–71. A decision that changes anything stated here updates this document in the same commit.*
 
 ## Vision
 
@@ -273,7 +273,7 @@ For the demo, the panel, the chase camera, and a read-only HUD are in scope. Pla
 
 ## Flying
 
-*Specified in `docs/proposals/0002-third-person-flight.md` (decision 92); `docs/visual-style.md`, Part I, covers the controlled aircraft's model and the HUD's look.*
+*Specified in `docs/proposals/0002-third-person-flight.md` (decision 94); `docs/visual-style.md`, Part I, covers the controlled aircraft's model and the HUD's look.*
 
 - **Camera rig.** A chase camera behind and slightly above the aircraft, attached through a spring-damper so it lags behind rolls, pitch changes, and acceleration while keeping the aircraft near the center of the screen. Each aircraft class gets its own offsets and damping. Free look orbits the camera while a key or button is held and springs back on release. A target camera keeps the aircraft and the selected target in frame, a weapon camera can follow a released missile or bomb, and flyby and cinematic cameras serve transitions, replays, and idle spectating. The camera raycasts against the height map, never clips terrain, and lowers and closes in at low altitude.
 - **Flight director and controls.** The flight director is an autopilot that turns a desired direction and speed into control inputs for the flight model. With mouse aim (the default), the mouse steers an aim point in the world and the flight director flies toward it; with direct control, keyboard, mouse-as-stick, or a flight stick drive the control surfaces through a stability augmentation layer. AI pilots use the same flight director and the same flight model, so handback only gives the flight director an aim point from the AI's orders instead of from the mouse.

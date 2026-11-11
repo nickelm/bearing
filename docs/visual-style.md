@@ -1,6 +1,6 @@
 # Bearing: Visual Style Guide
 
-*Revision 3, 2026-11-11. Companion to `docs/design.md`. Revision 3 adds the controlled aircraft, the HUD and displays, and their acceptance checks for third-person flight without cockpits (Proposal 0002, decision 92); revision 2 split the guide into two parts for the two views (Proposal 0001, decision 72).*
+*Revision 3, 2026-11-11. Companion to `docs/design.md`. Revision 3 adds the controlled aircraft, the HUD and displays, and their acceptance checks for third-person flight without cockpits (Proposal 0002, decision 94); revision 2 split the guide into two parts for the two views (Proposal 0001, decision 72).*
 
 ## Summary
 
@@ -221,7 +221,7 @@ Starting values; final values get tuned in the model viewer and on the globe.
 
 ## HUD and Displays
 
-With no cockpits, the HUD and the cockpit displays draw as 2D elements over the chase view (decision 92). They show only what the aircraft and its crew know.
+With no cockpits, the HUD and the cockpit displays draw as 2D elements over the chase view (decision 94). They show only what the aircraft and its crew know.
 
 ### Two Kinds of Symbols
 
@@ -429,7 +429,7 @@ Blue against orange-red stays distinct under protanopia, deuteranopia, and trita
 
 ## Strategic Post-Processing
 
-- A light vignette and a subtle, constant paper grain.
+- A light vignette and a subtle, constant paper grain: corners darken by 20%, and each pixel varies by ±6%, fixed to the screen (decision 93). A thin pale rim (`#D9E4E8`, about 1.5 px) outlines the globe against the background `#1E2630` (decision 92).
 - No bloom except a soft halo on night lights, no pixelation, and no physical tone curve per time of day.
 
 ## Strategic Performance

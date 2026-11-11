@@ -11,7 +11,7 @@
  * There is no physical sky, aerial perspective or atmosphere here (Part II), only a
  * flat background. Everything is placed camera-relative (common/cameraRelative.ts).
  */
-import { AmbientLight, Color, DirectionalLight, PerspectiveCamera, Scene } from 'three/webgpu';
+import { AmbientLight, DirectionalLight, PerspectiveCamera, Scene, Vector3 } from 'three/webgpu';
 import type { WebGPURenderer } from 'three/webgpu';
 import { uniform } from 'three/tsl';
 import type { Cast } from '../../campaign/cast';
@@ -30,12 +30,10 @@ import { STRATEGIC_EXAGGERATION, StrategicRelief } from './strategicRelief';
 import type { StrategicReliefWorld } from './strategicRelief';
 import { StrategicOverlay } from './strategicOverlay';
 import { mapLightList, MapLights } from './mapLights';
+import { backgroundNode } from './mapFinish';
 import { graticuleStep, pickSphere, ringStep } from './graticule';
 import type { WeatherField } from '../common/weatherField';
 import { ZOOM_BANDS, ZoomBands } from './zoomBands';
-
-/** Flat background behind the globe; Part II has no physical sky. */
-const BACKGROUND = new Color('#1E2630');
 
 export interface StrategicSceneOptions {
   radius: number;
@@ -84,6 +82,9 @@ export class StrategicScene {
   private grid: CubeGrid;
   private strategicData: { graph: StrategicGraph; infra: Infrastructure | null } | null = null;
   private lightsDirty = false;
+  /** Background rim uniforms: planet center relative to the camera, radians per pixel. */
+  private readonly planetCenter = uniform(new Vector3());
+  private readonly pixelAngle = uniform(0.001);
   /** Graticule and range rings (GUI toggles), and the selected point for the rings. */
   showGraticule = false;
   showRings = true;
@@ -104,7 +105,14 @@ export class StrategicScene {
     this.overlay = new StrategicOverlay(options.radius);
     this.lights = new MapLights(options.radius, this.relief.exaggeration);
     this.grid = options.grid;
-    this.scene.background = BACKGROUND;
+    // Flat background with a thin pale rim around the globe, finished like the map
+    // (decision 92); Part II has no physical sky.
+    this.scene.backgroundNode = backgroundNode({
+      center: this.planetCenter,
+      radius: options.radius,
+      pixelAngle: this.pixelAngle,
+      strength: this.relief.finish,
+    });
     this.scene.add(this.globe.group, this.relief.group, this.overlay.group, this.lights.group);
     this.scene.add(this.reliefLight, new AmbientLight(0xffffff, 0.55));
     this.inputEnabled = options.input !== false;
@@ -293,6 +301,8 @@ export class StrategicScene {
     // derivatives: the coastal halo and lines are placed with it (decision 85).
     const fovY = (this.camera.fov * Math.PI) / 180;
     const pixelAngle = fovY / (this.viewportHeight * this.renderer.getPixelRatio());
+    this.pixelAngle.value = pixelAngle;
+    this.planetCenter.value.set(-o.eye.x, -o.eye.y, -o.eye.z);
     this.relief.mapScale.value = o.range * pixelAngle;
     // Graticule spacing and range rings from the map scale (decision 91).
     const scale = this.relief.mapScale.value;

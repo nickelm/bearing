@@ -1,6 +1,6 @@
 # TODO
 
-Tech-demo milestones from [docs/design.md](docs/design.md) (revision 8, decisions 72 and 92): a foundation (F), a strategic track (S), a simulation core track (C), a flight view track (V) and integration (I), after a scaffold, then a post-demo piloting track (P, decision 92). The design doc's _Milestones_ section maps the old M1–M9 onto these. Each task should take a few hours. Check tasks off as they are completed, and add subtasks as you discover them.
+Tech-demo milestones from [docs/design.md](docs/design.md) (revision 8, decisions 72 and 94): a foundation (F), a strategic track (S), a simulation core track (C), a flight view track (V) and integration (I), after a scaffold, then a post-demo piloting track (P, decision 94). The design doc's _Milestones_ section maps the old M1–M9 onto these. Each task should take a few hours. Check tasks off as they are completed, and add subtasks as you discover them.
 
 Suggested order for the remaining work: S1, V1, S2, V2, the rest of S3 and S4, V3, C2, V4, C3, I1. Visual milestones (all S, V, I and P) close only after the acceptance checks in [docs/visual-style.md](docs/visual-style.md) for the views they touch: Part I for the simulation view, Part II for the strategic view.
 
@@ -107,8 +107,11 @@ The strategic view from [docs/visual-style.md](docs/visual-style.md) Part II: gl
   - [ ] Browser check: cloud opacity and softness at each band, hatching density, and fronts readable at globe scale; the bake's 2 km texels may look soft at the floor
 - [x] Graticule toggle and range rings around a selected point (decision 91)
   - [ ] Range rings around a selected base or aircraft once map symbols and selection exist (S4, C2); ring distance labels with the label engine (S2)
-- [ ] Post-processing: light vignette and paper grain; a soft halo on night lights only; a thin pale rim around the globe instead of the limb glow
-- [ ] Strategic preview views (globe band with the terminator, theater band, region band at the floor) in `tools/render.preview.ts`, plus a color-vision-deficiency filter (Part II check 4) and a 1920 × 1080 sharpness view at the floor (check 5); move the old `orbit`, `limb` and `terminator` views here
+- [x] Post-processing: light vignette and paper grain; a soft halo on night lights only; a thin pale rim around the globe instead of the limb glow (decision 92)
+  - [ ] Browser check: grain visible but subtle at 1× and 2× pixel ratio; rim thin and even all around the globe
+- [x] Strategic preview views (globe band with the terminator, theater band, region band at the floor) in `tools/render.preview.ts`, plus a color-vision-deficiency filter (Part II check 4) and a 1920 × 1080 sharpness view at the floor (check 5); move the old `orbit`, `limb` and `terminator` views here (decision 93)
+  - [ ] Owner: run `SCENE=strategic CVD=1` on a GPU and share the PNGs from `tools/out/`
+  - [ ] Browser check: vignette and grain visible after the stronger defaults (Paper finish up to 3×)
 - [ ] Acceptance checks 1, 4 and 5 (Part II) against the reference board; ask the owner to add the Civilization VI and Cold War map references
 - [ ] Checkpoint: owner review of the base map in the browser
 
@@ -390,7 +393,7 @@ Aircraft, vehicles, ships, buildings and trees are generated in code from small 
 
 ### V4. Transition, camera rig, and spectator HUD
 
-Follow a flight from mission search into the simulation view and back. Chase camera with per-type rigs, free look, and terrain avoidance. Read-only HUD with flight path marker, tapes, and heading for the followed aircraft. Bearing has no cockpits (decision 92): this is the view the player later flies in (P1).
+Follow a flight from mission search into the simulation view and back. Chase camera with per-type rigs, free look, and terrain avoidance. Read-only HUD with flight path marker, tapes, and heading for the followed aircraft. Bearing has no cockpits (decision 94): this is the view the player later flies in (P1).
 
 - [ ] Low-poly aircraft meshes from model specs for flights within the simulation view
 - [ ] The followed aircraft at the controlled-aircraft detail level (1,500–4,000 triangles, flat-shaded; Part I, _The Controlled Aircraft_), with its shadow on terrain visible down to the ground
@@ -427,7 +430,7 @@ Follow a flight from mission search into the simulation view and back. Chase cam
 
 ## Piloting track (after the demo)
 
-Player flight control in the chase view, with the HUD and displays as 2D overlays and no cockpits ([docs/proposals/0002-third-person-flight.md](docs/proposals/0002-third-person-flight.md), decision 92). AI pilots and the player share one flight director and one flight model. P1 depends on V4. P2 depends on P1. P3 depends on P2 and S4. P4 and P5 depend on P3. All P milestones touch rendering or UI, so they close only after the Part I acceptance checks.
+Player flight control in the chase view, with the HUD and displays as 2D overlays and no cockpits ([docs/proposals/0002-third-person-flight.md](docs/proposals/0002-third-person-flight.md), decision 94). AI pilots and the player share one flight director and one flight model. P1 depends on V4. P2 depends on P1. P3 depends on P2 and S4. P4 and P5 depend on P3. All P milestones touch rendering or UI, so they close only after the Part I acceptance checks.
 
 ### P1. Flight model and controls
 

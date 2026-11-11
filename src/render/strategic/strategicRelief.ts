@@ -82,6 +82,7 @@ import {
   SHORE_BLEND_LO,
 } from './mapWater';
 import { graticuleNode, rangeRingsNode } from './graticule';
+import { paperFinish } from './mapFinish';
 import {
   MAJOR_MIN_WIDTH,
   MapRiverShading,
@@ -235,6 +236,8 @@ export class StrategicRelief {
   readonly ringsOn = uniform(0);
   readonly ringCenter = uniform(new Vector3(0, 0, 1));
   readonly ringStep = uniform(100e3);
+  /** Paper finish strength (vignette and grain, decision 92); 0 turns it off. */
+  readonly finish = uniform(1);
   /** Scales cloud opacity (GUI); 1 gives 25% to 45% by coverage (decision 90). */
   readonly cloudOpacity = uniform(1);
   /** 1 draws seasonal snow, sea ice and lake ice; 0 hides them. */
@@ -486,7 +489,8 @@ export class StrategicRelief {
         .mul(0.75);
       const gratColor = mix(rgb(hexToLinear(0xa9c9d4)), rgb(hexToLinear(0x2f5f86)), day);
       const ringColor = mix(rgb(hexToLinear(0xf4efe4)), rgb(hexToLinear(0x22252a)), day);
-      return mix(mix(lit, gratColor, grat), ringColor, rings);
+      // Vignette and paper grain over everything (decision 92).
+      return paperFinish(mix(mix(lit, gratColor, grat), ringColor, rings), this.finish);
     })();
     return material;
   }
