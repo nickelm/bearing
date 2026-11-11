@@ -1548,3 +1548,32 @@ The engineering calls made while adopting it:
 - **Also fixed:** the briefing printed node areas in "million km²" divided by 10⁶ instead of 10¹².
 
 **Reason:** Names make the map and the briefing read like a real theater. Drawing every list from its own fork keeps rule 5, and keeping campaign naming on graph data keeps rule 9.
+
+### 97. Geographic glyphs: layout in TypeScript, instanced flat-shaded models per band
+
+**Date:** 2026-11-11
+**Decision:** Part II's mountain, hill, forest and dune glyphs come from the named features (decision 95):
+
+- **Layout** (`render/strategic/glyphLayout.ts`, pure and tested). Mountains chain along each range's ridge line about half a glyph apart, zigzagging across it, with peaks placed first and sized by prominence; the rest of a range fills with smaller glyphs where it rises above about 1,320 m reference height with a reference slope of at least 0.05, so high flat ground stays bare. Mounds cover hills features, forest tokens (3–7 trees, 2.5–5 km) cover forest features sparsely in the Region band only, and dunes cover the sand cells of desert features with their horns downwind. Placement is a deterministic dart throw over each feature's cells in hashed order with a minimum spacing.
+- **Two sets per kind.** A Theater set (mountains 30–50 km across, every 22 km along the ridge) and a Region set (10–17 km, every 6.5 km), wider than their spacing so chains overlap, each a separate instanced mesh whose opacity is its band's fade, so glyphs keep a roughly constant pixel size within a band and crossfade at band changes. Eight draw calls in all.
+- **Models in code** (`glyphGeometry.ts`, rule 11): an irregular five-sided pyramid with a cap that takes snow, a seven-sided mound, seven conifers per token (the shader drops trees past the instance's count), and a barchan crescent.
+- **Shading.** Flat, from the face normal by screen-space derivatives, lit from the screen's upper left like the hillshade (decision 78), then the night tint and twilight (decision 87) and the paper finish (decision 92). Snow caps where the annual mean temperature at the glyph is below 0 °C.
+- **Colors.** Part II names none: rock `#8C8379`, snow `#F1F3F2` (the snow fill), mounds `#A99B73`, trees `#4E6A48`, dunes `#D8BD8C` with a `#C4A473` slip face.
+- **Heights.** Glyphs stand on the display maps' heights times the relief's exaggeration, plus 150 m, like the night lights.
+
+**Reason:** Feature records already carry ridge lines, prominence and polygons, so glyph layout reduces to sampling them. A pure layout keeps the placement rules testable without a GPU; one mesh per kind and band keeps draw calls far under Part II's 300.
+
+### 98. Labels: an SDF atlas built at load time, a TypeScript placement pass, one instanced mesh
+
+**Date:** 2026-11-11
+**Decision:** The label engine lives in `render/strategic/labels/`.
+
+- **Text rendering (the MSDF spike).** The known text libraries for three (troika-three-text, three-bmfont-text, three-msdf-text-utils) build GLSL or WebGL-derived materials, which `WebGPURenderer` does not run, and r187's WebGPU examples ship no SDF text; their newest releases were not rechecked in this session. Instead the map builds a single-channel signed distance field atlas at load time: opentype.js parses the fonts, outlines are flattened, and each texel stores the exact distance to the outline (32 px per em, a quarter-em spread so halos fit at 10 px). The atlas takes about 0.3 s on the main thread. A TSL shader draws the letter with an antialiased edge from the field's screen derivative and a halo of a set pixel width. Multi-channel fields would keep corners sharp at large sizes; map labels stay at 10–22 px, where single-channel fields look the same, so the extra complexity buys nothing yet. The guide's "MSDF" becomes "SDF".
+- **Fonts.** EB Garamond Medium Italic and Fira Sans Medium and Semibold, from `@fontsource` (SIL Open Font License), loaded by Vite `?url` imports in the app and from `node_modules` in Node previews.
+- **Model and bands.** `labelModel.ts` builds labels from the features, settlements and the cast's theaters, with a band content table (class × band → least importance). Peaks carry their true height ("Mount Seir 1,036 m").
+- **Placement** (`labelPlacement.ts`, pure and tested). Point labels try four positions; line labels follow the projected polyline at one of five stations, read left to right and reject bends over 0.5 rad between letters; area labels letter-space along the feature's axis to fill 60% of it or sit level on the anchor. Points seen within about 12° of the horizon count as hidden, so text is never squashed along the limb. The collision pass sorts by importance (with a bonus for labels placed last time, against flicker) and keeps the first candidate whose glyph boxes, ink plus halo, stay in the viewport and clear of placed glyphs. It runs when the camera has been still for 0.15 s, when the band changes and when the labels change; between passes, placed labels are laid out again each frame with the candidate they won.
+- **Drawing** (`labelLayer.ts`). One instanced mesh of glyph quads; the vertex shader writes clip space from pixel rectangles, so labels need no camera-relative placement. The quads are double-sided, since pixel y runs down and clip y up. Labels fade over 0.3 s, times their bands' fades. They draw in a second pass after the map with tone mapping off (`drawOverlay`): the renderer's AgX curve, set by the simulation view, otherwise lifts `#22252A` ink to mid-gray.
+- **Acceptance check 2 in Node.** A test places the labels of a generated world at 3,000, 900, 250 and 100 km on a 1080p view with the scene's own projection and asserts that no two labels' glyph boxes overlap; passes take 0.4–15 ms there.
+- **GUI.** Map → Glyphs and Map → Labels toggle the two layers.
+
+**Reason:** Building the atlas from the fonts keeps the toolchain free of native MSDF generators and checked-in binaries, and lets Node previews render the same text. A pure placement pass makes "no overlapping labels" a unit test, not only a screenshot check.

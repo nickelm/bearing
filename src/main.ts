@@ -73,6 +73,8 @@ import { buildWeatherClimate } from './sim/weather/climate';
 import { WeatherGrid } from './sim/weather/grid';
 import { TimeControls } from './ui/timeControls';
 import { GenerationCancelled, WorldgenClient } from './workers/worldgenClient';
+import { fetchLabelFonts } from './render/strategic/labels/fonts';
+import { buildFontAtlas } from './render/strategic/labels/fontAtlas';
 
 async function main(): Promise<void> {
   // First, so the deployed version shows even if WebGPU is missing.
@@ -183,6 +185,14 @@ async function main(): Promise<void> {
     weather: globe.clouds,
   });
   strategicView.setFaceSeed(worldParams.seed);
+  // Label fonts load in the background; the map draws names once the atlas exists (decision 98).
+  void fetchLabelFonts()
+    .then((fonts) => {
+      const t0 = performance.now();
+      strategicView.setLabelFonts(buildFontAtlas(fonts));
+      console.info(`Label atlas: ${(performance.now() - t0).toFixed(0)} ms`);
+    })
+    .catch((e: unknown) => console.warn('Label fonts failed to load; the map has no names.', e));
   strategicView.bands.onChange((band, previous) =>
     console.info(`Zoom band: ${previous} → ${band}`),
   );
@@ -287,6 +297,16 @@ async function main(): Promise<void> {
       globe.globe.setFaceSeed(worldParams.seed);
       globe.globe.setWorld(world);
       strategicView.setFaceSeed(worldParams.seed);
+      // Label fonts load in the background; the map draws names once the atlas exists (decision 98).
+      void fetchLabelFonts()
+        .then((fonts) => {
+          const t0 = performance.now();
+          strategicView.setLabelFonts(buildFontAtlas(fonts));
+          console.info(`Label atlas: ${(performance.now() - t0).toFixed(0)} ms`);
+        })
+        .catch((e: unknown) =>
+          console.warn('Label fonts failed to load; the map has no names.', e),
+        );
       strategicView.setWorld(world);
       globe.climate.setWorld(world);
       calendar = defaultCampaignStart(new Vec3d(...world.info.mainContinent), orbitParams);
@@ -598,6 +618,8 @@ async function main(): Promise<void> {
     graticule: false,
     rangeRings: true,
     finish: 1,
+    glyphs: true,
+    labels: true,
   };
   gui.addMapControls(mapParams, (m) => {
     // The relief applies exaggeration in its shader; the fallback grid globe rebuilds.
@@ -616,6 +638,8 @@ async function main(): Promise<void> {
     relief.cloudOpacity.value = m.cloudOpacity;
     strategicView.showGraticule = m.graticule;
     strategicView.showRings = m.rangeRings;
+    strategicView.showGlyphs = m.glyphs;
+    strategicView.showLabels = m.labels;
     relief.finish.value = m.finish;
   });
   const lighting = globe.lighting;

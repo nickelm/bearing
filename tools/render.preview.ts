@@ -20,7 +20,8 @@
  * Output: tools/out/render-<seed>-<view>.png, or render-<seed>-strategic-<view>[-<cvd>].png
  * (gitignored).
  */
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { it } from 'vitest';
 import {
@@ -35,6 +36,9 @@ import { CubeGrid } from '../src/core/cubeGrid';
 import { DAY, DEG, HOUR, KM } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
 import { GlobeScene } from '../src/render/sim/globeScene';
+import { buildFontAtlas, FONT_IDS } from '../src/render/strategic/labels/fontAtlas';
+import type { FontId } from '../src/render/strategic/labels/fontAtlas';
+import { LABEL_FONT_FILES } from '../src/render/strategic/labels/fontFiles';
 import { StrategicScene } from '../src/render/strategic/strategicScene';
 import { CloudLayer } from '../src/render/sim/clouds/cloudLayer';
 import { WeatherTexture } from '../src/render/sim/clouds/weatherTexture';
@@ -671,6 +675,8 @@ async function renderStrategic(
     scene.resize(width, height);
     scene.setWorld(displayWorld);
     scene.setStrategic(campaign.graph, campaign.campaign.cast, campaign.infrastructure);
+    // Labels (decision 98): the same fonts as the app, read from node_modules.
+    if (process.env.LABELS !== '0') scene.setLabelFonts(labelAtlas());
     scene.setTerrainWorld({
       synth,
       seed: params.seed,
@@ -744,4 +750,16 @@ async function renderStrategic(
   if (gpu.errors.length) throw new Error(`GPU errors: ${gpu.errors.join(' | ')}`);
   synth.dispose();
   global.grid.dispose();
+}
+
+/** The label atlas from the font files in node_modules. */
+function labelAtlas() {
+  const req = createRequire(import.meta.url);
+  const buffers = Object.fromEntries(
+    FONT_IDS.map((id) => {
+      const b = readFileSync(req.resolve(LABEL_FONT_FILES[id]));
+      return [id, b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)];
+    }),
+  ) as Record<FontId, ArrayBuffer>;
+  return buildFontAtlas(buffers);
 }

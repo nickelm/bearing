@@ -34,6 +34,15 @@ import { backgroundNode } from './mapFinish';
 import { graticuleStep, pickSphere, ringStep } from './graticule';
 import type { WeatherField } from '../common/weatherField';
 import { ZOOM_BANDS, ZoomBands } from './zoomBands';
+import { GlyphLayer } from './glyphLayer';
+import { drawOverlay, LabelLayer, SETTLE_TIME } from './labels/labelLayer';
+import { buildLabels } from './labels/labelModel';
+import { perspectiveView } from './labels/labelPlacement';
+import type { LabelView } from './labels/labelPlacement';
+import type { FontAtlas } from './labels/fontAtlas';
+import { layoutGlyphs } from './glyphLayout';
+import { CubeGrid as FeatureGrid } from '../../core/cubeGrid';
+import { Biome } from '../../worldgen/biomes';
 
 export interface StrategicSceneOptions {
   radius: number;
@@ -60,6 +69,21 @@ export class StrategicScene {
   readonly overlay: StrategicOverlay;
   /** Settlement, base and industry lights on the night side (decision 88). */
   readonly lights: MapLights;
+  /** Mountains, hills, forest tokens and dunes (decision 97). */
+  readonly glyphs: GlyphLayer;
+  /** GUI toggle for the glyphs. */
+  showGlyphs = true;
+  /** Names on the map (decision 98); drawn once fonts are set. */
+  readonly labels = new LabelLayer();
+  /** GUI toggle for the labels. */
+  showLabels = true;
+  /** Drawn after the map without a tone curve, so labels keep their colors (decision 98). */
+  private readonly overlayScene = new Scene();
+  private viewportWidth = 1;
+  private readonly lastEye = new Vec3d();
+  private readonly lastForward = new Vec3d();
+  /** Real time the camera has been still (s). */
+  private stillTime = 0;
   /** Zoom band from the camera altitude, with fades and a change event (decision 76). */
   readonly bands: ZoomBands;
   /**
@@ -80,7 +104,11 @@ export class StrategicScene {
   /** The world and grid on display, and whether the lights need rebuilding. */
   private world: World | null = null;
   private grid: CubeGrid;
-  private strategicData: { graph: StrategicGraph; infra: Infrastructure | null } | null = null;
+  private strategicData: {
+    graph: StrategicGraph;
+    cast: Cast | null;
+    infra: Infrastructure | null;
+  } | null = null;
   private lightsDirty = false;
   /** Background rim uniforms: planet center relative to the camera, radians per pixel. */
   private readonly planetCenter = uniform(new Vector3());
@@ -104,6 +132,14 @@ export class StrategicScene {
     this.globe.setExaggeration(STRATEGIC_EXAGGERATION);
     this.overlay = new StrategicOverlay(options.radius);
     this.lights = new MapLights(options.radius, this.relief.exaggeration);
+    this.glyphs = new GlyphLayer(options.radius, {
+      exaggeration: this.relief.exaggeration,
+      sunDirection: this.relief.sunDirection,
+      nightStrength: this.relief.nightStrength,
+      twilightStrength: this.relief.twilightStrength,
+      finish: this.relief.finish,
+      bandFade: { theater: this.bandFade.theater, region: this.bandFade.region },
+    });
     this.grid = options.grid;
     // Flat background with a thin pale rim around the globe, finished like the map
     // (decision 92); Part II has no physical sky.
@@ -113,7 +149,14 @@ export class StrategicScene {
       pixelAngle: this.pixelAngle,
       strength: this.relief.finish,
     });
-    this.scene.add(this.globe.group, this.relief.group, this.overlay.group, this.lights.group);
+    this.scene.add(
+      this.globe.group,
+      this.relief.group,
+      this.glyphs.group,
+      this.overlay.group,
+      this.lights.group,
+    );
+    this.overlayScene.add(this.labels.group);
     this.scene.add(this.reliefLight, new AmbientLight(0xffffff, 0.55));
     this.inputEnabled = options.input !== false;
   }
@@ -220,12 +263,19 @@ export class StrategicScene {
     this.overlay.setWorld(graph, cast, infrastructure);
     // Farmland lies on settled land (decision 80).
     this.relief.habitability.set(graph?.habitability ?? null, graph?.resolution ?? 1);
-    this.strategicData = graph ? { graph, infra: infrastructure } : null;
+    this.strategicData = graph ? { graph, cast, infra: infrastructure } : null;
     this.lightsDirty = true;
   }
 
+  /** The label fonts' atlas (fontAtlas.ts); labels draw once it is set. */
+  setLabelFonts(atlas: FontAtlas): void {
+    this.labels.setFonts(atlas);
+  }
+
   resize(width: number, height: number): void {
+    this.viewportWidth = Math.max(1, width);
     this.viewportHeight = Math.max(1, height);
+    this.labels.invalidate();
     this.camera.aspect = width / Math.max(1, height);
     this.camera.updateProjectionMatrix();
   }
@@ -260,8 +310,14 @@ export class StrategicScene {
             (x, y, z) => w.maps.height[grid.cellOfDirection(dir.set(x, y, z))]!,
           ),
         );
+        this.glyphs.setGlyphs(glyphSets(d.graph, w, grid));
+        this.labels.setLabels(
+          buildLabels(d.graph, d.cast, (p) => w.maps.height[grid.cellOfDirection(dir.set(...p))]!),
+        );
       } else {
         this.lights.setLights(null);
+        this.glyphs.setGlyphs(null);
+        this.labels.setLabels(null);
       }
     }
 
@@ -334,9 +390,48 @@ export class StrategicScene {
       });
     }
     this.overlay.update(o.eye, this.globe.maxDisplayedHeight + 2000);
+    this.glyphs.group.visible = this.showGlyphs;
+    this.glyphs.update(o.eye, {
+      theater: this.bands.fade('theater'),
+      region: this.bands.fade('region'),
+    });
+    // Labels: the collision pass runs once the camera has been still for a moment.
+    const moved =
+      this.lastEye.distanceTo(o.eye) > 1e-4 * o.altitude ||
+      this.lastForward.distanceTo(o.forward) > 1e-5;
+    this.stillTime = moved ? 0 : this.stillTime + Math.max(0, dt);
+    if (moved) this.labels.invalidate();
+    this.lastEye.copy(o.eye);
+    this.lastForward.copy(o.forward);
+    this.labels.group.visible = this.showLabels;
+    this.labels.update(
+      this.labelView(),
+      this.bands.band,
+      (b) => this.bands.fade(b),
+      dt,
+      this.stillTime >= SETTLE_TIME,
+    );
     // Weather moves with game time: re-bake the cloud field while the map is on screen.
     this.weather?.bake(this.renderer, performance.now());
     this.renderer.render(this.scene, this.camera);
+    if (this.showLabels && this.labels.hasFonts)
+      drawOverlay(this.renderer, this.overlayScene, this.camera);
+  }
+
+  /** Screen projection for labels (CSS px), matching the camera this frame. */
+  private labelView(): LabelView {
+    const o = this.orbit;
+    return perspectiveView({
+      eye: o.eye,
+      forward: o.forward,
+      up: o.up,
+      fovY: (this.camera.fov * Math.PI) / 180,
+      width: this.viewportWidth,
+      height: this.viewportHeight,
+      near: o.near,
+      radius: o.radius,
+      exaggeration: this.relief.exaggeration.value,
+    });
   }
 
   dispose(): void {
@@ -345,5 +440,39 @@ export class StrategicScene {
     this.relief.dispose();
     this.overlay.dispose();
     this.lights.dispose();
+    this.glyphs.dispose();
+    this.labels.dispose();
   }
+}
+
+/**
+ * Glyph instances for a graph on a world's display maps (decision 97). The features
+ * live on the graph's coarse grid; heights, temperature, biome and wind come from the
+ * world's maps, looked up by direction when the two grids differ.
+ */
+function glyphSets(graph: StrategicGraph, w: World, grid: CubeGrid) {
+  const fgrid = graph.resolution === grid.n ? grid : new FeatureGrid(graph.resolution);
+  const m = w.maps;
+  const dir = new Vec3d();
+  const cellAt = (x: number, y: number, z: number) => grid.cellOfDirection(dir.set(x, y, z));
+  const worldCell = (c: number) =>
+    fgrid === grid
+      ? c
+      : cellAt(fgrid.centers[c * 3]!, fgrid.centers[c * 3 + 1]!, fgrid.centers[c * 3 + 2]!);
+  return layoutGlyphs({
+    features: graph.features,
+    grid: fgrid,
+    radius: graph.radius,
+    reliefScale: w.info.reliefScale,
+    heightAt: (x, y, z) => m.height[cellAt(x, y, z)]!,
+    // Snow caps where the annual mean is below freezing at the glyph's point.
+    snowAt: (x, y, z) => m.temperature[cellAt(x, y, z)]! < 0,
+    sandAt: (c) => m.biome[worldCell(c)] === Biome.HotDesert,
+    windAt: (c) => {
+      const k = worldCell(c);
+      const e = m.windEast[k]!;
+      const n = m.windNorth[k]!;
+      return e === 0 && n === 0 ? null : Math.atan2(n, e);
+    },
+  });
 }

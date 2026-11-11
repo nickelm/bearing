@@ -90,6 +90,10 @@ export interface MapGuiParams {
   rangeRings: boolean;
   /** Vignette and paper grain strength (decision 92). */
   finish: number;
+  /** Mountain, hill, forest and dune glyphs (decision 97). */
+  glyphs: boolean;
+  /** Names on the map (decision 98). */
+  labels: boolean;
 }
 
 export interface LightingGuiParams {
@@ -365,6 +369,12 @@ export class DebugGui {
       .onChange(() => changed(map));
     f.add(map, 'finish', 0, 3, 0.05)
       .name('Paper finish')
+      .onChange(() => changed(map));
+    f.add(map, 'glyphs')
+      .name('Glyphs (mountains, forests)')
+      .onChange(() => changed(map));
+    f.add(map, 'labels')
+      .name('Labels')
       .onChange(() => changed(map));
     f.close();
   }

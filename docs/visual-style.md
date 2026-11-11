@@ -342,9 +342,11 @@ Planning sorties needs night and weather, so the map always shows both (an owner
 
 ## Geographic Glyphs
 
-- **Mountains.** Low-poly peak glyphs (faceted pyramids with snow caps above the snow line), instanced along ridge lines detected from uplift and prominence. Glyph size scales with prominence, and spacing keeps ranges legible as chains. Hills get smaller, rounded mounds.
+- **Mountains.** Low-poly peak glyphs (faceted pyramids with snow caps above the snow line), instanced along ridge lines detected from uplift and prominence. Glyph size scales with prominence, and spacing keeps ranges legible as chains. Hills get smaller, rounded mounds. Chains space glyphs about half a glyph's width apart along the ridge, zigzagging across it, and the higher parts of a range fill with smaller glyphs; peaks get their own glyph sized by prominence. A glyph is snow-capped where the annual mean temperature at its point is below freezing (decision 97).
 - **Forests.** Pattern fill everywhere, plus sparse, oversized forest tokens (clumps of three to seven stylized trees, each token about 2 to 5 km across) in the Region band only. Individual trees never appear.
-- **Other landforms.** Dune glyphs in sand deserts.
+- **Other landforms.** Dune glyphs in sand deserts: crescents with their horns downwind.
+- **Sizes and bands.** Glyphs have a Theater set and a Region set, each fading with its band. Theater mountains are 30–50 km across (peaks up to 60 km), Region mountains 10–17 km (peaks up to 22 km), wider than their spacing so chains overlap into massifs, so a glyph stays roughly the same size in pixels within its band (decision 97).
+- **Shading and color.** Flat shading from face normals, lit from the screen's upper left like the hillshade, then the map's night tint and paper finish. Rock `#8C8379` with snow `#F1F3F2`, mounds `#A99B73`, trees `#4E6A48`, dunes `#D8BD8C` with a `#C4A473` slip face.
 
 ## Settlements and Infrastructure
 
@@ -360,10 +362,12 @@ Planning sorties needs night and weather, so the map always shows both (an owner
   - landforms in brown, letter-spaced capitals;
   - settlements in dark type with a light halo, sized by class;
   - military features in faction colors.
-  Candidate faces under open licenses: a humanist serif italic for water (for example EB Garamond), and a sans with small caps for landforms and settlements (for example Fira Sans or Source Sans 3). Panels keep the Part I UI typeface.
-- **Placement.** Point labels for cities and peaks ("Mount Kessar 4,210 m"), curved labels along polylines for rivers, ranges, and roads, and widely spaced area labels across deserts, forests, seas, and regions.
-- **Collision.** A screen-space placement pass, run when the camera settles or changes band, ranks labels by importance and drops those that collide. Labels fade in and out rather than popping.
-- **Rendering.** MSDF text rendered by the WebGPU pipeline, so text stays sharp at any size. Check the library choice against three's current WebGPU support.
+  The faces, under the SIL Open Font License and bundled from npm: EB Garamond Medium Italic for water, and Fira Sans Medium (Semibold for cities and theater names) for landforms, settlements and theaters. Panels keep the Part I UI typeface.
+  Sizes (CSS px): oceans 22, seas 17, bays, straits and lakes 14, rivers 13; continents 19 with wide letter spacing, ranges, deserts, forests and plateaus 13, hills, plains and wetlands 11, islands 12, peaks 11; cities 14, towns 12, villages 10.5; theater names 15. Every style has a halo (`#F4EFE4`, or a pale `#E6EFF2` thinner one for water) so text stays legible over glyphs and the night side (decision 98).
+- **Placement.** Point labels for cities and peaks ("Mount Kessar 1,210 m", with the peak's true height), curved labels along polylines for rivers, ranges, and roads, and widely spaced area labels across deserts, forests, seas, and regions. Point labels try right, left, above and below their anchor; line labels sit at the middle of the visible stretch or at stations either side, never upside down and never bending more than about 30° between letters; area labels spread their letters along the feature's axis to fill about 60% of it, or sit level on the anchor where the axis is short or steep.
+- **Band content.** Which labels show in which band, with the least importance each needs, is a table in `render/strategic/labels/labelModel.ts`: oceans, continents and theater names at the Globe band; seas, ranges, major deserts, forests, plateaus and rivers, straits, cities and the highest peaks at the Theater band; everything, down to hills, wetlands, towns and villages over 10,000 people, at the Region band (decision 98).
+- **Collision.** A screen-space placement pass, run when the camera settles or changes band, ranks labels by importance and drops those that collide. Labels fade in and out rather than popping. Between passes, placed labels follow the camera with the placement they won.
+- **Rendering.** Signed-distance-field text rendered by the WebGPU pipeline, so text stays sharp at any size: an atlas generated at load time from the font files (opentype.js), drawn as instanced screen-space quads by a TSL shader (decision 98). A single-channel field rounds the sharpest corners only at sizes far above the map's 10–22 px.
 
 ## Military Overlays
 
