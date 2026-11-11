@@ -594,6 +594,7 @@ async function main(): Promise<void> {
     twilight: 1,
     seasons: true,
     weather: true,
+    cloudOpacity: 1,
   };
   gui.addMapControls(mapParams, (m) => {
     // The relief applies exaggeration in its shader; the fallback grid globe rebuilds.
@@ -609,6 +610,7 @@ async function main(): Promise<void> {
     relief.twilightStrength.value = m.twilight;
     relief.seasons.value = m.seasons ? 1 : 0;
     relief.weatherOn.value = m.weather ? 1 : 0;
+    relief.cloudOpacity.value = m.cloudOpacity;
   });
   const lighting = globe.lighting;
   const lightParams: LightingGuiParams = {

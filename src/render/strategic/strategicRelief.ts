@@ -227,6 +227,8 @@ export class StrategicRelief {
   readonly twilightStrength = uniform(1);
   /** 1 draws the weather's clouds and precipitation hatching (decision 89); 0 hides them. */
   readonly weatherOn = uniform(1);
+  /** Scales cloud opacity (GUI); 1 gives 25% to 45% by coverage (decision 90). */
+  readonly cloudOpacity = uniform(1);
   /** 1 draws seasonal snow, sea ice and lake ice; 0 hides them. */
   readonly seasons = uniform(1);
   /** Climate by direction for the seasons; set from the tectonic world by the scene. */
@@ -444,7 +446,7 @@ export class StrategicRelief {
       const outlined = mix(surfaceColor, water.outlineColor, water.outline.mul(this.biomeMode));
       // Day and night: the night tint and the warm twilight band (decision 87).
       // Weather (decision 89): faint precipitation hatching under soft, translucent
-      // clouds from the live cloud field, 35% to 60% opaque.
+      // clouds from the live cloud field, 25% to 45% opaque (decision 90).
       const field = this.weather ? this.weather.sampleCoverage(radial) : vec2(0, 0);
       const weatherOn = this.weatherOn.mul(this.biomeMode);
       const cover = field.x;
@@ -452,7 +454,8 @@ export class StrategicRelief {
         rainNode(plane, footprint),
       ).mul(0.7);
       const cloud = smoothstep(0.3, 0.75, cover)
-        .mul(mix(float(0.35), float(0.6), smoothstep(0.6, 0.95, cover)))
+        .mul(mix(float(0.25), float(0.45), smoothstep(0.6, 0.95, cover)))
+        .mul(this.cloudOpacity)
         .mul(weatherOn);
       const weathered = mix(mix(outlined, rgb(hexToLinear(RAIN_MARK)), rain), vec3(1, 1, 1), cloud);
       return daylightNode(

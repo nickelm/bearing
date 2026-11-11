@@ -82,6 +82,8 @@ export interface MapGuiParams {
   seasons: boolean;
   /** Clouds and precipitation hatching from the live weather (decision 89). */
   weather: boolean;
+  /** Cloud opacity scale (1 = 25% to 45% by coverage). */
+  cloudOpacity: number;
 }
 
 export interface LightingGuiParams {
@@ -345,6 +347,9 @@ export class DebugGui {
       .onChange(() => changed(map));
     f.add(map, 'weather')
       .name('Weather (clouds, rain)')
+      .onChange(() => changed(map));
+    f.add(map, 'cloudOpacity', 0, 2, 0.05)
+      .name('Cloud opacity')
       .onChange(() => changed(map));
     f.close();
   }

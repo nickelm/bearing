@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–89 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–90 are reflected in both.
 
 ---
 
@@ -1441,3 +1441,10 @@ The owner's amendment and the engineering calls made while adopting it:
 - **Toggle.** GUI → Map → Weather (clouds, rain), on by default.
 
 **Reason:** One weather field for both views keeps them consistent: a front seen on the map is the cloud the player flies into. Reusing the bake costs the map one texture fetch per fragment.
+
+### 90. Lighter map clouds
+
+**Date:** 2026-11-11
+**Decision:** After the owner's browser check of decision 89, map clouds are lighter: opacity rises to 25% by coverage 0.75 and 45% by 0.95 (was 35% and 60%), and GUI → Map → Cloud opacity scales it (0 to 2). Part II's palette row for clouds changes to match.
+
+**Reason:** The owner found the clouds a little too opaque; the guide's "never so opaque that the map vanishes" governs.
