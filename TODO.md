@@ -1,8 +1,8 @@
 # TODO
 
-Tech-demo milestones from [docs/design.md](docs/design.md) (revision 7, decision 72): a foundation (F), a strategic track (S), a simulation core track (C), a flight view track (V) and integration (I), after a scaffold. The design doc's _Milestones_ section maps the old M1–M9 onto these. Each task should take a few hours. Check tasks off as they are completed, and add subtasks as you discover them.
+Tech-demo milestones from [docs/design.md](docs/design.md) (revision 8, decisions 72 and 91): a foundation (F), a strategic track (S), a simulation core track (C), a flight view track (V) and integration (I), after a scaffold, then a post-demo piloting track (P, decision 91). The design doc's _Milestones_ section maps the old M1–M9 onto these. Each task should take a few hours. Check tasks off as they are completed, and add subtasks as you discover them.
 
-Suggested order for the remaining work: S1, V1, S2, V2, the rest of S3 and S4, V3, C2, V4, C3, I1. Visual milestones (all S, V and I) close only after the acceptance checks in [docs/visual-style.md](docs/visual-style.md) for the views they touch: Part I for the simulation view, Part II for the strategic view.
+Suggested order for the remaining work: S1, V1, S2, V2, the rest of S3 and S4, V3, C2, V4, C3, I1. Visual milestones (all S, V, I and P) close only after the acceptance checks in [docs/visual-style.md](docs/visual-style.md) for the views they touch: Part I for the simulation view, Part II for the strategic view.
 
 ## Scaffold (done)
 
@@ -387,16 +387,24 @@ Aircraft, vehicles, ships, buildings and trees are generated in code from small 
 - [ ] Ship specs: carrier, other ships; low-poly ship meshes in the simulation view (from old M8)
 - [ ] Checkpoint: owner review in the model viewer and at an airbase in the simulation view
 
-### V4. Transition and chase camera
+### V4. Transition, camera rig, and spectator HUD
+
+Follow a flight from mission search into the simulation view and back. Chase camera with per-type rigs, free look, and terrain avoidance. Read-only HUD with flight path marker, tapes, and heading for the followed aircraft. Bearing has no cockpits (decision 91): this is the view the player later flies in (P1).
 
 - [ ] Low-poly aircraft meshes from model specs for flights within the simulation view
-- [ ] Chase camera on one aircraft of a mission
+- [ ] The followed aircraft at the controlled-aircraft detail level (1,500–4,000 triangles, flat-shaded; Part I, _The Controlled Aircraft_), with its shadow on terrain visible down to the ground
+- [ ] Chase camera behind and slightly above one aircraft of a mission, on a spring-damper so it lags behind rolls, pitch changes and acceleration while keeping the aircraft near screen center; tests for the damping and the centering bound
+- [ ] Per-type camera rigs: offsets and damping in the model spec (further back and looser for fast jets, closer and tighter for helicopters, further back and higher for bombers and transports)
+- [ ] Free look: hold a key or mouse button to orbit the camera around the aircraft; release springs it back
+- [ ] Terrain awareness: raycast against the height map so the camera never clips terrain; at low altitude it lowers and closes in; tests on synthetic terrain
+- [ ] Read-only HUD for the followed aircraft: Canvas 2D overlay at device pixel ratio; flight path marker projected from the velocity vector at a great distance (no parallax from the camera offset); airspeed, altitude and heading tapes; single color with a thin dark halo (Part I, _HUD and Displays_)
 - [ ] Transition controller in `render/common/`: the strategic camera eases toward the flight down to the zoom floor, a quick dissolve through a cloud layer, the simulation view opens behind the aircraft; under 2 s; both scenes stay resident
 - [ ] Return to the map: reverse transition, landing the strategic camera above the flight's position
 - [ ] _Follow_ from mission search and from a subscription offer starts the transition
 - [ ] Retire the debug free camera, or keep it only behind the dev flag (decision 72)
 - [ ] Follow representative sorties to judge the range factor (design open question)
-- [ ] Checkpoint: owner review of following missions from the map into the simulation view and back
+- [ ] Acceptance checks 7 (HUD legible against bright sky, snow and night), 8 (flight path marker only) and 10 (no terrain clipping in valley flight) as scripted sequences in `tools/render.preview.ts` (Part I)
+- [ ] Checkpoint: owner review of following missions from the map into the simulation view and back, with the camera rig and HUD
 
 ## Integration
 
@@ -416,6 +424,83 @@ Aircraft, vehicles, ships, buildings and trees are generated in code from small 
 - [ ] Scripted flythrough camera path for screenshots, including a dawn and a weather front, across both views
 - [ ] Check every demo goal against the design doc and decisions
 
+## Piloting track (after the demo)
+
+Player flight control in the chase view, with the HUD and displays as 2D overlays and no cockpits ([docs/proposals/0002-third-person-flight.md](docs/proposals/0002-third-person-flight.md), decision 91). AI pilots and the player share one flight director and one flight model. P1 depends on V4. P2 depends on P1. P3 depends on P2 and S4. P4 and P5 depend on P3. All P milestones touch rendering or UI, so they close only after the Part I acceptance checks.
+
+### P1. Flight model and controls
+
+Table-driven flight model, flight director shared with the AI, mouse-aim and direct schemes, flight stick support through the Gamepad API, take control and hand back.
+
+- [ ] Flight-model tables in the aircraft JSON spec (thrust, drag, lift, instantaneous and sustained turn rates, specific excess power, roll rate, and the effects of altitude, wing sweep and stores), with validation and tests
+- [ ] Table-driven flight model in `src/sim/` (SI units, deterministic, no `Math.random`): energy management, stalls and departures in simplified form; tests that sustained turn rate and specific excess power match the tables
+- [ ] Decide where the flight model and flight director run for the player's aircraft (sim worker or main thread, given input latency) and log it
+- [ ] Flight director: desired direction and speed → control inputs for the flight model; one implementation for AI pilots and the player; tests that it reaches and holds an aim point
+- [ ] Full fidelity for the controlled or followed aircraft: deterministic switch from the analytic route to the flight model and back (promotion and demotion)
+- [ ] Mouse aim (default): the mouse steers an aim point in the world, the camera follows it, the flight director flies toward it; keyboard for throttle, rudder overrides, weapons and displays
+- [ ] Direct control: keyboard and mouse-as-stick drive the control surfaces through a stability augmentation layer
+- [ ] Flight stick support through the Gamepad API, with axis and button bindings
+- [ ] Take control and hand back: _Jump in_ from mission search and subscription offers; handback gives the flight director an aim point from the AI's orders instead of the mouse
+- [ ] Flight cap on time acceleration: while the player controls an aircraft, up to 8× in cruise phases, cancelled on any threat
+- [ ] Animated parts from model-spec hinge axes and pivots: control surfaces, flaps, slats, airbrakes and speedbrakes from control inputs; swing wings with speed; afterburner nozzles; helicopter rotor discs
+- [ ] Flight effects: vapor and wingtip vortices at high G, contrails at altitude, heat shimmer behind engines, dust and spray at very low level, rotor wash
+- [ ] Acceptance check 9 (aircraft readable and centered in a maximum-rate turn) as a scripted sequence
+- [ ] Checkpoint: owner flies representative aircraft with mouse aim and a flight stick, takes control and hands back
+
+### P2. HUD and display framework
+
+Canvas overlay, layout system, world-anchored and screen-anchored symbology, message log, collapsible displays.
+
+- [ ] Overlay and layout system: aircraft slightly below center, tapes flanking it, display slots in the corners, upper edge and bottom center; collapsible displays; minimal mode with only world-anchored symbols and tapes
+- [ ] World-anchored symbology framework: projection from the scene each frame, boresight cross, target boxes, waypoint and target diamonds, missile seeker circles (extends V4's flight path marker)
+- [ ] Screen-anchored instruments: airspeed, altitude and heading tapes, compact attitude indicator (no pitch ladder), Mach, G, fuel, master caution
+- [ ] Message log: AWACS, wingman, crew and ground controller calls as text
+- [ ] Systems display: engines, fuel state, damage; compact, expands on warnings
+- [ ] HUD color: green by default, amber option, thin dark halo; tune the values and record them in `docs/visual-style.md`
+- [ ] Acceptance check 7 with the full HUD
+- [ ] Checkpoint: owner review of HUD legibility and layout
+
+### P3. Sensors and displays
+
+Sensor model, avionics profiles, radar, RWR, moving map from the strategic renderer, stores display.
+
+- [ ] Sensor model in the sim, per aircraft: radar detection by radar type (none, ranging only, pulse, pulse-Doppler with look-down), mode, range, radar cross-section, aspect, terrain masking and clutter; deterministic, with tests
+- [ ] RWR (emitting radars by bearing and type), visual detection (range, size, aspect, contrast, light), datalinks and AWACS contacts with lower precision and a delay (Pact leaning on ground control, Alliance on AWACS), targeting pods and terrain-following radar
+- [ ] The AI uses the same filtered picture as the player
+- [ ] Avionics profiles per type in the aircraft spec
+- [ ] Radar display: B-scope for fighter radars, PPI for maritime and AWACS radars, with mode, range scale and contacts; phosphor vector graphics
+- [ ] Threat warning display: RWR symbols by bearing and type
+- [ ] Moving map: the strategic renderer in a viewport, centered on the aircraft, with route, threats and front
+- [ ] Stores display: weapons and pylons, selected weapon, quantities, chaff and flares
+- [ ] Checkpoint: owner review of the displays across aircraft with very different avionics
+
+### P4. Weapons
+
+Guns with lead-computing pipper, air-to-air missiles, bombs with CCIP and CCRP, target and weapon cameras, damage states.
+
+- [ ] Guns with a lead-computing pipper projected at the predicted impact point
+- [ ] Air-to-air missiles with seeker circles and guidance
+- [ ] Bombs with CCIP fall lines and CCRP release cues
+- [ ] Stores hang on pylons and disappear on release; fuel tanks can be jettisoned
+- [ ] Target camera: keeps the aircraft (foreground) and the selected target in frame
+- [ ] Weapon camera: follows a released missile or bomb, picture-in-picture or full screen
+- [ ] Damage states: smoke, fire and missing parts on models; damage in the systems display
+- [ ] Acceptance check 8 with the gun pipper
+- [ ] Checkpoint: owner review of a dogfight and an attack run
+
+### P5. Crews and special roles
+
+AI crewmate and callouts, crew station mode, attack helicopter gunner mode, targeting sensor display, airdrop and sling-load tools with the hook camera.
+
+- [ ] AI crewmate in the F-111, A-6 and Su-24 analogues: runs the radar and targeting sensor, manages terrain-following, calls out threats, waypoints and releases
+- [ ] Crew station mode: the AI pilot flies, the player operates radar, targeting sensor and weapons, with the targeting display enlarged
+- [ ] Attack helicopter gunner mode with an enlarged gunner sight display
+- [ ] Targeting sensor display: FLIR or TV picture-in-picture from a render target with a thermal post-process
+- [ ] Airdrop: drop zone marker and release cue
+- [ ] Sling load: downward-looking hook camera display for pickup and placement
+- [ ] Blocky crew figures visible through canopies
+- [ ] Checkpoint: owner review of crew station, gunner, airdrop and sling-load sorties
+
 ## Known issues
 
 - [ ] Intermittent GPU determinism flake in Vitest (about 1 run in 5–10 of the full suite): a GPU determinism test (`detailStage`, `tileSynth`) gets different results for two identical runs. Present at the M2 baseline; not reproduced by 40 back-to-back detail-stage runs under load. Tests now report how many values differ and whether they are zeros (a readback race in Dawn's Node bindings would show zeros). First report (2026-11-10): 24 of 221k cells differ, worst 0.23 m, no zeros, in the single-dispatch detail kernel (pure per cell, no in-place neighbor reads). So it is not a readback race; suspect the GPU or driver under concurrent load. Check whether it happens with `--no-file-parallelism`, and on another GPU.
@@ -424,7 +509,8 @@ Aircraft, vehicles, ships, buildings and trees are generated in code from small 
 ## After the demo
 
 - Entity promotion and ground behaviors
-- Cockpit flight and jump-in, then flight stick support
+- The piloting track (P1–P5, above)
+- Flyby and cinematic cameras for transitions, replays and idle spectating (Proposal 0002; not yet in a milestone)
 - Air combat
 - Naval combat
 - The campaign economy

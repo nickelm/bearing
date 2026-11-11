@@ -27,7 +27,8 @@ docs/design.md      design doc (source of truth; do not reformat)
 docs/decisions.md   architecture decision log
 docs/visual-style.md  visual style guide (source of truth for the look; do not reformat)
 docs/style/references/  reference screenshots: local only, gitignored, never shipped (decision 70)
-docs/proposals/     owner proposals (do not reformat); 0001-two-views.md is accepted (decision 72)
+docs/proposals/     owner proposals (do not reformat); 0001-two-views.md (decision 72) and
+                    0002-third-person-flight.md (decision 91) are accepted
 src/core/           units, float64 Vec3d, coordinates, seeded RNG, invented names. Leaf layer.
 src/worldgen/       planet generation pipeline stages (may use GPU compute)
   coarsePass.ts     the design's pipeline at 256² on the CPU; campaignWorld.ts adds the validity retries
@@ -41,6 +42,7 @@ src/sim/            headless simulation; runs in a worker: event queue + fixed t
                     time acceleration (host.ts), world factory (world.ts)
   weather/          hourly weather model on a bordered 24² cube grid; WeatherView for queries
   command/          per-side command layer: intelligence picture, ATO (graph and cast only)
+  flight/           (planned, P1) flight model, flight director and sensor model, shared by AI and player
 src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Both scenes stay resident;
                     the app renders the active one (GUI → View → View). Until V1, sim/'s GlobeScene
                     still draws orbit to ground.
@@ -50,7 +52,7 @@ src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Bo
                     water/ (river segment tables and river shading);
                     later the transition controller
   sim/              simulation view: GlobeScene, terrain/ (TerrainRenderer), atmosphere/, water/ (sea),
-                    clouds/, forest/, infra/, lighting/
+                    clouds/, forest/, infra/, lighting/; later the camera rig and the HUD overlay (V4, P2)
   strategic/        strategic view: StrategicScene, StrategicCamera, zoom bands, relief mesh, hillshade,
                     biome fill, patterns, graph debug overlay; later base map,
                     glyphs, overlays, label engine
@@ -59,7 +61,7 @@ src/workers/        worker entry points and message protocols
 src/main.ts         app entry: WebGPU checks, renderer, scene, GUI
 tests/              Vitest unit tests (node); tests/gpu/ runs WGSL kernels on a real GPU via Dawn
 tools/              offline previews (npm run maps; terrain/bench *.preview.ts), output in tools/out/
-TODO.md             task list by milestone (F, S, C, V, I tracks; design.md, Milestones)
+TODO.md             task list by milestone (F, S, C, V, I tracks, then P after the demo; design.md, Milestones)
 ```
 
 ## Rules
@@ -104,6 +106,10 @@ These are the project conventions. Lint enforces some of them (marked ⚙).
     - Models are built in code from JSON specs, not modeled by hand or loaded as photographic assets.
     - If something must deviate from the guide, record it in `docs/decisions.md` and update the guide to match.
     - The reference screenshots in `docs/style/references/` are local only. Never commit them, import them from `src/`, or copy them into `public/` or `dist/`. `vite.config.ts` refuses to load anything under `docs/`.
+12. **No cockpits; one flight director and one flight model** (decision 91, Proposal 0002).
+    - Bearing has no cockpits. Every aircraft and helicopter is flown and followed from a third-person chase camera, and the HUD and displays are 2D overlays (`docs/visual-style.md` Part I, _HUD and Displays_). Do not add cockpit interiors, cockpit cameras or cockpit-only assets.
+    - AI pilots and the player share one flight director (desired direction and speed → control inputs) and one flight model. The player's input only replaces where the aim point or stick input comes from. Never give the player's aircraft its own physics path or the AI a shortcut around the flight model.
+    - Displays show only what the aircraft's sensor model knows, which is the same filtered picture the AI uses, never ground truth.
 
 ## Fidelity as level of detail
 
@@ -115,8 +121,8 @@ Fidelity is a level of detail in both space and time.
 Every unit exists at one of three levels:
 
 - **Aggregate:** formation, flight or convoy. Always simulated, cheaply.
-- **Entity:** individual vehicles and squads. Simulated only inside a promotion bubble of about 15–25 km around the player (around the followed aircraft or the simulation view's camera until cockpit flight exists, decisions 49, 72).
-- **Full:** physical simulation. Used only for the player's aircraft. The player flies and never commands ground or naval forces.
+- **Entity:** individual vehicles and squads. Simulated only inside a promotion bubble of about 15–25 km around the player (around the followed aircraft or the simulation view's camera until player flight control exists in P1, decisions 49, 72, 91).
+- **Full:** physical simulation (flight model, sensor model, flight director). Used only for the aircraft the player controls or follows, from P1; until then a followed aircraft flies its analytic route. The player flies and never commands ground or naval forces.
 
 Promotion expands a unit deterministically from its seed and current strength. Demotion folds entity losses back into aggregate strength, so nothing destroyed comes back. Design data models so that promotion is possible even before it is implemented.
 
@@ -125,8 +131,8 @@ Promotion expands a unit deterministically from its seed and current strength. D
 - Work on one milestone task at a time. Keep `TODO.md` current: check off finished tasks and add subtasks you discover.
 - Record any architectural decision, or any deviation from `docs/design.md`, in `docs/decisions.md` with the date, the decision and the reason. In the same commit, update whatever `docs/design.md` or `docs/visual-style.md` says on the subject.
 - Run `npm test` and `npm run typecheck` (or `npm run check`) before declaring a task complete.
-- **Visual milestones close only after the acceptance checks** in `docs/visual-style.md` for the views they touch. A visual milestone is any milestone with rendering, model or UI tasks (all of S1–S4, V1–V4 and I1).
-  - Simulation view (Part I): checks 1–5 as `tools/render.preview.ts` views; check 6, the silhouette test, in the model viewer once aircraft models exist.
+- **Visual milestones close only after the acceptance checks** in `docs/visual-style.md` for the views they touch. A visual milestone is any milestone with rendering, model or UI tasks (all of S1–S4, V1–V4, I1 and P1–P5).
+  - Simulation view (Part I): checks 1–5 as `tools/render.preview.ts` views; check 6, the silhouette test, in the model viewer once aircraft models exist; checks 7–10 (HUD and camera rig) as scripted sequences from V4 on.
   - Strategic view (Part II): checks 1, 2, 4 and 5 as preview views (4 through simulated color-vision deficiencies); check 3, the ten-second legibility test, with the owner.
   - Read the PNGs next to the reference board in `docs/style/references/` and report to the owner where they match and where they fall short.
   - Add a TODO task for each gap. The milestone's owner checkpoint comes after this comparison, not before.

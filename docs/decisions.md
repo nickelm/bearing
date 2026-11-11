@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–90 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–91 are reflected in both.
 
 ---
 
@@ -1448,3 +1448,34 @@ The owner's amendment and the engineering calls made while adopting it:
 **Decision:** After the owner's browser check of decision 89, map clouds are lighter: opacity rises to 25% by coverage 0.75 and 45% by 0.95 (was 35% and 60%), and GUI → Map → Cloud opacity scales it (0 to 2). Part II's palette row for clouds changes to match.
 
 **Reason:** The owner found the clouds a little too opaque; the guide's "never so opaque that the map vanishes" governs.
+
+### 91. Third-person flight without cockpits; one flight director for AI and player (Proposal 0002)
+
+**Date:** 2026-11-11
+**Decision:** The owner's Proposal 0002 (`docs/proposals/0002-third-person-flight.md`) is accepted. `docs/design.md` (revision 8) gains a _Flying_ section, `docs/visual-style.md` (revision 3) gains _The Controlled Aircraft_, _HUD and Displays_ and acceptance checks 7–10 in Part I, and Proposal 0001 is amended where it named cockpits.
+
+- **No cockpits.** The player flies every aircraft and helicopter from a third-person chase camera. The HUD and the key displays (radar, moving map, threat warning, stores, targeting sensor, messages, systems) are 2D overlays. Spectating an AI flight and flying it use the same view; taking control changes only who provides the inputs.
+- **One flight director, one flight model.** The flight director turns a desired direction and speed into control inputs. Mouse aim (the default) gives it an aim point from the mouse; direct control drives the surfaces through stability augmentation; AI pilots use the same flight director and the same table-driven flight model. Handback gives the flight director an aim point from the AI's orders.
+- **Sensor model.** Displays show only what the aircraft knows: a per-aircraft sensor model (radar, RWR, visual, datalinks and AWACS, targeting sensors) set by avionics profiles per type. The AI uses the same filtered picture.
+- **Crews as displays and callouts.** An AI crewmate in the F-111, A-6 and Su-24 analogues; crew station mode replaces the earlier idea of taking the right-hand seat; gunner mode for attack helicopters.
+- **The controlled aircraft** uses 1,500–4,000 triangles, with animated control surfaces, swing wings, nozzles, stores and effects, and its shadow down to the ground.
+- **Time.** The cockpit cap becomes the flight cap: while the player controls an aircraft, acceleration is limited to cruise phases (up to 8×) and cancels on any threat.
+- **Roadmap.** V4 becomes "Transition, camera rig, and spectator HUD" (per-type chase rigs, free look, terrain avoidance, a read-only HUD for the followed aircraft). A post-demo Piloting track follows: P1 flight model and controls, P2 HUD and display framework, P3 sensors and displays, P4 weapons, P5 crews and special roles. P1 depends on V4, P2 on P1, P3 on P2 and S4, P4 and P5 on P3.
+
+The engineering calls made while adopting it:
+
+- **Full fidelity arrives with P1.** The _Full_ level now means the aircraft the player controls or follows, with the flight model, sensor model and flight director. Until P1, a followed aircraft flies its analytic route, and decision 49's bubble still centers on it.
+- **Flight code is sim code.** The flight model, flight director and sensor model follow rule 5 (deterministic, SI, no `Math.random`) and are planned for `src/sim/flight/`. Where they run for the player's aircraft (sim worker or main thread, given input latency) is left to P1.
+- **Items the proposal's roadmap does not place.** The controlled-aircraft detail level and its shadow go to V4, since the followed aircraft fills the screen there. Animated parts and flight effects go to P1, stores on pylons and damage to P4, crew figures to P5. Flyby and cinematic cameras stay in `TODO.md`'s _After the demo_ list until a milestone takes them.
+- **Acceptance checks 7–10** (HUD legibility, symbol accuracy in hard maneuvers, the aircraft centered in a maximum-rate turn, no terrain clipping in valleys) run as scripted sequences from V4; check 9 needs P1 and the gun pipper part of check 8 needs P4. P1–P5 count as visual milestones.
+- **No new hex values.** HUD colors are tuned in P2 and recorded in the guide then.
+- Earlier entries that mention cockpits (2, 49, 72) stay as history.
+
+**Reason:**
+
+- _Cost:_ each cockpit is its own modeling, texturing and interaction project, and Bearing has more than twenty aircraft types. Without cockpits, a new type needs one exterior model, a flight model and an avionics profile.
+- _Style:_ the flat-shaded, low-poly look is best from outside, against terrain and sky; low-poly interiors at arm's length would be its weakest point.
+- _Jump-in:_ players join missions already in flight, often minutes before contact, and a chase view with clear 2D displays orients them within seconds.
+- _Symmetry:_ one flight director and one flight model keep the AI and the player on equal physical terms and make taking control and handing back trivial. Following and flying become the same experience.
+- _Browser budget:_ one exterior model and a 2D overlay cost far less than a detailed interior with its own lighting and render pass.
+- The cost is immersion and some realism: the chase camera gives more awareness than a real pilot has, especially to the rear. That advantage is accepted in a single-player game against AI.

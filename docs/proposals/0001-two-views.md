@@ -1,6 +1,6 @@
 # Proposal 0001: Illustrated Strategic Map and Simulation View
 
-*Drafted 2026-11-11. Status: accepted 2026-11-11 with one amendment (decision 72). Affects `docs/design.md`, `docs/visual-style.md`, and `TODO.md`.*
+*Drafted 2026-11-11. Status: accepted 2026-11-11 with one amendment (decision 72). Amended by Proposal 0002 (decision 91): Bearing has no cockpits, so the simulation view is entered through a chase view or an observer camera. Affects `docs/design.md`, `docs/visual-style.md`, and `TODO.md`.*
 
 ## Summary
 
@@ -19,14 +19,14 @@ The two views share world data and the simulation, and differ in everything they
 
 **Bounded simulation rendering.** On a planet with a 1,000 km radius, the horizon distance at altitude *h* is about √(2Rh). At 20 km altitude the horizon lies about 200 km away; at 500 m, about 32 km. The simulation view therefore never needs terrain beyond 200 km, which bounds its terrain streaming, LOD depth, and memory.
 
-**Identity.** Two clearly different looks make each mode feel purposeful: the map is where you plan and choose, and the cockpit is where you fly.
+**Identity.** Two clearly different looks make each mode feel purposeful: the map is where you plan and choose, and the simulation view is where you fly.
 
 ## Comparison of the Two Views
 
 | Aspect | Strategic view | Simulation view |
 |---|---|---|
 | Purpose | Read the war, find missions, follow events | Fly, fight, watch |
-| Camera | Orbit, from full globe down to a zoom floor of about 100 km altitude | Chase, cockpit, and observer cameras, 0 to about 20 km altitude |
+| Camera | Orbit, from full globe down to a zoom floor of about 100 km altitude | Chase and observer cameras, 0 to about 20 km altitude |
 | Terrain | Smooth stylized relief, 4× vertical exaggeration, baked hillshade | Faceted flat-shaded terrain at true scale |
 | Ground color | Painted biome colors with procedural pattern textures | Quantized biome shades per face, field patchwork |
 | Mountains | Low-poly mountain glyphs along ranges, labeled peaks | Real terrain |
@@ -103,7 +103,7 @@ Enemy territory that friendly reconnaissance has not covered recently could rend
 ## Simulation View
 
 - **Altitude envelope.** From the ground to about 20 km. The renderer only handles terrain within the horizon, at most about 200 km away.
-- **Entry.** Only through a unit: following a flight from mission search, jumping into an aircraft, or an observer camera at a base or ship. There is no free camera in the simulation view.
+- **Entry.** Only through a unit: following a flight from mission search or jumping into one of its aircraft, both in the same chase view (Proposal 0002), or an observer camera at a base or ship. There is no free camera in the simulation view.
 - **Content.** Unchanged from `docs/visual-style.md`: faceted terrain, the tree kit, settlements and the base kit, models from the procedural builders, atmosphere, clouds, water, and the full post-processing chain.
 - **Removed requirements.** The orbit-level parts of `docs/visual-style.md` move to the strategic view or disappear: the limb glow at orbit, terrain LOD above 20 km, and the acceptance check for an orbit view at golden hour.
 

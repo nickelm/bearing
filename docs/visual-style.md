@@ -1,6 +1,6 @@
 # Bearing: Visual Style Guide
 
-*Revision 2, 2026-11-11. Companion to `docs/design.md`. Revision 2 splits the guide into two parts for the two views (Proposal 0001, decision 72).*
+*Revision 3, 2026-11-11. Companion to `docs/design.md`. Revision 3 adds the controlled aircraft, the HUD and displays, and their acceptance checks for third-person flight without cockpits (Proposal 0002, decision 91); revision 2 split the guide into two parts for the two views (Proposal 0001, decision 72).*
 
 ## Summary
 
@@ -13,7 +13,7 @@ The two parts share the faction colors and the UI panels, and nothing else is as
 
 # Part I: Simulation View
 
-Everything in Part I applies to the simulation view: chase, cockpit, and observer cameras from the ground to about 20 km altitude, with terrain drawn only within the horizon (about 200 km at 20 km). Nothing in it is tuned for orbit; the globe belongs to Part II.
+Everything in Part I applies to the simulation view: chase, target, weapon, flyby, and observer cameras from the ground to about 20 km altitude, with terrain drawn only within the horizon (about 200 km at 20 km). Nothing in it is tuned for orbit; the globe belongs to Part II. Bearing has no cockpits: the player sees their aircraft from outside, with the HUD and displays as 2D overlays (see *HUD and Displays*).
 
 ## Principles
 
@@ -118,7 +118,7 @@ Beyond 5 km, forests are dark canopy masses in the terrain shading with a sharp 
 | Carrier | 2,000–5,000 including deck details |
 | Other ships | 400–2,000 |
 
-The player's own aircraft in a future cockpit view may exceed these budgets. Everything else stays within them.
+The aircraft the player controls or follows uses a higher detail level of 1,500 to 4,000 triangles, still flat-shaded (see *The Controlled Aircraft*). Everything else stays within these budgets.
 
 ### Aircraft
 
@@ -127,6 +127,19 @@ The player's own aircraft in a future cockpit view may exceed these budgets. Eve
 - **Camouflage.** Large flat color patches assigned per face, following a few faction schemes (see *Palette*). No gradients within a face.
 - **Markings.** Fictional national insignia, modex numbers, and squadron codes as simple geometric decals or painted faces. Large numbers on carrier islands and tails are welcome (reference 1).
 - **Emissives.** Afterburners glow in a warm core with bloom. Navigation lights (red port, green starboard, white tail) and anti-collision beacons blink at night.
+
+### The Controlled Aircraft
+
+The aircraft the player controls or follows fills the center of the screen for entire missions, so it is the most-viewed asset in the game.
+
+- **Detail level.** 1,500 to 4,000 triangles, still flat-shaded, with the same construction, camouflage, and markings as the standard level. Other aircraft keep the budgets above.
+- **Animated parts.** Ailerons, elevators or stabilators, rudders, flaps, slats, airbrakes, and speedbrakes respond to control inputs. Swing wings (the F-111, F-14, Tornado, Su-24, MiG-23, and Tu-22M analogues) animate with speed. Afterburner nozzles open and glow. Helicopter rotors blur into discs.
+- **Stores.** Weapons hang visibly on pylons and disappear as they are released. Fuel tanks can be jettisoned.
+- **No landing gear animation.** Takeoff and landing stay with the AI, so gear only needs to exist on parked and AI-controlled aircraft.
+- **Effects.** Vapor and wingtip vortices at high G, contrails at altitude, heat shimmer behind engines, dust and spray at very low level, rotor wash for helicopters, and smoke, fire, and missing parts for damage.
+- **Shadow.** The aircraft's shadow on terrain is a key height cue at low level and must stay visible down to the ground.
+- **Crew figures.** The blocky crew figures stay visible through canopies.
+- **Model specification.** The aircraft spec adds hinge axes for control surfaces, pivots for swing wings, store stations, nozzles, light positions, crew figure positions, and the camera rig offsets.
 
 ### Ground Vehicles and People
 
@@ -206,6 +219,38 @@ Starting values; final values get tuned in the model viewer and on the globe.
 - **Map symbology.** See Part II, *Military Overlays*. The panels and typeface here serve both views.
 - **Cinematic cards.** A short label line (base name, location) in the lower right, a status card (day, available aircraft) in the lower left, and an action hint at the bottom center (reference 5).
 
+## HUD and Displays
+
+With no cockpits, the HUD and the cockpit displays draw as 2D elements over the chase view (decision 91). They show only what the aircraft and its crew know.
+
+### Two Kinds of Symbols
+
+The chase camera sits behind and above the aircraft, so HUD symbols cannot sit at fixed screen positions as on a real HUD.
+
+- **World-anchored symbols** are projected from the 3D scene every frame: the flight path marker (from the velocity vector, projected at a great distance so the camera offset causes no parallax), the boresight cross, the gun pipper (at the predicted impact point), CCIP bomb fall lines, target boxes, waypoint and target diamonds, and missile seeker circles.
+- **Screen-anchored instruments** sit at fixed positions around the aircraft: airspeed and altitude tapes, a heading tape, a compact attitude indicator, Mach, G, fuel, and the master caution.
+
+A full pitch ladder is confusing when seen from outside the aircraft, so the compact attitude indicator replaces it.
+
+### Displays
+
+| Display | Contents | Notes |
+|---|---|---|
+| Radar | B-scope for fighter radars, PPI for maritime and AWACS radars, with mode, range scale, and contacts | Content depends on the aircraft's radar and its mode |
+| Moving map | The strategic map, centered on the aircraft, with route, threats, and front | Drawn by the strategic renderer in a viewport, so both views share one cartographic language (Part II) |
+| Threat warning | RWR display with threat symbols by bearing and type | |
+| Stores | Weapons and pylons, selected weapon, quantities, chaff and flares | |
+| Targeting sensor | FLIR or TV picture-in-picture from a targeting pod or gunner sight | Thermal post-process on a render target; only aircraft with such a sensor |
+| Messages | AWACS, wingman, crew, and ground controller calls as text, later as voice | |
+| Systems | Engines, fuel state, damage | Compact; expands on warnings |
+
+### Layout and Style
+
+- **Layout.** The aircraft sits slightly below screen center. Tapes flank it; the radar and moving map occupy the lower corners; the threat warning sits upper right; messages sit upper left; stores sit at bottom center. Each display can be collapsed, and a minimal mode shows only the world-anchored symbols and tapes.
+- **HUD symbology.** A single color (green by default, amber as an option) with a thin dark halo, so it stays legible against bright sky, snow, and night. Exact values are tuned with the HUD (milestone P2).
+- **Displays.** The dark translucent panels and monospaced type of *User Interface*, with phosphor-colored vector graphics for radar and RWR.
+- **Implementation.** A Canvas 2D overlay at device pixel ratio for HUD symbols and vector displays, the strategic renderer in a viewport for the moving map, and render targets for targeting sensors.
+
 ## Performance Budgets
 
 Targets for a mid-range laptop in a desktop browser at 1080p:
@@ -235,8 +280,12 @@ Before a visual milestone with simulation-view work closes, capture these views 
 4. An airbase at dusk with lit runway and parked aircraft.
 5. Coastline with shallow water, a beach, and sun glint.
 6. Silhouette test: every aircraft model rendered solid black against a pale sky, where each type must be identifiable.
+7. HUD legible against bright sky, snow, and night.
+8. The flight path marker and gun pipper stay accurate during hard maneuvers.
+9. The aircraft stays readable and centered in a maximum-rate turn.
+10. The camera never clips terrain during low-level flight through valleys.
 
-Checks 1–5 are named views in `tools/render.preview.ts`; check 6 runs in the model viewer.
+Checks 1–5 are named views in `tools/render.preview.ts`; check 6 runs in the model viewer. Checks 7–10 are scripted flight sequences in `tools/render.preview.ts` and apply from milestone V4 (camera rig and flight path marker); check 9 needs the flight model (P1), and the gun pipper part of check 8 needs guns (P4).
 
 # Part II: Strategic View
 
