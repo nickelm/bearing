@@ -76,7 +76,7 @@ The strategic view from [docs/visual-style.md](docs/visual-style.md) Part II: gl
   - [ ] Rename `GlobeScene` to `SimScene` once it no longer draws orbit views (V1)
 - [x] Strategic camera: altitude 100–3,000 km (floor a tunable constant), tilt eased from 0° above about 1,500 km to about 50° at the floor, heading, mouse and keyboard, and decision 60's touch gestures; unit tests for the clamps and the tilt curve (decision 75)
   - [ ] Owner check on a tablet: pinch, twist and pan feel at the floor, where zoom about the fingers is approximate under tilt
-- [ ] Zoom bands (globe above 1,500 km, theater 400–1,500 km, region below 400 km): band from altitude with hysteresis, per-band fade factors as uniforms and a change event; tests
+- [x] Zoom bands (globe above 1,500 km, theater 400–1,500 km, region below 400 km): band from altitude with hysteresis, per-band fade factors as uniforms and a change event; tests (decision 76)
 - [ ] Relief mesh: reuse `quadtree.ts` and `tileMesh.ts` with a level cap chosen for the floor and its own exaggeration uniform (default 4×); measure tile count and frame time at globe scale and at the floor
 - [ ] Cartographic hillshade: a light fixed at the screen's upper left (view-space direction) on the 4× normals, plus soft ambient; decide between a bake and per-fragment shading and log it; no physical sky or aerial perspective in this scene
 - [ ] Strategic biome palette (Part II) and biome boundary blending over a few kilometers

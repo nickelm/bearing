@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–75 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–76 are reflected in both.
 
 ---
 
@@ -1264,3 +1264,15 @@ The owner's amendment and the engineering calls made while adopting it:
 - **Horizon at the floor.** At 100 km and 50° tilt on the 1,000 km planet, the top of a 45° frame sits about 1° below the horizon, so the ground fills a landscape window. A unit test guards this. A taller field of view or a lower floor would show space above the horizon.
 
 **Reason:** Part II asks for a camera that looks straight down at globe scale and pitches toward the floor. Deriving the tilt from altitude gives every player the same readable view at each zoom, and keeps the horizon out of the frame on a small planet. Orbiting a focus keeps the point the player zooms into at the center, as map apps do.
+
+### 76. Zoom bands: hysteresis on the edges, timed fades as uniforms
+
+**Date:** 2026-11-11
+**Decision:** `render/strategic/zoomBands.ts` picks the strategic view's zoom band from the camera altitude:
+
+- **Edges.** Globe at and above 1,500 km, Theater from 400 km up to 1,500 km, Region below 400 km (Part II). The Globe edge is also where the camera starts to tilt (decision 75).
+- **Hysteresis.** The band changes only once the altitude clears an edge by 8% in the direction of travel: from Globe the view goes to Theater below about 1,389 km, and back to Globe above 1,620 km. A jump across several bands lands in the band whose edges it has cleared by the margin.
+- **Fades by time, not by altitude.** Each band has a fade factor that ramps linearly toward 1 while the band is active and toward 0 otherwise over 0.35 s of real time, eased with a smoothstep. Content of a band multiplies its opacity by its factor, so a band change is a short crossfade, as the guide asks. A step with dt = 0 snaps the fades, so headless previews show the settled state.
+- **Interfaces.** `StrategicScene.bands` exposes the band and an `onChange(band, previous)` event; label placement and band content tables (S2) will run on it. `StrategicScene.bandFade.{globe,theater,region}` are TSL uniforms with the eased factors for shaders. GUI → Status → Zoom band shows the band, and the console logs each change.
+
+**Reason:** Fading by altitude alone would leave content half-visible while the camera rests between bands, and a hard edge would make labels pop when the camera eases across it. A margin plus a short timed crossfade gives one clear band at any rest altitude and smooth transitions, and the change event gives the label engine one moment to re-place labels.

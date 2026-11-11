@@ -124,6 +124,8 @@ export interface DebugGuiStatus {
   latDeg: number;
   lonDeg: number;
   tiltDeg: number;
+  /** Strategic zoom band (decision 76), or "—" in the simulation view. */
+  band: string;
   backend: string;
   /** Drawing-buffer size and render scale. */
   resolution: string;
@@ -156,6 +158,7 @@ export class DebugGui {
     latDeg: 0,
     lonDeg: 0,
     tiltDeg: 0,
+    band: '—',
     backend: '—',
     resolution: '—',
     compute: 'pending',
@@ -251,6 +254,7 @@ export class DebugGui {
     st.add(this.status, 'latDeg').name('Latitude (°)').decimals(3).disable().listen();
     st.add(this.status, 'lonDeg').name('Longitude (°)').decimals(3).disable().listen();
     st.add(this.status, 'tiltDeg').name('Tilt (°)').decimals(1).disable().listen();
+    st.add(this.status, 'band').name('Zoom band').disable().listen();
     st.add(this.status, 'backend').name('Backend').disable().listen();
     st.add(this.status, 'resolution').name('Resolution').disable().listen();
     st.add(this.status, 'compute').name('GPU compute').disable().listen();

@@ -12,6 +12,7 @@
  */
 import { AmbientLight, Color, DirectionalLight, PerspectiveCamera, Scene } from 'three/webgpu';
 import type { WebGPURenderer } from 'three/webgpu';
+import { uniform } from 'three/tsl';
 import type { Cast } from '../../campaign/cast';
 import type { CubeGrid } from '../../core/cubeGrid';
 import type { WorldSeed } from '../../core/rng';
@@ -25,6 +26,7 @@ import type { ViewMode } from '../common/globeMesh';
 import { attachOrbitInput } from '../common/orbitCamera';
 import { StrategicCamera } from './strategicCamera';
 import { StrategicOverlay } from './strategicOverlay';
+import { ZOOM_BANDS, ZoomBands } from './zoomBands';
 
 /** Relief exaggeration on the map (Part II, Base Map; tunable). */
 export const STRATEGIC_EXAGGERATION = 4;
@@ -48,6 +50,13 @@ export class StrategicScene {
   readonly globe: GlobeMesh;
   /** Strategic graph and cast overlay. */
   readonly overlay: StrategicOverlay;
+  /** Zoom band from the camera altitude, with fades and a change event (decision 76). */
+  readonly bands: ZoomBands;
+  /**
+   * Each band's eased fade factor (0..1) for shaders: band content multiplies its
+   * opacity by its band's factor, so it fades in and out with the band.
+   */
+  readonly bandFade = { globe: uniform(1), theater: uniform(0), region: uniform(0) };
   /** Unit vector toward the sun, world frame. Unused until day and night reach the map. */
   readonly sun = new Vec3d(1, 0.6, 0.8).normalize();
   private detachInput: (() => void) | null = null;
@@ -65,6 +74,8 @@ export class StrategicScene {
   ) {
     this.camera = new PerspectiveCamera(45, 1, 1, 2);
     this.orbit = new StrategicCamera(options.radius);
+    this.bands = new ZoomBands(this.orbit.altitude);
+    for (const b of ZOOM_BANDS) this.bandFade[b].value = this.bands.fade(b);
     this.globe = new GlobeMesh(options.grid, options.radius);
     this.globe.setExaggeration(STRATEGIC_EXAGGERATION);
     this.overlay = new StrategicOverlay(options.radius);
@@ -139,6 +150,8 @@ export class StrategicScene {
     const o = this.orbit;
     o.terrainMaxHeight = this.globe.maxDisplayedHeight;
     o.update(dt);
+    this.bands.update(o.altitude, dt);
+    for (const b of ZOOM_BANDS) this.bandFade[b].value = this.bands.fade(b);
 
     // Camera at the origin, oriented from float64 vectors.
     this.camera.position.set(0, 0, 0);

@@ -180,6 +180,9 @@ async function main(): Promise<void> {
     input: false,
   });
   strategicView.setFaceSeed(worldParams.seed);
+  strategicView.bands.onChange((band, previous) =>
+    console.info(`Zoom band: ${previous} → ${band}`),
+  );
   let activeView: 'simulation' | 'strategic' = 'simulation';
   /** The camera of the view on screen; the clock and status read their position from it. */
   const activeOrbit = () => (activeView === 'strategic' ? strategicView.orbit : globe.orbit);
@@ -680,6 +683,7 @@ async function main(): Promise<void> {
     gui.status.latDeg = o.lat / DEG;
     gui.status.lonDeg = o.lon / DEG;
     gui.status.tiltDeg = o.tilt / DEG;
+    gui.status.band = activeView === 'strategic' ? strategicView.bands.band : '—';
     const ts = globe.terrain.stats;
     const fs = globe.forest.stats;
     gui.status.trees = globe.forest.group.visible
