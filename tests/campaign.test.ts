@@ -8,7 +8,7 @@ import { detectTheaters, strikeClusters } from '../src/campaign/theaters';
 import { generateCampaignWorld, MAX_RETRIES, retrySeed } from '../src/worldgen/campaignWorld';
 import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
 import { buildStrategicGraph } from '../src/worldgen/strategic/builder';
-import { boxWorld, graphFingerprint, RADIUS } from './helpers/syntheticWorld';
+import { boxWorld, firstDifference, graphFingerprint, RADIUS } from './helpers/syntheticWorld';
 
 const RES = 64;
 const grid = new CubeGrid(RES);
@@ -144,6 +144,14 @@ describe('validity check and retries', () => {
     expect(w.rejected.length).toBe(w.retries);
     expect(w.seed).toBe(w.retries === 0 ? 7 : retrySeed(7, w.retries));
     const again = generateCampaignWorld({ ...DEFAULT_PLANET_PARAMS, seed: 7 }, { grid });
+    // Stage by stage, so a divergence names the first stage that differs (TODO.md Known issues).
+    const m = (x: typeof w) => x.world.maps;
+    expect(firstDifference(m(again).height, m(w).height, 'height')).toBeNull();
+    expect(firstDifference(m(again).biome, m(w).biome, 'biome')).toBeNull();
+    expect(firstDifference(m(again).discharge, m(w).discharge, 'discharge')).toBeNull();
+    for (const k of ['nodes', 'settlements', 'roads', 'barrierLines', 'fronts'] as const)
+      expect(firstDifference(again.graph[k], w.graph[k], k)).toBeNull();
+    expect(firstDifference(again.graph, w.graph, 'graph')).toBeNull();
     expect(castFingerprint(again.campaign.cast)).toBe(castFingerprint(w.campaign.cast));
   });
 });

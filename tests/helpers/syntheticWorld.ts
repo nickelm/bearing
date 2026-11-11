@@ -58,3 +58,40 @@ export function graphFingerprint(g: StrategicGraph): string {
         : v,
   );
 }
+
+/**
+ * Path and values of the first difference between two values, or null if they
+ * match. Typed arrays compare as arrays; `timings` keys are skipped. Determinism
+ * tests use it so a failure names the first quantity that diverged, not a long
+ * fingerprint (a CI flake, TODO.md Known issues).
+ */
+export function firstDifference(a: unknown, b: unknown, path = ''): string | null {
+  const norm = (v: unknown): unknown =>
+    ArrayBuffer.isView(v) && !(v instanceof DataView)
+      ? Array.from(v as unknown as ArrayLike<number>)
+      : v;
+  const x = norm(a);
+  const y = norm(b);
+  if (Array.isArray(x) && Array.isArray(y)) {
+    if (x.length !== y.length) return `${path}: length ${x.length} vs ${y.length}`;
+    for (let i = 0; i < x.length; i++) {
+      const d = firstDifference(x[i], y[i], `${path}[${i}]`);
+      if (d) return d;
+    }
+    return null;
+  }
+  if (x && y && typeof x === 'object' && typeof y === 'object') {
+    const keys = new Set([...Object.keys(x), ...Object.keys(y)]);
+    for (const k of keys) {
+      if (k === 'timings') continue;
+      const d = firstDifference(
+        (x as Record<string, unknown>)[k],
+        (y as Record<string, unknown>)[k],
+        `${path}.${k}`,
+      );
+      if (d) return d;
+    }
+    return null;
+  }
+  return Object.is(x, y) ? null : `${path}: ${String(x)} vs ${String(y)}`;
+}

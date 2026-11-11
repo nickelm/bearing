@@ -22,7 +22,7 @@ import {
 import { BRIDGE_MIN_DISCHARGE } from '../src/worldgen/strategic/movement';
 import { LOCAL_LINK, localLinks } from '../src/worldgen/strategic/roads';
 import { buildTerritory, territoryCode } from '../src/worldgen/strategic/territory';
-import { boxWorld, graphFingerprint, RADIUS } from './helpers/syntheticWorld';
+import { boxWorld, firstDifference, graphFingerprint, RADIUS } from './helpers/syntheticWorld';
 
 const RIVER_LON = -50;
 
@@ -190,6 +190,8 @@ describe('settlements, roads and bridges in the strategic graph', () => {
 
   it('is deterministic; the settlement seed changes towns, not landmasses', () => {
     const again = riverWorld(1983).build.graph;
+    // Names the first differing quantity if this ever diverges (TODO.md Known issues).
+    expect(firstDifference(again, graph, 'graph')).toBeNull();
     expect(graphFingerprint(again)).toBe(graphFingerprint(graph));
     const other = riverWorld(7).build.graph;
     expect(other.nodes.map((n) => n.area)).toEqual(graph.nodes.map((n) => n.area));
