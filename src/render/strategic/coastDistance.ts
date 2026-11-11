@@ -12,7 +12,8 @@
  * - **Metric.** Distances are in cells times the mean cell size, (π/2 · R) / n. The
  *   equi-angular warp keeps cells within about 10% of that size.
  * - **Resolution.** Stored at up to 1024 texels per face edge (every k-th cell when
- *   the global grid is finer), as half floats; the shader samples it bilinearly.
+ *   the global grid is finer), as half floats in kilometers (half floats stop at
+ *   65,504); the shader samples it bilinearly and returns meters.
  *
  * Near the coast the shader prefers the per-vertex coast distance of decision 39,
  * which follows the fine tile coastline; this field takes over beyond a few
@@ -167,14 +168,15 @@ export class CoastDistanceTexture {
       this.texture.image = { data: new Uint16Array(6 * m * m), width: m, height: m, depth: 6 };
     }
     const half = this.texture.image.data as Uint16Array;
-    for (let i = 0; i < field.length; i++) half[i] = DataUtils.toHalfFloat(field[i]!);
+    // Kilometers: half floats stop at 65,504, below the 100 km cap in meters (decision 99).
+    for (let i = 0; i < field.length; i++) half[i] = DataUtils.toHalfFloat(field[i]! / 1000);
     this.texture.needsUpdate = true;
   }
 
   /** Distance (m) from the sea to the nearest land at a direction; 0 on land. */
   sample(dir: V3): Node<'float'> {
     const { face, uv } = cubeFaceUv(dir);
-    return texture(this.texture, uv).depth(face).level(int(0)).x as Node<'float'>;
+    return texture(this.texture, uv).depth(face).level(int(0)).x.mul(1000) as Node<'float'>;
   }
 
   dispose(): void {

@@ -15,7 +15,8 @@
  *        SCENE=strategic draws the strategic view (StrategicScene, decisions 74, 93) instead,
  *          from STRATEGIC_PREVIEW_VIEWS (globe, night, theater, region, floor, winter, and
  *          sharp at 1920 × 1080), with clouds, tile counts and frame times per view;
- *          CVD=1 also writes each image as seen with protanopia, deuteranopia, tritanopia
+ *          CVD=1 also writes each image as seen with protanopia, deuteranopia, tritanopia;
+ *          OVERLAY=1 adds the graph debug overlay
  *
  * Output: tools/out/render-<seed>-<view>.png, or render-<seed>-strategic-<view>[-<cvd>].png
  * (gitignored).
@@ -234,7 +235,7 @@ export const PREVIEW_VIEWS: PreviewView[] = [
  * the single renderer live here now.
  */
 export const STRATEGIC_PREVIEW_VIEWS: PreviewView[] = [
-  { name: 'globe', dLat: 0, dLon: 0, altitude: 3000 * KM, tilt: 0, heading: 0, localTime: 17 },
+  { name: 'globe', dLat: 0, dLon: 0, altitude: 3000 * KM, tilt: 0, heading: 0, localTime: 18.5 },
   { name: 'night', dLat: 0, dLon: 0, altitude: 3000 * KM, tilt: 0, heading: 0, localTime: 22 },
   { name: 'theater', dLat: 0, dLon: 0, altitude: 900 * KM, tilt: 0, heading: 0, localTime: 11 },
   {
@@ -688,6 +689,8 @@ async function renderStrategic(
       rivers: riverIndex,
     });
     scene.relief.buildBudgetMs = 10_000;
+    // The graph debug overlay is not part of the map's look; OVERLAY=1 shows it.
+    scene.overlay.enabled = process.env.OVERLAY === '1';
     for (const v of group) {
       const cam = scene.orbit;
       cam.lat = lat0 + v.dLat;

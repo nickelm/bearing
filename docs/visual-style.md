@@ -434,7 +434,7 @@ Blue against orange-red stays distinct under protanopia, deuteranopia, and trita
 ## Strategic Post-Processing
 
 - A light vignette and a subtle, constant paper grain: corners darken by 20%, and each pixel varies by ±6%, fixed to the screen (decision 93). A thin pale rim (`#D9E4E8`, about 1.5 px) outlines the globe against the background `#1E2630` (decision 92).
-- No bloom except a soft halo on night lights, no pixelation, and no physical tone curve per time of day.
+- No bloom except a soft halo on night lights, no pixelation, and no physical tone curve per time of day. The map renders with no tone curve at all, so its colors reach the screen as the palette gives them (decision 99).
 
 ## Strategic Performance
 

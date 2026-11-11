@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–94 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–99 are reflected in both.
 
 ---
 
@@ -1577,3 +1577,22 @@ The engineering calls made while adopting it:
 - **GUI.** Map → Glyphs and Map → Labels toggle the two layers.
 
 **Reason:** Building the atlas from the fonts keeps the toolchain free of native MSDF generators and checked-in binaries, and lets Node previews render the same text. A pure placement pass makes "no overlapping labels" a unit test, not only a screenshot check.
+
+### 99. The map renders without a tone curve; the coast field in kilometers; first preview review
+
+**Date:** 2026-11-11
+**Decision:** Fixes and findings from the owner's first run of the strategic previews (decision 93):
+
+- **No tone curve.** The renderer's AgX curve, set by the simulation view, also applied to the map. It lifted the `#1E2630` background to mid slate gray and paled and flattened every Part II fill, and it was the likely reason the vignette and grain of decision 92 were hard to see. The map's scene pass now renders with `NoToneMapping`, restoring the renderer's setting afterward, as the label pass already did (decision 98). Hillshade strength, night darkness and cloud opacity were tuned under AgX and need a second look.
+- **Coast field in kilometers.** Decision 85 raised the coast-distance cap to 100 km, past the half-float maximum of 65,504. Far-ocean texels overflowed ("DataUtils.toHalfFloat(): Value out of range" in the previews) and clamped, so the fade toward the cap never triggered. The texture now stores kilometers and the shader returns meters.
+- **Previews.** The graph debug overlay is off in strategic previews (`OVERLAY=1` shows it). The `globe` view moves to 18:30 local time, so the terminator crosses the globe for check 1.
+- **Review of the first images** (globe, theater, region, floor, sharp), against Part II:
+  - Met: the palette, depth bands, coastal halo and lines, rivers, hillshade and patterns read as an illustrated map. Night lights with halos show at the terminator. Labels are legible, with the guide's typography (decision 98).
+  - Check 1 falls short. The terminator only grazed the limb (fixed above), and territory tint, front lines and theater names wait for S3's overlays.
+  - Clouds read as blurry fog at the floor, from the bake's 2 km texels.
+  - Mountain glyphs (decision 97) show at the Globe band and crowd it. Part II lists ranges from the Theater band.
+  - Hill mounds read as scattered dots, some in rows.
+  - A steep patch at the floor looks noisy.
+  - Each gap is a TODO under S1.
+
+**Reason:** Part II specifies colors, not a camera response; a filmic curve built for the physically lit simulation view has no place on an illustrated map. Keeping the review in the log ties each TODO to the images that raised it.

@@ -71,8 +71,8 @@ function linear(hex: number): [number, number, number] {
 
 /**
  * Draws an overlay scene over the frame already rendered, without tone mapping, so
- * labels keep Part II's exact colors while the map beneath keeps the renderer's tone
- * curve (the simulation view's AgX applies to the whole frame; decision 98).
+ * labels keep Part II's exact colors (decision 98). Since decision 99 the map beneath
+ * renders without the simulation view's AgX curve as well.
  */
 export function drawOverlay(renderer: WebGPURenderer, overlay: Scene, camera: Camera): void {
   const toneMapping = renderer.toneMapping;

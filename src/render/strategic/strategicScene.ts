@@ -11,7 +11,14 @@
  * There is no physical sky, aerial perspective or atmosphere here (Part II), only a
  * flat background. Everything is placed camera-relative (common/cameraRelative.ts).
  */
-import { AmbientLight, DirectionalLight, PerspectiveCamera, Scene, Vector3 } from 'three/webgpu';
+import {
+  AmbientLight,
+  DirectionalLight,
+  NoToneMapping,
+  PerspectiveCamera,
+  Scene,
+  Vector3,
+} from 'three/webgpu';
 import type { WebGPURenderer } from 'three/webgpu';
 import { uniform } from 'three/tsl';
 import type { Cast } from '../../campaign/cast';
@@ -413,7 +420,15 @@ export class StrategicScene {
     );
     // Weather moves with game time: re-bake the cloud field while the map is on screen.
     this.weather?.bake(this.renderer, performance.now());
-    this.renderer.render(this.scene, this.camera);
+    // No tone curve on the map (Part II, decision 99): the simulation view's AgX would
+    // lift the dark background and pale every Part II color. Restored for that view.
+    const toneMapping = this.renderer.toneMapping;
+    this.renderer.toneMapping = NoToneMapping;
+    try {
+      this.renderer.render(this.scene, this.camera);
+    } finally {
+      this.renderer.toneMapping = toneMapping;
+    }
     if (this.showLabels && this.labels.hasFonts)
       drawOverlay(this.renderer, this.overlayScene, this.camera);
   }

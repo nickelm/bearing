@@ -110,7 +110,14 @@ The strategic view from [docs/visual-style.md](docs/visual-style.md) Part II: gl
 - [x] Post-processing: light vignette and paper grain; a soft halo on night lights only; a thin pale rim around the globe instead of the limb glow (decision 92)
   - [ ] Browser check: grain visible but subtle at 1× and 2× pixel ratio; rim thin and even all around the globe
 - [x] Strategic preview views (globe band with the terminator, theater band, region band at the floor) in `tools/render.preview.ts`, plus a color-vision-deficiency filter (Part II check 4) and a 1920 × 1080 sharpness view at the floor (check 5); move the old `orbit`, `limb` and `terminator` views here (decision 93)
-  - [ ] Owner: run `SCENE=strategic CVD=1` on a GPU and share the PNGs from `tools/out/`
+  - [x] Owner: run `SCENE=strategic CVD=1` on a GPU and share the PNGs from `tools/out/` (first run 2026-11-11; review in decision 99)
+  - [ ] Re-run the previews after decision 99 (no tone curve, coast field in km) and send all seven views, the CVD images and the console's frame times
+  - [ ] Retune hillshade strength, night darkness and cloud opacity without the AgX curve (they were tuned under it)
+  - [ ] Check 1 gaps: territory tint, front lines and theater names wait for S3's strategic overlays; the terminator view moved to 18:30 so the terminator crosses the globe
+  - [ ] Clouds read as blurry fog at the floor (2 km bake): give them a crisper stylized edge band, as printed weather maps do
+  - [ ] Mountain glyphs at the Globe band: Part II lists ranges from the Theater band; hide or thin them above 1,500 km (decision 97's Theater set shows at the globe)
+  - [ ] Hill mounds at Globe and Theater scale read as scattered dirt dots, some in regular rows; check their spacing and band
+  - [ ] A dark, noisy speckled patch on steep ground at the floor (rock hatching, tussocks and grain stacking?); find which pattern and calm it
   - [ ] Browser check: vignette and grain visible after the stronger defaults (Paper finish up to 3×)
 - [ ] Acceptance checks 1, 4 and 5 (Part II) against the reference board; ask the owner to add the Civilization VI and Cold War map references
 - [ ] Checkpoint: owner review of the base map in the browser
