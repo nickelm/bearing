@@ -118,6 +118,11 @@ export interface Infrastructure {
   spurs: RoadNetwork;
   /** Bridges on the spur roads. */
   spurBridges: BridgeList;
+  /**
+   * Holder of every coarse cell (territory.ts TERRITORY_*: −1 sea, 0 neutral,
+   * 1 Alliance, 2 Pact), for the map's territory tint (decision 101).
+   */
+  territory: Int8Array;
   timings: { stage: string; ms: number }[];
 }
 
@@ -244,7 +249,16 @@ export function placeInfrastructure(
 
   const targets = placeTargets(build, cast, territory, settlementSide, ports, r.fork('targets'));
   lap('targets');
-  return { settlementSide, ports, airbases, targets, spurs, spurBridges, timings };
+  return {
+    settlementSide,
+    ports,
+    airbases,
+    targets,
+    spurs,
+    spurBridges,
+    territory: territory.owner,
+    timings,
+  };
 }
 
 type NearestSettlement = (p: Readonly<Point>, side: Side | null, within: number) => number;
@@ -681,5 +695,6 @@ export function infrastructureBuffers(x: Infrastructure): ArrayBufferLike[] {
     b.riverWidth.buffer,
     b.road.buffer,
     b.roadClass.buffer,
+    x.territory.buffer,
   ];
 }

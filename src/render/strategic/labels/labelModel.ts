@@ -20,6 +20,7 @@
  * | town | – | – | all |
  * | village | – | – | ≥ 10,000 people |
  * | theater | all | – | – |
+ * | corridor (in the attacker's color) | – | all | all |
  */
 import type { Cast } from '../../../campaign/cast';
 import {
@@ -32,6 +33,7 @@ import {
 } from '../../../worldgen/strategic/graph';
 import type { Point, StrategicGraph } from '../../../worldgen/strategic/graph';
 import type { ZoomBand } from '../zoomBands';
+import type { MilitaryOverlays } from '../overlays/militaryModel';
 import type { LabelStyleId } from './labelStyles';
 
 export type LabelPlacement = 'point' | 'line' | 'area';
@@ -51,6 +53,8 @@ export interface MapLabel {
   /** Gap (px) between a point label's anchor and its text, for a marker. */
   gap: number;
   bands: readonly ZoomBand[];
+  /** Military overlay layer the label belongs to, hidden with it (decision 101). */
+  layer?: string;
 }
 
 type Row = Partial<Record<ZoomBand, number>>;
@@ -77,7 +81,10 @@ export const BAND_TABLE: Record<string, Row> = {
   town: { region: 0 },
   village: { region: 0 },
   theater: { globe: 0 },
+  corridor: { theater: 0, region: 0 },
 };
+/** Gap (px) between a front or lane theater's name and the line it is anchored on. */
+export const THEATER_LINE_GAP = 12;
 /** Villages need at least this population for a label. */
 export const VILLAGE_LABEL_MIN = 10_000;
 
@@ -147,6 +154,7 @@ export function buildLabels(
   graph: StrategicGraph,
   cast: Cast | null,
   heightAt: (p: Readonly<Point>) => number,
+  military: MilitaryOverlays | null = null,
 ): MapLabel[] {
   const out: MapLabel[] = [];
   const f = graph.features;
@@ -205,8 +213,27 @@ export function buildLabels(
       anchor,
       height: Math.max(0, heightAt(anchor)),
       path: null,
-      gap: 0,
+      // Beside the front or lane it names, not over it (decision 101).
+      gap: t.kind === 'continental-front' || t.kind === 'sea-lane' ? THEATER_LINE_GAP : 0,
       bands: bandsFor('theater', 1),
+    });
+  }
+  // Invasion corridors: named arrows, the name along the arrow in the attacker's color.
+  for (const line of military?.lines ?? []) {
+    if (line.layer !== 'corridors' || !line.name || !line.side) continue;
+    const mid = polylinePoint(line.points, Math.floor(line.points.length / 6));
+    out.push({
+      id: out.length,
+      text: labelText(line.name),
+      style: line.side === 'alliance' ? 'corridorAlliance' : 'corridorPact',
+      importance: 0.9,
+      placement: 'line',
+      anchor: mid,
+      height: Math.max(0, heightAt(mid)),
+      path: Float64Array.from(line.points),
+      gap: 0,
+      bands: bandsFor('corridor', 1),
+      layer: 'corridors',
     });
   }
   return out;

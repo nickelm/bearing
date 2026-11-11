@@ -4,8 +4,9 @@
  * worlds without a GPU.
  *
  * - **Text.** `layoutText` sets a string in a style: kerning, tracking, capitals.
- * - **Point labels** (settlements, peaks, straits, theaters) try right of the
- *   anchor, then left, above and below, past the marker gap.
+ * - **Point labels** (settlements, peaks, straits) try right of the anchor, then
+ *   left, above and below, past the marker gap. Theater names sit centered on their
+ *   anchor, or above or below the front or lane they are anchored on.
  * - **Line labels** (rivers, ranges) run along the projected polyline, centered at
  *   one of several stations along its longest visible stretch, turned so the text
  *   is never upside down, and rejected where it bends more than `MAX_BEND`
@@ -320,8 +321,12 @@ export function layoutLabel(
 /** The candidates of a label, best first. */
 export function candidates(label: MapLabel): Candidate[] {
   if (label.placement === 'point') {
-    return label.gap > 0 || label.style !== 'theater'
-      ? [0, 1, 2, 3].map((side) => ({ mode: 'point', side }) as Candidate)
+    if (label.style !== 'theater')
+      return [0, 1, 2, 3].map((side) => ({ mode: 'point', side }) as Candidate);
+    // Theater names sit centered on their anchor, or above or below a front or lane
+    // they would otherwise cover (decision 101).
+    return label.gap > 0
+      ? [2, 3, 0, 1].map((side) => ({ mode: 'point', side }) as Candidate)
       : [{ mode: 'level' }];
   }
   const path = STATIONS.map((station) => ({ mode: 'path', station }) as Candidate);

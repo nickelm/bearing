@@ -5,8 +5,8 @@
  * - **Water** in blue italic serif (EB Garamond), letter-spaced for oceans and seas.
  * - **Landforms** in brown, letter-spaced sans capitals (Fira Sans).
  * - **Settlements** in dark sans with a light halo, sized by class.
- * - **Theaters** in near-black spaced capitals (military features take faction
- *   colors once the overlays exist, S3).
+ * - **Theaters** in near-black spaced capitals; **invasion corridors** in the
+ *   attacker's faction color (decision 101).
  *
  * Every style has a halo so text stays legible over relief, glyphs and the night
  * side; water labels get a pale, thin one.
@@ -26,7 +26,9 @@ export type LabelStyleId =
   | 'city'
   | 'town'
   | 'village'
-  | 'theater';
+  | 'theater'
+  | 'corridorAlliance'
+  | 'corridorPact';
 
 export interface LabelStyle {
   font: FontId;
@@ -179,5 +181,25 @@ export const LABEL_STYLES: Record<LabelStyleId, LabelStyle> = {
     halo: HALO,
     haloWidth: 2,
     haloOpacity: 0.75,
+  },
+  corridorAlliance: {
+    font: 'sansBold',
+    size: 12,
+    tracking: 0.1,
+    uppercase: true,
+    color: 0x2f6fb5,
+    halo: HALO,
+    haloWidth: 2,
+    haloOpacity: 0.85,
+  },
+  corridorPact: {
+    font: 'sansBold',
+    size: 12,
+    tracking: 0.1,
+    uppercase: true,
+    color: 0xd0532b,
+    halo: HALO,
+    haloWidth: 2,
+    haloOpacity: 0.85,
   },
 };

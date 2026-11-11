@@ -68,6 +68,8 @@ import type { TileData, TileSynthesizer } from '../../worldgen/gpu/tileSynth';
 import { MAX_BAKED_LEVEL } from '../../worldgen/gpu/tileSynth';
 import { placeCameraRelative } from '../common/cameraRelative';
 import { HabitabilityTexture } from '../common/habitabilityTexture';
+import { TerritoryTexture } from './overlays/territoryTexture';
+import { FACTION_COLORS, NEUTRAL_COLOR } from './overlays/militaryModel';
 import type { WeatherField } from '../common/weatherField';
 import { BiomeFillTexture, hexToLinear, STEEP_ROCK_FILL } from './biomeFill';
 import { COAST_DISTANCE_MAX, CoastDistanceTexture } from './coastDistance';
@@ -146,6 +148,12 @@ const REED_MARK = hexToLinear(0x6f8366);
 const HATCH_MARK = hexToLinear(0x7e766d);
 /** Part II precipitation hatching color (decision 89). */
 const RAIN_MARK = 0x7c8fa6;
+/**
+ * Territory tint opacity: the sides at 22%, a little over Part II's first "about 15%",
+ * which hardly showed over the hillshade; neutral land fainter (decision 101).
+ */
+export const TERRITORY_TINT = 0.22;
+export const NEUTRAL_TINT = 0.08;
 
 export interface StrategicReliefWorld {
   synth: TileSynthesizer;
@@ -207,6 +215,12 @@ export class StrategicRelief {
   private coastPending = false;
   /** The strategic graph's habitability, for farmland (decision 80). */
   readonly habitability = new HabitabilityTexture(null, 1);
+  /** The cast's territory for the faction tint (decision 101). */
+  readonly territory = new TerritoryTexture();
+  /** Territory tint on (1) or off (0), and its opacity for the sides and for neutral land. */
+  readonly territoryOn = uniform(1);
+  readonly territoryOpacity = uniform(TERRITORY_TINT);
+  readonly neutralOpacity = uniform(NEUTRAL_TINT);
   /** Camera eye, planet-centered (set by the scene each frame): patterns are anchored to the ground. */
   readonly eye = uniform(new Vector3());
   /**
@@ -436,7 +450,26 @@ export class StrategicRelief {
       const riverOn = this.belowGlobe.mul(this.biomeMode);
       const wide = riverWideness(river);
       const riverColor = mix(rgb(RIVER_LINE), rgb(SHELF_FILL), wide);
-      const shadedLand = mix(land.mul(shade), riverColor, riverCoverage(river).mul(riverOn));
+      // Territory tint per faction over dry land, under rivers, weather and night
+      // (decision 101): Part II's faction colors at 22%, neutral land fainter.
+      const held = this.territory.sample(radial);
+      const tintOn = this.territoryOn.mul(this.biomeMode);
+      const sideShare = held.x.add(held.y).max(1e-4);
+      const sideColor = mix(
+        rgb(hexToLinear(FACTION_COLORS.alliance)),
+        rgb(hexToLinear(FACTION_COLORS.pact)),
+        held.y.div(sideShare),
+      );
+      const tinted = mix(
+        mix(
+          land.mul(shade),
+          rgb(hexToLinear(NEUTRAL_COLOR)),
+          held.z.mul(this.neutralOpacity).mul(tintOn),
+        ),
+        sideColor,
+        clamp(held.x.add(held.y), 0, 1).mul(this.territoryOpacity).mul(tintOn),
+      );
+      const shadedLand = mix(tinted, riverColor, riverCoverage(river).mul(riverOn));
       const riverBank = clamp(float(COASTLINE_PX / 2 + 0.5).sub(abs(river.edgePx)), 0, 1);
       const withRivers = mix(shadedLand, water.outlineColor, riverBank.mul(wide).mul(riverOn));
       // Sea ice and lake ice over the water, by the season (decision 87).
@@ -679,6 +712,7 @@ export class StrategicRelief {
     this.material.dispose();
     this.biomeFill.dispose();
     this.habitability.dispose();
+    this.territory.dispose();
     this.coastDistance.dispose();
     this.climate.texture.dispose();
   }

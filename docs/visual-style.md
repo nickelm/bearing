@@ -364,21 +364,22 @@ Planning sorties needs night and weather, so the map always shows both (an owner
   - military features in faction colors.
   The faces, under the SIL Open Font License and bundled from npm: EB Garamond Medium Italic for water, and Fira Sans Medium (Semibold for cities and theater names) for landforms, settlements and theaters. Panels keep the Part I UI typeface.
   Sizes (CSS px): oceans 22, seas 17, bays, straits and lakes 14, rivers 13; continents 19 with wide letter spacing, ranges, deserts, forests and plateaus 13, hills, plains and wetlands 11, islands 12, peaks 11; cities 14, towns 12, villages 10.5; theater names 15. Every style has a halo (`#F4EFE4`, or a pale `#E6EFF2` thinner one for water) so text stays legible over glyphs and the night side (decision 98).
-- **Placement.** Point labels for cities and peaks ("Mount Kessar 1,210 m", with the peak's true height), curved labels along polylines for rivers, ranges, and roads, and widely spaced area labels across deserts, forests, seas, and regions. Point labels try right, left, above and below their anchor; line labels sit at the middle of the visible stretch or at stations either side, never upside down and never bending more than about 30° between letters; area labels spread their letters along the feature's axis to fill about 60% of it, or sit level on the anchor where the axis is short or steep.
+- **Placement.** Point labels for cities and peaks ("Mount Kessar 1,210 m", with the peak's true height), curved labels along polylines for rivers, ranges, and roads, and widely spaced area labels across deserts, forests, seas, and regions. Point labels try right, left, above and below their anchor; theater names sit centered on their anchor, or above or below the front or sea lane they name (decision 101); line labels sit at the middle of the visible stretch or at stations either side, never upside down and never bending more than about 30° between letters; area labels spread their letters along the feature's axis to fill about 60% of it, or sit level on the anchor where the axis is short or steep.
 - **Band content.** Which labels show in which band, with the least importance each needs, is a table in `render/strategic/labels/labelModel.ts`: oceans, continents and theater names at the Globe band; seas, ranges, major deserts, forests, plateaus and rivers, straits, cities and the highest peaks at the Theater band; everything, down to hills, wetlands, towns and villages over 10,000 people, at the Region band (decision 98).
 - **Collision.** A screen-space placement pass, run when the camera settles or changes band, ranks labels by importance and drops those that collide. Labels fade in and out rather than popping. Between passes, placed labels follow the camera with the placement they won.
 - **Rendering.** Signed-distance-field text rendered by the WebGPU pipeline, so text stays sharp at any size: an atlas generated at load time from the font files (opentype.js), drawn as instanced screen-space quads by a TSL shader (decision 98). A single-channel field rounds the sharpest corners only at sizes far above the map's 10–22 px.
 
 ## Military Overlays
 
-- Territory tint per faction.
-- The front line as a bold line with teeth on the attacker's side; defensive lines dashed.
-- Invasion corridors as named arrows.
-- Sea lanes as dashed routes with convoy icons; chokepoints marked.
+- Territory tint per faction: the faction colors at 22% over dry land, under rivers, weather and the night tint; neutral land `#8C8C8C` at 8%. The tint follows the territory that placed bases and towns, and its edge is as soft as the coarse grid; the front line over it is sharp (decision 101).
+- The front line as a bold line with teeth on the attacker's side; defensive lines dashed. The front is 3 px `#2A2A2A` with a 1.5 px pale casing; teeth are 8 px wide and 6 px tall every 20 px, in the attacker's color. Defensive lines are 1.6 px with 14 px dashes.
+- Invasion corridors as named arrows: a 4 px shaft and a 16 px arrowhead in the attacker's color, from the attacker's side across the front, named along the shaft in the attacker's color.
+- Sea lanes as dashed routes with convoy icons; chokepoints marked. Lanes are 2 px with 12 px dashes in the color of the side that sails them; chokepoints are hollow `#2A2A2A` diamonds, larger for a chokepoint theater. Only the lanes and chokepoints in the cast's theaters show; convoy icons wait for convoys.
 - Air defense coverage as faint rings.
 - Formations as NATO-style unit symbols in faction colors; flights as small aircraft icons with heading and short trails; convoys and bases as simple vector icons.
 - Mission routes as thin dashed lines on hover and selection.
 - Every layer can be toggled.
+- **Drawing.** Lines and marks are sized in screen pixels and draped on the relief, with a pale casing (`#F4EFE4`) under each. Dashes and teeth are fixed to the ground: their spacing is the pixel target at the screen center's scale, rounded to a power of two in meters, so they keep their size within a factor of two and never swim. Relief and glyphs never hide an overlay. Territory and front lines show at every band (with a sea-lane theater's own lane); defensive lines, corridors, other lanes and chokepoints from the Theater band down (decision 101).
 
 ## Strategic Palette
 
@@ -427,7 +428,7 @@ Starting values, tuned on the globe. Land colors are lighter, softer versions of
 | Element | Alliance | Pact |
 |---|---|---|
 | Symbols, front teeth, labels | `#2F6FB5` | `#D0532B` |
-| Territory tint | `#2F6FB5` at about 15% | `#D0532B` at about 15% |
+| Territory tint | `#2F6FB5` at about 22% | `#D0532B` at about 22% |
 
 Blue against orange-red stays distinct under protanopia, deuteranopia, and tritanopia; check every overlay against simulated color-vision deficiencies anyway (acceptance check 4). Neutral territory is `#8C8C8C`. The front line itself is `#2A2A2A`.
 

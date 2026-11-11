@@ -115,7 +115,7 @@ The strategic view from [docs/visual-style.md](docs/visual-style.md) Part II: gl
   - [x] Previews were sRGB-encoded twice (too pale); fixed in tests/gpu/renderer.ts (decision 100)
   - [x] Night lights blew out at globe scale; they thin out with scale (decision 100)
   - [ ] Retune hillshade strength, night darkness and cloud opacity without the AgX curve (they were tuned under it)
-  - [ ] Check 1 gaps: territory tint, front lines and theater names wait for S3's strategic overlays; the terminator view moved to 18:30 so the terminator crosses the globe
+  - [ ] Check 1 gaps: territory tint and front lines now exist (S3, decision 101); re-run check 1 on a seed with a front (seed 1983 has none); the terminator view moved to 18:30 so the terminator crosses the globe
   - [ ] Clouds read as blurry fog at the floor (2 km bake): give them a crisper stylized edge band, as printed weather maps do
   - [ ] Mountain glyphs at the Globe band: Part II lists ranges from the Theater band; hide or thin them above 1,500 km (decision 97's Theater set shows at the globe)
   - [ ] Hill mounds at Globe and Theater scale read as scattered dirt dots, some in regular rows; check their spacing and band
@@ -160,7 +160,7 @@ The strategic view from [docs/visual-style.md](docs/visual-style.md) Part II: gl
 - [ ] Range ring distance labels with the label engine
 - [ ] Build the font atlas in a worker if its 0.3 s on the main thread shows as a hitch
 
-### S3. Reading the world (mostly done; old M4)
+### S3. Reading the world (overlays done; tuning and owner review open; old M4)
 
 The strategic graph is the only view of the world that theater detection, casting and the command layer get (decision 52). Generation is unsteered (decision 46).
 
@@ -210,12 +210,16 @@ The strategic graph is the only view of the world that theater detection, castin
 
 #### Strategic overlays (new with decision 72; needs S1 and S2)
 
-- [ ] Territory tint per faction (Part II palette)
-- [ ] Front line as a bold line with teeth on the attacker's side; defensive lines dashed
-- [ ] Invasion corridors as named arrows (names from S2)
-- [ ] Sea lanes as dashed routes; chokepoints marked; theater names at the globe band
+- [x] Territory tint per faction (Part II palette): the placement territory raster kept in `Infrastructure.territory`, a cube-face texture, 22% over dry land, neutral at 8% (decision 101)
+- [x] Front line as a bold line with teeth on the attacker's side; defensive lines dashed (screen-space ribbons fixed to the ground, `overlays/militaryLayer.ts`)
+- [x] Invasion corridors as named arrows (names from S2, labels in the attacker's color)
+- [x] Sea lanes as dashed routes; chokepoints marked; theater names at the globe band (lanes and chokepoints of the cast's theaters only)
 - [ ] Air defense coverage as faint rings (once air defense sites exist)
-- [ ] Layer toggles; the graph debug overlay stays as a developer view
+- [ ] Convoy icons on sea lanes (once convoys exist in the simulation, C track)
+- [x] Layer toggles (GUI → Map → Military overlays); the graph debug overlay stays as a developer view, off by default on the map
+- [ ] Browser check: teeth on the attacker's side and evenly spaced at every band, dashes fixed to the ground while panning, no gaps at line joins, corridor names along their arrows, overlays fading with the bands; tint opacity (Map → Military overlays → Tint opacity; 15% was faint in previews, 22% is the default)
+- [ ] Preview check: `SCENE=strategic SEED=1 VIEWS=front,globe CVD=1` (Part II checks 1 and 4 with overlays); seed 1983 has no front (ring continent, below)
+- [ ] The tint's edge follows the coarse grid (about 40 km) and can sit a cell off the drawn front line at the floor; if it shows, cut the tint along the start line in the shader
 
 #### Tools and review
 

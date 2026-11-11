@@ -19,6 +19,7 @@ import { DEFAULT_PLANET_PARAMS } from './worldgen/params';
 import type { PlanetParams } from './worldgen/params';
 import { GlobeScene } from './render/sim/globeScene';
 import { StrategicScene } from './render/strategic/strategicScene';
+import { OVERLAY_LAYERS } from './render/strategic/overlays/militaryModel';
 import { InfraScene } from './render/sim/infra/infraScene';
 import { VIEW_MODES } from './render/common/globeMesh';
 import type { ViewMode } from './render/common/globeMesh';
@@ -546,7 +547,6 @@ async function main(): Promise<void> {
     campaignParams,
     (c) => {
       globe.strategic.enabled = c.overlay;
-      strategicView.overlay.enabled = c.overlay;
       campaignPanel.visible = c.briefing && campaignParams.seedUsed !== '—';
     },
     {
@@ -620,6 +620,14 @@ async function main(): Promise<void> {
     finish: 1,
     glyphs: true,
     labels: true,
+    territory: true,
+    territoryOpacity: relief.territoryOpacity.value,
+    front: true,
+    defense: true,
+    corridors: true,
+    lanes: true,
+    chokepoints: true,
+    graphDebug: false,
   };
   gui.addMapControls(mapParams, (m) => {
     // The relief applies exaggeration in its shader; the fallback grid globe rebuilds.
@@ -640,6 +648,10 @@ async function main(): Promise<void> {
     strategicView.showRings = m.rangeRings;
     strategicView.showGlyphs = m.glyphs;
     strategicView.showLabels = m.labels;
+    strategicView.showTerritory = m.territory;
+    relief.territoryOpacity.value = m.territoryOpacity;
+    for (const layer of OVERLAY_LAYERS) strategicView.setLayerVisible(layer, m[layer]);
+    strategicView.overlay.enabled = m.graphDebug;
     relief.finish.value = m.finish;
   });
   const lighting = globe.lighting;

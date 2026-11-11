@@ -94,6 +94,17 @@ export interface MapGuiParams {
   glyphs: boolean;
   /** Names on the map (decision 98). */
   labels: boolean;
+  /** Military overlays (decision 101): territory tint and each line and mark layer. */
+  territory: boolean;
+  /** Territory tint opacity for the two sides (0.22 default). */
+  territoryOpacity: number;
+  front: boolean;
+  defense: boolean;
+  corridors: boolean;
+  lanes: boolean;
+  chokepoints: boolean;
+  /** The strategic graph debug overlay on the map (a developer view). */
+  graphDebug: boolean;
 }
 
 export interface LightingGuiParams {
@@ -128,7 +139,7 @@ export interface LightingGuiParams {
 
 /** Campaign folder: the cast summary (read-only) and overlay toggles. */
 export interface CampaignGuiParams {
-  /** Strategic graph overlay on the globe. */
+  /** Strategic graph debug overlay on the simulation view's globe (the map has its own toggle). */
   overlay: boolean;
   /** Briefing panel. */
   briefing: boolean;
@@ -376,6 +387,23 @@ export class DebugGui {
     f.add(map, 'labels')
       .name('Labels')
       .onChange(() => changed(map));
+    const o = f.addFolder('Military overlays');
+    const layers: [keyof MapGuiParams, string][] = [
+      ['territory', 'Territory tint'],
+      ['front', 'Front lines'],
+      ['defense', 'Defensive lines'],
+      ['corridors', 'Invasion corridors'],
+      ['lanes', 'Sea lanes'],
+      ['chokepoints', 'Chokepoints'],
+      ['graphDebug', 'Graph debug overlay'],
+    ];
+    for (const [key, name] of layers)
+      o.add(map, key)
+        .name(name)
+        .onChange(() => changed(map));
+    o.add(map, 'territoryOpacity', 0, 0.6, 0.01)
+      .name('Tint opacity')
+      .onChange(() => changed(map));
     f.close();
   }
 
@@ -439,7 +467,7 @@ export class DebugGui {
   ): void {
     const f = this.folderBeforeStatus('Campaign');
     f.add(params, 'overlay')
-      .name('Strategic graph')
+      .name('Strategic graph (simulation view)')
       .onChange(() => changed(params));
     f.add(params, 'briefing')
       .name('Briefing')

@@ -18,7 +18,7 @@ import type { PlanetParams } from './params';
 import type { World } from './pipeline';
 
 /** Bump whenever generation output changes, so cached worlds are regenerated. */
-export const GENERATOR_VERSION = 9;
+export const GENERATOR_VERSION = 10;
 
 const DB_NAME = 'bearing-worlds';
 const STORE = 'worlds';

@@ -49,6 +49,9 @@ import type { LabelView } from './labels/labelPlacement';
 import type { FontAtlas } from './labels/fontAtlas';
 import { layoutGlyphs } from './glyphLayout';
 import { CubeGrid as FeatureGrid } from '../../core/cubeGrid';
+import { MilitaryLayer } from './overlays/militaryLayer';
+import { buildMilitaryOverlays, OVERLAY_LAYERS } from './overlays/militaryModel';
+import type { MilitaryOverlays, OverlayLayer } from './overlays/militaryModel';
 import { Biome } from '../../worldgen/biomes';
 
 export interface StrategicSceneOptions {
@@ -72,8 +75,12 @@ export class StrategicScene {
   readonly globe: GlobeMesh;
   /** Draw the relief tiles when a terrain world exists (otherwise the cell-grid globe). */
   useTiles = true;
-  /** Strategic graph and cast overlay. */
+  /** Strategic graph debug overlay (a developer view, off by default). */
   readonly overlay: StrategicOverlay;
+  /** Military overlays: front lines, defensive lines, corridors, sea lanes, chokepoints (decision 101). */
+  readonly military: MilitaryLayer;
+  /** The territory tint (GUI toggle; decision 101). */
+  showTerritory = true;
   /** Settlement, base and industry lights on the night side (decision 88). */
   readonly lights: MapLights;
   /** Mountains, hills, forest tokens and dunes (decision 97). */
@@ -117,6 +124,7 @@ export class StrategicScene {
     infra: Infrastructure | null;
   } | null = null;
   private lightsDirty = false;
+  private coarse: CubeGrid | null = null;
   /** Background rim uniforms: planet center relative to the camera, radians per pixel. */
   private readonly planetCenter = uniform(new Vector3());
   private readonly pixelAngle = uniform(0.001);
@@ -138,6 +146,8 @@ export class StrategicScene {
     this.globe = new GlobeMesh(options.grid, options.radius);
     this.globe.setExaggeration(STRATEGIC_EXAGGERATION);
     this.overlay = new StrategicOverlay(options.radius);
+    this.overlay.enabled = false;
+    this.military = new MilitaryLayer(options.radius, { exaggeration: this.relief.exaggeration });
     this.lights = new MapLights(options.radius, this.relief.exaggeration);
     this.glyphs = new GlyphLayer(options.radius, {
       exaggeration: this.relief.exaggeration,
@@ -162,6 +172,7 @@ export class StrategicScene {
       this.glyphs.group,
       this.overlay.group,
       this.lights.group,
+      this.military.group,
     );
     this.overlayScene.add(this.labels.group);
     this.scene.add(this.reliefLight, new AmbientLight(0xffffff, 0.55));
@@ -270,8 +281,43 @@ export class StrategicScene {
     this.overlay.setWorld(graph, cast, infrastructure);
     // Farmland lies on settled land (decision 80).
     this.relief.habitability.set(graph?.habitability ?? null, graph?.resolution ?? 1);
+    // The territory tint (decision 101), on the graph's coarse grid.
+    const territoryGrid = graph && infrastructure ? this.coarseGrid(graph.resolution) : null;
+    this.relief.territory.set(infrastructure?.territory ?? null, territoryGrid);
     this.strategicData = graph ? { graph, cast, infra: infrastructure } : null;
     this.lightsDirty = true;
+  }
+
+  /** The graph's coarse grid (the display grid when they match), built once per resolution. */
+  private coarseGrid(n: number): CubeGrid {
+    if (this.grid.n === n) return this.grid;
+    if (this.coarse?.n !== n) this.coarse = new FeatureGrid(n);
+    return this.coarse;
+  }
+
+  /** The cast's military overlays; the territory raster puts the front's teeth on the attacker's side. */
+  private militaryOverlays(
+    graph: StrategicGraph,
+    cast: Cast | null,
+    infra: Infrastructure | null,
+  ): MilitaryOverlays {
+    const grid = infra ? this.coarseGrid(graph.resolution) : null;
+    const dir = new Vec3d();
+    const territory =
+      infra && grid && infra.territory.length === grid.cellCount
+        ? {
+            ownerAt: (p: Readonly<[number, number, number]>) =>
+              infra.territory[grid.cellOfDirection(dir.set(p[0], p[1], p[2]))]!,
+            cellAngle: Math.PI / 2 / grid.n,
+          }
+        : null;
+    return buildMilitaryOverlays(graph, cast, territory);
+  }
+
+  /** Shows or hides an overlay layer, its labels with it (decision 101). */
+  setLayerVisible(layer: OverlayLayer, on: boolean): void {
+    this.military.visible[layer] = on;
+    this.labels.setHidden(OVERLAY_LAYERS.filter((l) => !this.military.visible[l]));
   }
 
   /** The label fonts' atlas (fontAtlas.ts); labels draw once it is set. */
@@ -318,12 +364,15 @@ export class StrategicScene {
           ),
         );
         this.glyphs.setGlyphs(glyphSets(d.graph, w, grid));
-        this.labels.setLabels(
-          buildLabels(d.graph, d.cast, (p) => w.maps.height[grid.cellOfDirection(dir.set(...p))]!),
-        );
+        const heightAt = (p: Readonly<[number, number, number]>) =>
+          w.maps.height[grid.cellOfDirection(dir.set(p[0], p[1], p[2]))]!;
+        const military = this.militaryOverlays(d.graph, d.cast, d.infra);
+        this.military.setOverlays(military, (p) => Math.max(0, heightAt(p)));
+        this.labels.setLabels(buildLabels(d.graph, d.cast, heightAt, military));
       } else {
         this.lights.setLights(null);
         this.glyphs.setGlyphs(null);
+        this.military.setOverlays(null, () => 0);
         this.labels.setLabels(null);
       }
     }
@@ -397,6 +446,14 @@ export class StrategicScene {
       });
     }
     this.overlay.update(o.eye, this.globe.maxDisplayedHeight + 2000);
+    // Military overlays in CSS pixels, like the labels (decision 101).
+    const cssPixelAngle = fovY / this.viewportHeight;
+    this.relief.territoryOn.value = this.showTerritory ? 1 : 0;
+    this.military.update(o.eye, cssPixelAngle, o.range * cssPixelAngle, {
+      globe: this.bands.fade('globe'),
+      theater: this.bands.fade('theater'),
+      region: this.bands.fade('region'),
+    });
     this.glyphs.group.visible = this.showGlyphs;
     this.glyphs.update(o.eye, {
       theater: this.bands.fade('theater'),
@@ -454,6 +511,7 @@ export class StrategicScene {
     this.globe.dispose();
     this.relief.dispose();
     this.overlay.dispose();
+    this.military.dispose();
     this.lights.dispose();
     this.glyphs.dispose();
     this.labels.dispose();

@@ -112,6 +112,8 @@ export class LabelLayer {
   private readonly atlasNode = texture(new DataTexture(new Uint8Array(1), 1, 1, RedFormat));
   private dirty = true;
   private band: ZoomBand | null = null;
+  /** Overlay layers whose labels are hidden (MapLabel.layer); change through `setHidden`. */
+  private hidden = new Set<string>();
 
   constructor() {
     this.geometry.setAttribute(
@@ -202,6 +204,14 @@ export class LabelLayer {
     this.dirty = true;
   }
 
+  /** Hides the labels of these overlay layers (decision 101); they fade out on the next pass. */
+  setHidden(layers: Iterable<string>): void {
+    const next = new Set(layers);
+    if (next.size === this.hidden.size && [...next].every((l) => this.hidden.has(l))) return;
+    this.hidden = next;
+    this.dirty = true;
+  }
+
   /** Forces a collision pass on the next update. */
   invalidate(): void {
     this.dirty = true;
@@ -231,7 +241,9 @@ export class LabelLayer {
     let fresh: Map<number, Placement> | null = null;
     if (this.dirty && (settled || dt <= 0)) {
       const t0 = performance.now();
-      const active = this.labels.filter((l) => l.bands.includes(band));
+      const active = this.labels.filter(
+        (l) => l.bands.includes(band) && !(l.layer && this.hidden.has(l.layer)),
+      );
       fresh = placeLabels(atlas, active, view, this.placements);
       this.lastPassMs = performance.now() - t0;
       this.placedCount = fresh.size;

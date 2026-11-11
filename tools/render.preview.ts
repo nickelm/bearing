@@ -13,10 +13,10 @@
  *          (on a software adapter only the ratios mean anything),
  *        PROF=<file> also writes a V8 CPU profile of those frames (.cpuprofile),
  *        SCENE=strategic draws the strategic view (StrategicScene, decisions 74, 93) instead,
- *          from STRATEGIC_PREVIEW_VIEWS (globe, night, theater, region, floor, winter, and
- *          sharp at 1920 × 1080), with clouds, tile counts and frame times per view;
+ *          from STRATEGIC_PREVIEW_VIEWS (globe, night, theater, region, floor, front, winter,
+ *          and sharp at 1920 × 1080; front centers on the first front line), with clouds, tile counts and frame times per view;
  *          CVD=1 also writes each image as seen with protanopia, deuteranopia, tritanopia;
- *          OVERLAY=1 adds the graph debug overlay
+ *          OVERLAY=1 adds the graph debug overlay, TINT=x sets the territory tint opacity
  *
  * Output: tools/out/render-<seed>-<view>.png, or render-<seed>-strategic-<view>[-<cvd>].png
  * (gitignored).
@@ -76,7 +76,7 @@ export interface PreviewView {
    * latitude, the densely forested cell nearest the main continent, the
    * largest city, or the first main airbase (milestone 5).
    */
-  target?: 'lake' | 'forest' | 'city' | 'airbase';
+  target?: 'lake' | 'forest' | 'city' | 'airbase' | 'front';
   /** Image size for this view (strategic previews; default W × H). */
   width?: number;
   height?: number;
@@ -248,6 +248,17 @@ export const STRATEGIC_PREVIEW_VIEWS: PreviewView[] = [
     localTime: 10,
   },
   { name: 'floor', dLat: 0, dLon: 0, altitude: 100 * KM, tilt: 0, heading: 0, localTime: 11 },
+  // The military overlays (decision 101) at the Theater band, centered on the first front.
+  {
+    name: 'front',
+    dLat: 0,
+    dLon: 0,
+    altitude: 1100 * KM,
+    tilt: 0,
+    heading: 0,
+    localTime: 11,
+    target: 'front',
+  },
   {
     name: 'winter',
     dLat: 0,
@@ -412,6 +423,7 @@ it('renders preview views', async () => {
     if (sp.population[i]! > sp.population[biggest]!) biggest = i;
   const base = campaign.infrastructure.airbases.find((a) => a.kind === 'main');
   const targets: Record<NonNullable<PreviewView['target']>, Vec3d | null> = {
+    front: null, // strategic previews only
     lake: null,
     forest: null,
     city: sp.cells.length ? new Vec3d(...settlementPoint(sp, biggest)) : null,
@@ -691,10 +703,24 @@ async function renderStrategic(
     scene.relief.buildBudgetMs = 10_000;
     // The graph debug overlay is not part of the map's look; OVERLAY=1 shows it.
     scene.overlay.enabled = process.env.OVERLAY === '1';
+    if (process.env.TINT) scene.relief.territoryOpacity.value = Number(process.env.TINT);
     for (const v of group) {
       const cam = scene.orbit;
       cam.lat = lat0 + v.dLat;
       cam.lon = lon0 + v.dLon;
+      if (v.target === 'front') {
+        // The middle of the first continental front's start line.
+        const g = campaign.graph;
+        const t = campaign.campaign.cast.theaters.find((x) => x.kind === 'continental-front');
+        const line = t ? g.barrierLines[g.fronts[t.front!]!.start] : undefined;
+        if (line) {
+          const i = Math.floor(line.points.length / 6);
+          const p = line.points.subarray(i * 3, i * 3 + 3);
+          cam.lat = Math.asin(p[1]!) + v.dLat;
+          cam.lon = Math.atan2(p[0]!, p[2]!) + v.dLon;
+        } else
+          console.log(`strategic ${v.name}: no continental front; centered on the main continent`);
+      }
       cam.altitude = cam.targetAltitude = v.altitude;
       cam.heading = v.heading;
       // The sun, season and weather at the view's local time and day.
