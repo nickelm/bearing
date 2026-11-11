@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–80 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–81 are reflected in both.
 
 ---
 
@@ -1330,3 +1330,15 @@ The owner's amendment and the engineering calls made while adopting it:
 - **Toggle.** GUI → Map (strategic view) → Patterns turns stipple and farmland off for comparison.
 
 **Reason:** Purely screen-space patterns would slide over the terrain while panning, and purely world-space ones would shrink to noise or grow to blobs with zoom. Choosing the period per fragment from its footprint gives both: anchored marks at a constant apparent size, as on printed maps redrawn for each scale.
+
+### 81. The remaining map patterns, with biome masks and per-pattern branches
+
+**Date:** 2026-11-11
+**Decision:** `render/strategic/patterns.ts` adds the rest of Part II's patterns on decision 80's screen-stable scheme:
+
+- **Shapes.** Steep-rock hatching: diagonal one-pixel lines every 5 px, Part II `#7E766D`, wherever the steep-rock blend is on. Dune ripples: parallel lines every 9 px, wobbling sideways by 0.15 of the spacing, `#C9AA7A`. Tundra tussocks: dots of radius 0.2 of a 7 px spacing in 55% of cells, `#99957C`. Ice-cap cracks: one-pixel lines along the edges of jittered cells about 28 px across, measured as the exact distance to the bisector between the nearest cell point and each neighbor, `#C9D3D8`. Wetland reeds: short horizontal dashes every 10 px in 70% of cells, `#6F8366`. Lines whose periods nest (hatching) fade by dropping the finer lines; the rest crossfade between the two periods.
+- **Masks.** A second cube-face texture (RGBA8, blended and dilated like the fills by the same routine) holds the share of hot desert, tundra, ice sheet and wetland per texel. Only hot deserts get ripples: Part II asks for them on sand deserts, and cold deserts are mostly gravel and rock. The wetland channel is 0, since the world has no wetland biome; the reeds and the wetland fill wait for data that marks wetlands (TODO).
+- **Branches.** Each pattern runs inside a branch on its own mask. The pixel footprint is computed first, in uniform control flow, and no pattern takes derivatives, so the branches are safe. A pixel pays only for the patterns present there; the cracks, with their 34 cell lookups per period, run only on ice caps.
+- **Check.** The CPU references of all seven patterns were drawn to a test image before the shader was wired. The first crack version, which used half the difference of the two nearest distances, left wedges at cell corners; the exact bisector distance replaced it.
+
+**Reason:** These complete the base map's pattern set in one framework. Masks blended like the fills keep pattern edges as soft as the color edges, and branching keeps the most expensive patterns from costing anything outside their biomes.

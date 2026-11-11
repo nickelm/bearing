@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  crackCoverage,
+  duneCoverage,
+  hatchCoverage,
+  reedCoverage,
+  REED_HALF_LENGTH,
+  REED_SHARE,
+  tussockCoverage,
+  TUSSOCK_RADIUS,
+  TUSSOCK_SHARE,
   GRID_LINE_PX,
   gridCoverage,
   hash12,
@@ -66,5 +75,43 @@ describe('pattern shapes', () => {
     const steps = 6400;
     for (let i = 0; i < steps; i++) sum += gridCoverage((i * 10 * P) / steps, 0.5 * P, P, f);
     expect(sum / steps).toBeCloseTo((GRID_LINE_PX * f) / P, 2);
+  });
+});
+
+describe('biome and rock patterns', () => {
+  /** Mean coverage over a patch, with a 1 m footprint and a 64 m period. */
+  const mean = (cov: (x: number, y: number, p: number, f: number) => number) => {
+    let sum = 0;
+    let n = 0;
+    // About 90,000 samples over 30 × 30 periods, off any grid alignment.
+    for (let y = 0; y < 1920; y += 6.3)
+      for (let x = 0; x < 1920; x += 6.7) {
+        const c = cov(x - 7e5, y + 2e5, 64, 1);
+        expect(c).toBeGreaterThanOrEqual(0);
+        expect(c).toBeLessThanOrEqual(1);
+        sum += c;
+        n++;
+      }
+    return sum / n;
+  };
+
+  it('draws one-pixel lines: hatching, dune ripples and ice cracks', () => {
+    // A one-pixel line every period covers 1/64 of the plane.
+    expect(mean(hatchCoverage)).toBeCloseTo(1 / 64, 2);
+    const dunes = mean(duneCoverage);
+    expect(dunes).toBeGreaterThan(1 / 64);
+    expect(dunes).toBeLessThan(1.5 / 64);
+    // Cell edges: about two lines' worth per period.
+    const cracks = mean(crackCoverage);
+    expect(cracks).toBeGreaterThan(1 / 64);
+    expect(cracks).toBeLessThan(3.5 / 64);
+  });
+
+  it('scatters tussocks and reeds over the share of cells they claim', () => {
+    expect(mean(tussockCoverage)).toBeCloseTo(TUSSOCK_SHARE * Math.PI * TUSSOCK_RADIUS ** 2, 1);
+    const reeds = mean(reedCoverage);
+    const dash = (REED_SHARE * 2 * REED_HALF_LENGTH * 64) / 64 ** 2;
+    expect(reeds).toBeGreaterThan(0.6 * dash);
+    expect(reeds).toBeLessThan(1.6 * dash);
   });
 });

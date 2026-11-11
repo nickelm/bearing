@@ -25,6 +25,7 @@ import {
   HalfFloatType,
   LinearFilter,
   RGBAFormat,
+  UnsignedByteType,
 } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import { int, texture } from 'three/tsl';
@@ -95,6 +96,36 @@ const FILL_LINEAR = STRATEGIC_BIOME_FILL.map((h, b) =>
  * face edge, at `n / factor` texels per face edge.
  */
 export function biomeFillTexels(biome: Uint8Array, n: number, factor = 2): Float32Array {
+  return blendBiomeChannels(biome, n, factor, FILL_LINEAR, [...hexToLinear(FALLBACK), 0]);
+}
+
+/**
+ * Pattern masks per biome (decision 81): R hot (sand) desert, G tundra, B ice
+ * sheet, A wetland. The world has no wetland biome yet, so A stays 0 until data
+ * marks wetlands.
+ */
+const MASKS: readonly (readonly number[] | null)[] = STRATEGIC_BIOME_FILL.map((h, b) =>
+  h === null
+    ? null
+    : [b === Biome.HotDesert ? 1 : 0, b === Biome.Tundra ? 1 : 0, b === Biome.IceSheet ? 1 : 0, 0],
+);
+
+/** Blended pattern masks (see MASKS), 0..1, at `n / factor` texels per face edge. */
+export function biomeMaskTexels(biome: Uint8Array, n: number, factor = 2): Float32Array {
+  return blendBiomeChannels(biome, n, factor, MASKS, [0, 0, 0, 0]);
+}
+
+/**
+ * Four channels per biome, averaged over the land cells of each texel, tent-filtered
+ * and dilated out to sea (see the header); `fallback` where no land is near.
+ */
+function blendBiomeChannels(
+  biome: Uint8Array,
+  n: number,
+  factor: number,
+  table: readonly (readonly number[] | null)[],
+  fallback: readonly number[],
+): Float32Array {
   const m = Math.max(1, Math.floor(n / factor));
   const T = 6 * m * m;
   // 1. Land-weighted sums per texel.
@@ -104,7 +135,7 @@ export function biomeFillTexels(biome: Uint8Array, n: number, factor = 2): Float
     for (let j = 0; j < n; j++) {
       const J = Math.min(m - 1, Math.floor(j / factor));
       for (let i = 0; i < n; i++) {
-        const c = FILL_LINEAR[biome[(face * n + j) * n + i]!];
+        const c = table[biome[(face * n + j) * n + i]!];
         if (!c) continue;
         const I = Math.min(m - 1, Math.floor(i / factor));
         const t = (face * m + J) * m + I;
@@ -180,7 +211,6 @@ export function biomeFillTexels(biome: Uint8Array, n: number, factor = 2): Float
     }
     known.set(next);
   }
-  const fallback = [...hexToLinear(FALLBACK), 0];
   for (let t = 0; t < T; t++) {
     if (known[t]) continue;
     for (let ch = 0; ch < 4; ch++) rgba[t * 4 + ch] = fallback[ch]!;
@@ -191,10 +221,13 @@ export function biomeFillTexels(biome: Uint8Array, n: number, factor = 2): Float
 /** The blended fill as a cube-face texture array. */
 export class BiomeFillTexture {
   readonly texture: DataArrayTexture;
+  /** Pattern masks (biomeMaskTexels), RGBA8. */
+  readonly masks: DataArrayTexture;
   private m = 1;
 
   constructor() {
     this.texture = BiomeFillTexture.make(1);
+    this.masks = BiomeFillTexture.makeMasks(1);
     const g = hexToLinear(FALLBACK);
     this.fill(new Float32Array(6 * 4).map((_, i) => [g[0], g[1], g[2], 0][i % 4]!));
   }
@@ -203,6 +236,18 @@ export class BiomeFillTexture {
     const t = new DataArrayTexture(new Uint16Array(6 * m * m * 4), m, m, 6);
     t.format = RGBAFormat;
     t.type = HalfFloatType;
+    t.magFilter = LinearFilter;
+    t.minFilter = LinearFilter;
+    t.wrapS = ClampToEdgeWrapping;
+    t.wrapT = ClampToEdgeWrapping;
+    t.generateMipmaps = false;
+    return t;
+  }
+
+  private static makeMasks(m: number): DataArrayTexture {
+    const t = new DataArrayTexture(new Uint8Array(6 * m * m * 4), m, m, 6);
+    t.format = RGBAFormat;
+    t.type = UnsignedByteType;
     t.magFilter = LinearFilter;
     t.minFilter = LinearFilter;
     t.wrapS = ClampToEdgeWrapping;
@@ -225,8 +270,14 @@ export class BiomeFillTexture {
       this.m = m;
       this.texture.dispose();
       this.texture.image = { data: new Uint16Array(6 * m * m * 4), width: m, height: m, depth: 6 };
+      this.masks.dispose();
+      this.masks.image = { data: new Uint8Array(6 * m * m * 4), width: m, height: m, depth: 6 };
     }
     this.fill(biomeFillTexels(biome, n, factor));
+    const bytes = this.masks.image.data as Uint8Array;
+    const masks = biomeMaskTexels(biome, n, factor);
+    for (let i = 0; i < masks.length; i++) bytes[i] = Math.round(masks[i]! * 255);
+    this.masks.needsUpdate = true;
   }
 
   /** Linear land fill (rgb) and farmability (a) at a direction. */
@@ -235,7 +286,14 @@ export class BiomeFillTexture {
     return texture(this.texture, uv).depth(face).level(int(0)) as Node<'vec4'>;
   }
 
+  /** Pattern masks at a direction: desert, tundra, ice, wetland (0..1). */
+  sampleMasks(dir: V3): Node<'vec4'> {
+    const { face, uv } = cubeFaceUv(dir);
+    return texture(this.masks, uv).depth(face).level(int(0)) as Node<'vec4'>;
+  }
+
   dispose(): void {
     this.texture.dispose();
+    this.masks.dispose();
   }
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { Biome } from '../src/worldgen/biomes';
 import {
   biomeFillTexels,
+  biomeMaskTexels,
   hexToLinear,
   STRATEGIC_BIOME_FILL,
 } from '../src/render/strategic/biomeFill';
@@ -88,5 +89,21 @@ describe('strategic biome fill', () => {
     expect(alpha(M - 1)).toBeCloseTo(0, 6);
     expect(alpha(M / 2)).toBeGreaterThan(0);
     expect(alpha(M / 2)).toBeLessThan(1);
+  });
+
+  it('masks sand desert, tundra and ice for their patterns', () => {
+    for (const [b, mask] of [
+      [Biome.HotDesert, [1, 0, 0, 0]],
+      [Biome.Tundra, [0, 1, 0, 0]],
+      [Biome.IceSheet, [0, 0, 1, 0]],
+      [Biome.ColdDesert, [0, 0, 0, 0]],
+      [Biome.Taiga, [0, 0, 0, 0]],
+    ] as const) {
+      const t = biomeMaskTexels(
+        map(() => b),
+        N,
+      );
+      expect(Array.from(t.slice(0, 4))).toEqual(mask.map((x) => expect.closeTo(x, 6)));
+    }
   });
 });

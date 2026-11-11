@@ -20,8 +20,9 @@
  * - **Palette.** Land takes the Part II biome fills from a blended cube-face texture
  *   (biomeFill.ts, decision 79), with steep rock on steep displayed slopes. The sea is
  *   one flat water color until the water task of S1.
- * - **Patterns.** Forest stipple and farmland with its field grid (patterns.ts,
- *   decision 80), anchored to the ground and sized on screen.
+ * - **Patterns.** Forest stipple and farmland with its field grid (decision 80), dune
+ *   ripples, tundra tussocks, ice cracks, wetland reeds and steep-rock hatching
+ *   (decision 81), all from patterns.ts, anchored to the ground and sized on screen.
  *
  * Geomorphing works as in the terrain renderer, so splits do not pop.
  */
@@ -34,9 +35,12 @@ import {
   MeshBasicNodeMaterial,
   Vector3,
 } from 'three/webgpu';
+import type { Node } from 'three/webgpu';
 import {
   attribute,
+  float,
   Fn,
+  If,
   fwidth,
   length,
   max,
@@ -60,7 +64,16 @@ import { MAX_BAKED_LEVEL } from '../../worldgen/gpu/tileSynth';
 import { placeCameraRelative } from '../common/cameraRelative';
 import { HabitabilityTexture } from '../common/habitabilityTexture';
 import { BiomeFillTexture, hexToLinear, STEEP_ROCK_FILL } from './biomeFill';
-import { gridNode, planeCoordsNode, stippleNode } from './patterns';
+import {
+  crackNode,
+  duneNode,
+  gridNode,
+  hatchNode,
+  planeCoordsNode,
+  reedNode,
+  stippleNode,
+  tussockNode,
+} from './patterns';
 import { DEFAULT_HILLSHADE, hillshadeNode } from './hillshade';
 import { DEFAULT_LOD, selectTiles } from '../common/terrain/quadtree';
 import type { LodOptions, LodView } from '../common/terrain/quadtree';
@@ -92,6 +105,12 @@ const FARM_LINE = hexToLinear(0xb3a066);
  * colors are about 0.78 of their fills in sRGB for all three forest rows.
  */
 const STIPPLE_DARKEN = 0.58;
+/** Part II pattern marks (decision 81): dune ripples, tussocks, ice cracks, reeds, rock hatching. */
+const DUNE_MARK = hexToLinear(0xc9aa7a);
+const TUSSOCK_MARK = hexToLinear(0x99957c);
+const CRACK_MARK = hexToLinear(0xc9d3d8);
+const REED_MARK = hexToLinear(0x6f8366);
+const HATCH_MARK = hexToLinear(0x7e766d);
 /** Placeholder sea color until the water task: Part II mid-depth water. */
 const WATER = new Color('#6C97AC');
 
@@ -221,12 +240,39 @@ export class StrategicRelief {
       const settled = smoothstep(0.25, 0.45, this.habitability.sample(radial));
       const farm = settled.mul(fill.a).mul(forestCover.oneMinus()).mul(open).toVar();
       const fields = mix(fill.rgb, rgb(FARM_FILL), farm);
-      const grid = gridNode(plane, footprint).mul(farm).mul(this.gridVisibility);
+      // Each pattern runs only where its mask is on: no derivatives below this point,
+      // so branching per fragment is safe, and most pixels pay for one pattern or none.
+      const masked = (mask: Node<'float'>, pattern: () => Node<'float'>) => {
+        const out = float(0).toVar();
+        If(mask.greaterThan(1e-3), () => {
+          out.assign(pattern().mul(mask));
+        });
+        return out;
+      };
+      const grid = masked(farm.mul(this.gridVisibility), () => gridNode(plane, footprint));
       const farmed = mix(fields, rgb(FARM_LINE), grid);
       // Forest stipple: darker dots of the canopy color, at every band.
-      const dots = stippleNode(plane, footprint).mul(forestCover).mul(open);
+      const dots = masked(forestCover.mul(open), () => stippleNode(plane, footprint));
       const stippled = mix(farmed, farmed.mul(STIPPLE_DARKEN), dots);
-      const mapLand = mix(stippled, rock, steep);
+      // Biome patterns by the blended masks (decision 81): dune ripples on sand desert,
+      // tussocks on tundra, cracks on ice caps, reeds on wetlands.
+      const masks = this.biomeFill.sampleMasks(radial);
+      const dunes = masked(masks.x.mul(open), () => duneNode(plane, footprint));
+      const tussocks = masked(masks.y.mul(open), () => tussockNode(plane, footprint));
+      const cracks = masked(masks.z.mul(open), () => crackNode(plane, footprint));
+      const reeds = masked(masks.w.mul(open), () => reedNode(plane, footprint));
+      const marked = mix(
+        mix(
+          mix(mix(stippled, rgb(DUNE_MARK), dunes), rgb(TUSSOCK_MARK), tussocks),
+          rgb(CRACK_MARK),
+          cracks,
+        ),
+        rgb(REED_MARK),
+        reeds,
+      );
+      // Steep rock with its hatching.
+      const hatch = masked(steep.mul(this.patterns), () => hatchNode(plane, footprint));
+      const mapLand = mix(mix(marked, rock, steep), rgb(HATCH_MARK), hatch);
       const land = mix(attribute('color', 'vec3'), mapLand, this.biomeMode);
       // Water: at sea, and in lakes; flat, no relief light.
       const wet = max(step(rawHeight, 0), step(0, lakeDepth)).mul(this.biomeMode);
