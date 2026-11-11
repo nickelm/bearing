@@ -2,7 +2,7 @@
  * Cartographic hillshade for the strategic map (visual-style Part II, Base Map;
  * decision 78).
  *
- * - **Light.** From the screen's upper left, at `elevation` (45°) above the local
+ * - **Light.** From the screen's upper left, at `elevation` (20° by default) above the local
  *   ground, everywhere on the globe: the light's horizontal part is the screen's
  *   up-left direction projected onto the tangent plane at each point. It turns with
  *   the camera and never with the sun, so ranges always read the same way.
@@ -23,10 +23,10 @@ import type { Node } from 'three/webgpu';
 import { DEG } from '../../core/units';
 import { Vec3d } from '../../core/vec3d';
 
-/** Cartographic convention: the light 45° above the ground. */
-export const HILLSHADE_ELEVATION = 45 * DEG;
-/** Above 1 to make the 4× relief read more strongly (owner: relief looked subtle). */
-export const HILLSHADE_STRENGTH = 1.5;
+/** A low light, 20° above the ground (owner's choice; cartographic convention is 45°). */
+export const HILLSHADE_ELEVATION = 20 * DEG;
+/** Twice the plain factor: the owner's choice, so the 4× relief reads strongly. */
+export const HILLSHADE_STRENGTH = 2;
 export const HILLSHADE_AMBIENT = 0.3;
 /** Brightest a lit slope gets, relative to flat ground. */
 export const HILLSHADE_MAX = 1.35;

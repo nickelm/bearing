@@ -83,7 +83,8 @@ The strategic view from [docs/visual-style.md](docs/visual-style.md) Part II: gl
   - [ ] Share tile data between the two views' caches, or extract the common tile-set logic of `TerrainRenderer` and `StrategicRelief` (duplicated selection, build and eviction loop)
 - [x] Cartographic hillshade: a light fixed at the screen's upper left (view-space direction) on the 4× normals, plus soft ambient; decide between a bake and per-fragment shading and log it; no physical sky or aerial perspective in this scene (decision 78: per fragment)
   - [ ] Owner: tune GUI → Map (strategic view) → Hillshade strength, Light elevation, Shadow floor and Relief exaggeration in the browser; fold the chosen values into the defaults
-- [ ] Strategic biome palette (Part II) and biome boundary blending over a few kilometers
+- [x] Strategic biome palette (Part II) and biome boundary blending over a few kilometers (decision 79)
+  - [ ] Farmland, wetland and urban fills once data marks them (farmland from habitability or settlements, S4)
 - [ ] Pattern framework: procedural shader patterns with screen-stable scaling per band; forest stipple and farmland grid first
 - [ ] Remaining patterns: desert dune ripples, tundra tussocks, steep-slope rock hatching, wetland reeds, ice-cap cracks
 - [ ] Water: flat depth bands, a thin dark coastline outline (reuse the coast distance of decision 39), lakes

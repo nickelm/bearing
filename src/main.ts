@@ -331,6 +331,8 @@ async function main(): Promise<void> {
         seed: params.seed,
         radius: params.radius,
         reliefScale: params.reliefScale,
+        biome: global.finish.biome,
+        biomeResolution: global.n,
       });
       if (old || oldSynth) {
         setTimeout(() => {

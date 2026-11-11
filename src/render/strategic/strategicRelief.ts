@@ -15,9 +15,11 @@
  * - **Its own caches.** TileData and meshes are cached apart from the simulation
  *   view's, with a smaller budget; only the active view loads tiles.
  * - **Shading.** The cartographic hillshade (hillshade.ts, decision 78) on the 4×
- *   normals, per fragment: flat ground keeps the vertex color, slopes brighten or
- *   darken by the screen's upper-left light. The sea is one flat water color until the
- *   palette and water tasks of S1.
+ *   normals, per fragment: flat ground keeps its fill color, slopes brighten or
+ *   darken by the screen's upper-left light.
+ * - **Palette.** Land takes the Part II biome fills from a blended cube-face texture
+ *   (biomeFill.ts, decision 79), with steep rock on steep displayed slopes. The sea is
+ *   one flat water color until the water task of S1.
  *
  * Geomorphing works as in the terrain renderer, so splits do not pop.
  */
@@ -30,7 +32,19 @@ import {
   MeshBasicNodeMaterial,
   Vector3,
 } from 'three/webgpu';
-import { attribute, Fn, max, mix, normalize, positionLocal, step, uniform, vec3 } from 'three/tsl';
+import {
+  attribute,
+  Fn,
+  length,
+  max,
+  mix,
+  normalize,
+  positionLocal,
+  smoothstep,
+  step,
+  uniform,
+  vec3,
+} from 'three/tsl';
 import { Noise3 } from '../../core/noise';
 import { rng } from '../../core/rng';
 import type { WorldSeed } from '../../core/rng';
@@ -40,6 +54,7 @@ import { Vec3d } from '../../core/vec3d';
 import type { TileData, TileSynthesizer } from '../../worldgen/gpu/tileSynth';
 import { MAX_BAKED_LEVEL } from '../../worldgen/gpu/tileSynth';
 import { placeCameraRelative } from '../common/cameraRelative';
+import { BiomeFillTexture, hexToLinear, STEEP_ROCK_FILL } from './biomeFill';
 import { DEFAULT_HILLSHADE, hillshadeNode } from './hillshade';
 import { DEFAULT_LOD, selectTiles } from '../sim/terrain/quadtree';
 import type { LodOptions, LodView } from '../sim/terrain/quadtree';
@@ -71,6 +86,9 @@ export interface StrategicReliefWorld {
   seed: WorldSeed;
   radius: number;
   reliefScale: number;
+  /** Biome per global cell and the global grid's cells per face edge, for the map palette. */
+  biome: Uint8Array;
+  biomeResolution: number;
 }
 
 export interface StrategicReliefStats {
@@ -109,7 +127,10 @@ export class StrategicRelief {
 
   private world: StrategicReliefWorld | null = null;
   private mode: TileViewMode = 'biome';
-  private readonly waterEnabled = uniform(1);
+  /** 1 in the biome view (map palette and water), 0 in debug color modes. */
+  private readonly biomeMode = uniform(1);
+  /** Part II land fills by direction, blended across biome boundaries (decision 79). */
+  readonly biomeFill = new BiomeFillTexture();
   private detail = new Noise3(rng(0, 'render-detail'));
   private readonly index = new BufferAttribute(buildTileIndex(), 1);
   private readonly material: MeshBasicNodeMaterial;
@@ -158,10 +179,16 @@ export class StrategicRelief {
     // Meshes carry no rotation or scale: object space is world space.
     const normal = normalize(up.sub(attribute('slope', 'vec3').mul(ex)));
     const radial = normalize(up);
+    const slope = attribute('slope', 'vec3');
+    const rock = hexToLinear(STEEP_ROCK_FILL);
     material.colorNode = Fn(() => {
-      const land = attribute('color', 'vec3');
+      // Map palette: the blended biome fill, and steep rock where the displayed (4×)
+      // slope passes about 31° to 45° (decision 79). Debug modes keep the vertex colors.
+      const steep = smoothstep(0.6, 1.0, length(slope).mul(ex));
+      const mapLand = mix(this.biomeFill.sample(radial), vec3(rock[0], rock[1], rock[2]), steep);
+      const land = mix(attribute('color', 'vec3'), mapLand, this.biomeMode);
       // Water: at sea, and in lakes; flat, no relief light.
-      const wet = max(step(rawHeight, 0), step(0, lakeDepth)).mul(this.waterEnabled);
+      const wet = max(step(rawHeight, 0), step(0, lakeDepth)).mul(this.biomeMode);
       const shade = hillshadeNode(normal, radial, {
         right: this.screenRight,
         up: this.screenUp,
@@ -182,6 +209,7 @@ export class StrategicRelief {
   /** Shows a world (or nothing). Drops all cached tiles. */
   setWorld(world: StrategicReliefWorld | null): void {
     this.world = world;
+    if (world) this.biomeFill.setBiomes(world.biome, world.biomeResolution);
     this.detail = new Noise3(rng(world?.seed ?? 0, 'render-detail'));
     this.data.clear();
     this.meshes.clear();
@@ -192,7 +220,7 @@ export class StrategicRelief {
   setMode(mode: TileViewMode): void {
     if (mode === this.mode) return;
     this.mode = mode;
-    this.waterEnabled.value = mode === 'biome' ? 1 : 0;
+    this.biomeMode.value = mode === 'biome' ? 1 : 0;
     this.meshes.clear();
     this.visible.clear();
   }
@@ -316,5 +344,6 @@ export class StrategicRelief {
   dispose(): void {
     this.setWorld(null);
     this.material.dispose();
+    this.biomeFill.dispose();
   }
 }

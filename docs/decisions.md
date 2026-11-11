@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–78 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–79 are reflected in both.
 
 ---
 
@@ -1303,3 +1303,16 @@ The owner's amendment and the engineering calls made while adopting it:
 - There is no physical sky, aerial perspective or sun lighting in this scene. Day and night come later as their own map treatment (Part II).
 
 **Reason:** Cartographic hillshades (Imhof; the 315°, 45° convention of GIS tools) shade relief relative to a flat plane so that the map's colors stay true and only form reads as light and shadow. Doing it per point on a sphere keeps that property at globe scale.
+
+### 79. Strategic biome palette from a blended fill texture; owner's hillshade defaults
+
+**Date:** 2026-11-11
+**Decision:** The strategic relief takes its land colors from `render/strategic/biomeFill.ts`:
+
+- **Fills.** Each biome maps to a Part II fill. Taiga takes conifer; temperate forest and tropical seasonal forest take temperate forest; temperate and tropical rainforest take rainforest; hot and cold desert take desert; alpine takes steep rock; ice sheet takes snow and ice. Shrubland has no row in the guide and takes the midpoint of grassland and savanna (`#B3B27B`). Sea biomes have no fill. The guide's farmland, wetland and urban rows wait for data that marks them.
+- **Blend.** A cube-face texture array (half-float, linear RGB) at half the global grid's resolution, two cells per texel (about 3 km at 1024²), holds each texel's land-weighted mean fill. A 3 × 3 tent filter within each face widens the blend to about 9 km, and the shader samples it bilinearly by direction. Sea cells carry no weight, so coasts keep their land color, and four dilation passes carry land colors out to sea so bilinear filtering never mixes in a sea color. The filter does not cross cube seams; at 9 km the fills are smooth enough that the step there is slight. The texture costs about 12 MB at 1024².
+- **Steep rock.** The shader blends in the steep-rock fill where the displayed (4×) slope rises from tan 0.6 to 1.0 (31° to 45°).
+- **Per-vertex colors** stay for the debug color modes (height, tile level, borders, forest).
+- **Hillshade defaults** (amending decision 78, after the owner's tuning in the browser): strength 2 and light elevation 20°. The low light lengthens the shading on gentle slopes; the clamp at 1.35 caps lit faces.
+
+**Reason:** The tiles store one biome per sample from the global grid, so per-vertex colors step at the 1.5 km cell size and blur only by vertex interpolation, which changes with the tile level. A fill texture sampled by direction gives the same blended boundary at every zoom, and costs one texture fetch per fragment.

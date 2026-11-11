@@ -269,7 +269,7 @@ Civilization VI screenshots and Cold War operational maps (NATO planning maps, 1
 ## Base Map
 
 - **Relief.** A cube-sphere mesh displaced from the world's heights with 4× vertical exaggeration (tunable), and a moderate quadtree so the floor stays sharp: the terrain tiles capped at level 6, vertices about 380 m apart (decision 77).
-- **Hillshade.** A fixed light from the upper left of the screen, following cartographic convention, plus soft ambient light. The relief light never moves with the sun, so ranges always read the same way. It stands 45° above the local ground at every point of the globe, and shading is relative to flat ground, so flat land keeps its palette color everywhere and only slopes brighten or darken (decision 78).
+- **Hillshade.** A fixed light from the upper left of the screen, following cartographic convention, plus soft ambient light. The relief light never moves with the sun, so ranges always read the same way. It stands low, 20° above the local ground, at every point of the globe, and shading is relative to flat ground at twice the plain strength, so flat land keeps its palette color everywhere and slopes brighten or darken strongly (decisions 78, 79).
 - **Biome painting.** A softened, illustrative version of the biome palette (see *Strategic Palette*), with a procedural pattern per biome generated in the shader:
   - stippled canopy for forests;
   - dune ripples for sand deserts;
@@ -329,7 +329,7 @@ Planning sorties needs night and weather, so the map always shows both (an owner
 
 ## Strategic Palette
 
-Starting values, tuned on the globe. Land colors are lighter, softer versions of Part I's terrain shades.
+Starting values, tuned on the globe. Land colors are lighter, softer versions of Part I's terrain shades. The world's biomes map onto these rows: taiga takes the conifer fill, temperate and tropical seasonal forest the temperate-forest fill, temperate and tropical rainforest the rainforest fill, hot and cold deserts the desert fill, alpine terrain and displayed slopes steeper than about 31° to 45° the steep-rock fill, and ice sheets the snow fill. Shrubland, which has no row, takes the midpoint of grassland and savanna. Fills blend across biome boundaries over about 9 km (decision 79).
 
 ### Land and Water
 

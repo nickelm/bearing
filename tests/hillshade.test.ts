@@ -48,12 +48,12 @@ describe('cartographic hillshade', () => {
     }
   });
 
-  it('puts the light 45° above the ground, toward the screen upper left', () => {
+  it('puts the light at its elevation above the ground, toward the screen upper left', () => {
     const { o, right, up } = camera(3000 * KM);
     const r = latLonToDirection(o.lat, o.lon, new Vec3d());
     const L = hillshadeLight(r, right, up, DEFAULT_HILLSHADE.elevation);
     expect(L.length()).toBeCloseTo(1, 12);
-    expect(L.dot(r)).toBeCloseTo(Math.sin(45 * DEG), 12);
+    expect(L.dot(r)).toBeCloseTo(Math.sin(DEFAULT_HILLSHADE.elevation), 12);
     // Its horizontal part points up the screen and to the left.
     expect(L.dot(up)).toBeGreaterThan(0);
     expect(L.dot(right)).toBeLessThan(0);
@@ -62,20 +62,26 @@ describe('cartographic hillshade', () => {
   it('brightens slopes facing the light and darkens those facing away, within bounds', () => {
     const { o, right, up } = camera(STRATEGIC_FLOOR, 0.7);
     const r = latLonToDirection(o.lat, o.lon, new Vec3d());
-    const upLeft = up.clone().sub(right);
-    const downRight = right.clone().sub(up);
-    const lit = hillshade(tilted(r, upLeft, 30 * DEG), r, right, up);
-    const shadow = hillshade(tilted(r, downRight, 30 * DEG), r, right, up);
-    const side = hillshade(tilted(r, up.clone().add(right), 30 * DEG), r, right, up);
+    // Directions on the ground: toward the light, away from it, and across it.
+    const L = hillshadeLight(r, right, up, DEFAULT_HILLSHADE.elevation);
+    const toward = L.clone().addScaled(r, -L.dot(r));
+    const away = toward.clone().scale(-1);
+    const across = r.clone().cross(toward);
+    const lit = hillshade(tilted(r, toward, 30 * DEG), r, right, up);
+    const shadow = hillshade(tilted(r, away, 30 * DEG), r, right, up);
+    const side = hillshade(tilted(r, across, 30 * DEG), r, right, up);
     expect(lit).toBeGreaterThan(1.2);
     expect(lit).toBeLessThanOrEqual(HILLSHADE_MAX);
     expect(shadow).toBeLessThan(0.6);
     expect(shadow).toBeGreaterThanOrEqual(DEFAULT_HILLSHADE.ambient);
+    // The light still comes from the screen's upper left.
+    expect(toward.dot(up)).toBeGreaterThan(0);
+    expect(toward.dot(right)).toBeLessThan(0);
     // A slope across the light is a little darker than flat (it faces away from the zenith).
     expect(side).toBeLessThan(1);
     expect(side).toBeGreaterThan(shadow);
     // A cliff facing away never goes below the shadow floor.
-    expect(hillshade(tilted(r, downRight, 85 * DEG), r, right, up)).toBe(DEFAULT_HILLSHADE.ambient);
+    expect(hillshade(tilted(r, away, 85 * DEG), r, right, up)).toBe(DEFAULT_HILLSHADE.ambient);
   });
 
   it('scales with strength: 0 is flat everywhere', () => {
