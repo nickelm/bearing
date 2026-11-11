@@ -44,11 +44,12 @@ import {
   vec3,
   vec4,
 } from 'three/tsl';
-import { directionToCubeFace } from '../../core/coords';
-import type { CubeFaceUv } from '../../core/coords';
-import { Noise3 } from '../../core/noise';
-import { rng } from '../../core/rng';
-import type { WorldSeed } from '../../core/rng';
+import { placeCameraRelative } from '../../common/cameraRelative';
+import { directionToCubeFace } from '../../../core/coords';
+import type { CubeFaceUv } from '../../../core/coords';
+import { Noise3 } from '../../../core/noise';
+import { rng } from '../../../core/rng';
+import type { WorldSeed } from '../../../core/rng';
 import {
   parentTile,
   tileKey,
@@ -56,17 +57,17 @@ import {
   TILE_BORDER,
   TILE_STRIDE,
   TILE_TEXELS,
-} from '../../core/tiles';
-import type { TileKey } from '../../core/tiles';
-import { Vec3d } from '../../core/vec3d';
-import { MAX_BAKED_LEVEL } from '../../worldgen/gpu/tileSynth';
-import type { TileData, TileSynthesizer } from '../../worldgen/gpu/tileSynth';
-import { ClimateTexture } from '../climateTexture';
+} from '../../../core/tiles';
+import type { TileKey } from '../../../core/tiles';
+import { Vec3d } from '../../../core/vec3d';
+import { MAX_BAKED_LEVEL } from '../../../worldgen/gpu/tileSynth';
+import type { TileData, TileSynthesizer } from '../../../worldgen/gpu/tileSynth';
+import { ClimateTexture } from '../../common/climateTexture';
 import { PlanetLighting } from '../lighting/planetLighting';
 import { RiverShading, RiverStyle } from '../water/riverShading';
 import { RiverTables } from '../water/riverTables';
 import { WAVE_PERIOD, WaterShading } from '../water/waterShading';
-import type { RiverIndex } from '../../worldgen/riverIndex';
+import type { RiverIndex } from '../../../worldgen/riverIndex';
 import type { InfraScene } from '../infra/infraScene';
 import { HabitabilityTexture } from '../infra/habitabilityTexture';
 import {
@@ -166,7 +167,6 @@ export class TerrainRenderer {
   private readonly queue = new TileRequestQueue();
   private readonly loader: TileLoader<TileData>;
   private visible = new Set<Mesh>();
-  private readonly scratch = new Vec3d();
 
   constructor(
     readonly lighting = new PlanetLighting(),
@@ -542,8 +542,7 @@ export class TerrainRenderer {
       if (!mesh) continue;
       this.sources(d.tile);
       const o = mesh.userData.origin as Vec3d;
-      this.scratch.copy(o).sub(view.eye);
-      mesh.position.set(this.scratch.x, this.scratch.y, this.scratch.z);
+      placeCameraRelative(mesh, o, view.eye);
       mesh.userData.morph = this.geomorph ? d.morph : 1;
       mesh.visible = true;
       now.add(mesh);

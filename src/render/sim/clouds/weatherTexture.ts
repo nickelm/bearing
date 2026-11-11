@@ -20,11 +20,11 @@ import {
 } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import { int, mix, texture, uniform, vec2 } from 'three/tsl';
-import { HOUR } from '../../core/units';
-import { Channel } from '../../sim/weather/frame';
-import type { WeatherView } from '../../sim/weather/frame';
-import { WEATHER_RESOLUTION } from '../../sim/weather/grid';
-import { cubeFaceUv } from '../climateTexture';
+import { HOUR } from '../../../core/units';
+import { Channel } from '../../../sim/weather/frame';
+import type { WeatherView } from '../../../sim/weather/frame';
+import { WEATHER_RESOLUTION } from '../../../sim/weather/grid';
+import { cubeFaceUv } from '../../common/climateTexture';
 
 type V3 = Node<'vec3'>;
 type F = Node<'float'>;

@@ -4,8 +4,8 @@
  * up and the clump stands on y = 0. One instance is a clump of a few trees,
  * so a 40 m lattice of instances reads as a forest.
  */
-import { rng } from '../../core/rng';
-import { srgbToLinear } from '../palette';
+import { rng } from '../../../core/rng';
+import { srgbToLinear } from '../../common/palette';
 
 export type TreeKind = 'conifer' | 'broadleaf';
 

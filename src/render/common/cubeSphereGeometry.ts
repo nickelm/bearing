@@ -6,10 +6,10 @@
  * for baked maps later) simple. Positions are float32, relative to the planet
  * center; the mesh is placed camera-relative at render time.
  */
-import { CUBE_FACE_COUNT, cubeFaceUvToDirection } from '../core/coords';
-import type { CubeFace } from '../core/coords';
-import type { CubeGrid } from '../core/cubeGrid';
-import { Vec3d } from '../core/vec3d';
+import { CUBE_FACE_COUNT, cubeFaceUvToDirection } from '../../core/coords';
+import type { CubeFace } from '../../core/coords';
+import type { CubeGrid } from '../../core/cubeGrid';
+import { Vec3d } from '../../core/vec3d';
 
 export interface CubeSphereArrays {
   /** xyz per vertex, meters from the planet center. */

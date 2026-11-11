@@ -41,11 +41,12 @@ src/sim/            headless simulation; runs in a worker: event queue + fixed t
                     time acceleration (host.ts), world factory (world.ts)
   weather/          hourly weather model on a bordered 24² cube grid; WeatherView for queries
   command/          per-side command layer: intelligence picture, ATO (graph and cast only)
-src/render/         Three.js WebGPU + TSL. Today one GlobeScene draws orbit to ground from terrain/,
-                    atmosphere/, water/, clouds/, forest/, infra/, lighting/; S1 splits it into:
-  common/           (planned) camera-relative rendering, shared materials, palette, transition controller
-  sim/              (planned) simulation view: local terrain LOD, vegetation, models, atmosphere,
-                    clouds, water (the current folders move here)
+src/render/         Three.js WebGPU + TSL, split by view (decision 72). Until StrategicScene exists,
+                    sim/'s GlobeScene still draws orbit to ground.
+  common/           shared by both views: camera-relative placement, palette, climate texture,
+                    render scale, cube-sphere geometry, WebGPU checks; later the transition controller
+  sim/              simulation view: GlobeScene, orbit camera, terrain/ (LOD), atmosphere/, water/,
+                    clouds/, forest/, infra/, lighting/, and the M1 cell-grid debug globe
   strategic/        strategic view: base map, glyphs, overlays, label engine (now: graph debug overlay)
 src/ui/             lil-gui debug panel, overlays, time controls
 src/workers/        worker entry points and message protocols
@@ -67,7 +68,7 @@ These are the project conventions. Lint enforces some of them (marked ⚙).
    - Cube faces are 0..5 = +X, −X, +Y, −Y, +Z, −Z and use the equi-angular warp. The face order and axes are fixed because baked maps depend on them.
 4. **Camera-relative rendering.**
    - The Three.js camera stays at the origin.
-   - Every world-space object's GPU position is `worldPos − cameraEye`, subtracted in float64 _before_ it is written into float32 (see `src/render/globeScene.ts`).
+   - Every world-space object's GPU position is `worldPos − cameraEye`, subtracted in float64 _before_ it is written into float32. Place objects with `placeCameraRelative` / `placePlanetCentered` in `src/render/common/cameraRelative.ts`.
    - Never put planet-scale coordinates into an `Object3D` directly.
 5. **Determinism.**
    - ⚙ `Math.random()` is banned in `core`, `worldgen` and `sim`.

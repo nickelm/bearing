@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RenderScaleController } from '../src/render/renderScale';
+import { RenderScaleController } from '../src/render/common/renderScale';
 
 /** Runs frames whose time is `cost(scale)` ms; returns the scale after `seconds`. */
 function run(c: RenderScaleController, cost: (scale: number) => number, seconds: number): number {

@@ -14,8 +14,8 @@
 import { Vector3 } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import { dot, max, normalize, uniform, vec3 } from 'three/tsl';
-import { PLANET_RADIUS } from '../../core/units';
-import type { Vec3d } from '../../core/vec3d';
+import { PLANET_RADIUS } from '../../../core/units';
+import type { Vec3d } from '../../../core/vec3d';
 import { AtmosphereNodes } from '../atmosphere/atmosphere';
 import { earthLikeAtmosphere } from '../atmosphere/model';
 

@@ -14,10 +14,10 @@
  * tiles), turns by `heading`, tilts nearly to the horizon below 50 km, and
  * moves with the keyboard (`input`) at a speed proportional to altitude.
  */
-import { latLonToDirection } from '../core/coords';
-import { DEG, KM, PLANET_RADIUS } from '../core/units';
-import type { Meters, Radians } from '../core/units';
-import { Vec3d } from '../core/vec3d';
+import { latLonToDirection } from '../../core/coords';
+import { DEG, KM, PLANET_RADIUS } from '../../core/units';
+import type { Meters, Radians } from '../../core/units';
+import { Vec3d } from '../../core/vec3d';
 
 export interface OrbitCameraLimits {
   /** Lowest altitude above the ground under the camera (or above the highest terrain if unknown). */

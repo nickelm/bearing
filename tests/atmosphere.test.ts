@@ -12,7 +12,7 @@ import {
   transmittanceRMu,
   transmittanceToTop,
   transmittanceUv,
-} from '../src/render/atmosphere/model';
+} from '../src/render/sim/atmosphere/model';
 import { PLANET_RADIUS } from '../src/core/units';
 
 const a = earthLikeAtmosphere(PLANET_RADIUS);

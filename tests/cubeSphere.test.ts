@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCornerCells, buildCubeSphereArrays } from '../src/render/cubeSphereGeometry';
+import { buildCornerCells, buildCubeSphereArrays } from '../src/render/common/cubeSphereGeometry';
 import { CubeGrid } from '../src/core/cubeGrid';
 import { PLANET_RADIUS } from '../src/core/units';
 

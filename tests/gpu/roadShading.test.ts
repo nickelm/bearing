@@ -5,8 +5,8 @@ import type { Node } from 'three/webgpu';
 import { latLonToDirection } from '../../src/core/coords';
 import { tileForDirection } from '../../src/core/tiles';
 import { DEG, PLANET_RADIUS } from '../../src/core/units';
-import { RoadShading } from '../../src/render/infra/roadShading';
-import { RiverTables } from '../../src/render/water/riverTables';
+import { RoadShading } from '../../src/render/sim/infra/roadShading';
+import { RiverTables } from '../../src/render/sim/water/riverTables';
 import { testGpu } from './device';
 import { headlessRenderer } from './renderer';
 

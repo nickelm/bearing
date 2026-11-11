@@ -14,7 +14,7 @@ import { it } from 'vitest';
 import { tileForDirection, tileKey, tileSampleIndex, TILE_TEXELS } from '../src/core/tiles';
 import type { TileKey } from '../src/core/tiles';
 import { Vec3d } from '../src/core/vec3d';
-import { BIOME_COLORS } from '../src/render/palette';
+import { BIOME_COLORS } from '../src/render/common/palette';
 import { finishWorld } from '../src/worldgen/finishWorld';
 import { buildGlobalWorld } from '../src/worldgen/globalPipeline';
 import { sampleSpacing, TileSynthesizer } from '../src/worldgen/gpu/tileSynth';

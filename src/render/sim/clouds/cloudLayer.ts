@@ -61,10 +61,11 @@ import {
   vec4,
 } from 'three/tsl';
 import type { WebGPURenderer } from 'three/webgpu';
-import type { Vec3d } from '../../core/vec3d';
+import { placePlanetCentered } from '../../common/cameraRelative';
+import type { Vec3d } from '../../../core/vec3d';
 import { CoverageBake } from './coverageBake';
 import type { WeatherTexture } from './weatherTexture';
-import { buildCubeSphereArrays } from '../cubeSphereGeometry';
+import { buildCubeSphereArrays } from '../../common/cubeSphereGeometry';
 import type { PlanetLighting } from '../lighting/planetLighting';
 
 type F = Node<'float'>;
@@ -234,7 +235,7 @@ export class CloudLayer {
 
   /** Places the shell camera-relative and notes whether the camera is below it. */
   update(eye: Readonly<Vec3d>): void {
-    this.mesh.position.set(-eye.x, -eye.y, -eye.z);
+    placePlanetCentered(this.mesh, eye);
     this.below.value = eye.length() < this.radius + CLOUD_ALTITUDE ? 1 : 0;
     this.detailed.value = eye.length() < this.radius + DETAIL_ALTITUDE ? 1 : 0;
     this.group.visible = this.enabled.value > 0;

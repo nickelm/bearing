@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEG, KM } from '../../src/core/units';
-import { OrbitCamera } from '../../src/render/orbitCamera';
-import { TerrainRenderer } from '../../src/render/terrain/terrainRenderer';
+import { OrbitCamera } from '../../src/render/sim/orbitCamera';
+import { TerrainRenderer } from '../../src/render/sim/terrain/terrainRenderer';
 import { finishWorld } from '../../src/worldgen/finishWorld';
 import { buildGlobalWorld } from '../../src/worldgen/globalPipeline';
 import { TileSynthesizer } from '../../src/worldgen/gpu/tileSynth';

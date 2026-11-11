@@ -42,14 +42,15 @@ import {
   vec3,
   vec4,
 } from 'three/tsl';
-import { cubeFaceUvToDirection, directionToCubeFace } from '../../core/coords';
-import { rng } from '../../core/rng';
-import type { Rng, WorldSeed } from '../../core/rng';
-import { tileForDirection, tileKeyString, TILE_TEXELS } from '../../core/tiles';
-import type { TileKey } from '../../core/tiles';
-import { Vec3d } from '../../core/vec3d';
-import { NO_LAKE } from '../../worldgen/gpu/tileSynth';
-import type { TileData } from '../../worldgen/gpu/tileSynth';
+import { placeCameraRelative } from '../../common/cameraRelative';
+import { cubeFaceUvToDirection, directionToCubeFace } from '../../../core/coords';
+import { rng } from '../../../core/rng';
+import type { Rng, WorldSeed } from '../../../core/rng';
+import { tileForDirection, tileKeyString, TILE_TEXELS } from '../../../core/tiles';
+import type { TileKey } from '../../../core/tiles';
+import { Vec3d } from '../../../core/vec3d';
+import { NO_LAKE } from '../../../worldgen/gpu/tileSynth';
+import type { TileData } from '../../../worldgen/gpu/tileSynth';
 import { treeDataTile } from '../forest/forestLayer';
 import type { PlanetLighting } from '../lighting/planetLighting';
 import type { TerrainRenderer } from '../terrain/terrainRenderer';
@@ -478,7 +479,7 @@ export class StructureLayer {
         tile.lastUsed = this.frame;
         if (m) {
           instances += (m.geometry as InstancedBufferGeometry).instanceCount;
-          m.position.set(tile.origin.x - eye.x, tile.origin.y - eye.y, tile.origin.z - eye.z);
+          placeCameraRelative(m, tile.origin, eye);
           m.visible = true;
         }
       } else {

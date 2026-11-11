@@ -2,8 +2,8 @@
  * lil-gui debug panel: world parameters, generation control, debug view
  * options and read-only status values.
  */
-import { RENDER_SCALES } from '../render/renderScale';
-import type { RenderScaleSetting } from '../render/renderScale';
+import { RENDER_SCALES } from '../render/common/renderScale';
+import type { RenderScaleSetting } from '../render/common/renderScale';
 import GUI from 'lil-gui';
 
 export interface WorldGuiParams {

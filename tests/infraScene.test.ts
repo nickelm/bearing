@@ -11,9 +11,9 @@ import {
   localFrame,
   offsetPoint,
   urbanRadius,
-} from '../src/render/infra/infraScene';
-import { LIGHT_LEVEL, LightTables } from '../src/render/infra/roadShading';
-import { RiverTables } from '../src/render/water/riverTables';
+} from '../src/render/sim/infra/infraScene';
+import { LIGHT_LEVEL, LightTables } from '../src/render/sim/infra/roadShading';
+import { RiverTables } from '../src/render/sim/water/riverTables';
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
 import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
 

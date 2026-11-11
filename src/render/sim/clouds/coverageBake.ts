@@ -31,8 +31,8 @@ import {
   vec3,
   vec4,
 } from 'three/tsl';
-import { CUBE_FACES } from '../../core/coords';
-import { cubeFaceUv } from '../climateTexture';
+import { CUBE_FACES } from '../../../core/coords';
+import { cubeFaceUv } from '../../common/climateTexture';
 
 type F = Node<'float'>;
 type V3 = Node<'vec3'>;

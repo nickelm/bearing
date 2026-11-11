@@ -7,8 +7,8 @@
  * GPU textures plus the CPU TileData in each entry and frees textures in
  * `onEvict`.
  */
-import { parentTile, tileKeyString } from '../../core/tiles';
-import type { TileKey } from '../../core/tiles';
+import { parentTile, tileKeyString } from '../../../core/tiles';
+import type { TileKey } from '../../../core/tiles';
 
 export interface CacheEntry<T> {
   readonly key: string;

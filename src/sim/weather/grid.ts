@@ -6,7 +6,7 @@
  * Weather fields are evaluated at every sample's own direction, border
  * included, so bilinear interpolation inside one face's lattice is continuous
  * across face seams. The GPU samples the same layout as an (n + 2)² × 6 array
- * texture (render/clouds/weatherTexture.ts).
+ * texture (render/sim/clouds/weatherTexture.ts).
  *
  * Sample (f, i, j), with i, j in 0..n + 1, sits at face coordinates
  * u = (i − 0.5) / n, v = (j − 0.5) / n (equi-angular, rule 3), and its index is

@@ -2,11 +2,11 @@
  * Debug and biome color palettes. All colors are sRGB in [0, 1]; the globe
  * mesh converts them to linear when writing vertex colors.
  */
-import { CUBE_FACE_COUNT } from '../core/coords';
-import { rng } from '../core/rng';
-import type { WorldSeed } from '../core/rng';
-import { BIOME_COUNT, Biome } from '../worldgen/biomes';
-import { BOUNDARY_TYPE_COUNT, BoundaryType } from '../worldgen/boundaries';
+import { CUBE_FACE_COUNT } from '../../core/coords';
+import { rng } from '../../core/rng';
+import type { WorldSeed } from '../../core/rng';
+import { BIOME_COUNT, Biome } from '../../worldgen/biomes';
+import { BOUNDARY_TYPE_COUNT, BoundaryType } from '../../worldgen/boundaries';
 
 export type Rgb = [number, number, number];
 

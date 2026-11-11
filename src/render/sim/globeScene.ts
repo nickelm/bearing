@@ -1,14 +1,7 @@
 /**
- * The globe scene: the M1 debug cube-sphere, the tiled terrain, the sun and an orbit camera,
- * rendered camera-relative.
- *
- * CAMERA-RELATIVE RENDERING (the pattern every world-space object follows):
- *   - World positions are float64 (Vec3d), planet-centered, in meters.
- *   - The Three.js camera stays at the origin and only rotates.
- *   - Each frame, every object's GPU-side position is (worldPosition - cameraEye),
- *     computed in float64 *before* it is written into float32 Object3D fields.
- * This keeps the numbers the GPU sees small near the camera, where precision
- * matters. Do not put planet-scale coordinates into Object3D positions directly.
+ * The simulation view's scene (decision 72): the M1 debug cube-sphere, the tiled terrain,
+ * the sun and an orbit camera, rendered camera-relative (see common/cameraRelative.ts).
+ * Until the strategic view exists it still spans orbit to ground.
  */
 import {
   AgXToneMapping,
@@ -18,9 +11,10 @@ import {
   Scene,
 } from 'three/webgpu';
 import type { WebGPURenderer } from 'three/webgpu';
-import type { CubeGrid } from '../core/cubeGrid';
-import { Vec3d } from '../core/vec3d';
-import { ClimateTexture } from './climateTexture';
+import { placePlanetCentered } from '../common/cameraRelative';
+import type { CubeGrid } from '../../core/cubeGrid';
+import { Vec3d } from '../../core/vec3d';
+import { ClimateTexture } from '../common/climateTexture';
 import { CloudLayer } from './clouds/cloudLayer';
 import { WeatherTexture } from './clouds/weatherTexture';
 import { ForestLayer } from './forest/forestLayer';
@@ -28,11 +22,9 @@ import { GlobeMesh } from './globeMesh';
 import { PlanetLighting } from './lighting/planetLighting';
 import { TerrainRenderer } from './terrain/terrainRenderer';
 import { OrbitCamera, attachOrbitInput } from './orbitCamera';
-import { StrategicOverlay } from './strategic/strategicOverlay';
+import { StrategicOverlay } from '../strategic/strategicOverlay';
 import { StructureLayer } from './infra/structureLayer';
 import type { InfraScene } from './infra/infraScene';
-
-const PLANET_CENTER = new Vec3d(0, 0, 0);
 
 export interface GlobeSceneOptions {
   radius: number;
@@ -154,8 +146,7 @@ export class GlobeScene {
     this.lighting.update(o.eye, this.sun);
 
     // World object placement: float64 subtraction first, then write float32.
-    this.scratch.subVectors(PLANET_CENTER, o.eye);
-    this.globe.group.position.set(this.scratch.x, this.scratch.y, this.scratch.z);
+    placePlanetCentered(this.globe.group, o.eye);
 
     this.globe.group.visible = !tiles;
     this.terrain.group.visible = tiles;

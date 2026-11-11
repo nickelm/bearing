@@ -20,7 +20,7 @@ import { Vec3d } from '../src/core/vec3d';
 import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
 import { generateWorld } from '../src/worldgen/pipeline';
 import { testGpu } from '../tests/gpu/device';
-import { BIOME_COLORS } from '../src/render/palette';
+import { BIOME_COLORS } from '../src/render/common/palette';
 import { finishWorld } from '../src/worldgen/finishWorld';
 import { buildGlobalWorld } from '../src/worldgen/globalPipeline';
 import { encodePng } from './png';

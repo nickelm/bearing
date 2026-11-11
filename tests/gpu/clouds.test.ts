@@ -9,9 +9,9 @@ import { directionToFace, randomUnitVector } from '../../src/core/coords';
 import { rng } from '../../src/core/rng';
 import { HOUR, PLANET_RADIUS } from '../../src/core/units';
 import { Vec3d } from '../../src/core/vec3d';
-import { CloudLayer } from '../../src/render/clouds/cloudLayer';
-import { WeatherTexture } from '../../src/render/clouds/weatherTexture';
-import { PlanetLighting } from '../../src/render/lighting/planetLighting';
+import { CloudLayer } from '../../src/render/sim/clouds/cloudLayer';
+import { WeatherTexture } from '../../src/render/sim/clouds/weatherTexture';
+import { PlanetLighting } from '../../src/render/sim/lighting/planetLighting';
 import { testGpu } from './device';
 import { headlessRenderer } from './renderer';
 

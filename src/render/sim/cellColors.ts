@@ -3,7 +3,7 @@
  * no Three.js imports, so the globe mesh and the offline map renderer
  * (tools/) color worlds identically.
  */
-import type { World } from '../worldgen/pipeline';
+import type { World } from '../../worldgen/pipeline';
 import {
   BIOME_COLORS,
   BOUNDARY_COLORS,
@@ -15,8 +15,8 @@ import {
   UPLIFT_RAMP,
   plateColor,
   ramp,
-} from './palette';
-import type { Rgb } from './palette';
+} from '../common/palette';
+import type { Rgb } from '../common/palette';
 
 export const VIEW_MODES = [
   'biome',

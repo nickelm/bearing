@@ -54,7 +54,7 @@ import {
   uniform,
   vec3,
 } from 'three/tsl';
-import { rng } from '../../core/rng';
+import { rng } from '../../../core/rng';
 import type { LightAt, PlanetLighting } from '../lighting/planetLighting';
 
 type F = Node<'float'>;

@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { CubeGrid } from '../../src/core/cubeGrid';
 import { DEG, KM } from '../../src/core/units';
 import { Vec3d } from '../../src/core/vec3d';
-import { GlobeScene } from '../../src/render/globeScene';
+import { GlobeScene } from '../../src/render/sim/globeScene';
 import { finishWorld } from '../../src/worldgen/finishWorld';
 import { buildGlobalWorld } from '../../src/worldgen/globalPipeline';
 import { TileSynthesizer } from '../../src/worldgen/gpu/tileSynth';

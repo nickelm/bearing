@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { latLonToDirection } from '../src/core/coords';
 import { neighborTile, tileForDirection } from '../src/core/tiles';
 import { DEG, PLANET_RADIUS } from '../src/core/units';
-import { COARSE_MIN_WIDTH, FINE_LEVEL, RiverTables } from '../src/render/water/riverTables';
+import { COARSE_MIN_WIDTH, FINE_LEVEL, RiverTables } from '../src/render/sim/water/riverTables';
 import { RiverIndex } from '../src/worldgen/riverIndex';
 import { straightRiver } from './helpers/rivers';
 

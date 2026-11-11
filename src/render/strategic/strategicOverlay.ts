@@ -21,6 +21,7 @@ import {
   LineBasicNodeMaterial,
   LineSegments,
 } from 'three/webgpu';
+import { placePlanetCentered } from '../common/cameraRelative';
 import type { Cast, Region } from '../../campaign/cast';
 import type { Point, StrategicGraph } from '../../worldgen/strategic/graph';
 import type { Infrastructure } from '../../worldgen/strategic/infrastructure';
@@ -124,7 +125,6 @@ export class StrategicOverlay {
   enabled = true;
   private mesh: LineSegments | null = null;
   private readonly material = new LineBasicNodeMaterial({ vertexColors: true });
-  private readonly scratch = new Vec3d();
 
   constructor(private readonly radius: number) {
     // The lines must write depth: the cloud shell (transparent, drawn after the
@@ -230,8 +230,7 @@ export class StrategicOverlay {
   update(eye: Readonly<Vec3d>, lift: number): void {
     this.group.visible = this.enabled && this.mesh !== null;
     if (!this.group.visible) return;
-    this.scratch.set(-eye.x, -eye.y, -eye.z);
-    this.group.position.set(this.scratch.x, this.scratch.y, this.scratch.z);
+    placePlanetCentered(this.group, eye);
     this.group.scale.setScalar((this.radius + lift) / this.radius);
   }
 

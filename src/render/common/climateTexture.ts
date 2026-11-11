@@ -26,9 +26,9 @@ import {
 } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import { abs, atan, dot, int, select, texture, vec2, vec3 } from 'three/tsl';
-import { CUBE_FACES } from '../core/coords';
-import { LAPSE_RATE } from '../worldgen/climate';
-import type { World } from '../worldgen/pipeline';
+import { CUBE_FACES } from '../../core/coords';
+import { LAPSE_RATE } from '../../worldgen/climate';
+import type { World } from '../../worldgen/pipeline';
 
 type V3 = Node<'vec3'>;
 

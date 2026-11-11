@@ -17,12 +17,12 @@ import { latLonToDirection } from './core/coords';
 import { Vec3d } from './core/vec3d';
 import { DEFAULT_PLANET_PARAMS } from './worldgen/params';
 import type { PlanetParams } from './worldgen/params';
-import { GlobeScene } from './render/globeScene';
-import { InfraScene } from './render/infra/infraScene';
-import { VIEW_MODES } from './render/globeMesh';
-import type { ViewMode } from './render/globeMesh';
-import { runComputeSmokeTest } from './render/computeSmokeTest';
-import { RenderScaleController } from './render/renderScale';
+import { GlobeScene } from './render/sim/globeScene';
+import { InfraScene } from './render/sim/infra/infraScene';
+import { VIEW_MODES } from './render/sim/globeMesh';
+import type { ViewMode } from './render/sim/globeMesh';
+import { runComputeSmokeTest } from './render/common/computeSmokeTest';
+import { RenderScaleController } from './render/common/renderScale';
 import {
   describeAdapter,
   isOnWebGpuBackend,
@@ -31,7 +31,7 @@ import {
   rendererDevice,
   showFatalError,
   showWebGpuRequired,
-} from './render/webgpuSupport';
+} from './render/common/webgpuSupport';
 import {
   DEFAULT_GLOBAL_RESOLUTION,
   DebugGui,
@@ -41,8 +41,8 @@ import {
 import { GpuContext } from './worldgen/gpu/gpuContext';
 import { TileSynthesizer } from './worldgen/gpu/tileSynth';
 import { RiverIndex } from './worldgen/riverIndex';
-import { DEFAULT_LOD } from './render/terrain/quadtree';
-import type { TileViewMode } from './render/terrain/tileMesh';
+import { DEFAULT_LOD } from './render/sim/terrain/quadtree';
+import type { TileViewMode } from './render/sim/terrain/tileMesh';
 import {
   buildGlobalWorld,
   GlobalPassCancelled,

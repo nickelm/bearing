@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–72 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–73 are reflected in both.
 
 ---
 
@@ -1226,3 +1226,16 @@ The owner's amendment and the engineering calls made while adopting it:
 - _Risk:_ one renderer that zooms continuously from orbit to 500 m was the hardest rendering problem in the project. The split bounds each renderer: the map never goes below its floor, and the simulation view never goes above the aircraft ceiling, so terrain within 200 km bounds streaming, LOD depth and memory.
 - _Identity:_ the map is where the player plans, and the cockpit is where they fly.
 - The amendment comes from the owner: night and weather decide which sorties fly, so the planning view must show them.
+
+### 73. Render layout: `common/`, `sim/` and `strategic/`
+
+**Date:** 2026-11-11
+**Decision:** `src/render/` is split by view, as decision 72 planned, with no behavior change:
+
+- **`common/`** holds what both views use: `cameraRelative.ts` (new), `palette.ts`, `climateTexture.ts`, `renderScale.ts`, `cubeSphereGeometry.ts`, `webgpuSupport.ts` and `computeSmokeTest.ts`. The climate texture is common because the strategic base map will color biomes and snow from it; the palette is common because both palettes derive from the same biome table.
+- **`sim/`** holds `GlobeScene`, `OrbitCamera`, the M1 cell-grid debug globe (`globeMesh.ts`, `cellColors.ts`) and the folders `terrain/`, `atmosphere/`, `water/`, `clouds/`, `forest/`, `infra/` and `lighting/`. `GlobeScene` keeps drawing orbit to ground until `StrategicScene` takes over the upper envelope.
+- **`strategic/`** keeps the graph debug overlay for now.
+- **Camera-relative placement goes through two helpers**, `placeCameraRelative(object, world, eye)` and `placePlanetCentered(object, eye)`, which subtract in float64 before the float32 write. The six hand-written subtractions in the scene, terrain, forest, structure, cloud and overlay code now call them, so the new strategic scene follows rule 4 by construction.
+- Earlier decisions keep the old paths as history.
+
+**Reason:** The strategic view needs a home that does not import the simulation view's atmosphere or LOD code, and a shared helper keeps rule 4 in one place instead of six.

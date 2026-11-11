@@ -14,7 +14,7 @@ import {
 import type { CubeFace } from '../../src/core/coords';
 import { rng } from '../../src/core/rng';
 import { Vec3d } from '../../src/core/vec3d';
-import { ClimateTexture, climateTexels, cubeFaceUv } from '../../src/render/climateTexture';
+import { ClimateTexture, climateTexels, cubeFaceUv } from '../../src/render/common/climateTexture';
 import { DEFAULT_PLANET_PARAMS } from '../../src/worldgen/params';
 import { generateWorld } from '../../src/worldgen/pipeline';
 import { testGpu } from './device';

@@ -38,7 +38,7 @@ import {
   uniform,
   vec3,
 } from 'three/tsl';
-import { LAPSE_RATE } from '../../worldgen/climate';
+import { LAPSE_RATE } from '../../../worldgen/climate';
 import { WAVE_PERIOD } from '../water/waterShading';
 
 type F = Node<'float'>;

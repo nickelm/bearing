@@ -22,10 +22,10 @@
  * screen-space error goes from the threshold to `morphRange` × threshold. At
  * 0 the tile looks exactly like its parent, so splits never pop.
  */
-import { childTiles, tileKey, tileSampleDirection, TILE_TEXELS } from '../../core/tiles';
-import type { TileKey } from '../../core/tiles';
-import type { CubeFace } from '../../core/coords';
-import { Vec3d } from '../../core/vec3d';
+import { childTiles, tileKey, tileSampleDirection, TILE_TEXELS } from '../../../core/tiles';
+import type { TileKey } from '../../../core/tiles';
+import type { CubeFace } from '../../../core/coords';
+import { Vec3d } from '../../../core/vec3d';
 
 /** Mesh segments per tile edge (vertices every 4 samples). */
 export const TILE_SEGMENTS = 64;

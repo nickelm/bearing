@@ -13,7 +13,7 @@ import {
 } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import { int, texture } from 'three/tsl';
-import { cubeFaceUv } from '../climateTexture';
+import { cubeFaceUv } from '../../common/climateTexture';
 
 type V3 = Node<'vec3'>;
 

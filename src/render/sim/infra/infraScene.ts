@@ -15,13 +15,13 @@
  *
  * Nothing here touches the GPU, so tests run it in Node.
  */
-import { tileForDirection, tileKeyString } from '../../core/tiles';
-import { Vec3d } from '../../core/vec3d';
-import { chaikin } from '../../worldgen/riverIndex';
-import type { RiverSegments } from '../../worldgen/riverIndex';
-import { ROAD_WIDTH } from '../../worldgen/strategic/graph';
-import type { RoadNetwork, StrategicGraph } from '../../worldgen/strategic/graph';
-import type { Infrastructure } from '../../worldgen/strategic/infrastructure';
+import { tileForDirection, tileKeyString } from '../../../core/tiles';
+import { Vec3d } from '../../../core/vec3d';
+import { chaikin } from '../../../worldgen/riverIndex';
+import type { RiverSegments } from '../../../worldgen/riverIndex';
+import { ROAD_WIDTH } from '../../../worldgen/strategic/graph';
+import type { RoadNetwork, StrategicGraph } from '../../../worldgen/strategic/graph';
+import type { Infrastructure } from '../../../worldgen/strategic/infrastructure';
 
 export type SiteKind = 'town' | 'airbase' | 'industry';
 

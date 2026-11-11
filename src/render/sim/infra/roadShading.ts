@@ -39,9 +39,9 @@ import {
   vec2,
   vec3,
 } from 'three/tsl';
-import { tileForDirection, tileKey, tileKeyString } from '../../core/tiles';
-import type { TileKey } from '../../core/tiles';
-import { Vec3d } from '../../core/vec3d';
+import { tileForDirection, tileKey, tileKeyString } from '../../../core/tiles';
+import type { TileKey } from '../../../core/tiles';
+import { Vec3d } from '../../../core/vec3d';
 import type { RiverRange, RiverTables } from '../water/riverTables';
 import { localFrame } from './infraScene';
 

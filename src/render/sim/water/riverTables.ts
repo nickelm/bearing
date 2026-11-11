@@ -23,10 +23,10 @@
  * smoothing) are much shorter than the tiles, so that covers every tile the
  * segment's reach overlaps.
  */
-import { tileForDirection, tileKey, tileKeyString } from '../../core/tiles';
-import type { TileKey } from '../../core/tiles';
-import { Vec3d } from '../../core/vec3d';
-import type { RiverSegments } from '../../worldgen/riverIndex';
+import { tileForDirection, tileKey, tileKeyString } from '../../../core/tiles';
+import type { TileKey } from '../../../core/tiles';
+import { Vec3d } from '../../../core/vec3d';
+import type { RiverSegments } from '../../../worldgen/riverIndex';
 
 export const FINE_LEVEL = 7;
 export const COARSE_LEVEL = 4;

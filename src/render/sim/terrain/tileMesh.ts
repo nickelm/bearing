@@ -22,16 +22,16 @@
  * - Normals come from height differences one sample apart, using the tile's
  *   border, so they agree across tile edges.
  */
-import { cubeFaceUvToDirection } from '../../core/coords';
-import type { Noise3 } from '../../core/noise';
-import { parentTile, tileKey, TILE_BORDER, TILE_STRIDE, TILE_TEXELS } from '../../core/tiles';
-import type { TileKey } from '../../core/tiles';
-import { Vec3d } from '../../core/vec3d';
-import { Biome } from '../../worldgen/biomes';
-import type { TileData } from '../../worldgen/gpu/tileSynth';
-import { MAX_BAKED_LEVEL, NO_LAKE } from '../../worldgen/gpu/tileSynth';
-import { BIOME_COLORS, HEIGHT_RAMP, hsl, ramp, srgbToLinear } from '../palette';
-import type { Rgb } from '../palette';
+import { cubeFaceUvToDirection } from '../../../core/coords';
+import type { Noise3 } from '../../../core/noise';
+import { parentTile, tileKey, TILE_BORDER, TILE_STRIDE, TILE_TEXELS } from '../../../core/tiles';
+import type { TileKey } from '../../../core/tiles';
+import { Vec3d } from '../../../core/vec3d';
+import { Biome } from '../../../worldgen/biomes';
+import type { TileData } from '../../../worldgen/gpu/tileSynth';
+import { MAX_BAKED_LEVEL, NO_LAKE } from '../../../worldgen/gpu/tileSynth';
+import { BIOME_COLORS, HEIGHT_RAMP, hsl, ramp, srgbToLinear } from '../../common/palette';
+import type { Rgb } from '../../common/palette';
 import { TILE_SEGMENTS, vertexSpacing } from './quadtree';
 
 export const TILE_VIEW_MODES = ['biome', 'height', 'level', 'borders', 'forest'] as const;

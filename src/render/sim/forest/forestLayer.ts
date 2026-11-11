@@ -48,9 +48,10 @@ import {
   vec3,
   vec4,
 } from 'three/tsl';
-import { cubeFaceUvToDirection } from '../../core/coords';
-import { rng } from '../../core/rng';
-import type { WorldSeed } from '../../core/rng';
+import { placeCameraRelative } from '../../common/cameraRelative';
+import { cubeFaceUvToDirection } from '../../../core/coords';
+import { rng } from '../../../core/rng';
+import type { WorldSeed } from '../../../core/rng';
 import {
   tileForDirection,
   tileKey,
@@ -58,13 +59,13 @@ import {
   TILE_BORDER,
   TILE_STRIDE,
   TILE_TEXELS,
-} from '../../core/tiles';
-import type { TileKey } from '../../core/tiles';
-import { Vec3d } from '../../core/vec3d';
-import { Biome } from '../../worldgen/biomes';
-import { MAX_BAKED_LEVEL, NO_LAKE } from '../../worldgen/gpu/tileSynth';
-import type { TileData } from '../../worldgen/gpu/tileSynth';
-import type { ClimateTexture } from '../climateTexture';
+} from '../../../core/tiles';
+import type { TileKey } from '../../../core/tiles';
+import { Vec3d } from '../../../core/vec3d';
+import { Biome } from '../../../worldgen/biomes';
+import { MAX_BAKED_LEVEL, NO_LAKE } from '../../../worldgen/gpu/tileSynth';
+import type { TileData } from '../../../worldgen/gpu/tileSynth';
+import type { ClimateTexture } from '../../common/climateTexture';
 import type { PlanetLighting } from '../lighting/planetLighting';
 import type { LandShading } from '../terrain/landShading';
 import type { TerrainRenderer } from '../terrain/terrainRenderer';
@@ -370,7 +371,7 @@ export class ForestLayer {
         for (const m of tile.meshes) {
           const g = m.geometry as InstancedBufferGeometry;
           instances += g.instanceCount;
-          m.position.set(tile.origin.x - eye.x, tile.origin.y - eye.y, tile.origin.z - eye.z);
+          placeCameraRelative(m, tile.origin, eye);
           m.visible = true;
         }
       } else {
