@@ -29,6 +29,7 @@ import { StrategicCamera } from './strategicCamera';
 import { STRATEGIC_EXAGGERATION, StrategicRelief } from './strategicRelief';
 import type { StrategicReliefWorld } from './strategicRelief';
 import { StrategicOverlay } from './strategicOverlay';
+import { mapLightList, MapLights } from './mapLights';
 import { ZOOM_BANDS, ZoomBands } from './zoomBands';
 
 /** Flat background behind the globe; Part II has no physical sky. */
@@ -54,6 +55,8 @@ export class StrategicScene {
   useTiles = true;
   /** Strategic graph and cast overlay. */
   readonly overlay: StrategicOverlay;
+  /** Settlement, base and industry lights on the night side (decision 88). */
+  readonly lights: MapLights;
   /** Zoom band from the camera altitude, with fades and a change event (decision 76). */
   readonly bands: ZoomBands;
   /**
@@ -71,6 +74,11 @@ export class StrategicScene {
   /** World and grid waiting to be built; applied on the next render, so a hidden view costs nothing. */
   private pendingGrid: CubeGrid | null = null;
   private pendingWorld: { world: World | null } | null = null;
+  /** The world and grid on display, and whether the lights need rebuilding. */
+  private world: World | null = null;
+  private grid: CubeGrid;
+  private strategicData: { graph: StrategicGraph; infra: Infrastructure | null } | null = null;
+  private lightsDirty = false;
 
   constructor(
     private readonly renderer: WebGPURenderer,
@@ -83,8 +91,10 @@ export class StrategicScene {
     this.globe = new GlobeMesh(options.grid, options.radius);
     this.globe.setExaggeration(STRATEGIC_EXAGGERATION);
     this.overlay = new StrategicOverlay(options.radius);
+    this.lights = new MapLights(options.radius, this.relief.exaggeration);
+    this.grid = options.grid;
     this.scene.background = BACKGROUND;
-    this.scene.add(this.globe.group, this.relief.group, this.overlay.group);
+    this.scene.add(this.globe.group, this.relief.group, this.overlay.group, this.lights.group);
     this.scene.add(this.reliefLight, new AmbientLight(0xffffff, 0.55));
     this.inputEnabled = options.input !== false;
   }
@@ -139,6 +149,8 @@ export class StrategicScene {
     this.overlay.setWorld(graph, cast, infrastructure);
     // Farmland lies on settled land (decision 80).
     this.relief.habitability.set(graph?.habitability ?? null, graph?.resolution ?? 1);
+    this.strategicData = graph ? { graph, infra: infrastructure } : null;
+    this.lightsDirty = true;
   }
 
   resize(width: number, height: number): void {
@@ -151,13 +163,35 @@ export class StrategicScene {
   render(dt: number): void {
     if (this.pendingGrid) {
       if (this.pendingGrid.n !== this.globe.resolution) this.globe.setGrid(this.pendingGrid);
+      this.grid = this.pendingGrid;
       this.pendingGrid = null;
     }
     if (this.pendingWorld) {
       this.globe.setWorld(this.pendingWorld.world);
       // Climate for the seasonal snow line, sea ice and lake ice (decision 87).
       if (this.pendingWorld.world) this.relief.climate.setWorld(this.pendingWorld.world);
+      this.world = this.pendingWorld.world;
       this.pendingWorld = null;
+      this.lightsDirty = true;
+    }
+    if (this.lightsDirty) {
+      // Lights sit on the world's terrain: build them once the graph and world agree.
+      this.lightsDirty = false;
+      const d = this.strategicData;
+      const w = this.world;
+      if (d && w && w.info.resolution === this.grid.n) {
+        const grid = this.grid;
+        const dir = new Vec3d();
+        this.lights.setLights(
+          mapLightList(
+            d.graph,
+            d.infra,
+            (x, y, z) => w.maps.height[grid.cellOfDirection(dir.set(x, y, z))]!,
+          ),
+        );
+      } else {
+        this.lights.setLights(null);
+      }
     }
 
     const o = this.orbit;
@@ -195,8 +229,11 @@ export class StrategicScene {
     // Map scale at the screen center, in drawing-buffer pixels like the shader's
     // derivatives: the coastal halo and lines are placed with it (decision 85).
     const fovY = (this.camera.fov * Math.PI) / 180;
-    this.relief.mapScale.value =
-      (o.range * fovY) / (this.viewportHeight * this.renderer.getPixelRatio());
+    const pixelAngle = fovY / (this.viewportHeight * this.renderer.getPixelRatio());
+    this.relief.mapScale.value = o.range * pixelAngle;
+    // Night lights: sized in pixels, facing the screen, as strong as the night tint.
+    this.lights.update(o.eye, this.sun, pixelAngle, right, o.up);
+    this.lights.strength.value = this.relief.nightStrength.value;
     this.relief.belowGlobe.value = this.bands.fade('theater') + this.bands.fade('region');
 
     const tiles = this.useTiles && this.relief.hasWorld;
@@ -224,5 +261,6 @@ export class StrategicScene {
     this.globe.dispose();
     this.relief.dispose();
     this.overlay.dispose();
+    this.lights.dispose();
   }
 }

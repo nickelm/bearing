@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–87 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–88 are reflected in both.
 
 ---
 
@@ -1416,3 +1416,15 @@ The owner's amendment and the engineering calls made while adopting it:
 - Settlement, base and industry lights are the next commit of this task.
 
 **Reason:** Part II keeps day, night and seasons on the map because they decide which sorties fly (decision 72). A multiply keeps the map's colors and hillshade, so a coast reads the same by night, only darker and bluer.
+
+### 88. Night lights on the map: instanced screen-facing points on the terrain
+
+**Date:** 2026-11-11
+**Decision:** `render/strategic/mapLights.ts` draws the map's night lights:
+
+- **Sources.** Every settlement of the strategic graph (core radius 0.9 px, plus 0.7 px per doubling of population above 2,000, at most 3.5 px), every airbase (1.4 px) and every target site (1.1 px), from the graph and the infrastructure the map already receives. The simulation view's light tables (decisions 66, 71) are per-tile shader lists for close range; the map needs one point per place at globe scale, so it builds its own list.
+- **Drawing.** One instanced quad per light, turned to the screen's right and up vectors and sized in drawing-buffer pixels, so a light keeps its size at every zoom. A core with a one-pixel antialiased edge plus a Gaussian halo about four times wider, in `#FFD27A`, additively blended: the soft halo Part II allows on night lights only.
+- **Placement.** Each light sits 200 m above its displayed terrain (the world's height at its cell times the relief's exaggeration uniform), so lights stay on their towns when the camera tilts at the floor. The quads are planet-centered at −eye (rule 4).
+- **Visibility.** Lights fade in across civil twilight on the night side (decision 87) and follow the GUI's Night strength. They draw without a depth test, so terrain never hides them, and a horizon test removes those on the far side of the globe.
+
+**Reason:** Lights show where people and bases are at night, the moment the map is otherwise darkest. Pixel-sized points with a halo read at every zoom, and drawing them as one instanced mesh costs a single draw call.
