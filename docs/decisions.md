@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–90 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–91 are reflected in both.
 
 ---
 
@@ -1448,3 +1448,15 @@ The owner's amendment and the engineering calls made while adopting it:
 **Decision:** After the owner's browser check of decision 89, map clouds are lighter: opacity rises to 25% by coverage 0.75 and 45% by 0.95 (was 35% and 60%), and GUI → Map → Cloud opacity scales it (0 to 2). Part II's palette row for clouds changes to match.
 
 **Reason:** The owner found the clouds a little too opaque; the guide's "never so opaque that the map vanishes" governs.
+
+### 91. Graticule and range rings in the relief shader; click to select a point
+
+**Date:** 2026-11-11
+**Decision:** `render/strategic/graticule.ts` adds Part II's optional graticule and range rings, drawn by the relief shader as annotation after day and night:
+
+- **Graticule.** Latitude and longitude lines one pixel wide (distances in meters divided by the fragment's footprint), at the finest round step of 30°, 15°, 10°, 5°, 2°, 1° or 0.5° that keeps lines at least 120 px apart at the screen center. Longitude lines fade out from 75° to 80° latitude, where they converge, and the equator is 1.6 times stronger. Off by default (GUI → Map → Graticule).
+- **Range rings.** Great-circle rings around a selected point at multiples of the finest of 500, 250, 100, 50 or 25 km that keeps them 90 px apart, eight rings, with a three-pixel center dot. On by default once a point is selected (GUI → Map → Range rings).
+- **Selection.** Until map symbols exist, a click on the map (a press and release within 5 px and 400 ms, so drags still pan) selects the ground point under the cursor on the sea-level sphere; Escape clears it. Snapping to bases and aircraft comes with their symbols (S4, C2), and ring labels with the label engine (S2).
+- **Colors.** Part II names none. The graticule is the water-label blue `#2F5F86` at 35% by day and the coastal-line blue `#A9C9D4` by night; rings are the settlement-label dark `#22252A` at 75% by day and the label halo `#F4EFE4` by night, so both stay visible on the night side.
+
+**Reason:** Range rings answer the planning question "what can reach what" at a glance, and the graticule orients the reader on a globe without coastlines in view. Drawing both in the relief shader keeps them on the ground, one pixel wide at any zoom, at no extra draw calls.

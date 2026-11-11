@@ -105,7 +105,8 @@ The strategic view from [docs/visual-style.md](docs/visual-style.md) Part II: gl
   - [ ] Browser check: night legibility and twilight warmth (GUI → Map → Night, Twilight), snow line and sea ice through the year (Time → day)
 - [x] Weather on the map: stylized soft cloud shapes and precipitation hatching from the live weather field (`weatherTexture`, `coverageBake`), at every band, moving with game time, on by default with a toggle (decision 89)
   - [ ] Browser check: cloud opacity and softness at each band, hatching density, and fronts readable at globe scale; the bake's 2 km texels may look soft at the floor
-- [ ] Graticule toggle and range rings around a selected point
+- [x] Graticule toggle and range rings around a selected point (decision 91)
+  - [ ] Range rings around a selected base or aircraft once map symbols and selection exist (S4, C2); ring distance labels with the label engine (S2)
 - [ ] Post-processing: light vignette and paper grain; a soft halo on night lights only; a thin pale rim around the globe instead of the limb glow
 - [ ] Strategic preview views (globe band with the terminator, theater band, region band at the floor) in `tools/render.preview.ts`, plus a color-vision-deficiency filter (Part II check 4) and a 1920 × 1080 sharpness view at the floor (check 5); move the old `orbit`, `limb` and `terminator` views here
 - [ ] Acceptance checks 1, 4 and 5 (Part II) against the reference board; ask the owner to add the Civilization VI and Cold War map references

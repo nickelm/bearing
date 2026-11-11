@@ -30,6 +30,7 @@ import { STRATEGIC_EXAGGERATION, StrategicRelief } from './strategicRelief';
 import type { StrategicReliefWorld } from './strategicRelief';
 import { StrategicOverlay } from './strategicOverlay';
 import { mapLightList, MapLights } from './mapLights';
+import { graticuleStep, pickSphere, ringStep } from './graticule';
 import type { WeatherField } from '../common/weatherField';
 import { ZOOM_BANDS, ZoomBands } from './zoomBands';
 
@@ -83,6 +84,10 @@ export class StrategicScene {
   private grid: CubeGrid;
   private strategicData: { graph: StrategicGraph; infra: Infrastructure | null } | null = null;
   private lightsDirty = false;
+  /** Graticule and range rings (GUI toggles), and the selected point for the rings. */
+  showGraticule = false;
+  showRings = true;
+  selection: Vec3d | null = null;
 
   constructor(
     private readonly renderer: WebGPURenderer,
@@ -113,15 +118,67 @@ export class StrategicScene {
   set inputEnabled(on: boolean) {
     if (on === this.inputEnabled) return;
     if (on) {
-      this.detachInput = attachOrbitInput(
+      const detachOrbit = attachOrbitInput(
         this.renderer.domElement,
         this.orbit,
         () => (this.camera.fov * Math.PI) / 180 / this.viewportHeight,
       );
+      const detachSelect = this.attachSelection(this.renderer.domElement);
+      this.detachInput = () => {
+        detachOrbit();
+        detachSelect();
+      };
     } else {
       this.detachInput!();
       this.detachInput = null;
     }
+  }
+
+  /**
+   * Selection for the range rings (decision 91): a click (press and release within
+   * 5 px and 400 ms, so drags still pan) selects the ground point under the cursor;
+   * Escape clears it.
+   */
+  private attachSelection(el: HTMLElement): () => void {
+    let down: { x: number; y: number; t: number } | null = null;
+    const onDown = (e: PointerEvent) => {
+      down = e.button === 0 ? { x: e.clientX, y: e.clientY, t: performance.now() } : null;
+    };
+    const onUp = (e: PointerEvent) => {
+      const d = down;
+      down = null;
+      if (!d || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 5) return;
+      if (performance.now() - d.t > 400) return;
+      const rect = el.getBoundingClientRect();
+      this.selectAt(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        1 - ((e.clientY - rect.top) / rect.height) * 2,
+      );
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code === 'Escape') this.selection = null;
+    };
+    el.addEventListener('pointerdown', onDown);
+    el.addEventListener('pointerup', onUp);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      el.removeEventListener('pointerdown', onDown);
+      el.removeEventListener('pointerup', onUp);
+      window.removeEventListener('keydown', onKey);
+    };
+  }
+
+  /** Selects the ground point at normalized device coordinates (x, y in −1..1), or clears it. */
+  selectAt(x: number, y: number): void {
+    const o = this.orbit;
+    const t = Math.tan((this.camera.fov * Math.PI) / 360);
+    const right = o.forward.clone().cross(o.up);
+    const dir = o.forward
+      .clone()
+      .addScaled(right, x * t * this.camera.aspect)
+      .addScaled(o.up, y * t)
+      .normalize();
+    this.selection = pickSphere(o.eye, dir, o.radius);
   }
 
   setGrid(grid: CubeGrid): void {
@@ -237,6 +294,14 @@ export class StrategicScene {
     const fovY = (this.camera.fov * Math.PI) / 180;
     const pixelAngle = fovY / (this.viewportHeight * this.renderer.getPixelRatio());
     this.relief.mapScale.value = o.range * pixelAngle;
+    // Graticule spacing and range rings from the map scale (decision 91).
+    const scale = this.relief.mapScale.value;
+    this.relief.graticuleStep.value = graticuleStep(scale, o.radius);
+    this.relief.graticuleOn.value = this.showGraticule ? 1 : 0;
+    this.relief.ringStep.value = ringStep(scale);
+    const sel = this.selection;
+    this.relief.ringsOn.value = this.showRings && sel ? 1 : 0;
+    if (sel) this.relief.ringCenter.value.set(sel.x, sel.y, sel.z);
     // Night lights: sized in pixels, facing the screen, as strong as the night tint.
     this.lights.update(o.eye, this.sun, pixelAngle, right, o.up);
     this.lights.strength.value = this.relief.nightStrength.value;

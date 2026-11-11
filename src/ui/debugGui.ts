@@ -84,6 +84,10 @@ export interface MapGuiParams {
   weather: boolean;
   /** Cloud opacity scale (1 = 25% to 45% by coverage). */
   cloudOpacity: number;
+  /** Latitude and longitude lines (decision 91). */
+  graticule: boolean;
+  /** Range rings around the clicked point; Escape clears it. */
+  rangeRings: boolean;
 }
 
 export interface LightingGuiParams {
@@ -350,6 +354,12 @@ export class DebugGui {
       .onChange(() => changed(map));
     f.add(map, 'cloudOpacity', 0, 2, 0.05)
       .name('Cloud opacity')
+      .onChange(() => changed(map));
+    f.add(map, 'graticule')
+      .name('Graticule')
+      .onChange(() => changed(map));
+    f.add(map, 'rangeRings')
+      .name('Range rings (click; Esc)')
       .onChange(() => changed(map));
     f.close();
   }
