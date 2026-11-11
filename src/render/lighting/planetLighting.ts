@@ -21,6 +21,18 @@ import { earthLikeAtmosphere } from '../atmosphere/model';
 
 export type Vec3Node = Node<'vec3'>;
 
+/** Light at one point, shared by the layers a material shades there (see `PlanetLighting.at`). */
+export interface LightAt {
+  /** Planet-centered position. */
+  p: Vec3Node;
+  /** Unit radial direction. */
+  up: Vec3Node;
+  /** Sunlight after the atmosphere and the clouds. */
+  sunlight: Vec3Node;
+  /** Sky irradiance on a surface facing straight up. */
+  sky: Vec3Node;
+}
+
 export class PlanetLighting {
   /** Unit vector toward the sun, world frame. */
   readonly sunDirection = uniform(new Vector3(1, 0, 0));
@@ -72,18 +84,39 @@ export class PlanetLighting {
    * faint night floor. Aerial perspective is applied separately (`applyAerial`).
    * `normal` is a unit world-space normal; `relative` the camera-relative position.
    */
-  shadeDiffuse(albedo: Vec3Node, normal: Vec3Node, relative: Vec3Node): Vec3Node {
-    const p = this.planetPosition(relative);
-    const up = normalize(p);
-    const sunElevation = dot(up, this.sunDirection);
-    const direct = this.sunlightAt(p).mul(max(dot(normal, this.sunDirection), 0));
-    const skyFacing = dot(normal, up).mul(0.5).add(0.5);
-    const sky = this.atmosphere
-      .skyIrradiance(sunElevation)
-      .mul(this.sunIlluminance.mul(this.skyLight).mul(skyFacing));
+  shadeDiffuse(
+    albedo: Vec3Node,
+    normal: Vec3Node,
+    relative: Vec3Node,
+    at: LightAt = this.at(relative),
+  ): Vec3Node {
+    const direct = at.sunlight.mul(max(dot(normal, this.sunDirection), 0));
+    const skyFacing = dot(normal, at.up).mul(0.5).add(0.5);
+    const sky = at.sky.mul(skyFacing);
     const night = vec3(0.55, 0.65, 1.0).mul(this.nightLight);
     const light = direct.add(sky).add(night);
     return albedo.mul(light) as Vec3Node;
+  }
+
+  /**
+   * The light arriving at a camera-relative position, independent of the
+   * surface's normal and albedo. A material that shades several layers at one
+   * point (land, water, roads) builds this once and passes it to each
+   * `shadeDiffuse` call, so the sun's transmittance, the cloud shadow and the
+   * sky light are evaluated once per fragment (decision 69).
+   */
+  at(relative: Vec3Node): LightAt {
+    const p = this.planetPosition(relative);
+    const up = normalize(p) as Vec3Node;
+    const sky = this.atmosphere
+      .skyIrradiance(dot(up, this.sunDirection))
+      .mul(this.sunIlluminance.mul(this.skyLight)) as Vec3Node;
+    return {
+      p,
+      up,
+      sunlight: this.sunlightAt(p).toVar() as Vec3Node,
+      sky: sky.toVar() as Vec3Node,
+    };
   }
 
   /** Surface radiance seen through the air: L·T + in-scatter (per-vertex values from aerialPerspective). */

@@ -7,7 +7,11 @@
  *   npx vitest run --config vitest.tools.config.ts tools/render.preview.ts
  *   env: SEED (1983), TRES tectonic resolution (256), GRES global resolution (1024),
  *        VIEWS comma list of view names (all), W × H image size (1024 × 576),
- *        EX exaggeration (10)
+ *        EX exaggeration (10),
+ *        PERF=n times n more frames per view once loaded: ms per frame until the GPU is
+ *          done, CPU in scene.render and its parts, terrain loop lengths, draw statistics
+ *          (on a software adapter only the ratios mean anything),
+ *        PROF=<file> also writes a V8 CPU profile of those frames (.cpuprofile)
  *
  * Output: tools/out/render-<seed>-<view>.png (gitignored).
  */
@@ -224,6 +228,38 @@ export const PREVIEW_VIEWS: PreviewView[] = [
   },
 ];
 
+/** Draw statistics for PERF lines: visible meshes and triangles per scene group, and layer counts. */
+function drawStats(scene: GlobeScene): string {
+  const names = new Map<unknown, string>([
+    [scene.terrain.group, 'terrain'],
+    [scene.forest.group, 'trees'],
+    [scene.structures.group, 'buildings'],
+    [scene.clouds.group, 'clouds'],
+    [scene.strategic.group, 'overlay'],
+    [scene.globe.group, 'grid'],
+  ]);
+  const groups = scene.scene.children
+    .map((g) => {
+      let n = 0;
+      let tris = 0;
+      g.traverseVisible((o) => {
+        const m = o as unknown as {
+          isMesh?: boolean;
+          geometry?: { index?: { count: number }; instanceCount?: number };
+        };
+        if (!m.isMesh) return;
+        n++;
+        const instances = m.geometry?.instanceCount;
+        tris +=
+          ((m.geometry?.index?.count ?? 0) / 3) * (Number.isFinite(instances) ? instances! : 1);
+      });
+      return n ? `${names.get(g) ?? g.type} ${n} draws ${(tris / 1e6).toFixed(2)} M tris` : '';
+    })
+    .filter(Boolean)
+    .join(', ');
+  return `${groups}; deepest L${scene.terrain.stats.deepest}, ${scene.forest.stats.instances} tree clumps, ${scene.structures.stats.instances} buildings`;
+}
+
 const env = (k: string, d: string) => process.env[k] ?? d;
 
 it('renders preview views', async () => {
@@ -357,13 +393,11 @@ it('renders preview views', async () => {
     o.altitude = o.targetAltitude = v.altitude;
     o.tilt = v.tilt;
     o.heading = v.heading;
-    const t = withLocalTime(
-      (v.day ?? 0) * DAY,
-      o.lon,
-      (v.localTime ?? 11) * HOUR,
-      params,
-      calendar,
-    );
+    const localAt = (day: number) =>
+      withLocalTime(day * DAY, o.lon, (v.localTime ?? 11) * HOUR, params, calendar);
+    // The sim starts at campaign start: an early local time on day 0 can fall before it.
+    let t = localAt(v.day ?? 0);
+    if (t < 0) t = localAt((v.day ?? 0) + 1);
     sunDirection(t, params, calendar, scene.sun);
     scene.terrain.land.seasonPhase.value = seasonPhase(t, params, calendar);
     // HOURS shifts only the clouds' clock (to see them move with the sun held fixed).
@@ -392,6 +426,76 @@ it('renders preview views', async () => {
       last = sig;
     }
     scene.render(0);
+    // PERF=n: time n more frames of the loaded view (CPU in scene.render, and until the GPU is done).
+    const perfFrames = Number(process.env.PERF ?? 0);
+    if (perfFrames > 0) {
+      await gpu.finish();
+      let cpu = 0;
+      const p0 = performance.now();
+      const parts: Record<string, number> = {};
+      const wrap = (obj: Record<string, unknown>, name: string, label: string) => {
+        const fn = obj[name] as (...a: unknown[]) => unknown;
+        obj[name] = (...a: unknown[]) => {
+          const q0 = performance.now();
+          const r = fn.apply(obj, a);
+          parts[label] = (parts[label] ?? 0) + performance.now() - q0;
+          return r;
+        };
+        return () => (obj[name] = fn);
+      };
+      const unwrap = [
+        wrap(scene.terrain as unknown as Record<string, unknown>, 'update', 'terrain'),
+        wrap(scene.forest as unknown as Record<string, unknown>, 'update', 'forest'),
+        wrap(scene.structures as unknown as Record<string, unknown>, 'update', 'buildings'),
+        wrap(scene.strategic as unknown as Record<string, unknown>, 'update', 'strategic'),
+        wrap(head.renderer as unknown as Record<string, unknown>, 'render', 'three'),
+      ];
+      const { Session } = await import('node:inspector/promises');
+      const session = process.env.PROF ? new Session() : null;
+      if (session) {
+        session.connect();
+        await session.post('Profiler.enable');
+        await session.post('Profiler.start');
+      }
+      for (let f = 0; f < perfFrames; f++) {
+        const c0 = performance.now();
+        scene.render(0);
+        cpu += performance.now() - c0;
+        await gpu.finish();
+      }
+      const wall = (performance.now() - p0) / perfFrames;
+      if (session) {
+        const { profile } = await session.post('Profiler.stop');
+        writeFileSync(process.env.PROF!, JSON.stringify(profile));
+        session.disconnect();
+      }
+      for (const u of unwrap) u();
+      const counts: Record<string, number[]> = { river: [], road: [], light: [] };
+      scene.terrain.group.traverseVisible((m) => {
+        if (!(m as { isMesh?: boolean }).isMesh) return;
+        for (const k of ['river', 'road', 'light'])
+          counts[k]!.push(m.userData[`${k}Count`] as number);
+      });
+      console.log(
+        '  loops per mesh (mean/max): ' +
+          Object.entries(counts)
+            .map(
+              ([k, c]) =>
+                `${k} ${(c.reduce((a, b) => a + b, 0) / Math.max(1, c.length)).toFixed(0)}/${Math.max(0, ...c)}`,
+            )
+            .join(', '),
+      );
+      console.log(
+        '  CPU parts: ' +
+          Object.entries(parts)
+            .map(([k, ms]) => `${k} ${(ms / perfFrames).toFixed(1)}`)
+            .join(', '),
+      );
+      console.log(
+        `  perf ${v.name}: ${wall.toFixed(1)} ms/frame, CPU ${(cpu / perfFrames).toFixed(1)} ms, ` +
+          drawStats(scene),
+      );
+    }
     const rgb = await head.readRgb();
     const file = join(outDir, `render-${seed}-${v.name}.png`);
     writeFileSync(file, encodePng(width, height, rgb));

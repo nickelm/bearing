@@ -24,6 +24,7 @@ import {
   min,
   mix,
   normalize,
+  select,
   storage,
   uniform,
 } from 'three/tsl';
@@ -65,15 +66,18 @@ export class RiverShading {
 
   /**
    * Water coverage 0..1 at a planet-centered position, from `count` segments
-   * starting at `start` in the list buffer. `footprint` is meters per pixel.
+   * starting at `start` in the list buffer. `footprint` is meters per pixel
+   * (a variable computed outside any branch). The loop runs only where
+   * `gate` holds (default: everywhere).
    */
-  coverage(planetPosition: V3, start: F, count: F, footprint: F): F {
+  coverage(planetPosition: V3, start: F, count: F, footprint: F, gate?: Node<'bool'>): F {
     return Fn(() => {
       const p = normalize(planetPosition);
       const fp = max(footprint, 0.05);
       const cover = float(0).toVar();
       const first = int(start);
-      Loop({ start: int(0), end: int(count), type: 'int' }, ({ i }) => {
+      const end = gate ? select(gate, int(count), int(0)) : int(count);
+      Loop({ start: int(0), end, type: 'int' }, ({ i }) => {
         const id = this.lists.element(first.add(i)).toInt();
         const a = this.segments.element(id.mul(2));
         const b = this.segments.element(id.mul(2).add(1));

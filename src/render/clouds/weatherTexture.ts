@@ -36,6 +36,8 @@ export class WeatherTexture {
   readonly texture: DataArrayTexture;
   /** 0 shows the earlier frame, 1 the later. */
   readonly blend = uniform(0);
+  /** Counts uploads, so baked fields know when the frames changed. */
+  version = 0;
   private readonly m: number;
 
   constructor(private readonly n = WEATHER_RESOLUTION) {
@@ -70,6 +72,7 @@ export class WeatherTexture {
       half[s * 4 + 3] = DataUtils.toHalfFloat(Math.min(1, later[precip + s]! / PRECIP_FULL));
     }
     this.texture.needsUpdate = true;
+    this.version++;
   }
 
   /** Fills every texel with one cover and precipitation fraction (tests, and before the sim runs). */
@@ -79,6 +82,7 @@ export class WeatherTexture {
     const p = DataUtils.toHalfFloat(precip);
     for (let s = 0; s < half.length / 4; s++) half.set([c, c, p, p], s * 4);
     this.texture.needsUpdate = true;
+    this.version++;
   }
 
   /** Sets the blend for game time t from the view's frame hours. */

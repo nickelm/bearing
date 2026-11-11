@@ -181,6 +181,8 @@ export class GlobeScene {
     // Above the highest exaggerated terrain, so the lines are not buried.
     this.strategic.update(o.eye, this.globe.maxDisplayedHeight + 2000);
 
+    // Cloud coverage for shadows, re-baked when the clouds have moved (decision 69).
+    this.clouds.bake(this.renderer, performance.now());
     this.renderer.render(this.scene, this.camera);
   }
 

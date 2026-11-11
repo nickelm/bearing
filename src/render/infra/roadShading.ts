@@ -79,14 +79,17 @@ export class RoadShading {
    * (coverage, concrete) at a planet-centered position: coverage 0..1 by any
    * paved segment, and how much of that is concrete.
    */
-  coverage(planetPosition: V3, start: F, count: F, footprint: F): V2 {
+  coverage(planetPosition: V3, start: F, count: F, footprint: F, gate?: Node<'bool'>): V2 {
     return Fn(() => {
       const p = normalize(planetPosition);
       const fp = max(footprint, 0.05);
       const cover = float(0).toVar();
       const concrete = float(0).toVar();
       const first = int(start);
-      Loop({ start: int(0), end: int(count), type: 'int' }, ({ i }) => {
+      // No segments where the gate fails (e.g. at sea), or with roads hidden.
+      const run = this.style.enabled.greaterThan(0);
+      const end = select(gate ? gate.and(run) : run, int(count), int(0));
+      Loop({ start: int(0), end, type: 'int' }, ({ i }) => {
         const id = this.lists.element(first.add(i)).toInt();
         const a = this.segments.element(id.mul(2));
         const b = this.segments.element(id.mul(2).add(1));
@@ -277,10 +280,12 @@ export function localNetwork(
   footprint: F,
   radius: number,
   style: RoadStyle,
+  gate?: Node<'bool'>,
 ): V2 {
   return Fn(() => {
     const out = vec2(0, 0).toVar();
-    If(footprint.lessThan(LOCAL_MAX_FOOTPRINT).and(habitability.greaterThan(0.1)), () => {
+    const near = footprint.lessThan(LOCAL_MAX_FOOTPRINT).and(habitability.greaterThan(0.1));
+    If((gate ? near.and(gate) : near).and(style.enabled.greaterThan(0)), () => {
       const p = normalize(planetPosition).mul(radius);
       const base = floor(p.div(LOCAL_CELL));
       const keep = habitability;

@@ -45,6 +45,11 @@ export class TileCache<T> {
     return this.entries.has(tileKeyString(tile));
   }
 
+  /** The tile's value, without marking it used. */
+  peek(tile: TileKey): T | undefined {
+    return this.entries.get(tileKeyString(tile))?.value;
+  }
+
   /** The tile's value, marking it used this frame. */
   get(tile: TileKey): T | undefined {
     const e = this.entries.get(tileKeyString(tile));

@@ -96,6 +96,8 @@ interface Bounds {
   /** Unit direction of the tile center and angular radius of its bounding cap. */
   capCenter: Vec3d;
   capAngle: number;
+  /** Highest displayed point (m above the sphere): the horizon test's peak height. */
+  top: number;
 }
 
 const BOUND_SAMPLES: readonly [number, number][] = [
@@ -110,8 +112,50 @@ const BOUND_SAMPLES: readonly [number, number][] = [
   [TILE_TEXELS / 2, TILE_TEXELS / 2],
 ];
 
-function tileBounds(t: TileKey, view: LodView): Bounds {
-  const top = view.radius + view.maxHeight;
+/**
+ * Displayed height range of a tile (m above the sphere, exaggerated), once
+ * known from its mesh. Without it, a tile's bounds reach from the sphere to
+ * the tallest terrain on the planet.
+ */
+export type HeightRange = (t: TileKey) => readonly [number, number] | null;
+
+interface CachedBounds {
+  bounds: Bounds;
+  lo: number;
+  hi: number;
+}
+
+/**
+ * Bounds of every tile visited, kept across frames (decision 69): they
+ * depend only on the tile, the planet radius and the height range, and
+ * computing them (nine trigonometric samples and their allocations per tile)
+ * was a large share of the selection's cost.
+ */
+class BoundsCache {
+  private readonly map = new Map<number, CachedBounds>();
+  private radius = Number.NaN;
+
+  get(t: TileKey, radius: number, lo: number, hi: number): Bounds {
+    if (radius !== this.radius) {
+      this.map.clear();
+      this.radius = radius;
+    }
+    // Unique for levels up to 20: (level·6 + face) · 2⁴⁰ + y · 2²⁰ + x < 2⁵³.
+    const key = (t.level * 6 + t.face) * 2 ** 40 + t.y * 2 ** 20 + t.x;
+    const c = this.map.get(key);
+    if (c && c.lo === lo && c.hi === hi) return c.bounds;
+    if (!c && this.map.size > 200_000) this.map.clear();
+    const bounds = computeTileBounds(t, radius, lo, hi);
+    this.map.set(key, { bounds, lo, hi });
+    return bounds;
+  }
+}
+
+const boundsCache = new BoundsCache();
+
+function computeTileBounds(t: TileKey, radius: number, lo: number, hi: number): Bounds {
+  const top = radius + hi;
+  const bottom = radius + lo;
   const points: Vec3d[] = [];
   const center = new Vec3d();
   const d = new Vec3d();
@@ -121,18 +165,18 @@ function tileBounds(t: TileKey, view: LodView): Bounds {
     tileSampleDirection(t, sx, sy, d);
     capCos = Math.min(capCos, d.dot(capCenter));
     points.push(d.clone().scale(top));
-    points.push(d.clone().scale(view.radius));
+    points.push(d.clone().scale(bottom));
   }
   for (const p of points) center.add(p);
   center.scale(1 / points.length);
   let r = 0;
   for (const p of points) r = Math.max(r, p.distanceTo(center));
   // Points only sample the tile; the surface bulges between them by at most the sagitta.
-  const side = vertexSpacing(t.level, view.radius) * TILE_SEGMENTS;
-  r += (side * side) / (8 * view.radius);
+  const side = vertexSpacing(t.level, radius) * TILE_SEGMENTS;
+  r += (side * side) / (8 * radius);
   // Corners and edge midpoints bound the cap of a tile up to its curved edges; pad slightly.
   const capAngle = Math.acos(Math.min(1, capCos)) * 1.02;
-  return { center, radius: r, capCenter, capAngle };
+  return { center, radius: r, capCenter, capAngle, top: hi };
 }
 
 /**
@@ -155,19 +199,41 @@ export function capBeyondHorizon(
   return angle - capAngle > horizon;
 }
 
-function outsideFrustum(b: Bounds, view: LodView): boolean {
+/** The camera's frustum planes, computed once per selection. */
+interface Frustum {
+  right: Vec3d;
+  up: Vec3d;
+  tanX: number;
+  tanY: number;
+  nx: number;
+  ny: number;
+}
+
+function frustumOf(view: LodView): Frustum {
   const right = view.forward.clone().cross(view.up).normalize();
   const up = right.clone().cross(view.forward).normalize();
-  const rel = b.center.clone().sub(view.eye);
-  const z = rel.dot(view.forward);
-  if (z < -b.radius) return true; // behind the camera
   const tanY = Math.tan(view.fovY / 2);
   const tanX = tanY * view.aspect;
+  return {
+    right,
+    up,
+    tanX,
+    tanY,
+    nx: 1 / Math.sqrt(1 + tanX * tanX),
+    ny: 1 / Math.sqrt(1 + tanY * tanY),
+  };
+}
+
+const relScratch = new Vec3d();
+
+function outsideFrustum(b: Bounds, view: LodView, f: Frustum = frustumOf(view)): boolean {
+  const { right, up, tanX, tanY, nx, ny } = f;
+  const rel = relScratch.copy(b.center).sub(view.eye);
+  const z = rel.dot(view.forward);
+  if (z < -b.radius) return true; // behind the camera
   // Side planes through the eye; signed distance of the center, compared with the radius.
   const x = rel.dot(right);
   const y = rel.dot(up);
-  const nx = 1 / Math.sqrt(1 + tanX * tanX);
-  const ny = 1 / Math.sqrt(1 + tanY * tanY);
   if ((x - z * tanX) * nx > b.radius) return true;
   if ((-x - z * tanX) * nx > b.radius) return true;
   if ((y - z * tanY) * ny > b.radius) return true;
@@ -183,7 +249,17 @@ export function selectTiles(
   view: LodView,
   ready: (t: TileKey) => boolean,
   opts: LodOptions = DEFAULT_LOD,
+  heightRange: HeightRange = () => null,
 ): LodSelection {
+  // A tile's own height range when known (its mesh exists), else sphere to tallest peak.
+  // With the planet-wide range, a camera below the tallest exaggerated peak sits inside
+  // every nearby tile's bounds, and they all split to the finest level (decision 69).
+  const tileBounds = (t: TileKey): Bounds => {
+    const range = heightRange(t);
+    return range
+      ? boundsCache.get(t, view.radius, range[0], range[1])
+      : boundsCache.get(t, view.radius, 0, view.maxHeight);
+  };
   const k = view.viewportHeight / (2 * Math.tan(view.fovY / 2));
   const out: LodSelection = { draw: [], wanted: [], visited: 0 };
 
@@ -191,11 +267,12 @@ export function selectTiles(
     const dist = Math.max(1, view.eye.distanceTo(b.center) - b.radius);
     return (geometricError(t.level, view, opts) * k) / dist;
   };
+  const frustum = frustumOf(view);
   const visible = (b: Bounds) =>
     !opts.cull ||
     !(
-      capBeyondHorizon(view.eye, b.capCenter, b.capAngle, view.radius, view.maxHeight) ||
-      outsideFrustum(b, view)
+      capBeyondHorizon(view.eye, b.capCenter, b.capAngle, view.radius, b.top) ||
+      outsideFrustum(b, view, frustum)
     );
 
   const visit = (t: TileKey, b: Bounds, parentSse: number) => {
@@ -207,7 +284,7 @@ export function selectTiles(
         : Math.min(1, Math.max(0, (parentSse / opts.sseThreshold - 1) / (opts.morphRange - 1)));
     if (e > opts.sseThreshold && t.level < opts.maxLevel) {
       const kids = childTiles(t)
-        .map((c) => ({ c, b: tileBounds(c, view) }))
+        .map((c) => ({ c, b: tileBounds(c) }))
         .filter((x) => visible(x.b));
       const missing = kids.filter((x) => !ready(x.c));
       if (missing.length === 0) {
@@ -221,7 +298,7 @@ export function selectTiles(
 
   for (let f = 0; f < 6; f++) {
     const root = tileKey(f as CubeFace, 0, 0, 0);
-    const b = tileBounds(root, view);
+    const b = tileBounds(root);
     if (!visible(b)) continue;
     if (!ready(root)) {
       out.wanted.push({ tile: root, priority: Infinity });

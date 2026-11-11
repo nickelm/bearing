@@ -183,7 +183,7 @@ Civilian geography (settlements, roads, bridges) joins the strategic graph befor
 - [ ] Island campaigns can leave the Alliance under 15 airbases (seed 11: 9), since its islands have little flat land; tied to the lopsided island split noted under milestone 4
 - [ ] Checkpoint 6: owner review of towns, roads, airbases and night lights in the browser
 
-## Milestone 6: Simulation core and weather
+## Milestone 6: Simulation core and weather (done)
 
 - [x] Sim worker host: message protocol and state snapshots to the main thread as transferable buffers (decision 40, 67)
 - [x] Float64 game clock and time acceleration (pause, 1×, 4×, 16×, 64×, 256×)
@@ -196,8 +196,8 @@ Civilian geography (settlements, roads, bridges) joins the strategic graph befor
 - [x] Weather determinism test across time acceleration
 - [x] Clouds rendered from the live weather field (replaces the static M3 field)
 - [x] Tools: `tools/weather.preview.ts` draws cloud, precipitation, isobars and 850 hPa winds and prints statistics
-- [ ] Checkpoint 7: owner review of the time bar, auto-slowdown and clouds from live weather in the browser (the GPU cloud test and the render preview have not run on a GPU yet)
-- [ ] Weather fields not yet used: fog and visibility in the renderer, rain and snow on the ground, live winds for wave direction
+- [x] Checkpoint 7: owner review of the time bar, auto-slowdown and clouds from live weather in the browser (signed off 2026-11-11; the GPU cloud test now runs on lavapipe and caught clear skies that were not clear, decision 69)
+- Carried to milestone 9: weather fields not yet used in the renderer (fog and visibility, rain and snow on the ground, live winds for wave direction)
 
 ## Milestone 7: Air tasking and mission search
 
@@ -264,6 +264,12 @@ Civilian geography (settlements, roads, bridges) joins the strategic graph befor
 - [ ] Cache the strategic graph and the cast with the world in IndexedDB
 - [ ] Generation profiling and progress polish (no time budget, decision 12)
 - [ ] Rendering performance pass (GPU timestamp queries, frame budget); consider building tile meshes in a worker (decision 30)
+  - [x] First pass after the owner saw 1–2 fps on an RTX 5090 laptop (decision 69): device on the high-performance adapter, tile bounds from each tile's own heights (5–9× fewer draws at 20–50 km), cloud coverage baked by compute for shadows, light shared per fragment, water and night lights branch off where they do not show, adaptive render scale
+  - [x] `PERF=n` and `PROF=<file>` in `tools/render.preview.ts` (frame and CPU times, draw statistics, V8 profiles)
+  - [ ] Owner check in the browser: 25–30 fps in map views (20–300 km) while panning; Status → Backend names the discrete GPU
+  - [ ] GPU timestamp queries per pass, to split terrain, clouds, sky and trees on real hardware
+  - [ ] Per-object uniforms on terrain meshes (eight per tile) packed into fewer, if draw submission shows up in profiles
+- [ ] Weather in the renderer (from milestone 6): fog and visibility, rain and snow on the ground, live winds for wave direction
 - [ ] Tree LOD: one cone per clump beyond about 2 km, or impostors (decision 45: ~6.6 M triangles over dense forest at the default 5 km range)
 - [ ] Denser forests: closer clump spacing in closed-canopy biomes, paid for by the tree LOD (owner request at checkpoint 4)
 - [ ] Bundle size and code splitting

@@ -29,6 +29,7 @@ import {
   float,
   fwidth,
   Fn,
+  If,
   length,
   max,
   mix,
@@ -104,6 +105,8 @@ export interface TerrainStats {
   generated: number;
   pending: number;
   deepest: number;
+  /** Quadtree nodes visited by the last selection. */
+  visited: number;
 }
 
 export interface TerrainWorld {
@@ -126,6 +129,7 @@ export class TerrainRenderer {
     generated: 0,
     pending: 0,
     deepest: 0,
+    visited: 0,
   };
   lod: LodOptions = { ...DEFAULT_LOD };
   geomorph = true;
@@ -252,77 +256,91 @@ export class TerrainRenderer {
     const normal = normalize(up.sub(attribute('slope', 'vec3').mul(exaggeration)));
     const radial = normalize(up);
     const wrapped = wrapOrigin.add(local);
-    const climateHere = this.climate.sample(radial);
-    const bed = attribute('color', 'vec3');
-    const surface = this.water.shade({
-      albedo: this.land.albedo({
-        albedo: bed,
-        slope: attribute('slope', 'vec3'),
+    const L = this.lighting;
+    material.colorNode = Fn(() => {
+      // Derivatives first, in uniform control flow: the layers below branch
+      // per fragment (decision 69) and must not take derivatives themselves.
+      const footprint = length(fwidth(positionWorld)).toVar();
+      const heightWidth = max(fwidth(rawHeight), 1e-3).toVar();
+      const planet = L.planetPosition(positionWorld);
+      // Sunlight, cloud shadow and sky light once for every layer shaded here.
+      const at = L.at(positionWorld);
+      const climateHere = this.climate.sample(radial);
+      const bed = attribute('color', 'vec3');
+      // Rivers draw on land only: skip their loop out at sea.
+      const offshore = rawHeight.lessThan(heightWidth.negate());
+      const river = rivers.coverage(planet, riverStart, riverCount, footprint, offshore.not());
+      const surface = this.water.shade({
+        albedo: this.land.albedo({
+          albedo: bed,
+          slope: attribute('slope', 'vec3'),
+          height: rawHeight,
+          up: radial,
+          climate: climateHere,
+          wrapped,
+        }),
+        bed,
+        temperature: this.land.surfaceTemperature(climateHere, rawHeight, radial),
+        normal,
         height: rawHeight,
+        lake: lakeDepth,
+        river,
+        shore: surfaceAttr.z,
         up: radial,
-        climate: climateHere,
-        wrapped,
-      }),
-      bed,
-      temperature: this.land.surfaceTemperature(climateHere, rawHeight, radial),
-      normal,
-      height: rawHeight,
-      lake: lakeDepth,
-      river: rivers.coverage(
-        this.lighting.planetPosition(positionWorld),
-        riverStart,
-        riverCount,
-        length(fwidth(positionWorld)),
-      ),
-      shore: surfaceAttr.z,
-      up: radial,
-      relative: positionWorld,
-      wavePosition: wrapped,
-    });
-    // Roads and pavement over dry land and rivers (a road over a river reads as a bridge).
-    const planet = this.lighting.planetPosition(positionWorld);
-    const footprint = length(fwidth(positionWorld));
-    const paved = roads.coverage(planet, roadStart, roadCount, footprint);
-    // Habitability peaks near 0.6 and is under 0.1 on half the land: 0.4 and up count as fully settled.
-    const hab = clamp(this.habitability.sample(radial).div(0.4), 0, 1);
-    // Country lanes and villages near the camera (render-only, decision 66).
-    const lanes = localNetwork(planet, hab, footprint, radius, this.roadStyle);
-    const dry = step(0.5, rawHeight).mul(step(lakeDepth, 0)).mul(this.land.enabled);
-    const asphalt = vec3(0.075, 0.075, 0.08);
-    const concrete = vec3(0.4, 0.39, 0.36);
-    const roadAlbedo = mix(
-      asphalt,
-      concrete,
-      clamp(paved.y.div(max(paved.x, 1e-4)), 0, 1),
-    ) as unknown as typeof normal;
-    const roadRadiance = this.lighting.shadeDiffuse(roadAlbedo, normal, positionWorld);
-    const laneAlbedo = vec3(0.22, 0.2, 0.17) as unknown as typeof normal;
-    const laneRadiance = this.lighting.shadeDiffuse(laneAlbedo, normal, positionWorld);
-    const withLanes = mix(surface, laneRadiance, lanes.x.mul(dry));
-    const withRoads = mix(withLanes, roadRadiance, paved.x.mul(dry));
-    // Settlement lights on the night side (sodium orange), plus a glow along paved roads.
-    const night = nightFactor(radial, this.lighting.sunDirection);
-    // Rural glow: habitability² broken into village-sized speckles, faded out
-    // where pixels are much larger than the speckles so orbit views keep a mean.
-    // Two scales: village dots (2.5 km) inside clusters of settled land (30 km);
-    // where pixels outgrow the dots, their mean takes over within the clusters.
-    const dots = clamp(ruralSpeckle(planet).sub(0.5).mul(3), 0, 1);
-    const clusters = clamp(ruralSpeckle(planet, 30_000).sub(0.45).mul(3), 0, 1);
-    const resolved = clamp(footprint.div(1500), 0, 1);
-    const villages = mix(dots, float(0.15), resolved).mul(clusters);
-    // Close up, the lit villages of the local network replace the speckle.
-    const near = clamp(float(400).sub(footprint).div(200), 0, 1);
-    const rural = mix(pow(hab, 1.5).mul(villages).mul(0.9), lanes.y.mul(0.8), near);
-    const glow = lights
-      .emission(planet, lightStart, lightCount, footprint)
-      .add(rural)
-      .add(paved.x.mul(0.12))
-      .mul(night)
-      .mul(dry)
-      .mul(this.roadStyle.lights)
-      .mul(0.12);
-    const lit = withRoads.add(vec3(1, 0.7, 0.38).mul(glow));
-    material.colorNode = this.lighting.applyAerial(lit, apInscatter, apTransmittance);
+        relative: positionWorld,
+        wavePosition: wrapped,
+        light: at,
+      });
+      const dry = step(0.5, rawHeight).mul(step(lakeDepth, 0)).mul(this.land.enabled).toVar();
+      const isDry = dry.greaterThan(0);
+      // Roads and pavement over dry land and rivers (a road over a river reads as a bridge).
+      const paved = roads.coverage(planet, roadStart, roadCount, footprint, isDry).toVar();
+      // Habitability peaks near 0.6 and is under 0.1 on half the land: 0.4 and up count as fully settled.
+      const hab = clamp(this.habitability.sample(radial).div(0.4), 0, 1).toVar();
+      // Country lanes and villages near the camera (render-only, decision 66).
+      const lanes = localNetwork(planet, hab, footprint, radius, this.roadStyle, isDry).toVar();
+      const asphalt = vec3(0.075, 0.075, 0.08);
+      const concrete = vec3(0.4, 0.39, 0.36);
+      const roadAlbedo = mix(
+        asphalt,
+        concrete,
+        clamp(paved.y.div(max(paved.x, 1e-4)), 0, 1),
+      ) as unknown as typeof normal;
+      const roadRadiance = L.shadeDiffuse(roadAlbedo, normal, positionWorld, at);
+      const laneAlbedo = vec3(0.22, 0.2, 0.17) as unknown as typeof normal;
+      const laneRadiance = L.shadeDiffuse(laneAlbedo, normal, positionWorld, at);
+      const withLanes = mix(surface, laneRadiance, lanes.x.mul(dry));
+      const withRoads = mix(withLanes, roadRadiance, paved.x.mul(dry));
+      // Settlement lights on the night side (sodium orange), plus a glow along paved roads.
+      // By day, at sea and with lights off, none of it runs.
+      const night = nightFactor(radial, L.sunDirection);
+      const glow = float(0).toVar();
+      If(night.mul(dry).mul(this.roadStyle.lights).greaterThan(0), () => {
+        // Rural glow: habitability² broken into village-sized speckles, faded out
+        // where pixels are much larger than the speckles so orbit views keep a mean.
+        // Two scales: village dots (2.5 km) inside clusters of settled land (30 km);
+        // where pixels outgrow the dots, their mean takes over within the clusters.
+        const dots = clamp(ruralSpeckle(planet).sub(0.5).mul(3), 0, 1);
+        const clusters = clamp(ruralSpeckle(planet, 30_000).sub(0.45).mul(3), 0, 1);
+        const resolved = clamp(footprint.div(1500), 0, 1);
+        const villages = mix(dots, float(0.15), resolved).mul(clusters);
+        // Close up, the lit villages of the local network replace the speckle.
+        const near = clamp(float(400).sub(footprint).div(200), 0, 1);
+        const rural = mix(pow(hab, 1.5).mul(villages).mul(0.9), lanes.y.mul(0.8), near);
+        glow.assign(
+          lights
+            .emission(planet, lightStart, lightCount, footprint)
+            .add(rural)
+            .add(paved.x.mul(0.12))
+            .mul(night)
+            .mul(dry)
+            .mul(this.roadStyle.lights)
+            .mul(0.12),
+        );
+      });
+      const lit = withRoads.add(vec3(1, 0.7, 0.38).mul(glow));
+      return L.applyAerial(lit, apInscatter, apTransmittance);
+    })();
     return material;
   }
 
@@ -336,6 +354,16 @@ export class TerrainRenderer {
     const w = this.world;
     if (!w) return null;
     return { radius: w.radius, reliefScale: w.reliefScale, mode: this.mode, detail: this.detail };
+  }
+
+  /**
+   * Asks for a data tile that a layer drawn on the terrain needs (trees and
+   * buildings, decision 69): the terrain may draw that area from coarser
+   * tiles and never load it itself. Requests last one frame; ask every frame.
+   * `priority` is compared with the terrain's own screen-space errors (pixels).
+   */
+  requestDataTile(key: TileKey, priority: number): void {
+    if (this.world && !this.data.has(key)) this.queue.request(key, priority);
   }
 
   /** Cached tile data (levels ≤ MAX_BAKED_LEVEL), marking it used; undefined if not loaded. */
@@ -443,6 +471,9 @@ export class TerrainRenderer {
       wrapCoordinate(m.origin.z),
     );
     mesh.userData.morph = 1;
+    // Displayed height range before exaggeration: tight bounds for LOD selection.
+    mesh.userData.minHeight = m.minHeight;
+    mesh.userData.maxHeight = m.maxHeight;
     const river = this.rivers?.rangeFor(t);
     mesh.userData.riverStart = river?.start ?? 0;
     mesh.userData.riverCount = river?.count ?? 0;
@@ -468,9 +499,16 @@ export class TerrainRenderer {
     const v: LodView = { ...view, exaggeration: this.exaggeration };
     this.data.beginFrame();
     this.meshes.beginFrame();
-    this.queue.beginFrame();
 
-    let sel = selectTiles(v, (t) => this.meshes.has(t), this.lod);
+    const ready = (t: TileKey) => this.meshes.has(t);
+    const x = this.exaggeration;
+    const heightRange = (t: TileKey): [number, number] | null => {
+      const mesh = this.meshes.peek(t);
+      if (!mesh) return null;
+      const u = mesh.userData as { minHeight: number; maxHeight: number };
+      return [Math.max(0, u.minHeight) * x, Math.max(0, u.maxHeight) * x];
+    };
+    let sel = selectTiles(v, ready, this.lod, heightRange);
     // Build wanted meshes whose data is cached, best first, within the time budget.
     const t0 = performance.now();
     const wanted = [...sel.wanted].sort((a, b) => b.priority - a.priority);
@@ -484,7 +522,7 @@ export class TerrainRenderer {
         this.requestData(w.tile, w.priority);
       }
     }
-    if (built > 0) sel = selectTiles(v, (t) => this.meshes.has(t), this.lod);
+    if (built > 0) sel = selectTiles(v, ready, this.lod, heightRange);
     for (const w of sel.wanted) if (!this.sources(w.tile)) this.requestData(w.tile, w.priority);
 
     // Place drawn meshes camera-relative and keep their data alive.
@@ -505,7 +543,10 @@ export class TerrainRenderer {
     for (const m of this.visible) if (!now.has(m)) m.visible = false;
     this.visible = now;
 
+    // Generates what this frame asked for, plus the requests trees and buildings made
+    // after the last update; then starts collecting the next frame's requests.
     void this.loader.update();
+    this.queue.beginFrame();
     this.meshes.evict();
     this.data.evict();
 
@@ -516,6 +557,7 @@ export class TerrainRenderer {
     s.generated = this.loader.generated;
     s.pending = this.loader.pending;
     s.deepest = deepest;
+    s.visited = sel.visited;
   }
 
   /**

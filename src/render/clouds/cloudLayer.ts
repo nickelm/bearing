@@ -20,6 +20,11 @@
  * - Shadows: `shadow(p)` is the sun visibility at a planet-centered point. It
  *   samples coverage where the ray toward the sun crosses the shell, and
  *   PlanetLighting applies it to every lit surface (terrain, water, trees).
+ * - Baking (decision 69): shadows read the coverage from a texture baked by
+ *   a compute pass (`bake`, coverageBake.ts), one texel instead of four
+ *   fractal noises per fragment. The shell itself evaluates the field only
+ *   while the camera is below DETAIL_ALTITUDE, where baked texels (about
+ *   2 km) would look soft; above, it reads the bake as well.
  */
 import {
   DoubleSide,
@@ -38,6 +43,7 @@ import {
   dot,
   float,
   Fn,
+  If,
   length,
   max,
   mix,
@@ -50,10 +56,13 @@ import {
   smoothstep,
   uniform,
   varyingProperty,
+  vec2,
   vec3,
   vec4,
 } from 'three/tsl';
+import type { WebGPURenderer } from 'three/webgpu';
 import type { Vec3d } from '../../core/vec3d';
+import { CoverageBake } from './coverageBake';
 import type { WeatherTexture } from './weatherTexture';
 import { buildCubeSphereArrays } from '../cubeSphereGeometry';
 import type { PlanetLighting } from '../lighting/planetLighting';
@@ -70,6 +79,8 @@ const WESTERLY: [number, number] = [12, Math.PI / 4];
 const EASTERLY: [number, number] = [-7, Math.PI / 12];
 /** Time for the cloud pattern to evolve by about one feature (s). */
 const EVOLVE = 3 * 86_400;
+/** Below this camera altitude (m) the shell evaluates the cloud field per fragment. */
+const DETAIL_ALTITUDE = 40_000;
 
 export class CloudLayer {
   readonly group = new Group();
@@ -85,13 +96,21 @@ export class CloudLayer {
   readonly shadowStrength = uniform(0.75);
   /** 1 while the camera is below the cloud shell (undersides darken). */
   private readonly below = uniform(0);
+  /** 1 while the camera is low enough for the shell to evaluate the field itself. */
+  private readonly detailed = uniform(1);
   private readonly mesh: Mesh;
+  /** Coverage baked into a texture for shadows and distant views (decision 69). */
+  readonly baked: CoverageBake;
 
   constructor(
     private readonly radius: number,
     private readonly lighting: PlanetLighting,
     private readonly weather: WeatherTexture,
   ) {
+    this.baked = new CoverageBake({
+      coverage: (d) => this.coverage(d),
+      precipitation: (d) => this.weather.sample(d).precip,
+    });
     const arrays = buildCubeSphereArrays(48, radius + CLOUD_ALTITUDE);
     const g = new BufferGeometry();
     g.setAttribute('position', new BufferAttribute(arrays.positions, 3));
@@ -115,7 +134,9 @@ export class CloudLayer {
     const west = this.field(dir, EASTERLY, vec3(41.7, 19.3, 73.1));
     // The detail value spread over roughly 0..1: cloudy where it is below the cover.
     const q = clamp(mix(west, east, westerlies).sub(0.5).mul(2.2).add(0.5), 0.02, 0.98);
-    return smoothstep(q.sub(0.1), q.add(0.1), cover).mul(this.enabled) as F;
+    // Cover stretched by the blend half-width, so 0 is fully clear and 1 fully overcast.
+    const stretched = cover.mul(1.2).sub(0.1);
+    return smoothstep(q.sub(0.1), q.add(0.1), stretched).mul(this.enabled) as F;
   }
 
   /**
@@ -153,7 +174,22 @@ export class CloudLayer {
     const toShell = max(float(CLOUD_ALTITUDE).sub(height), 0).div(max(dot(up, sun), 0.08));
     const crossing = p.add(sun.mul(toShell));
     const underneath = smoothstep(CLOUD_ALTITUDE + 200, CLOUD_ALTITUDE - 200, height);
-    return float(1).sub(this.coverage(crossing).mul(this.shadowStrength).mul(underneath)) as F;
+    const cover = this.baked.sample(crossing).x;
+    return float(1).sub(cover.mul(this.shadowStrength).mul(underneath)) as F;
+  }
+
+  /**
+   * Re-bakes the coverage texture when the field has moved (call once per
+   * frame, after setting `time`). Returns whether it baked.
+   */
+  bake(renderer: WebGPURenderer, nowMs: number): boolean {
+    const key = [
+      this.weather.version,
+      this.enabled.value,
+      this.coverageBias.value,
+      this.windScale.value,
+    ].join('|');
+    return this.baked.update(renderer, this.time.value, key, nowMs);
   }
 
   private material(): MeshBasicNodeMaterial {
@@ -172,7 +208,15 @@ export class CloudLayer {
     })();
     const p = L.planetPosition(positionWorld as V3);
     const up = normalize(p) as V3;
-    const cover = this.coverage(p);
+    // The field itself near the camera, the bake from altitude (a uniform branch).
+    const field = Fn(() => {
+      const out = this.baked.sample(p).toVar();
+      If(this.detailed.greaterThan(0.5), () => {
+        out.assign(vec2(this.coverage(p), this.weather.sample(p).precip));
+      });
+      return out;
+    })();
+    const cover = field.x.mul(this.enabled);
     const sunUp = dot(up, L.sunDirection);
     // Lit from above: brighter as the sun climbs; undersides of thick cloud are darker.
     const sunlight = L.sunlightAt(p).mul(clamp(sunUp.add(0.25), 0, 1).mul(0.7).add(0.15));
@@ -180,7 +224,7 @@ export class CloudLayer {
     const night = vec3(0.55, 0.65, 1.0).mul(L.nightLight);
     const shade = mix(float(1), float(0.4).add(cover.oneMinus().mul(0.6)), this.below);
     // Rain and snow clouds are thicker and darker.
-    const wet = float(1).sub(this.weather.sample(p).precip.mul(0.4));
+    const wet = float(1).sub(field.y.mul(0.4));
     const albedo = vec3(0.9, 0.91, 0.93).mul(shade).mul(wet);
     const radiance = albedo.mul(sunlight.add(sky).add(night)) as V3;
     m.colorNode = L.applyAerial(radiance, apInscatter as V3, apTransmittance as V3);
@@ -192,6 +236,7 @@ export class CloudLayer {
   update(eye: Readonly<Vec3d>): void {
     this.mesh.position.set(-eye.x, -eye.y, -eye.z);
     this.below.value = eye.length() < this.radius + CLOUD_ALTITUDE ? 1 : 0;
+    this.detailed.value = eye.length() < this.radius + DETAIL_ALTITUDE ? 1 : 0;
     this.group.visible = this.enabled.value > 0;
   }
 

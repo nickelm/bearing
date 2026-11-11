@@ -1,5 +1,5 @@
 import './style.css';
-import { WebGPURenderer } from 'three/webgpu';
+import { Vector2, WebGPURenderer } from 'three/webgpu';
 import {
   daysPerYear,
   defaultCampaignStart,
@@ -22,9 +22,12 @@ import { InfraScene } from './render/infra/infraScene';
 import { VIEW_MODES } from './render/globeMesh';
 import type { ViewMode } from './render/globeMesh';
 import { runComputeSmokeTest } from './render/computeSmokeTest';
+import { RenderScaleController } from './render/renderScale';
 import {
+  describeAdapter,
   isOnWebGpuBackend,
   probeWebGpu,
+  requestRendererDevice,
   rendererDevice,
   showFatalError,
   showWebGpuRequired,
@@ -76,10 +79,19 @@ async function main(): Promise<void> {
   }
 
   const container = document.getElementById('app')!;
-  const renderer = new WebGPURenderer({ antialias: true, requiredLimits: probe.limits });
+  // The device comes from the high-performance adapter the probe found (decision 69).
+  const device = await requestRendererDevice(probe.adapter, probe.limits);
+  const renderer = new WebGPURenderer({ antialias: true, device });
   renderer.setPixelRatio(window.devicePixelRatio);
   container.appendChild(renderer.domElement);
   await renderer.init();
+  // Adaptive resolution (decision 69): the canvas backing store follows the frame time.
+  const renderScale = new RenderScaleController();
+  const applyRenderScale = (scale: number, now: number) => {
+    renderScale.set(scale, now);
+    renderer.setPixelRatio(window.devicePixelRatio * renderScale.scale);
+    onResize();
+  };
 
   if (!isOnWebGpuBackend(renderer)) {
     // WebGPURenderer fell back to WebGL 2. Bearing does not support that.
@@ -117,6 +129,8 @@ async function main(): Promise<void> {
     trees: true,
     treeRange: 5,
     buildings: true,
+    renderScale: 'auto',
+    targetFps: 30,
   };
 
   // The game clock lives in the sim worker (decision 67); the display time follows it.
@@ -424,13 +438,17 @@ async function main(): Promise<void> {
       globe.forest.enabled = v.trees;
       globe.forest.range.value = v.treeRange * KM;
       globe.structures.enabled = v.buildings;
+      renderScale.targetMs = 1000 / v.targetFps;
+      const fixed = RenderScaleController.fixed(v.renderScale);
+      applyRenderScale(fixed ?? renderScale.scale, performance.now());
     },
     shapeChanged: (v) => {
       globe.globe.setExaggeration(v.exaggeration);
       globe.terrain.setExaggeration(v.exaggeration);
     },
   });
-  gui.status.backend = 'WebGPU';
+  gui.status.backend = `WebGPU on ${describeAdapter(probe.adapter)}`;
+  console.info(`WebGPU adapter: ${describeAdapter(probe.adapter)}`, probe.adapter.info);
   // Seed browser: its own worker, so scanning does not cancel the displayed world.
   const scanner = new WorldgenClient();
   const seedBrowser = new SeedBrowser((seed) => {
@@ -560,7 +578,11 @@ async function main(): Promise<void> {
       console.error('GPU compute smoke test failed', err);
     });
 
-  const onResize = () => globe.resize(window.innerWidth, window.innerHeight);
+  const onResize = () => {
+    globe.resize(window.innerWidth, window.innerHeight);
+    const size = renderer.getDrawingBufferSize(new Vector2());
+    gui.status.resolution = `${size.x}×${size.y} (${Math.round(renderScale.scale * 100)}% of ${window.devicePixelRatio}×)`;
+  };
   window.addEventListener('resize', onResize);
   onResize();
 
@@ -573,6 +595,10 @@ async function main(): Promise<void> {
     const frameMs = now - last;
     last = now;
     overlay.record(frameMs, now);
+    if (viewParams.renderScale === 'auto') {
+      const scale = renderScale.record(frameMs, now);
+      if (scale !== null) applyRenderScale(scale, now);
+    }
     const dt = Math.min(frameMs, 100) / 1000;
     gameTime = sim.displayTime(now);
     sunDirection(gameTime, orbitParams, calendar, globe.sun);

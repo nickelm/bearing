@@ -17,7 +17,9 @@ export type RequiredLimits = Record<string, number>;
  * about 100 MB, close to the default 128 MB binding limit, so we ask for what
  * the adapter offers.
  */
-export async function probeWebGpu(): Promise<{ limits: RequiredLimits } | { problem: string }> {
+export async function probeWebGpu(): Promise<
+  { adapter: GPUAdapter; limits: RequiredLimits } | { problem: string }
+> {
   if (!('gpu' in navigator) || !navigator.gpu) {
     return { problem: 'This browser does not expose WebGPU (navigator.gpu is undefined).' };
   }
@@ -31,6 +33,7 @@ export async function probeWebGpu(): Promise<{ limits: RequiredLimits } | { prob
     }
     const l = adapter.limits;
     return {
+      adapter,
       limits: {
         maxStorageBufferBindingSize: l.maxStorageBufferBindingSize,
         maxBufferSize: l.maxBufferSize,
@@ -41,6 +44,29 @@ export async function probeWebGpu(): Promise<{ limits: RequiredLimits } | { prob
   } catch (err) {
     return { problem: `Requesting a WebGPU adapter failed: ${String(err)}` };
   }
+}
+
+/**
+ * Creates the device for the renderer on the probed adapter, with the raised
+ * limits and every standard feature the adapter offers. Three's backend would
+ * otherwise request its own adapter without a power preference, and on a laptop
+ * with two GPUs the browser then hands out the integrated one (decision 69).
+ */
+export async function requestRendererDevice(
+  adapter: GPUAdapter,
+  limits: RequiredLimits,
+): Promise<GPUDevice> {
+  const features = [...adapter.features].filter(
+    (f) => !f.startsWith('chromium-'),
+  ) as GPUFeatureName[];
+  return adapter.requestDevice({ requiredLimits: limits, requiredFeatures: features });
+}
+
+/** A short description of the adapter for the status panel, e.g. "nvidia blackwell". */
+export function describeAdapter(adapter: GPUAdapter): string {
+  const i = adapter.info;
+  const name = [i.vendor, i.architecture, i.description].filter(Boolean).join(' ');
+  return `${name || 'unknown GPU'}${i.isFallbackAdapter ? ' (software fallback)' : ''}`;
 }
 
 /** The raw GPUDevice behind three's WebGPU backend. Call after init(). */

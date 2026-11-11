@@ -82,7 +82,7 @@ export interface TileMeshData {
   slope: Float32Array;
   /** Linear RGB albedo: biome on land, seabed under the sea (or a debug-mode color). */
   color: Float32Array;
-  /** Displayed height range before exaggeration (m). */
+  /** Displayed height range before exaggeration (m), of this tile and of the parent surface it morphs to. */
   minHeight: number;
   maxHeight: number;
 }
@@ -412,6 +412,10 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
       // Parent heights (displayed) exist at even vertices only; a and b are always even.
       const ha = hPar[a]!;
       const hb = hPar[b]!;
+      // The morphed surface lies between this tile's heights and the parent's.
+      const hp = (ha + hb) * 0.5;
+      minH = Math.min(minH, hp);
+      maxH = Math.max(maxH, hp);
       for (let c = 0; c < 3; c++) {
         parentBase[k + c] = (dirs[a * 3 + c]! + dirs[b * 3 + c]!) * 0.5 * R - o3[c]!;
         parentDisp[k + c] = (dirs[a * 3 + c]! * ha + dirs[b * 3 + c]! * hb) * 0.5;

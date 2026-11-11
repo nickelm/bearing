@@ -95,6 +95,18 @@ describe('selectTiles', () => {
     expect(s.draw.some((d) => d.morph > 0 && d.morph < 1)).toBe(true);
   });
 
+  it('bounds built tiles by their own heights, so a camera below the tallest peak does not over-refine', () => {
+    // Exaggerated relief: peaks 40 km tall somewhere on the planet, a camera at 30 km.
+    const v = { ...viewAt(30 * KM, 60 * DEG), exaggeration: 10, maxHeight: 40 * KM };
+    const loose = selectTiles(v, always);
+    // The same view where every tile's mesh says it is low land (0–2 km displayed).
+    const tight = selectTiles(v, always, DEFAULT_LOD, () => [0, 2 * KM]);
+    const deepest = (s: typeof loose) => Math.max(...s.draw.map((d) => d.tile.level));
+    expect(deepest(loose)).toBe(DEFAULT_LOD.maxLevel);
+    expect(deepest(tight)).toBeLessThan(DEFAULT_LOD.maxLevel);
+    expect(tight.draw.length * 4).toBeLessThan(loose.draw.length);
+  });
+
   it('includes the sphere sagitta in the geometric error at coarse levels', () => {
     const v = viewAt(1000 * KM);
     expect(geometricError(0, v, DEFAULT_LOD)).toBeGreaterThan(50);

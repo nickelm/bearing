@@ -41,7 +41,9 @@ import {
   dot,
   exp,
   float,
+  Fn,
   fwidth,
+  If,
   length,
   max,
   mix,
@@ -53,7 +55,7 @@ import {
   vec3,
 } from 'three/tsl';
 import { rng } from '../../core/rng';
-import type { PlanetLighting } from '../lighting/planetLighting';
+import type { LightAt, PlanetLighting } from '../lighting/planetLighting';
 
 type F = Node<'float'>;
 type V3 = Node<'vec3'>;
@@ -133,6 +135,8 @@ export interface WaterInputs {
   relative: V3;
   /** Fragment position modulo WAVE_PERIOD (per-mesh wrapped origin + local position). */
   wavePosition: V3;
+  /** Light at the fragment, if the material already built it (PlanetLighting.at). */
+  light?: LightAt;
 }
 
 export class WaterShading {
@@ -156,103 +160,111 @@ export class WaterShading {
 
   /** Radiance of a terrain fragment: land, or water over a seabed with waves and glint. */
   shade(i: WaterInputs): V3 {
-    const L = this.lighting;
-    const fw = max(fwidth(i.height), 1e-3);
-    const sea = smoothstep(fw.negate(), fw, i.height.negate()).mul(this.enabled);
-    const lfw = max(fwidth(i.lake), 1e-3);
-    const lake = smoothstep(lfw.negate(), lfw, i.lake).mul(this.enabled);
-    const river = i.river.mul(this.enabled).mul(float(1).sub(sea));
-    const wet = max(max(sea, lake), river);
+    return Fn(() => {
+      const L = this.lighting;
+      // Everything that takes derivatives runs first, outside the water branch:
+      // WGSL allows derivatives only in uniform control flow.
+      const at = i.light ?? L.at(i.relative);
+      const fw = max(fwidth(i.height), 1e-3);
+      const sea = smoothstep(fw.negate(), fw, i.height.negate()).mul(this.enabled).toVar();
+      const lfw = max(fwidth(i.lake), 1e-3);
+      const lake = smoothstep(lfw.negate(), lfw, i.lake).mul(this.enabled).toVar();
+      const river = i.river.mul(this.enabled).mul(float(1).sub(sea)).toVar();
+      const wet = max(max(sea, lake), river).toVar();
+      const footprint = max(length(fwidth(i.wavePosition)), 1e-4).toVar();
+      const land = L.shadeDiffuse(i.albedo, i.normal, i.relative, at).toVar();
+      const out = land.toVar();
+      // Dry land skips the water body, waves, glint and foam (decision 69).
+      If(wet.greaterThan(0), () => {
+        // Body color: the bed seen through the water column (reference depth).
+        // Rivers run in their carved channels at a nominal depth.
+        const standing = mix(max(i.lake, 0), max(i.height.negate(), 0), sea);
+        const waterDepth = mix(
+          standing,
+          float(RIVER_DEPTH).mul(this.reliefScale),
+          river.mul(float(1).sub(lake)),
+        );
+        const depth = vec3(waterDepth.div(this.reliefScale));
+        const bedVisible = exp(depth.mul(vec3(...ABSORPTION)).mul(-2));
+        const body = mix(this.deepColor, i.bed, bedVisible) as V3;
 
-    // Body color: the bed seen through the water column (reference depth).
-    // Rivers run in their carved channels at a nominal depth.
-    const standing = mix(max(i.lake, 0), max(i.height.negate(), 0), sea);
-    const waterDepth = mix(
-      standing,
-      float(RIVER_DEPTH).mul(this.reliefScale),
-      river.mul(float(1).sub(lake)),
-    );
-    const depth = vec3(waterDepth.div(this.reliefScale));
-    const bedVisible = exp(depth.mul(vec3(...ABSORPTION)).mul(-2));
-    const body = mix(this.deepColor, i.bed, bedVisible) as V3;
+        // Waves: tangent-plane slope from resolved waves, variance from the rest.
+        let grad: V3 = vec3(0);
+        let unresolved: F = float(0);
+        // Crests of the shorter waves, for breaking up the foam.
+        let crest: F = float(0);
+        for (const [index, w] of this.waves.entries()) {
+          const k = (2 * Math.PI) / WAVE_PERIOD;
+          const kv = vec3(w.n[0] * k, w.n[1] * k, w.n[2] * k);
+          const omega = Math.sqrt(GRAVITY * ((2 * Math.PI) / w.wavelength));
+          const resolved = smoothstep(2, 6, footprint.reciprocal().mul(w.wavelength));
+          const s = this.waveStrength.mul(w.slope);
+          const phase = dot(kv, i.wavePosition).sub(time.mul(omega)).add(w.phase);
+          const dir = vec3(w.n[0], w.n[1], w.n[2]).div(Math.hypot(...w.n));
+          grad = grad.add(dir.mul(cos(phase).mul(s).mul(resolved))) as V3;
+          if (index >= this.waves.length / 2) crest = crest.add(cos(phase).mul(resolved)) as F;
+          unresolved = unresolved.add(
+            float(slopeVariance(w.slope))
+              .mul(this.waveStrength.mul(this.waveStrength))
+              .mul(float(1).sub(resolved)),
+          ) as F;
+        }
+        const tangentGrad = grad.sub(i.up.mul(dot(grad, i.up)));
+        const waveNormal = normalize(i.up.sub(tangentGrad)) as V3;
+        // Beckmann–GGX correspondence: α² ≈ 2σ².
+        const alpha2 = this.baseRoughness.mul(this.baseRoughness).add(unresolved.mul(2));
 
-    // Waves: tangent-plane slope from resolved waves, variance from the rest.
-    const footprint = max(length(fwidth(i.wavePosition)), 1e-4);
-    let grad: V3 = vec3(0);
-    let unresolved: F = float(0);
-    // Crests of the shorter waves, for breaking up the foam.
-    let crest: F = float(0);
-    for (const [index, w] of this.waves.entries()) {
-      const k = (2 * Math.PI) / WAVE_PERIOD;
-      const kv = vec3(w.n[0] * k, w.n[1] * k, w.n[2] * k);
-      const omega = Math.sqrt(GRAVITY * ((2 * Math.PI) / w.wavelength));
-      const resolved = smoothstep(2, 6, footprint.reciprocal().mul(w.wavelength));
-      const s = this.waveStrength.mul(w.slope);
-      const phase = dot(kv, i.wavePosition).sub(time.mul(omega)).add(w.phase);
-      const dir = vec3(w.n[0], w.n[1], w.n[2]).div(Math.hypot(...w.n));
-      grad = grad.add(dir.mul(cos(phase).mul(s).mul(resolved))) as V3;
-      if (index >= this.waves.length / 2) crest = crest.add(cos(phase).mul(resolved)) as F;
-      unresolved = unresolved.add(
-        float(slopeVariance(w.slope))
-          .mul(this.waveStrength.mul(this.waveStrength))
-          .mul(float(1).sub(resolved)),
-      ) as F;
-    }
-    const tangentGrad = grad.sub(i.up.mul(dot(grad, i.up)));
-    const waveNormal = normalize(i.up.sub(tangentGrad)) as V3;
-    // Beckmann–GGX correspondence: α² ≈ 2σ².
-    const alpha2 = this.baseRoughness.mul(this.baseRoughness).add(unresolved.mul(2));
+        // Lighting of the water surface.
+        const v = normalize(i.relative.negate()) as V3;
+        const sun = L.sunDirection;
+        const h = normalize(v.add(sun));
+        const nDotL = max(dot(waveNormal, sun), 0);
+        const nDotV = max(dot(waveNormal, v), 1e-3);
+        const nDotH = max(dot(waveNormal, h), 0);
+        const d = nDotH.mul(nDotH).mul(alpha2.sub(1)).add(1);
+        const ggx = alpha2.div(d.mul(d).mul(Math.PI));
+        const fresnel = float(0.02).add(float(0.98).mul(pow(float(1).sub(nDotV), 5)));
+        // Specular radiance: π·E·D·F/(4·N·V) with E = π × the display sun illuminance (decision 34).
+        const sunLight = at.sunlight;
+        const glint = sunLight.mul(ggx.mul(fresnel).mul(nDotL).div(nDotV.mul(4)).mul(Math.PI));
+        // Sky reflection: the average sky radiance at this sun elevation.
+        const sky = L.atmosphere
+          .skyIrradiance(dot(i.up, sun))
+          .mul(L.sunIlluminance.mul(L.skyLight))
+          .mul(fresnel);
+        // Coastal foam.
+        const shoreDistance = max(i.shore, 0);
+        const band = this.foamWidth;
+        const inBand = float(1).sub(smoothstep(0, max(band, footprint.mul(1.5)), shoreDistance));
+        const surf = cos(shoreDistance.div(14).add(time.mul(0.8)))
+          .mul(0.5)
+          .add(0.5);
+        const breakup = crest
+          .div(Math.sqrt(this.waves.length / 2))
+          .mul(0.5)
+          .add(0.5);
+        const pattern = smoothstep(0.35, 0.75, surf.mul(0.55).add(breakup.mul(0.45)));
+        // Narrower than a few pixels: the pattern averages out, then the band thins.
+        const detail = smoothstep(1, 4, band.div(footprint));
+        const foam = inBand
+          .mul(mix(float(0.3), pattern, detail))
+          .mul(clamp(band.div(footprint), 0, 1))
+          .mul(this.foamStrength)
+          .mul(sea);
+        const foamy = clamp(foam, 0, 1);
+        const surface = mix(body, vec3(0.8, 0.82, 0.82), foamy) as V3;
 
-    // Lighting of the water surface.
-    const p = L.planetPosition(i.relative);
-    const v = normalize(i.relative.negate()) as V3;
-    const sun = L.sunDirection;
-    const h = normalize(v.add(sun));
-    const nDotL = max(dot(waveNormal, sun), 0);
-    const nDotV = max(dot(waveNormal, v), 1e-3);
-    const nDotH = max(dot(waveNormal, h), 0);
-    const d = nDotH.mul(nDotH).mul(alpha2.sub(1)).add(1);
-    const ggx = alpha2.div(d.mul(d).mul(Math.PI));
-    const fresnel = float(0.02).add(float(0.98).mul(pow(float(1).sub(nDotV), 5)));
-    // Specular radiance: π·E·D·F/(4·N·V) with E = π × the display sun illuminance (decision 34).
-    const sunLight = L.sunlightAt(p);
-    const glint = sunLight.mul(ggx.mul(fresnel).mul(nDotL).div(nDotV.mul(4)).mul(Math.PI));
-    // Sky reflection: the average sky radiance at this sun elevation.
-    const sky = L.atmosphere
-      .skyIrradiance(dot(i.up, sun))
-      .mul(L.sunIlluminance.mul(L.skyLight))
-      .mul(fresnel);
-    // Coastal foam.
-    const shoreDistance = max(i.shore, 0);
-    const band = this.foamWidth;
-    const inBand = float(1).sub(smoothstep(0, max(band, footprint.mul(1.5)), shoreDistance));
-    const surf = cos(shoreDistance.div(14).add(time.mul(0.8)))
-      .mul(0.5)
-      .add(0.5);
-    const breakup = crest
-      .div(Math.sqrt(this.waves.length / 2))
-      .mul(0.5)
-      .add(0.5);
-    const pattern = smoothstep(0.35, 0.75, surf.mul(0.55).add(breakup.mul(0.45)));
-    // Narrower than a few pixels: the pattern averages out, then the band thins.
-    const detail = smoothstep(1, 4, band.div(footprint));
-    const foam = inBand
-      .mul(mix(float(0.3), pattern, detail))
-      .mul(clamp(band.div(footprint), 0, 1))
-      .mul(this.foamStrength)
-      .mul(sea);
-    const foamy = clamp(foam, 0, 1);
-    const surface = mix(body, vec3(0.8, 0.82, 0.82), foamy) as V3;
+        const bodyLight = L.shadeDiffuse(surface, i.up, i.relative, at).mul(float(1).sub(fresnel));
+        const water = bodyLight.add(
+          sky.add(glint.mul(clamp(nDotL.mul(20), 0, 1))).mul(float(1).sub(foamy)),
+        );
 
-    const bodyLight = L.shadeDiffuse(surface, i.up, i.relative).mul(float(1).sub(fresnel));
-    const water = bodyLight.add(
-      sky.add(glint.mul(clamp(nDotL.mul(20), 0, 1))).mul(float(1).sub(foamy)),
-    );
-
-    // Lakes freeze in the cold season (sea ice stays a static biome until weather exists).
-    const frozen = smoothstep(-1.5, -4, i.temperature).mul(lake).mul(float(1).sub(sea));
-    const ice = L.shadeDiffuse(vec3(0.75, 0.8, 0.86), i.up, i.relative);
-    const land = L.shadeDiffuse(i.albedo, i.normal, i.relative);
-    return mix(land, mix(water, ice, frozen), wet) as V3;
+        // Lakes freeze in the cold season (sea ice stays a static biome until weather exists).
+        const frozen = smoothstep(-1.5, -4, i.temperature).mul(lake).mul(float(1).sub(sea));
+        const ice = L.shadeDiffuse(vec3(0.75, 0.8, 0.86), i.up, i.relative, at);
+        out.assign(mix(land, mix(water, ice, frozen), wet));
+      });
+      return out;
+    })() as V3;
   }
 }

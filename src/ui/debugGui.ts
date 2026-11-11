@@ -2,6 +2,8 @@
  * lil-gui debug panel: world parameters, generation control, debug view
  * options and read-only status values.
  */
+import { RENDER_SCALES } from '../render/renderScale';
+import type { RenderScaleSetting } from '../render/renderScale';
 import GUI from 'lil-gui';
 
 export interface WorldGuiParams {
@@ -35,6 +37,10 @@ export interface ViewGuiParams {
   treeRange: number;
   /** Instanced buildings of towns, airbases and industry near the camera. */
   buildings: boolean;
+  /** Canvas resolution relative to the device pixel ratio: 'auto' adapts to the frame time. */
+  renderScale: RenderScaleSetting;
+  /** Frame rate the automatic render scale holds. */
+  targetFps: number;
 }
 
 /** Time folder: jumps of the sim clock, alarms and the sim status (milestone 6). */
@@ -117,6 +123,8 @@ export interface DebugGuiStatus {
   lonDeg: number;
   tiltDeg: number;
   backend: string;
+  /** Drawing-buffer size and render scale. */
+  resolution: string;
   compute: string;
   worker: string;
   tiles: string;
@@ -147,6 +155,7 @@ export class DebugGui {
     lonDeg: 0,
     tiltDeg: 0,
     backend: '—',
+    resolution: '—',
     compute: 'pending',
     worker: 'pending',
     tiles: '—',
@@ -202,6 +211,12 @@ export class DebugGui {
     v.add(view, 'wireframe')
       .name('Wireframe (grid)')
       .onChange(() => callbacks.viewChanged(view));
+    v.add(view, 'renderScale', [...RENDER_SCALES])
+      .name('Render scale')
+      .onChange(() => callbacks.viewChanged(view));
+    v.add(view, 'targetFps', 20, 60, 5)
+      .name('Target FPS (auto scale)')
+      .onChange(() => callbacks.viewChanged(view));
     const t = v.addFolder('Terrain tiles');
     t.add(view, 'tiles')
       .name('Tiled terrain')
@@ -232,6 +247,7 @@ export class DebugGui {
     st.add(this.status, 'lonDeg').name('Longitude (°)').decimals(3).disable().listen();
     st.add(this.status, 'tiltDeg').name('Tilt (°)').decimals(1).disable().listen();
     st.add(this.status, 'backend').name('Backend').disable().listen();
+    st.add(this.status, 'resolution').name('Resolution').disable().listen();
     st.add(this.status, 'compute').name('GPU compute').disable().listen();
     st.add(this.status, 'worker').name('Sim worker').disable().listen();
     st.add(this.status, 'tiles').name('Tiles').disable().listen();

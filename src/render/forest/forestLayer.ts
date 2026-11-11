@@ -351,6 +351,8 @@ export class ForestLayer {
     let pending = 0;
     for (const [s, k] of missing) {
       const data = this.terrain.dataTile(treeDataTile(k));
+      // Low priority: after the terrain's own tiles (whose priorities are pixels of error).
+      if (!data) this.terrain.requestDataTile(treeDataTile(k), 1);
       if (!data || performance.now() - t0 > this.buildBudgetMs) {
         pending++;
         continue;
