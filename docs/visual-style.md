@@ -1,6 +1,6 @@
 # Bearing: Visual Style Guide
 
-*Revision 3, 2026-11-11. Companion to `docs/design.md`. Revision 3 adds the controlled aircraft, the HUD and displays, and their acceptance checks for third-person flight without cockpits (Proposal 0002, decision 91); revision 2 split the guide into two parts for the two views (Proposal 0001, decision 72).*
+*Revision 3, 2026-11-11. Companion to `docs/design.md`. Revision 3 adds the controlled aircraft, the HUD and displays, and their acceptance checks for third-person flight without cockpits (Proposal 0002, decision 92); revision 2 split the guide into two parts for the two views (Proposal 0001, decision 72).*
 
 ## Summary
 
@@ -221,7 +221,7 @@ Starting values; final values get tuned in the model viewer and on the globe.
 
 ## HUD and Displays
 
-With no cockpits, the HUD and the cockpit displays draw as 2D elements over the chase view (decision 91). They show only what the aircraft and its crew know.
+With no cockpits, the HUD and the cockpit displays draw as 2D elements over the chase view (decision 92). They show only what the aircraft and its crew know.
 
 ### Two Kinds of Symbols
 
@@ -329,7 +329,7 @@ Civilization VI screenshots and Cold War operational maps (NATO planning maps, 1
   - rock hatching on steep slopes.
   Biome boundaries blend over a few kilometers. Pattern scale is screen-stable, so a pattern looks the same at every zoom within a band: patterns are anchored to the ground, and each point picks its period from its pixel footprint, crossfading between powers of two. Farmland lies on settled land (the strategic graph's habitability) in open lowland biomes, outside forests; its field grid shows from the Theater band down (decision 80). Dune ripples mark hot (sand) deserts only, not cold deserts. Reed marks wait for data that marks wetlands, since the world has no wetland biome yet (decision 81).
 - **Coasts and water.** Water gets depth tints in a few flat bands, a lighter halo along coasts, and the faint parallel coastal lines of old printed maps. The bands split at reference depths of 200 m (shelf) and 3,000 m (deep) (decision 82). Coastlines carry a thin dark outline, about 1.2 px wide. The halo fades out over the first 11 px from the coast, and three faint lines run 7, 14 and 22 px out, measured at the map scale of the screen center so they stay fixed to the ground while the view orbits (decisions 83, 85). Lakes and wide rivers use the same treatment; narrow rivers are blue lines whose width follows discharge, kept at least a pixel wide: 1 px at 25 m wide, a pixel more per fourfold width, at most 3.5 px. A river becomes water once its true width passes about 4 px. Rivers show from the Theater band down: rivers at least 60 m wide at Theater scale, at least 15 m wide in the Region band (decision 84).
-- **Graticule.** Optional latitude and longitude lines, and range rings around a selected base or aircraft. There is no hex grid: hexes imply movement rules, and the simulation has none.
+- **Graticule.** Optional latitude and longitude lines, and range rings around a selected base or aircraft. There is no hex grid: hexes imply movement rules, and the simulation has none. Lines are a pixel wide at a round spacing (30° down to 0.5°) about 120 px apart, the equator a little stronger; rings fall at multiples of a round distance (25 to 500 km) about 90 px apart, eight of them. Both are dark by day and light by night (decision 91).
 
 ## Day, Night, and Weather
 

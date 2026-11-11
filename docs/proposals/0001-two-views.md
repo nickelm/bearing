@@ -1,6 +1,6 @@
 # Proposal 0001: Illustrated Strategic Map and Simulation View
 
-*Drafted 2026-11-11. Status: accepted 2026-11-11 with one amendment (decision 72). Amended by Proposal 0002 (decision 91): Bearing has no cockpits, so the simulation view is entered through a chase view or an observer camera. Affects `docs/design.md`, `docs/visual-style.md`, and `TODO.md`.*
+*Drafted 2026-11-11. Status: accepted 2026-11-11 with one amendment (decision 72). Amended by Proposal 0002 (decision 92): Bearing has no cockpits, so the simulation view is entered through a chase view or an observer camera. Affects `docs/design.md`, `docs/visual-style.md`, and `TODO.md`.*
 
 ## Summary
 

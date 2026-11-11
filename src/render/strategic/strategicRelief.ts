@@ -81,6 +81,7 @@ import {
   SHORE_BLEND_HI,
   SHORE_BLEND_LO,
 } from './mapWater';
+import { graticuleNode, rangeRingsNode } from './graticule';
 import {
   MAJOR_MIN_WIDTH,
   MapRiverShading,
@@ -227,6 +228,13 @@ export class StrategicRelief {
   readonly twilightStrength = uniform(1);
   /** 1 draws the weather's clouds and precipitation hatching (decision 89); 0 hides them. */
   readonly weatherOn = uniform(1);
+  /** Graticule (decision 91): on/off and spacing (radians), set by the scene. */
+  readonly graticuleOn = uniform(0);
+  readonly graticuleStep = uniform((10 * Math.PI) / 180);
+  /** Range rings (decision 91): on/off, center (unit direction) and spacing (m). */
+  readonly ringsOn = uniform(0);
+  readonly ringCenter = uniform(new Vector3(0, 0, 1));
+  readonly ringStep = uniform(100e3);
   /** Scales cloud opacity (GUI); 1 gives 25% to 45% by coverage (decision 90). */
   readonly cloudOpacity = uniform(1);
   /** 1 draws seasonal snow, sea ice and lake ice; 0 hides them. */
@@ -458,12 +466,27 @@ export class StrategicRelief {
         .mul(this.cloudOpacity)
         .mul(weatherOn);
       const weathered = mix(mix(outlined, rgb(hexToLinear(RAIN_MARK)), rain), vec3(1, 1, 1), cloud);
-      return daylightNode(
+      const lit = daylightNode(
         weathered,
         dot(radial, this.sunDirection),
         this.nightStrength.mul(this.biomeMode),
         this.twilightStrength.mul(this.biomeMode),
       );
+      // Graticule and range rings (decision 91): annotation over day and night, dark by
+      // day and light by night so they stay visible on the night side.
+      const mu = dot(radial, this.sunDirection);
+      const day = smoothstep(-0.1, 0.1, mu);
+      const grat = graticuleNode(radial, footprint, this.graticuleStep, radius)
+        .mul(this.graticuleOn)
+        .mul(this.biomeMode)
+        .mul(0.35);
+      const rings = rangeRingsNode(radial, this.ringCenter, footprint, this.ringStep, radius)
+        .mul(this.ringsOn)
+        .mul(this.biomeMode)
+        .mul(0.75);
+      const gratColor = mix(rgb(hexToLinear(0xa9c9d4)), rgb(hexToLinear(0x2f5f86)), day);
+      const ringColor = mix(rgb(hexToLinear(0xf4efe4)), rgb(hexToLinear(0x22252a)), day);
+      return mix(mix(lit, gratColor, grat), ringColor, rings);
     })();
     return material;
   }
