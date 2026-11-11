@@ -2,9 +2,9 @@
  * The strategic map's finish (visual-style Part II, Strategic Post-Processing;
  * decision 92), applied in the map's own shaders rather than in a separate pass:
  *
- * - **Vignette.** Corners darken by up to `VIGNETTE` (8%), starting 45% of the way
+ * - **Vignette.** Corners darken by up to `VIGNETTE` (20%), starting 45% of the way
  *   from the center to a corner.
- * - **Paper grain.** A constant per-pixel variation of ±`GRAIN` (2.5%), fixed to the
+ * - **Paper grain.** A constant per-pixel variation of ±`GRAIN` (6%), fixed to the
  *   screen like the paper under a printed map, so it never swims with the terrain.
  * - **Rim.** The background draws a thin pale rim (`RIM`, about 1.5 px) just outside
  *   the globe's silhouette, in place of the simulation view's limb glow. Part II
@@ -38,8 +38,9 @@ import { hash12Node } from './patterns';
 type F = Node<'float'>;
 type V3 = Node<'vec3'>;
 
-export const VIGNETTE = 0.08;
-export const GRAIN = 0.025;
+/** Strengthened after the owner saw neither at 8% and ±2.5% under AgX (decision 93). */
+export const VIGNETTE = 0.2;
+export const GRAIN = 0.06;
 /** Rim width (px, Gaussian scale) and color. */
 export const RIM_PX = 1.5;
 export const RIM = 0xd9e4e8;

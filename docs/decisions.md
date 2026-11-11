@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–92 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–93 are reflected in both.
 
 ---
 
@@ -1472,3 +1472,15 @@ The owner's amendment and the engineering calls made while adopting it:
 - **Control.** GUI → Map → Paper finish scales vignette and grain from 0 to 1.
 
 **Reason:** A post-processing pass would add a render target and a full-screen pass for three multiplies. In the map's own shaders the finish costs a hash and a smoothstep per pixel. The night lights, which draw additively over the relief, are not grained, which keeps them clean points.
+
+### 93. Strategic preview views, a color-vision filter, and a stronger paper finish
+
+**Date:** 2026-11-11
+**Decision:**
+
+- **Views.** `tools/render.preview.ts` with `SCENE=strategic` renders its own list. `globe` is the Globe band at 3,000 km with the terminator in view (Part II check 1). `night` is the same at 22:00. `theater` is at 900 km, `region` at 250 km, `floor` at 100 km, and `winter` at 1,500 km on day 150. `sharp` is the floor at 1920 × 1080 (check 5). The old `orbit`, `limb`, `terminator` and `floor` views leave the simulation list; the rest of that list is sorted in V1.
+- **Clouds and sizes.** Each image size gets its own headless renderer and scene. The previews build a cloud layer fed by the sim's weather at each view's time, and force its bake with a synthetic clock, so check 1's weather shows.
+- **Color vision.** `CVD=1` also writes each image as seen with protanopia, deuteranopia and tritanopia (`tools/cvd.ts`: Machado, Oliveira and Fernandes 2009, severity 1, in linear RGB) for check 4. A test confirms that grays stay gray and that Part II's faction colors stay far apart under all three.
+- **Paper finish.** The owner saw neither the 8% vignette nor the ±2.5% grain of decision 92 in the browser, most likely because the AgX tone curve compresses small changes. Both are stronger by default: corners darken by 20%, grain is ±6%, and GUI → Map → Paper finish now reaches 3×. The previews will show whether the finish reaches the image at all.
+
+**Reason:** Visual milestones close only after the acceptance checks (CLAUDE.md). This gives the owner one command that produces every image S1's strategic checks need.

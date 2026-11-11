@@ -363,7 +363,7 @@ export class DebugGui {
     f.add(map, 'rangeRings')
       .name('Range rings (click; Esc)')
       .onChange(() => changed(map));
-    f.add(map, 'finish', 0, 1, 0.05)
+    f.add(map, 'finish', 0, 3, 0.05)
       .name('Paper finish')
       .onChange(() => changed(map));
     f.close();

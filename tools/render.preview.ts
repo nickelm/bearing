@@ -12,11 +12,13 @@
  *          done, CPU in scene.render and its parts, terrain loop lengths, draw statistics
  *          (on a software adapter only the ratios mean anything),
  *        PROF=<file> also writes a V8 CPU profile of those frames (.cpuprofile),
- *        SCENE=strategic draws the strategic view (StrategicScene, decision 74) instead,
- *          from the views at or above its 100 km floor (orbit, limb, terminator, winter, floor,
- *          night), with tile counts and frame times per view
+ *        SCENE=strategic draws the strategic view (StrategicScene, decisions 74, 93) instead,
+ *          from STRATEGIC_PREVIEW_VIEWS (globe, night, theater, region, floor, winter, and
+ *          sharp at 1920 × 1080), with clouds, tile counts and frame times per view;
+ *          CVD=1 also writes each image as seen with protanopia, deuteranopia, tritanopia
  *
- * Output: tools/out/render-<seed>-<view>.png, or render-<seed>-strategic-<view>.png (gitignored).
+ * Output: tools/out/render-<seed>-<view>.png, or render-<seed>-strategic-<view>[-<cvd>].png
+ * (gitignored).
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -34,7 +36,10 @@ import { DAY, DEG, HOUR, KM } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
 import { GlobeScene } from '../src/render/sim/globeScene';
 import { StrategicScene } from '../src/render/strategic/strategicScene';
-import { STRATEGIC_FLOOR } from '../src/render/strategic/strategicCamera';
+import { CloudLayer } from '../src/render/sim/clouds/cloudLayer';
+import { WeatherTexture } from '../src/render/sim/clouds/weatherTexture';
+import { PlanetLighting } from '../src/render/sim/lighting/planetLighting';
+import { DEFICIENCIES, simulateCvd } from './cvd';
 import { TileSynthesizer } from '../src/worldgen/gpu/tileSynth';
 import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
 import { RiverIndex } from '../src/worldgen/riverIndex';
@@ -67,28 +72,12 @@ export interface PreviewView {
    * largest city, or the first main airbase (milestone 5).
    */
   target?: 'lake' | 'forest' | 'city' | 'airbase';
+  /** Image size for this view (strategic previews; default W × H). */
+  width?: number;
+  height?: number;
 }
 
 export const PREVIEW_VIEWS: PreviewView[] = [
-  { name: 'orbit', dLat: 0, dLon: 0, altitude: 3000 * KM, tilt: 0, heading: 0, localTime: 11 },
-  {
-    name: 'limb',
-    dLat: -20 * DEG,
-    dLon: 0,
-    altitude: 900 * KM,
-    tilt: 36 * DEG,
-    heading: 0,
-    localTime: 10,
-  },
-  {
-    name: 'terminator',
-    dLat: 0,
-    dLon: 0,
-    altitude: 2500 * KM,
-    tilt: 0,
-    heading: 0,
-    localTime: 18,
-  },
   {
     name: 'oblique',
     dLat: 0,
@@ -223,15 +212,6 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     target: 'city',
   },
   {
-    name: 'floor',
-    dLat: 0,
-    dLon: 0,
-    altitude: 100 * KM,
-    tilt: 50 * DEG,
-    heading: 0,
-    localTime: 11,
-  },
-  {
     name: 'night',
     dLat: 0,
     dLon: 0,
@@ -239,6 +219,50 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     tilt: 0,
     heading: 0,
     localTime: 0,
+  },
+];
+
+/**
+ * Strategic previews (SCENE=strategic): one view per zoom band and the Part II
+ * acceptance checks (decision 93). `globe` is check 1 (the Globe band with the
+ * terminator, night lights and weather); every view feeds check 4 with CVD=1; `sharp`
+ * is check 5 (the floor at 1920 × 1080). The old orbit, limb and terminator views of
+ * the single renderer live here now.
+ */
+export const STRATEGIC_PREVIEW_VIEWS: PreviewView[] = [
+  { name: 'globe', dLat: 0, dLon: 0, altitude: 3000 * KM, tilt: 0, heading: 0, localTime: 17 },
+  { name: 'night', dLat: 0, dLon: 0, altitude: 3000 * KM, tilt: 0, heading: 0, localTime: 22 },
+  { name: 'theater', dLat: 0, dLon: 0, altitude: 900 * KM, tilt: 0, heading: 0, localTime: 11 },
+  {
+    name: 'region',
+    dLat: 0,
+    dLon: 0,
+    altitude: 250 * KM,
+    tilt: 0,
+    heading: 30 * DEG,
+    localTime: 10,
+  },
+  { name: 'floor', dLat: 0, dLon: 0, altitude: 100 * KM, tilt: 0, heading: 0, localTime: 11 },
+  {
+    name: 'winter',
+    dLat: 0,
+    dLon: 0,
+    altitude: 1500 * KM,
+    tilt: 0,
+    heading: 0,
+    localTime: 12,
+    day: 150,
+  },
+  {
+    name: 'sharp',
+    dLat: 0,
+    dLon: 0,
+    altitude: 100 * KM,
+    tilt: 0,
+    heading: 0,
+    localTime: 14,
+    width: 1920,
+    height: 1080,
   },
 ];
 
@@ -287,10 +311,8 @@ it('renders preview views', async () => {
   const exaggeration = Number(env('EX', '10'));
   const wanted = env('VIEWS', '');
   const strategic = env('SCENE', 'sim') === 'strategic';
-  const views = PREVIEW_VIEWS.filter(
-    (v) =>
-      (!wanted || wanted.split(',').includes(v.name)) &&
-      (!strategic || (!v.target && v.altitude >= STRATEGIC_FLOOR)),
+  const views = (strategic ? STRATEGIC_PREVIEW_VIEWS : PREVIEW_VIEWS).filter(
+    (v) => !wanted || wanted.split(',').includes(v.name),
   );
 
   // The campaign world first: the global pass uses the seed that passed the validity check.
@@ -299,9 +321,8 @@ it('renders preview views', async () => {
   const { world, global } = await previewWorld(gpu, params, tres, gres);
   const infra = new InfraScene(campaign.graph, campaign.infrastructure, params.radius);
 
-  const head = await headlessRenderer(gpu.device, width, height);
   if (strategic) {
-    await renderStrategic(head, gpu, {
+    await renderStrategic(gpu, {
       world,
       global,
       campaign,
@@ -313,6 +334,7 @@ it('renders preview views', async () => {
     });
     return;
   }
+  const head = await headlessRenderer(gpu.device, width, height);
   const scene = new GlobeScene(head.renderer, {
     radius: params.radius,
     grid: new CubeGrid(tres),
@@ -564,11 +586,11 @@ it('renders preview views', async () => {
 });
 
 /**
- * SCENE=strategic: the strategic view's scene from the views at or above its floor.
- * The map needs only the display maps of the global pass and the strategic graph.
+ * SCENE=strategic: the strategic view's scene from STRATEGIC_PREVIEW_VIEWS, with clouds
+ * from the sim's weather, tile counts and frame times, and (CVD=1) the same images as
+ * seen with protanopia, deuteranopia and tritanopia (acceptance check 4).
  */
 async function renderStrategic(
-  head: Awaited<ReturnType<typeof headlessRenderer>>,
   gpu: NonNullable<Awaited<ReturnType<typeof testGpu>>>,
   o: {
     world: Awaited<ReturnType<typeof previewWorld>>['world'];
@@ -581,17 +603,12 @@ async function renderStrategic(
     views: PreviewView[];
   },
 ): Promise<void> {
-  const { world, global, campaign, params, width, height } = o;
-  const scene = new StrategicScene(head.renderer, {
-    radius: params.radius,
-    grid: new CubeGrid(world.info.resolution),
-    input: false,
-  });
-  scene.resize(width, height);
+  const { world, global, campaign, params } = o;
+  const cvd = process.env.CVD === '1';
   const d = global.finish.display;
   let maxHeight = -Infinity;
   for (const h of d.height) maxHeight = Math.max(maxHeight, h);
-  scene.setWorld({
+  const displayWorld = {
     maps: {
       ...world.maps,
       height: d.height,
@@ -600,8 +617,8 @@ async function renderStrategic(
       lakeDepth: d.lakeDepth,
     },
     info: { ...world.info, maxHeight },
-  });
-  scene.setStrategic(campaign.graph, campaign.campaign.cast, campaign.infrastructure);
+  };
+  const riverIndex = new RiverIndex(global.finish.rivers);
   // The relief mesh (decision 77) from the same synthesizer as the terrain.
   const synth = new TileSynthesizer(global.grid, {
     seed: params.seed,
@@ -612,70 +629,119 @@ async function renderStrategic(
     height: global.height,
     forest: global.finish.forest,
     treeline: global.finish.treeline,
-    index: new RiverIndex(global.finish.rivers),
+    index: riverIndex,
   });
-  scene.setTerrainWorld({
-    synth,
-    seed: params.seed,
-    radius: params.radius,
-    reliefScale: params.reliefScale,
-    biome: global.finish.biome,
-    biomeResolution: global.n,
-    height: global.height,
-    rivers: new RiverIndex(global.finish.rivers),
-  });
-  scene.relief.buildBudgetMs = 10_000;
   const main = new Vec3d(...world.info.mainContinent);
   const lat0 = Math.asin(main.y);
   const lon0 = Math.atan2(main.x, main.z);
   const calendar = defaultCampaignStart(main, params);
+  // Live weather from the sim, replayed to each view's time, for the map's clouds.
+  const weatherConfig = {
+    seed: params.seed,
+    radius: params.radius,
+    orbit: params,
+    calendar,
+    climate: buildWeatherClimate(
+      { ...world.maps, resolution: world.info.resolution, reliefScale: world.info.reliefScale },
+      new WeatherGrid(),
+      params.radius,
+    ),
+  };
+  let simWorld = createSimWorld(weatherConfig);
   const outDir = join(import.meta.dirname, 'out');
   mkdirSync(outDir, { recursive: true });
+  // One renderer and scene per image size.
+  const sizes = new Map<string, PreviewView[]>();
   for (const v of o.views) {
-    const cam = scene.orbit;
-    cam.lat = lat0 + v.dLat;
-    cam.lon = lon0 + v.dLon;
-    cam.altitude = cam.targetAltitude = v.altitude;
-    cam.heading = v.heading;
-    // The sun and season at the view's local time and day, as in the simulation previews.
-    const localAt = (day: number) =>
-      withLocalTime(day * DAY, cam.lon, (v.localTime ?? 11) * HOUR, params, calendar);
-    let when = localAt(v.day ?? 0);
-    if (when < 0) when = localAt((v.day ?? 0) + 1);
-    sunDirection(when, params, calendar, scene.sun);
-    scene.relief.seasonPhase.value = seasonPhase(when, params, calendar);
-    // Render until every tile this view wants has loaded.
-    let stable = 0;
-    let last = '';
-    for (let f = 0; f < 300 && stable < 3; f++) {
-      scene.render(0);
-      await gpu.finish();
-      await new Promise((r) => setTimeout(r, 2));
+    const key = `${v.width ?? o.width}x${v.height ?? o.height}`;
+    sizes.set(key, [...(sizes.get(key) ?? []), v]);
+  }
+  let fakeNow = 0;
+  for (const [key, group] of sizes) {
+    const [width, height] = key.split('x').map(Number) as [number, number];
+    const head = await headlessRenderer(gpu.device, width, height);
+    const weather = new WeatherTexture();
+    const clouds = new CloudLayer(params.radius, new PlanetLighting(params.radius), weather);
+    const scene = new StrategicScene(head.renderer, {
+      radius: params.radius,
+      grid: new CubeGrid(world.info.resolution),
+      input: false,
+      weather: clouds,
+    });
+    scene.resize(width, height);
+    scene.setWorld(displayWorld);
+    scene.setStrategic(campaign.graph, campaign.campaign.cast, campaign.infrastructure);
+    scene.setTerrainWorld({
+      synth,
+      seed: params.seed,
+      radius: params.radius,
+      reliefScale: params.reliefScale,
+      biome: global.finish.biome,
+      biomeResolution: global.n,
+      height: global.height,
+      rivers: riverIndex,
+    });
+    scene.relief.buildBudgetMs = 10_000;
+    for (const v of group) {
+      const cam = scene.orbit;
+      cam.lat = lat0 + v.dLat;
+      cam.lon = lon0 + v.dLon;
+      cam.altitude = cam.targetAltitude = v.altitude;
+      cam.heading = v.heading;
+      // The sun, season and weather at the view's local time and day.
+      const localAt = (day: number) =>
+        withLocalTime(day * DAY, cam.lon, (v.localTime ?? 11) * HOUR, params, calendar);
+      let when = localAt(v.day ?? 0);
+      if (when < 0) when = localAt((v.day ?? 0) + 1);
+      sunDirection(when, params, calendar, scene.sun);
+      scene.relief.seasonPhase.value = seasonPhase(when, params, calendar);
+      if (when < simWorld.sim.time) simWorld = createSimWorld(weatherConfig);
+      simWorld.sim.advanceTo(when);
+      const view = simWorld.weather.view();
+      weather.setFrames(view);
+      weather.update(view, when);
+      clouds.time.value = when;
+      // A clock far ahead of real time, so the bake runs now whatever its throttle.
+      clouds.bake(head.renderer, (fakeNow += 1e9));
+      // Render until every tile this view wants has loaded.
+      let stable = 0;
+      let last = '';
+      for (let f = 0; f < 300 && stable < 3; f++) {
+        scene.render(0);
+        await gpu.finish();
+        await new Promise((r) => setTimeout(r, 2));
+        const s = scene.relief.stats;
+        const sig = `${s.drawn}/${s.deepest}/${s.meshes}`;
+        stable = s.pending === 0 && sig === last ? stable + 1 : 0;
+        last = sig;
+      }
+      // Frame time of the loaded view (ms until the GPU is done; on a software adapter
+      // only ratios between views mean anything).
+      const frames = 20;
+      const p0 = performance.now();
+      for (let f = 0; f < frames; f++) {
+        scene.render(0);
+        await gpu.finish();
+      }
+      const ms = (performance.now() - p0) / frames;
+      const rgb = await head.readRgb();
+      const base = join(outDir, `render-${o.seed}-strategic-${v.name}`);
+      writeFileSync(`${base}.png`, encodePng(width, height, rgb));
+      if (cvd) {
+        for (const kind of DEFICIENCIES)
+          writeFileSync(`${base}-${kind}.png`, encodePng(width, height, simulateCvd(rgb, kind)));
+      }
       const s = scene.relief.stats;
-      const sig = `${s.drawn}/${s.deepest}/${s.meshes}`;
-      stable = s.pending === 0 && sig === last ? stable + 1 : 0;
-      last = sig;
+      console.log(
+        `strategic ${v.name} (${width}×${height}): ${s.drawn} tiles, deepest L${s.deepest}, ` +
+          `${ms.toFixed(1)} ms/frame → ${base}.png`,
+      );
     }
-    // Frame time of the loaded view (ms until the GPU is done; on a software adapter
-    // only ratios between views mean anything).
-    const frames = 20;
-    const p0 = performance.now();
-    for (let f = 0; f < frames; f++) {
-      scene.render(0);
-      await gpu.finish();
-    }
-    const ms = (performance.now() - p0) / frames;
-    const rgb = await head.readRgb();
-    const file = join(outDir, `render-${o.seed}-strategic-${v.name}.png`);
-    writeFileSync(file, encodePng(width, height, rgb));
-    const s = scene.relief.stats;
-    console.log(
-      `strategic ${v.name}: ${s.drawn} tiles, deepest L${s.deepest}, ${ms.toFixed(1)} ms/frame → ${file}`,
-    );
+    scene.dispose();
+    clouds.dispose();
+    head.dispose();
   }
   if (gpu.errors.length) throw new Error(`GPU errors: ${gpu.errors.join(' | ')}`);
-  scene.dispose();
   synth.dispose();
   global.grid.dispose();
-  head.dispose();
 }
