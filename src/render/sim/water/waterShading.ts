@@ -163,6 +163,9 @@ export class WaterShading {
   /** Foam amount multiplier (0 = none). */
   readonly foamStrength = uniform(1);
   readonly waves = waveSet();
+  /** Silt in warm rivers (decision 126): color (linear) and strength at full warmth. */
+  readonly siltColor = uniform(new Color(0.16, 0.095, 0.04));
+  readonly siltStrength = uniform(0.85);
 
   constructor(private readonly lighting: PlanetLighting) {}
 
@@ -194,7 +197,11 @@ export class WaterShading {
         );
         const depth = vec3(waterDepth.div(this.reliefScale));
         const bedVisible = exp(depth.mul(vec3(...ABSORPTION)).mul(-2));
-        const body = mix(this.deepColor, i.bed, bedVisible) as V3;
+        const clear = mix(this.deepColor, i.bed, bedVisible) as V3;
+        // Warm rivers carry silt (decision 126): the Amazon's and the Nile's brown.
+        const riverShare = clamp(river.div(max(wet, 1e-4)), 0, 1).mul(float(1).sub(max(sea, lake)));
+        const turbid = riverShare.mul(smoothstep(10, 22, i.temperature)).mul(this.siltStrength);
+        const body = mix(clear, this.siltColor, turbid) as V3;
 
         // Waves: tangent-plane slope from resolved waves, variance from the rest.
         let grad: V3 = vec3(0);

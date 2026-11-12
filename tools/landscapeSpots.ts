@@ -256,8 +256,18 @@ export async function findSpots(
           offer('lake', Math.min(lake[c]!, 400) + 0.5 * s.relief(d, [5000, 10000]), c);
         if (COLD.has(b) || b === Biome.TemperateForest) {
           const rel = s.relief(d, [5000, 10000]);
-          // Northern-Sweden-like: tundra or taiga below the ice, with deep valleys.
-          if ((b === Biome.Tundra || b === Biome.Taiga) && h < 2500) offer('glacial', rel, c);
+          // Northern-Sweden-like: tundra or taiga below the ice, with deep valleys, inland,
+          // with lakes in the valleys nearby.
+          if ((b === Biome.Tundra || b === Biome.Taiga) && h < 1800 && rel > 400) {
+            let inland = true;
+            let lakes = 0;
+            for (let k = 0; k < 8; k++) {
+              const q = s.offset(d, (k * Math.PI) / 4, 12000);
+              if (s.height(q) <= 0) inland = false;
+              if (lake[s.cell(s.offset(d, (k * Math.PI) / 4, 5000))]! > 0) lakes++;
+            }
+            if (inland) offer('glacial', rel + 400 * lakes, c);
+          }
         }
         if (h > 3000) offer('peaks', h + 2 * s.relief(d, [6000, 12000]), c);
         if (b === Biome.TropicalRainforest && lake[c]! <= 0)
