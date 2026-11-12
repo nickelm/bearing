@@ -49,7 +49,7 @@ Across all five, edges show slight stair-stepping and the image has faint grain,
 
 - **Facets by design.** Flat shading makes the LOD mesh's triangles visible. At low altitude, target facets of roughly 20 to 60 m, so mountains look carved (reference 3); the finest tile level gives 24 m. With distance the LOD coarsens the mesh at the rate it shrinks on screen, so facets stay about 20 to 40 px across while growing in meters; haze softens them toward the horizon (decision 123).
 - **Shade quantization.** Each biome has three to five shades (four by default). The shader picks a shade from slope, altitude, moisture, and a low-frequency noise term, then holds it constant per face, with the whole land albedo evaluated at the face's center. This produces the mottled, painted look of reference 2 without textures (decision 124).
-- **Rock and snow.** Steep faces switch to rock shades; high faces switch to snow. Transitions follow face boundaries rather than blending smoothly.
+- **Rock and snow.** Steep faces switch to rock shades (three per face); cold faces switch to snow (two shades). Transitions follow face boundaries rather than blending smoothly, dithered so the line is not a contour (decision 125).
 - **Farmland.** Near settlements and on flat lowland, a Voronoi field pattern assigns each cell a crop color (wheat, green crop, fallow, pasture). Field cells are a few hundred meters across with slight color variation.
 - **Rivers.** Rivers render as bright ribbons that mirror the sky color, with a narrow darker bank. They should be the most visible terrain feature from altitude, since they matter tactically.
 - **Roads.** Thin, muted gray-brown lines from vector data, visible below about 3 km altitude.

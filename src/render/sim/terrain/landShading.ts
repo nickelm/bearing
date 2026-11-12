@@ -35,6 +35,7 @@ import {
   mix,
   smoothstep,
   sin,
+  step,
   uniform,
   vec3,
 } from 'three/tsl';
@@ -190,6 +191,33 @@ export class LandShading {
     return mix(this.shadeDark, this.shadePale, k.div(n.sub(1))) as V3;
   }
 
+  /**
+   * Rock cover 0..1 on steep ground (about 19° to 35°): physical slope, since
+   * landforms keep Earth's slopes (decision 121). Faceted, a face is all rock
+   * or none, switching at about 27° with the noise and jitter dithering the
+   * line along facets (decision 125); smooth, it blends.
+   */
+  rockCover(steep: F, noise: F, jitter: F, faceted: F): F {
+    const smooth = smoothstep(0.35, 0.7, steep.add(noise.mul(0.15)));
+    const face = step(0.52, steep.add(noise.mul(0.15)).add(jitter.sub(0.5).mul(0.12)));
+    return mix(smooth, face, faceted) as F;
+  }
+
+  /**
+   * Snow cover 0..1 from the surface temperature (°C), slope and moisture:
+   * below about 0 °C, not on cliffs, thin in deserts. Faceted, a face is
+   * snow-covered or bare, switching where the smooth cover would be half
+   * (about −2.5 °C on gentle, wet ground), dithered by the jitter (decision 125).
+   */
+  snowCover(t: F, steep: F, moisture: F, jitter: F, faceted: F): F {
+    const cold = smoothstep(0, -5, t);
+    const sticks = float(1).sub(smoothstep(0.9, 1.5, steep));
+    const wetEnough = smoothstep(0.03, 0.2, moisture);
+    const smooth = cold.mul(sticks).mul(wetEnough);
+    const face = step(0.5, smooth.add(jitter.sub(0.5).mul(0.2)));
+    return mix(smooth, face, faceted) as F;
+  }
+
   /** The land albedo for a fragment. */
   albedo(i: LandInputs): V3 {
     // Per face, noise finer than a few facets would only speckle (decision 124).
@@ -243,22 +271,25 @@ export class LandShading {
     const autumn = smoothstep(10, 2, t).mul(green).mul(0.75).mul(float(1).sub(evergreen));
     a = mix(a, this.autumnColor.mul(noise.mul(0.2).add(1)), autumn) as V3;
 
-    // Rock on steep ground (about 19° to 35°): physical slope, since landforms keep
-    // Earth's slopes (decision 121).
+    // Rock and snow switch per face when faceted (decision 125), and blend otherwise.
+    const faceted = (i.face ? this.facets : float(0)) as F;
+    const jitter = (i.face ? i.face.jitter : float(0.5)) as F;
     const steep = length(i.slope);
-    const rock = smoothstep(0.35, 0.7, steep.add(noise.mul(0.15)));
-    a = mix(a, this.rockColor.mul(noise.mul(0.25).add(1)), rock) as V3;
+    const rock = this.rockCover(steep, noise, jitter, faceted);
+    // Three rock shades per face, or continuous noise.
+    const rockShade = clamp(floor(noise.mul(0.8).add(jitter).mul(3)), 0, 2)
+      .mul(0.18)
+      .add(0.82);
+    const rockTone = mix(noise.mul(0.25).add(1), rockShade, faceted);
+    a = mix(a, this.rockColor.mul(rockTone), rock) as V3;
 
-    // Snow below about 0 °C, not on cliffs, thin in deserts.
-    const cold = smoothstep(0, -5, t);
-    const sticks = float(1).sub(smoothstep(0.9, 1.5, steep));
-    const wetEnough = smoothstep(0.03, 0.2, moisture);
     // Snow lies under evergreen canopy more than on it: forests stay dark in winter.
-    const snow = cold
-      .mul(sticks)
-      .mul(wetEnough)
-      .mul(float(1).sub(evergreen.mul(0.6)));
-    a = mix(a, this.snowColor, snow) as V3;
+    const snow = this.snowCover(t, steep, moisture, jitter, faceted).mul(
+      float(1).sub(evergreen.mul(0.6)),
+    );
+    // Two snow shades per face: sunlit faces still differ, as in the reference board.
+    const snowTone = mix(float(1), step(0.5, jitter).mul(0.06).add(0.94), faceted);
+    a = mix(a, this.snowColor.mul(snowTone), snow) as V3;
 
     return mix(i.albedo, a, this.enabled) as V3;
   }

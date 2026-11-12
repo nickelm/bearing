@@ -79,7 +79,7 @@ export interface PreviewView {
    * latitude, the densely forested cell nearest the main continent, the
    * largest city, or the first main airbase (milestone 5).
    */
-  target?: 'lake' | 'forest' | 'city' | 'airbase' | 'front' | 'capital';
+  target?: 'lake' | 'forest' | 'city' | 'airbase' | 'front' | 'capital' | 'peak';
   /** With target 'airbase': stand back along the runway and look down it (heading ignored). */
   alongRunway?: boolean;
   /** Instead of localTime: the first evening time the sun at the camera sinks to this elevation (rad). */
@@ -188,6 +188,17 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     heading: 0,
     localTime: 14,
     day: 0,
+  },
+  {
+    // The highest summit near the main continent: rock and snow by face (decision 125).
+    name: 'alpine',
+    dLat: 0,
+    dLon: 0,
+    altitude: 10 * KM,
+    tilt: 72 * DEG,
+    heading: 0,
+    localTime: 15,
+    target: 'peak',
   },
   {
     name: 'sunset',
@@ -512,20 +523,32 @@ it('renders preview views', async () => {
     capital: null,
     lake: null,
     forest: null,
+    peak: null,
     city: sp.cells.length ? new Vec3d(...settlementPoint(sp, biggest)) : null,
     airbase: base ? new Vec3d(...base.point) : null,
   };
   let deepest = 0;
   let nearest = -2;
+  let highest = 0;
   for (let c = 0; c < lakeDepth.length; c++) {
     const lakeCandidate = lakeDepth[c]! > deepest;
     const forestCandidate = forestMap[c]! > 220 && global.height[c]! > 30;
-    if (!lakeCandidate && !forestCandidate) continue;
+    const peakCandidate = global.height[c]! > highest;
+    if (!lakeCandidate && !forestCandidate && !peakCandidate) continue;
     const face = Math.floor(c / (n * n)) as CubeFace;
     cubeFaceUvToDirection(face, ((c % n) + 0.5) / n, ((Math.floor(c / n) % n) + 0.5) / n, cellDir);
     if (lakeCandidate && Math.abs(cellDir.y) < Math.sin(55 * DEG)) {
       deepest = lakeDepth[c]!;
       targets.lake = cellDir.clone();
+    }
+    // Within about 600 km of the main continent, away from the ice caps.
+    if (
+      peakCandidate &&
+      cellDir.dot(main) > Math.cos((600 * KM) / params.radius) &&
+      Math.abs(cellDir.y) < 0.8
+    ) {
+      highest = global.height[c]!;
+      targets.peak = cellDir.clone();
     }
     if (forestCandidate && cellDir.dot(main) > nearest) {
       nearest = cellDir.dot(main);

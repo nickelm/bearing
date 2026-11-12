@@ -1909,3 +1909,16 @@ The engineering calls made while adopting it:
 - **Controls.** GUI → Lighting → Faceted terrain switches facets and per-face shading together; the preview's `FACETS=0` renders both off.
 
 **Reason:** Part I asks for three to five shades per biome, constant per face, for the mottled, painted look of reference 2 without textures; with the albedo smooth across faces, flat facets showed only through light. Evaluating every land input at the face center also prepares the next task, rock and snow by face, which only has to replace their smooth blends with steps.
+
+### 125. Rock and snow by face
+
+**Date:** 2026-11-12
+**Decision:** With faceted shading on, rock and snow cover whole faces or none, instead of blending smoothly with slope and temperature (Part I, _Rock and snow_; a style gap since decision 70). `LandShading.rockCover` and `snowCover` hold both forms; GUI → Lighting → Faceted terrain switches between them with the facets.
+
+- **Rock.** A face turns to rock where its physical slope, plus the low-frequency noise, passes 0.52 (about 27°), the middle of the old 19°–35° blend. The slope is the vertex slope at the face's center (decision 124), not the facet's own tilt: the vertex slope comes from the data one sample apart, so a coarse distant face over a craggy slope still reads as rock, and rock does not come and go as the LOD refines. Rock takes three shades per face from the noise and the face's jitter, replacing its continuous ±25% noise.
+- **Snow.** A face is snow-covered where the old smooth cover (cold from 0 to −5 °C, not on cliffs, thin in deserts) passes one half, about −2.5 °C on gentle, wet ground, at the face's center temperature. Snow takes two shades, 6% apart, so neighboring sunlit faces still separate. Evergreen canopy still keeps 60% of the snow off, per fragment, so forests stay dark in winter (decision 71).
+- **Dither.** The face's jitter shifts each threshold slightly (±0.06 in slope, ±0.1 in cover), so the rock line and the snow line follow facet edges without tracing a smooth contour, and a few faces past the line switch early, as patches would.
+- **Tests:** a compute kernel on Dawn checks that faceted covers are only 0 or 1 and switch at those thresholds with the jitter neutral, that the jitter dithers faces at the threshold, and that the smooth covers are the old blends.
+- **Preview:** a new view, `alpine`, looks at the highest summit within 600 km of the main continent from 10 km. Faceted, its snow line runs along facet edges with scattered snow faces beyond it; smooth (`FACETS=0`), the old blends.
+
+**Reason:** Part I wants transitions on face boundaries, so the terrain reads as built from colored facets rather than painted over them. With the albedo already evaluated per face (decision 124), a step in place of each blend is all it takes.

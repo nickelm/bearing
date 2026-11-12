@@ -409,7 +409,9 @@ Simulation view (needs S1's `render/sim/` split):
 - [x] Per-face shade quantization: three to five shades per biome from slope, altitude, moisture and low-frequency noise, constant per face (decision 124: `render/sim/terrain/faceShading.ts`; the land albedo is evaluated at each face's center)
   - [ ] Owner: judge the shades in the browser (GUI → Lighting → Faceted terrain toggles facets and shades together); tune the shade count and the dark and pale multipliers (`LandShading.shades`, `shadeDark`, `shadePale`) if the mottling is too strong or too weak
   - [ ] The forest edge steps along the road clearings in the `trees` view, with or without facets: the density field, not the shading
-- [ ] Rock and snow by face; drop smooth rock blending (style gap from decision 70)
+- [x] Rock and snow by face; drop smooth rock blending (style gap from decision 70) (decision 125; preview view `alpine`)
+  - [ ] Owner: look at snow lines and rock faces in the browser, high in a range and from a valley floor
+  - [ ] Owner idea (2026-11-12): more color variation per facet, possibly from textures, later; keep it value-first and constant per face (Part I)
 - [ ] Voronoi farmland patchwork near settlements and on flat lowland
 - [ ] Simulation preview views: re-aim Part I checks 1–5 (5 km mixed landscape, 500 m conifer edge with a road, mountains at low sun, airbase at dusk, coast with glint) at or below 20 km in `tools/render.preview.ts`; retire views between 20 and 100 km (`oblique`, `roads`, `coast`) or move them to the strategic set (carried from old M5)
 - [ ] Style audit: compare those views with the reference board and Part I (terrain facets and shade quantization, farmland, rivers, ocean, haze, trees, towns, lights); the old M3 and M5 rendering predates the guide (smooth shading, clump trees). Add a task per gap (carried from old M5)
