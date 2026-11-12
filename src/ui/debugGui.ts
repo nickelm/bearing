@@ -192,6 +192,8 @@ export interface DebugGuiStatus {
   tiles: string;
   trees: string;
   buildings: string;
+  /** The observer's distance from its station (of the 25 km allowed) and height above the ground. */
+  observer: string;
 }
 
 export interface DebugGuiCallbacks {
@@ -231,6 +233,7 @@ export class DebugGui {
     tiles: '—',
     trees: '—',
     buildings: '—',
+    observer: '—',
   };
 
   private stationController: ReturnType<GUI['add']> | null = null;
@@ -359,6 +362,7 @@ export class DebugGui {
     st.add(this.status, 'tiles').name('Tiles').disable().listen();
     st.add(this.status, 'trees').name('Trees').disable().listen();
     st.add(this.status, 'buildings').name('Buildings').disable().listen();
+    st.add(this.status, 'observer').name('Observer').disable().listen();
   }
 
   /** Adds a top-level folder above Status (lil-gui appends, so move its element). */

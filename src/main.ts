@@ -24,6 +24,7 @@ import { INFRA_LAYERS } from './render/strategic/infra/infraModel';
 import { InfraScene } from './render/sim/infra/infraScene';
 import { airfieldGrading, globalMapSampler } from './render/sim/infra/airfieldGrading';
 import { observerStations } from './render/sim/camera/observerStations';
+import { OBSERVER_LEASH } from './render/sim/camera/observerCamera';
 import type { ObserverStation } from './render/sim/camera/observerStations';
 import { VIEW_MODES } from './render/common/globeMesh';
 import type { ViewMode } from './render/common/globeMesh';
@@ -252,7 +253,8 @@ async function main(): Promise<void> {
   };
 
   const campaignParams: CampaignGuiParams = {
-    overlay: true,
+    // Off by default (owner request): a developer view of the graph over the simulation view.
+    overlay: false,
     // Off by default: the panel covers much of the screen (GUI → Campaign → Briefing).
     briefing: false,
     seedUsed: '—',
@@ -597,6 +599,8 @@ async function main(): Promise<void> {
     void regenerate();
   });
   let nextScanSeed: bigint | null = null;
+  // The overlay's own default is on; the GUI's value reaches it only on change otherwise.
+  globe.strategic.enabled = campaignParams.overlay;
   gui.addCampaign(
     campaignParams,
     (c) => {
@@ -853,6 +857,11 @@ async function main(): Promise<void> {
     gui.status.buildings = globe.structures.group.visible
       ? `${bs.instances} in ${bs.tiles} tiles${bs.pending ? `, ${bs.pending} loading` : ''}`
       : 'off (shown below 15 km)';
+    const ob = globe.observer;
+    gui.status.observer =
+      globe.cameraMode === 'observer' && ob.station
+        ? `${(ob.distanceFromStation / KM).toFixed(1)} of ${OBSERVER_LEASH / KM} km out, ${ob.height.toFixed(0)} m up`
+        : '—';
     const rs = strategicView.relief.stats;
     const tileText =
       activeView === 'strategic'

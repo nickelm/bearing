@@ -170,6 +170,8 @@ describe('ObserverCamera', () => {
     const d = Math.acos(Math.min(1, c.spot.dot(s.point))) * R;
     expect(d).toBeLessThanOrEqual(OBSERVER_LEASH);
     expect(d).toBeGreaterThan(OBSERVER_LEASH - 10);
+    expect(c.distanceFromStation).toBeCloseTo(d, 6);
+    expect(OBSERVER_LEASH).toBe(25_000); // really 25 km of ground
   });
 });
 

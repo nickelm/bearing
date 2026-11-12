@@ -1809,3 +1809,10 @@ The engineering calls made while adopting it:
 - **What it does not change.** Tile counts barely move (the dropped tiles were coarse ones near the horizon), and a tile straddling the horizon is still drawn whole; the far plane clips it. The bound grows with exaggeration: at the current 10× (peaks up to 40 km) it is about 490 km at 20 km, which V1's true-scale relief task brings to about 290 km. The design doc's "about 200 km at 20 km" is the flat-land horizon; peaks beyond it add their own horizon, since a 4 km ridge 250–290 km away still shows with 20–40% of its red light through the haze, and cutting it would make ridges pop in as the camera climbs.
 
 **Reason:** V1 bounds the simulation view's terrain by the horizon so that streaming, LOD depth and memory stay bounded (Proposal 0001). The selection already culled by horizon, but loosely, and asked for meshes no view could show. The next task, the tile cache budget and prefetch, needs a radius it can rely on; `selectionRange` is that radius.
+
+### 117. The graph overlay starts off; an observer status line
+
+**Date:** 2026-11-12
+**Decision:** The strategic graph debug overlay on the simulation view starts off (owner request); GUI → Campaign → overlay turns it on. Its own default was on and the GUI's value reached it only when toggled, so it is now also applied at startup, as the View folder's settings are. GUI → Status gains an _Observer_ line: the observer's ground distance from its station out of the 25 km allowed, and its height above the ground.
+
+**Reason:** The owner asked whether the 25 km limit is really 25 km. It is (a test flies 50 km outward and stops between 24.99 and 25 km of ground distance), but it feels shorter because speed grows with height: at 1 km above the ground the observer moves 2 km/s, so the limit is twelve seconds away, two and a half with ×5. The status line makes the distance visible.

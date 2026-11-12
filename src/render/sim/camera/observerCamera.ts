@@ -139,6 +139,12 @@ export class ObserverCamera implements CameraControls {
     return this.height;
   }
 
+  /** Ground distance from the station's spot (m), at most OBSERVER_LEASH. */
+  get distanceFromStation(): Meters {
+    const home = this.station?.point;
+    return home ? Math.acos(clamp(this.spot.dot(home), -1, 1)) * this.radius : 0;
+  }
+
   /** Walks the spot `forwardM` along the heading and `rightM` to the right, within the leash. */
   walk(forwardM: Meters, rightM: Meters): void {
     const { east, north } = localFrame(this.spot);
