@@ -43,6 +43,12 @@ export interface BuiltModel {
   color: Float32Array;
   /** Ambient occlusion 0..1 at each vertex. */
   ao: Float32Array;
+  /**
+   * Smoothed normal at each vertex for ink outlines (decision 107): the sum of the
+   * distinct face normals meeting at its position, normalized, so the inflated outline
+   * hull stays closed across the model's hard edges.
+   */
+  outlineNormal: Float32Array;
   /** Color group index per triangle, into `groupNames`. */
   group: Uint16Array;
   groupNames: string[];
@@ -616,6 +622,7 @@ export function buildModel(spec: ModelSpec, options: BuildOptions = {}): BuiltMo
     normal,
     color,
     ao,
+    outlineNormal: outlineNormals(position, normal),
     group: groupIndex,
     groupNames,
     emissives,
@@ -627,4 +634,37 @@ export function buildModel(spec: ModelSpec, options: BuildOptions = {}): BuiltMo
 export function withinBudget(m: BuiltModel): boolean {
   const [lo, hi] = MODEL_BUDGETS[m.class];
   return m.triangles >= lo && m.triangles <= hi;
+}
+
+/**
+ * Outline normals (decision 107): vertices at the same position (to 0.1 mm) share the
+ * normalized sum of the distinct face normals that meet there; where they cancel (the
+ * two sides of a thin sheet), the face normal is kept.
+ */
+export function outlineNormals(position: Float32Array, normal: Float32Array): Float32Array {
+  const key = (i: number) =>
+    `${Math.round(position[i]! * 1e4)},${Math.round(position[i + 1]! * 1e4)},${Math.round(position[i + 2]! * 1e4)}`;
+  const sums = new Map<string, { n: number[][]; sum: [number, number, number] }>();
+  for (let i = 0; i < position.length; i += 3) {
+    const k = key(i);
+    let e = sums.get(k);
+    if (!e) sums.set(k, (e = { n: [], sum: [0, 0, 0] }));
+    const nx = normal[i]!;
+    const ny = normal[i + 1]!;
+    const nz = normal[i + 2]!;
+    // Coplanar triangles of one face count once.
+    if (e.n.some((m) => m[0]! * nx + m[1]! * ny + m[2]! * nz > 0.9999)) continue;
+    e.n.push([nx, ny, nz]);
+    e.sum[0] += nx;
+    e.sum[1] += ny;
+    e.sum[2] += nz;
+  }
+  const out = new Float32Array(position.length);
+  for (let i = 0; i < position.length; i += 3) {
+    const sum = sums.get(key(i))!.sum;
+    const l = Math.hypot(sum[0], sum[1], sum[2]);
+    if (l < 0.2) out.set([normal[i]!, normal[i + 1]!, normal[i + 2]!], i);
+    else out.set([sum[0] / l, sum[1] / l, sum[2] / l], i);
+  }
+  return out;
 }

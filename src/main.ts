@@ -139,6 +139,8 @@ async function main(): Promise<void> {
     trees: false,
     treeRange: 5,
     buildings: false,
+    ink: true,
+    inkWidth: 1.6,
     renderScale: 'auto',
     targetFps: 30,
     scene: query.get('view') === 'strategic' ? 'strategic' : 'simulation',
@@ -524,6 +526,8 @@ async function main(): Promise<void> {
       globe.forest.enabled = v.trees;
       globe.forest.range.value = v.treeRange * KM;
       globe.structures.enabled = v.buildings;
+      globe.structures.ink = v.ink;
+      globe.structures.setInk(v.inkWidth, 0);
       renderScale.targetMs = 1000 / v.targetFps;
       const fixed = RenderScaleController.fixed(v.renderScale);
       applyRenderScale(fixed ?? renderScale.scale, performance.now());

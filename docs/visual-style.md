@@ -43,7 +43,7 @@ Across all five, edges show slight stair-stepping and the image has faint grain,
 - **Materials.** Mostly rough, non-metallic surfaces (roughness 0.8 to 1.0). Canopies, water, and wet surfaces get lower roughness for specular highlights. Bare-metal bombers get a modest metalness.
 - **Lighting.** One directional sun plus hemispheric sky light, with the sky light's colors taken from the current sky gradient so shadows pick up the sky's tint. Shadows use cascaded shadow maps within a few kilometers of the camera; beyond that, the haze hides their absence.
 - **Ambient occlusion.** Bake per-vertex AO into model vertex colors at build time. Screen-space AO is optional and off by default.
-- **No outlines.** The references use no ink lines or cel shading, and neither do we.
+- **Ink outlines on models, no cel shading.** Models (aircraft, vehicles, ships, buildings) carry a dark ink outline, `#1A1B1D` and about 1.5 to 2 px wide, around their silhouettes and where their parts meet, drawn by an inflated back-face hull. It is an owner's choice beyond the references, on by default and switchable in the GUI; terrain, trees and clouds stay unoutlined, and shading keeps its flat facets without cel bands (decision 107).
 
 ## Terrain
 
@@ -269,7 +269,7 @@ Targets for a mid-range laptop in a desktop browser at 1080p:
 - Smooth shading on models or close terrain.
 - Photographic or noisy high-frequency textures.
 - Saturated primary colors outside emissives and UI highlights.
-- Ink outlines and cel-shading bands.
+- Cel-shading bands, and ink lines on terrain, trees or clouds (models carry their optional outline, decision 107).
 - Thin geometry such as antennas, pitot tubes, and fine branches that alias at distance; omit them or thicken them.
 - Uniform scatter of identical trees; forests need clusters, edges, and value variation.
 - Real national insignia, unit badges, or manufacturer markings.

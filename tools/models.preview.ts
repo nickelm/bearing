@@ -8,7 +8,8 @@
  *   bottom row: the same four views as silhouettes, solid black on a pale sky
  *            (Part I acceptance check 6: each type recognizable by outline alone).
  *
- * Also prints each model's triangle count against its class budget.
+ * Shaded views carry ink outlines (decision 107; INK=0 turns them off, INK_PX sets the
+ * width). Also prints each model's triangle count against its class budget.
  *
  *   npx vitest run --config vitest.tools.config.ts tools/models.preview.ts
  *   MODELS=alliance-fighter,pact-strike SCHEME=pact-tactical  (scheme override)
@@ -24,6 +25,9 @@ import { encodePng } from './png';
 
 const CELL = Number(process.env.CELL ?? 320);
 const SKY = [0xc9, 0xd8, 0xe3];
+/** Ink outlines (INK=0 turns them off) and their width in pixels. */
+const INK = process.env.INK !== '0';
+const INK_PX = Number(process.env.INK_PX ?? 1.6);
 
 type M3 = [number, number, number, number, number, number, number, number, number];
 
@@ -67,8 +71,11 @@ function draw(
   const c = m.bounds.min.map((v, i) => (v + m.bounds.max[i]!) / 2);
   const size = Math.hypot(...m.bounds.max.map((v, i) => v - m.bounds.min[i]!));
   const s = (CELL * 0.9) / size;
+  // Ink outlines (decision 107): the inflated back faces first, in ink.
+  let inflate = 0;
   const proj = (i: number): [number, number, number] => {
-    const p = [m.position[i]! - c[0]!, m.position[i + 1]! - c[1]!, m.position[i + 2]! - c[2]!];
+    const on = m.outlineNormal;
+    const p = [0, 1, 2].map((k) => m.position[i + k]! - c[k]! + on[i + k]! * inflate);
     const vx = rot[0] * p[0]! + rot[1] * p[1]! + rot[2] * p[2]!;
     const vy = rot[3] * p[0]! + rot[4] * p[1]! + rot[5] * p[2]!;
     const vz = rot[6] * p[0]! + rot[7] * p[1]! + rot[8] * p[2]!;
@@ -77,39 +84,43 @@ function draw(
   // Low sun from the front left, above; sky light from above.
   const sun = [0.55, 0.62, -0.56];
   const sl = Math.hypot(...sun);
-  for (let t = 0; t < m.triangles; t++) {
-    const [a, b, cc] = [proj(t * 9), proj(t * 9 + 3), proj(t * 9 + 6)];
-    const nx = m.normal[t * 9]!;
-    const ny = m.normal[t * 9 + 1]!;
-    const nz = m.normal[t * 9 + 2]!;
-    const lambert = Math.max(0, (nx * sun[0]! + ny * sun[1]! + nz * sun[2]!) / sl);
-    const sky = 0.5 + 0.25 * ny;
-    const x0 = Math.max(0, Math.floor(Math.min(a[0], b[0], cc[0])));
-    const x1 = Math.min(CELL - 1, Math.ceil(Math.max(a[0], b[0], cc[0])));
-    const y0 = Math.max(0, Math.floor(Math.min(a[1], b[1], cc[1])));
-    const y1 = Math.min(CELL - 1, Math.ceil(Math.max(a[1], b[1], cc[1])));
-    const area = (b[0] - a[0]) * (cc[1] - a[1]) - (cc[0] - a[0]) * (b[1] - a[1]);
-    if (Math.abs(area) < 1e-9) continue;
-    for (let y = y0; y <= y1; y++) {
-      for (let x = x0; x <= x1; x++) {
-        const px = x + 0.5;
-        const py = y + 0.5;
-        const w0 = ((b[0] - px) * (cc[1] - py) - (cc[0] - px) * (b[1] - py)) / area;
-        const w1 = ((cc[0] - px) * (a[1] - py) - (a[0] - px) * (cc[1] - py)) / area;
-        const w2 = 1 - w0 - w1;
-        if (w0 < 0 || w1 < 0 || w2 < 0) continue;
-        const z = w0 * a[2] + w1 * b[2] + w2 * cc[2];
-        const k = y * CELL + x;
-        if (z <= zbuf[k]!) continue;
-        zbuf[k] = z;
-        const o = ((oy + y) * width + ox + x) * 3;
-        if (silhouette) {
-          img[o] = img[o + 1] = img[o + 2] = 0;
-          continue;
+  for (const hull of INK && !silhouette ? [true, false] : [false]) {
+    inflate = hull ? INK_PX / s : 0;
+    for (let t = 0; t < m.triangles; t++) {
+      const nx = m.normal[t * 9]!;
+      const ny = m.normal[t * 9 + 1]!;
+      const nz = m.normal[t * 9 + 2]!;
+      if (hull && rot[6] * nx + rot[7] * ny + rot[8] * nz > 0) continue;
+      const [a, b, cc] = [proj(t * 9), proj(t * 9 + 3), proj(t * 9 + 6)];
+      const lambert = Math.max(0, (nx * sun[0]! + ny * sun[1]! + nz * sun[2]!) / sl);
+      const sky = 0.5 + 0.25 * ny;
+      const x0 = Math.max(0, Math.floor(Math.min(a[0], b[0], cc[0])));
+      const x1 = Math.min(CELL - 1, Math.ceil(Math.max(a[0], b[0], cc[0])));
+      const y0 = Math.max(0, Math.floor(Math.min(a[1], b[1], cc[1])));
+      const y1 = Math.min(CELL - 1, Math.ceil(Math.max(a[1], b[1], cc[1])));
+      const area = (b[0] - a[0]) * (cc[1] - a[1]) - (cc[0] - a[0]) * (b[1] - a[1]);
+      if (Math.abs(area) < 1e-9) continue;
+      for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) {
+          const px = x + 0.5;
+          const py = y + 0.5;
+          const w0 = ((b[0] - px) * (cc[1] - py) - (cc[0] - px) * (b[1] - py)) / area;
+          const w1 = ((cc[0] - px) * (a[1] - py) - (a[0] - px) * (cc[1] - py)) / area;
+          const w2 = 1 - w0 - w1;
+          if (w0 < 0 || w1 < 0 || w2 < 0) continue;
+          const z = w0 * a[2] + w1 * b[2] + w2 * cc[2];
+          const k = y * CELL + x;
+          if (z <= zbuf[k]!) continue;
+          zbuf[k] = z;
+          const o = ((oy + y) * width + ox + x) * 3;
+          if (silhouette || hull) {
+            img[o] = img[o + 1] = img[o + 2] = hull ? 0x1a : 0;
+            continue;
+          }
+          const ao = w0 * m.ao[t * 3]! + w1 * m.ao[t * 3 + 1]! + w2 * m.ao[t * 3 + 2]!;
+          const light = (sky * ao + 0.9 * lambert * (0.6 + 0.4 * ao)) * 1.05;
+          for (let ch = 0; ch < 3; ch++) img[o + ch] = toSrgb(m.color[t * 9 + ch]! * light);
         }
-        const ao = w0 * m.ao[t * 3]! + w1 * m.ao[t * 3 + 1]! + w2 * m.ao[t * 3 + 2]!;
-        const light = (sky * ao + 0.9 * lambert * (0.6 + 0.4 * ao)) * 1.05;
-        for (let ch = 0; ch < 3; ch++) img[o + ch] = toSrgb(m.color[t * 9 + ch]! * light);
       }
     }
   }

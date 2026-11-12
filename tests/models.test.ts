@@ -244,3 +244,25 @@ describe('model spec validation', () => {
     ).not.toThrow();
   });
 });
+
+describe('ink outline normals', () => {
+  it('points corner outline normals out along the diagonal of a box', () => {
+    const m = buildModel(one({ type: 'box', center: [0, 0, 0], size: [2, 2, 2] }), { noAo: true });
+    for (let i = 0; i < m.position.length; i += 3) {
+      const n = [m.outlineNormal[i]!, m.outlineNormal[i + 1]!, m.outlineNormal[i + 2]!];
+      expect(Math.hypot(...n)).toBeCloseTo(1, 5);
+      for (let k = 0; k < 3; k++)
+        expect(n[k]! * Math.sign(m.position[i + k]!)).toBeCloseTo(1 / Math.sqrt(3), 5);
+    }
+  });
+
+  it('gives every vertex of every library model a unit outline normal', () => {
+    for (const id of ['alliance-fighter', 'hangar', 'radar-mast']) {
+      const m = buildModel(MODEL_SPECS[id]!, { noAo: true });
+      for (let i = 0; i < m.outlineNormal.length; i += 3)
+        expect(
+          Math.hypot(m.outlineNormal[i]!, m.outlineNormal[i + 1]!, m.outlineNormal[i + 2]!),
+        ).toBeCloseTo(1, 4);
+    }
+  });
+});

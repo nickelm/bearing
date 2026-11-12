@@ -432,7 +432,9 @@ Aircraft, vehicles, ships, buildings and trees are generated in code from small 
 - [x] Debug model-viewer page (decision 106; `viewer.html`): renders any spec with a turntable, sun direction and time of day, sky light and exposure controls, wireframe, triangle count, and a silhouette mode (solid black on a pale sky, Part I acceptance check 6); hot-reloads specs in dev; reachable from the debug GUI and built as a second Vite page under `/bearing/`
 - [x] First specs: one fighter and one strike aircraft per side (F-21 Kestrel, F-124 Harrow, Vo-31 Strizh, Vo-35 Molot), checked with the silhouette test in `tools/models.preview.ts`
   - [x] Owner review of the previews (2026-11-12): wingtip missiles onto the F-21's tips, the F-124's outer wings into the fuselage, stores under the wings of the Vo-31 and Vo-35, both Vo-35 wings one color (camouflage now symmetric), the destroyer's radar mast onto the bridge roof
-  - [ ] Owner: check them in the model viewer in the browser (shading, camouflage patches, silhouettes)
+  - [x] Owner: check them in the model viewer in the browser (shading, camouflage patches, silhouettes) (2026-11-12)
+  - [x] Ink outlines on models, switchable (owner request; decision 107)
+  - [ ] Browser check: ink outlines in the viewer and on buildings in the simulation view (width, fade with distance, no ink blots far away)
   - [ ] Markings: national insignia, modex numbers and squadron codes as painted faces or decals (Part I, Aircraft)
 - [x] Base kit from specs: hangars, hardened shelters, tower, radar on a lattice mast, radar dome, fuel tanks, revetments, placed at airbases in the simulation view (decision 106)
   - [ ] Runway and taxiway markings in the pavement shader (threshold bars, centerline dashes, runway numbers)
@@ -442,7 +444,7 @@ Aircraft, vehicles, ships, buildings and trees are generated in code from small 
   - [ ] Town buildings read as dark specks from 3 km (`DETAIL=1 VIEWS=town`): walls facing away from the sun get only a weak sky light; tune with V1's style audit
 - [x] Ship specs: carrier (CVN-73 Resolute), Alliance destroyer, Pact cruiser (decision 106)
   - [ ] Ship meshes in the simulation view once ships exist (C3)
-- [ ] Checkpoint: owner review in the model viewer and at an airbase in the simulation view
+- [ ] Checkpoint: owner review in the model viewer (done 2026-11-12) and at an airbase in the simulation view (waits for a camera that can get close: V1's observer camera; from the free camera the owner cannot see hangars)
 
 ### V4. Transition, camera rig, and spectator HUD
 

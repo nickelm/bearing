@@ -37,6 +37,9 @@ export interface ViewGuiParams {
   treeRange: number;
   /** Instanced buildings of towns, airbases and industry near the camera. */
   buildings: boolean;
+  /** Ink outlines on models (decision 107) and their width (px). */
+  ink: boolean;
+  inkWidth: number;
   /** Canvas resolution relative to the device pixel ratio: 'auto' adapts to the frame time. */
   renderScale: RenderScaleSetting;
   /** Frame rate the automatic render scale holds. */
@@ -300,6 +303,12 @@ export class DebugGui {
       .onFinishChange(() => callbacks.viewChanged(view));
     t.add(view, 'buildings')
       .name('Buildings (sim detail)')
+      .onChange(() => callbacks.viewChanged(view));
+    t.add(view, 'ink')
+      .name('Ink outlines on models')
+      .onChange(() => callbacks.viewChanged(view));
+    t.add(view, 'inkWidth', 0.5, 4, 0.1)
+      .name('Ink width (px)')
       .onChange(() => callbacks.viewChanged(view));
 
     const st = this.gui.addFolder('Status');

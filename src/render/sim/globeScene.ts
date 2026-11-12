@@ -178,6 +178,10 @@ export class GlobeScene {
       });
       const ground = o.groundHeight ?? 0;
       this.forest.update(o.eye, o.altitude - Math.max(0, ground));
+      this.structures.setInk(
+        this.structures.inkWidth,
+        (this.camera.fov * Math.PI) / 180 / this.viewportHeight,
+      );
       this.structures.update(o.eye, o.altitude - Math.max(0, ground));
     } else {
       this.forest.group.visible = false;

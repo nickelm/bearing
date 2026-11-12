@@ -6,8 +6,8 @@
  * - **Controls** (lil-gui): model, camouflage scheme override, turntable speed, view
  *   pitch and distance, time of day (the sun's elevation and color follow it, golden
  *   near the horizon), sun azimuth, sky light, exposure, ambient occlusion on or off,
- *   wireframe, emissive lights, and silhouette mode: solid black on a pale sky (Part I
- *   acceptance check 6).
+ *   wireframe, emissive lights, ink outlines with their width (decision 107), and
+ *   silhouette mode: solid black on a pale sky (Part I acceptance check 6).
  * - **Shading.** Flat, from the builder's face normals: the spec colors × baked
  *   occlusion × (sky light from above + a sun term), no tone curve.
  * - **Hot reload.** In dev, editing a spec reloads the page through Vite; the chosen
@@ -15,6 +15,7 @@
  */
 import '../style.css';
 import {
+  BackSide,
   Color,
   Group,
   Mesh,
@@ -26,14 +27,27 @@ import {
   Vector3,
   WebGPURenderer,
 } from 'three/webgpu';
-import { attribute, dot, float, max, mix, uniform, vec3 } from 'three/tsl';
+import {
+  attribute,
+  cameraPosition,
+  dot,
+  float,
+  length,
+  max,
+  mix,
+  modelWorldMatrix,
+  positionLocal,
+  uniform,
+  vec3,
+  vec4,
+} from 'three/tsl';
 import GUI from 'lil-gui';
 import { buildModel } from '../render/common/models/builder';
 import type { BuiltModel } from '../render/common/models/builder';
 import { MODEL_SPECS } from '../render/common/models/library';
 import { SCHEMES } from '../render/common/models/palettes';
 import { MODEL_BUDGETS } from '../render/common/models/spec';
-import { modelGeometry } from '../render/common/models/threeModel';
+import { INK_LINEAR, modelGeometry } from '../render/common/models/threeModel';
 import {
   isOnWebGpuBackend,
   probeWebGpu,
@@ -58,6 +72,8 @@ interface ViewerState {
   wireframe: boolean;
   lights: boolean;
   silhouette: boolean;
+  ink: boolean;
+  inkWidth: number;
 }
 
 function readHash(defaults: ViewerState): ViewerState {
@@ -111,6 +127,8 @@ async function start(): Promise<void> {
     wireframe: false,
     lights: true,
     silhouette: false,
+    ink: true,
+    inkWidth: 2,
   });
 
   const scene = new Scene();
@@ -136,6 +154,15 @@ async function start(): Promise<void> {
     .mul(0.9);
   material.colorNode = mix(albedo.mul(sky.add(sun)).mul(exposure), vec3(0, 0, 0), silhouette);
 
+  // Ink outlines (decision 107): the model again, inflated along its outline normals by
+  // a width in pixels at each vertex's distance, back faces only, in ink.
+  const inkPixel = uniform(0.001); // radians per pixel × width (px)
+  const ink = new MeshBasicNodeMaterial({ side: BackSide });
+  const world = modelWorldMatrix.mul(vec4(positionLocal, 1)).xyz;
+  const inkOffset = length(cameraPosition.sub(world)).mul(inkPixel);
+  ink.positionNode = positionLocal.add(attribute('outlineNormal', 'vec3').mul(inkOffset));
+  ink.colorNode = vec3(...INK_LINEAR);
+  let outline: Mesh | null = null;
   let mesh: Mesh | null = null;
   const lights = new Group();
   turntable.add(lights);
@@ -155,8 +182,12 @@ async function start(): Promise<void> {
     const t0 = performance.now();
     model = buildModel(spec, { scheme: state.scheme || undefined });
     const ms = performance.now() - t0;
-    mesh = new Mesh(modelGeometry(model), material);
+    const geometry = modelGeometry(model);
+    mesh = new Mesh(geometry, material);
     turntable.add(mesh);
+    if (outline) turntable.remove(outline);
+    outline = new Mesh(geometry, ink);
+    turntable.add(outline);
     const size = Math.hypot(...model.bounds.max.map((v, i) => v - model!.bounds.min[i]!));
     const dot = new OctahedronGeometry(Math.max(0.15, size * 0.008), 0);
     for (const e of model.emissives) {
@@ -173,6 +204,7 @@ async function start(): Promise<void> {
       `${model.triangles > hi || model.triangles < lo ? ' — OUT OF BUDGET' : ''}; built in ${ms.toFixed(0)} ms`;
     const c = model.bounds.min.map((v, i) => (v + model!.bounds.max[i]!) / 2);
     mesh.position.set(-c[0]!, -c[1]!, -c[2]!);
+    outline.position.copy(mesh.position);
     lights.position.copy(mesh.position);
   };
 
@@ -188,6 +220,8 @@ async function start(): Promise<void> {
     .name('Scheme override')
     .onChange(() => (rebuild(), save()));
   gui.add(state, 'silhouette').name('Silhouette (check 6)').onChange(save);
+  gui.add(state, 'ink').name('Ink outlines').onChange(save);
+  gui.add(state, 'inkWidth', 0.5, 4, 0.1).name('Ink width (px)').onChange(save);
   gui.add(state, 'wireframe').name('Wireframe').onChange(save);
   gui.add(state, 'ao').name('Ambient occlusion').onChange(save);
   gui.add(state, 'lights').name('Emissive lights').onChange(save);
@@ -251,6 +285,9 @@ async function start(): Promise<void> {
     aoOn.value = state.ao ? 1 : 0;
     silhouette.value = state.silhouette ? 1 : 0;
     material.wireframe = state.wireframe;
+    if (outline) outline.visible = state.ink && !state.wireframe;
+    const fovY = (camera.fov * Math.PI) / 180;
+    inkPixel.value = (fovY / window.innerHeight) * state.inkWidth;
     scene.background = new Color(state.silhouette ? PALE_SKY : s.sky.getStyle());
     const night = s.elevation < 0.1;
     const blink = Math.floor(now / 600) % 2 === 0;

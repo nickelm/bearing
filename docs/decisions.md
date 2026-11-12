@@ -1688,3 +1688,15 @@ The engineering calls made while adopting it:
 - **CPU previews.** `tools/models.preview.ts` rasterizes each model on the CPU (z-buffer, the same flat shading) into a sheet of four views and four silhouettes, so models can be reviewed in sessions without a GPU.
 
 **Reason:** Part I asks for models generated from small, reviewable JSON specs, within budgets, with a viewer and a silhouette test. Orienting faces from an inside point makes primitives simple to write and impossible to get inside out; a CPU preview lets specs be authored and checked without a browser, as the map previews do for the strategic view.
+
+### 107. Ink outlines on models
+
+**Date:** 2026-11-12
+**Decision:** At the owner's request, models get a strong ink outline, switchable. This reverses Part I's "No outlines" for models only; terrain, trees and clouds stay unoutlined, and there is still no cel shading.
+
+- **Technique.** An inverted hull: each model draws a second time, back faces only, in ink `#1A1B1D`, every vertex pushed out along an outline normal by a width in pixels at its distance (distance × radians per pixel × width), so the line keeps its width at any range. The flat-shaded models have split normals at every hard edge, which would tear the hull open, so the builder bakes an `outlineNormal` per vertex: the normalized sum of the distinct face normals meeting at its position (where they cancel, on the two sides of a thin sheet, the face normal). The outline traces silhouettes and the seams where parts meet (canopy on fuselage, wing on body); creases inside one closed part stay unoutlined, as the method does.
+- **Model viewer.** "Ink outlines" toggle and "Ink width" (default 2 px).
+- **Simulation view.** The structure layer draws an ink mesh beside each building mesh (twice the draw calls of buildings), its offset transformed by the instance's inverse-transpose scale like the normals, under the same aerial perspective as the buildings, and fading out from 3 to 5 km, where buildings are a few pixels across and would turn to ink blots. GUI → View → "Ink outlines on models" and "Ink width (px)" (default 1.6 px).
+- **Previews.** `tools/models.preview.ts` draws the hull in its shaded views (INK=0 turns it off, INK_PX sets the width).
+
+**Reason:** The owner wants models strongly inked, in the spirit of illustrated maps and toy-like models, with a switch to compare. An inverted hull costs one extra draw per model and no post-processing pass, keeps a constant pixel width, and works with instancing; a screen-space edge filter would also ink terrain facets and trees, which the guide keeps clean.

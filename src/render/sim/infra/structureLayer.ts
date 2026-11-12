@@ -19,6 +19,7 @@
  * - Buildings keep their real size; only the ground point is exaggerated.
  */
 import {
+  BackSide,
   BufferAttribute,
   DoubleSide,
   Group,
@@ -33,6 +34,7 @@ import {
   cos,
   cross,
   dot,
+  float,
   Fn,
   max,
   modelWorldMatrix,
@@ -68,7 +70,7 @@ import {
   TAXIWAY_OFFSET,
   townRadiusToward,
 } from './infraScene';
-import { libraryModel } from '../../common/models/threeModel';
+import { INK_LINEAR, libraryModel } from '../../common/models/threeModel';
 import type { BuiltSite, InfraScene } from './infraScene';
 
 type V3 = Node<'vec3'>;
@@ -323,6 +325,14 @@ export class StructureLayer {
   private scene: InfraScene | null = null;
   private readonly tiles = new Map<string, BuiltTile>();
   private readonly material: MeshBasicNodeMaterial;
+  private readonly inkMaterial: MeshBasicNodeMaterial;
+  /** Ink outlines on buildings (GUI toggle; decision 107). */
+  ink = true;
+  /** Outline width: radians per pixel × width in pixels (set with `setInk`). */
+  readonly inkPixel = uniform(0);
+  /** Outlines fade out by this distance (m), where buildings are a few pixels across. */
+  readonly inkRange = uniform(5000);
+  private inkWidthPx = 1.6;
   private frame = 0;
   private lastWorld: unknown = null;
 
@@ -331,6 +341,17 @@ export class StructureLayer {
     lighting: PlanetLighting,
   ) {
     this.material = this.buildMaterial(lighting);
+    this.inkMaterial = this.buildMaterial(lighting, true);
+  }
+
+  /** Outline width in pixels and the camera's radians per pixel. */
+  setInk(widthPx: number, pixelAngle: number): void {
+    this.inkWidthPx = widthPx;
+    this.inkPixel.value = widthPx * pixelAngle;
+  }
+
+  get inkWidth(): number {
+    return this.inkWidthPx;
   }
 
   setScene(scene: InfraScene | null): void {
@@ -338,10 +359,15 @@ export class StructureLayer {
     this.clear();
   }
 
-  private buildMaterial(lighting: PlanetLighting): MeshBasicNodeMaterial {
+  /**
+   * The building material, or with `outline` its ink outline (decision 107): the same
+   * instance, inflated along the model's outline normals by `inkWidth` pixels at its
+   * distance, back faces only, in ink, fading out toward `inkRange`.
+   */
+  private buildMaterial(lighting: PlanetLighting, outline = false): MeshBasicNodeMaterial {
     // Double-sided like the other simulation layers; shading uses the builder's outward
     // face normals, so either side shades the same.
-    const m = new MeshBasicNodeMaterial({ side: DoubleSide });
+    const m = new MeshBasicNodeMaterial({ side: outline ? BackSide : DoubleSide });
     const base = attribute('iBase', 'vec3');
     const up = normalize(attribute('iUp', 'vec3'));
     const params = attribute('iParams', 'vec4'); // ground height, angle, scale x, scale y
@@ -364,10 +390,21 @@ export class StructureLayer {
       // Shrink buildings away toward the edge of the range, like the trees.
       const dist = modelWorldMatrix.mul(vec4(ground, 1)).xyz.length();
       const k = smoothstep(this.range, this.range.sub(this.fade), dist);
-      const p = ground
+      let p = ground
         .add(ax.mul(local.x.mul(params.z).mul(k)))
         .add(up.mul(local.y.mul(params.w).mul(k)))
         .add(az.mul(local.z.mul(style.x).mul(k)));
+      if (outline) {
+        const on = attribute('outlineNormal', 'vec3');
+        const n = normalize(
+          ax
+            .mul(on.x.div(params.z))
+            .add(up.mul(on.y.div(params.w)))
+            .add(az.mul(on.z.div(style.x))),
+        );
+        const fadeInk = float(1).sub(smoothstep(this.inkRange.mul(0.6), this.inkRange, dist));
+        p = p.add(n.mul(dist.mul(this.inkPixel).mul(fadeInk).mul(k)));
+      }
       const ap = lighting.atmosphere.aerialPerspective(
         modelWorldMatrix.mul(vec4(p, 1)).xyz as V3,
         6,
@@ -393,7 +430,11 @@ export class StructureLayer {
     const shaded = lighting
       .shadeDiffuse(albedo, normal, positionWorld as V3)
       .add(vec3(1, 0.75, 0.45).mul(glow));
-    m.colorNode = lighting.applyAerial(shaded as V3, apIn as V3, apTr as V3);
+    m.colorNode = lighting.applyAerial(
+      (outline ? vec3(...INK_LINEAR) : shaded) as V3,
+      apIn as V3,
+      apTr as V3,
+    );
     return m;
   }
 
@@ -462,9 +503,9 @@ export class StructureLayer {
       if (wanted.has(s)) {
         tile.lastUsed = this.frame;
         for (const m of tile.meshes) {
-          instances += (m.geometry as InstancedBufferGeometry).instanceCount;
+          if (!m.userData.ink) instances += (m.geometry as InstancedBufferGeometry).instanceCount;
           placeCameraRelative(m, tile.origin, eye);
-          m.visible = true;
+          m.visible = !m.userData.ink || this.ink;
         }
       } else {
         for (const m of tile.meshes) m.visible = false;
@@ -489,6 +530,7 @@ export class StructureLayer {
       g.setAttribute('normal', new BufferAttribute(m.normal, 3));
       g.setAttribute('color', new BufferAttribute(m.color, 3));
       g.setAttribute('ao', new BufferAttribute(m.ao, 1));
+      g.setAttribute('outlineNormal', new BufferAttribute(m.outlineNormal, 3));
       const base = new Float32Array(count * 3);
       const up = new Float32Array(count * 3);
       const params = new Float32Array(count * 4);
@@ -505,11 +547,14 @@ export class StructureLayer {
       g.setAttribute('iParams', new InstancedBufferAttribute(params, 4));
       g.setAttribute('iStyle', new InstancedBufferAttribute(style, 4));
       g.instanceCount = count;
-      const mesh = new Mesh(g, this.material);
-      mesh.frustumCulled = false;
-      mesh.visible = false;
-      this.group.add(mesh);
-      meshes.push(mesh);
+      for (const material of [this.material, this.inkMaterial]) {
+        const mesh = new Mesh(g, material);
+        mesh.frustumCulled = false;
+        mesh.visible = false;
+        mesh.userData.ink = material === this.inkMaterial;
+        this.group.add(mesh);
+        meshes.push(mesh);
+      }
     }
     return { meshes, origin: inst.origin, lastUsed: this.frame };
   }
@@ -517,7 +562,7 @@ export class StructureLayer {
   private dropTile(tile: BuiltTile): void {
     for (const m of tile.meshes) {
       this.group.remove(m);
-      m.geometry.dispose();
+      if (!m.userData.ink) m.geometry.dispose();
     }
   }
 
@@ -529,5 +574,6 @@ export class StructureLayer {
   dispose(): void {
     this.clear();
     this.material.dispose();
+    this.inkMaterial.dispose();
   }
 }

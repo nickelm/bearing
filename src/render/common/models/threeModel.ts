@@ -1,7 +1,7 @@
 /**
  * Built models (builder.ts) as three.js geometry (decision 106): non-indexed
- * `BufferGeometry` with `position`, `normal` (the face normal), `color` (linear rgb)
- * and `ao` attributes, cached per model id and scheme.
+ * `BufferGeometry` with `position`, `normal` (the face normal), `color` (linear rgb),
+ * `ao` and `outlineNormal` attributes, and the ink outline material (decision 107).
  */
 import { BufferAttribute, BufferGeometry } from 'three/webgpu';
 import { buildModel } from './builder';
@@ -14,6 +14,7 @@ export function modelGeometry(m: BuiltModel): BufferGeometry {
   g.setAttribute('normal', new BufferAttribute(m.normal, 3));
   g.setAttribute('color', new BufferAttribute(m.color, 3));
   g.setAttribute('ao', new BufferAttribute(m.ao, 1));
+  g.setAttribute('outlineNormal', new BufferAttribute(m.outlineNormal, 3));
   g.computeBoundingSphere();
   return g;
 }
@@ -27,3 +28,6 @@ export function libraryModel(id: string, scheme?: string): BuiltModel {
   if (!m) built.set(key, (m = buildModel(modelSpec(id), { scheme })));
   return m;
 }
+
+/** Ink color of model outlines (sRGB `#1A1B1D`, linear here). */
+export const INK_LINEAR: [number, number, number] = [0.0103, 0.011, 0.0123];
