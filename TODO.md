@@ -265,6 +265,7 @@ Civilian geography (settlements, roads, bridges) joins the strategic graph befor
 - [x] Map: symbols for airbases (runway glyph), ports (pier glyph), factories, refineries, depots and rail yards (decision 104)
 - [x] Labels: route numbers and pass and coast road names along roads; capitals (decision 104)
 - [x] Preview views `cities` (700 km) and `capital` (150 km) on the Alliance capital
+- [x] Check 3 with the owner, capital part (2026-11-12): found the capital quickly by its star; completes the check S2 deferred to S4
 - [x] Check 2 in Node with route and capital labels (tests/labels.test.ts, seed 7: no overlaps at any band)
 - [x] Checkpoint 6: owner review of towns, roads, airbases, railways and their symbols on the map (signed off 2026-11-12 from the seed 1 `cities` and `capital` previews: "Looks great")
 
@@ -277,7 +278,7 @@ Civilian geography (settlements, roads, bridges) joins the strategic graph befor
 - [ ] Tune routes across seeds: seed 1983 numbers 33 motorway and 86 trunk chains, many short pieces between junctions; consider merging through junctions across classes
 - [ ] Bridge marks and the capital star read small at 150 km; the urban fill is faint around small towns
 - [ ] Browser check: frame time at the floor with roads, railways, symbols and building glyphs; whether secondary roads crowd the Region band near 400 km
-- [ ] Acceptance checks on the new views: re-run check 3 with the owner (capitals now exist; S2 deferred that part to S4), and checks 1, 4 and 5 (`SCENE=strategic SEED=1 VIEWS=globe,cities,capital,sharp CVD=1`)
+- [ ] Acceptance checks 1, 4 and 5 on the new views (`SCENE=strategic SEED=1 VIEWS=globe,cities,capital,sharp CVD=1`)
 
 ## Simulation core track
 
