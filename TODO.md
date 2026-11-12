@@ -441,9 +441,11 @@ Aircraft, vehicles, ships, buildings and trees are generated in code from small 
 - [x] Base kit from specs: hangars, hardened shelters, tower, radar on a lattice mast, radar dome, fuel tanks, revetments, placed at airbases in the simulation view (decision 106)
   - [x] Runway and taxiway markings in the pavement shader (threshold bars, centerline dashes, runway numbers) (decision 109)
     - [ ] Owner: check the paint in the browser low over a runway (legibility of the numbers, shimmer of the thin lines at 1–3 km)
-  - [ ] Night lighting: runway edge lights, apron floods and tower windows from the models' emissive anchors
+  - [x] Night lighting: runway edge lights, apron floods and tower windows from the models' emissive anchors (decision 110)
+    - [ ] Owner: the `dusk` preview and a browser look at an airbase after sunset (GUI → View → Buildings on, Night lights); brightness and size of the points
+    - [ ] Blinking beacons (a clock uniform on the structure layer); bloom on emissives (Part I, Post-Processing)
 - [x] Settlement buildings from specs (pitched and flat roofs, taller city blocks), using S4's urban extents (decision 106)
-  - [ ] The terrain's built-up patch is still the urban radius disk; draw it from the extent polygon too
+  - [x] The terrain's built-up patch is still the urban radius disk; draw it from the extent polygon too (decision 111)
   - [ ] Town buildings read as dark specks from 3 km (`DETAIL=1 VIEWS=town`): walls facing away from the sun get only a weak sky light; tune with V1's style audit
 - [x] Ship specs: carrier (CVN-73 Resolute), Alliance destroyer, Pact cruiser (decision 106)
   - [ ] Ship meshes in the simulation view once ships exist (C3)

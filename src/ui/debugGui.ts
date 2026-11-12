@@ -40,6 +40,8 @@ export interface ViewGuiParams {
   /** Ink outlines on models (decision 107) and their width (px). */
   ink: boolean;
   inkWidth: number;
+  /** Brightness of airbase and town lights at night (V3); 0 hides them. */
+  nightLights: number;
   /** Canvas resolution relative to the device pixel ratio: 'auto' adapts to the frame time. */
   renderScale: RenderScaleSetting;
   /** Frame rate the automatic render scale holds. */
@@ -309,6 +311,9 @@ export class DebugGui {
       .onChange(() => callbacks.viewChanged(view));
     t.add(view, 'inkWidth', 0.5, 4, 0.1)
       .name('Ink width (px)')
+      .onChange(() => callbacks.viewChanged(view));
+    t.add(view, 'nightLights', 0, 10, 0.1)
+      .name('Night lights (sim detail)')
       .onChange(() => callbacks.viewChanged(view));
 
     const st = this.gui.addFolder('Status');

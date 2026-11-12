@@ -18,7 +18,9 @@ import { Color, StorageBufferAttribute } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import {
   abs,
+  atan,
   clamp,
+  cross,
   dot,
   float,
   floor,
@@ -31,6 +33,7 @@ import {
   max,
   min,
   mix,
+  mod,
   normalize,
   select,
   sin,
@@ -44,6 +47,7 @@ import { tileForDirection, tileKey, tileKeyString } from '../../../core/tiles';
 import type { TileKey } from '../../../core/tiles';
 import { Vec3d } from '../../../core/vec3d';
 import type { RiverRange, RiverTables } from '../../common/water/riverTables';
+import { URBAN_VERTICES } from '../../../worldgen/strategic/graph';
 import { localFrame } from './infraScene';
 import { runwayMarks } from './runwayMarkings';
 
@@ -127,13 +131,16 @@ export const LIGHT_LEVEL = 2;
 const TIER_RADIUS = [5000, 2000, 0];
 
 export class LightTables {
-  /** Two vec4 per light: (direction, radius), (intensity, 0, 0, 0). */
+  /** Two vec4 per light: (direction, radius), (intensity, built-up radius, kind, extra). */
   readonly lights: Float32Array;
   readonly lists: Uint32Array;
+  /** Towns' urban extent radii, URBAN_VERTICES each (InfraScene.outlines). */
+  readonly outlines: Float32Array;
   private readonly ranges = new Map<string, RiverRange>();
 
-  constructor(lights: Float32Array, radius: number) {
+  constructor(lights: Float32Array, radius: number, outlines?: Float32Array) {
     this.lights = lights.length ? lights : new Float32Array(8);
+    this.outlines = outlines?.length ? outlines : new Float32Array(1);
     const count = lights.length / 8;
     const byTile = new Map<string, number[]>();
     const p = new Vec3d();
@@ -206,6 +213,7 @@ export function ruralSpeckle(planetPosition: V3, cell = 2500): F {
 export class LightShading {
   private readonly lights;
   private readonly lists;
+  private readonly outlines;
 
   constructor(
     tables: LightTables | null,
@@ -215,6 +223,27 @@ export class LightShading {
     const lists = tables?.lists ?? new Uint32Array(1);
     this.lights = storage(new StorageBufferAttribute(l, 4), 'vec4', l.length / 4).toReadOnly();
     this.lists = storage(new StorageBufferAttribute(lists, 1), 'uint', lists.length).toReadOnly();
+    const o = tables?.outlines ?? new Float32Array(1);
+    this.outlines = storage(new StorageBufferAttribute(o, 1), 'float', o.length).toReadOnly();
+  }
+
+  /**
+   * A town's urban extent radius (m) toward unit direction `p` from its center
+   * `c`: its outline `shape` (1-based) interpolated by bearing, counterclockwise
+   * from east, as `townRadiusToward` on the CPU.
+   */
+  private outlineRadius(p: V3, c: V3, shape: F): F {
+    const east = normalize(cross(vec3(0, 1, 0), c));
+    const north = cross(c, east);
+    const d = p.sub(c);
+    const bearing = atan(dot(d, north), dot(d, east));
+    const t = fract(bearing.div(2 * Math.PI).add(1)).mul(URBAN_VERTICES);
+    const i0 = floor(t);
+    const f = t.sub(i0);
+    const base = shape.sub(1).mul(URBAN_VERTICES);
+    const r0 = this.outlines.element(int(base.add(i0)));
+    const r1 = this.outlines.element(int(base.add(mod(i0.add(1), URBAN_VERTICES))));
+    return mix(r0, r1, f) as F;
   }
 
   /**
@@ -222,7 +251,8 @@ export class LightShading {
    * (town cover, industry cover, emission, runway paint).
    *
    * - **Built-up patches** (decision 71): a disk of each record's built-up
-   *   radius, its edge broken by `edgeNoise` (0..1, a few km across) and
+   *   radius, or a town's urban extent polygon where it has one (decision
+   *   103), its edge broken by `edgeNoise` (0..1, a few km across) and
    *   softened over a quarter radius. A patch is at least `minPixels` wide,
    *   its cover thinned by the area ratio, so towns stay visible as dots from
    *   altitude without growing.
@@ -252,8 +282,13 @@ export class LightShading {
         const scale = min(a.w.div(r), 1);
         const x = clamp(float(1).sub(d.mul(d).div(r.mul(r))), 0, 1);
         total.addAssign(b.x.mul(x.mul(x)).mul(scale.mul(scale).mul(0.7).add(0.3)));
-        // Built-up patch.
-        const built = b.y.mul(wobble);
+        // Built-up patch: the town's outline where it has one (less wobble: it is
+        // already irregular), else the disk.
+        const shaped = b.z.lessThan(0.5).and(b.w.greaterThan(0.5));
+        const built = b.y.mul(wobble).toVar();
+        If(shaped, () => {
+          built.assign(this.outlineRadius(p, a.xyz, b.w).mul(edgeNoise.sub(0.5).mul(0.2).add(1)));
+        });
         const shown = max(built, minBuilt);
         const thin = min(built.div(shown), 1);
         const edge = max(shown.mul(0.25), footprint);

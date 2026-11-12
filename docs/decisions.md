@@ -1725,3 +1725,25 @@ The engineering calls made while adopting it:
 - **Apron links.** The apron stood 150 m beyond the taxiway with grass between; two 23 m links now join them, so an airbase has seven concrete strips.
 
 **Reason:** A paint layer in the pavement shader follows the surface, its LOD and the new grading (decision 108) exactly, as the pavement does; decals would fight geomorphing. Riding on the light record keeps the per-tile uniform count where it is (I1 lists it as a cost).
+
+### 110. Night lights at bases and in towns as camera-facing points
+
+**Date:** 2026-11-12
+**Decision:** The simulation view's night lights (visual-style Part I, _Bases_; check 4) are additive camera-facing points drawn by the structure layer (`render/sim/infra/lightPoints.ts`), emitted per level-9 tile with the buildings.
+
+- **Sources.** Every building's emissive anchors from its model spec (decision 106), turned and scaled with the instance in float64 on the CPU (the material's own frame, `instanceAxes`): apron floods on hangars, tower windows and beacons, mast and chimney beacons, and lit windows in towns, where 55% of buildings have one, chosen by a hash of the building's position so that no random stream changes. Each airbase also gets runway edge lights every 60 m along both edges, a green threshold row and a red end row 3 m beyond it at each end.
+- **Drawing.** One instanced quad per light, turned to the camera with the camera's world right and up axes, at the anchor's world size (2–7 m) but at least 6 device pixels across; held at that size, its brightness falls with the square root of the area ratio, between constant brightness and constant total flux (the full ratio left distant rows invisible in the first preview). A hot core plus a soft halo, dimmed by the air's transmittance to the camera, faded at the layer's range. Colors from Part I's emissive table: `#FFD27A` for runway lights and floods, the navigation red and green for the ends and thresholds and beacons, `#FFC98A` for windows.
+- **When.** Lights fade in as the sun sets, from a sun elevation of about 6° to fully on at −2°, so the airbase at dusk of check 4 is lit while the sky still glows. GUI → View → Night lights sets the brightness (default 3; 0 hides them).
+- **Not yet.** Beacons do not blink (the layer has no clock), lights cast no light on the ground (the terrain's settlement glow stands in), and there is no bloom.
+
+**Reason:** Points scale to hundreds of lights per airfield at one draw per tile, follow the buildings' placement exactly (same tiles, same ground heights, the same grading, decision 108), and keep the emissives defined where the models are. A minimum pixel size with area dimming makes runway rows read as lines of dots from a few kilometers without turning into blobs.
+
+### 111. Town patches in the terrain follow the urban extent polygon
+
+**Date:** 2026-11-12
+**Decision:** The terrain's built-up patch for a town (decision 71) takes the town's urban extent polygon (decision 103) instead of a disk of its urban radius, matching where the instanced buildings stand (decision 106).
+
+- `InfraScene.outlines` holds each town's 24 radii, at evenly spaced bearings counterclockwise from east; the town's light record carries 1 + its index in its last float (0: none, the disk as before). Radii are capped at the light's radius plus 1.5 km, so the patch never reaches past the tile lists the light is filed in.
+- The shader reads the outline only for town records with one, in a branch (a WGSL `select` would evaluate both sides and index the table with an airfield's runway code), and interpolates the radius by the fragment's bearing, as `townRadiusToward` does on the CPU. The edge noise wobbles a polygon by ±10% rather than a disk's ±25%, since the polygon is already irregular. A GPU test checks the shader's patch against `townRadiusToward` on a lopsided town.
+
+**Reason:** With buildings filling the polygon and the patch a disk, a town's buildings and its patch disagreed at the edges, most visibly where a town stretches along a valley or coast. The light record already reaches the shader in the loop that draws the patch, so the outline costs one small table and no new per-tile uniform.

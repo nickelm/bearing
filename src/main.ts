@@ -142,6 +142,7 @@ async function main(): Promise<void> {
     buildings: false,
     ink: true,
     inkWidth: 1.6,
+    nightLights: 3,
     renderScale: 'auto',
     targetFps: 30,
     scene: query.get('view') === 'strategic' ? 'strategic' : 'simulation',
@@ -531,6 +532,7 @@ async function main(): Promise<void> {
       globe.structures.enabled = v.buildings;
       globe.structures.ink = v.ink;
       globe.structures.setInk(v.inkWidth, 0);
+      globe.structures.lightBrightness.value = v.nightLights;
       renderScale.targetMs = 1000 / v.targetFps;
       const fixed = RenderScaleController.fixed(v.renderScale);
       applyRenderScale(fixed ?? renderScale.scale, performance.now());

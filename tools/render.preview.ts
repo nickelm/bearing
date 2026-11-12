@@ -31,7 +31,7 @@ import {
   sunDirection,
   withLocalTime,
 } from '../src/core/calendar';
-import { cubeFaceUvToDirection } from '../src/core/coords';
+import { cubeFaceUvToDirection, latLonToDirection } from '../src/core/coords';
 import type { CubeFace } from '../src/core/coords';
 import { CubeGrid } from '../src/core/cubeGrid';
 import { DAY, DEG, HOUR, KM } from '../src/core/units';
@@ -80,6 +80,8 @@ export interface PreviewView {
   target?: 'lake' | 'forest' | 'city' | 'airbase' | 'front' | 'capital';
   /** With target 'airbase': stand back along the runway and look down it (heading ignored). */
   alongRunway?: boolean;
+  /** Instead of localTime: the first evening time the sun at the camera sinks to this elevation (rad). */
+  sunElevation?: number;
   /** Image size for this view (strategic previews; default W × H). */
   width?: number;
   height?: number;
@@ -218,6 +220,18 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     tilt: 78 * DEG,
     heading: 0,
     localTime: 16,
+    target: 'airbase',
+    alongRunway: true,
+  },
+  {
+    // Part I check 4: an airbase at dusk with its runway lit (V3).
+    name: 'dusk',
+    dLat: 0,
+    dLon: 0,
+    altitude: 300,
+    tilt: 80 * DEG,
+    heading: 0,
+    sunElevation: -1 * DEG,
     target: 'airbase',
     alongRunway: true,
   },
@@ -517,6 +531,23 @@ it('renders preview views', async () => {
     // The sim starts at campaign start: an early local time on day 0 can fall before it.
     let t = localAt(v.day ?? 0);
     if (t < 0) t = localAt((v.day ?? 0) + 1);
+    if (v.sunElevation !== undefined) {
+      // Step through the afternoon and evening until the sun sinks to the elevation.
+      const up = latLonToDirection(o.lat, o.lon);
+      const sun = new Vec3d();
+      for (let h = 12; h < 24; h += 1 / 60) {
+        let at = withLocalTime((v.day ?? 0) * DAY, o.lon, h * HOUR, params, calendar);
+        if (at < 0) at = withLocalTime((v.day ?? 0) * DAY + DAY, o.lon, h * HOUR, params, calendar);
+        if (sunDirection(at, params, calendar, sun).dot(up) < Math.sin(v.sunElevation)) {
+          t = at;
+          break;
+        }
+      }
+      const el = Math.asin(sunDirection(t, params, calendar, sun).dot(up)) / DEG;
+      console.log(
+        `${v.name}: sun at ${el.toFixed(1)}° (wanted ${(v.sunElevation / DEG).toFixed(1)}°)`,
+      );
+    }
     sunDirection(t, params, calendar, scene.sun);
     scene.terrain.land.seasonPhase.value = seasonPhase(t, params, calendar);
     // HOURS shifts only the clouds' clock (to see them move with the sun held fixed).

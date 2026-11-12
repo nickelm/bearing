@@ -53,7 +53,7 @@ Across all five, edges show slight stair-stepping and the image has faint grain,
 - **Farmland.** Near settlements and on flat lowland, a Voronoi field pattern assigns each cell a crop color (wheat, green crop, fallow, pasture). Field cells are a few hundred meters across with slight color variation.
 - **Rivers.** Rivers render as bright ribbons that mirror the sky color, with a narrow darker bank. They should be the most visible terrain feature from altitude, since they matter tactically.
 - **Roads.** Thin, muted gray-brown lines from vector data, visible below about 3 km altitude.
-- **Settlements.** Towns are grids of box buildings with pitched or flat roofs in a narrow palette of plaster and roof colors. Cities add a few taller blocks at the center. Beyond building range, towns are built-up patches in the terrain: blocks of the same roof and wall colors, with no building meshes (decision 71). The strategic view draws settlements its own way (Part II).
+- **Settlements.** Towns are grids of box buildings with pitched or flat roofs in a narrow palette of plaster and roof colors. Cities add a few taller blocks at the center. Beyond building range, towns are built-up patches in the terrain: blocks of the same roof and wall colors, with no building meshes (decision 71), in the shape of the town's urban extent (decision 111). The strategic view draws settlements its own way (Part II).
 
 ## Vegetation
 

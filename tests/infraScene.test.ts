@@ -9,6 +9,7 @@ import {
   BUILT_INDUSTRY,
   BUILT_TOWN,
   decodeRunway,
+  OUTLINE_REACH,
   InfraScene,
   localFrame,
   offsetPoint,
@@ -18,6 +19,7 @@ import { LIGHT_LEVEL, LightTables } from '../src/render/sim/infra/roadShading';
 import { RiverTables } from '../src/render/common/water/riverTables';
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
 import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
+import { URBAN_VERTICES } from '../src/worldgen/strategic/graph';
 
 const R = DEFAULT_PLANET_PARAMS.radius;
 
@@ -109,6 +111,30 @@ describe('InfraScene from a generated world', () => {
     expect(towns).toBe(w.graph.settlements.cells.length);
     expect(industry).toBe(scene.sites.filter((x) => x.kind === 'industry').length);
     expect(count - towns - industry).toBe(bases.length);
+  });
+
+  it('points each town light at its urban extent outline', () => {
+    const count = scene.lights.length / 8;
+    const towns = scene.sites.filter((x) => x.kind === 'town');
+    let k = 0;
+    let shaped = 0;
+    for (let i = 0; i < count; i++) {
+      if (scene.lights[i * 8 + 6] !== BUILT_TOWN || scene.lights[i * 8 + 5]! <= 0) continue;
+      const site = towns[k++]!;
+      const shape = scene.lights[i * 8 + 7]!;
+      if (!site.outline) {
+        expect(shape).toBe(0);
+        continue;
+      }
+      shaped++;
+      const cap = scene.lights[i * 8 + 3]! + OUTLINE_REACH;
+      for (let v = 0; v < URBAN_VERTICES; v++) {
+        const want = Math.min(site.outline[v]!, cap);
+        expect(scene.outlines[(shape - 1) * URBAN_VERTICES + v]).toBeCloseTo(want, 0);
+      }
+    }
+    expect(k).toBe(towns.length);
+    expect(shaped).toBeGreaterThan(0);
   });
 
   it('packs each airbase runway into its light record', () => {

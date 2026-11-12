@@ -409,7 +409,9 @@ export class TerrainRenderer {
     this.roads = world?.infra
       ? new RiverTables(world.infra, world.radius, { coarseMinWidth: 0, coarseCap: 300 })
       : null;
-    this.lights = world?.infra ? new LightTables(world.infra.lights, world.radius) : null;
+    this.lights = world?.infra
+      ? new LightTables(world.infra.lights, world.radius, world.infra.outlines)
+      : null;
     const oldHabitability = this.habitability;
     this.habitability = world?.infra
       ? new HabitabilityTexture(world.infra.habitability, world.infra.habitabilityResolution)

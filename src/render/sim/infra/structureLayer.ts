@@ -67,10 +67,12 @@ import {
   APRON_LENGTH,
   APRON_OFFSET,
   offsetPoint,
+  RUNWAY_WIDTH,
   TAXIWAY_OFFSET,
   townRadiusToward,
 } from './infraScene';
 import { INK_LINEAR, libraryModel } from '../../common/models/threeModel';
+import { LIGHT_FLOATS, LIGHT_KINDS, lightPointMaterial, lightQuad } from './lightPoints';
 import type { BuiltSite, InfraScene } from './infraScene';
 
 type V3 = Node<'vec3'>;
@@ -105,6 +107,53 @@ export interface BuildingInstances {
   origin: Vec3d;
   /** BUILDING_FLOATS per instance, by model. */
   data: Map<BuildingModel, Float32Array>;
+  /** Night lights, LIGHT_FLOATS each (lightPoints.ts): emissive anchors and runway lights. */
+  lights: Float32Array;
+}
+
+/** A light placed by a site rather than a model: runway edge, threshold and end lights. */
+interface SiteLight {
+  d: Vec3d;
+  kind: string;
+  /** Height above the ground (m): 1 m, above real fixtures, so coarser terrain meshes do not hide it. */
+  lift: number;
+}
+
+/** Runway light spacing along the edges and across the ends (m). */
+export const RUNWAY_LIGHT_SPACING = 60;
+export const THRESHOLD_LIGHT_SPACING = 4;
+/** Share of town buildings with a lit window at night. */
+export const LIT_WINDOWS = 0.55;
+
+/** Runway edge lights (both edges), green threshold lights and red end lights. */
+export function runwayLights(site: BuiltSite, radius: number): SiteLight[] {
+  const out: SiteLight[] = [];
+  if (site.kind !== 'airbase') return out;
+  const half = site.runwayLength / 2;
+  const edge = RUNWAY_WIDTH / 2 + 1.5;
+  const at = (along: number, across: number) =>
+    offsetPoint(site.point, site.heading, along, across, radius);
+  const n = Math.round(site.runwayLength / RUNWAY_LIGHT_SPACING);
+  for (let i = 0; i <= n; i++) {
+    const along = -half + (i * site.runwayLength) / n;
+    out.push({ d: at(along, edge), kind: 'runway', lift: 1 });
+    out.push({ d: at(along, -edge), kind: 'runway', lift: 1 });
+  }
+  // Across each end: green facing the approach, red facing the runway's far end; both
+  // drawn as points, so one row per end, green at the near threshold and red 3 m past it.
+  for (let x = -edge; x <= edge + 1e-6; x += THRESHOLD_LIGHT_SPACING) {
+    for (const end of [-1, 1]) {
+      out.push({ d: at(end * (half + 1), x), kind: 'threshold', lift: 1 });
+      out.push({ d: at(end * (half + 4), x), kind: 'runway-end', lift: 1 });
+    }
+  }
+  return out;
+}
+
+/** A stable 0..1 hash of a direction, for choices that must not draw from a stream. */
+function directionHash(d: Readonly<Vec3d>): number {
+  const x = Math.sin(d.x * 12_989.8 + d.y * 78_233.1 + d.z * 37_719.3) * 43_758.5453;
+  return x - Math.floor(x);
 }
 
 interface Building {
@@ -199,6 +248,19 @@ function siteBuildings(site: BuiltSite, radius: number, seed: WorldSeed): Buildi
   return out;
 }
 
+/**
+ * The world directions of an instance's model +x (`ax`) and +z (`az`) at unit
+ * direction `up` for shader angle `angle`: the material's frame, in float64.
+ */
+export function instanceAxes(up: Readonly<Vec3d>, angle: number, ax: Vec3d, az: Vec3d): void {
+  const t0 = new Vec3d(up.x, up.y, up.z).cross(new Vec3d(0.0001, 1, 0.0002)).normalize();
+  const t1 = new Vec3d(up.x, up.y, up.z).cross(t0);
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  ax.set(0, 0, 0).addScaled(t0, c).addScaled(t1, s);
+  az.set(0, 0, 0).addScaled(t0, s).addScaled(t1, -c);
+}
+
 /** Places the buildings of level-9 tile `t`, deterministically. Pure: no GPU. */
 export function placeBuildings(
   t: TileKey,
@@ -219,24 +281,53 @@ export function placeBuildings(
   const tileRadius = (TILE_TEXELS * sampleM) / Math.SQRT2 + 200;
   const sites = scene.sitesNear(center, tileRadius);
   const out = new Map<BuildingModel, number[]>();
+  const lights: number[] = [];
   const result = (): BuildingInstances => ({
     tile: t,
     origin,
     data: new Map([...out].map(([m, v]) => [m, Float32Array.from(v)])),
+    lights: Float32Array.from(lights),
   });
+  const pushLight = (d: Vec3d, h: number, offset: Vec3d, kind: string) => {
+    const k = LIGHT_KINDS[kind];
+    if (!k) return;
+    lights.push(
+      d.x * R - origin.x,
+      d.y * R - origin.y,
+      d.z * R - origin.z,
+      d.x,
+      d.y,
+      d.z,
+      offset.x,
+      offset.y,
+      offset.z,
+      h,
+      ...k.color,
+      k.size,
+    );
+  };
   if (sites.length === 0) return result();
   const ground = surfaceSampler(t, GROUND_LEVEL, data, opts);
   const lake = lakeSampler(t, data);
   const uv = { face: 0, u: 0, v: 0 } as ReturnType<typeof directionToCubeFace>;
-  const emit = (b: Building) => {
-    directionToCubeFace(b.d, uv);
-    if (uv.face !== t.face) return;
+  /** Ground height under `d` if this tile places it (on dry land), else null. */
+  const groundAt = (d: Vec3d): number | null => {
+    directionToCubeFace(d, uv);
+    if (uv.face !== t.face) return null;
     const sx = uv.u * size - t.x * TILE_TEXELS;
     const sy = uv.v * size - t.y * TILE_TEXELS;
-    if (sx < 0 || sy < 0 || sx >= TILE_TEXELS || sy >= TILE_TEXELS) return;
-    const h = ground(sx, sy, b.d);
+    if (sx < 0 || sy < 0 || sx >= TILE_TEXELS || sy >= TILE_TEXELS) return null;
+    const h = ground(sx, sy, d);
     const level = lake(sx, sy);
-    if (h <= 0 || (level > NO_LAKE / 2 && level > h)) return;
+    if (h <= 0 || (level > NO_LAKE / 2 && level > h)) return null;
+    return h;
+  };
+  const ax = new Vec3d();
+  const az = new Vec3d();
+  const off = new Vec3d();
+  const emit = (b: Building, town = false) => {
+    const h = groundAt(b.d);
+    if (h === null) return;
     let list = out.get(b.model);
     if (!list) out.set(b.model, (list = []));
     list.push(
@@ -251,10 +342,30 @@ export function placeBuildings(
       ...b.scale,
       b.tint,
     );
+    // The model's emissive anchors, turned and scaled like the instance (the material's frame).
+    const emissives = libraryModel(b.model).emissives;
+    if (emissives.length === 0) return;
+    if (town && directionHash(b.d) >= LIT_WINDOWS) return;
+    instanceAxes(b.d, b.angle, ax, az);
+    for (const e of emissives) {
+      const [x, y, z] = e.position;
+      off
+        .set(0, 0, 0)
+        .addScaled(ax, x * b.scale[0])
+        .addScaled(b.d, y * b.scale[1])
+        .addScaled(az, z * b.scale[2]);
+      pushLight(b.d, h, off, e.kind);
+    }
   };
 
-  for (const site of sites)
-    if (site.kind !== 'town') for (const b of siteBuildings(site, R, seed)) emit(b);
+  for (const site of sites) {
+    if (site.kind === 'town') continue;
+    for (const b of siteBuildings(site, R, seed)) emit(b);
+    for (const l of runwayLights(site, R)) {
+      const h = groundAt(l.d);
+      if (h !== null) pushLight(l.d, h, off.copy(l.d).scale(l.lift), l.kind);
+    }
+  }
 
   const towns = sites.filter((s) => s.kind === 'town');
   if (towns.length > 0) {
@@ -297,7 +408,7 @@ export function placeBuildings(
           dist < 0.3 * bestR,
           best.population >= 200_000,
         );
-        emit({ d: d.clone(), ...shape });
+        emit({ d: d.clone(), ...shape }, true);
       }
     }
   }
@@ -333,6 +444,10 @@ export class StructureLayer {
   /** Outlines fade out by this distance (m), where buildings are a few pixels across. */
   readonly inkRange = uniform(5000);
   private inkWidthPx = 1.6;
+  /** Night light strength (GUI); 0 hides them. */
+  readonly lightBrightness = uniform(3);
+  private readonly lightMaterial: MeshBasicNodeMaterial;
+  private readonly quad = lightQuad();
   private frame = 0;
   private lastWorld: unknown = null;
 
@@ -342,6 +457,12 @@ export class StructureLayer {
   ) {
     this.material = this.buildMaterial(lighting);
     this.inkMaterial = this.buildMaterial(lighting, true);
+    this.lightMaterial = lightPointMaterial(
+      lighting,
+      terrain.exaggerationUniform,
+      this.range,
+      this.lightBrightness,
+    );
   }
 
   /** Outline width in pixels and the camera's radians per pixel. */
@@ -503,7 +624,8 @@ export class StructureLayer {
       if (wanted.has(s)) {
         tile.lastUsed = this.frame;
         for (const m of tile.meshes) {
-          if (!m.userData.ink) instances += (m.geometry as InstancedBufferGeometry).instanceCount;
+          if (!m.userData.ink && !m.userData.light)
+            instances += (m.geometry as InstancedBufferGeometry).instanceCount;
           placeCameraRelative(m, tile.origin, eye);
           m.visible = !m.userData.ink || this.ink;
         }
@@ -556,6 +678,36 @@ export class StructureLayer {
         meshes.push(mesh);
       }
     }
+    const lights = inst.lights.length / LIGHT_FLOATS;
+    if (lights > 0) {
+      const g = new InstancedBufferGeometry();
+      g.setAttribute('position', this.quad.getAttribute('position'));
+      g.setIndex(this.quad.getIndex());
+      const base = new Float32Array(lights * 3);
+      const up = new Float32Array(lights * 3);
+      const offset = new Float32Array(lights * 4);
+      const color = new Float32Array(lights * 4);
+      for (let i = 0; i < lights; i++) {
+        const o = i * LIGHT_FLOATS;
+        const d = inst.lights;
+        base.set(d.subarray(o, o + 3), i * 3);
+        up.set(d.subarray(o + 3, o + 6), i * 3);
+        offset.set(d.subarray(o + 6, o + 10), i * 4);
+        color.set(d.subarray(o + 10, o + 14), i * 4);
+      }
+      g.setAttribute('lBase', new InstancedBufferAttribute(base, 3));
+      g.setAttribute('lUp', new InstancedBufferAttribute(up, 3));
+      g.setAttribute('lOffset', new InstancedBufferAttribute(offset, 4));
+      g.setAttribute('lColor', new InstancedBufferAttribute(color, 4));
+      g.instanceCount = lights;
+      const mesh = new Mesh(g, this.lightMaterial);
+      mesh.frustumCulled = false;
+      mesh.visible = false;
+      mesh.renderOrder = 1;
+      mesh.userData.light = true;
+      this.group.add(mesh);
+      meshes.push(mesh);
+    }
     return { meshes, origin: inst.origin, lastUsed: this.frame };
   }
 
@@ -575,5 +727,7 @@ export class StructureLayer {
     this.clear();
     this.material.dispose();
     this.inkMaterial.dispose();
+    this.lightMaterial.dispose();
+    this.quad.dispose();
   }
 }

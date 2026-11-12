@@ -9,7 +9,9 @@
  * - `lights`: night lights per settlement and airbase, 8 floats each
  *   (direction xyz, radius; intensity, built-up radius, kind, runway).
  *   The terrain draws the built-up area as a patch by day (decision 71):
- *   kind BUILT_TOWN or BUILT_INDUSTRY; radius 0 for none. Airbases have kind
+ *   kind BUILT_TOWN or BUILT_INDUSTRY; radius 0 for none. A town's last float
+ *   is 1 + its index in `outlines` (0: none), whose urban extent polygon then
+ *   shapes the patch instead of the disk. Airbases have kind
  *   BUILT_AIRFIELD and their runway packed by `encodeRunway`, from which the
  *   terrain paints the runway markings.
  * - `sites`: footprints for building clusters (towns, airbases, industry).
@@ -74,6 +76,9 @@ export const APRON_OFFSET = 420;
 /** Links from the taxiway to the apron, this far either side of the apron's middle (m). */
 export const APRON_LINK_ALONG = 200;
 
+/** How far a town's outline may reach beyond its light radius (m): inside LightTables' reach. */
+export const OUTLINE_REACH = 1500;
+
 /** Built-up kinds in the light records. */
 export const BUILT_TOWN = 0;
 export const BUILT_INDUSTRY = 1;
@@ -136,6 +141,12 @@ export const CLEARING_LEVEL = 7;
 export class InfraScene {
   readonly segments: RiverSegments;
   readonly lights: Float32Array;
+  /**
+   * Towns' urban extent radii (m), URBAN_VERTICES per town at evenly spaced
+   * bearings counterclockwise from east (decision 103), indexed from the
+   * light records; capped so the patch stays inside the light's tile lists.
+   */
+  readonly outlines: Float32Array;
   readonly sites: BuiltSite[] = [];
   /** Habitability per coarse cell and that grid's resolution, for the rural glow. */
   readonly habitability: Uint8Array;
@@ -187,6 +198,7 @@ export class InfraScene {
       segs.push(a.x, a.y, a.z, b.x, b.y, b.z, -w, -w);
     };
     const lights: number[] = [];
+    const outlines: number[] = [];
     for (const base of infra.airbases) {
       const p = new Vec3d(...base.point);
       const h = base.heading;
@@ -252,6 +264,11 @@ export class InfraScene {
         outline,
       });
       this.clear(p, p, 0.6 * r, false);
+      let shape = 0;
+      if (outline) {
+        shape = outlines.length / URBAN_VERTICES + 1;
+        for (const o of outline) outlines.push(Math.min(o, 2 * r + OUTLINE_REACH));
+      }
       lights.push(
         p.x,
         p.y,
@@ -260,7 +277,7 @@ export class InfraScene {
         Math.min(1.2, 0.3 + Math.sqrt(pop / 7e5)),
         r,
         BUILT_TOWN,
-        0,
+        shape,
       );
     }
     const seen = new Set<number>();
@@ -284,6 +301,7 @@ export class InfraScene {
       lights.push(p.x, p.y, p.z, 1200, 0.4, 900, BUILT_INDUSTRY, 0);
     }
     this.lights = Float32Array.from(lights);
+    this.outlines = Float32Array.from(outlines.length ? outlines : [0]);
   }
 
   private clear(a: Vec3d, b: Vec3d, r: number, paved: boolean): void {
