@@ -35,14 +35,17 @@
  * smoothed; on land h_phys = (h + (gain − 1) · blur(h − V)) · reliefScale,
  * the relief above the floor blurred over a few cells (LANDFORM.smoothing).
  * The coast and the broad valley floors stay where erosion left them; slopes
- * and ridges rise. Drainage is recomputed afterwards on the CPU, as always.
+ * and ridges rise. A breach pass then lowers any cell the gain left above a
+ * cell that drained into it, so the gain makes no new lakes. Drainage is
+ * recomputed afterwards on the CPU, as always.
  *
  * Climate (decision 19) reads elevation as physical height ÷ reliefScale. The
  * landform excess is Earth-scaled, so it counts at its physical height: where
- * the grid has "seaLevelTemperature", it rises by LAPSE_RATE × (gain − 1) ·
- * blur(h − V) · (1 − reliefScale), and every reader of physical height ÷
+ * the grid has "seaLevelTemperature", it rises by LAPSE_RATE × the excess
+ * (amplified − eroded, reference m) × (1 − reliefScale), and every reader of physical height ÷
  * reliefScale (biomes, treeline, snow and season in the shaders) then gets the
- * temperature of the Earth-like elevation without change. Landmass-scale height keeps decision 14's scale.
+ * temperature of the Earth-like elevation without change. Landmass-scale
+ * height keeps decision 14's scale.
  *
  * Maps on the grid: in "height" (physical m), "uplift" and "precipitation";
  * out "height" plus "flow" (drainage area, km² · m/yr of rain) and "receiver".
@@ -113,6 +116,14 @@ export const LANDFORM = {
    * valleys narrower than a few cells keep their eroded depth.
    */
   smoothing: 2,
+  /**
+   * Breach passes after the gain, and the drop (reference m) a cell keeps below
+   * its donors: the blur raises narrow channels toward their banks, which made
+   * closed hollows (9.5 % of the land became lakes); breaching cuts them open
+   * downstream, as an overflow would.
+   */
+  breachPasses: 128,
+  breachDrop: 0.05,
 };
 
 const f = (x: number) => (Number.isInteger(x) ? `${x}.0` : String(x));
@@ -195,18 +206,42 @@ ${main(`  var sum = 2.0 * vIn[id];
 @group(0) @binding(2) var<storage, read_write> above: array<f32>;
 ${main(`  let hc = h[id];
   above[id] = select(0.0, max(hc - min(valleyFloor[id], hc), 0.0), hc > 0.0);`)}`);
-  const toPhys = gpu.kernel(`${head}
-@group(0) @binding(0) var<storage, read> h: array<f32>;
-@group(0) @binding(1) var<storage, read_write> hPhys: array<f32>;
-@group(0) @binding(2) var<storage, read> above: array<f32>;
-${main(`  let hc = h[id];
-  hPhys[id] = select(hc, hc + ${f(lf.gain - 1)} * above[id], hc > 0.0) * RELIEF;`)}`);
-  const climateCorrection = gpu.kernel(`${head}
+  const amplify = gpu.kernel(`${head}
 @group(0) @binding(0) var<storage, read> h: array<f32>;
 @group(0) @binding(1) var<storage, read> above: array<f32>;
+@group(0) @binding(2) var<storage, read_write> hA: array<f32>;
+${main(`  let hc = h[id];
+  hA[id] = select(hc, hc + ${f(lf.gain - 1)} * above[id], hc > 0.0);`)}`);
+  // Breach: where the eroded surface ran downhill from a donor to this cell, the
+  // amplified one must too, so the gain makes no new hollows. A lowered cell may
+  // now stand above its own receiver's level; later passes carry the cut on.
+  // Erosion lakes, whose routing runs uphill over the spill, are left alone.
+  const breach = gpu.kernel(`${head}
+@group(0) @binding(0) var<storage, read> h: array<f32>;
+@group(0) @binding(1) var<storage, read> rcv: array<u32>;
+@group(0) @binding(2) var<storage, read> hIn: array<f32>;
+@group(0) @binding(3) var<storage, read_write> hOut: array<f32>;
+${main(`  let hc = h[id];
+  var m = hIn[id];
+  if (hc > 0.0) {
+    for (var k = 0; k < 8; k++) {
+      let nb = neighbor(c, k);
+      if (nb < 0 || nb == c) { continue; }
+      if ((rcv[nb] & RCV_MASK) == u32(c) && h[nb] > hc) { m = min(m, hIn[nb] - ${f(lf.breachDrop)}); }
+    }
+    m = max(m, hc);
+  }
+  hOut[id] = m;`)}`);
+  const toPhys = gpu.kernel(`${head}
+@group(0) @binding(0) var<storage, read> hA: array<f32>;
+@group(0) @binding(1) var<storage, read_write> hPhys: array<f32>;
+${main('  hPhys[id] = hA[id] * RELIEF;')}`);
+  const climateCorrection = gpu.kernel(`${head}
+@group(0) @binding(0) var<storage, read> h: array<f32>;
+@group(0) @binding(1) var<storage, read> hA: array<f32>;
 @group(0) @binding(2) var<storage, read_write> seaLevelT: array<f32>;
 ${main(`  if (h[id] > 0.0) {
-    seaLevelT[id] += ${f(LAPSE_RATE)} * ${f(lf.gain - 1)} * above[id] * (1.0 - RELIEF);
+    seaLevelT[id] += ${f(LAPSE_RATE)} * (hA[id] - h[id]) * (1.0 - RELIEF);
   }`)}`);
 
   const prefill = gpu.kernel(`${head}
@@ -391,11 +426,26 @@ ${main(`  let hc = hIn[id];
     gpu.dispatchLinear(floorBlur, [grid.get('erosion.h0'), grid.get('erosion.w2')], count);
     grid.swap('erosion.h0', 'erosion.w2');
   }
-  gpu.dispatchLinear(toPhys, [grid.get('erosion.h'), hPhys, grid.get('erosion.h0')], count);
+  // The amplified surface, in reference meters, into erosion.w (the floor is no longer needed).
+  gpu.dispatchLinear(
+    amplify,
+    [grid.get('erosion.h'), grid.get('erosion.h0'), grid.get('erosion.w')],
+    count,
+  );
+  for (let p = 0; p < lf.breachPasses; p++) {
+    gpu.dispatchLinear(
+      breach,
+      [grid.get('erosion.h'), rcv, grid.get('erosion.w'), grid.get('erosion.w2')],
+      count,
+    );
+    grid.swap('erosion.w', 'erosion.w2');
+    if (p % 32 === 31) await gpu.finish();
+  }
+  gpu.dispatchLinear(toPhys, [grid.get('erosion.w'), hPhys], count);
   if (grid.has('seaLevelTemperature')) {
     gpu.dispatchLinear(
       climateCorrection,
-      [grid.get('erosion.h'), grid.get('erosion.h0'), grid.get('seaLevelTemperature')],
+      [grid.get('erosion.h'), grid.get('erosion.w'), grid.get('seaLevelTemperature')],
       count,
     );
   }
