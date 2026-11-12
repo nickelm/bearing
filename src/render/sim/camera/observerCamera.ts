@@ -6,13 +6,12 @@
  *
  * - **Where:** over a station's spot (observerStations.ts), at an eye height
  *   above the ground from 2 m to 20 km, the simulation view's envelope.
- *   W/A/S/D move the spot within LEASH of the station, at 40 m/s near the
- *   ground and faster the higher the eye, five times faster with Shift; R/F
- *   raise and lower the eye.
- * - **Looking:** a mouse drag (either button) is mouse-look: right turns
- *   right, down looks down (owner review: grab semantics felt inverted); a
- *   finger drag grabs the view instead, as touch users expect (decision 114);
- *   Q/E turn; the wheel and pinch zoom the field of view from 70° down to 5°,
+ *   W/A/S/D move the spot within LEASH of the station, at 80 m/s near the
+ *   ground and twice the eye height per second higher up, five times faster
+ *   with Shift; R/F raise and lower the eye.
+ * - **Looking:** a drag (either mouse button, or one or two fingers) is
+ *   mouse-look: right turns right, down looks down (owner reviews: grab
+ *   semantics felt inverted, with the mouse and with a finger); Q/E turn; the wheel and pinch zoom the field of view from 70° down to 5°,
  *   like binoculars.
  * - **Touch:** the on-screen stick, height slider and ×5 toggle
  *   (ui/touchControls.ts) feed `stick`, added to the keys.
@@ -144,14 +143,6 @@ export class ObserverCamera implements CameraControls {
     this.pitch = clamp(this.pitch - dyPixels * radPerPixel, -MAX_PITCH, MAX_PITCH);
   }
 
-  /**
-   * A finger drag grabs the view instead (decision 114): the scene follows the
-   * finger, as touch users expect, so dragging right turns left.
-   */
-  touchDrag(dxPixels: number, dyPixels: number, radPerPixel: number): void {
-    this.drag(-dxPixels, -dyPixels, radPerPixel);
-  }
-
   zoomAt(factor: number): void {
     this.fov = clamp(this.fov * factor, OBSERVER_MIN_FOV, OBSERVER_MAX_FOV);
   }
@@ -179,7 +170,7 @@ export class ObserverCamera implements CameraControls {
     if (dt > 0) {
       // A brisk pace on the ground, faster from higher up; Shift (or ×5) for more.
       const boost = inp.boost || st.boost ? BOOST : 1;
-      const speed = Math.max(40, 1.5 * this.height) * boost;
+      const speed = Math.max(80, 2 * this.height) * boost;
       const forward = clamp(inp.forward + st.forward, -1, 1);
       const right = clamp(inp.right + st.right, -1, 1);
       const climb = clamp(inp.climb + st.climb, -1, 1);

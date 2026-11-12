@@ -49,14 +49,15 @@ describe('observer on touch', () => {
     pitch: 0,
   };
 
-  it('grabs the view with a finger, the reverse of mouse-look', () => {
+  it('looks with a finger as with the mouse, and ignores a twist', () => {
     const c = new ObserverCamera(R);
     c.setStation(station);
-    c.touchDrag(100, 50, 0.001);
-    expect(c.heading).toBeCloseTo(-0.1, 9); // finger right: the scene follows, the head turns left
-    expect(c.pitch).toBeCloseTo(0.05, 9); // finger down: look up
+    expect((c as { touchDrag?: unknown }).touchDrag).toBeUndefined();
+    c.drag(100, 50, 0.001);
+    expect(c.heading).toBeCloseTo(0.1, 9); // finger right: turn right
+    expect(c.pitch).toBeCloseTo(-0.05, 9); // finger down: look down
     c.rotateAt();
-    expect(c.heading).toBeCloseTo(-0.1, 9); // a twist does not turn
+    expect(c.heading).toBeCloseTo(0.1, 9); // a twist does not turn
   });
 
   it('walks and climbs from the on-screen controls, faster with ×5', () => {
@@ -66,11 +67,11 @@ describe('observer on touch', () => {
     c.stick.forward = 1;
     c.update(1);
     const slow = c.spot.clone().sub(station.point).dot(north) * R;
-    expect(slow).toBeCloseTo(40, 0);
+    expect(slow).toBeCloseTo(80, 0);
     c.setStation(station);
     c.stick.boost = 1;
     c.update(1);
-    expect(c.spot.clone().sub(station.point).dot(north) * R).toBeCloseTo(200, 0);
+    expect(c.spot.clone().sub(station.point).dot(north) * R).toBeCloseTo(400, 0);
     c.stick.forward = 0;
     c.stick.climb = 1;
     const h = c.height;

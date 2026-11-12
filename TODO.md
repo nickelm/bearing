@@ -380,7 +380,8 @@ Simulation view (needs S1's `render/sim/` split):
   - [x] Owner review (2026-11-12): the ground flickered to sea or black for single frames while turning (fixed, decision 113: tiles split only when all four children are ready); horizontal drag felt inverted (mouse-look now); movement too slow (40 m/s, Shift ×5, 25 km leash)
   - [ ] Owner: recheck the observer in the browser after decision 113 (no flicker while turning or walking; drag and Shift feel right)
   - [x] Touch controls for the observer (owner request; decision 114): one finger looks, pinch zooms, on-screen walk stick, height slider and ×5
-  - [ ] Owner: try them on the tablet (stick size and placement, look speed, whether the stick and slider clear the time bar on a phone)
+  - [x] Owner tablet review (2026-11-12): the stick works but is a little slow (now 80 m/s near the ground); finger look felt inverted (now mouse-look, as with the mouse)
+  - [ ] Owner: recheck finger look and pace on the tablet
   - [ ] Owner concern: the ground around bases looks flat and uniform. Airbases sit on flat land by design and the grading flattens 400 m beyond; the uniform look is the smooth, one-color-per-biome land shading that the faceted shading, shade quantization and farmland tasks below replace
   - [ ] Ports: a quay layout and buildings, so a port observer stands on the quay rather than at the coarse site point (with C3's ships)
   - [ ] Ease between stations instead of jumping (V4's transition controller)

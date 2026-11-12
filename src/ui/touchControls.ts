@@ -9,7 +9,8 @@
  * - **×5** (above the slider): toggles the fast pace, as holding Shift.
  *
  * Looking around and zooming stay gestures on the view itself
- * (orbitCamera.ts `attachOrbitInput`): one finger looks, two fingers pinch.
+ * (orbitCamera.ts `attachOrbitInput`): one finger looks as the mouse does
+ * (right turns right, down looks down), two fingers pinch.
  * Each control captures its own pointer, so both thumbs work at once.
  * Panels follow visual-style Part I, _User Interface_: dark translucent,
  * square corners, amber when active.
