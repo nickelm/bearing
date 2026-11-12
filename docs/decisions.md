@@ -1772,3 +1772,14 @@ The engineering calls made while adopting it:
 - **Speed.** The observer moves at 40 m/s near the ground and 1.5 times its eye height per second higher up, may roam 25 km from its station (about the promotion bubble, decision 49) instead of 5 km, and Shift moves either camera five times faster.
 
 **Reason:** The owner's review of the observer camera (decision 112) found the flicker, the inverted horizontal drag and the slow movement. The all-or-nothing split is the standard way to avoid holes between tile levels; it only has to count the children outside the view as well.
+
+### 114. Touch controls for the observer camera
+
+**Date:** 2026-11-12
+**Decision:** On touch screens the observer camera (decision 112) takes gestures for looking and on-screen controls for moving (`ui/touchControls.ts`), as the owner asked.
+
+- **Gestures on the view.** One finger looks around by grabbing the view: the scene follows the finger, as in panorama and map apps, the reverse of the mouse's mouse-look (decision 113), so `CameraControls` gains an optional `touchDrag` that `attachOrbitInput` uses for fingers. Two fingers pinch to zoom the field of view and move to look; a twist does nothing, since it would jitter the heading while pinching. Three fingers dragged up or down pitch, as before.
+- **On-screen controls**, bottom left and bottom right above the time bar, in Part I's panel style (dark translucent, square knobs, amber when active): a walk stick, analog, with a 12% dead zone, full deflection being W/A/S/D; a height slider that springs back to the middle, as R/F; and a ×5 toggle for the fast pace, as Shift. Each captures its own pointer, so both thumbs work at once. They feed the observer's `stick` input, which is added to the keys. They show only on touch devices (`maxTouchPoints` or a coarse pointer), in the simulation view, with the observer camera.
+- **Checks.** Unit tests for the stick and slider mapping and the observer's touch behavior; the overlay was also driven in headless Chromium with emulated touch (push, release, slider, toggle).
+
+**Reason:** Decision 60 gave the orbit camera map-app gestures, but the observer walks and climbs, which have no natural gesture; a twin-stick layout is the convention for moving a ground camera on a tablet, and keeping looking as a gesture leaves the screen mostly free.

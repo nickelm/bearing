@@ -9,10 +9,13 @@
  *   W/A/S/D move the spot within LEASH of the station, at 40 m/s near the
  *   ground and faster the higher the eye, five times faster with Shift; R/F
  *   raise and lower the eye.
- * - **Looking:** drag (either button, or one finger) is mouse-look: right
- *   turns right, down looks down (owner review: grab semantics felt inverted);
+ * - **Looking:** a mouse drag (either button) is mouse-look: right turns
+ *   right, down looks down (owner review: grab semantics felt inverted); a
+ *   finger drag grabs the view instead, as touch users expect (decision 114);
  *   Q/E turn; the wheel and pinch zoom the field of view from 70° down to 5°,
  *   like binoculars.
+ * - **Touch:** the on-screen stick, height slider and ×5 toggle
+ *   (ui/touchControls.ts) feed `stick`, added to the keys.
  * - **Ground:** the scene sets `groundHeight`, the displayed surface under the
  *   eye, every frame; until it is known the eye stands over sea level.
  * - **Clip planes:** a near plane of a tenth of the eye height (at most 1 m,
@@ -40,6 +43,8 @@ const MAX_PITCH = 85 * DEG;
 
 export class ObserverCamera implements CameraControls {
   readonly input: OrbitInput = { forward: 0, right: 0, turn: 0, climb: 0 };
+  /** The on-screen controls on touch screens (ui/touchControls.ts), added to the keys. */
+  readonly stick = { forward: 0, right: 0, climb: 0, boost: 0 };
   station: ObserverStation | null = null;
   /** Unit direction of the spot the observer stands over. */
   readonly spot = new Vec3d(0, 0, 1);
@@ -139,13 +144,20 @@ export class ObserverCamera implements CameraControls {
     this.pitch = clamp(this.pitch - dyPixels * radPerPixel, -MAX_PITCH, MAX_PITCH);
   }
 
+  /**
+   * A finger drag grabs the view instead (decision 114): the scene follows the
+   * finger, as touch users expect, so dragging right turns left.
+   */
+  touchDrag(dxPixels: number, dyPixels: number, radPerPixel: number): void {
+    this.drag(-dxPixels, -dyPixels, radPerPixel);
+  }
+
   zoomAt(factor: number): void {
     this.fov = clamp(this.fov * factor, OBSERVER_MIN_FOV, OBSERVER_MAX_FOV);
   }
 
-  rotateAt(angle: Radians): void {
-    this.heading = wrapAngle(this.heading - angle);
-  }
+  /** A two-finger twist does not turn the observer: it would jitter the heading while pinching. */
+  rotateAt(): void {}
 
   tiltBy(dyPixels: number): void {
     this.pitch = clamp(this.pitch - dyPixels * 0.005, -MAX_PITCH, MAX_PITCH);
@@ -163,14 +175,19 @@ export class ObserverCamera implements CameraControls {
   /** Applies keyboard input, then recomputes eye, orientation and clip planes. */
   update(dt: number): void {
     const inp = this.input;
+    const st = this.stick;
     if (dt > 0) {
-      // A brisk pace on the ground, faster from higher up; Shift for more.
-      const speed = Math.max(40, 1.5 * this.height) * (inp.boost ? BOOST : 1);
-      if (inp.forward || inp.right) this.walk(inp.forward * speed * dt, inp.right * speed * dt);
+      // A brisk pace on the ground, faster from higher up; Shift (or ×5) for more.
+      const boost = inp.boost || st.boost ? BOOST : 1;
+      const speed = Math.max(40, 1.5 * this.height) * boost;
+      const forward = clamp(inp.forward + st.forward, -1, 1);
+      const right = clamp(inp.right + st.right, -1, 1);
+      const climb = clamp(inp.climb + st.climb, -1, 1);
+      if (forward || right) this.walk(forward * speed * dt, right * speed * dt);
       if (inp.turn) this.heading = wrapAngle(this.heading + inp.turn * 0.8 * dt);
-      if (inp.climb) {
+      if (climb) {
         this.height = clamp(
-          this.height * Math.exp(inp.climb * 1.2 * dt),
+          this.height * Math.exp(climb * 1.2 * dt),
           OBSERVER_MIN_HEIGHT,
           OBSERVER_MAX_HEIGHT,
         );

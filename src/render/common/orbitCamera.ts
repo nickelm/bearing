@@ -63,6 +63,8 @@ export interface CameraControls {
   readonly input: OrbitInput;
   /** Moves the ground under the cursor by a screen drag. `radPerPixel` = vertical FOV / viewport height. */
   drag(dxPixels: number, dyPixels: number, radPerPixel: number): void;
+  /** A finger drag, where it should differ from the mouse's (the observer: grab, not mouse-look). */
+  touchDrag?(dxPixels: number, dyPixels: number, radPerPixel: number): void;
   /** Zooms by `factor` at once, keeping the ground under the screen point (`ox`, `oy`) in place. */
   zoomAt(factor: number, ox: number, oy: number, radPerPixel: number): void;
   /** Turns the view by `angle` (clockwise positive) about the screen point (`ox`, `oy`). */
@@ -341,8 +343,10 @@ export function attachOrbitInput(
     const cur = { x: e.clientX, y: e.clientY };
     if (cur.x === prev.x && cur.y === prev.y) return;
     const rpp = radPerPixel();
+    const drag = (dx: number, dy: number) =>
+      camera.touchDrag ? camera.touchDrag(dx, dy, rpp) : camera.drag(dx, dy, rpp);
     if (touches.size === 1) {
-      camera.drag(cur.x - prev.x, cur.y - prev.y, rpp);
+      drag(cur.x - prev.x, cur.y - prev.y);
     } else if (touches.size === 2) {
       let other: Point = prev;
       for (const [id, p] of touches) if (id !== e.pointerId) other = p;
@@ -350,7 +354,7 @@ export function attachOrbitInput(
       const rect = element.getBoundingClientRect();
       const ox = g.cx - (rect.left + rect.width / 2);
       const oy = g.cy - (rect.top + rect.height / 2);
-      camera.drag(g.dx, g.dy, rpp);
+      drag(g.dx, g.dy);
       if (g.scale !== 1) camera.zoomAt(1 / g.scale, ox, oy, rpp);
       if (g.rotation !== 0) camera.rotateAt(g.rotation, ox, oy, rpp);
     } else {

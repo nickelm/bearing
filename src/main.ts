@@ -78,6 +78,7 @@ import { SnapshotField } from './workers/protocol';
 import { buildWeatherClimate } from './sim/weather/climate';
 import { WeatherGrid } from './sim/weather/grid';
 import { TimeControls } from './ui/timeControls';
+import { hasTouch, TouchControls } from './ui/touchControls';
 import { GenerationCancelled, WorldgenClient } from './workers/worldgenClient';
 import { fetchLabelFonts } from './render/strategic/labels/fonts';
 import { buildFontAtlas } from './render/strategic/labels/fontAtlas';
@@ -652,6 +653,9 @@ async function main(): Promise<void> {
     },
   });
   const timeControls = new TimeControls((rate) => sim.setRate(rate));
+  // On-screen walk stick, height slider and ×5 for the observer on touch screens (decision 114).
+  const touchControls = new TouchControls(globe.observer.stick);
+  const touchDevice = hasTouch();
   sim.onFlagged = (n) => {
     const labels = n.events.map((e) => e.label).join(', ');
     timeControls.notify(n.slowed ? `Slowed to 1×: ${labels}` : labels);
@@ -811,6 +815,8 @@ async function main(): Promise<void> {
     strategicView.relief.seasonPhase.value = globe.terrain.land.seasonPhase.value;
     globe.clouds.time.value = gameTime;
     globe.weather.update(sim.weather, gameTime);
+    touchControls.visible =
+      touchDevice && activeView === 'simulation' && globe.cameraMode === 'observer';
     if (activeView === 'strategic') strategicView.render(dt);
     else globe.render(dt);
 

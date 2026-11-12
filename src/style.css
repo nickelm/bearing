@@ -199,3 +199,85 @@ body {
   pointer-events: none;
   white-space: nowrap;
 }
+
+/* Observer camera controls on touch screens (decision 114); Part I panels. */
+.touch-controls {
+  position: fixed;
+  inset: auto 0 0 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.touch-controls[hidden] {
+  display: none;
+}
+
+.touch-stick,
+.touch-slider {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgb(0 0 0 / 0.55);
+  border: 1px solid rgb(255 255 255 / 0.25);
+  pointer-events: auto;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.touch-stick {
+  left: 24px;
+  bottom: 84px;
+  width: 132px;
+  height: 132px;
+  border-radius: 50%;
+}
+
+.touch-right {
+  position: absolute;
+  right: 24px;
+  bottom: 84px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.touch-slider {
+  position: relative;
+  width: 64px;
+  height: 160px;
+}
+
+.touch-knob {
+  width: 56px;
+  height: 56px;
+  background: rgb(255 255 255 / 0.35);
+  border: 1px solid rgb(255 255 255 / 0.6);
+  pointer-events: none;
+}
+
+.touch-stick .touch-knob {
+  border-radius: 50%;
+}
+
+.touch-fast {
+  width: 64px;
+  height: 40px;
+  border: 1px solid rgb(255 255 255 / 0.25);
+  background: rgb(0 0 0 / 0.55);
+  color: #fff;
+  font:
+    14px/1 ui-monospace,
+    Consolas,
+    monospace;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+.touch-fast.active {
+  color: #000;
+  background: #ffb347;
+  border-color: #ffb347;
+}
