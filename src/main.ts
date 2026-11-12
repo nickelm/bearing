@@ -60,6 +60,7 @@ import type { GlobalWorld } from './worldgen/globalPipeline';
 import { GPU_SELF_TESTS, runSelfTest } from './worldgen/gpu/selfTests';
 import type {
   CampaignGuiParams,
+  DebugGuiCallbacks,
   LightingGuiParams,
   MapGuiParams,
   TimeGuiParams,
@@ -533,62 +534,57 @@ async function main(): Promise<void> {
   };
   const COLOR_MODES = [...VIEW_MODES, 'forest', 'tile level', 'tile borders'];
   let tilesBlocked = false;
-  const gui = new DebugGui(
-    worldParams,
-    viewParams,
-    COLOR_MODES,
-    {
-      regenerate: () => void regenerate(),
-      clearCache: () => {
-        store
-          .clear()
-          .then(() => (gui.status.generation = 'world cache cleared'))
-          .catch((err: unknown) => console.warn('Could not clear the world cache', err));
-      },
-      cancel: () => {
-        generation++;
-        worldgen.cancel();
-        gui.status.generation = 'cancelled';
-      },
-      viewChanged: (v) => {
-        // One "Color by" list for both renderers: modes the tiles cannot show
-        // (they need tectonic-grid maps) switch the display to the grid mesh.
-        const tileMode = TILE_MODE_FOR[v.mode];
-        tilesBlocked = tileMode === undefined;
-        const gridMode = (
-          (VIEW_MODES as readonly string[]).includes(v.mode) ? v.mode : 'biome'
-        ) as ViewMode;
-        globe.globe.setViewMode(gridMode);
-        strategicView.setViewMode(gridMode);
-        setActiveView(v.scene);
-        globe.globe.wireframe = v.wireframe;
-        globe.useTiles = v.tiles && !tilesBlocked;
-        strategicView.useTiles = v.tiles && !tilesBlocked;
-        if (tileMode) {
-          globe.terrain.setMode(tileMode);
-          strategicView.relief.setMode(tileMode);
-        }
-        globe.terrain.geomorph = v.geomorph;
-        globe.terrain.lod.sseThreshold = v.sse;
-        globe.terrain.budgetMiB = v.tileMemory;
-        globe.forest.enabled = v.trees;
-        globe.forest.range.value = v.treeRange * KM;
-        globe.structures.enabled = v.buildings;
-        globe.structures.ink = v.ink;
-        globe.structures.setInk(v.inkWidth, 0);
-        globe.structures.lightBrightness.value = v.nightLights;
-        renderScale.targetMs = 1000 / v.targetFps;
-        const fixed = RenderScaleController.fixed(v.renderScale);
-        applyRenderScale(fixed ?? renderScale.scale, performance.now());
-      },
-      shapeChanged: (v) => {
-        globe.globe.setExaggeration(v.exaggeration);
-        globe.terrain.setExaggeration(v.exaggeration);
-      },
-      cameraChanged: () => applyCamera(),
+  const guiCallbacks: DebugGuiCallbacks = {
+    regenerate: () => void regenerate(),
+    clearCache: () => {
+      store
+        .clear()
+        .then(() => (gui.status.generation = 'world cache cleared'))
+        .catch((err: unknown) => console.warn('Could not clear the world cache', err));
     },
-    { devCamera },
-  );
+    cancel: () => {
+      generation++;
+      worldgen.cancel();
+      gui.status.generation = 'cancelled';
+    },
+    viewChanged: (v) => {
+      // One "Color by" list for both renderers: modes the tiles cannot show
+      // (they need tectonic-grid maps) switch the display to the grid mesh.
+      const tileMode = TILE_MODE_FOR[v.mode];
+      tilesBlocked = tileMode === undefined;
+      const gridMode = (
+        (VIEW_MODES as readonly string[]).includes(v.mode) ? v.mode : 'biome'
+      ) as ViewMode;
+      globe.globe.setViewMode(gridMode);
+      strategicView.setViewMode(gridMode);
+      setActiveView(v.scene);
+      globe.globe.wireframe = v.wireframe;
+      globe.useTiles = v.tiles && !tilesBlocked;
+      strategicView.useTiles = v.tiles && !tilesBlocked;
+      if (tileMode) {
+        globe.terrain.setMode(tileMode);
+        strategicView.relief.setMode(tileMode);
+      }
+      globe.terrain.geomorph = v.geomorph;
+      globe.terrain.lod.sseThreshold = v.sse;
+      globe.terrain.budgetMiB = v.tileMemory;
+      globe.forest.enabled = v.trees;
+      globe.forest.range.value = v.treeRange * KM;
+      globe.structures.enabled = v.buildings;
+      globe.structures.ink = v.ink;
+      globe.structures.setInk(v.inkWidth, 0);
+      globe.structures.lightBrightness.value = v.nightLights;
+      renderScale.targetMs = 1000 / v.targetFps;
+      const fixed = RenderScaleController.fixed(v.renderScale);
+      applyRenderScale(fixed ?? renderScale.scale, performance.now());
+    },
+    shapeChanged: (v) => {
+      globe.globe.setExaggeration(v.exaggeration);
+      globe.terrain.setExaggeration(v.exaggeration);
+    },
+    cameraChanged: () => applyCamera(),
+  };
+  const gui = new DebugGui(worldParams, viewParams, COLOR_MODES, guiCallbacks, { devCamera });
   setActiveView(viewParams.scene); // ?view=strategic opens the map
   gui.status.backend = `WebGPU on ${describeAdapter(probe.adapter)}`;
   console.info(`WebGPU adapter: ${describeAdapter(probe.adapter)}`, probe.adapter.info);
@@ -789,6 +785,9 @@ async function main(): Promise<void> {
   };
   window.addEventListener('resize', onResize);
   onResize();
+  // Apply the View folder's starting values (once onResize exists): before this, the
+  // scene kept its own defaults, buildings off, until a View control changed.
+  guiCallbacks.viewChanged(viewParams);
 
   void regenerate();
 
