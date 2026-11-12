@@ -156,6 +156,8 @@ The aircraft the player controls or follows fills the center of the screen for e
 
 Aircraft, vehicles, ships, buildings, and trees should be generated in code from small JSON specifications rather than modeled by hand. A fuselage spec lists cross-sections along its length; a wing spec lists its planform, sweep, and dihedral; a camouflage spec maps colors to face groups. This approach suits the low-poly style, keeps assets reviewable as text, lets Claude Code author and adjust models, and makes new fictional types cheap to add. A small model viewer page in the debug UI should render any spec with turntable and lighting controls.
 
+The specs live in `src/render/common/models/specs/` (decision 106). A spec names its budget class and a color per face group (a hex color, a named model color, or `camo` for its scheme), and lists parts: lofts through 4- to 8-sided cross-sections, wings and fins as thin diamond-section planforms with a sharp leading edge, and boxes (optionally beveled), frustums, cylinders, icosphere blobs and domes, arched shells with a dark door wall, gabled houses and lattice masts, any of them mirrored across the centerline. The builder bakes per-vertex ambient occlusion (eight short rays per vertex, plus darkening toward the ground for buildings) and lays camouflage as large patches from a smooth noise over face centers, one color per face. The model viewer is `viewer.html`, reached from the debug GUI (View → Model viewer), with a silhouette mode for check 6; `tools/models.preview.ts` renders the same views and silhouettes to PNG without a GPU.
+
 ## Palette
 
 Starting values; final values get tuned in the model viewer and on the globe.
@@ -191,6 +193,8 @@ Starting values; final values get tuned in the model viewer and on the globe.
 | Pact air superiority | `#7F8C96`, `#A3B1B9` | Fighters |
 | Pact tactical | `#8B7350`, `#5E6B45`, `#A39070` | Strike, CAS, ground vehicles |
 | Pact bomber | `#A7ABAE` | Bare-metal bombers |
+| Alliance ship | `#8C949B`, waterline `#3A3E42` | Ships (decision 106) |
+| Pact ship | `#7E8A86`, waterline `#3A3E42` | Ships (decision 106) |
 
 ### Light and Emissives
 

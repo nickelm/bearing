@@ -1,0 +1,16 @@
+{
+  "name": "House",
+  "class": "building",
+  "groups": { "wall": "wall", "roof": "roof-red" },
+  "parts": [
+    {
+      "type": "house",
+      "group": "wall",
+      "roofGroup": "roof",
+      "center": [0, 0, 0],
+      "size": [10, 5.5, 8],
+      "roof": 3
+    }
+  ],
+  "emissives": [{ "kind": "window", "at": [0, 2.5, 4.1] }]
+}

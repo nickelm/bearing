@@ -1,0 +1,24 @@
+{
+  "name": "Hardened aircraft shelter",
+  "class": "building",
+  "groups": { "shell": "concrete", "berm": "earth" },
+  "parts": [
+    {
+      "type": "arch",
+      "group": "shell",
+      "center": [0, 0, 0],
+      "length": 34,
+      "width": 24,
+      "height": 9,
+      "sides": 6
+    },
+    {
+      "type": "frustum",
+      "group": "berm",
+      "center": [-17.5, 0, 0],
+      "base": [4, 26],
+      "top": [1.5, 22],
+      "height": 7
+    }
+  ]
+}

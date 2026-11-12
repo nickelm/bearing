@@ -1,0 +1,24 @@
+{
+  "name": "Factory hall",
+  "class": "building",
+  "groups": { "wall": "concrete-dark", "roof": "roof-gray" },
+  "parts": [
+    {
+      "type": "house",
+      "group": "wall",
+      "roofGroup": "roof",
+      "center": [0, 0, -7.5],
+      "size": [60, 12, 15],
+      "roof": 3
+    },
+    {
+      "type": "house",
+      "group": "wall",
+      "roofGroup": "roof",
+      "center": [0, 0, 7.5],
+      "size": [60, 12, 15],
+      "roof": 3
+    },
+    { "type": "box", "group": "wall", "center": [-34, 4, 0], "size": [8, 8, 20] }
+  ]
+}

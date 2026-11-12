@@ -19,7 +19,7 @@ import { tileForDirection, tileKeyString } from '../../../core/tiles';
 import { Vec3d } from '../../../core/vec3d';
 import { chaikin } from '../../../worldgen/riverIndex';
 import type { RiverSegments } from '../../../worldgen/riverIndex';
-import { ROAD_WIDTH } from '../../../worldgen/strategic/graph';
+import { ROAD_WIDTH, URBAN_VERTICES } from '../../../worldgen/strategic/graph';
 import type { RoadNetwork, StrategicGraph } from '../../../worldgen/strategic/graph';
 import type { Infrastructure } from '../../../worldgen/strategic/infrastructure';
 
@@ -37,6 +37,29 @@ export interface BuiltSite {
   runwayLength: number;
   /** Stable key for the site's random stream. */
   key: string;
+  /**
+   * Towns: the urban extent's radius (m) at URBAN_VERTICES evenly spaced bearings,
+   * counterclockwise from east (decision 103); `radius` is their maximum.
+   */
+  outline?: Float32Array;
+}
+
+/** A town's built-up radius (m) toward unit direction `d`: its outline, or its radius. */
+export function townRadiusToward(site: BuiltSite, d: Readonly<Vec3d>): number {
+  const o = site.outline;
+  if (!o) return site.radius;
+  const { east, north } = localFrame(site.point);
+  const dx = d.x - site.point.x;
+  const dy = d.y - site.point.y;
+  const dz = d.z - site.point.z;
+  const e = dx * east.x + dy * east.y + dz * east.z;
+  const n = dx * north.x + dy * north.y + dz * north.z;
+  if (e === 0 && n === 0) return o[0]!;
+  const k = o.length;
+  const t = ((Math.atan2(n, e) / (2 * Math.PI) + 1) % 1) * k;
+  const i = Math.floor(t) % k;
+  const f = t - Math.floor(t);
+  return o[i]! * (1 - f) + o[(i + 1) % k]! * f;
 }
 
 /** Runway, taxiway and apron dimensions (m). */
@@ -185,14 +208,26 @@ export class InfraScene {
       const p = new Vec3d(s.points[i * 3]!, s.points[i * 3 + 1]!, s.points[i * 3 + 2]!);
       const pop = s.population[i]!;
       const r = urbanRadius(pop);
+      // Buildings fill the town's urban extent polygon (decision 106).
+      let outline: Float32Array | undefined;
+      const u = graph.urban?.points;
+      if (u && u.length >= (i + 1) * URBAN_VERTICES * 3) {
+        outline = new Float32Array(URBAN_VERTICES);
+        for (let k = 0; k < URBAN_VERTICES; k++) {
+          const o = (i * URBAN_VERTICES + k) * 3;
+          const dot = p.x * u[o]! + p.y * u[o + 1]! + p.z * u[o + 2]!;
+          outline[k] = Math.acos(Math.min(1, dot)) * radius;
+        }
+      }
       this.sites.push({
         kind: 'town',
         point: p,
-        radius: r,
+        radius: outline ? Math.max(...outline) : r,
         population: pop,
         heading: 0,
         runwayLength: 0,
         key: `town-${i}`,
+        outline,
       });
       this.clear(p, p, 0.6 * r, false);
       lights.push(

@@ -1,0 +1,143 @@
+{
+  "name": "Admiral Vetrov",
+  "class": "ship",
+  "scheme": "pact-ship",
+  "ground": false,
+  "groups": {
+    "hull": "camo",
+    "waterline": "waterline",
+    "deck": "deck",
+    "mast": "mast",
+    "white": "paint-white",
+    "black": "#2A2C2E",
+    "glass": "glass",
+    "launcher": "#6E7A74"
+  },
+  "parts": [
+    {
+      "type": "loft",
+      "group": "hull",
+      "sides": 8,
+      "stations": [
+        { "x": 84, "y": 4.5, "w": 0.2, "h": 5, "square": 0.5 },
+        { "x": 70, "y": 3, "w": 5.5, "h": 6.5, "square": 0.6 },
+        { "x": 45, "y": 1.5, "w": 8.5, "h": 7.5, "square": 0.7 },
+        { "x": 0, "y": 1, "w": 9.5, "h": 7, "square": 0.75 },
+        { "x": -45, "y": 1, "w": 9.2, "h": 6.6, "square": 0.8 },
+        { "x": -78, "y": 1.5, "w": 7.5, "h": 6, "square": 0.85 }
+      ]
+    },
+    {
+      "type": "loft",
+      "group": "waterline",
+      "sides": 8,
+      "stations": [
+        { "x": 68, "y": -0.6, "w": 5.6, "h": 1.4, "square": 0.8 },
+        { "x": 45, "y": -0.6, "w": 8.7, "h": 1.4, "square": 0.8 },
+        { "x": 0, "y": -0.6, "w": 9.7, "h": 1.4, "square": 0.8 },
+        { "x": -45, "y": -0.6, "w": 9.4, "h": 1.4, "square": 0.8 },
+        { "x": -77, "y": -0.6, "w": 7.7, "h": 1.4, "square": 0.85 }
+      ]
+    },
+    {
+      "type": "box",
+      "group": "launcher",
+      "mirror": true,
+      "center": [52, 9.6, 3.2],
+      "size": [14, 2.4, 2.4],
+      "bevel": 0.4,
+      "yaw": -4
+    },
+    {
+      "type": "box",
+      "group": "launcher",
+      "mirror": true,
+      "center": [52, 12, 3.2],
+      "size": [13, 2.0, 2.2],
+      "bevel": 0.4,
+      "yaw": -4
+    },
+    { "type": "box", "group": "hull", "center": [24, 12, 0], "size": [22, 8, 14], "bevel": 0.6 },
+    { "type": "box", "group": "hull", "center": [26, 18.5, 0], "size": [12, 5, 11], "bevel": 0.5 },
+    { "type": "box", "group": "glass", "center": [32.1, 19, 0], "size": [0.2, 1.4, 10.4] },
+    {
+      "type": "frustum",
+      "group": "hull",
+      "center": [26, 21, 0],
+      "base": [6, 6],
+      "top": [2, 2],
+      "height": 9
+    },
+    { "type": "box", "group": "white", "center": [26, 31.5, 0], "size": [1.4, 3, 9], "bevel": 0.3 },
+    { "type": "box", "group": "hull", "center": [-8, 11.5, 0], "size": [30, 7, 13], "bevel": 0.6 },
+    {
+      "type": "frustum",
+      "group": "hull",
+      "center": [-6, 15, 0],
+      "base": [10, 7],
+      "top": [8, 5],
+      "height": 9
+    },
+    { "type": "box", "group": "black", "center": [-6, 24.2, 0], "size": [8.2, 0.4, 5.2] },
+    {
+      "type": "mast",
+      "group": "mast",
+      "center": [-20, 15, 0],
+      "height": 18,
+      "base": 5,
+      "top": 1.2
+    },
+    {
+      "type": "blob",
+      "group": "white",
+      "center": [-20, 34, 0],
+      "radius": [2.6, 1.4, 2.6],
+      "detail": 1
+    },
+    { "type": "box", "group": "hull", "center": [-36, 10.5, 0], "size": [12, 5, 12], "bevel": 0.5 },
+    { "type": "box", "group": "hull", "center": [-55, 10, 0], "size": [7, 3, 7], "bevel": 0.8 },
+    {
+      "type": "cylinder",
+      "group": "mast",
+      "mirror": true,
+      "from": [-58, 10.5, 1.2],
+      "to": [-66, 10.8, 1.2],
+      "radius": 0.3,
+      "sides": 4
+    },
+    { "type": "box", "group": "hull", "center": [62, 9.6, 0], "size": [7, 3, 7], "bevel": 0.8 },
+    {
+      "type": "cylinder",
+      "group": "mast",
+      "mirror": true,
+      "from": [65, 10.2, 1.2],
+      "to": [73, 10.5, 1.2],
+      "radius": 0.3,
+      "sides": 4
+    },
+    { "type": "box", "group": "deck", "center": [-70, 8.2, 0], "size": [12, 0.3, 13] },
+    {
+      "type": "cylinder",
+      "group": "white",
+      "mirror": true,
+      "from": [8, 12, 7],
+      "to": [8, 14.5, 7],
+      "radius": 1.1,
+      "sides": 6
+    },
+    {
+      "type": "cylinder",
+      "group": "white",
+      "mirror": true,
+      "from": [-22, 12, 7],
+      "to": [-22, 14.5, 7],
+      "radius": 1.1,
+      "sides": 6
+    }
+  ],
+  "emissives": [
+    { "kind": "nav-red", "at": [26, 21, -5.7] },
+    { "kind": "nav-green", "at": [26, 21, 5.7] },
+    { "kind": "nav-white", "at": [-20, 35.5, 0] }
+  ]
+}

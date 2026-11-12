@@ -1,0 +1,32 @@
+{
+  "name": "Fuel tank",
+  "class": "building",
+  "groups": { "tank": "paint-white", "roof": "steel" },
+  "parts": [
+    {
+      "type": "cylinder",
+      "group": "tank",
+      "from": [0, 0, 0],
+      "to": [0, 10, 0],
+      "radius": 9,
+      "sides": 12
+    },
+    {
+      "type": "cylinder",
+      "group": "roof",
+      "from": [0, 10, 0],
+      "to": [0, 11.5, 0],
+      "radius": 9,
+      "radius2": 2,
+      "sides": 12
+    },
+    {
+      "type": "frustum",
+      "group": "earth",
+      "center": [0, 0, 0],
+      "base": [26, 26],
+      "top": [24, 24],
+      "height": 1.6
+    }
+  ]
+}

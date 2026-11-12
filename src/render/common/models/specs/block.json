@@ -1,0 +1,11 @@
+{
+  "name": "Apartment block",
+  "class": "building",
+  "groups": { "wall": "wall", "roof": "concrete" },
+  "parts": [
+    { "type": "box", "group": "wall", "center": [0, 7.5, 0], "size": [30, 15, 12] },
+    { "type": "box", "group": "roof", "center": [0, 15.3, 0], "size": [30.6, 0.6, 12.6] },
+    { "type": "box", "group": "roof", "center": [6, 16.6, 0], "size": [4, 2, 3] }
+  ],
+  "emissives": [{ "kind": "window", "at": [0, 8, 6.1] }]
+}

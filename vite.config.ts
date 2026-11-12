@@ -62,6 +62,13 @@ export default defineConfig(({ command, isPreview }) => ({
   build: {
     // WebGPU-only project: every supported browser handles modern syntax and top-level await.
     target: 'esnext',
+    // Two pages: the game and the model viewer (decision 106).
+    rollupOptions: {
+      input: {
+        main: join(import.meta.dirname, 'index.html'),
+        viewer: join(import.meta.dirname, 'viewer.html'),
+      },
+    },
     // three/webgpu alone is ~850 kB minified; revisit with code splitting in milestone 8.
     chunkSizeWarningLimit: 1200,
   },

@@ -1,0 +1,31 @@
+{
+  "name": "Revetment",
+  "class": "building",
+  "groups": { "berm": "earth" },
+  "parts": [
+    {
+      "type": "frustum",
+      "group": "berm",
+      "center": [-14, 0, 0],
+      "base": [6, 30],
+      "top": [2, 27],
+      "height": 5
+    },
+    {
+      "type": "frustum",
+      "group": "berm",
+      "center": [0, 0, -14],
+      "base": [26, 6],
+      "top": [24, 2],
+      "height": 5
+    },
+    {
+      "type": "frustum",
+      "group": "berm",
+      "center": [0, 0, 14],
+      "base": [26, 6],
+      "top": [24, 2],
+      "height": 5
+    }
+  ]
+}

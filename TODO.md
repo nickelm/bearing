@@ -274,7 +274,6 @@ Civilian geography (settlements, roads, bridges) joins the strategic graph befor
 - [ ] Snap bridges to the rendered (eroded) rivers, which can run a few kilometers from the coarse ones (decision 65)
 - [ ] Keep civilian roads off airfields (a road may cross a taxiway; route around airbase footprints or end them at the gate)
 - [ ] Island campaigns can leave the Alliance under 15 airbases (seed 11: 9), since its islands have little flat land; tied to the lopsided island split noted under S3
-- [ ] Simulation view: built-up patches from the urban extent polygons instead of the urban radius disk (V3)
 - [ ] Tune routes across seeds: seed 1983 numbers 33 motorway and 86 trunk chains, many short pieces between junctions; consider merging through junctions across classes
 - [ ] Browser check: frame time at the floor with roads, railways, symbols and building glyphs; whether secondary roads crowd the Region band near 400 km
 - [x] Acceptance checks 1, 4 and 5 on the new views (2026-11-12, `SCENE=strategic SEED=1 VIEWS=globe,cities,capital,sharp CVD=1`): pass, with the gaps below
@@ -426,15 +425,22 @@ Aircraft, vehicles, ships, buildings and trees are generated in code from small 
 
 - [x] Settlement building clusters scaled by population (old M5; instanced boxes, off by default on the globe since decision 71)
 - [x] Airbase runway meshes (drawn as concrete in the terrain shader, plus hangar and shelter meshes; decision 65) (old M5)
-- [ ] Flatten the terrain under runways (they follow the fine terrain's detail noise) (old M5)
-- [ ] Model spec JSON format and types: lofted fuselages from 6–8-sided cross-sections along the length; wings and tails as extruded planforms with sweep, dihedral, thickness and a sharp leading edge; primitives (box, beveled box, pyramid stack, coarse icosphere blob, cylinder); mirroring; named face groups; camouflage schemes mapping face groups to palette colors; emissive points (afterburners, navigation lights). Validation with clear errors, and tests
-- [ ] Procedural model builder: spec → non-indexed, flat-shaded `BufferGeometry` with vertex colors and baked per-vertex AO, plus emissive anchors; deterministic (same spec, same bytes); fails a test when a model exceeds its class's triangle budget from the guide
-- [ ] Faction palettes and camouflage schemes from the guide's palette tables, as data shared by the builder and the viewer
-- [ ] Debug model-viewer page: renders any spec with a turntable, sun direction and time of day, sky light and exposure controls, wireframe, triangle count, and a silhouette mode (solid black on a pale sky, Part I acceptance check 6); hot-reloads specs in dev; reachable from the debug GUI and built as a second Vite page under `/bearing/`
-- [ ] First specs: one fighter and one strike aircraft per side, checked in the viewer and the silhouette test
-- [ ] Base kit from specs: hangars, hardened shelters, tower, radar on a lattice mast, radar dome, fuel tanks, revetments; runway and taxiway markings; night lighting
-- [ ] Settlement buildings from specs (pitched and flat roofs, taller city blocks), using S4's urban extents
-- [ ] Ship specs: carrier, other ships; low-poly ship meshes in the simulation view (from old M8)
+- [ ] Flatten the terrain under runways (they follow the fine terrain's detail noise) (old M5): a height hook in `surfaceSampler` that blends toward the field elevation inside the airfield, and a terrain rebuild when the infrastructure arrives
+- [x] Model spec JSON format and types (decision 106): lofted fuselages from 6–8-sided cross-sections along the length; wings and tails as extruded planforms with sweep, dihedral, thickness and a sharp leading edge; primitives (box, beveled box, pyramid stack, coarse icosphere blob, cylinder); mirroring; named face groups; camouflage schemes mapping face groups to palette colors; emissive points (afterburners, navigation lights). Validation with clear errors, and tests
+- [x] Procedural model builder (decision 106): spec → non-indexed, flat-shaded `BufferGeometry` with vertex colors and baked per-vertex AO, plus emissive anchors; deterministic (same spec, same bytes); fails a test when a model exceeds its class's triangle budget from the guide
+- [x] Faction palettes and camouflage schemes from the guide's palette tables, as data shared by the builder and the viewer (plus ship schemes, decision 106)
+- [x] Debug model-viewer page (decision 106; `viewer.html`): renders any spec with a turntable, sun direction and time of day, sky light and exposure controls, wireframe, triangle count, and a silhouette mode (solid black on a pale sky, Part I acceptance check 6); hot-reloads specs in dev; reachable from the debug GUI and built as a second Vite page under `/bearing/`
+- [x] First specs: one fighter and one strike aircraft per side (F-21 Kestrel, F-124 Harrow, Vo-31 Strizh, Vo-35 Molot), checked with the silhouette test in `tools/models.preview.ts`
+  - [ ] Owner: check them in the model viewer in the browser (shading, camouflage patches, silhouettes)
+  - [ ] Markings: national insignia, modex numbers and squadron codes as painted faces or decals (Part I, Aircraft)
+- [x] Base kit from specs: hangars, hardened shelters, tower, radar on a lattice mast, radar dome, fuel tanks, revetments, placed at airbases in the simulation view (decision 106)
+  - [ ] Runway and taxiway markings in the pavement shader (threshold bars, centerline dashes, runway numbers)
+  - [ ] Night lighting: runway edge lights, apron floods and tower windows from the models' emissive anchors
+- [x] Settlement buildings from specs (pitched and flat roofs, taller city blocks), using S4's urban extents (decision 106)
+  - [ ] The terrain's built-up patch is still the urban radius disk; draw it from the extent polygon too
+  - [ ] Town buildings read as dark specks from 3 km (`DETAIL=1 VIEWS=town`): walls facing away from the sun get only a weak sky light; tune with V1's style audit
+- [x] Ship specs: carrier (CVN-73 Resolute), Alliance destroyer, Pact cruiser (decision 106)
+  - [ ] Ship meshes in the simulation view once ships exist (C3)
 - [ ] Checkpoint: owner review in the model viewer and at an airbase in the simulation view
 
 ### V4. Transition, camera rig, and spectator HUD

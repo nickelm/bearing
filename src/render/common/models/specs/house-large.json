@@ -1,0 +1,25 @@
+{
+  "name": "Large house",
+  "class": "building",
+  "groups": { "wall": "wall-dark", "roof": "roof-gray" },
+  "parts": [
+    {
+      "type": "house",
+      "group": "wall",
+      "roofGroup": "roof",
+      "center": [0, 0, 0],
+      "size": [16, 7, 10],
+      "roof": 3.5
+    },
+    {
+      "type": "house",
+      "group": "wall",
+      "roofGroup": "roof",
+      "center": [3, 0, 7],
+      "size": [6, 5, 5],
+      "roof": 2,
+      "yaw": 90
+    }
+  ],
+  "emissives": [{ "kind": "window", "at": [0, 3, 5.1] }]
+}

@@ -1,0 +1,153 @@
+{
+  "name": "F-124 Harrow",
+  "class": "strike",
+  "scheme": "alliance-woodland",
+  "groups": {
+    "body": "camo",
+    "canopy": "canopy",
+    "intake": "intake",
+    "nozzle": "nozzle",
+    "store": "steel"
+  },
+  "parts": [
+    {
+      "type": "loft",
+      "group": "body",
+      "sides": 8,
+      "stations": [
+        { "x": 11.2, "y": 0.3, "w": 0, "h": 0 },
+        { "x": 10.0, "y": 0.3, "w": 0.45, "h": 0.4 },
+        { "x": 8.4, "y": 0.35, "w": 0.85, "h": 0.65 },
+        { "x": 6.6, "y": 0.45, "w": 1.1, "h": 0.8, "square": 0.2 },
+        { "x": 4.5, "y": 0.4, "w": 1.15, "h": 0.8, "square": 0.3 },
+        { "x": 1.5, "y": 0.35, "w": 1.25, "h": 0.75, "square": 0.5 },
+        { "x": -2.5, "y": 0.3, "w": 1.3, "h": 0.7, "square": 0.6 },
+        { "x": -6.5, "y": 0.3, "w": 1.2, "h": 0.65, "square": 0.6 },
+        { "x": -9.6, "y": 0.3, "w": 1.0, "h": 0.55, "square": 0.5 }
+      ]
+    },
+    {
+      "type": "blob",
+      "group": "canopy",
+      "center": [6.7, 1.05, 0],
+      "radius": [1.7, 0.42, 0.95],
+      "detail": 1,
+      "half": true
+    },
+    {
+      "type": "box",
+      "group": "body",
+      "mirror": true,
+      "center": [2.4, -0.15, 1.35],
+      "size": [2.2, 0.9, 0.55],
+      "bevel": 0.1
+    },
+    {
+      "type": "box",
+      "group": "intake",
+      "mirror": true,
+      "center": [3.52, -0.15, 1.35],
+      "size": [0.06, 0.75, 0.45]
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "mirror": true,
+      "root": [5.0, 0.55, 1.1],
+      "rootChord": 6.4,
+      "tipChord": 3.2,
+      "span": 1.2,
+      "sweep": 62,
+      "thickness": 0.05
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "mirror": true,
+      "root": [1.6, 0.55, 2.2],
+      "rootChord": 3.3,
+      "tipChord": 1.3,
+      "span": 7.2,
+      "sweep": 34,
+      "thickness": 0.05
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "mirror": true,
+      "root": [-7.0, 0.25, 1.1],
+      "rootChord": 3.6,
+      "tipChord": 1.2,
+      "span": 3.5,
+      "sweep": 48,
+      "thickness": 0.05
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [-4.4, 1.0, 0],
+      "rootChord": 5.2,
+      "tipChord": 1.8,
+      "span": 4.4,
+      "sweep": 52,
+      "vertical": true,
+      "thickness": 0.05
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "mirror": true,
+      "root": [-6.0, -0.3, 0.6],
+      "rootChord": 1.8,
+      "tipChord": 1.0,
+      "span": 0.8,
+      "sweep": 40,
+      "vertical": true,
+      "dihedral": 160,
+      "thickness": 0.05
+    },
+    {
+      "type": "cylinder",
+      "group": "nozzle",
+      "mirror": true,
+      "from": [-9.6, 0.3, 0.55],
+      "to": [-10.6, 0.3, 0.55],
+      "radius": 0.5,
+      "radius2": 0.44,
+      "sides": 8
+    },
+    {
+      "type": "cylinder",
+      "group": "store",
+      "mirror": true,
+      "from": [-0.6, 0.1, 3.4],
+      "to": [2.0, 0.1, 3.4],
+      "radius": 0.2,
+      "sides": 6
+    },
+    {
+      "type": "cylinder",
+      "group": "store",
+      "mirror": true,
+      "from": [-1.4, 0.1, 5.2],
+      "to": [1.0, 0.1, 5.2],
+      "radius": 0.2,
+      "sides": 6
+    },
+    {
+      "type": "cylinder",
+      "group": "store",
+      "from": [-1.0, -0.6, 0],
+      "to": [2.2, -0.6, 0],
+      "radius": 0.24,
+      "sides": 6
+    }
+  ],
+  "emissives": [
+    { "kind": "afterburner", "at": [-10.65, 0.3, 0.55], "mirror": true },
+    { "kind": "nav-red", "at": [-3.6, 0.55, -9.35] },
+    { "kind": "nav-green", "at": [-3.6, 0.55, 9.35] },
+    { "kind": "nav-white", "at": [-9.2, 5.3, 0] },
+    { "kind": "beacon", "at": [0.0, 1.1, 0] }
+  ]
+}

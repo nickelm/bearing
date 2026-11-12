@@ -1,0 +1,16 @@
+{
+  "name": "Radar dome",
+  "class": "building",
+  "groups": { "dome": "paint-white", "base": "concrete" },
+  "parts": [
+    { "type": "box", "group": "base", "center": [0, 3, 0], "size": [11, 6, 11], "bevel": 0.3 },
+    {
+      "type": "blob",
+      "group": "dome",
+      "center": [0, 6, 0],
+      "radius": [6.2, 6.2, 6.2],
+      "detail": 1,
+      "half": true
+    }
+  ]
+}

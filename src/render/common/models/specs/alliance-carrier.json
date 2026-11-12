@@ -1,0 +1,995 @@
+{
+  "name": "CVN-73 Resolute",
+  "class": "carrier",
+  "scheme": "alliance-ship",
+  "groups": {
+    "hull": "camo",
+    "waterline": "waterline",
+    "flight-deck": "flight-deck",
+    "deck": "deck",
+    "mast": "mast",
+    "paint-white": "paint-white",
+    "steel": "steel",
+    "glass": "glass",
+    "deck-aircraft": "#9AA1A8"
+  },
+  "parts": [
+    {
+      "type": "loft",
+      "group": "hull",
+      "sides": 8,
+      "stations": [
+        {
+          "x": 168,
+          "y": 2,
+          "w": 0.5,
+          "h": 15,
+          "square": 0.6
+        },
+        {
+          "x": 150,
+          "y": 4,
+          "w": 6,
+          "h": 15,
+          "square": 0.5
+        },
+        {
+          "x": 120,
+          "y": 7,
+          "w": 14,
+          "h": 15,
+          "square": 0.6
+        },
+        {
+          "x": 80,
+          "y": 8,
+          "w": 18,
+          "h": 15,
+          "square": 0.7
+        },
+        {
+          "x": 30,
+          "y": 8,
+          "w": 20,
+          "h": 15,
+          "square": 0.75
+        },
+        {
+          "x": -30,
+          "y": 8,
+          "w": 20,
+          "h": 15,
+          "square": 0.75
+        },
+        {
+          "x": -90,
+          "y": 8,
+          "w": 19,
+          "h": 15,
+          "square": 0.75
+        },
+        {
+          "x": -140,
+          "y": 7,
+          "w": 17,
+          "h": 15,
+          "square": 0.75
+        },
+        {
+          "x": -162,
+          "y": 7,
+          "w": 15,
+          "h": 15,
+          "square": 0.8
+        }
+      ]
+    },
+    {
+      "type": "loft",
+      "group": "waterline",
+      "sides": 8,
+      "stations": [
+        {
+          "x": 150,
+          "y": -1,
+          "w": 6.3,
+          "h": 2.2,
+          "square": 0.8
+        },
+        {
+          "x": 120,
+          "y": -1,
+          "w": 14.3,
+          "h": 2.2,
+          "square": 0.8
+        },
+        {
+          "x": 80,
+          "y": -1,
+          "w": 18.3,
+          "h": 2.2,
+          "square": 0.8
+        },
+        {
+          "x": 30,
+          "y": -1,
+          "w": 20.3,
+          "h": 2.2,
+          "square": 0.8
+        },
+        {
+          "x": -30,
+          "y": -1,
+          "w": 20.3,
+          "h": 2.2,
+          "square": 0.8
+        },
+        {
+          "x": -90,
+          "y": -1,
+          "w": 19.3,
+          "h": 2.2,
+          "square": 0.8
+        },
+        {
+          "x": -140,
+          "y": -1,
+          "w": 17.3,
+          "h": 2.2,
+          "square": 0.8
+        },
+        {
+          "x": -162,
+          "y": -1,
+          "w": 15.3,
+          "h": 2.2,
+          "square": 0.8
+        }
+      ]
+    },
+    {
+      "type": "box",
+      "group": "flight-deck",
+      "center": [2, 22.6, 3],
+      "size": [330, 1.2, 74]
+    },
+    {
+      "type": "box",
+      "group": "flight-deck",
+      "center": [-40, 22.7, -14],
+      "size": [200, 1.0, 36],
+      "yaw": 9
+    },
+    {
+      "type": "box",
+      "group": "hull",
+      "center": [110, 18, -30],
+      "size": [26, 8, 10],
+      "bevel": 1
+    },
+    {
+      "type": "box",
+      "group": "hull",
+      "center": [60, 18, 36],
+      "size": [26, 8, 10],
+      "bevel": 1
+    },
+    {
+      "type": "box",
+      "group": "hull",
+      "center": [-40, 18, 36],
+      "size": [26, 8, 10],
+      "bevel": 1
+    },
+    {
+      "type": "box",
+      "group": "hull",
+      "center": [-120, 18, -28],
+      "size": [26, 8, 10],
+      "bevel": 1
+    },
+    {
+      "type": "box",
+      "group": "hull",
+      "center": [-10, 18, -38],
+      "size": [26, 8, 10],
+      "bevel": 1
+    },
+    {
+      "type": "box",
+      "group": "paint-white",
+      "center": [-40, 23.25, -14],
+      "size": [190, 0.1, 0.8],
+      "yaw": 9
+    },
+    {
+      "type": "box",
+      "group": "steel",
+      "center": [110, 23.2, -8],
+      "size": [80, 0.1, 0.8]
+    },
+    {
+      "type": "box",
+      "group": "steel",
+      "center": [110, 23.2, 8],
+      "size": [80, 0.1, 0.8]
+    },
+    {
+      "type": "box",
+      "group": "steel",
+      "center": [60, 23.2, -26],
+      "size": [70, 0.1, 0.8],
+      "yaw": -6
+    },
+    {
+      "type": "box",
+      "group": "deck",
+      "center": [40, 22.4, 37],
+      "size": [20, 0.8, 16]
+    },
+    {
+      "type": "box",
+      "group": "deck",
+      "center": [10, 22.4, 37],
+      "size": [20, 0.8, 16]
+    },
+    {
+      "type": "box",
+      "group": "deck",
+      "center": [-90, 22.4, 37],
+      "size": [20, 0.8, 16]
+    },
+    {
+      "type": "box",
+      "group": "deck",
+      "center": [-60, 22.4, -36],
+      "size": [20, 0.8, 16]
+    },
+    {
+      "type": "box",
+      "group": "hull",
+      "center": [-10, 30, 30],
+      "size": [36, 14, 11],
+      "bevel": 0.6
+    },
+    {
+      "type": "box",
+      "group": "hull",
+      "center": [-12, 40, 30],
+      "size": [26, 8, 10],
+      "bevel": 0.5
+    },
+    {
+      "type": "box",
+      "group": "hull",
+      "center": [-14, 46.5, 30],
+      "size": [16, 5, 9],
+      "bevel": 0.4
+    },
+    {
+      "type": "box",
+      "group": "glass",
+      "center": [-6, 46.8, 30],
+      "size": [1, 1.6, 9.2]
+    },
+    {
+      "type": "box",
+      "group": "glass",
+      "center": [2.1, 40, 30],
+      "size": [0.2, 1.6, 10.2]
+    },
+    {
+      "type": "mast",
+      "group": "mast",
+      "center": [-14, 49, 30],
+      "height": 16,
+      "base": 4,
+      "top": 1.2
+    },
+    {
+      "type": "box",
+      "group": "mast",
+      "center": [-14, 65.5, 30],
+      "size": [1.6, 1, 8],
+      "bevel": 0.2
+    },
+    {
+      "type": "box",
+      "group": "paint-white",
+      "center": [-8, 51, 30],
+      "size": [4, 6, 1],
+      "yaw": 25
+    },
+    {
+      "type": "box",
+      "group": "paint-white",
+      "center": [-20, 51, 30],
+      "size": [4, 6, 1],
+      "yaw": -25
+    },
+    {
+      "type": "blob",
+      "group": "paint-white",
+      "center": [-22, 49, 26],
+      "radius": [2, 2, 2],
+      "detail": 1
+    },
+    {
+      "type": "blob",
+      "group": "paint-white",
+      "center": [-4, 49, 34],
+      "radius": [1.6, 1.6, 1.6],
+      "detail": 1
+    },
+    {
+      "type": "box",
+      "group": "paint-white",
+      "center": [-20, 33, 35.6],
+      "size": [3, 0.5, 0.15]
+    },
+    {
+      "type": "box",
+      "group": "paint-white",
+      "center": [-18.5, 31.5, 35.6],
+      "size": [0.5, 3, 0.15]
+    },
+    {
+      "type": "box",
+      "group": "paint-white",
+      "center": [-18.5, 28.5, 35.6],
+      "size": [0.5, 3, 0.15]
+    },
+    {
+      "type": "box",
+      "group": "paint-white",
+      "center": [-14, 33, 35.6],
+      "size": [3, 0.5, 0.15]
+    },
+    {
+      "type": "box",
+      "group": "paint-white",
+      "center": [-12.5, 31.5, 35.6],
+      "size": [0.5, 3, 0.15]
+    },
+    {
+      "type": "box",
+      "group": "paint-white",
+      "center": [-14, 30, 35.6],
+      "size": [3, 0.5, 0.15]
+    },
+    {
+      "type": "box",
+      "group": "paint-white",
+      "center": [-12.5, 28.5, 35.6],
+      "size": [0.5, 3, 0.15]
+    },
+    {
+      "type": "box",
+      "group": "paint-white",
+      "center": [-14, 27, 35.6],
+      "size": [3, 0.5, 0.15]
+    },
+    {
+      "type": "box",
+      "group": "hull",
+      "center": [118, 25, -34],
+      "size": [5, 3, 5]
+    },
+    {
+      "type": "cylinder",
+      "group": "paint-white",
+      "from": [118, 26.5, -34],
+      "to": [118, 30, -34],
+      "radius": 1.2,
+      "sides": 8
+    },
+    {
+      "type": "blob",
+      "group": "paint-white",
+      "center": [118, 30, -34],
+      "radius": [1.2, 1.4, 1.2],
+      "detail": 1,
+      "half": true
+    },
+    {
+      "type": "cylinder",
+      "group": "steel",
+      "from": [118.5, 28, -34],
+      "to": [121, 28, -34],
+      "radius": 0.25,
+      "sides": 4
+    },
+    {
+      "type": "box",
+      "group": "hull",
+      "center": [64, 25, 40],
+      "size": [5, 3, 5]
+    },
+    {
+      "type": "cylinder",
+      "group": "paint-white",
+      "from": [64, 26.5, 40],
+      "to": [64, 30, 40],
+      "radius": 1.2,
+      "sides": 8
+    },
+    {
+      "type": "blob",
+      "group": "paint-white",
+      "center": [64, 30, 40],
+      "radius": [1.2, 1.4, 1.2],
+      "detail": 1,
+      "half": true
+    },
+    {
+      "type": "cylinder",
+      "group": "steel",
+      "from": [64.5, 28, 40],
+      "to": [67, 28, 40],
+      "radius": 0.25,
+      "sides": 4
+    },
+    {
+      "type": "box",
+      "group": "hull",
+      "center": [-44, 25, 40],
+      "size": [5, 3, 5]
+    },
+    {
+      "type": "cylinder",
+      "group": "paint-white",
+      "from": [-44, 26.5, 40],
+      "to": [-44, 30, 40],
+      "radius": 1.2,
+      "sides": 8
+    },
+    {
+      "type": "blob",
+      "group": "paint-white",
+      "center": [-44, 30, 40],
+      "radius": [1.2, 1.4, 1.2],
+      "detail": 1,
+      "half": true
+    },
+    {
+      "type": "cylinder",
+      "group": "steel",
+      "from": [-43.5, 28, 40],
+      "to": [-41, 28, 40],
+      "radius": 0.25,
+      "sides": 4
+    },
+    {
+      "type": "box",
+      "group": "hull",
+      "center": [-124, 25, -32],
+      "size": [5, 3, 5]
+    },
+    {
+      "type": "cylinder",
+      "group": "paint-white",
+      "from": [-124, 26.5, -32],
+      "to": [-124, 30, -32],
+      "radius": 1.2,
+      "sides": 8
+    },
+    {
+      "type": "blob",
+      "group": "paint-white",
+      "center": [-124, 30, -32],
+      "radius": [1.2, 1.4, 1.2],
+      "detail": 1,
+      "half": true
+    },
+    {
+      "type": "cylinder",
+      "group": "steel",
+      "from": [-123.5, 28, -32],
+      "to": [-121, 28, -32],
+      "radius": 0.25,
+      "sides": 4
+    },
+    {
+      "type": "box",
+      "group": "deck-aircraft",
+      "center": [130, 24.5, -28],
+      "size": [15, 1.6, 2],
+      "bevel": 0.3
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [131, 24.2, -27.1],
+      "rootChord": 4,
+      "tipChord": 1,
+      "span": 3.5,
+      "sweep": 45,
+      "thickness": 0.05
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [131, 24.2, -28.9],
+      "rootChord": 4,
+      "tipChord": 1,
+      "span": 3.5,
+      "sweep": 45,
+      "thickness": 0.05,
+      "dihedral": 180
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [125.5, 25.2, -28],
+      "rootChord": 3,
+      "tipChord": 1,
+      "span": 3,
+      "sweep": 45,
+      "vertical": true,
+      "thickness": 0.05
+    },
+    {
+      "type": "box",
+      "group": "deck-aircraft",
+      "center": [115, 24.5, 22],
+      "size": [15, 1.6, 2],
+      "bevel": 0.3
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [116, 24.2, 22.9],
+      "rootChord": 4,
+      "tipChord": 1,
+      "span": 3.5,
+      "sweep": 45,
+      "thickness": 0.05
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [116, 24.2, 21.1],
+      "rootChord": 4,
+      "tipChord": 1,
+      "span": 3.5,
+      "sweep": 45,
+      "thickness": 0.05,
+      "dihedral": 180
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [110.5, 25.2, 22],
+      "rootChord": 3,
+      "tipChord": 1,
+      "span": 3,
+      "sweep": 45,
+      "vertical": true,
+      "thickness": 0.05
+    },
+    {
+      "type": "box",
+      "group": "deck-aircraft",
+      "center": [100, 24.5, -28],
+      "size": [15, 1.6, 2],
+      "bevel": 0.3
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [101, 24.2, -27.1],
+      "rootChord": 4,
+      "tipChord": 1,
+      "span": 3.5,
+      "sweep": 45,
+      "thickness": 0.05
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [101, 24.2, -28.9],
+      "rootChord": 4,
+      "tipChord": 1,
+      "span": 3.5,
+      "sweep": 45,
+      "thickness": 0.05,
+      "dihedral": 180
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [95.5, 25.2, -28],
+      "rootChord": 3,
+      "tipChord": 1,
+      "span": 3,
+      "sweep": 45,
+      "vertical": true,
+      "thickness": 0.05
+    },
+    {
+      "type": "box",
+      "group": "deck-aircraft",
+      "center": [85, 24.5, 22],
+      "size": [15, 1.6, 2],
+      "bevel": 0.3
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [86, 24.2, 22.9],
+      "rootChord": 4,
+      "tipChord": 1,
+      "span": 3.5,
+      "sweep": 45,
+      "thickness": 0.05
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [86, 24.2, 21.1],
+      "rootChord": 4,
+      "tipChord": 1,
+      "span": 3.5,
+      "sweep": 45,
+      "thickness": 0.05,
+      "dihedral": 180
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [80.5, 25.2, 22],
+      "rootChord": 3,
+      "tipChord": 1,
+      "span": 3,
+      "sweep": 45,
+      "vertical": true,
+      "thickness": 0.05
+    },
+    {
+      "type": "box",
+      "group": "deck-aircraft",
+      "center": [70, 24.5, -28],
+      "size": [15, 1.6, 2],
+      "bevel": 0.3
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [71, 24.2, -27.1],
+      "rootChord": 4,
+      "tipChord": 1,
+      "span": 3.5,
+      "sweep": 45,
+      "thickness": 0.05
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [71, 24.2, -28.9],
+      "rootChord": 4,
+      "tipChord": 1,
+      "span": 3.5,
+      "sweep": 45,
+      "thickness": 0.05,
+      "dihedral": 180
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [65.5, 25.2, -28],
+      "rootChord": 3,
+      "tipChord": 1,
+      "span": 3,
+      "sweep": 45,
+      "vertical": true,
+      "thickness": 0.05
+    },
+    {
+      "type": "box",
+      "group": "deck-aircraft",
+      "center": [55, 24.5, 22],
+      "size": [15, 1.6, 2],
+      "bevel": 0.3
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [56, 24.2, 22.9],
+      "rootChord": 4,
+      "tipChord": 1,
+      "span": 3.5,
+      "sweep": 45,
+      "thickness": 0.05
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [56, 24.2, 21.1],
+      "rootChord": 4,
+      "tipChord": 1,
+      "span": 3.5,
+      "sweep": 45,
+      "thickness": 0.05,
+      "dihedral": 180
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [50.5, 25.2, 22],
+      "rootChord": 3,
+      "tipChord": 1,
+      "span": 3,
+      "sweep": 45,
+      "vertical": true,
+      "thickness": 0.05
+    },
+    {
+      "type": "box",
+      "group": "deck-aircraft",
+      "center": [40, 24.5, -28],
+      "size": [15, 1.6, 2],
+      "bevel": 0.3
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [41, 24.2, -27.1],
+      "rootChord": 4,
+      "tipChord": 1,
+      "span": 3.5,
+      "sweep": 45,
+      "thickness": 0.05
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [41, 24.2, -28.9],
+      "rootChord": 4,
+      "tipChord": 1,
+      "span": 3.5,
+      "sweep": 45,
+      "thickness": 0.05,
+      "dihedral": 180
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [35.5, 25.2, -28],
+      "rootChord": 3,
+      "tipChord": 1,
+      "span": 3,
+      "sweep": 45,
+      "vertical": true,
+      "thickness": 0.05
+    },
+    {
+      "type": "box",
+      "group": "deck-aircraft",
+      "center": [25, 24.5, 22],
+      "size": [15, 1.6, 2],
+      "bevel": 0.3
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [26, 24.2, 22.9],
+      "rootChord": 4,
+      "tipChord": 1,
+      "span": 3.5,
+      "sweep": 45,
+      "thickness": 0.05
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [26, 24.2, 21.1],
+      "rootChord": 4,
+      "tipChord": 1,
+      "span": 3.5,
+      "sweep": 45,
+      "thickness": 0.05,
+      "dihedral": 180
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [20.5, 25.2, 22],
+      "rootChord": 3,
+      "tipChord": 1,
+      "span": 3,
+      "sweep": 45,
+      "vertical": true,
+      "thickness": 0.05
+    },
+    {
+      "type": "box",
+      "group": "deck-aircraft",
+      "center": [10, 24.5, -28],
+      "size": [15, 1.6, 2],
+      "bevel": 0.3
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [11, 24.2, -27.1],
+      "rootChord": 4,
+      "tipChord": 1,
+      "span": 3.5,
+      "sweep": 45,
+      "thickness": 0.05
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [11, 24.2, -28.9],
+      "rootChord": 4,
+      "tipChord": 1,
+      "span": 3.5,
+      "sweep": 45,
+      "thickness": 0.05,
+      "dihedral": 180
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [5.5, 25.2, -28],
+      "rootChord": 3,
+      "tipChord": 1,
+      "span": 3,
+      "sweep": 45,
+      "vertical": true,
+      "thickness": 0.05
+    },
+    {
+      "type": "box",
+      "group": "deck-aircraft",
+      "center": [-50, 24.5, -28],
+      "size": [15, 1.6, 2],
+      "bevel": 0.3
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [-49, 24.2, -27.1],
+      "rootChord": 4,
+      "tipChord": 1,
+      "span": 3.5,
+      "sweep": 45,
+      "thickness": 0.05
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [-49, 24.2, -28.9],
+      "rootChord": 4,
+      "tipChord": 1,
+      "span": 3.5,
+      "sweep": 45,
+      "thickness": 0.05,
+      "dihedral": 180
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [-54.5, 25.2, -28],
+      "rootChord": 3,
+      "tipChord": 1,
+      "span": 3,
+      "sweep": 45,
+      "vertical": true,
+      "thickness": 0.05
+    },
+    {
+      "type": "box",
+      "group": "deck-aircraft",
+      "center": [-65, 24.5, 22],
+      "size": [15, 1.6, 2],
+      "bevel": 0.3
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [-64, 24.2, 22.9],
+      "rootChord": 4,
+      "tipChord": 1,
+      "span": 3.5,
+      "sweep": 45,
+      "thickness": 0.05
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [-64, 24.2, 21.1],
+      "rootChord": 4,
+      "tipChord": 1,
+      "span": 3.5,
+      "sweep": 45,
+      "thickness": 0.05,
+      "dihedral": 180
+    },
+    {
+      "type": "wing",
+      "group": "deck-aircraft",
+      "root": [-69.5, 25.2, 22],
+      "rootChord": 3,
+      "tipChord": 1,
+      "span": 3,
+      "sweep": 45,
+      "vertical": true,
+      "thickness": 0.05
+    },
+    {
+      "type": "box",
+      "group": "paint-white",
+      "center": [90, 15, -20.4],
+      "size": [8, 2.5, 1.5],
+      "bevel": 0.4
+    },
+    {
+      "type": "box",
+      "group": "paint-white",
+      "center": [50, 15, -20.4],
+      "size": [8, 2.5, 1.5],
+      "bevel": 0.4
+    },
+    {
+      "type": "box",
+      "group": "paint-white",
+      "center": [-70, 15, -20.4],
+      "size": [8, 2.5, 1.5],
+      "bevel": 0.4
+    },
+    {
+      "type": "box",
+      "group": "paint-white",
+      "center": [-110, 15, -20.4],
+      "size": [8, 2.5, 1.5],
+      "bevel": 0.4
+    },
+    {
+      "type": "cylinder",
+      "group": "mast",
+      "from": [140, 23, -30],
+      "to": [140, 33, -30],
+      "radius": 0.2,
+      "sides": 4
+    },
+    {
+      "type": "cylinder",
+      "group": "mast",
+      "from": [-150, 23, -30],
+      "to": [-150, 33, -30],
+      "radius": 0.2,
+      "sides": 4
+    }
+  ],
+  "ground": false,
+  "emissives": [
+    {
+      "kind": "nav-red",
+      "at": [20, 48, -36]
+    },
+    {
+      "kind": "nav-green",
+      "at": [20, 48, 36]
+    },
+    {
+      "kind": "nav-white",
+      "at": [-14, 66, 30]
+    },
+    {
+      "kind": "runway",
+      "at": [-100, 23.4, -10]
+    },
+    {
+      "kind": "runway",
+      "at": [0, 23.4, -38],
+      "mirror": true
+    },
+    {
+      "kind": "runway",
+      "at": [100, 23.4, -36],
+      "mirror": true
+    }
+  ]
+}

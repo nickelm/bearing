@@ -256,6 +256,11 @@ export class DebugGui {
     w.add(world, 'moistureScale', 0.2, 2, 0.05).name('Moisture scale').onFinishChange(regen);
 
     const v = this.gui.addFolder('View');
+    // The model viewer is a page of its own (decision 106).
+    v.add(
+      { open: () => window.open(`${import.meta.env.BASE_URL}viewer.html`, '_blank') },
+      'open',
+    ).name('Model viewer (new tab)');
     v.add(view, 'scene', ['simulation', 'strategic'])
       .name('View')
       .onChange(() => callbacks.viewChanged(view));

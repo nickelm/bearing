@@ -1,15 +1,18 @@
 /**
  * Instanced buildings near the camera (milestone 5, decision 65): town
  * clusters scaled by population, airbase hangars, shelters and towers, and
- * industrial plants with stacks.
+ * industrial plants with stacks. Every building is an instance of a model built
+ * from a spec (render/common/models, decision 106), turned and scaled per
+ * instance, one instanced mesh per model and tile.
  *
  * - Placed per level-9 tile within `range` of the camera and below
  *   `maxAltitude`, like the trees (decision 45), on the same level-10 surface.
  * - **Towns:** candidates on a jittered 45 m lattice from
  *   rng(seed, "buildings").fork(tileKey); every candidate draws all its
  *   values. A candidate is kept with probability 0.55 × exp(−2 (d / r)²)
- *   within the urban radius r of the nearest town, off roads and water.
- *   Cities get taller buildings in their core.
+ *   within the town's urban extent, r its radius toward the candidate
+ *   (decision 103's polygon), off roads and water. Houses in the outskirts,
+ *   apartment blocks in town cores, tower blocks in city cores.
  * - **Airbases and industry:** a fixed layout per site from
  *   rng(seed, "buildings").fork(site key); a building is placed by the tile
  *   that contains it.
@@ -17,6 +20,7 @@
  */
 import {
   BufferAttribute,
+  DoubleSide,
   Group,
   InstancedBufferAttribute,
   InstancedBufferGeometry,
@@ -57,7 +61,14 @@ import type { TerrainRenderer } from '../terrain/terrainRenderer';
 import { lakeSampler, surfaceSampler } from '../../common/terrain/tileMesh';
 import type { MeshOptions } from '../../common/terrain/tileMesh';
 import { nightFactor } from './roadShading';
-import { APRON_LENGTH, APRON_OFFSET, offsetPoint, TAXIWAY_OFFSET } from './infraScene';
+import {
+  APRON_LENGTH,
+  APRON_OFFSET,
+  offsetPoint,
+  TAXIWAY_OFFSET,
+  townRadiusToward,
+} from './infraScene';
+import { libraryModel } from '../../common/models/threeModel';
 import type { BuiltSite, InfraScene } from './infraScene';
 
 type V3 = Node<'vec3'>;
@@ -66,36 +77,63 @@ export const BUILDING_TILE_LEVEL = 9;
 const GROUND_LEVEL = 10;
 const LATTICE = 45;
 
-/** Per instance: base xyz (relative to origin), up xyz, ground height, width, depth, angle, height, r, g, b. */
-export const BUILDING_FLOATS = 14;
+/** Per instance: base xyz (relative to origin), up xyz, ground height, angle, scale x, y, z, tint. */
+export const BUILDING_FLOATS = 12;
+
+/** Building models from the spec library (decision 106). */
+export const BUILDING_MODELS = [
+  'house',
+  'house-large',
+  'block',
+  'tower-block',
+  'hangar',
+  'shelter',
+  'tower',
+  'radar-mast',
+  'radar-dome',
+  'fuel-tank',
+  'revetment',
+  'factory-hall',
+  'stack',
+] as const;
+export type BuildingModel = (typeof BUILDING_MODELS)[number];
 
 export interface BuildingInstances {
   tile: TileKey;
   origin: Vec3d;
-  data: Float32Array;
+  /** BUILDING_FLOATS per instance, by model. */
+  data: Map<BuildingModel, Float32Array>;
 }
 
 interface Building {
   d: Vec3d;
-  w: number;
-  depth: number;
+  model: BuildingModel;
+  /** Shader angle (see `angleForHeading`). */
   angle: number;
-  height: number;
-  rgb: [number, number, number];
+  scale: [number, number, number];
+  /** Brightness multiplier for variety. */
+  tint: number;
+}
+
+/**
+ * The instance angle that points a model's +x (its front) along a compass heading
+ * (rad clockwise from north). The shader measures angles from its own tangent pair,
+ * west then south (see the material).
+ */
+export function angleForHeading(heading: number): number {
+  return -Math.PI / 2 - heading;
 }
 
 function townBuilding(r: Rng, core: boolean, city: boolean): Omit<Building, 'd'> {
   const tall = core && city && r.chance(0.3);
-  const w = tall ? r.range(18, 40) : r.range(9, 22);
-  const shade = r.range(0.55, 0.85);
-  const brick = r.chance(0.35);
-  return {
-    w,
-    depth: w * r.range(0.6, 1.4),
-    angle: r.range(0, Math.PI),
-    height: tall ? r.range(20, 60) : r.range(5, core ? 16 : 10),
-    rgb: brick ? [shade * 0.75, shade * 0.5, shade * 0.4] : [shade, shade * 0.97, shade * 0.92],
-  };
+  const block = !tall && core && r.chance(city ? 0.7 : 0.35);
+  const large = !tall && !block && r.chance(0.35);
+  const s = r.range(0.8, 1.3);
+  const angle = r.range(0, 2 * Math.PI);
+  const tint = r.range(0.85, 1.12);
+  if (tall) return { model: 'tower-block', angle, scale: [s, r.range(0.6, 1.5), s], tint };
+  if (block) return { model: 'block', angle, scale: [s, r.range(0.7, 1.2), s], tint };
+  return { model: large ? 'house-large' : 'house', angle, scale: [s, s, s], tint };
 }
 
 /** Fixed buildings of an airbase or industrial site (all of them, wherever they fall). */
@@ -105,67 +143,56 @@ function siteBuildings(site: BuiltSite, radius: number, seed: WorldSeed): Buildi
   const p = site.point;
   const h = site.heading;
   const at = (along: number, across: number) => offsetPoint(p, h, along, across, radius);
+  const put = (d: Vec3d, model: BuildingModel, heading: number) =>
+    out.push({ d, model, angle: angleForHeading(heading), scale: [1, 1, 1], tint: 1 });
+  // Toward the runway: the left of the runway heading (buildings stand on its right).
+  const facing = h - Math.PI / 2;
   if (site.kind === 'airbase') {
-    const concrete: [number, number, number] = [0.5, 0.5, 0.47];
-    const green: [number, number, number] = [0.3, 0.34, 0.26];
-    // Hangars behind the apron.
+    // Hangars behind the apron, doors toward the runway.
     const hangars = 3 + r.int(4);
     for (let i = 0; i < hangars; i++) {
       const along = -APRON_LENGTH / 2 + ((i + 0.5) * APRON_LENGTH) / hangars;
-      out.push({
-        d: at(along, APRON_OFFSET + 140),
-        w: 60,
-        depth: 45,
-        angle: h,
-        height: 16,
-        rgb: concrete,
-      });
+      put(at(along, APRON_OFFSET + 140), 'hangar', facing);
     }
-    out.push({
-      d: at(APRON_LENGTH / 2 + 80, APRON_OFFSET),
-      w: 8,
-      depth: 8,
-      angle: h,
-      height: 28,
-      rgb: [0.7, 0.7, 0.68],
-    });
-    // Hardened shelters dispersed along both ends of the taxiway.
+    put(at(APRON_LENGTH / 2 + 80, APRON_OFFSET), 'tower', facing);
+    put(at(-APRON_LENGTH / 2 - 120, APRON_OFFSET + 60), 'fuel-tank', 0);
+    put(at(-APRON_LENGTH / 2 - 120, APRON_OFFSET + 150), 'fuel-tank', 0);
+    put(at(APRON_LENGTH / 2 + 260, APRON_OFFSET + 180), 'radar-dome', 0);
+    put(at(site.runwayLength / 2 + 350, 350), 'radar-mast', facing + r.range(-1, 1));
+    // Hardened shelters dispersed along both ends of the taxiway, doors toward it,
+    // with revetments between them.
     const shelters = 8 + r.int(8);
     for (let i = 0; i < shelters; i++) {
       const end = i % 2 === 0 ? -1 : 1;
       const along = end * (site.runwayLength / 2 - r.range(100, 700));
-      out.push({
-        d: at(along, TAXIWAY_OFFSET + r.range(120, 450)),
-        w: 24,
-        depth: 30,
-        angle: h + r.range(-0.6, 0.6),
-        height: 8,
-        rgb: green,
-      });
+      const across = TAXIWAY_OFFSET + r.range(120, 450);
+      const turn = r.range(-0.6, 0.6);
+      put(at(along, across), i % 4 === 3 ? 'revetment' : 'shelter', facing + turn);
     }
   } else if (site.kind === 'industry') {
     const halls = 6 + r.int(6);
     for (let i = 0; i < halls; i++) {
       out.push({
         d: at(r.range(-500, 500), r.range(-350, 350)),
-        w: r.range(40, 110),
-        depth: r.range(25, 60),
-        angle: h,
-        height: r.range(10, 24),
-        rgb: [r.range(0.45, 0.6), r.range(0.43, 0.55), r.range(0.4, 0.5)],
+        model: 'factory-hall',
+        angle: angleForHeading(h),
+        scale: [r.range(0.7, 1.8), r.range(0.8, 1.6), r.range(0.8, 1.6)],
+        tint: r.range(0.85, 1.1),
       });
     }
     const stacks = 1 + r.int(3);
     for (let i = 0; i < stacks; i++) {
+      const tall = r.range(0.75, 1.5);
       out.push({
         d: at(r.range(-200, 200), r.range(-150, 150)),
-        w: 6,
-        depth: 6,
+        model: 'stack',
         angle: 0,
-        height: r.range(60, 120),
-        rgb: [0.55, 0.35, 0.3],
+        scale: [1, tall, 1],
+        tint: 1,
       });
     }
+    const tanks = r.int(4);
+    for (let i = 0; i < tanks; i++) put(at(r.range(-600, -450), -200 + i * 60), 'fuel-tank', 0);
   }
   return out;
 }
@@ -189,8 +216,13 @@ export function placeBuildings(
   const origin = center.clone().scale(R);
   const tileRadius = (TILE_TEXELS * sampleM) / Math.SQRT2 + 200;
   const sites = scene.sitesNear(center, tileRadius);
-  const out: number[] = [];
-  if (sites.length === 0) return { tile: t, origin, data: new Float32Array(0) };
+  const out = new Map<BuildingModel, number[]>();
+  const result = (): BuildingInstances => ({
+    tile: t,
+    origin,
+    data: new Map([...out].map(([m, v]) => [m, Float32Array.from(v)])),
+  });
+  if (sites.length === 0) return result();
   const ground = surfaceSampler(t, GROUND_LEVEL, data, opts);
   const lake = lakeSampler(t, data);
   const uv = { face: 0, u: 0, v: 0 } as ReturnType<typeof directionToCubeFace>;
@@ -203,7 +235,9 @@ export function placeBuildings(
     const h = ground(sx, sy, b.d);
     const level = lake(sx, sy);
     if (h <= 0 || (level > NO_LAKE / 2 && level > h)) return;
-    out.push(
+    let list = out.get(b.model);
+    if (!list) out.set(b.model, (list = []));
+    list.push(
       b.d.x * R - origin.x,
       b.d.y * R - origin.y,
       b.d.z * R - origin.z,
@@ -211,11 +245,9 @@ export function placeBuildings(
       b.d.y,
       b.d.z,
       h,
-      b.w,
-      b.depth,
       b.angle,
-      b.height,
-      ...b.rgb,
+      ...b.scale,
+      b.tint,
     );
   };
 
@@ -243,13 +275,16 @@ export function placeBuildings(
         );
         let best: BuiltSite | null = null;
         let bestF = 0;
+        let bestR = 1;
         for (const s of towns) {
           const dist = Math.acos(Math.min(1, s.point.dot(d))) * R;
-          const f = dist / s.radius;
+          const reach = townRadiusToward(s, d);
+          const f = dist / reach;
           const p = 0.55 * Math.exp(-2 * f * f);
           if (f < 1.3 && p > bestF) {
             bestF = p;
             best = s;
+            bestR = reach;
           }
         }
         if (!best || keep >= bestF) continue;
@@ -257,79 +292,18 @@ export function placeBuildings(
         const dist = Math.acos(Math.min(1, best.point.dot(d))) * R;
         const shape = townBuilding(
           r.fork(`${a},${b}`),
-          dist < 0.3 * best.radius,
+          dist < 0.3 * bestR,
           best.population >= 200_000,
         );
         emit({ d: d.clone(), ...shape });
       }
     }
   }
-  return { tile: t, origin, data: Float32Array.from(out) };
-}
-
-/** A unit box, bottom 3 m under the ground point, top at 1: position and normal, 36 vertices. */
-function unitBox(): { position: Float32Array; normal: Float32Array } {
-  const pos: number[] = [];
-  const nrm: number[] = [];
-  const y0 = -0.15;
-  const faces: [number[], number[][]][] = [
-    [
-      [1, 0, 0],
-      [
-        [0.5, y0, -0.5],
-        [0.5, 1, -0.5],
-        [0.5, 1, 0.5],
-        [0.5, y0, 0.5],
-      ],
-    ],
-    [
-      [-1, 0, 0],
-      [
-        [-0.5, y0, 0.5],
-        [-0.5, 1, 0.5],
-        [-0.5, 1, -0.5],
-        [-0.5, y0, -0.5],
-      ],
-    ],
-    [
-      [0, 0, 1],
-      [
-        [0.5, y0, 0.5],
-        [0.5, 1, 0.5],
-        [-0.5, 1, 0.5],
-        [-0.5, y0, 0.5],
-      ],
-    ],
-    [
-      [0, 0, -1],
-      [
-        [-0.5, y0, -0.5],
-        [-0.5, 1, -0.5],
-        [0.5, 1, -0.5],
-        [0.5, y0, -0.5],
-      ],
-    ],
-    [
-      [0, 1, 0],
-      [
-        [-0.5, 1, -0.5],
-        [-0.5, 1, 0.5],
-        [0.5, 1, 0.5],
-        [0.5, 1, -0.5],
-      ],
-    ],
-  ];
-  for (const [n, q] of faces) {
-    for (const i of [0, 1, 2, 0, 2, 3]) {
-      pos.push(...q[i]!);
-      nrm.push(...n);
-    }
-  }
-  return { position: Float32Array.from(pos), normal: Float32Array.from(nrm) };
+  return result();
 }
 
 interface BuiltTile {
-  mesh: Mesh | null;
+  meshes: Mesh[];
   origin: Vec3d;
   lastUsed: number;
 }
@@ -349,7 +323,6 @@ export class StructureLayer {
   private scene: InfraScene | null = null;
   private readonly tiles = new Map<string, BuiltTile>();
   private readonly material: MeshBasicNodeMaterial;
-  private readonly box = unitBox();
   private frame = 0;
   private lastWorld: unknown = null;
 
@@ -366,20 +339,25 @@ export class StructureLayer {
   }
 
   private buildMaterial(lighting: PlanetLighting): MeshBasicNodeMaterial {
-    const m = new MeshBasicNodeMaterial();
+    // Double-sided like the other simulation layers; shading uses the builder's outward
+    // face normals, so either side shades the same.
+    const m = new MeshBasicNodeMaterial({ side: DoubleSide });
     const base = attribute('iBase', 'vec3');
     const up = normalize(attribute('iUp', 'vec3'));
-    const params = attribute('iParams', 'vec4'); // ground height, width, depth, angle
-    const style = attribute('iStyle', 'vec4'); // height, r, g, b
+    const params = attribute('iParams', 'vec4'); // ground height, angle, scale x, scale y
+    const style = attribute('iStyle', 'vec4'); // scale z, tint
     const ex = this.terrain.exaggerationUniform;
+    // Tangents west (t0) and south (t1); the model's +x turns by the angle from t0,
+    // its +z is to the right of +x (right-handed, as specs are).
     const t0 = normalize(cross(up, vec3(0.0001, 1, 0.0002)));
     const t1 = cross(up, t0);
-    const ca = cos(params.w);
-    const sa = sin(params.w);
+    const ca = cos(params.y);
+    const sa = sin(params.y);
     const ax = t0.mul(ca).add(t1.mul(sa));
-    const az = t1.mul(ca).sub(t0.mul(sa));
+    const az = t0.mul(sa).sub(t1.mul(ca));
     const local = attribute('position', 'vec3');
-    const ground = base.add(up.mul(max(params.x, 0).mul(ex)));
+    // A little below the ground point, so bases do not float on slopes.
+    const ground = base.add(up.mul(max(params.x, 0).mul(ex).sub(1.5)));
     const apIn = varyingProperty('vec3', 'vBuildInscatter');
     const apTr = varyingProperty('vec3', 'vBuildTransmittance');
     m.positionNode = Fn(() => {
@@ -387,9 +365,9 @@ export class StructureLayer {
       const dist = modelWorldMatrix.mul(vec4(ground, 1)).xyz.length();
       const k = smoothstep(this.range, this.range.sub(this.fade), dist);
       const p = ground
-        .add(ax.mul(local.x.mul(params.y).mul(k)))
-        .add(up.mul(local.y.mul(style.x).mul(k)))
-        .add(az.mul(local.z.mul(params.z).mul(k)));
+        .add(ax.mul(local.x.mul(params.z).mul(k)))
+        .add(up.mul(local.y.mul(params.w).mul(k)))
+        .add(az.mul(local.z.mul(style.x).mul(k)));
       const ap = lighting.atmosphere.aerialPerspective(
         modelWorldMatrix.mul(vec4(p, 1)).xyz as V3,
         6,
@@ -398,10 +376,17 @@ export class StructureLayer {
       apTr.assign(ap.transmittance);
       return p;
     })();
+    // The face normal under the instance's non-uniform scale (inverse transpose).
     const n0 = attribute('normal', 'vec3');
-    const normal = normalize(ax.mul(n0.x).add(up.mul(n0.y)).add(az.mul(n0.z))) as V3;
+    const normal = normalize(
+      ax
+        .mul(n0.x.div(params.z))
+        .add(up.mul(n0.y.div(params.w)))
+        .add(az.mul(n0.z.div(style.x))),
+    ) as V3;
     const roof = dot(normal, up).greaterThan(0.5);
-    const albedo = style.yzw.mul(roof.select(0.8, 1)) as V3;
+    // Spec colors with their baked ambient occlusion, varied per instance.
+    const albedo = attribute('color', 'vec3').mul(attribute('ao', 'float')).mul(style.y) as V3;
     // Lit windows on walls at night.
     const night = nightFactor(up as V3, lighting.sunDirection);
     const glow = mul(night, roof.select(0, 0.004));
@@ -474,21 +459,17 @@ export class StructureLayer {
     this.stats.pending = pending;
     let instances = 0;
     for (const [s, tile] of this.tiles) {
-      const m = tile.mesh;
       if (wanted.has(s)) {
         tile.lastUsed = this.frame;
-        if (m) {
+        for (const m of tile.meshes) {
           instances += (m.geometry as InstancedBufferGeometry).instanceCount;
           placeCameraRelative(m, tile.origin, eye);
           m.visible = true;
         }
       } else {
-        if (m) m.visible = false;
+        for (const m of tile.meshes) m.visible = false;
         if (this.frame - tile.lastUsed > 120) {
-          if (m) {
-            this.group.remove(m);
-            m.geometry.dispose();
-          }
+          this.dropTile(tile);
           this.tiles.delete(s);
         }
       }
@@ -498,41 +479,50 @@ export class StructureLayer {
   }
 
   private build(inst: BuildingInstances): BuiltTile {
-    const count = inst.data.length / BUILDING_FLOATS;
-    if (count === 0) return { mesh: null, origin: inst.origin, lastUsed: this.frame };
-    const g = new InstancedBufferGeometry();
-    g.setAttribute('position', new BufferAttribute(this.box.position, 3));
-    g.setAttribute('normal', new BufferAttribute(this.box.normal, 3));
-    const base = new Float32Array(count * 3);
-    const up = new Float32Array(count * 3);
-    const params = new Float32Array(count * 4);
-    const style = new Float32Array(count * 4);
-    for (let i = 0; i < count; i++) {
-      const o = i * BUILDING_FLOATS;
-      base.set(inst.data.subarray(o, o + 3), i * 3);
-      up.set(inst.data.subarray(o + 3, o + 6), i * 3);
-      params.set(inst.data.subarray(o + 6, o + 10), i * 4);
-      style.set(inst.data.subarray(o + 10, o + 14), i * 4);
+    const meshes: Mesh[] = [];
+    for (const [model, data] of inst.data) {
+      const count = data.length / BUILDING_FLOATS;
+      if (count === 0) continue;
+      const m = libraryModel(model);
+      const g = new InstancedBufferGeometry();
+      g.setAttribute('position', new BufferAttribute(m.position, 3));
+      g.setAttribute('normal', new BufferAttribute(m.normal, 3));
+      g.setAttribute('color', new BufferAttribute(m.color, 3));
+      g.setAttribute('ao', new BufferAttribute(m.ao, 1));
+      const base = new Float32Array(count * 3);
+      const up = new Float32Array(count * 3);
+      const params = new Float32Array(count * 4);
+      const style = new Float32Array(count * 4);
+      for (let i = 0; i < count; i++) {
+        const o = i * BUILDING_FLOATS;
+        base.set(data.subarray(o, o + 3), i * 3);
+        up.set(data.subarray(o + 3, o + 6), i * 3);
+        params.set(data.subarray(o + 6, o + 10), i * 4);
+        style.set(data.subarray(o + 10, o + 12), i * 4);
+      }
+      g.setAttribute('iBase', new InstancedBufferAttribute(base, 3));
+      g.setAttribute('iUp', new InstancedBufferAttribute(up, 3));
+      g.setAttribute('iParams', new InstancedBufferAttribute(params, 4));
+      g.setAttribute('iStyle', new InstancedBufferAttribute(style, 4));
+      g.instanceCount = count;
+      const mesh = new Mesh(g, this.material);
+      mesh.frustumCulled = false;
+      mesh.visible = false;
+      this.group.add(mesh);
+      meshes.push(mesh);
     }
-    g.setAttribute('iBase', new InstancedBufferAttribute(base, 3));
-    g.setAttribute('iUp', new InstancedBufferAttribute(up, 3));
-    g.setAttribute('iParams', new InstancedBufferAttribute(params, 4));
-    g.setAttribute('iStyle', new InstancedBufferAttribute(style, 4));
-    g.instanceCount = count;
-    const mesh = new Mesh(g, this.material);
-    mesh.frustumCulled = false;
-    mesh.visible = false;
-    this.group.add(mesh);
-    return { mesh, origin: inst.origin, lastUsed: this.frame };
+    return { meshes, origin: inst.origin, lastUsed: this.frame };
+  }
+
+  private dropTile(tile: BuiltTile): void {
+    for (const m of tile.meshes) {
+      this.group.remove(m);
+      m.geometry.dispose();
+    }
   }
 
   clear(): void {
-    for (const tile of this.tiles.values()) {
-      if (tile.mesh) {
-        this.group.remove(tile.mesh);
-        tile.mesh.geometry.dispose();
-      }
-    }
+    for (const tile of this.tiles.values()) this.dropTile(tile);
     this.tiles.clear();
   }
 
