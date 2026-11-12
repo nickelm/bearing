@@ -64,6 +64,17 @@ export interface LandInputs {
   wrapped: V3;
   /** Forest density 0..1, interpolated from the vertices (decision 44). */
   forest?: F;
+  /**
+   * Per-face shading (decision 124): the other inputs (except `forest`) are
+   * then sampled at the face's center, and the ground takes one of a few
+   * shades per face instead of continuous detail noise.
+   */
+  face?: {
+    /** Facet size (m): sets the noise's finest visible octave. */
+    spacing: F;
+    /** Per-face random value in [0, 1): dithers the shade thresholds. */
+    jitter: F;
+  };
 }
 
 /** sRGB hex to a linear color. */
@@ -113,6 +124,11 @@ export class LandShading {
   readonly detail = uniform(1);
   /** 1 shades each terrain triangle flat with its own normal, 0 smooth (decision 123). */
   readonly facets = uniform(1);
+  /** Ground shades per biome when faceted (decision 124; the guide asks for three to five). */
+  readonly shades = uniform(4);
+  /** Albedo multipliers of the darkest (lush) and palest (dry, high, steep) shade. */
+  readonly shadeDark = uniform(new Color(0.84, 0.89, 0.84));
+  readonly shadePale = uniform(new Color(1.14, 1.09, 0.97));
   readonly rockColor = uniform(new Color(0.13, 0.12, 0.105));
   readonly snowColor = uniform(new Color(0.82, 0.85, 0.9));
   readonly autumnColor = uniform(new Color(0.24, 0.13, 0.04));
@@ -134,10 +150,13 @@ export class LandShading {
     return mean.add(climate.y.mul(seasonal)).add(this.temperatureOffset) as F;
   }
 
-  /** Detail noise in [-1, 1], faded where its cells are smaller than a few pixels. */
-  detailNoise(wrapped: V3): F {
-    // fwidth of the wrapped position: meters per pixel.
-    const footprint = length(fwidth(wrapped));
+  /**
+   * Detail noise in [-1, 1], faded where its cells are smaller than a few
+   * footprints: meters per pixel by default (fwidth of the wrapped position),
+   * or the facet size, so that noise sampled at face centers stays coarser
+   * than the faces (decision 124).
+   */
+  detailNoise(wrapped: V3, footprint: F = length(fwidth(wrapped)) as F): F {
     let n: F = float(0);
     let total = 0;
     for (const [cell, weight] of [
@@ -152,17 +171,46 @@ export class LandShading {
     return n.div(total) as F;
   }
 
+  /**
+   * Which of `shades` ground shades a face takes (decision 124), as an albedo
+   * multiplier. Steep, high and dry faces lean pale; wet ones dark; the
+   * low-frequency noise makes patches several faces wide, and the per-face
+   * jitter breaks their edges along facets.
+   */
+  faceShade(noise: F, steep: F, height: F, climate: V4, jitter: F): V3 {
+    const elevation = earthElevationNode(height, climate.w, this.reliefScale);
+    const score = float(0.5)
+      .add(noise.mul(0.9))
+      .add(clamp(steep.mul(0.5), 0, 0.25))
+      .add(clamp(elevation.div(8000), -0.05, 0.2))
+      .sub(climate.z.sub(0.4).mul(0.3))
+      .add(jitter.sub(0.5).mul(0.35));
+    const n = max(this.shades, 2);
+    const k = clamp(floor(score.mul(n)), 0, n.sub(1));
+    return mix(this.shadeDark, this.shadePale, k.div(n.sub(1))) as V3;
+  }
+
   /** The land albedo for a fragment. */
   albedo(i: LandInputs): V3 {
-    const noise = this.detailNoise(i.wrapped).mul(this.detail);
+    // Per face, noise finer than a few facets would only speckle (decision 124).
+    const footprint = i.face
+      ? (mix(length(fwidth(i.wrapped)), i.face.spacing, this.facets) as F)
+      : undefined;
+    const noise = this.detailNoise(i.wrapped, footprint).mul(this.detail);
     const moisture = i.climate.z;
 
     // Moisture: drier lighter and yellower, wetter darker and greener.
     let a: V3 = i.albedo.mul(
       mix(vec3(1.12, 1.06, 0.9), vec3(0.88, 0.97, 0.9), clamp(moisture.mul(1.6).sub(0.2), 0, 1)),
     ) as V3;
-    // Detail: ±12% brightness.
-    a = a.mul(noise.mul(0.12).add(1)) as V3;
+    // Detail: ±12% brightness, or one of a few shades per face.
+    const continuous = noise.mul(0.12).add(1);
+    if (i.face) {
+      const shade = this.faceShade(noise, length(i.slope), i.height, i.climate, i.face.jitter);
+      a = a.mul(mix(vec3(continuous), shade, this.facets)) as V3;
+    } else {
+      a = a.mul(continuous) as V3;
+    }
 
     // Forest as dark canopy masses with a crisp edge (decision 71): the density
     // is thresholded per fragment, so the edge follows its contour, not the mesh.

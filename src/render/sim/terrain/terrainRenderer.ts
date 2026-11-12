@@ -22,6 +22,7 @@ import {
   Mesh,
   MeshBasicNodeMaterial,
   Vector3,
+  Vector4,
 } from 'three/webgpu';
 import {
   attribute,
@@ -43,6 +44,7 @@ import {
   varyingProperty,
   vec3,
   vec4,
+  vertexIndex,
 } from 'three/tsl';
 import { placeCameraRelative } from '../../common/cameraRelative';
 import { directionToCubeFace } from '../../../core/coords';
@@ -82,6 +84,7 @@ import {
   RoadStyle,
   ruralSpeckle,
 } from '../infra/roadShading';
+import { FaceSampler, tileGridCoordinate } from './faceShading';
 import { facetNormal } from './facets';
 import { LandShading } from './landShading';
 import { DEFAULT_LOD, selectTiles } from '../../common/terrain/quadtree';
@@ -114,6 +117,7 @@ import {
 import type { MeshOptions, TileViewMode } from '../../common/terrain/tileMesh';
 
 const ZERO = new Vector3();
+const NO_TILE = new Vector4();
 /** A planet coordinate modulo the wave period, in float64 (decision 38). */
 const wrapCoordinate = (x: number) => ((x % WAVE_PERIOD) + WAVE_PERIOD) % WAVE_PERIOD;
 
@@ -302,9 +306,17 @@ export class TerrainRenderer {
       ({ object }) => ((object as Mesh | undefined)?.userData.wrap as Vector3 | undefined) ?? ZERO,
     );
     const local = varyingProperty('vec3', 'vLocal');
+    // The vertex's grid coordinate in its tile, for per-face shading (decision 124).
+    const grid = varyingProperty('vec3', 'vGrid');
+    // The drawn tile as (cube face, level, x, y).
+    const tileUniform = uniform(new Vector4()).onObjectUpdate(
+      ({ object }) =>
+        ((object as Mesh | undefined)?.userData.tile as Vector4 | undefined) ?? NO_TILE,
+    );
     material.positionNode = Fn(() => {
       const p = mix(parent, own, morph);
       local.assign(p);
+      grid.assign(tileGridCoordinate(vertexIndex));
       const relative = modelWorldMatrix.mul(vec4(p, 1)).xyz;
       const ap = this.lighting.atmosphere.aerialPerspective(relative);
       apInscatter.assign(ap.inscatter);
@@ -323,6 +335,15 @@ export class TerrainRenderer {
       const heightWidth = max(fwidth(rawHeight), 1e-3).toVar();
       // Flat facets: each triangle's own normal (decision 123).
       const normal = facetNormal(positionWorld, radial, smoothNormal, this.land.facets).toVar();
+      // The land's inputs at the face's center, so its albedo is constant per face (decision 124).
+      const face = new FaceSampler(grid, tileUniform, morph, radius, this.land.facets);
+      const faceUp = normalize(face.at(up)).toVar();
+      const faceHeight = face.at(rawHeight).toVar();
+      const faceWrapped = face.at(wrapped).toVar();
+      const faceBed = face.at(attribute('color', 'vec3')).toVar();
+      const faceSlope = face.at(attribute('slope', 'vec3')).toVar();
+      const faceJitter = face.jitter.toVar();
+      const faceSpacing = face.spacing.toVar();
       const planet = L.planetPosition(positionWorld);
       // Sunlight, cloud shadow and sky light once for every layer shaded here.
       const at = L.at(positionWorld);
@@ -345,13 +366,14 @@ export class TerrainRenderer {
       const builtCover = clamp(built.x.add(built.y), 0, 1).mul(dry);
       const landAlbedo = mix(
         this.land.albedo({
-          albedo: bed,
-          slope: attribute('slope', 'vec3'),
-          height: rawHeight,
-          up: radial,
-          climate: climateHere,
-          wrapped,
+          albedo: faceBed,
+          slope: faceSlope,
+          height: faceHeight,
+          up: faceUp,
+          climate: this.climate.sample(faceUp),
+          wrapped: faceWrapped,
           forest: surfaceAttr.w,
+          face: { spacing: faceSpacing, jitter: faceJitter },
         }),
         builtAlbedo(planet, footprint, built.y.div(max(built.x.add(built.y), 1e-4))),
         builtCover,
@@ -557,6 +579,7 @@ export class TerrainRenderer {
       wrapCoordinate(m.origin.z),
     );
     mesh.userData.morph = 1;
+    mesh.userData.tile = new Vector4(t.face, t.level, t.x, t.y);
     // Displayed height range before exaggeration: tight bounds for LOD selection.
     mesh.userData.minHeight = m.minHeight;
     mesh.userData.maxHeight = m.maxHeight;

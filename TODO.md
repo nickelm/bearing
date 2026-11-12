@@ -405,8 +405,10 @@ Simulation view (needs S1's `render/sim/` split):
   - [ ] Tune the landform gain, radius and tile detail across more seeds and terrain types (plains, coasts, high mountains) with `tools/relief.preview.ts`
 - [x] Faceted flat shading on terrain (derivative normals), with facets of about 20–60 m at low altitude; check it against geomorphing (decision 123: `render/sim/terrain/facets.ts`; GUI → Lighting → Faceted terrain; preview `FACETS=0`)
   - [ ] Owner: look at the facets in the browser at low altitude and over mountains, toggling GUI → Lighting → Faceted terrain
-  - [ ] Facets read as a grid of squares on gentle ground: the mesh is a regular grid with one diagonal direction, so a quad's two triangles shade almost alike. Consider jittering each vertex by an amount set by the level at which it first appears, which keeps geomorphing exact, and judge again after shade quantization
-- [ ] Per-face shade quantization: three to five shades per biome from slope, altitude, moisture and low-frequency noise, constant per face
+  - [ ] Facets read as a grid of squares on gentle ground: the mesh is a regular grid with one diagonal direction, so a quad's two triangles shade almost alike. Shade quantization (decision 124) breaks it up near the camera; if it still shows, consider jittering each vertex by an amount set by the level at which it first appears, which keeps geomorphing exact
+- [x] Per-face shade quantization: three to five shades per biome from slope, altitude, moisture and low-frequency noise, constant per face (decision 124: `render/sim/terrain/faceShading.ts`; the land albedo is evaluated at each face's center)
+  - [ ] Owner: judge the shades in the browser (GUI → Lighting → Faceted terrain toggles facets and shades together); tune the shade count and the dark and pale multipliers (`LandShading.shades`, `shadeDark`, `shadePale`) if the mottling is too strong or too weak
+  - [ ] The forest edge steps along the road clearings in the `trees` view, with or without facets: the density field, not the shading
 - [ ] Rock and snow by face; drop smooth rock blending (style gap from decision 70)
 - [ ] Voronoi farmland patchwork near settlements and on flat lowland
 - [ ] Simulation preview views: re-aim Part I checks 1–5 (5 km mixed landscape, 500 m conifer edge with a road, mountains at low sun, airbase at dusk, coast with glint) at or below 20 km in `tools/render.preview.ts`; retire views between 20 and 100 km (`oblique`, `roads`, `coast`) or move them to the strategic set (carried from old M5)
