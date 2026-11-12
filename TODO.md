@@ -417,6 +417,8 @@ Simulation view (needs S1's `render/sim/` split):
   - [ ] Cliffs sharper than the 48 m baked samples stair-step along the mesh grid; a finer baked level near the observer, or vertex jitter (above), would allow sharper cliffs and falls
   - [ ] Meanders end at every confluence (they taper to zero there); on rivers with many tributaries the bends come in short trains. Carry the phase across confluences of the main stem
   - [ ] Tune the landforms across more seeds (buttes are sparse on seed 1983; skerries need cold, low coasts)
+  - [ ] Buttes, terraces and skerries come from tile noise that knows nothing of roads and towns placed by the coarse pass: a road can run into a 320 m butte cliff or a skerry inlet. Suppress the landforms within a few hundred meters of roads and urban extents (as airfield grading does), or let roads cut through
+  - [ ] Lake shores in glacial troughs show small steps where the smooth, detail-free lake bed meets the detailed land (`dryBed`); blend the detail over a wider band
 - [x] Voronoi farmland patchwork near settlements and on flat lowland (decision 127; GUI → Lighting → Farmland; preview view `farmland`, `FARMLAND=0`)
   - [ ] Owner: judge field size (256 m lattice), crop shares and the stepped field edges in the browser
   - [ ] Field edges: hedgerows or darker field margins, if the patchwork needs more structure (not in Part I yet)

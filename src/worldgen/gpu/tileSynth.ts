@@ -88,6 +88,9 @@ export const TILE_SYNTH_TUNING = {
   alpineHeight: [1500, 4000] as [number, number],
   alpineRelief: 900,
   alpineWavelength: 1.6,
+  /** Extra alpine relief (fraction) on the highest ground, ramped over these heights (m). */
+  alpineSummit: 0.8,
+  alpineSummitHeight: [4500, 7500] as [number, number],
   /** Gully depth per (slope × wavelength), the share kept on valley floors, the slope at which depth stops growing, and the per-octave decay. */
   gullies: 0.35,
   gullyValley: 0.3,
@@ -523,7 +526,9 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
       * mix(0.35, 1.0, position) * fade * dryBed;
     if (alpine > 0.0) {
       lambda = LAMBDA0 * ${f(t.alpineWavelength)};
-      var pa = ${f(t.alpineRelief)} * alpine;
+      // The highest massifs tower more (Everest over the Himalaya).
+      var pa = ${f(t.alpineRelief)} * alpine
+        * (1.0 + ${f(t.alpineSummit)} * smoothstep(${f(t.alpineSummitHeight[0])}, ${f(t.alpineSummitHeight[1])}, base));
       for (var o = 0u; o < 2u; o++) {
         if (lambda < 2.0 * sampleSpacing) { break; }
         let q = d * (R / lambda) + vec3f(23.9, 71.3, 5.7) * f32(o + 1u);
