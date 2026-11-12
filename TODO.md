@@ -394,6 +394,8 @@ Simulation view (needs S1's `render/sim/` split):
   - [ ] Recheck the working set and the 600 MiB default after true-scale relief (below); at today's 10× the views need more meshes, and a lower default would suit tablets
   - [ ] The sim worker's line of sight (C3, P1) reads its own level-7 tiles; give it `regionTiles` inside the bubble then, since the renderer's cache lives on the main thread
   - [ ] Tile generation throughput (one batch of eight in flight) bounds a fast climb, not prediction (decision 119's measurement); for P1's low, fast flight try larger or overlapping batches and measure on a real GPU
+- [ ] Owner: recheck the glitter toward the sun from altitude on the tablet after decision 120 (rivers reflect only their true width)
+- [ ] Frame rate at altitude (owner, tablet: 28–30 fps near the ground, about 10 high up). Headless at 8 km facing the sun: 10× draws 107 tiles, 0.93 M triangles, 12.5 ms of terrain CPU per frame; 1× draws 13 tiles, 0.11 M triangles, 0.7 ms, and the software-rendered frame takes half as long. True-scale relief (next) is the main fix; then shorten the river lists of coarse meshes (mean 36–52 segments per pixel, up to 160, at 8 km), e.g. by dropping rivers narrower than a fraction of the mesh's vertex spacing
 - [ ] True-scale relief: the simulation view's own exaggeration uniform, default 1×; recheck skirt depth and the near plane; owner look at whether decision 14's relief reads at 1×
 - [ ] Faceted flat shading on terrain (derivative normals), with facets of about 20–60 m at low altitude; check it against geomorphing
 - [ ] Per-face shade quantization: three to five shades per biome from slope, altitude, moisture and low-frequency noise, constant per face
