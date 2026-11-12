@@ -115,7 +115,7 @@ The strategic view from [docs/visual-style.md](docs/visual-style.md) Part II: gl
   - [x] Previews were sRGB-encoded twice (too pale); fixed in tests/gpu/renderer.ts (decision 100)
   - [x] Night lights blew out at globe scale; they thin out with scale (decision 100)
   - [ ] Retune hillshade strength, night darkness and cloud opacity without the AgX curve (they were tuned under it)
-  - [ ] Check 1 gaps: territory tint and front lines now exist (S3, decision 101); re-run check 1 on a seed with a front (seed 1983 has none); the terminator view moved to 18:30 so the terminator crosses the globe
+  - [x] Check 1 gaps: territory tint, front lines and theater names now show at the Globe band (S3, decision 101; seed 1 `globe` preview); the terminator view moved to 18:30 so the terminator crosses the globe
   - [ ] Clouds read as blurry fog at the floor (2 km bake): give them a crisper stylized edge band, as printed weather maps do
   - [ ] Mountain glyphs at the Globe band: Part II lists ranges from the Theater band; hide or thin them above 1,500 km (decision 97's Theater set shows at the globe)
   - [ ] Hill mounds at Globe and Theater scale read as scattered dirt dots, some in regular rows; check their spacing and band
@@ -160,7 +160,7 @@ The strategic view from [docs/visual-style.md](docs/visual-style.md) Part II: gl
 - [ ] Range ring distance labels with the label engine
 - [ ] Build the font atlas in a worker if its 0.3 s on the main thread shows as a hitch
 
-### S3. Reading the world (overlays done; tuning and owner review open; old M4)
+### S3. Reading the world (done; old M4)
 
 The strategic graph is the only view of the world that theater detection, casting and the command layer get (decision 52). Generation is unsteered (decision 46).
 
@@ -186,7 +186,6 @@ The strategic graph is the only view of the world that theater detection, castin
 - [x] Coast-to-coast maximum-barrier path search with the area constraint (each side at least 35% of the landmass)
 - [x] Repeated search with exclusion corridors to get 3–4 roughly parallel defensive lines; store them as the landmass node's barrier lines
 - [x] Start line one line forward of the strongest barrier; invasion corridors on weak segments of each line (refined with roads in S4)
-- [ ] Ring-shaped continents around an inland or polar sea get no front: a single cut cannot split them (decision 62; seed 1983). Consider two cuts, or a front across the ring's narrowest part
 
 #### Theaters
 
@@ -214,24 +213,28 @@ The strategic graph is the only view of the world that theater detection, castin
 - [x] Front line as a bold line with teeth on the attacker's side; defensive lines dashed (screen-space ribbons fixed to the ground, `overlays/militaryLayer.ts`)
 - [x] Invasion corridors as named arrows (names from S2, labels in the attacker's color)
 - [x] Sea lanes as dashed routes; chokepoints marked; theater names at the globe band (lanes and chokepoints of the cast's theaters only)
-- [ ] Air defense coverage as faint rings (once air defense sites exist)
-- [ ] Convoy icons on sea lanes (once convoys exist in the simulation, C track)
 - [x] Layer toggles (GUI → Map → Military overlays); the graph debug overlay stays as a developer view, off by default on the map
-- [ ] Browser check: teeth on the attacker's side and evenly spaced at every band, dashes fixed to the ground while panning, no gaps at line joins, corridor names along their arrows, overlays fading with the bands; tint opacity (Map → Military overlays → Tint opacity; 15% was faint in previews, 22% is the default)
-- [ ] Preview check: `SCENE=strategic SEED=1 VIEWS=front,globe CVD=1` (Part II checks 1 and 4 with overlays); seed 1983 has no front (ring continent, below)
-- [ ] The tint's edge follows the coarse grid (about 40 km) and can sit a cell off the drawn front line at the floor; if it shows, cut the tint along the start line in the shader
+- [x] Browser check (owner, 2026-11-12): teeth on the attacker's side and evenly spaced at every band, dashes fixed to the ground while panning, no gaps at line joins, corridor names along their arrows, overlays fading with the bands; tint opacity (Map → Military overlays → Tint opacity; 15% was faint in previews, 22% is the default)
+- [x] Preview check: `SCENE=strategic SEED=1 VIEWS=front,globe CVD=1` (Part II checks 1 and 4 with overlays; front, teeth and corridors distinct under all three deficiencies); seed 1983 has no front (ring continent, below)
 
 #### Tools and review
 
 - [x] Strategic graph debug overlay on the globe: nodes, sea lanes, chokepoints, barrier lines, start line, corridors, theater boundaries (GUI → Campaign; not yet seen in a browser)
 - [x] Graph overlay mode in `npm run maps`, so detection can be checked without a browser (`MODES=graph,barrier`)
 - [x] Seed browser: a CLI table first (`npm run seeds`: theaters, fit scores, range factor, retries per seed), then a GUI panel (GUI → Campaign → "Seed browser: scan next 10")
+- [x] Determinism tests: graph and cast identical across runs; changing casting leaves the graph unchanged
+- [x] Checkpoint 5: owner review of the overlays, theaters and briefings on the strategic map (signed off 2026-11-12)
+
+#### S3 follow-ups (not blocking)
+
+- [ ] Ring-shaped continents around an inland or polar sea get no front: a single cut cannot split them (decision 62; seed 1983). Consider two cuts, or a front across the ring's narrowest part
+- [ ] Air defense coverage as faint rings (once air defense sites exist)
+- [ ] Convoy icons on sea lanes (once convoys exist in the simulation, C track)
+- [ ] The tint's edge follows the coarse grid (about 40 km) and can sit a cell off the drawn front line at the floor; if it shows, cut the tint along the start line in the shader
 - [ ] Tune the theater fit thresholds from seed browser statistics (design open question)
   - First run, seeds 1–40 at the defaults (2026-11-10): continental front 90%, sea lane 25%, chokepoint 5%, island campaign 10%, strategic 100%; one retry (seed 9, Alliance short of airbase room), none invalid; 4–6 s per seed.
   - The range factor is 1.0 for almost every seed (mean 0.98, min 0.73): fronts are 1,500–2,500 km deep, beyond a medium strike radius of 1,300 km. Owner decision: keep real ranges, measure depth to the enemy's industry and base regions instead of 90% of its land, or change the reference radii.
   - Island campaigns are lopsided: the Pact gets a large landmass with no valid front (often a ring continent) and the Alliance a few islands (45–254 vs. 1,200–1,500 airbase sites).
-- [x] Determinism tests: graph and cast identical across runs; changing casting leaves the graph unchanged
-- [ ] Checkpoint 5: owner review of the graph overlay, theaters and briefings across many seeds (now on the strategic map once the overlays exist)
 
 ### S4. Settlements and infrastructure (data done; map symbols open; old M5)
 
