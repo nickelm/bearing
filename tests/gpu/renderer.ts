@@ -38,6 +38,8 @@ export async function headlessRenderer(
     device,
     canvas: canvas as unknown as HTMLCanvasElement,
     antialias: false,
+    // As in the app (decision 112).
+    reversedDepthBuffer: true,
   });
   await renderer.init();
   const animation = (renderer as unknown as { _animation: { setContext(c: unknown): void } })

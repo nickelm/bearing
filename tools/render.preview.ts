@@ -55,6 +55,7 @@ import { previewWorld } from './previewWorld';
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
 import { settlementPoint } from '../src/worldgen/strategic/graph';
 import { InfraScene, offsetPoint } from '../src/render/sim/infra/infraScene';
+import { observerStations } from '../src/render/sim/camera/observerStations';
 import { airfieldGrading } from '../src/render/sim/infra/airfieldGrading';
 import { buildWeatherClimate } from '../src/sim/weather/climate';
 import { WeatherGrid } from '../src/sim/weather/grid';
@@ -82,6 +83,11 @@ export interface PreviewView {
   alongRunway?: boolean;
   /** Instead of localTime: the first evening time the sun at the camera sinks to this elevation (rad). */
   sunElevation?: number;
+  /**
+   * Through the observer camera (V1) at the main airbase's tower, at its station's
+   * height, facing and pitch (altitude, tilt, heading and target are ignored).
+   */
+  observer?: boolean;
   /** Image size for this view (strategic previews; default W × H). */
   width?: number;
   height?: number;
@@ -222,6 +228,27 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     localTime: 16,
     target: 'airbase',
     alongRunway: true,
+  },
+  {
+    // The observer camera at the main airbase's tower (V1): apron, hangars, runway.
+    name: 'tower',
+    dLat: 0,
+    dLon: 0,
+    altitude: 0,
+    tilt: 0,
+    heading: 0,
+    localTime: 10,
+    observer: true,
+  },
+  {
+    name: 'tower-dusk',
+    dLat: 0,
+    dLon: 0,
+    altitude: 0,
+    tilt: 0,
+    heading: 0,
+    sunElevation: -1 * DEG,
+    observer: true,
   },
   {
     // Part I check 4: an airbase at dusk with its runway lit (V3).
@@ -505,6 +532,7 @@ it('renders preview views', async () => {
   const outDir = join(import.meta.dirname, 'out');
   mkdirSync(outDir, { recursive: true });
 
+  const stations = observerStations(campaign.infrastructure, params.radius);
   for (const v of views) {
     const o = scene.orbit;
     const target = v.target ? targets[v.target] : null;
@@ -526,6 +554,15 @@ it('renders preview views', async () => {
     o.altitude = o.targetAltitude = v.altitude;
     o.tilt = v.tilt;
     o.heading = v.alongRunway && base ? base.heading : v.heading;
+    const station =
+      v.observer && base ? stations.find((x) => x.key === `airbase-${base.id}`) : null;
+    if (station) {
+      scene.observer.setStation(station);
+      // The clock and the sun follow the observer's spot.
+      o.lat = scene.observer.lat;
+      o.lon = scene.observer.lon;
+    }
+    scene.cameraMode = station ? 'observer' : 'free';
     const localAt = (day: number) =>
       withLocalTime(day * DAY, o.lon, (v.localTime ?? 11) * HOUR, params, calendar);
     // The sim starts at campaign start: an early local time on day 0 can fall before it.

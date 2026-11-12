@@ -1,7 +1,11 @@
 /**
  * The simulation view's scene (decision 72): the M1 debug cube-sphere, the tiled terrain,
- * the sun and an orbit camera, rendered camera-relative (see common/cameraRelative.ts).
- * Until the strategic view exists it still spans orbit to ground.
+ * the sun and two cameras, rendered camera-relative (see common/cameraRelative.ts):
+ *
+ * - the **observer camera** at a base or port (V1), the simulation view's own, from the
+ *   ground to 20 km;
+ * - the **free camera**, the old orbit camera from orbit down to 500 m, kept as a
+ *   development tool until V4 (decision 72; the app offers it behind a dev flag).
  */
 import {
   AgXToneMapping,
@@ -13,7 +17,9 @@ import {
 import type { WebGPURenderer } from 'three/webgpu';
 import { placePlanetCentered } from '../common/cameraRelative';
 import type { CubeGrid } from '../../core/cubeGrid';
+import { DEG } from '../../core/units';
 import { Vec3d } from '../../core/vec3d';
+import { ObserverCamera } from './camera/observerCamera';
 import { ClimateTexture } from '../common/climateTexture';
 import { CloudLayer } from './clouds/cloudLayer';
 import { WeatherTexture } from './clouds/weatherTexture';
@@ -26,6 +32,17 @@ import { StrategicOverlay } from '../strategic/strategicOverlay';
 import { StructureLayer } from './infra/structureLayer';
 import type { InfraScene } from './infra/infraScene';
 
+export type SimCameraMode = 'observer' | 'free';
+
+/** What the scene reads from either camera each frame. */
+interface ViewCamera {
+  readonly eye: Vec3d;
+  readonly forward: Vec3d;
+  readonly up: Vec3d;
+  near: number;
+  far: number;
+}
+
 export interface GlobeSceneOptions {
   radius: number;
   grid: CubeGrid;
@@ -36,7 +53,10 @@ export interface GlobeSceneOptions {
 export class GlobeScene {
   readonly scene = new Scene();
   readonly camera: PerspectiveCamera;
+  /** The free (debug) camera. */
   readonly orbit: OrbitCamera;
+  /** The observer camera at a base or port (V1). */
+  readonly observer: ObserverCamera;
   readonly globe: GlobeMesh;
   /** Sun and camera uniforms shared by every lit planet material (decision 34). */
   readonly lighting: PlanetLighting;
@@ -61,6 +81,7 @@ export class GlobeScene {
   /** Whether the terrain has a world to draw (set by the app). */
   terrainReady = false;
   private detachInput: (() => void) | null = null;
+  private mode: SimCameraMode = 'free';
   private readonly scratch = new Vec3d();
   private viewportHeight = 1;
   private readonly sunLight = new DirectionalLight(0xffffff, 2.5);
@@ -71,6 +92,7 @@ export class GlobeScene {
   ) {
     this.camera = new PerspectiveCamera(45, 1, 1, 2);
     this.orbit = new OrbitCamera(options.radius);
+    this.observer = new ObserverCamera(options.radius);
     this.lighting = new PlanetLighting(options.radius);
     // Clouds first: their shadow hook must be in place before lit materials are built.
     this.clouds = new CloudLayer(options.radius, this.lighting, this.weather);
@@ -112,13 +134,26 @@ export class GlobeScene {
     if (on) {
       this.detachInput = attachOrbitInput(
         this.renderer.domElement,
-        this.orbit,
+        this.mode === 'observer' ? this.observer : this.orbit,
         () => (this.camera.fov * Math.PI) / 180 / this.viewportHeight,
       );
     } else {
       this.detachInput!();
       this.detachInput = null;
     }
+  }
+
+  /** Which camera draws the view; input follows it. */
+  get cameraMode(): SimCameraMode {
+    return this.mode;
+  }
+
+  set cameraMode(mode: SimCameraMode) {
+    if (mode === this.mode) return;
+    const listening = this.inputEnabled;
+    this.inputEnabled = false;
+    this.mode = mode;
+    this.inputEnabled = listening;
   }
 
   /**
@@ -139,14 +174,31 @@ export class GlobeScene {
 
   /** Advances camera easing and renders one frame. `dt` is real seconds since the last frame. */
   render(dt: number): void {
-    const o = this.orbit;
     const tiles = this.useTiles && this.terrainReady;
-    o.terrainMaxHeight = this.globe.maxDisplayedHeight;
-    // Ground clamp and near plane from the tile data under the camera (null until loaded).
-    o.groundHeight = tiles
-      ? this.terrain.displayHeightAt(this.scratch.copy(o.eye).normalize())
-      : null;
-    o.update(dt);
+    let o: ViewCamera;
+    /** Height of the eye above the ground (m). */
+    let aboveGround: number;
+    if (this.mode === 'observer') {
+      const ob = this.observer;
+      ob.terrainMaxHeight = this.globe.maxDisplayedHeight;
+      // The finest surface under the eye, so a standing observer stays above the drawn ground.
+      ob.groundHeight = tiles ? this.terrain.displaySurfaceAt(ob.spot) : null;
+      ob.update(dt);
+      this.camera.fov = ob.fov / DEG;
+      o = ob;
+      aboveGround = ob.height;
+    } else {
+      const fc = this.orbit;
+      fc.terrainMaxHeight = this.globe.maxDisplayedHeight;
+      // Ground clamp and near plane from the tile data under the camera (null until loaded).
+      fc.groundHeight = tiles
+        ? this.terrain.displayHeightAt(this.scratch.copy(fc.eye).normalize())
+        : null;
+      fc.update(dt);
+      this.camera.fov = 45;
+      o = fc;
+      aboveGround = fc.altitude - Math.max(0, fc.groundHeight ?? 0);
+    }
 
     // Camera at the origin, oriented from float64 vectors.
     this.camera.position.set(0, 0, 0);
@@ -173,16 +225,15 @@ export class GlobeScene {
         fovY: (this.camera.fov * Math.PI) / 180,
         aspect: this.camera.aspect,
         viewportHeight: this.viewportHeight,
-        radius: o.radius,
+        radius: this.orbit.radius,
         maxHeight: this.globe.maxDisplayedHeight,
       });
-      const ground = o.groundHeight ?? 0;
-      this.forest.update(o.eye, o.altitude - Math.max(0, ground));
+      this.forest.update(o.eye, aboveGround);
       this.structures.setInk(
         this.structures.inkWidth,
         (this.camera.fov * Math.PI) / 180 / this.viewportHeight,
       );
-      this.structures.update(o.eye, o.altitude - Math.max(0, ground));
+      this.structures.update(o.eye, aboveGround);
     } else {
       this.forest.group.visible = false;
       this.structures.group.visible = false;

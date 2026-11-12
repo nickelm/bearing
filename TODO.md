@@ -376,7 +376,10 @@ Done in old M2, for the renderer that served orbit to ground:
 
 Simulation view (needs S1's `render/sim/` split):
 
-- [ ] Camera envelope 0–20 km; an observer camera at an airbase or port from the cast; the free camera kept as a debug tool behind a dev flag until V4 (decision 72)
+- [x] Camera envelope 0–20 km; an observer camera at an airbase or port from the cast; the free camera kept as a debug tool behind a dev flag until V4 (decision 72; decision 112)
+  - [ ] Owner: the observer at an airbase in the browser (GUI → View → Simulation camera → Observer at); walking (W/A/S/D), height (R/F), binocular zoom (wheel), and whether the eye ever drops under the ground
+  - [ ] Ports: a quay layout and buildings, so a port observer stands on the quay rather than at the coarse site point (with C3's ships)
+  - [ ] Ease between stations instead of jumping (V4's transition controller)
 - [ ] Horizon-bounded tile selection: drop tiles beyond √(2Rh) plus a margin (at most about 200 km at 20 km); tests for the bound and that selection never exceeds it
 - [ ] Tile cache budget and prefetch for the bounded radius around the active unit or camera; prefetch the regional level-7 tiles (decision 64)
 - [ ] True-scale relief: the simulation view's own exaggeration uniform, default 1×; recheck skirt depth and the near plane; owner look at whether decision 14's relief reads at 1×

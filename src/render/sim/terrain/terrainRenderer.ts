@@ -51,7 +51,9 @@ import { Noise3 } from '../../../core/noise';
 import { rng } from '../../../core/rng';
 import type { WorldSeed } from '../../../core/rng';
 import {
+  MAX_TILE_LEVEL,
   parentTile,
+  tileForDirection,
   tileKey,
   tileKeyString,
   TILE_BORDER,
@@ -88,6 +90,8 @@ import {
   buildTileIndex,
   buildTileMesh,
   dataTileFor,
+  lakeSampler,
+  surfaceSampler,
   TILE_VERTEX_COUNT,
 } from '../../common/terrain/tileMesh';
 import type { MeshOptions, TileViewMode } from '../../common/terrain/tileMesh';
@@ -619,6 +623,33 @@ export class TerrainRenderer {
       return this.world?.grading ? this.world.grading.apply(dir, raw) : raw;
     }
     return null;
+  }
+
+  /**
+   * Displayed height (m, exaggerated, sea and lakes flat) of the finest surface
+   * under a direction: the level-MAX_TILE_LEVEL surface the finest meshes, trees
+   * and buildings use (render detail and grading included), so an eye a couple
+   * of meters up stays above the drawn ground. Asks for the data tile it needs;
+   * falls back to `displayHeightAt` until it has loaded.
+   */
+  displaySurfaceAt(dir: Readonly<Vec3d>): number | null {
+    const opts = this.meshOptions();
+    if (!opts) return null;
+    const t = tileForDirection(dir, MAX_TILE_LEVEL);
+    const key = dataTileFor(t);
+    const data = this.data.get(key);
+    if (!data) {
+      this.requestDataTile(key, 1e6);
+      return this.displayHeightAt(dir);
+    }
+    const uv: CubeFaceUv = { face: 0, u: 0, v: 0 };
+    directionToCubeFace(dir, uv);
+    const size = TILE_TEXELS * (1 << t.level);
+    const sx = uv.u * size - t.x * TILE_TEXELS;
+    const sy = uv.v * size - t.y * TILE_TEXELS;
+    const h = surfaceSampler(t, t.level, data, opts)(sx, sy, dir);
+    const lake = lakeSampler(t, data)(sx, sy);
+    return Math.max(0, h, lake) * this.exaggeration;
   }
 
   /** Displayed height (m, exaggerated, sea flat at 0) under a direction, or null. */

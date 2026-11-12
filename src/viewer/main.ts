@@ -101,7 +101,7 @@ async function start(): Promise<void> {
   const probe = await probeWebGpu();
   if ('problem' in probe) return showWebGpuRequired(probe.problem);
   const device = await requestRendererDevice(probe.adapter, probe.limits);
-  const renderer = new WebGPURenderer({ antialias: true, device });
+  const renderer = new WebGPURenderer({ antialias: true, device, reversedDepthBuffer: true });
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.toneMapping = NoToneMapping;

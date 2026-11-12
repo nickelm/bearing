@@ -48,6 +48,10 @@ export interface ViewGuiParams {
   targetFps: number;
   /** Which view is on screen (decision 72): the strategic map or the simulation view. */
   scene: 'simulation' | 'strategic';
+  /** The simulation view's camera: an observer at a base or port, or the free camera (dev flag). */
+  simCamera: 'observer' | 'free';
+  /** The observer's station, by label (see `setStations`). */
+  station: string;
 }
 
 /** Time folder: jumps of the sim clock, alarms and the sim status (milestone 6). */
@@ -197,6 +201,13 @@ export interface DebugGuiCallbacks {
   cancel(): void;
   viewChanged(view: ViewGuiParams): void;
   shapeChanged(view: ViewGuiParams): void;
+  /** The simulation camera or the observer's station changed. */
+  cameraChanged(view: ViewGuiParams): void;
+}
+
+export interface DebugGuiOptions {
+  /** Offer the free camera in the simulation view (a development tool until V4, decision 72). */
+  devCamera: boolean;
 }
 
 export const RESOLUTIONS = [64, 128, 256, 512] as const;
@@ -222,11 +233,16 @@ export class DebugGui {
     buildings: '—',
   };
 
+  private stationController: ReturnType<GUI['add']> | null = null;
+  private readonly cameraFolder: GUI;
+  private readonly onCamera: () => void;
+
   constructor(
     readonly world: WorldGuiParams,
     readonly view: ViewGuiParams,
     viewModes: readonly string[],
     callbacks: DebugGuiCallbacks,
+    options: DebugGuiOptions = { devCamera: false },
   ) {
     const regen = () => callbacks.regenerate();
 
@@ -269,6 +285,19 @@ export class DebugGui {
     v.add(view, 'scene', ['simulation', 'strategic'])
       .name('View')
       .onChange(() => callbacks.viewChanged(view));
+    this.onCamera = () => callbacks.cameraChanged(view);
+    this.cameraFolder = v.addFolder('Simulation camera');
+    this.cameraFolder
+      .add(
+        view,
+        'simCamera',
+        options.devCamera
+          ? { Observer: 'observer', 'Free (dev)': 'free' }
+          : { Observer: 'observer' },
+      )
+      .name('Camera')
+      .onChange(this.onCamera);
+    this.setStations([]);
     v.add(view, 'mode', [...viewModes])
       .name('Color by')
       .onChange(() => callbacks.viewChanged(view));
@@ -542,6 +571,17 @@ export class DebugGui {
     ).name('Run GPU self-tests');
     for (const n of names) f.add(status, n).disable().listen();
     f.close();
+  }
+
+  /** Replaces the observer's station list (labels); keeps the current one if it is still there. */
+  setStations(labels: readonly string[]): void {
+    this.stationController?.destroy();
+    const list = labels.length ? [...labels] : ['(no world yet)'];
+    if (!list.includes(this.view.station)) this.view.station = list[0]!;
+    this.stationController = this.cameraFolder
+      .add(this.view, 'station', list)
+      .name('Observer at')
+      .onChange(this.onCamera);
   }
 
   refresh(): void {

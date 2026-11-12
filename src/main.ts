@@ -22,7 +22,9 @@ import { StrategicScene } from './render/strategic/strategicScene';
 import { OVERLAY_LAYERS } from './render/strategic/overlays/militaryModel';
 import { INFRA_LAYERS } from './render/strategic/infra/infraModel';
 import { InfraScene } from './render/sim/infra/infraScene';
-import { airfieldGrading } from './render/sim/infra/airfieldGrading';
+import { airfieldGrading, globalMapSampler } from './render/sim/infra/airfieldGrading';
+import { observerStations } from './render/sim/camera/observerStations';
+import type { ObserverStation } from './render/sim/camera/observerStations';
 import { VIEW_MODES } from './render/common/globeMesh';
 import type { ViewMode } from './render/common/globeMesh';
 import { runComputeSmokeTest } from './render/common/computeSmokeTest';
@@ -91,7 +93,9 @@ async function main(): Promise<void> {
   const container = document.getElementById('app')!;
   // The device comes from the high-performance adapter the probe found (decision 69).
   const device = await requestRendererDevice(probe.adapter, probe.limits);
-  const renderer = new WebGPURenderer({ antialias: true, device });
+  // Reversed depth: the observer camera needs a near plane under a meter with the
+  // horizon 200 km away (decision 112).
+  const renderer = new WebGPURenderer({ antialias: true, device, reversedDepthBuffer: true });
   renderer.setPixelRatio(window.devicePixelRatio);
   container.appendChild(renderer.domElement);
   await renderer.init();
@@ -139,14 +143,19 @@ async function main(): Promise<void> {
     // Individual trees and buildings are simulator detail (decision 71).
     trees: false,
     treeRange: 5,
-    buildings: false,
+    // On: the simulation view is a ground view now (the observer camera, decision 112).
+    buildings: true,
     ink: true,
     inkWidth: 1.6,
     nightLights: 3,
     renderScale: 'auto',
     targetFps: 30,
     scene: query.get('view') === 'strategic' ? 'strategic' : 'simulation',
+    simCamera: 'observer',
+    station: '',
   };
+  // The free camera is a development tool until V4 (decision 72): on the dev server, or with ?dev.
+  const devCamera = import.meta.env.DEV || query.has('dev');
 
   // The game clock lives in the sim worker (decision 67); the display time follows it.
   // A new world resets the campaign calendar (decision 33) and restarts the sim.
@@ -204,18 +213,40 @@ async function main(): Promise<void> {
   );
   let activeView: 'simulation' | 'strategic' = 'simulation';
   /** The camera of the view on screen; the clock and status read their position from it. */
-  const activeOrbit = () => (activeView === 'strategic' ? strategicView.orbit : globe.orbit);
+  const activeOrbit = () =>
+    activeView === 'strategic'
+      ? strategicView.orbit
+      : globe.cameraMode === 'observer'
+        ? globe.observer
+        : globe.orbit;
   const setActiveView = (view: 'simulation' | 'strategic') => {
     if (view === activeView) return;
     // Keep the place: the new view's camera starts over the same point, with the same heading.
+    // The observer stays at its station (it is entered through the station, decision 72).
     const from = activeOrbit();
     activeView = view;
-    const to = activeOrbit();
-    to.lat = from.lat;
-    to.lon = from.lon;
-    to.heading = from.heading;
+    const to = activeView === 'strategic' ? strategicView.orbit : globe.orbit;
+    if (to !== globe.orbit || globe.cameraMode === 'free') {
+      to.lat = from.lat;
+      to.lon = from.lon;
+      to.heading = from.heading;
+    }
     globe.inputEnabled = view === 'simulation';
     strategicView.inputEnabled = view === 'strategic';
+  };
+
+  /** Observer stations of the current world (airbases and ports, decision 112). */
+  let stations: ObserverStation[] = [];
+  /**
+   * Puts the simulation view's camera where the GUI says: the observer at the chosen
+   * station, or the free camera (dev flag). Without stations (no world yet) the free
+   * camera shows the globe while it generates.
+   */
+  const applyCamera = () => {
+    const station = stations.find((x) => x.label === viewParams.station) ?? stations[0] ?? null;
+    const observer = station !== null && (viewParams.simCamera === 'observer' || !devCamera);
+    if (observer && globe.observer.station?.key !== station.key) globe.observer.setStation(station);
+    globe.cameraMode = observer ? 'observer' : 'free';
   };
 
   const campaignParams: CampaignGuiParams = {
@@ -355,6 +386,15 @@ async function main(): Promise<void> {
       });
       globe.setInfrastructure(infra);
       globe.terrainReady = true;
+      // Observer stations at every airbase and port; ports face the sea (decision 112).
+      stations = observerStations(
+        strategic.infrastructure,
+        params.radius,
+        globalMapSampler(global.height, global.n),
+      );
+      gui.setStations(stations.map((x) => x.label));
+      globe.observer.station = null;
+      applyCamera();
       // The map's relief mesh draws from the same synthesizer (decision 77).
       strategicView.setTerrainWorld({
         synth,
@@ -493,55 +533,62 @@ async function main(): Promise<void> {
   };
   const COLOR_MODES = [...VIEW_MODES, 'forest', 'tile level', 'tile borders'];
   let tilesBlocked = false;
-  const gui = new DebugGui(worldParams, viewParams, COLOR_MODES, {
-    regenerate: () => void regenerate(),
-    clearCache: () => {
-      store
-        .clear()
-        .then(() => (gui.status.generation = 'world cache cleared'))
-        .catch((err: unknown) => console.warn('Could not clear the world cache', err));
+  const gui = new DebugGui(
+    worldParams,
+    viewParams,
+    COLOR_MODES,
+    {
+      regenerate: () => void regenerate(),
+      clearCache: () => {
+        store
+          .clear()
+          .then(() => (gui.status.generation = 'world cache cleared'))
+          .catch((err: unknown) => console.warn('Could not clear the world cache', err));
+      },
+      cancel: () => {
+        generation++;
+        worldgen.cancel();
+        gui.status.generation = 'cancelled';
+      },
+      viewChanged: (v) => {
+        // One "Color by" list for both renderers: modes the tiles cannot show
+        // (they need tectonic-grid maps) switch the display to the grid mesh.
+        const tileMode = TILE_MODE_FOR[v.mode];
+        tilesBlocked = tileMode === undefined;
+        const gridMode = (
+          (VIEW_MODES as readonly string[]).includes(v.mode) ? v.mode : 'biome'
+        ) as ViewMode;
+        globe.globe.setViewMode(gridMode);
+        strategicView.setViewMode(gridMode);
+        setActiveView(v.scene);
+        globe.globe.wireframe = v.wireframe;
+        globe.useTiles = v.tiles && !tilesBlocked;
+        strategicView.useTiles = v.tiles && !tilesBlocked;
+        if (tileMode) {
+          globe.terrain.setMode(tileMode);
+          strategicView.relief.setMode(tileMode);
+        }
+        globe.terrain.geomorph = v.geomorph;
+        globe.terrain.lod.sseThreshold = v.sse;
+        globe.terrain.budgetMiB = v.tileMemory;
+        globe.forest.enabled = v.trees;
+        globe.forest.range.value = v.treeRange * KM;
+        globe.structures.enabled = v.buildings;
+        globe.structures.ink = v.ink;
+        globe.structures.setInk(v.inkWidth, 0);
+        globe.structures.lightBrightness.value = v.nightLights;
+        renderScale.targetMs = 1000 / v.targetFps;
+        const fixed = RenderScaleController.fixed(v.renderScale);
+        applyRenderScale(fixed ?? renderScale.scale, performance.now());
+      },
+      shapeChanged: (v) => {
+        globe.globe.setExaggeration(v.exaggeration);
+        globe.terrain.setExaggeration(v.exaggeration);
+      },
+      cameraChanged: () => applyCamera(),
     },
-    cancel: () => {
-      generation++;
-      worldgen.cancel();
-      gui.status.generation = 'cancelled';
-    },
-    viewChanged: (v) => {
-      // One "Color by" list for both renderers: modes the tiles cannot show
-      // (they need tectonic-grid maps) switch the display to the grid mesh.
-      const tileMode = TILE_MODE_FOR[v.mode];
-      tilesBlocked = tileMode === undefined;
-      const gridMode = (
-        (VIEW_MODES as readonly string[]).includes(v.mode) ? v.mode : 'biome'
-      ) as ViewMode;
-      globe.globe.setViewMode(gridMode);
-      strategicView.setViewMode(gridMode);
-      setActiveView(v.scene);
-      globe.globe.wireframe = v.wireframe;
-      globe.useTiles = v.tiles && !tilesBlocked;
-      strategicView.useTiles = v.tiles && !tilesBlocked;
-      if (tileMode) {
-        globe.terrain.setMode(tileMode);
-        strategicView.relief.setMode(tileMode);
-      }
-      globe.terrain.geomorph = v.geomorph;
-      globe.terrain.lod.sseThreshold = v.sse;
-      globe.terrain.budgetMiB = v.tileMemory;
-      globe.forest.enabled = v.trees;
-      globe.forest.range.value = v.treeRange * KM;
-      globe.structures.enabled = v.buildings;
-      globe.structures.ink = v.ink;
-      globe.structures.setInk(v.inkWidth, 0);
-      globe.structures.lightBrightness.value = v.nightLights;
-      renderScale.targetMs = 1000 / v.targetFps;
-      const fixed = RenderScaleController.fixed(v.renderScale);
-      applyRenderScale(fixed ?? renderScale.scale, performance.now());
-    },
-    shapeChanged: (v) => {
-      globe.globe.setExaggeration(v.exaggeration);
-      globe.terrain.setExaggeration(v.exaggeration);
-    },
-  });
+    { devCamera },
+  );
   setActiveView(viewParams.scene); // ?view=strategic opens the map
   gui.status.backend = `WebGPU on ${describeAdapter(probe.adapter)}`;
   console.info(`WebGPU adapter: ${describeAdapter(probe.adapter)}`, probe.adapter.info);
