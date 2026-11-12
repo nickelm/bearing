@@ -27,6 +27,11 @@ export interface FinishInput {
   radius: number;
   /** Display grid cells per face edge; must divide n. */
   displayN: number;
+  /**
+   * Reference meters to subtract from physical height ÷ reliefScale for the
+   * Earth-like elevation (decision 121); none when absent.
+   */
+  landformExcess?: Float32Array;
 }
 
 export interface DisplayMaps {
@@ -58,6 +63,8 @@ export function globalBiomes(input: FinishInput, lakeDepth: Float32Array): Uint8
     const h = height[c]!;
     const ref = h / reliefScale;
     const t = seaLevelTemperature[c]! - LAPSE_RATE * Math.max(0, ref);
+    // The alpine rule reads elevation itself: the Earth-like one (decision 121).
+    const earthRef = ref - (input.landformExcess?.[c] ?? 0);
     const moisture = Math.min(
       1,
       Math.max(0, (0.5 * precipitation[c]!) / potentialEvapotranspiration(t)),
@@ -66,7 +73,7 @@ export function globalBiomes(input: FinishInput, lakeDepth: Float32Array): Uint8
     out[c] =
       lakeDepth[c]! > 0
         ? Biome.Shelf
-        : classifyBiome(h, ref, t, moisture, t - temperatureRange[c]!);
+        : classifyBiome(h, earthRef, t, moisture, t - temperatureRange[c]!);
   }
   return out;
 }

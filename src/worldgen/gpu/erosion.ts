@@ -44,8 +44,10 @@
  * the grid has "seaLevelTemperature", it rises by LAPSE_RATE × the excess
  * (amplified − eroded, reference m) × (1 − reliefScale), and every reader of physical height ÷
  * reliefScale (biomes, treeline, snow and season in the shaders) then gets the
- * temperature of the Earth-like elevation without change. Landmass-scale
- * height keeps decision 14's scale.
+ * temperature of the Earth-like elevation without change. The correction
+ * itself goes to map "landformExcess" (reference m), for rules that read
+ * elevation directly (alpine biome). Landmass-scale height keeps decision
+ * 14's scale.
  *
  * Maps on the grid: in "height" (physical m), "uplift" and "precipitation";
  * out "height" plus "flow" (drainage area, km² · m/yr of rain) and "receiver".
@@ -240,9 +242,10 @@ ${main('  hPhys[id] = hA[id] * RELIEF;')}`);
 @group(0) @binding(0) var<storage, read> h: array<f32>;
 @group(0) @binding(1) var<storage, read> hA: array<f32>;
 @group(0) @binding(2) var<storage, read_write> seaLevelT: array<f32>;
-${main(`  if (h[id] > 0.0) {
-    seaLevelT[id] += ${f(LAPSE_RATE)} * (hA[id] - h[id]) * (1.0 - RELIEF);
-  }`)}`);
+@group(0) @binding(3) var<storage, read_write> excess: array<f32>;
+${main(`  let e = select(0.0, (hA[id] - h[id]) * (1.0 - RELIEF), h[id] > 0.0);
+  seaLevelT[id] += ${f(LAPSE_RATE)} * e;
+  excess[id] = e;`)}`);
 
   const prefill = gpu.kernel(`${head}
 @group(0) @binding(0) var<storage, read_write> h: array<f32>;
@@ -445,7 +448,12 @@ ${main(`  let hc = hIn[id];
   if (grid.has('seaLevelTemperature')) {
     gpu.dispatchLinear(
       climateCorrection,
-      [grid.get('erosion.h'), grid.get('erosion.w'), grid.get('seaLevelTemperature')],
+      [
+        grid.get('erosion.h'),
+        grid.get('erosion.w'),
+        grid.get('seaLevelTemperature'),
+        grid.map('landformExcess'),
+      ],
       count,
     );
   }

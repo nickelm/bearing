@@ -4,9 +4,9 @@
  *
  * - moisture (from the climate texture): drier ground lighter and yellower,
  *   wetter ground darker and greener;
- * - slope: rock on steep ground. Steepness uses the Earth-like reference
- *   slope (physical ÷ reliefScale, as biomes use reference heights, decision
- *   19), so cliffs read as cliffs whatever the exaggeration;
+ * - slope: rock on steep ground. Steepness is the physical slope, since
+ *   landforms keep Earth's slopes (decision 121), so cliffs read as cliffs
+ *   whatever the exaggeration;
  * - season: the surface temperature is the sea-level mean, lapse-corrected
  *   to the reference height, plus the seasonal half-range times a cosine
  *   peaking about 30 days after the summer solstice (sign by hemisphere).
@@ -189,8 +189,9 @@ export class LandShading {
     const autumn = smoothstep(10, 2, t).mul(green).mul(0.75).mul(float(1).sub(evergreen));
     a = mix(a, this.autumnColor.mul(noise.mul(0.2).add(1)), autumn) as V3;
 
-    // Rock on steep ground (reference slope: about 19° to 35°).
-    const steep = length(i.slope).div(this.reliefScale);
+    // Rock on steep ground (about 19° to 35°): physical slope, since landforms keep
+    // Earth's slopes (decision 121).
+    const steep = length(i.slope);
     const rock = smoothstep(0.35, 0.7, steep.add(noise.mul(0.15)));
     a = mix(a, this.rockColor.mul(noise.mul(0.25).add(1)), rock) as V3;
 
