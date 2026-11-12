@@ -18,13 +18,55 @@
       "group": "hull",
       "sides": 8,
       "stations": [
-        { "x": 78, "y": 3.5, "w": 0.2, "h": 4.5, "square": 0.5 },
-        { "x": 66, "y": 2.5, "w": 4.5, "h": 6, "square": 0.6 },
-        { "x": 45, "y": 1.5, "w": 7.5, "h": 7, "square": 0.7 },
-        { "x": 10, "y": 1, "w": 8.6, "h": 7, "square": 0.75 },
-        { "x": -30, "y": 1, "w": 8.6, "h": 7, "square": 0.75 },
-        { "x": -60, "y": 1, "w": 8, "h": 6.6, "square": 0.8 },
-        { "x": -74, "y": 1.2, "w": 7, "h": 6, "square": 0.85 }
+        {
+          "x": 78,
+          "y": 3.5,
+          "w": 0.2,
+          "h": 4.5,
+          "square": 0.5
+        },
+        {
+          "x": 66,
+          "y": 2.5,
+          "w": 4.5,
+          "h": 6,
+          "square": 0.6
+        },
+        {
+          "x": 45,
+          "y": 1.5,
+          "w": 7.5,
+          "h": 7,
+          "square": 0.7
+        },
+        {
+          "x": 10,
+          "y": 1,
+          "w": 8.6,
+          "h": 7,
+          "square": 0.75
+        },
+        {
+          "x": -30,
+          "y": 1,
+          "w": 8.6,
+          "h": 7,
+          "square": 0.75
+        },
+        {
+          "x": -60,
+          "y": 1,
+          "w": 8,
+          "h": 6.6,
+          "square": 0.8
+        },
+        {
+          "x": -74,
+          "y": 1.2,
+          "w": 7,
+          "h": 6,
+          "square": 0.85
+        }
       ]
     },
     {
@@ -32,18 +74,77 @@
       "group": "waterline",
       "sides": 8,
       "stations": [
-        { "x": 64, "y": -0.6, "w": 4.6, "h": 1.4, "square": 0.8 },
-        { "x": 45, "y": -0.6, "w": 7.7, "h": 1.4, "square": 0.8 },
-        { "x": 10, "y": -0.6, "w": 8.8, "h": 1.4, "square": 0.8 },
-        { "x": -30, "y": -0.6, "w": 8.8, "h": 1.4, "square": 0.8 },
-        { "x": -73, "y": -0.6, "w": 7.2, "h": 1.4, "square": 0.85 }
+        {
+          "x": 64,
+          "y": -0.6,
+          "w": 4.6,
+          "h": 1.4,
+          "square": 0.8
+        },
+        {
+          "x": 45,
+          "y": -0.6,
+          "w": 7.7,
+          "h": 1.4,
+          "square": 0.8
+        },
+        {
+          "x": 10,
+          "y": -0.6,
+          "w": 8.8,
+          "h": 1.4,
+          "square": 0.8
+        },
+        {
+          "x": -30,
+          "y": -0.6,
+          "w": 8.8,
+          "h": 1.4,
+          "square": 0.8
+        },
+        {
+          "x": -73,
+          "y": -0.6,
+          "w": 7.2,
+          "h": 1.4,
+          "square": 0.85
+        }
       ]
     },
-    { "type": "box", "group": "hull", "center": [18, 11, 0], "size": [26, 6, 13], "bevel": 0.6 },
-    { "type": "box", "group": "hull", "center": [21, 16.5, 0], "size": [12, 5, 10], "bevel": 0.5 },
-    { "type": "box", "group": "glass", "center": [27.1, 17, 0], "size": [0.2, 1.4, 9.4] },
-    { "type": "box", "group": "hull", "center": [-14, 10.5, 0], "size": [40, 5, 12], "bevel": 0.5 },
-    { "type": "box", "group": "hull", "center": [-40, 10, 0], "size": [12, 4, 13], "bevel": 0.5 },
+    {
+      "type": "box",
+      "group": "hull",
+      "center": [18, 11, 0],
+      "size": [26, 6, 13],
+      "bevel": 0.6
+    },
+    {
+      "type": "box",
+      "group": "hull",
+      "center": [21, 16.5, 0],
+      "size": [12, 5, 10],
+      "bevel": 0.5
+    },
+    {
+      "type": "box",
+      "group": "glass",
+      "center": [27.1, 17, 0],
+      "size": [0.2, 1.4, 9.4]
+    },
+    {
+      "type": "box",
+      "group": "hull",
+      "center": [-14, 10.5, 0],
+      "size": [40, 5, 12],
+      "bevel": 0.5
+    },
+    {
+      "type": "box",
+      "group": "hull",
+      "center": [-40, 10, 0],
+      "size": [12, 4, 13],
+      "bevel": 0.5
+    },
     {
       "type": "frustum",
       "group": "hull",
@@ -52,7 +153,12 @@
       "top": [6, 4],
       "height": 9
     },
-    { "type": "box", "group": "black", "center": [-2, 22.2, 0], "size": [6.2, 0.4, 4.2] },
+    {
+      "type": "box",
+      "group": "black",
+      "center": [-2, 22.2, 0],
+      "size": [6.2, 0.4, 4.2]
+    },
     {
       "type": "frustum",
       "group": "hull",
@@ -61,12 +167,24 @@
       "top": [6, 4],
       "height": 8
     },
-    { "type": "box", "group": "black", "center": [-26, 21.2, 0], "size": [6.2, 0.4, 4.2] },
-    { "type": "mast", "group": "mast", "center": [14, 19, 0], "height": 14, "base": 4, "top": 1 },
+    {
+      "type": "box",
+      "group": "black",
+      "center": [-26, 21.2, 0],
+      "size": [6.2, 0.4, 4.2]
+    },
+    {
+      "type": "mast",
+      "group": "mast",
+      "center": [21, 19, 0],
+      "height": 14,
+      "base": 4,
+      "top": 1
+    },
     {
       "type": "box",
       "group": "white",
-      "center": [14, 33.5, 0],
+      "center": [21, 33.5, 0],
       "size": [1.2, 1.4, 7],
       "bevel": 0.2
     },
@@ -78,7 +196,13 @@
       "detail": 1,
       "half": true
     },
-    { "type": "box", "group": "hull", "center": [50, 9.4, 0], "size": [6, 2.4, 6], "bevel": 0.8 },
+    {
+      "type": "box",
+      "group": "hull",
+      "center": [50, 9.4, 0],
+      "size": [6, 2.4, 6],
+      "bevel": 0.8
+    },
     {
       "type": "cylinder",
       "group": "mast",
@@ -87,9 +211,24 @@
       "radius": 0.25,
       "sides": 4
     },
-    { "type": "box", "group": "deck", "center": [38, 8.25, 0], "size": [8, 0.5, 8] },
-    { "type": "box", "group": "deck", "center": [-58, 8.15, 0], "size": [26, 0.3, 14] },
-    { "type": "box", "group": "white", "center": [-58, 8.35, 0], "size": [16, 0.1, 0.5] },
+    {
+      "type": "box",
+      "group": "deck",
+      "center": [38, 8.25, 0],
+      "size": [8, 0.5, 8]
+    },
+    {
+      "type": "box",
+      "group": "deck",
+      "center": [-58, 8.15, 0],
+      "size": [26, 0.3, 14]
+    },
+    {
+      "type": "box",
+      "group": "white",
+      "center": [-58, 8.35, 0],
+      "size": [16, 0.1, 0.5]
+    },
     {
       "type": "cylinder",
       "group": "white",
@@ -109,9 +248,21 @@
     }
   ],
   "emissives": [
-    { "kind": "nav-red", "at": [21, 19, -5.2] },
-    { "kind": "nav-green", "at": [21, 19, 5.2] },
-    { "kind": "nav-white", "at": [14, 34.5, 0] },
-    { "kind": "nav-white", "at": [-73, 9, 0] }
+    {
+      "kind": "nav-red",
+      "at": [21, 19, -5.2]
+    },
+    {
+      "kind": "nav-green",
+      "at": [21, 19, 5.2]
+    },
+    {
+      "kind": "nav-white",
+      "at": [21, 34.5, 0]
+    },
+    {
+      "kind": "nav-white",
+      "at": [-73, 9, 0]
+    }
   ]
 }

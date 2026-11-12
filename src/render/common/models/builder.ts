@@ -10,8 +10,8 @@
  *   outward whatever order a primitive lists its corners in. Degenerate triangles
  *   (a loft collapsing to its nose tip) are dropped.
  * - **Color.** A group's color, or for `camo` groups the spec's scheme: a smooth
- *   value-noise pattern over face centers, feature size `scheme.patch`, picks one of
- *   the scheme's colors per face, and down-facing faces take its underside color.
+ *   value-noise pattern over face centers, feature size `scheme.patch`, symmetric
+ *   across the centerline so both wings match, picks one of the scheme's colors per face, and down-facing faces take its underside color.
  *   Faces stay single-colored (no gradients within a face, Part I).
  * - **Ambient occlusion.** Per vertex: eight rays in a cone about the face normal,
  *   up to a quarter of the model's radius; each ray that hits another face darkens
@@ -442,7 +442,9 @@ function camoColor(scheme: CamoScheme, center: V, normal: V, seed: number): stri
   if (scheme.underside && normal[1] < -0.3) return scheme.underside;
   const n = scheme.colors.length;
   if (n === 1) return scheme.colors[0]!;
-  const v = valueNoise(scale(center, 1 / scheme.patch), seed);
+  // Symmetric across the centerline, so mirrored halves (both wings) match.
+  const mirrored: V = [center[0], center[1], Math.abs(center[2])];
+  const v = valueNoise(scale(mirrored, 1 / scheme.patch), seed);
   // Spread the noise's middle-heavy distribution over the colors.
   const u = Math.min(0.999, Math.max(0, (v - 0.2) / 0.6));
   return scheme.colors[Math.floor(u * n)]!;

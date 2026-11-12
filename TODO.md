@@ -431,6 +431,7 @@ Aircraft, vehicles, ships, buildings and trees are generated in code from small 
 - [x] Faction palettes and camouflage schemes from the guide's palette tables, as data shared by the builder and the viewer (plus ship schemes, decision 106)
 - [x] Debug model-viewer page (decision 106; `viewer.html`): renders any spec with a turntable, sun direction and time of day, sky light and exposure controls, wireframe, triangle count, and a silhouette mode (solid black on a pale sky, Part I acceptance check 6); hot-reloads specs in dev; reachable from the debug GUI and built as a second Vite page under `/bearing/`
 - [x] First specs: one fighter and one strike aircraft per side (F-21 Kestrel, F-124 Harrow, Vo-31 Strizh, Vo-35 Molot), checked with the silhouette test in `tools/models.preview.ts`
+  - [x] Owner review of the previews (2026-11-12): wingtip missiles onto the F-21's tips, the F-124's outer wings into the fuselage, stores under the wings of the Vo-31 and Vo-35, both Vo-35 wings one color (camouflage now symmetric), the destroyer's radar mast onto the bridge roof
   - [ ] Owner: check them in the model viewer in the browser (shading, camouflage patches, silhouettes)
   - [ ] Markings: national insignia, modex numbers and squadron codes as painted faces or decals (Part I, Aircraft)
 - [x] Base kit from specs: hangars, hardened shelters, tower, radar on a lattice mast, radar dome, fuel tanks, revetments, placed at airbases in the simulation view (decision 106)
