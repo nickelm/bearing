@@ -105,6 +105,8 @@ describe.skipIf(!gpu)('erosion (GPU)', () => {
         radius: P.radius,
         erosionStrength: 1,
         tuning: { iterations: 400, kdt: 0, rebound: 0, diffusion: 0, talus },
+        // Thermal erosion alone: no landform gain on the result (decision 121).
+        landform: { gain: 1 },
       }),
     );
     const out = await g.readF32('height');

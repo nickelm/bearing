@@ -4,7 +4,8 @@
  *   npx vitest run --config vitest.tools.config.ts tools/relief.preview.ts
  *   env: SEED (1983), LAT, LON (deg; default the main continent), EX exaggeration for the
  *        shading (10), GLOBAL_KM half-width of the global view (150), TILE_KM half-width of
- *        the tile view (20), LEVEL tile level (7)
+ *        the tile view (20), LEVEL tile level (7), GRES global grid resolution (1024; 512 is
+ *        about four times faster for tuning)
  *        What-if gains, for proposals: GAIN multiplies the global grid's wavelengths below
  *        BAND_KM (30) about a Gaussian blur, DETAIL_GAIN the tiles' detail over the global
  *        grid (both 1); files then get a -g<GAIN>-d<DETAIL_GAIN>-ex<EX> suffix.
@@ -28,6 +29,7 @@ import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
 import { TileSynthesizer } from '../src/worldgen/gpu/tileSynth';
 import type { TileData } from '../src/worldgen/gpu/tileSynth';
 import { RiverIndex } from '../src/worldgen/riverIndex';
+import { LANDFORM } from '../src/worldgen/gpu/erosion';
 import { directionToCubeFace, latLonToDirection } from '../src/core/coords';
 import type { CubeFaceUv } from '../src/core/coords';
 import {
@@ -106,7 +108,8 @@ function writeShaded(
       const dy = ((at(i, j - 1) - at(i, j + 1)) * ex) / (2 * cellM);
       const n = new Vec3d(-dx, -dy, 1).normalize();
       const shade = Math.max(0, n.dot(L)) / L.z;
-      const c = tint(at(i, j) / relief);
+      // Tinted by height ÷ (reliefScale × the landform gain), so colors keep their old meaning.
+      const c = tint(at(i, j) / (relief * LANDFORM.gain));
       for (let k = 0; k < 3; k++) {
         img[(j * S + i) * 3 + k] = Math.round(255 * Math.min(1, c[k]! * (0.35 + 0.65 * shade)));
       }
@@ -202,7 +205,7 @@ it('relief at a point', { timeout: 1_800_000 }, async () => {
   const seed = env.SEED ?? '1983';
   const campaign = generateCampaignWorld({ ...DEFAULT_PLANET_PARAMS, seed });
   const params = { ...DEFAULT_PLANET_PARAMS, seed: campaign.seed };
-  const { world, global } = await previewWorld(gpu, params, 256, 1024);
+  const { world, global } = await previewWorld(gpu, params, 256, Number(env.GRES ?? 1024));
   const R = params.radius;
   const relief = params.reliefScale;
   const ex = Number(env.EX ?? 10);
@@ -230,6 +233,25 @@ it('relief at a point', { timeout: 1_800_000 }, async () => {
       (c(x, y + 1) * (1 - tx) + c(x + 1, y + 1) * tx) * ty
     );
   };
+  {
+    directionToCubeFace(center, uv);
+    const c =
+      (uv.face * n + Math.min(n - 1, Math.floor(uv.v * n))) * n +
+      Math.min(n - 1, Math.floor(uv.u * n));
+    console.log(
+      `center: height ${global.height[c]!.toFixed(0)} m (${(global.height[c]! / relief).toFixed(0)} m reference), ` +
+        `uplift ${global.uplift[c]!.toFixed(0)} m reference`,
+    );
+  }
+  {
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const v of global.height) {
+      lo = Math.min(lo, v);
+      hi = Math.max(hi, v);
+    }
+    console.log(`planet: heights ${lo.toFixed(0)}..${hi.toFixed(0)} m physical`);
+  }
   const gKm = Number(env.GLOBAL_KM ?? 150);
   const gDirs = grid(center, gKm, R);
   const gRaw = new Float64Array(gDirs.map(globalAt));

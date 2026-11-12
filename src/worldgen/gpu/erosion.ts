@@ -29,12 +29,28 @@
  * Ocean cells (h ≤ 0) are base level and do not erode by flow. Land never
  * erodes below a small height above sea level, so coastlines stay put.
  *
+ * Landforms (decision 121): back in physical meters, relief above the local
+ * valley floor keeps Earth's proportions instead of shrinking with the planet.
+ * The valley floor V is the eroded height's minimum within LANDFORM.radius,
+ * smoothed; on land h_phys = (h + (gain − 1) · blur(h − V)) · reliefScale,
+ * the relief above the floor blurred over a few cells (LANDFORM.smoothing).
+ * The coast and the broad valley floors stay where erosion left them; slopes
+ * and ridges rise. Drainage is recomputed afterwards on the CPU, as always.
+ *
+ * Climate (decision 19) reads elevation as physical height ÷ reliefScale. The
+ * landform excess is Earth-scaled, so it counts at its physical height: where
+ * the grid has "seaLevelTemperature", it rises by LAPSE_RATE × (gain − 1) ·
+ * blur(h − V) · (1 − reliefScale), and every reader of physical height ÷
+ * reliefScale (biomes, treeline, snow and season in the shaders) then gets the
+ * temperature of the Earth-like elevation without change. Landmass-scale height keeps decision 14's scale.
+ *
  * Maps on the grid: in "height" (physical m), "uplift" and "precipitation";
  * out "height" plus "flow" (drainage area, km² · m/yr of rain) and "receiver".
  */
 import { CUBE_FACE_COUNT } from '../../core/coords';
 import type { GlobalGrid } from './globalGrid';
 import { LINEAR_ID_WGSL } from './gpuContext';
+import { LAPSE_RATE } from '../climate';
 
 export const EROSION_TUNING = {
   /** Erosion iterations at erosionStrength 1. */
@@ -82,6 +98,23 @@ export const EROSION_TUNING = {
 
 export type ErosionTuning = typeof EROSION_TUNING;
 
+/**
+ * Landform relief (decision 121): the gain on relief above the local valley
+ * floor, and the radius (m) over which the floor is the lowest ground, about
+ * half the 40 km wavelength that splits landforms (hills, valleys, ridges)
+ * from landmasses (ranges, plateaus, continents).
+ */
+export const LANDFORM = {
+  gain: 5,
+  radius: 20_000,
+  /**
+   * Blur passes on the relief above the floor before the gain: the stepwise
+   * descent of a channel across the grid is not magnified into terraces, and
+   * valleys narrower than a few cells keep their eroded depth.
+   */
+  smoothing: 2,
+};
+
 const f = (x: number) => (Number.isInteger(x) ? `${x}.0` : String(x));
 const RCV_MASK = 0x0fffffff;
 
@@ -90,12 +123,15 @@ export interface ErosionOptions {
   radius: number;
   erosionStrength: number;
   tuning?: Partial<ErosionTuning>;
+  /** Landform relief settings (decision 121); gain 1 leaves the eroded relief as it is. */
+  landform?: Partial<typeof LANDFORM>;
   onProgress?: (fraction: number) => void;
 }
 
 /** Runs erosion in place on grid map "height". Resolves when the GPU has finished. */
 export async function runErosion(grid: GlobalGrid, opts: ErosionOptions): Promise<void> {
   const t = { ...EROSION_TUNING, ...opts.tuning };
+  const lf = { ...LANDFORM, ...opts.landform };
   const gpu = grid.gpu;
   const n = grid.n;
   if (CUBE_FACE_COUNT * n * n > RCV_MASK) throw new RangeError(`Grid ${n} too large`);
@@ -132,10 +168,46 @@ ${main(
   '  h[id] = hPhys[id] / RELIEF;\n  w[id] = select(h[id], 1.0e30, h[id] > 0.0);\n  h0[id] = h[id];',
 )}`);
 
+  // Landform relief (decision 121): the valley floor V by a minimum filter, then a blur.
+  const floorMin = gpu.kernel(`${head}
+@group(0) @binding(0) var<storage, read> vIn: array<f32>;
+@group(0) @binding(1) var<storage, read_write> vOut: array<f32>;
+${main(`  var m = vIn[id];
+  for (var k = 0; k < 8; k++) {
+    let nb = neighbor(c, k);
+    if (nb >= 0) { m = min(m, vIn[nb]); }
+  }
+  vOut[id] = m;`)}`);
+  const floorBlur = gpu.kernel(`${head}
+@group(0) @binding(0) var<storage, read> vIn: array<f32>;
+@group(0) @binding(1) var<storage, read_write> vOut: array<f32>;
+${main(`  var sum = 2.0 * vIn[id];
+  var wsum = 2.0;
+  for (var k = 0; k < 8; k++) {
+    let nb = neighbor(c, k);
+    if (nb >= 0) { sum += vIn[nb]; wsum += 1.0; }
+  }
+  vOut[id] = sum / wsum;`)}`);
+  // Relief above the floor (0 at sea), then blurred by floorBlur, then the gain.
+  const aboveFloor = gpu.kernel(`${head}
+@group(0) @binding(0) var<storage, read> h: array<f32>;
+@group(0) @binding(1) var<storage, read> valleyFloor: array<f32>;
+@group(0) @binding(2) var<storage, read_write> above: array<f32>;
+${main(`  let hc = h[id];
+  above[id] = select(0.0, max(hc - min(valleyFloor[id], hc), 0.0), hc > 0.0);`)}`);
   const toPhys = gpu.kernel(`${head}
 @group(0) @binding(0) var<storage, read> h: array<f32>;
 @group(0) @binding(1) var<storage, read_write> hPhys: array<f32>;
-${main('  hPhys[id] = h[id] * RELIEF;')}`);
+@group(0) @binding(2) var<storage, read> above: array<f32>;
+${main(`  let hc = h[id];
+  hPhys[id] = select(hc, hc + ${f(lf.gain - 1)} * above[id], hc > 0.0) * RELIEF;`)}`);
+  const climateCorrection = gpu.kernel(`${head}
+@group(0) @binding(0) var<storage, read> h: array<f32>;
+@group(0) @binding(1) var<storage, read> above: array<f32>;
+@group(0) @binding(2) var<storage, read_write> seaLevelT: array<f32>;
+${main(`  if (h[id] > 0.0) {
+    seaLevelT[id] += ${f(LAPSE_RATE)} * ${f(lf.gain - 1)} * above[id] * (1.0 - RELIEF);
+  }`)}`);
 
   const prefill = gpu.kernel(`${head}
 @group(0) @binding(0) var<storage, read_write> h: array<f32>;
@@ -299,7 +371,34 @@ ${main(`  let hc = hIn[id];
       opts.onProgress?.((it + 1) / iterations);
     }
   }
-  gpu.dispatchLinear(toPhys, [grid.get('erosion.h'), hPhys], count);
+  // The valley floor: the lowest ground within the landform radius, then smoothed.
+  const floorCells = Math.max(1, Math.round(lf.radius / cellLength));
+  gpu.copy(grid.get('erosion.h'), grid.get('erosion.w'));
+  for (let p = 0; p < floorCells; p++) {
+    gpu.dispatchLinear(floorMin, [grid.get('erosion.w'), grid.get('erosion.w2')], count);
+    grid.swap('erosion.w', 'erosion.w2');
+  }
+  for (let p = 0; p < 2 * floorCells; p++) {
+    gpu.dispatchLinear(floorBlur, [grid.get('erosion.w'), grid.get('erosion.w2')], count);
+    grid.swap('erosion.w', 'erosion.w2');
+  }
+  gpu.dispatchLinear(
+    aboveFloor,
+    [grid.get('erosion.h'), grid.get('erosion.w'), grid.get('erosion.h0')],
+    count,
+  );
+  for (let p = 0; p < lf.smoothing; p++) {
+    gpu.dispatchLinear(floorBlur, [grid.get('erosion.h0'), grid.get('erosion.w2')], count);
+    grid.swap('erosion.h0', 'erosion.w2');
+  }
+  gpu.dispatchLinear(toPhys, [grid.get('erosion.h'), hPhys, grid.get('erosion.h0')], count);
+  if (grid.has('seaLevelTemperature')) {
+    gpu.dispatchLinear(
+      climateCorrection,
+      [grid.get('erosion.h'), grid.get('erosion.h0'), grid.get('seaLevelTemperature')],
+      count,
+    );
+  }
   await gpu.finish();
   for (const name of [
     'erosion.h',

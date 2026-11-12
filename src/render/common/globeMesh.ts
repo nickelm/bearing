@@ -36,7 +36,7 @@ export class GlobeMesh {
   private grid!: CubeGrid;
   private world: World | null = null;
   private mode: ViewMode = 'biome';
-  private exaggeration = 10;
+  private exaggeration = 1;
   private faceSeed: WorldSeed = 0;
 
   private geometry!: BufferGeometry;

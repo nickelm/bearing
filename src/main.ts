@@ -137,7 +137,7 @@ async function main(): Promise<void> {
   };
   const viewParams: ViewGuiParams = {
     mode: 'biome',
-    exaggeration: 10,
+    exaggeration: 1,
     wireframe: false,
     tiles: true,
     geomorph: true,

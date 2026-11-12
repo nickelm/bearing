@@ -396,7 +396,12 @@ Simulation view (needs S1's `render/sim/` split):
   - [ ] Tile generation throughput (one batch of eight in flight) bounds a fast climb, not prediction (decision 119's measurement); for P1's low, fast flight try larger or overlapping batches and measure on a real GPU
 - [ ] Owner: recheck the glitter toward the sun from altitude on the tablet after decision 120 (rivers reflect only their true width)
 - [ ] Frame rate at altitude (owner, tablet: 28–30 fps near the ground, about 10 high up). Headless at 8 km facing the sun: 10× draws 107 tiles, 0.93 M triangles, 12.5 ms of terrain CPU per frame; 1× draws 13 tiles, 0.11 M triangles, 0.7 ms, and the software-rendered frame takes half as long. True-scale relief (next) is the main fix; then shorten the river lists of coarse meshes (mean 36–52 segments per pixel, up to 160, at 8 km), e.g. by dropping rivers narrower than a fraction of the mesh's vertex spacing
-- [ ] True-scale relief: the simulation view's own exaggeration uniform, default 1×; recheck skirt depth and the near plane; owner look at whether decision 14's relief reads at 1×
+- [x] True-scale relief: the simulation view's own exaggeration uniform, default 1×; recheck skirt depth and the near plane; owner look at whether decision 14's relief reads at 1× (it did not: decision 121 keeps landforms at Earth's proportions, and the view defaults to 1×; skirts were already sized for 40×)
+  - [ ] Owner: look at the terrain at true scale in the browser (seed 1983 at 9.853, −48.200 and elsewhere): valleys, ridges, snow lines and forests after decision 121
+  - [ ] Strategic map: relief is now taller at landform scale (peaks about 4.7 km); check the hillshade and the 4× exaggeration at the floor, and lower it if the map gets busy
+  - [ ] Peak labels show coarse-pass heights (about 1.4 km at most), lower than the eroded summits now; label from the global grid's height near the peak, or drop the height
+  - [ ] Airfields on rougher ground: check the 400 m grading margin and embankments at true scale (`VIEWS=airbase,runway`)
+  - [ ] Tune the landform gain, radius and tile detail across more seeds and terrain types (plains, coasts, high mountains) with `tools/relief.preview.ts`
 - [ ] Faceted flat shading on terrain (derivative normals), with facets of about 20–60 m at low altitude; check it against geomorphing
 - [ ] Per-face shade quantization: three to five shades per biome from slope, altitude, moisture and low-frequency noise, constant per face
 - [ ] Rock and snow by face; drop smooth rock blending (style gap from decision 70)

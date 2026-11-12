@@ -11,7 +11,10 @@
  *
  * `fade` goes to zero on floodplains, so river valleys stay smooth. Detail
  * amplitude on plains also falls with the global slope, so flat, sediment-filled
- * lowlands stay smooth while hills and mountains stay rough. Octaves
+ * lowlands stay smooth while hills and mountains stay rough. On land, detail is
+ * in physical meters (landforms keep Earth's heights, decision 121) and follows
+ * the landscape position from the global grid: little on valley floors, which
+ * erosion has filled, most on ridges and upper slopes. Octaves
  * are added while their wavelength stays above two sample spacings (and
  * above MIN_WAVELENGTH, the finest baked detail), so coarse tiles are a
  * low-pass version of fine ones. Tiles at or above the global grid's level
@@ -41,6 +44,7 @@ import type { GlobalGrid } from './globalGrid';
 import { WORKGROUP_SIZE } from './gpuContext';
 import { bicubicSamplerWgsl } from './gridWgsl';
 import { NOISE_WGSL, packPermutations } from './noiseWgsl';
+import { LANDFORM } from './erosion';
 
 export const TILE_SYNTH_TUNING = {
   /** First detail octave, in global cells: just below what the global grid resolves (the detail stage covers 3+ cells). */
@@ -49,9 +53,26 @@ export const TILE_SYNTH_TUNING = {
   minWavelength: 100,
   /** Roughness exponent: octave amplitude ∝ wavelength^H. */
   roughness: 0.8,
-  /** Detail amplitude of the first octave (reference m) on plains, and per meter of uplift. */
-  detailPlains: 25,
-  detailPerUplift: 0.05,
+  /**
+   * Detail amplitude of the first octave (reference m) on plains, and per meter of
+   * uplift. On land it is multiplied by the landform gain as well as reliefScale
+   * (decision 121); on the sea floor by reliefScale only.
+   */
+  detailPlains: 12,
+  detailPerUplift: 0.025,
+  /**
+   * Landscape position (decision 121): the global height minus its mean on a ring
+   * `positionRing` global cells out, over `positionScale` m plus `positionSlope` × the
+   * height change along the slope across the ring. Detail is `valleyDetail` of full
+   * on valley floors and `ridgeDetail` on ridges.
+   */
+  positionRing: 2,
+  positionScale: 8,
+  positionSlope: 0.5,
+  valleyDetail: 0.25,
+  ridgeDetail: 1,
+  /** Forest thins on global slopes (m/m, physical) between these. */
+  forestSlope: [0.5, 0.8] as [number, number],
   /** Plains detail falls to this fraction where the global slope is below flatSlope[0]. */
   lowlandDetail: 0.15,
   /** Global slopes (m/m) over which plains detail ramps from lowlandDetail to full. */
@@ -354,7 +375,16 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     let up = upliftAt(d);
     let mountain = smoothstep(500.0, 2500.0, up);
     let lowland = mix(${f(t.lowlandDetail)}, 1.0, smoothstep(${f(t.flatSlope[0])}, ${f(t.flatSlope[1])}, slope));
-    let a0 = ${f(t.detailPlains)} * lowland + ${f(t.detailPerUplift)} * max(up, 0.0);
+    // Landscape position: above the ring mean on ridges, below it in valleys.
+    let ring = ${f(t.positionRing)} * 2.0 * QUARTER_PI / f32(N);
+    let ringMean = 0.25 * (heightAt(normalize(d + ring * e0)) + heightAt(normalize(d - ring * e0))
+      + heightAt(normalize(d + ring * n0)) + heightAt(normalize(d - ring * n0)));
+    let relScale = ${f(t.positionScale)} + ${f(t.positionSlope)} * slope * ring * R;
+    let position = smoothstep(-1.0, 1.0, (base - ringMean) / relScale);
+    // Detail continues the global grid's landform relief (decision 121): reference
+    // amplitude × reliefScale × the landform gain, so slopes stay Earth-like.
+    let a0 = (${f(t.detailPlains)} * lowland + ${f(t.detailPerUplift)} * max(up, 0.0)) * RELIEF
+      * ${f(LANDFORM.gain)} * mix(${f(t.valleyDetail)}, ${f(t.ridgeDetail)}, position);
     var detail = 0.0;
     var lambda = LAMBDA0;
     for (var o = 0u; o < tile.octaves; o++) {
@@ -377,7 +407,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
       }
     }
 
-    h = base + (detail * RELIEF + gullies) * fade * dryBed;
+    h = base + (detail + gullies) * fade * dryBed;
     // Rivers shape the terrain within reach; carving never raises it.
     // Not under lakes: a river crossing a lake has no channel in the lake bed.
     h = mix(h, min(h, carve), reachW * dryBed);
@@ -389,7 +419,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     // where the clumps are resolved (coarse tiles keep the mean).
     forest = f32((mat >> 24u) & 0xffu) / 255.0;
     forest *= smoothstep(treeline + ${f(t.treelineBand)}, treeline - ${f(t.treelineBand)}, h);
-    forest *= 1.0 - smoothstep(0.6, 1.0, slope / RELIEF);
+    forest *= 1.0 - smoothstep(${f(t.forestSlope[0])}, ${f(t.forestSlope[1])}, slope);
     forest *= 1.0 - riverCover;
     forest *= select(1.0, 0.0, h < lakeLevel || h <= 0.0);
     var clump = 0.0;

@@ -7,7 +7,7 @@
  *   npx vitest run --config vitest.tools.config.ts tools/render.preview.ts
  *   env: SEED (1983), TRES tectonic resolution (256), GRES global resolution (1024),
  *        VIEWS comma list of view names (all), W × H image size (1024 × 576),
- *        EX exaggeration (10), GRADE=0 leaves airfields ungraded (files get -ungraded),
+ *        EX exaggeration (1, the simulation view's true scale), GRADE=0 leaves airfields ungraded (files get -ungraded),
  *        PERF=n times n more frames per view once loaded: ms per frame until the GPU is
  *          done, CPU in scene.render and its parts, terrain loop lengths, draw statistics
  *          (on a software adapter only the ratios mean anything),
@@ -403,7 +403,7 @@ it('renders preview views', async () => {
   const gres = Number(env('GRES', '1024'));
   const width = Number(env('W', '1024'));
   const height = Number(env('H', '576'));
-  const exaggeration = Number(env('EX', '10'));
+  const exaggeration = Number(env('EX', '1'));
   const wanted = env('VIEWS', '');
   const strategic = env('SCENE', 'sim') === 'strategic';
   const views = (strategic ? STRATEGIC_PREVIEW_VIEWS : PREVIEW_VIEWS).filter(
@@ -565,6 +565,12 @@ it('renders preview views', async () => {
         height: env.OBS_HEIGHT ? Number(env.OBS_HEIGHT) : station.height,
         pitch: env.OBS_PITCH ? Number(env.OBS_PITCH) * DEG : station.pitch,
       });
+      // OBS_LAT and OBS_LON (deg) move the observer from the station to that spot.
+      if (env.OBS_LAT && env.OBS_LON) {
+        scene.observer.spot.copy(
+          latLonToDirection(Number(env.OBS_LAT) * DEG, Number(env.OBS_LON) * DEG),
+        );
+      }
       // The clock and the sun follow the observer's spot.
       o.lat = scene.observer.lat;
       o.lon = scene.observer.lon;

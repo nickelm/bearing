@@ -185,9 +185,9 @@ export class TerrainRenderer {
   buildBudgetMs = 8;
 
   private world: TerrainWorld | null = null;
-  private exaggeration = 10;
+  private exaggeration = 1;
   /** Height exaggeration, shared with layers drawn on the terrain (trees). */
-  readonly exaggerationUniform = uniform(10);
+  readonly exaggerationUniform = uniform(1);
   private mode: TileViewMode = 'biome';
   private detail: Noise3 = new Noise3(rng(0, 'render-detail'));
   private readonly index = new BufferAttribute(buildTileIndex(), 1);
