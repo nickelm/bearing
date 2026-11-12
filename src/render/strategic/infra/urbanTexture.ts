@@ -8,6 +8,11 @@
  *
  * Each polygon is rasterized on every face one of its vertices falls on, projected
  * onto that face (projectToCubeFace), so towns on a face seam are whole.
+ *
+ * The map draws towns larger than life (Part II principle 1; decision 105): each
+ * polygon is scaled about its center by URBAN_MAP_SCALE, and at least to a mean radius
+ * of URBAN_MIN_TEXELS texels, so villages show as small patches instead of a faint
+ * smudge under a texel.
  */
 import {
   ClampToEdgeWrapping,
@@ -30,9 +35,18 @@ type V3 = Node<'vec3'>;
 /** Texels per face edge: about 0.8 km on a 1,000 km planet. */
 export const URBAN_TEXTURE_SIZE = 2048;
 const SAMPLES = 4;
+/** Scale of urban polygons on the map, about their centers. */
+export const URBAN_MAP_SCALE = 1.6;
+/** Least mean radius of a drawn urban polygon (texels). */
+export const URBAN_MIN_TEXELS = 1.6;
 
 /** Coverage texels (6 · n², face · n² + j · n + i) of every urban polygon. */
-export function urbanTexels(urban: UrbanExtents, n = URBAN_TEXTURE_SIZE): Uint8Array {
+export function urbanTexels(
+  urban: UrbanExtents,
+  n = URBAN_TEXTURE_SIZE,
+  scale = URBAN_MAP_SCALE,
+  minTexels = URBAN_MIN_TEXELS,
+): Uint8Array {
   const out = new Uint8Array(6 * n * n);
   const K = URBAN_VERTICES;
   const count = urban.points.length / (K * 3);
@@ -40,13 +54,39 @@ export function urbanTexels(urban: UrbanExtents, n = URBAN_TEXTURE_SIZE): Uint8A
   const uv = { face: 0 as CubeFace, u: 0, v: 0 };
   const xs = new Float64Array(K);
   const ys = new Float64Array(K);
+  const pts = new Float64Array(K * 3);
+  const minAngle = (minTexels * Math.PI) / 2 / n;
+  const P = urban.points;
   for (let p = 0; p < count; p++) {
+    // Scale about the center: larger than life, and at least minTexels in radius.
+    let cx = 0;
+    let cy = 0;
+    let cz = 0;
+    for (let k = 0; k < K; k++) {
+      const o = (p * K + k) * 3;
+      cx += P[o]!;
+      cy += P[o + 1]!;
+      cz += P[o + 2]!;
+    }
+    const cl = Math.hypot(cx, cy, cz) || 1;
+    cx /= cl;
+    cy /= cl;
+    cz /= cl;
+    let mean = 0;
+    for (let k = 0; k < K; k++) {
+      const o = (p * K + k) * 3;
+      mean += Math.hypot(P[o]! - cx, P[o + 1]! - cy, P[o + 2]! - cz) / K;
+    }
+    const f = Math.max(scale, minAngle / Math.max(mean, 1e-12));
     const faces = new Set<CubeFace>();
     for (let k = 0; k < K; k++) {
       const o = (p * K + k) * 3;
-      faces.add(
-        directionToFace(d.set(urban.points[o]!, urban.points[o + 1]!, urban.points[o + 2]!)),
-      );
+      d.set(cx + (P[o]! - cx) * f, cy + (P[o + 1]! - cy) * f, cz + (P[o + 2]! - cz) * f);
+      d.normalize();
+      pts[k * 3] = d.x;
+      pts[k * 3 + 1] = d.y;
+      pts[k * 3 + 2] = d.z;
+      faces.add(directionToFace(d));
     }
     for (const face of faces) {
       let x0 = Infinity;
@@ -54,12 +94,7 @@ export function urbanTexels(urban: UrbanExtents, n = URBAN_TEXTURE_SIZE): Uint8A
       let y0 = Infinity;
       let y1 = -Infinity;
       for (let k = 0; k < K; k++) {
-        const o = (p * K + k) * 3;
-        projectToCubeFace(
-          d.set(urban.points[o]!, urban.points[o + 1]!, urban.points[o + 2]!),
-          face,
-          uv,
-        );
+        projectToCubeFace(d.set(pts[k * 3]!, pts[k * 3 + 1]!, pts[k * 3 + 2]!), face, uv);
         xs[k] = uv.u * n;
         ys[k] = uv.v * n;
         x0 = Math.min(x0, xs[k]!);

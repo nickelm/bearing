@@ -73,7 +73,10 @@ import { UrbanTexture } from './infra/urbanTexture';
 
 /** Part II's urban extent fill (sRGB), and how much of it covers the land (decision 104). */
 export const URBAN_FILL = 0xcbb8a0;
-export const URBAN_OPACITY = 0.9;
+export const URBAN_OPACITY = 1;
+/** The urban fill's outline (sRGB) and its width (px), where texels span pixels (decision 105). */
+export const URBAN_EDGE = 0x8e7a64;
+export const URBAN_EDGE_PX = 1.3;
 import { FACTION_COLORS, NEUTRAL_COLOR } from './overlays/militaryModel';
 import type { WeatherField } from '../common/weatherField';
 import { BiomeFillTexture, hexToLinear, STEEP_ROCK_FILL } from './biomeFill';
@@ -428,11 +431,22 @@ export class StrategicRelief {
       const mapLand = mix(mix(marked, rock, steep), rgb(HATCH_MARK), hatch);
       // Urban extents over the land fills and patterns, under snow and the hillshade
       // (decision 104).
-      const urbanCover = this.urban
-        .sample(radial)
-        .mul(this.urbanOn.mul(this.belowGlobe))
-        .mul(URBAN_OPACITY);
-      const builtLand = mix(mapLand, rgb(hexToLinear(URBAN_FILL)), urbanCover);
+      // A crisp edge at half coverage and a thin darker outline (decision 105), where
+      // the texels span several pixels; a soft blend where they are smaller.
+      const urbanGate = this.urbanOn.mul(this.belowGlobe);
+      const coverage = this.urban.sample(radial);
+      const coverageWidth = max(fwidth(coverage), 1e-3);
+      const urbanFill = clamp(coverage.sub(0.5).div(coverageWidth).add(0.5), 0, 1);
+      const urbanEdge = clamp(
+        float(URBAN_EDGE_PX / 2 + 0.5).sub(abs(coverage.sub(0.5)).div(coverageWidth)),
+        0,
+        1,
+      ).mul(float(1).sub(smoothstep(0.25, 0.5, coverageWidth)));
+      const builtLand = mix(
+        mix(mapLand, rgb(hexToLinear(URBAN_FILL)), urbanFill.mul(URBAN_OPACITY).mul(urbanGate)),
+        rgb(hexToLinear(URBAN_EDGE)),
+        urbanEdge.mul(urbanGate),
+      );
       // Seasonal snow over the land colors, below the hillshade (decision 87).
       const climate = this.climate.sample(radial);
       const seasonsOn = this.seasons.mul(this.biomeMode);

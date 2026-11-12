@@ -1663,3 +1663,13 @@ The engineering calls made while adopting it:
 - **Previews.** Two strategic preview views center on the Alliance capital: `cities` at 700 km (Theater band) and `capital` at 150 km (Region band).
 
 **Reason:** Reusing the overlay drawing gives roads and symbols the same crisp, ground-fixed, screen-sized strokes as the front (Part II principle 3) without a second line renderer, and the glyph layer already provides flat shading, the night tint and band fades for the building clusters. Drawing roads under the glyphs and symbols over them follows how printed maps layer them: relief art first, linework, then symbols and type.
+
+### 105. Legible towns and symbols at the zoom floor
+
+**Date:** 2026-11-12
+**Decision:** Fixes for the gaps acceptance check 5 found in S4's map (seed 1, `sharp` view at 1920 × 1080).
+
+- **Urban fill.** The map draws urban polygons 1.6 times their size about their centers, and at least 1.6 texels (about 1.3 km) in mean radius, so towns read larger than life (Part II principle 1) and villages show as small patches rather than a smudge under a texel. The graph keeps the true extents. The fill is opaque now and gets a crisp edge at half coverage, with a 1.3 px `#8E7A64` outline where a texel spans at least two to four pixels (fading out where texels are smaller). Without an edge, `#CBB8A0` was nearly invisible on desert (`#DCC195`) and farmland (`#C9B57A`), which differ from it mostly in hue.
+- **Symbols.** Site symbols are 16 px (were 12), airbases 13 and 19 px (11 and 15), bridge marks 13 px with thicker bars (9), the capital star 18 px (15), with wider pale casings. Upright symbols now face the screen as billboards. Before, they lay in the ground plane, and the map's tilt of up to 50° at the floor squashed them to half height.
+
+**Reason:** At the floor a factory or depot drawn flat at 12 px was a few pixels tall, and the towns the roads join were hard to find. Larger, screen-facing symbols and outlined towns keep the linework, symbols and type all legible at the closest zoom, which is what check 5 asks.

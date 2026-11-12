@@ -24,7 +24,7 @@
  *   and pass, so layers toggle by visibility.
  * - **Reuse** (decision 104). The class takes its own layer names, so the map's roads,
  *   railways and site symbols (infra/) draw with it too: lines may have a colored
- *   casing, marks include map symbols that stand upright on screen, and an optional
+ *   casing, marks include map symbols that face the screen, and an optional
  *   day/night input darkens ink and casing with the map's night tint.
  */
 import {
@@ -197,7 +197,7 @@ function symbolDistance(code: F, x: F, y: F): F {
         min(sdBox(x, y, 0, 0.2, 0.95, 0.07), sdBox(x, y, 0, -0.2, 0.95, 0.07)),
       ),
     // Two bars along the road, either side of it.
-    bridge: () => min(sdBox(x, y, -0.55, 0, 0.13, 0.75), sdBox(x, y, 0.55, 0, 0.13, 0.75)),
+    bridge: () => min(sdBox(x, y, -0.6, 0, 0.18, 0.8), sdBox(x, y, 0.6, 0, 0.18, 0.8)),
     star: () => sdStar(x, y, 0.45),
   };
   let d: F = float(FAR);
@@ -421,10 +421,15 @@ export class MilitaryLayer<L extends string = OverlayLayer> {
     const toEye = this.eye.sub(c);
     const mpp = length(toEye).mul(this.pixelAngle);
     const dir = normalize(iP.xyz);
-    // Upright symbols: the screen's up, laid into the ground plane.
-    const up = this.screenUp.sub(dir.mul(dot(dir, this.screenUp)));
-    const axis = normalize(select(length(iAxis.xyz).greaterThan(0.5), iAxis.xyz, up));
-    const left = normalize(cross(dir, axis));
+    // Oriented marks lie flat on the ground along their axis; upright symbols face the
+    // screen (billboards), so the map's tilt does not squash them (decision 105).
+    const oriented = length(iAxis.xyz).greaterThan(0.5);
+    const axis = select(oriented, normalize(iAxis.xyz), normalize(this.screenUp));
+    const left = select(
+      oriented,
+      normalize(cross(dir, axis)),
+      normalize(cross(normalize(toEye), this.screenUp)),
+    );
     const half = max(iSize.x, iSize.y).add(iSize.w).add(1.5);
     m.positionNode = c.add(axis.mul(corner.x).add(left.mul(corner.y)).mul(half).mul(mpp));
     const visibleV = smoothstep(0, 0.04, dot(dir, normalize(toEye))).mul(

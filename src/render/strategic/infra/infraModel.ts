@@ -61,11 +61,11 @@ export const THEATER_MOTORWAY = { width: 1.5, casing: 0.5 } as const;
 export const RAIL_COLOR = 0x3e3a36;
 export const RAIL = { width: 1.2, casing: 0.6, tickLength: 6, tickPeriod: 9, tickWidth: 1.5 };
 /** Bridge marks and symbols (CSS px). */
-export const BRIDGE_SIZE = 9;
+export const BRIDGE_SIZE = 13;
 export const BRIDGE_COLOR = 0x2a2a2a;
-export const SYMBOL_SIZE = 12;
-export const AIRBASE_SIZE = { theater: 11, region: 15 } as const;
-export const STAR_SIZE = 15;
+export const SYMBOL_SIZE = 16;
+export const AIRBASE_SIZE = { theater: 13, region: 19 } as const;
+export const STAR_SIZE = 18;
 
 const THEATER_DOWN: readonly ZoomBand[] = ['theater', 'region'];
 const REGION: readonly ZoomBand[] = ['region'];
@@ -177,7 +177,7 @@ function symbol(
     width: size,
     color,
     outline: 0,
-    casing: 1.4,
+    casing: 1.8,
     bands,
   };
 }
@@ -270,7 +270,7 @@ export function buildInfraOverlays(
       const road = b.road[i]!;
       if (road < 0) continue;
       const axis = tangentAt(pts[road]!, p);
-      marks.push({ ...symbol('bridge', p, color, BRIDGE_SIZE, REGION, axis), casing: 1 });
+      marks.push({ ...symbol('bridge', p, color, BRIDGE_SIZE, REGION, axis), casing: 1.4 });
     }
   };
   bridgeMarks(graph.bridges, graph.roads, BRIDGE_COLOR);

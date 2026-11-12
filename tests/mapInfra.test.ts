@@ -114,7 +114,7 @@ describe('map infrastructure helpers', () => {
       d.normalize();
       points.set([d.x, d.y, d.z], k * 3);
     }
-    const tex = urbanTexels({ points, area: new Float32Array([0]) }, n);
+    const tex = urbanTexels({ points, area: new Float32Array([0]) }, n, 1, 0);
     const uv = projectToCubeFace(c, 4);
     const at = (u: number, v: number) =>
       tex[4 * n * n + Math.floor(v * n) * n + Math.floor(u * n)]!;
@@ -126,6 +126,32 @@ describe('map infrastructure helpers', () => {
     const expected = Math.PI * ((r / (Math.PI / 2)) * n) ** 2;
     expect(covered).toBeGreaterThan(0.9 * expected);
     expect(covered).toBeLessThan(1.1 * expected);
+  });
+
+  it('draws towns larger than life, and villages at least a few texels across', () => {
+    const n = 256;
+    const ring = (r: number) => {
+      const c = latLonToDirection(0, 0);
+      const points = new Float64Array(URBAN_VERTICES * 3);
+      for (let k = 0; k < URBAN_VERTICES; k++) {
+        const a = (k / URBAN_VERTICES) * 2 * Math.PI;
+        const d = c.clone();
+        d.x += r * Math.cos(a);
+        d.y += r * Math.sin(a);
+        d.normalize();
+        points.set([d.x, d.y, d.z], k * 3);
+      }
+      return { points, area: new Float32Array([0]) };
+    };
+    const sum = (t: Uint8Array) => t.reduce((s, x) => s + x / 255, 0);
+    const big = ring(0.02);
+    const ratio = sum(urbanTexels(big, n, 1.6, 0)) / sum(urbanTexels(big, n, 1, 0));
+    expect(ratio).toBeGreaterThan(0.95 * 1.6 ** 2);
+    expect(ratio).toBeLessThan(1.05 * 1.6 ** 2);
+    // A village far below a texel still covers about π · 1.6² texels.
+    const tiny = sum(urbanTexels(ring(1e-5), n, 1.6, 1.6));
+    expect(tiny).toBeGreaterThan(0.8 * Math.PI * 1.6 ** 2);
+    expect(tiny).toBeLessThan(1.2 * Math.PI * 1.6 ** 2);
   });
 
   it('builds closed settlement models standing on the ground', () => {

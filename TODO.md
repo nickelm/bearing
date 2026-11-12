@@ -276,12 +276,11 @@ Civilian geography (settlements, roads, bridges) joins the strategic graph befor
 - [ ] Island campaigns can leave the Alliance under 15 airbases (seed 11: 9), since its islands have little flat land; tied to the lopsided island split noted under S3
 - [ ] Simulation view: built-up patches from the urban extent polygons instead of the urban radius disk (V3)
 - [ ] Tune routes across seeds: seed 1983 numbers 33 motorway and 86 trunk chains, many short pieces between junctions; consider merging through junctions across classes
-- [ ] Bridge marks and the capital star read small at 150 km; the urban fill is faint around small towns
 - [ ] Browser check: frame time at the floor with roads, railways, symbols and building glyphs; whether secondary roads crowd the Region band near 400 km
 - [x] Acceptance checks 1, 4 and 5 on the new views (2026-11-12, `SCENE=strategic SEED=1 VIEWS=globe,cities,capital,sharp CVD=1`): pass, with the gaps below
   - [ ] Check 4: under deuteranopia and protanopia motorways (`#C0563A`) and trunk roads (`#D99A4E`) both turn olive and differ only by width; consider a lighter trunk or a stronger width step
   - [ ] Check 4: under protanopia the Pact's front teeth go near black against the front line; they still read by shape
-  - [ ] Check 5: site symbols, bridge marks and the urban fill are hard to see at 1080p at the floor (the `sharp` view); enlarge symbols and bridge marks, or raise the fill's contrast against desert and farmland
+  - [x] Check 5: site symbols, bridge marks and the urban fill were hard to see at 1080p at the floor (the `sharp` view); larger symbols facing the screen, towns drawn larger than life with an outlined fill (decision 105)
   - [ ] Check 1: weather clouds are hard to tell from snow on the `globe` view; the night side's lights merge into a bright field over the densest region
 
 ## Simulation core track
