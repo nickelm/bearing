@@ -144,6 +144,9 @@ export interface WaterInputs {
   light?: LightAt;
 }
 
+/** GGX α² added to the reflection of a river much narrower than its pixel (decision 120). */
+const THIN_RIVER_ALPHA2 = 0.5;
+
 export class WaterShading {
   /** 1 draws water; 0 in debug color modes, which show the raw vertex colors. */
   readonly enabled = uniform(1);
@@ -217,7 +220,20 @@ export class WaterShading {
         const tangentGrad = grad.sub(i.up.mul(dot(grad, i.up)));
         const waveNormal = normalize(i.up.sub(tangentGrad)) as V3;
         // Beckmann–GGX correspondence: α² ≈ 2σ².
-        const alpha2 = this.baseRoughness.mul(this.baseRoughness).add(unresolved.mul(2));
+        // A river drawn wider than it is (decision 46) reflects only its true share of
+        // the pixel, and over a broad lobe: banks, bends and ripples average out within
+        // a pixel it does not fill, so its glint spreads instead of saturating (decision 120).
+        // How much of this pixel's water is river alone (1 where no sea or lake).
+        const riverOnly = clamp(river.div(max(wet, 1e-4)), 0, 1).mul(float(1).sub(max(sea, lake)));
+        const trueShare = i.riverReflect
+          ? clamp(i.riverReflect.div(max(river, 1e-4)), 0, 1)
+          : float(1);
+        const thin = riverOnly.mul(float(1).sub(trueShare));
+        const reflectShare = float(1).sub(thin);
+        const alpha2 = this.baseRoughness
+          .mul(this.baseRoughness)
+          .add(unresolved.mul(2))
+          .add(thin.mul(THIN_RIVER_ALPHA2));
 
         // Lighting of the water surface.
         const v = normalize(i.relative.negate()) as V3;
@@ -260,13 +276,6 @@ export class WaterShading {
         const surface = mix(body, vec3(0.8, 0.82, 0.82), foamy) as V3;
 
         const bodyLight = L.shadeDiffuse(surface, i.up, i.relative, at).mul(float(1).sub(fresnel));
-        // A river drawn wider than it is reflects only its true share of the pixel.
-        const riverOnly = river.mul(float(1).sub(max(sea, lake)));
-        const reflectShare = i.riverReflect
-          ? float(1).sub(
-              riverOnly.mul(float(1).sub(clamp(i.riverReflect.div(max(river, 1e-4)), 0, 1))),
-            )
-          : float(1);
         const water = bodyLight.add(
           sky
             .add(glint.mul(clamp(nDotL.mul(20), 0, 1)))
