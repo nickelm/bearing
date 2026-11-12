@@ -327,7 +327,8 @@ export class TerrainRenderer {
       const bed = attribute('color', 'vec3');
       // Rivers draw on land only: skip their loop out at sea.
       const offshore = rawHeight.lessThan(heightWidth.negate());
-      const river = rivers.coverage(planet, riverStart, riverCount, footprint, offshore.not());
+      const riverCover = rivers.coverage(planet, riverStart, riverCount, footprint, offshore.not());
+      const river = riverCover.x;
       const dry = step(0.5, rawHeight).mul(step(lakeDepth, 0)).mul(this.land.enabled).toVar();
       const isDry = dry.greaterThan(0);
       // Towns and industry as built-up patches, and their night lights, in one
@@ -360,6 +361,7 @@ export class TerrainRenderer {
         height: rawHeight,
         lake: lakeDepth,
         river,
+        riverReflect: riverCover.y,
         shore: surfaceAttr.z,
         up: radial,
         relative: positionWorld,

@@ -125,8 +125,13 @@ export interface WaterInputs {
   height: F;
   /** Signed lake depth (m): positive under a lake. */
   lake: F;
-  /** River coverage 0..1 (decision 46). */
+  /** River coverage 0..1 as drawn (decision 46). */
   river: F;
+  /**
+   * The river's true pixel fraction, ≤ `river`: only it reflects the sun and
+   * sky, so rivers widened for legibility do not glitter (decision 120).
+   */
+  riverReflect?: F;
   /** Signed coast distance (m), positive at sea. */
   shore: F;
   /** Unit radial direction at the fragment. */
@@ -255,8 +260,18 @@ export class WaterShading {
         const surface = mix(body, vec3(0.8, 0.82, 0.82), foamy) as V3;
 
         const bodyLight = L.shadeDiffuse(surface, i.up, i.relative, at).mul(float(1).sub(fresnel));
+        // A river drawn wider than it is reflects only its true share of the pixel.
+        const riverOnly = river.mul(float(1).sub(max(sea, lake)));
+        const reflectShare = i.riverReflect
+          ? float(1).sub(
+              riverOnly.mul(float(1).sub(clamp(i.riverReflect.div(max(river, 1e-4)), 0, 1))),
+            )
+          : float(1);
         const water = bodyLight.add(
-          sky.add(glint.mul(clamp(nDotL.mul(20), 0, 1))).mul(float(1).sub(foamy)),
+          sky
+            .add(glint.mul(clamp(nDotL.mul(20), 0, 1)))
+            .mul(float(1).sub(foamy))
+            .mul(reflectShare),
         );
 
         // Lakes freeze in the cold season (sea ice stays a static biome until weather exists).

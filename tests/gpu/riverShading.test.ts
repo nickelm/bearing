@@ -40,21 +40,35 @@ describe.skipIf(!gpu)('river coverage (TSL on Dawn)', () => {
     });
     const head = await headlessRenderer(gpu!.device, 64, 64);
     const inBuf = instancedArray(input, 'vec4');
-    const outBuf = instancedArray(cases.length, 'vec4');
-    const kernel = Fn(() => {
-      const p = inBuf.element(instanceIndex);
-      const c = shading.coverage(
-        p.xyz,
-        float(range.start) as Node<'float'>,
-        float(range.count) as Node<'float'>,
-        p.w,
-      );
-      outBuf.element(instanceIndex).assign(vec4(c, 0, 0, 0));
-    })().compute(cases.length);
-    await head.renderer.computeAsync(kernel);
-    const out = new Float32Array(await head.renderer.getArrayBufferAsync(outBuf.value));
+    const run = async () => {
+      const outBuf = instancedArray(cases.length, 'vec4');
+      const kernel = Fn(() => {
+        const p = inBuf.element(instanceIndex);
+        const c = shading.coverage(
+          p.xyz,
+          float(range.start) as Node<'float'>,
+          float(range.count) as Node<'float'>,
+          p.w,
+        );
+        outBuf.element(instanceIndex).assign(vec4(c.x, c.y, 0, 0));
+      })().compute(cases.length);
+      await head.renderer.computeAsync(kernel);
+      return new Float32Array(await head.renderer.getArrayBufferAsync(outBuf.value));
+    };
+    const out = await run();
+    // As the app draws them: at least 2 px wide, at 0.8 strength.
+    shading.legibility.value = 0.8;
+    shading.minPixels.value = 2;
+    const legible = await run();
     head.dispose();
     const cover = cases.map((_, i) => out[i * 4]!);
+    // With legibility 0, drawn and true coverage agree.
+    cases.forEach((_, i) => expect(out[i * 4 + 1]).toBeCloseTo(out[i * 4]!, 6));
+    // Drawn legibly, the sub-pixel river covers most of its widened line; its true
+    // fraction, which alone reflects the sun (decision 120), stays about 40/800.
+    expect(legible[5 * 4]).toBeGreaterThan(0.5);
+    expect(legible[5 * 4 + 1]).toBeGreaterThan(0.02);
+    expect(legible[5 * 4 + 1]).toBeLessThan(0.15);
     expect(gpu!.errors).toEqual([]);
     expect(cover[0]).toBeCloseTo(1, 3); // on the centerline
     expect(cover[1]).toBeCloseTo(1, 3); // inside the 20 m half-width

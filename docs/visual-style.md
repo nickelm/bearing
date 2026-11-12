@@ -92,7 +92,7 @@ Beyond 5 km, forests are dark canopy masses in the terrain shading with a sharp 
 ## Water
 
 - **Ocean.** Calm, deep-colored water with faint, large facets from a low-frequency normal pattern (reference 1). Color shifts from deep blue-green offshore to teal in shallows, with a pale foam line at the coast.
-- **Reflections.** Fresnel blend toward the sky color, plus a stretched sun glint that forms a soft column at low sun angles. Planar or screen-space reflections are a later option; the sky blend carries most of the effect.
+- **Reflections.** Fresnel blend toward the sky color, plus a stretched sun glint that forms a soft column at low sun angles. Rivers drawn wider than a pixel for legibility reflect only their true width, so distant rivers do not glitter. Planar or screen-space reflections are a later option; the sky blend carries most of the effect.
 - **Rivers and lakes.** Same material, calmer, with stronger sky reflection.
 
 ## Sky, Atmosphere, and Clouds

@@ -6,7 +6,9 @@
  * to the bank in pixels. A river narrower than `minPixels` is drawn that wide,
  * with its coverage scaled toward its true pixel fraction by `legibility`
  * (0 = physically faint, 1 = full strength). Thin rivers then stay continuous
- * and readable from altitude rather than breaking into dashes. Distances are
+ * and readable from altitude rather than breaking into dashes. The true pixel
+ * fraction comes alongside, for reflections: a widened river's color is a
+ * legibility aid, but only its real water reflects the sun (decision 120). Distances are
  * taken on the unit sphere (float32 unit vectors resolve about 6 cm at
  * R = 1,000 km).
  */
@@ -27,11 +29,13 @@ import {
   select,
   storage,
   uniform,
+  vec2,
 } from 'three/tsl';
 import type { RiverTables } from './riverTables';
 
 type F = Node<'float'>;
 type V3 = Node<'vec3'>;
+type V2 = Node<'vec2'>;
 
 /** How rivers are drawn; shared across materials, so GUI settings survive world changes. */
 export class RiverStyle {
@@ -66,15 +70,17 @@ export class RiverShading {
 
   /**
    * Water coverage 0..1 at a planet-centered position, from `count` segments
-   * starting at `start` in the list buffer. `footprint` is meters per pixel
+   * starting at `start` in the list buffer: x as drawn (widened and
+   * strengthened by the style), y the true pixel fraction (legibility 0). `footprint` is meters per pixel
    * (a variable computed outside any branch). The loop runs only where
    * `gate` holds (default: everywhere).
    */
-  coverage(planetPosition: V3, start: F, count: F, footprint: F, gate?: Node<'bool'>): F {
+  coverage(planetPosition: V3, start: F, count: F, footprint: F, gate?: Node<'bool'>): V2 {
     return Fn(() => {
       const p = normalize(planetPosition);
       const fp = max(footprint, 0.05);
       const cover = float(0).toVar();
+      const physical = float(0).toVar();
       const first = int(start);
       const end = gate ? select(gate, int(count), int(0)) : int(count);
       Loop({ start: int(0), end, type: 'int' }, ({ i }) => {
@@ -87,11 +93,13 @@ export class RiverShading {
         const halfWidth = mix(a.w, b.w, t);
         // At least minPixels wide, with coverage scaled toward the true fraction.
         const drawn = max(halfWidth, fp.mul(this.minPixels).mul(0.5));
-        const strength = mix(min(halfWidth.div(drawn), 1), float(1), this.legibility);
-        const c = clamp(float(0.5).sub(d.sub(drawn).div(fp)), 0, 1).mul(strength);
-        cover.assign(max(cover, c));
+        const fraction = min(halfWidth.div(drawn), 1);
+        const strength = mix(fraction, float(1), this.legibility);
+        const shape = clamp(float(0.5).sub(d.sub(drawn).div(fp)), 0, 1);
+        cover.assign(max(cover, shape.mul(strength)));
+        physical.assign(max(physical, shape.mul(fraction)));
       });
-      return cover;
-    })() as F;
+      return vec2(cover, physical);
+    })() as V2;
   }
 }
