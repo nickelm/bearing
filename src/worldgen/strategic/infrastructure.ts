@@ -23,9 +23,11 @@
  *      factor. Bases within FORWARD_DEPTH of the line are 'forward'.
  * - **Spur roads** link every airbase and port off the network to the
  *   nearest road or settlement, with the civilian road search.
+ * - **Capitals:** each side's largest settlement (decision 103).
  * - **Targets:** factories and power plants in the cast's industry regions,
  *   one refinery per side, supply depots at road junctions 60–150 km behind
- *   each front, rail yards in the largest towns 150–400 km back, and fuel
+ *   each front, rail-yard targets at the graph's rail yards 150–400 km back
+ *   (the largest towns there when no railway reaches the band), and fuel
  *   depots at military ports.
  *
  * Draws from rng(seed, "infrastructure") forks only.
@@ -111,6 +113,8 @@ export interface TargetSite {
 export interface Infrastructure {
   /** Holder of each settlement in graph order: 'alliance', 'pact' or null (neutral). */
   settlementSide: (Side | null)[];
+  /** Each side's capital (a settlement index; −1 if the side holds none): its largest settlement. */
+  capitals: Record<Side, number>;
   ports: Port[];
   airbases: Airbase[];
   targets: TargetSite[];
@@ -243,14 +247,22 @@ export function placeInfrastructure(
     points: Float64Array.from(keep.flatMap((i) => [...all.points.subarray(i * 3, i * 3 + 3)])),
     riverWidth: Float32Array.from(keep, (i) => all.riverWidth[i]!),
     road: Int32Array.from(keep, (i) => all.road[i]!),
-    roadClass: Uint8Array.from(keep, () => RoadClass.Minor),
+    roadClass: Uint8Array.from(keep, () => RoadClass.Secondary),
   };
   lap('spur roads');
 
   const targets = placeTargets(build, cast, territory, settlementSide, ports, r.fork('targets'));
   lap('targets');
+  const capitals: Record<Side, number> = { alliance: -1, pact: -1 };
+  for (let i = 0; i < s.cells.length; i++) {
+    const side = settlementSide[i];
+    if (!side) continue;
+    const cur = capitals[side];
+    if (cur < 0 || s.population[i]! > s.population[cur]!) capitals[side] = i;
+  }
   return {
     settlementSide,
+    capitals,
     ports,
     airbases,
     targets,
@@ -646,9 +658,17 @@ function placeTargets(
         depots.push(j.c);
         add('supply-depot', side, t.id, j.c, nearestIn(s, p, R, 30e3), 0.6);
       }
-      // Rail yards in the largest towns 150–400 km back.
-      const towns = [...s.cells.keys()]
-        .filter((i) => inBand(s.cells[i]!, 150e3, 400e3))
+      // Rail yards 150–400 km back: the graph's yards, else the largest towns.
+      const yards = graph.railways.yards;
+      const yardTowns = [...yards.cells.keys()]
+        .filter((y) => inBand(yards.cells[y]!, 150e3, 400e3))
+        .map((y) => graph.railways.yardSettlement[y]!)
+        .filter((i) => i >= 0);
+      const towns = (
+        yardTowns.length > 0
+          ? yardTowns
+          : [...s.cells.keys()].filter((i) => inBand(s.cells[i]!, 150e3, 400e3))
+      )
         .sort((a, b) => s.population[b]! - s.population[a]! || a - b)
         .slice(0, 2);
       for (const i of towns) add('rail-yard', side, t.id, s.cells[i]!, i, 0.5 + 0.3 * popValue(i));
@@ -690,6 +710,7 @@ export function infrastructureBuffers(x: Infrastructure): ArrayBufferLike[] {
     r.points.buffer,
     r.roadClass.buffer,
     r.traffic.buffer,
+    r.route.buffer,
     b.cells.buffer,
     b.points.buffer,
     b.riverWidth.buffer,

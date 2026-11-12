@@ -9,12 +9,13 @@
  *   (the feature's `region`).
  * - **Streams.** Features draw from `names/features` in id order, settlements from
  *   `names/settlements` in placement order, corridors from `names/corridors` in
- *   front order, so a change in one list leaves the others' names alone.
+ *   front order, routes from `names/roads` in route order, so a change in one
+ *   list leaves the others' names alone.
  * - **Generic terms.** See `featureName`.
  */
 import { rng } from '../../core/rng';
 import type { WorldSeed } from '../../core/rng';
-import { FeatureKind, STRAIT_MAX_WIDTH } from '../strategic/graph';
+import { FeatureKind, RouteKind, STRAIT_MAX_WIDTH } from '../strategic/graph';
 import type { StrategicGraph } from '../strategic/graph';
 import { ISLAND_FLAVOR, LAND_FLAVORS } from './flavors';
 import { Toponymy } from './toponymy';
@@ -95,7 +96,7 @@ export function featureName(
   }
 }
 
-/** Names features, settlements and corridors in place. */
+/** Names features, settlements, corridors and pass and coast roads in place. */
 export function nameWorld(graph: StrategicGraph, seed: WorldSeed): void {
   const flavors = assignFlavors(graph, seed);
   graph.nodes.forEach((n, id) => (n.flavor = flavors[id]!));
@@ -132,5 +133,18 @@ export function nameWorld(graph: StrategicGraph, seed: WorldSeed): void {
       taken.add(name);
       c.name = name;
     }
+  }
+
+  const tr = new Toponymy(base.fork('roads'));
+  const rt = graph.routes;
+  for (let i = 0; i < rt.count; i++) {
+    const kind = rt.kind[i];
+    if (kind !== RouteKind.Pass && kind !== RouteKind.Coast) continue;
+    const generic = kind === RouteKind.Pass ? 'Pass Road' : 'Coast Road';
+    const flavor = flavorOf(rt.region[i]!);
+    let name = `the ${tr.proper(flavor)} ${generic}`;
+    while (taken.has(name)) name = `the ${tr.proper(flavor)} ${generic}`;
+    taken.add(name);
+    rt.names[i] = name;
   }
 }

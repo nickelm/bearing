@@ -27,8 +27,9 @@ const ROAD: readonly Rgb[] = [
 const ROAD_PX = [2, 1.3, 0.8];
 const TOWN: Rgb = [1, 1, 1];
 const BRIDGE: Rgb = [0.1, 0.1, 0.1];
+const RAIL: Rgb = [0.24, 0.23, 0.21];
 
-/** Roads, minor first so major roads draw on top. */
+/** Roads, secondary first so motorways draw on top. */
 export function drawRoads(c: MapCanvas, roads: RoadNetwork, color?: Rgb): void {
   for (const cls of [2, 1, 0]) {
     for (let k = 0; k < roads.count; k++) {
@@ -57,6 +58,13 @@ export function drawGraph(
   }
   for (const lane of g.lanes) c.polyline(lane.points, 2, () => LANE);
   drawRoads(c, g.roads);
+  // Railways (decision 103): dark lines, yards as squares.
+  for (let k = 0; k < g.railways.lines.count; k++) {
+    const r = g.railways.lines;
+    c.polyline(r.points.subarray(r.offsets[k]! * 3, r.offsets[k + 1]! * 3), 1, () => RAIL);
+  }
+  const yards = g.railways.yards;
+  for (let i = 0; i < yards.cells.length; i++) c.square(sitePoint(yards, i), 1.5, RAIL);
   for (let i = 0; i < g.bridges.cells.length; i++) {
     c.square(
       [g.bridges.points[i * 3]!, g.bridges.points[i * 3 + 1]!, g.bridges.points[i * 3 + 2]!],

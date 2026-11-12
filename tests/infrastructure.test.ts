@@ -113,7 +113,7 @@ describe('settlements, roads and bridges in the strategic graph', () => {
     const onMain = Array.from(s.cells).filter((c) => label[c] === main);
     expect(connectedOver(graph.roads, onMain)).toBe(true);
     for (const c of graph.roads.cells) expect(label[c]).toBeGreaterThanOrEqual(0);
-    expect(Array.from(graph.roads.roadClass)).toContain(RoadClass.Highway);
+    expect(Array.from(graph.roads.roadClass)).toContain(RoadClass.Motorway);
   });
 
   it('links neighboring settlements along a Gabriel graph, so roads pass through villages', () => {

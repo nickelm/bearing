@@ -17,9 +17,13 @@
  *   is not allowed. Steps along an existing road cost REUSE_FACTOR of that,
  *   so later links merge into earlier ones: trunk roads form where traffic
  *   concentrates.
- * - **Network.** Each grid edge accumulates the traffic of the links routed
- *   over it, which sets its class. Polylines are cut at junctions, settlements
- *   and class changes.
+ * - **Hierarchy** (decision 103). A gravity model sets each road's class: every
+ *   pair of trunk settlements on a landmass exchanges P_a · P_b / d² (d the
+ *   distance in km, at least TRAFFIC_MIN_DISTANCE), assigned to the shortest path
+ *   over the finished network. The busiest edges making up MOTORWAY_SHARE of the
+ *   network's length become motorways, the next TRUNK_SHARE trunk roads, the
+ *   rest secondary roads. Polylines are cut at junctions, settlements and class
+ *   changes.
  * - **Bridges.** A bridge is where the network crosses a river at least
  *   BRIDGE_MIN_WIDTH wide: a connected group of road cells on the river with
  *   road attached on both banks (RiverGeometry.side).
@@ -39,17 +43,11 @@ export const REUSE_FACTOR = 0.3;
 /** Fixed bridge cost, in cell lengths, plus one cell per BRIDGE_WIDTH_SCALE m of river. */
 const BRIDGE_PENALTY = 1.5;
 const BRIDGE_WIDTH_SCALE = 80;
-/** Traffic (thousands of √(pop · pop)) at which an edge becomes a main road and a highway. */
-export const MAIN_TRAFFIC = 60;
-export const HIGHWAY_TRAFFIC = 150;
-
-export function roadClassOf(traffic: number): RoadClass {
-  return traffic >= HIGHWAY_TRAFFIC
-    ? RoadClass.Highway
-    : traffic >= MAIN_TRAFFIC
-      ? RoadClass.Main
-      : RoadClass.Minor;
-}
+/** Settlement pairs closer than this count as this far apart in the gravity model (km). */
+export const TRAFFIC_MIN_DISTANCE = 20;
+/** Shares of the network's length (busiest first) that become motorways and trunk roads. */
+export const MOTORWAY_SHARE = 0.07;
+export const TRUNK_SHARE = 0.2;
 
 /** Grid edges of a road network with their traffic, keyed by `edgeKey`. */
 export type RoadEdges = Map<number, number>;
@@ -297,12 +295,15 @@ export function routeSettlementLinks(
 
 /**
  * Polylines from grid edges: cut at junctions (degree ≠ 2), at `breaks`
- * cells and where the road class changes. Deterministic in cell order.
+ * cells and where the road class changes. `edges` maps each edge to its
+ * traffic; `classes` gives each edge's class (secondary where missing).
+ * Deterministic in cell order.
  */
 export function roadPolylines(
   ctx: StrategicContext,
   edges: RoadEdges,
   breaks: ReadonlySet<number> = new Set(),
+  classes: ReadonlyMap<number, RoadClass> = new Map(),
 ): RoadNetwork {
   const n = ctx.grid.cellCount;
   const adj = new Map<number, number[]>();
@@ -320,7 +321,7 @@ export function roadPolylines(
     }
   }
   const key = (a: number, b: number) => (a < b ? a * n + b : b * n + a);
-  const cls = (a: number, b: number) => roadClassOf(edges.get(key(a, b))!);
+  const cls = (a: number, b: number) => classes.get(key(a, b)) ?? RoadClass.Secondary;
   const isBreak = (c: number) => {
     const l = adj.get(c)!;
     return l.length !== 2 || breaks.has(c) || cls(c, l[0]!) !== cls(c, l[1]!);
@@ -363,6 +364,7 @@ export function roadPolylines(
     points: new Float64Array(total * 3),
     roadClass: new Uint8Array(count),
     traffic: new Float32Array(count),
+    route: new Int32Array(count).fill(-1),
   };
   let o = 0;
   const g = ctx.grid.centers;
@@ -457,7 +459,7 @@ export function findBridges(
     riverWidth: Float32Array.from(out, (x) => x.width),
     road: Int32Array.from(out, (x) => x.road),
     roadClass: Uint8Array.from(out, (x) =>
-      x.road >= 0 ? net.roadClass[x.road]! : RoadClass.Minor,
+      x.road >= 0 ? net.roadClass[x.road]! : RoadClass.Secondary,
     ),
   };
   out.forEach((x, i) =>
@@ -469,6 +471,145 @@ export function findBridges(
 /** Settlements on the trunk network: towns and cities, or the TRUNK_MIN_COUNT largest per landmass. */
 export const TRUNK_MIN_POPULATION = 20_000;
 const TRUNK_MIN_COUNT = 3;
+
+/**
+ * Gravity-model traffic per edge of `edges` (decision 103): every pair of
+ * `origins` settlements on the same road component exchanges
+ * P_a · P_b / max(d, TRAFFIC_MIN_DISTANCE)² (d in km, great circle), carried on the
+ * cheapest path over the network (step cost: length × mean movement cost). One
+ * Dijkstra per origin; flows to the later origins accumulate up its shortest-path
+ * tree. Edges no flow uses get 0.
+ */
+export function gravityTraffic(
+  ctx: StrategicContext,
+  edges: RoadEdges,
+  cost: Float32Array,
+  s: SettlementList,
+  origins: readonly number[],
+): Map<number, number> {
+  const { grid, radius } = ctx;
+  const n = grid.cellCount;
+  const keys = [...edges.keys()].sort((a, b) => a - b);
+  // Compact road graph.
+  const index = new Map<number, number>();
+  const cellOf: number[] = [];
+  const id = (c: number) => {
+    let i = index.get(c);
+    if (i === undefined) {
+      i = cellOf.length;
+      index.set(c, i);
+      cellOf.push(c);
+    }
+    return i;
+  };
+  const adj: { to: number; w: number; key: number }[][] = [];
+  for (const k of keys) {
+    const a = id(Math.floor(k / n));
+    const b = id(k % n);
+    const ca = cellOf[a]!;
+    const cb = cellOf[b]!;
+    const w = grid.angleBetween(ca, cb) * radius * 0.5 * (cost[ca]! + cost[cb]!);
+    (adj[a] ??= []).push({ to: b, w, key: k });
+    (adj[b] ??= []).push({ to: a, w, key: k });
+  }
+  const m = cellOf.length;
+  const out = new Map<number, number>();
+  for (const k of keys) out.set(k, 0);
+  const order = [...origins].filter((i) => index.has(s.cells[i]!)).sort((a, b) => a - b);
+  const dist = new Float64Array(m);
+  const prev = new Int32Array(m);
+  const prevKey = new Float64Array(m);
+  const load = new Float64Array(m);
+  const done = new Uint8Array(m);
+  const heap = new MinHeap(1024);
+  const P = s.points;
+  for (let oi = 0; oi < order.length; oi++) {
+    const a = order[oi]!;
+    const src = index.get(s.cells[a]!)!;
+    dist.fill(Infinity);
+    done.fill(0);
+    load.fill(0);
+    prev.fill(-1);
+    heap.clear();
+    dist[src] = 0;
+    heap.push(0, src);
+    const settled: number[] = [];
+    while (heap.size > 0) {
+      const u = heap.pop();
+      if (done[u]) continue;
+      done[u] = 1;
+      settled.push(u);
+      for (const e of adj[u] ?? []) {
+        const nd = dist[u]! + e.w;
+        if (nd < dist[e.to]!) {
+          dist[e.to] = nd;
+          prev[e.to] = u;
+          prevKey[e.to] = e.key;
+          heap.push(nd, e.to);
+        }
+      }
+    }
+    // Flows from a to every later origin it reaches.
+    for (let oj = oi + 1; oj < order.length; oj++) {
+      const b = order[oj]!;
+      const t = index.get(s.cells[b]!)!;
+      if (!done[t]) continue;
+      const dot =
+        P[a * 3]! * P[b * 3]! + P[a * 3 + 1]! * P[b * 3 + 1]! + P[a * 3 + 2]! * P[b * 3 + 2]!;
+      const km = (radius * Math.acos(Math.max(-1, Math.min(1, dot)))) / 1000;
+      const d = Math.max(TRAFFIC_MIN_DISTANCE, km);
+      load[t] = load[t]! + (s.population[a]! * s.population[b]!) / (d * d);
+    }
+    // Accumulate up the shortest-path tree, farthest first.
+    for (let i = settled.length - 1; i > 0; i--) {
+      const u = settled[i]!;
+      const l = load[u]!;
+      if (l === 0) continue;
+      const p = prev[u]!;
+      load[p] = load[p]! + l;
+      const k = prevKey[u]!;
+      out.set(k, out.get(k)! + l);
+    }
+  }
+  return out;
+}
+
+/**
+ * Road classes from traffic (decision 103): edges in order of traffic, busiest
+ * first (ties by edge key); motorways until MOTORWAY_SHARE of the total length,
+ * trunk roads until MOTORWAY_SHARE + TRUNK_SHARE, then secondary roads. Edges
+ * with no traffic are always secondary.
+ */
+export function classifyRoads(
+  ctx: StrategicContext,
+  traffic: ReadonlyMap<number, number>,
+): Map<number, RoadClass> {
+  const n = ctx.grid.cellCount;
+  const items = [...traffic].map(([k, t]) => ({
+    k,
+    t,
+    len: ctx.grid.angleBetween(Math.floor(k / n), k % n),
+  }));
+  const total = items.reduce((sum, x) => sum + x.len, 0);
+  items.sort((a, b) => b.t - a.t || a.k - b.k);
+  const out = new Map<number, RoadClass>();
+  let cum = 0;
+  for (const x of items) {
+    const share = cum / Math.max(total, 1e-12);
+    out.set(
+      x.k,
+      x.t <= 0
+        ? RoadClass.Secondary
+        : share < MOTORWAY_SHARE
+          ? RoadClass.Motorway
+          : share < MOTORWAY_SHARE + TRUNK_SHARE
+            ? RoadClass.Trunk
+            : RoadClass.Secondary,
+    );
+    cum += x.len;
+  }
+  return out;
+}
 /** Longest local link between neighboring settlements (m). */
 export const LOCAL_LINK = 70e3;
 /** A local link is dropped if its route costs more than this × its length (a detour round a mountain or a bay). */
@@ -656,7 +797,13 @@ export function buildRoads(
   );
   routeLocalLinks(builder, settlements, localLinks(ctx, settlements));
   routeFeeders(builder, settlements, trunk);
-  const network = roadPolylines(ctx, builder.edges, new Set(settlements.cells));
+  const traffic = gravityTraffic(ctx, builder.edges, cost, settlements, [...trunk]);
+  const network = roadPolylines(
+    ctx,
+    traffic,
+    new Set(settlements.cells),
+    classifyRoads(ctx, traffic),
+  );
   const bridges = findBridges(ctx, builder.rivers, builder.edges, network);
   return { builder, network, bridges };
 }

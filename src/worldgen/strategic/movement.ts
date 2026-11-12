@@ -111,3 +111,21 @@ export class RiverGeometry {
     return s > 0 ? 1 : s < 0 ? -1 : 0;
   }
 }
+
+/**
+ * Railway cost multiplier per cell (decision 103): like `movementCost`, but grades
+ * cost three times as much, since trains climb poorly; Infinity at sea and on lakes.
+ */
+export function railCost(ctx: StrategicContext): Float32Array {
+  const { grid, biome, lakeDepth, slope, forest } = ctx;
+  const label = ctx.labels.label;
+  const out = new Float32Array(grid.cellCount);
+  for (let c = 0; c < grid.cellCount; c++) {
+    if (label[c]! < 0 || lakeDepth[c]! > 0) {
+      out[c] = Infinity;
+      continue;
+    }
+    out[c] = 1 + 30 * slope[c]! + 0.6 * (BIOME_COST[biome[c]!] ?? 0) + 0.3 * forest[c]!;
+  }
+  return out;
+}

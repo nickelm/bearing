@@ -214,14 +214,20 @@ export const SETTLEMENT_RIVER = 2;
 export const SETTLEMENT_COAST = 4;
 
 export type SettlementKind = 'city' | 'town' | 'village';
+/** Map classes of a settlement: a side's capital is drawn above its kind (decision 103). */
+export type SettlementClass = SettlementKind | 'capital';
 
 export function settlementKind(population: number): SettlementKind {
   return population >= 200_000 ? 'city' : population >= 40_000 ? 'town' : 'village';
 }
 
-/** Road classes, widest first. */
-export const RoadClass = { Highway: 0, Main: 1, Minor: 2 } as const;
+/**
+ * Road classes, widest first (decision 103): set by the gravity-model traffic each
+ * road carries (roads.ts `classifyRoads`).
+ */
+export const RoadClass = { Motorway: 0, Trunk: 1, Secondary: 2 } as const;
 export type RoadClass = (typeof RoadClass)[keyof typeof RoadClass];
+export const ROAD_CLASS_NAMES: readonly string[] = ['motorway', 'trunk', 'secondary'];
 /** Paved width per road class (m). */
 export const ROAD_WIDTH: readonly number[] = [24, 12, 7];
 /** Weight of a road class when scoring corridors. */
@@ -239,10 +245,72 @@ export interface RoadNetwork {
   cells: Int32Array;
   /** Unit directions, xyz interleaved. */
   points: Float64Array;
-  /** RoadClass per polyline. */
+  /** RoadClass per polyline (railways: 0). */
   roadClass: Uint8Array;
-  /** Summed √(pop_a · pop_b) of the settlement links routed over each polyline. */
+  /**
+   * Gravity-model traffic over each polyline (decision 103): the summed flows
+   * P_a · P_b / d² (people², d in km, at least TRAFFIC_MIN_DISTANCE) between pairs of
+   * trunk settlements whose shortest road path uses it. 0 on railways and spurs.
+   */
   traffic: Float32Array;
+  /** Route (index into `StrategicGraph.routes`) each polyline belongs to, or −1. */
+  route: Int32Array;
+}
+
+/** Kinds of route: numbered major roads, and named pass and coast roads. */
+export const RouteKind = { Numbered: 0, Pass: 1, Coast: 2 } as const;
+export type RouteKind = (typeof RouteKind)[keyof typeof RouteKind];
+
+/**
+ * Routes (decision 103): chains of road polylines that read as one road. Motorway and
+ * trunk chains get route numbers ("M4", "R12"); notable chains through mountain passes
+ * or along coasts get names ("the Kessar Pass Road"), whatever their class.
+ */
+export interface RouteList {
+  count: number;
+  /** Road polylines of route k, in order along it: roads[offsets[k], offsets[k + 1]). */
+  offsets: Uint32Array;
+  roads: Int32Array;
+  /** Widest class on the route. */
+  roadClass: Uint8Array;
+  kind: Uint8Array;
+  /** Length along the route (m). */
+  length: Float32Array;
+  /** Naming region (land node) of the route, −1 if none. */
+  region: Int32Array;
+  /** "M4", "R12", or "" for unnumbered routes (named secondary roads). */
+  numbers: string[];
+  /** "the Kessar Pass Road", or "" for routes with a number only. */
+  names: string[];
+}
+
+/**
+ * Urban extents (decision 103): one polygon per settlement, `URBAN_VERTICES` unit
+ * directions around it in counterclockwise order seen from above, grown from the
+ * settlement's built-up area along its roads and held back by water and steep ground.
+ */
+export interface UrbanExtents {
+  /** xyz interleaved, URBAN_VERTICES points per settlement in settlement order. */
+  points: Float64Array;
+  /** Built-up area of each polygon (m²). */
+  area: Float32Array;
+}
+
+export const URBAN_VERTICES = 24;
+
+/**
+ * Railways (decision 103) between major cities, ports and the largest towns of each
+ * landmass, as polylines like roads (all `roadClass` 0), with their bridges and yards.
+ */
+export interface RailNetwork {
+  lines: RoadNetwork;
+  bridges: BridgeList;
+  /** Settlements with a station, in settlement order. */
+  stations: Int32Array;
+  /** Rail yards: the stations of cities and rail junctions, targetable features. */
+  yards: SiteList;
+  /** Settlement at each yard, or −1 at a junction outside towns. */
+  yardSettlement: Int32Array;
 }
 
 /** Road bridges over rivers at least BRIDGE_MIN_WIDTH wide: targetable features. */
@@ -406,6 +474,11 @@ export interface StrategicGraph {
   habitability: Uint8Array;
   roads: RoadNetwork;
   bridges: BridgeList;
+  /** Numbered and named roads (decision 103). */
+  routes: RouteList;
+  railways: RailNetwork;
+  /** Urban extent polygons per settlement (decision 103). */
+  urban: UrbanExtents;
   /** Named geography (decision 95). */
   features: FeatureList;
   lanes: SeaLane[];
@@ -508,12 +581,26 @@ export function graphBuffers(g: StrategicGraph): ArrayBuffer[] {
   out.push(s.cells.buffer, s.points.buffer, s.population.buffer, s.node.buffer, s.flags.buffer);
   out.push(g.habitability.buffer);
   out.push(...roadBuffers(g.roads), ...bridgeBuffers(g.bridges), ...featureBuffers(g.features));
+  const rt = g.routes;
+  out.push(rt.offsets.buffer, rt.roads.buffer, rt.roadClass.buffer, rt.kind.buffer);
+  out.push(rt.length.buffer, rt.region.buffer);
+  const rw = g.railways;
+  out.push(...roadBuffers(rw.lines), ...bridgeBuffers(rw.bridges), rw.stations.buffer);
+  out.push(rw.yards.cells.buffer, rw.yards.points.buffer, rw.yards.scores.buffer);
+  out.push(rw.yardSettlement.buffer, g.urban.points.buffer, g.urban.area.buffer);
   // A buffer may appear only once in a transfer list.
   return [...new Set(out)] as ArrayBuffer[];
 }
 
 export function roadBuffers(r: RoadNetwork): ArrayBufferLike[] {
-  return [r.offsets.buffer, r.cells.buffer, r.points.buffer, r.roadClass.buffer, r.traffic.buffer];
+  return [
+    r.offsets.buffer,
+    r.cells.buffer,
+    r.points.buffer,
+    r.roadClass.buffer,
+    r.traffic.buffer,
+    r.route.buffer,
+  ];
 }
 
 export function bridgeBuffers(b: BridgeList): ArrayBufferLike[] {
@@ -621,4 +708,14 @@ export function featuresAlong(
     if (near >= share * n) out.push(i);
   }
   return out.sort((a, b) => f.importance[b]! - f.importance[a]! || a - b);
+}
+
+/** The urban extent polygon of settlement i (a subarray view, xyz interleaved). */
+export function urbanPolygon(u: UrbanExtents, i: number): Float64Array {
+  return u.points.subarray(i * URBAN_VERTICES * 3, (i + 1) * URBAN_VERTICES * 3);
+}
+
+/** The points of road polyline k (a subarray view, xyz interleaved). */
+export function roadPolyline(r: RoadNetwork, k: number): Float64Array {
+  return r.points.subarray(r.offsets[k]! * 3, r.offsets[k + 1]! * 3);
 }

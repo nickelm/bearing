@@ -5,12 +5,13 @@
  *
  *   landmasses and statistics → airbase and port sites → land nodes
  *   (landmasses and archipelagos) → ocean grid, sea lanes, chokepoints and
- *   node distances → settlements → movement cost, roads and bridges →
- *   barrier map and fronts (corridors use the roads) → named features
- *   (geography/) → names (names/)
+ *   node distances → settlements → movement cost, roads (with their gravity-model
+ *   hierarchy) and bridges → urban extents → railways → barrier map and fronts
+ *   (corridors use the roads) → named features (geography/) → routes (numbers,
+ *   pass and coast roads) → names (names/)
  *
- * Deterministic: settlements draw from rng(seed, "settlements"), names from
- * rng(seed, "names"); every other
+ * Deterministic: settlements draw from rng(seed, "settlements"), urban extents
+ * from rng(seed, "urban"), names from rng(seed, "names"); every other
  * stage is free of randomness, with ties broken by cell and node index.
  */
 import { labelLandmasses, landmassStats, referenceSlope } from '../landmasses';
@@ -22,6 +23,9 @@ import { movementCost } from './movement';
 import { buildNodes } from './nodes';
 import type { NodeBuild } from './nodes';
 import { buildRoads } from './roads';
+import { buildRailways } from './railways';
+import { buildRoutes } from './routes';
+import { urbanExtents } from './urban';
 import type { RoadBuilder } from './roads';
 import { placeSettlements } from './settlements';
 import { buildSeaLanes } from './ocean';
@@ -90,6 +94,10 @@ export function buildStrategicGraphWithContext(input: StrategicInput): Strategic
   lap('settlements');
   const roads = buildRoads(ctx, settlements, movementCost(ctx));
   lap('roads');
+  const urban = urbanExtents(ctx, settlements, roads.network, input.seed ?? 0);
+  lap('urban extents');
+  const railways = buildRailways(ctx, settlements);
+  lap('railways');
   const barrier = barrierMap(ctx, walker);
   const { lines, fronts } = buildFronts(ctx, nb.nodes, nb.members, barrier, {
     settlements,
@@ -105,6 +113,8 @@ export function buildStrategicGraphWithContext(input: StrategicInput): Strategic
     timings,
   });
   lap('features');
+  const routes = buildRoutes(ctx, roads.network, features, nb.nodeOfLandmass);
+  lap('routes');
   const graph: StrategicGraph = {
     resolution: ctx.grid.n,
     radius: ctx.radius,
@@ -113,6 +123,9 @@ export function buildStrategicGraphWithContext(input: StrategicInput): Strategic
     habitability,
     roads: roads.network,
     bridges: roads.bridges,
+    routes,
+    railways,
+    urban,
     features,
     lanes: ocean.lanes,
     chokepoints: ocean.chokepoints,

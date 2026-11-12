@@ -258,10 +258,13 @@ Civilian geography (settlements, roads, bridges) joins the strategic graph befor
 - [ ] Snap bridges to the rendered (eroded) rivers, which can run a few kilometers from the coarse ones (decision 65)
 - [ ] Keep civilian roads off airfields (a road may cross a taxiway; route around airbase footprints or end them at the gate)
 - [ ] Island campaigns can leave the Alliance under 15 airbases (seed 11: 9), since its islands have little flat land; tied to the lopsided island split noted under S3
-- [ ] Urban extent polygons per settlement from the growth model, in the graph (replacing the urban radius disk)
-- [ ] Road hierarchy from a gravity model: motorway, trunk and secondary from the populations a road connects and the traffic routed over it (reworks `RoadClass` Highway/Main/Minor in `roads.ts`); bump `GENERATOR_VERSION`
-- [ ] Route numbers from a fictional scheme ("R4", "M12") and names for notable pass and coast roads ("the Kessar Pass Road"), with S2's generator
-- [ ] Railways linking major cities, ports and industry, with rail yards and rail bridges as targets
+- [x] Urban extent polygons per settlement from the growth model, in the graph (decision 103: radial growth along roads, cut at water)
+  - [ ] Simulation view: built-up patches from the extent polygons instead of the urban radius disk (V3)
+- [x] Road hierarchy from a gravity model: motorway, trunk and secondary from the populations a road connects and the traffic routed over it; `GENERATOR_VERSION` 11 (decision 103)
+- [x] Route numbers from a fictional scheme ("R4", "M12") and names for notable pass and coast roads ("the Kessar Pass Road"), with S2's generator (decision 103)
+  - [ ] Tune across seeds: seed 1983 numbers 33 motorway and 86 trunk chains, many short pieces between junctions; consider merging through junctions across classes
+- [x] Railways linking major cities, ports and industry, with rail yards and rail bridges as targets (decision 103)
+- [x] Capitals: each side's largest settlement (decision 103)
 - [ ] Map: urban extent fills and oversized low-poly city glyphs by class (village, town, city, capital with a star)
 - [ ] Map: road ribbons with casing by class, bridge marks, railway lines with ticks
 - [ ] Map: symbols for airbases (runway glyph), ports (pier glyph), factories, refineries, depots and rail yards
