@@ -131,7 +131,7 @@ describe('look-ahead', () => {
   });
 
   it('ranks below the view and the layers on it, and above the bubble', () => {
-    for (const sse of [2.0001, 3, 10, 1e3, 1e6]) {
+    for (const sse of [2.0001, 3, 10, 1e3, 1e6, Infinity]) {
       expect(lookAheadPriority(sse)).toBeLessThan(1);
       expect(lookAheadPriority(sse)).toBeGreaterThan(bubblePriority(0, PROMOTION_BUBBLE));
     }

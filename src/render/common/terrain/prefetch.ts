@@ -38,7 +38,8 @@ export const LOOK_AHEAD_SECONDS = 3;
  * look-ahead, then the bubble.
  */
 export function lookAheadPriority(sse: number): number {
-  return 0.6 + 0.3 * (sse / (sse + 1));
+  // Root tiles carry an infinite error.
+  return Number.isFinite(sse) ? 0.6 + 0.3 * (sse / (sse + 1)) : 0.9;
 }
 
 export function bubblePriority(distance: number, bubble: number): number {
