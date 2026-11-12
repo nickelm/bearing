@@ -21,6 +21,8 @@
  *   from it to `position` with the tile's morph factor.
  * - Normals come from height differences one sample apart, using the tile's
  *   border, so they agree across tile edges.
+ * - Grading (airfields, V3): when the options carry a SurfaceGrading, heights,
+ *   the morph target and the normals all come from the graded surface.
  */
 import { cubeFaceUvToDirection } from '../../../core/coords';
 import type { Noise3 } from '../../../core/noise';
@@ -32,6 +34,7 @@ import type { TileData } from '../../../worldgen/gpu/tileSynth';
 import { MAX_BAKED_LEVEL, NO_LAKE } from '../../../worldgen/gpu/tileSynth';
 import { BIOME_COLORS, HEIGHT_RAMP, hsl, ramp, srgbToLinear } from '../palette';
 import type { Rgb } from '../palette';
+import type { SurfaceGrading } from './grading';
 import { TILE_SEGMENTS, vertexSpacing } from './quadtree';
 
 export const TILE_VIEW_MODES = ['biome', 'height', 'level', 'borders', 'forest'] as const;
@@ -121,6 +124,8 @@ export interface MeshOptions {
   mode: TileViewMode;
   /** Render detail noise below the finest baked level (seeded per world). */
   detail: Noise3;
+  /** Flat pads graded into the surface (airfields); none when absent. */
+  grading?: SurfaceGrading | null;
 }
 
 /** Shared index buffer: grid triangles split along (i, j)–(i+1, j+1), plus skirts. */
@@ -243,7 +248,8 @@ export function surfaceSampler(
   const scale = 2 ** (src.key.level - t.level);
   const lambdas = renderDetailOctaves(level, opts.radius);
   const R = opts.radius;
-  return (sx, sy, dir) => {
+  const grade = opts.grading?.forTile(t) ?? null;
+  const surface = (sx: number, sy: number, dir: Readonly<Vec3d>): number => {
     const h = bilinear(src, ox + sx * scale, oy + sy * scale);
     if (lambdas.length === 0 || h <= 0) return h;
     // Amplitude follows the local relief of the baked surface.
@@ -260,6 +266,7 @@ export function surfaceSampler(
     }
     return h + detail;
   };
+  return grade ? (sx, sy, dir) => grade(dir, surface(sx, sy, dir)) : surface;
 }
 
 /**
@@ -434,8 +441,13 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
   const dscale = 2 ** (sources.data.key.level - t.level);
   const raw = (sx: number, sy: number) =>
     bilinear(sources.data, dox + sx * dscale, doy + sy * dscale);
+  const grade = opts.grading?.forTile(t) ?? null;
+  const gradeDir = new Vec3d();
+  const graded = grade
+    ? (sx: number, sy: number) => grade(dirAt(sx, sy, gradeDir), raw(sx, sy))
+    : raw;
   const dataLake = lakeSampler(t, sources.data);
-  const flat = (sx: number, sy: number) => displayHeight(raw(sx, sy), dataLake(sx, sy));
+  const flat = (sx: number, sy: number) => displayHeight(graded(sx, sy), dataLake(sx, sy));
   const tu = new Vec3d();
   const tv = new Vec3d();
   const tmp = new Vec3d();
@@ -476,6 +488,9 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
       color[v * 3 + 1] = srgbToLinear(rgb[1]);
       color[v * 3 + 2] = srgbToLinear(rgb[2]);
       forest[v] = opts.mode === 'biome' && hOwn[v]! > 0 ? (mat >>> 24) / 255 : 0;
+      // No canopy on graded ground (airfields); it thins over the pad's margin.
+      if (grade && forest[v]! > 0)
+        forest[v] = forest[v]! * (1 - opts.grading!.cover(dirOf(v, gradeDir)));
     }
   }
 

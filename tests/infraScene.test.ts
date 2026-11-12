@@ -5,8 +5,10 @@ import { tileForDirection } from '../src/core/tiles';
 import { DEG } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
 import {
+  BUILT_AIRFIELD,
   BUILT_INDUSTRY,
   BUILT_TOWN,
+  decodeRunway,
   InfraScene,
   localFrame,
   offsetPoint,
@@ -49,14 +51,14 @@ describe('InfraScene from a generated world', () => {
   const scene = new InfraScene(w.graph, w.infrastructure, R);
   const bases = w.infrastructure.airbases;
 
-  it('draws roads as asphalt and five concrete strips per airbase', () => {
+  it('draws roads as asphalt and seven concrete strips per airbase', () => {
     let concrete = 0;
     let asphalt = 0;
     for (let s = 0; s < scene.segments.count; s++) {
       if (scene.segments.data[s * 8 + 6]! < 0) concrete++;
       else asphalt++;
     }
-    expect(concrete).toBe(5 * bases.length);
+    expect(concrete).toBe(7 * bases.length);
     expect(asphalt).toBeGreaterThan(w.graph.roads.count);
   });
 
@@ -107,6 +109,21 @@ describe('InfraScene from a generated world', () => {
     expect(towns).toBe(w.graph.settlements.cells.length);
     expect(industry).toBe(scene.sites.filter((x) => x.kind === 'industry').length);
     expect(count - towns - industry).toBe(bases.length);
+  });
+
+  it('packs each airbase runway into its light record', () => {
+    const count = scene.lights.length / 8;
+    const runways: { length: number; heading: number }[] = [];
+    for (let i = 0; i < count; i++)
+      if (scene.lights[i * 8 + 6] === BUILT_AIRFIELD)
+        runways.push(decodeRunway(scene.lights[i * 8 + 7]!));
+    expect(runways.length).toBe(bases.length);
+    for (const [k, r] of runways.entries()) {
+      expect(r.length).toBe(Math.round(bases[k]!.runwayLength));
+      // Float32 keeps the heading to about 0.06°.
+      const h = ((bases[k]!.heading % Math.PI) + Math.PI) % Math.PI;
+      expect(Math.abs(r.heading - h)).toBeLessThan(1e-3);
+    }
   });
 
   it('keeps runways out of coarse road lists', () => {

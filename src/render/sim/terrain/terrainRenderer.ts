@@ -69,6 +69,7 @@ import { RiverTables } from '../../common/water/riverTables';
 import { WAVE_PERIOD, WaterShading } from '../water/waterShading';
 import type { RiverIndex } from '../../../worldgen/riverIndex';
 import type { InfraScene } from '../infra/infraScene';
+import type { SurfaceGrading } from '../../common/terrain/grading';
 import { HabitabilityTexture } from '../../common/habitabilityTexture';
 import {
   builtAlbedo,
@@ -124,6 +125,8 @@ export interface TerrainWorld {
   rivers?: RiverIndex;
   /** Roads, airfield pavement and settlement lights (decision 65); none when absent. */
   infra?: InfraScene;
+  /** Airfields graded into the terrain (V3); none when absent. */
+  grading?: SurfaceGrading;
 }
 
 export class TerrainRenderer {
@@ -279,7 +282,7 @@ export class TerrainRenderer {
       const isDry = dry.greaterThan(0);
       // Towns and industry as built-up patches, and their night lights, in one
       // pass over the light list (decision 71); dry land only.
-      const built = vec3(0).toVar();
+      const built = vec4(0).toVar();
       If(isDry.and(lightCount.greaterThan(0)), () => {
         built.assign(
           lights.sample(planet, lightStart, lightCount, footprint, ruralSpeckle(planet, 2000)),
@@ -320,11 +323,16 @@ export class TerrainRenderer {
       // Road color from docs/visual-style.md (#7A7062, linear).
       const asphalt = vec3(0.195, 0.162, 0.122);
       const concrete = vec3(0.4, 0.39, 0.36);
-      const roadAlbedo = mix(
-        asphalt,
-        concrete,
-        clamp(paved.y.div(max(paved.x, 1e-4)), 0, 1),
-      ) as unknown as typeof normal;
+      const concreteShare = clamp(paved.y.div(max(paved.x, 1e-4)), 0, 1);
+      // Runway and taxiway paint on the concrete (V3): white, and yellow where negative.
+      const paintWhite = vec3(0.8, 0.79, 0.74);
+      const paintYellow = vec3(0.7, 0.45, 0.06);
+      const painted = mix(
+        mix(concrete, paintWhite, clamp(built.w, 0, 1)),
+        paintYellow,
+        clamp(built.w.negate(), 0, 1),
+      );
+      const roadAlbedo = mix(asphalt, painted, concreteShare) as unknown as typeof normal;
       const roadRadiance = L.shadeDiffuse(roadAlbedo, normal, positionWorld, at);
       const withRoads = mix(surface, roadRadiance, paved.x.mul(dry));
       // Settlement lights on the night side (sodium orange), plus a glow along paved roads.
@@ -366,7 +374,13 @@ export class TerrainRenderer {
   meshOptions(): MeshOptions | null {
     const w = this.world;
     if (!w) return null;
-    return { radius: w.radius, reliefScale: w.reliefScale, mode: this.mode, detail: this.detail };
+    return {
+      radius: w.radius,
+      reliefScale: w.reliefScale,
+      mode: this.mode,
+      detail: this.detail,
+      grading: w.grading ?? null,
+    };
   }
 
   /**
@@ -458,6 +472,7 @@ export class TerrainRenderer {
       reliefScale: w.reliefScale,
       mode: this.mode,
       detail: this.detail,
+      grading: w.grading ?? null,
     });
     const g = new BufferGeometry();
     g.setAttribute('position', new BufferAttribute(m.base, 3));
@@ -575,7 +590,8 @@ export class TerrainRenderer {
 
   /**
    * Physical terrain height (m, not exaggerated; ≤ 0 is sea) under a
-   * direction, from the finest cached tile data, or null if none is cached.
+   * direction, from the finest cached tile data and graded like the meshes,
+   * or null if none is cached.
    */
   heightAt(dir: Readonly<Vec3d>): number | null {
     const uv: CubeFaceUv = { face: 0, u: 0, v: 0 };
@@ -595,10 +611,10 @@ export class TerrainRenderer {
       const ty = fy - y0;
       const i = (y0 + TILE_BORDER) * TILE_STRIDE + x0 + TILE_BORDER;
       const h = data.height;
-      return (
+      const raw =
         (h[i]! * (1 - tx) + h[i + 1]! * tx) * (1 - ty) +
-        (h[i + TILE_STRIDE]! * (1 - tx) + h[i + TILE_STRIDE + 1]! * tx) * ty
-      );
+        (h[i + TILE_STRIDE]! * (1 - tx) + h[i + TILE_STRIDE + 1]! * tx) * ty;
+      return this.world?.grading ? this.world.grading.apply(dir, raw) : raw;
     }
     return null;
   }

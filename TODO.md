@@ -425,7 +425,9 @@ Aircraft, vehicles, ships, buildings and trees are generated in code from small 
 
 - [x] Settlement building clusters scaled by population (old M5; instanced boxes, off by default on the globe since decision 71)
 - [x] Airbase runway meshes (drawn as concrete in the terrain shader, plus hangar and shelter meshes; decision 65) (old M5)
-- [ ] Flatten the terrain under runways (they follow the fine terrain's detail noise) (old M5): a height hook in `surfaceSampler` that blends toward the field elevation inside the airfield, and a terrain rebuild when the infrastructure arrives
+- [x] Flatten the terrain under runways (they follow the fine terrain's detail noise) (old M5): a height hook in `surfaceSampler` that blends toward the field elevation inside the airfield, and a terrain rebuild when the infrastructure arrives (decision 108)
+  - [ ] Owner: look at an airfield low and along the runway in the browser (embankment height, margin width); `VIEWS=runway` in the preview
+  - [ ] Move the grading to a layer the sim's execution layer can import (flight, line of sight) once those query terrain (P1)
 - [x] Model spec JSON format and types (decision 106): lofted fuselages from 6–8-sided cross-sections along the length; wings and tails as extruded planforms with sweep, dihedral, thickness and a sharp leading edge; primitives (box, beveled box, pyramid stack, coarse icosphere blob, cylinder); mirroring; named face groups; camouflage schemes mapping face groups to palette colors; emissive points (afterburners, navigation lights). Validation with clear errors, and tests
 - [x] Procedural model builder (decision 106): spec → non-indexed, flat-shaded `BufferGeometry` with vertex colors and baked per-vertex AO, plus emissive anchors; deterministic (same spec, same bytes); fails a test when a model exceeds its class's triangle budget from the guide
 - [x] Faction palettes and camouflage schemes from the guide's palette tables, as data shared by the builder and the viewer (plus ship schemes, decision 106)
@@ -437,7 +439,8 @@ Aircraft, vehicles, ships, buildings and trees are generated in code from small 
   - [ ] Browser check: ink outlines in the viewer and on buildings in the simulation view (width, fade with distance, no ink blots far away)
   - [ ] Markings: national insignia, modex numbers and squadron codes as painted faces or decals (Part I, Aircraft)
 - [x] Base kit from specs: hangars, hardened shelters, tower, radar on a lattice mast, radar dome, fuel tanks, revetments, placed at airbases in the simulation view (decision 106)
-  - [ ] Runway and taxiway markings in the pavement shader (threshold bars, centerline dashes, runway numbers)
+  - [x] Runway and taxiway markings in the pavement shader (threshold bars, centerline dashes, runway numbers) (decision 109)
+    - [ ] Owner: check the paint in the browser low over a runway (legibility of the numbers, shimmer of the thin lines at 1–3 km)
   - [ ] Night lighting: runway edge lights, apron floods and tower windows from the models' emissive anchors
 - [x] Settlement buildings from specs (pitched and flat roofs, taller city blocks), using S4's urban extents (decision 106)
   - [ ] The terrain's built-up patch is still the urban radius disk; draw it from the extent polygon too

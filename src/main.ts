@@ -22,6 +22,7 @@ import { StrategicScene } from './render/strategic/strategicScene';
 import { OVERLAY_LAYERS } from './render/strategic/overlays/militaryModel';
 import { INFRA_LAYERS } from './render/strategic/infra/infraModel';
 import { InfraScene } from './render/sim/infra/infraScene';
+import { airfieldGrading } from './render/sim/infra/airfieldGrading';
 import { VIEW_MODES } from './render/common/globeMesh';
 import type { ViewMode } from './render/common/globeMesh';
 import { runComputeSmokeTest } from './render/common/computeSmokeTest';
@@ -348,6 +349,8 @@ async function main(): Promise<void> {
         reliefScale: params.reliefScale,
         rivers: riverIndex,
         infra,
+        // Airfields graded flat into the terrain (V3).
+        grading: airfieldGrading(infra, global.height, global.n),
       });
       globe.setInfrastructure(infra);
       globe.terrainReady = true;

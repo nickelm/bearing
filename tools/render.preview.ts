@@ -7,7 +7,7 @@
  *   npx vitest run --config vitest.tools.config.ts tools/render.preview.ts
  *   env: SEED (1983), TRES tectonic resolution (256), GRES global resolution (1024),
  *        VIEWS comma list of view names (all), W × H image size (1024 × 576),
- *        EX exaggeration (10),
+ *        EX exaggeration (10), GRADE=0 leaves airfields ungraded (files get -ungraded),
  *        PERF=n times n more frames per view once loaded: ms per frame until the GPU is
  *          done, CPU in scene.render and its parts, terrain loop lengths, draw statistics
  *          (on a software adapter only the ratios mean anything),
@@ -54,7 +54,8 @@ import { encodePng } from './png';
 import { previewWorld } from './previewWorld';
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
 import { settlementPoint } from '../src/worldgen/strategic/graph';
-import { InfraScene } from '../src/render/sim/infra/infraScene';
+import { InfraScene, offsetPoint } from '../src/render/sim/infra/infraScene';
+import { airfieldGrading } from '../src/render/sim/infra/airfieldGrading';
 import { buildWeatherClimate } from '../src/sim/weather/climate';
 import { WeatherGrid } from '../src/sim/weather/grid';
 import { createSimWorld } from '../src/sim/world';
@@ -77,6 +78,8 @@ export interface PreviewView {
    * largest city, or the first main airbase (milestone 5).
    */
   target?: 'lake' | 'forest' | 'city' | 'airbase' | 'front' | 'capital';
+  /** With target 'airbase': stand back along the runway and look down it (heading ignored). */
+  alongRunway?: boolean;
   /** Image size for this view (strategic previews; default W × H). */
   width?: number;
   height?: number;
@@ -205,6 +208,18 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     heading: 0,
     localTime: 10,
     target: 'airbase',
+  },
+  {
+    // Low along the runway: shows the airfield graded flat into the terrain (V3).
+    name: 'runway',
+    dLat: 0,
+    dLon: 0,
+    altitude: 150,
+    tilt: 78 * DEG,
+    heading: 0,
+    localTime: 16,
+    target: 'airbase',
+    alongRunway: true,
   },
   {
     name: 'roads',
@@ -405,6 +420,9 @@ it('renders preview views', async () => {
     reliefScale: params.reliefScale,
     rivers: riverIndex,
     infra,
+    // GRADE=0 leaves the airfields ungraded, for comparison.
+    grading:
+      process.env.GRADE === '0' ? undefined : airfieldGrading(infra, global.height, global.n),
   });
   scene.setInfrastructure(infra);
   scene.terrainReady = true;
@@ -476,7 +494,13 @@ it('renders preview views', async () => {
   for (const v of views) {
     const o = scene.orbit;
     const target = v.target ? targets[v.target] : null;
-    if (target) {
+    if (target && v.alongRunway && base) {
+      // Back from the runway's threshold, looking down it.
+      const back = v.altitude * Math.tan(Math.min(v.tilt, 70 * DEG));
+      const p = offsetPoint(target, base.heading, -base.runwayLength / 2 - back, 0, params.radius);
+      o.lat = Math.asin(p.y);
+      o.lon = Math.atan2(p.x, p.z);
+    } else if (target) {
       // Stand back from the target, south of it, looking north.
       o.lat =
         Math.asin(target.y) - (v.altitude * Math.tan(Math.min(v.tilt, 70 * DEG))) / params.radius;
@@ -487,7 +511,7 @@ it('renders preview views', async () => {
     }
     o.altitude = o.targetAltitude = v.altitude;
     o.tilt = v.tilt;
-    o.heading = v.heading;
+    o.heading = v.alongRunway && base ? base.heading : v.heading;
     const localAt = (day: number) =>
       withLocalTime(day * DAY, o.lon, (v.localTime ?? 11) * HOUR, params, calendar);
     // The sim starts at campaign start: an early local time on day 0 can fall before it.
@@ -594,7 +618,8 @@ it('renders preview views', async () => {
       );
     }
     const rgb = await head.readRgb();
-    const file = join(outDir, `render-${seed}-${v.name}.png`);
+    const ungraded = process.env.GRADE === '0' ? '-ungraded' : '';
+    const file = join(outDir, `render-${seed}-${v.name}${ungraded}.png`);
     writeFileSync(file, encodePng(width, height, rgb));
     const s = scene.terrain.stats;
     if (process.env.DEBUG) {

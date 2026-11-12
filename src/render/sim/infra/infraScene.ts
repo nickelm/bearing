@@ -7,9 +7,11 @@
  *   pavement (runway, parallel taxiway, apron) with negative widths, which
  *   the road shader draws as concrete. Same 8-field layout as RiverSegments.
  * - `lights`: night lights per settlement and airbase, 8 floats each
- *   (direction xyz, radius; intensity, built-up radius, built-up kind, 0).
+ *   (direction xyz, radius; intensity, built-up radius, kind, runway).
  *   The terrain draws the built-up area as a patch by day (decision 71):
- *   kind BUILT_TOWN or BUILT_INDUSTRY; radius 0 for none (airbases).
+ *   kind BUILT_TOWN or BUILT_INDUSTRY; radius 0 for none. Airbases have kind
+ *   BUILT_AIRFIELD and their runway packed by `encodeRunway`, from which the
+ *   terrain paints the runway markings.
  * - `sites`: footprints for building clusters (towns, airbases, industry).
  * - `clearings`: where trees must not stand (urban cores, airfields, roads).
  *
@@ -69,10 +71,24 @@ export const TAXIWAY_OFFSET = 190;
 export const APRON_WIDTH = 140;
 export const APRON_LENGTH = 600;
 export const APRON_OFFSET = 420;
+/** Links from the taxiway to the apron, this far either side of the apron's middle (m). */
+export const APRON_LINK_ALONG = 200;
 
 /** Built-up kinds in the light records. */
 export const BUILT_TOWN = 0;
 export const BUILT_INDUSTRY = 1;
+export const BUILT_AIRFIELD = 2;
+
+/** Packs runway length (m) and heading (rad, folded to 0..π) into one float of a light record. */
+export function encodeRunway(length: number, heading: number): number {
+  const h = ((heading % Math.PI) + Math.PI) % Math.PI;
+  return Math.round(length) + h / 4;
+}
+
+export function decodeRunway(code: number): { length: number; heading: number } {
+  const length = Math.floor(code);
+  return { length, heading: (code - length) * 4 };
+}
 
 /** Urban radius (m) of a settlement: about 3.2 km at 100,000 people. */
 export function urbanRadius(population: number): number {
@@ -183,6 +199,12 @@ export class InfraScene {
         const b = offsetPoint(p, h, end, TAXIWAY_OFFSET, radius);
         segs.push(a.x, a.y, a.z, b.x, b.y, b.z, -TAXIWAY_WIDTH, -TAXIWAY_WIDTH);
       }
+      // Links from the taxiway to the apron.
+      for (const along of [-APRON_LINK_ALONG, APRON_LINK_ALONG]) {
+        const a = offsetPoint(p, h, along, TAXIWAY_OFFSET, radius);
+        const b = offsetPoint(p, h, along, APRON_OFFSET, radius);
+        segs.push(a.x, a.y, a.z, b.x, b.y, b.z, -TAXIWAY_WIDTH, -TAXIWAY_WIDTH);
+      }
       pave(p, h, -APRON_LENGTH / 2, APRON_LENGTH / 2, APRON_OFFSET, APRON_WIDTH);
       this.clear(
         offsetPoint(p, h, -L / 2 - 300, 200, radius),
@@ -199,7 +221,7 @@ export class InfraScene {
         runwayLength: L,
         key: `airbase-${base.id}`,
       });
-      lights.push(p.x, p.y, p.z, 1500, 0.35, 0, 0, 0);
+      lights.push(p.x, p.y, p.z, 1500, 0.35, 0, BUILT_AIRFIELD, encodeRunway(L, h));
     }
     this.segments = { count: segs.length / 8, data: Float64Array.from(segs) };
 

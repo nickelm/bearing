@@ -1700,3 +1700,28 @@ The engineering calls made while adopting it:
 - **Previews.** `tools/models.preview.ts` draws the hull in its shaded views (INK=0 turns it off, INK_PX sets the width).
 
 **Reason:** The owner wants models strongly inked, in the spirit of illustrated maps and toy-like models, with a switch to compare. An inverted hull costs one extra draw per model and no post-processing pass, keeps a constant pixel width, and works with instancing; a screen-space edge filter would also ink terrain facets and trees, which the guide keeps clean.
+
+### 108. Airfields graded into the terrain from the global height grid
+
+**Date:** 2026-11-12
+**Decision:** Each airbase gets a flat pad cut and filled into the simulation view's terrain (V3), a pure function of direction and the ungraded height in `render/common/terrain/grading.ts`.
+
+- **Pad.** A rectangle in the runway's frame: along the runway with 200 m overruns past each end, across from 80 m beyond the runway's left edge to 200 m beyond the apron's far edge, which covers the taxiway, the apron, hangars, shelters, revetments, fuel tanks and the radar dome (`render/sim/infra/airfieldGrading.ts`). Inside it the surface is the field elevation; over a 400 m margin it returns to the terrain with a smootherstep, so the embankment has no crease at either end.
+- **Field elevation.** The mean of the global eroded height (the CPU copy of the 1024² grid the tiles add their detail to) at 27 points over the pad, at least 3 m. It is known as soon as the world is, the same for every tile level, without waiting for tile data. The fine surface differs from it by its detail, rivers and gullies, so a pad sits on a low embankment or in a shallow cut of a few meters to a few tens of meters, as real airfields do.
+- **Where it applies.** `surfaceSampler` grades after the render detail, so the tile's own heights, its geomorph target, trees and buildings all stand on the same graded ground; the mesh's slope pass grades its samples, so normals are flat on the pad; `TerrainRenderer.heightAt` grades too, for the camera's ground clearance. The terrain's forest canopy (decision 71) is scaled by one minus the pad's cover, so no canopy is painted on the field, where the instanced trees were already cleared. `SurfaceGrading.forTile` keeps only the pads that reach a tile, so other tiles cost nothing and build byte-identical meshes. Only land is graded: a sample at or below sea level keeps its height, so a coastal pad meets the sea at its own edge. The strategic relief is not graded; a 3 km field is below its zoom floor's detail.
+- **No separate rebuild.** The grading travels with the infrastructure in `TerrainWorld`, which the app sets together with the synthesizer, and `setWorld` drops every cached mesh. The TODO's "terrain rebuild when the infrastructure arrives" is that drop.
+
+**Reason:** The runway pavement draws in the terrain shader and follows the surface exactly (decision 65), so it followed the fine terrain's detail noise and rolled like a country road. Grading by a closed-form function keeps the shader approach: every LOD level, the morph target and the instanced layers agree without exchanging data, and a field elevation from the global grid needs no tile to be loaded first. The execution layer's terrain queries (flight, line of sight) will need the same function when they exist; it lives in `render/common/` for now and moves to a shared layer then.
+
+### 109. Runway and taxiway paint in the terrain shader, from the airbase light record
+
+**Date:** 2026-11-12
+**Decision:** Runway and taxiway markings (visual-style Part I, _Bases_) are painted in the terrain fragment shader over the concrete, like the pavement itself (decision 65), in `render/sim/infra/runwayMarkings.ts`.
+
+- **Data.** Each airbase's light record (decision 71) now has kind `BUILT_AIRFIELD` and carries its runway in the last float: the length in whole meters plus the heading (folded to 0..π) over 4, which float32 keeps to about 0.06°. The shader rebuilds the runway frame from the record's center and heading, so the markings need no new table and no new per-tile uniform: they ride on the light loop that already runs on dry land by day for the built-up patches.
+- **Layout** (ICAO-like, a little bolder than life so it reads from a few hundred meters). Per runway end, in the frame of a pilot landing there: five threshold bars each side of the centerline (1.8 m on 3.6 m centers, 30 m long), the two-digit designation in seven-segment figures 18 m tall (the heading in tens of degrees, 36 for north, the far end ± 18), and the aiming-point blocks 300 m in. Along the runway: side stripes at both edges and 30 m centerline dashes every 50 m between the designations. In yellow: the taxiway centerline and its links to the runway ends and to the apron. White paint `#E6E4DC`, yellow `#D9A92E`.
+- **Antialiasing.** Each mark is a box whose cover is clamped by the pixel footprint and scaled by its width over the footprint, so thin lines fade to their share of the pixel rather than shimmer; the dashes fade to their duty cycle once a period is under two pixels.
+- **Layout as data.** The boxes, the segment boxes and the figure masks are constants read by both the shader and a CPU twin, `markingAt`, which the tests check.
+- **Apron links.** The apron stood 150 m beyond the taxiway with grass between; two 23 m links now join them, so an airbase has seven concrete strips.
+
+**Reason:** A paint layer in the pavement shader follows the surface, its LOD and the new grading (decision 108) exactly, as the pavement does; decals would fight geomorphing. Riding on the light record keeps the per-tile uniform count where it is (I1 lists it as a cost).

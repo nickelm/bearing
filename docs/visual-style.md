@@ -148,7 +148,7 @@ The aircraft the player controls or follows fills the center of the screen for e
 
 ### Buildings and Bases
 
-- **Base kit.** Hangars, hardened aircraft shelters, control towers, radar towers on lattice masts, radar domes, fuel tanks, revetments, and taxiway and runway markings.
+- **Base kit.** Hangars, hardened aircraft shelters, control towers, radar towers on lattice masts, radar domes, fuel tanks, revetments, and taxiway and runway markings. Markings are paint in the pavement shader: threshold bars, two-digit designations, aiming points, edge stripes and centerline dashes in white, taxi lines in yellow (decision 109). Fields are graded flat into the terrain (decision 108).
 - **Style.** Plain boxes and arched shells in pale concrete and muted paint, with large openings that create deep shadow (references 3 and 5).
 - **Night.** Runway edge lights, apron floodlights, and tower windows as emissive points.
 
@@ -180,6 +180,7 @@ Starting values; final values get tuned in the model viewer and on the globe.
 | Rock | `#6E665E`, `#857B70`, `#5C554F` |
 | Snow | `#E8ECEF`, `#D5DCE2` |
 | Roads | `#7A7062` |
+| Runway paint | `#E6E4DC` (white), `#D9A92E` (taxi lines; decision 109) |
 | Settlements | `#C9BFAF`, `#B5A898` (walls), `#8E5A48`, `#5E5E62` (roofs) |
 
 ### Factions

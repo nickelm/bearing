@@ -38,16 +38,19 @@ import {
   uniform,
   vec2,
   vec3,
+  vec4,
 } from 'three/tsl';
 import { tileForDirection, tileKey, tileKeyString } from '../../../core/tiles';
 import type { TileKey } from '../../../core/tiles';
 import { Vec3d } from '../../../core/vec3d';
 import type { RiverRange, RiverTables } from '../../common/water/riverTables';
 import { localFrame } from './infraScene';
+import { runwayMarks } from './runwayMarkings';
 
 type F = Node<'float'>;
 type V2 = Node<'vec2'>;
 type V3 = Node<'vec3'>;
+type V4 = Node<'vec4'>;
 
 /** How roads are drawn; shared across materials, so GUI settings survive world changes. */
 export class RoadStyle {
@@ -216,7 +219,7 @@ export class LightShading {
 
   /**
    * One pass over the light list at a planet-centered position:
-   * (town cover, industry cover, emission).
+   * (town cover, industry cover, emission, runway paint).
    *
    * - **Built-up patches** (decision 71): a disk of each record's built-up
    *   radius, its edge broken by `edgeNoise` (0..1, a few km across) and
@@ -225,13 +228,16 @@ export class LightShading {
    *   altitude without growing.
    * - **Emission** (relative units, before color): Σ intensity × (1 − (d / r)²)²,
    *   each disk at least 1.5 pixels wide so towns stay visible from orbit.
+   * - **Runway paint** (airbase records, V3): signed cover from `runwayMarks`,
+   *   positive white, negative yellow.
    */
-  sample(planetPosition: V3, start: F, count: F, footprint: F, edgeNoise: F): V3 {
+  sample(planetPosition: V3, start: F, count: F, footprint: F, edgeNoise: F): V4 {
     return Fn(() => {
       const p = normalize(planetPosition);
       const town = float(0).toVar();
       const industry = float(0).toVar();
       const total = float(0).toVar();
+      const paint = float(0).toVar();
       const first = int(start);
       const minRadius = max(footprint, 1).mul(1.5);
       const minBuilt = max(footprint, 1).mul(1.2);
@@ -254,12 +260,19 @@ export class LightShading {
         const c = clamp(shown.sub(d).div(edge), 0, 1)
           .mul(thin.mul(thin))
           .mul(select(b.y.greaterThan(0), float(1), float(0)));
-        If(b.z.lessThan(0.5), () => town.assign(max(town, c))).Else(() =>
-          industry.assign(max(industry, c)),
-        );
+        If(b.z.lessThan(0.5), () => {
+          town.assign(max(town, c));
+        })
+          .ElseIf(b.z.lessThan(1.5), () => {
+            industry.assign(max(industry, c));
+          })
+          .ElseIf(d.lessThan(b.w.mul(0.5).add(600)), () => {
+            const m = runwayMarks(p, a.xyz, b.w, this.radius, max(footprint, 0.05));
+            paint.assign(select(abs(m).greaterThan(abs(paint)), m, paint));
+          });
       });
-      return vec3(town, industry, total);
-    })() as V3;
+      return vec4(town, industry, total, paint);
+    })() as V4;
   }
 }
 
