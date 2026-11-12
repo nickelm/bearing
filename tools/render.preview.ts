@@ -438,6 +438,8 @@ it('renders preview views', async () => {
   scene.resize(width, height);
   scene.globe.setWorld(world);
   scene.climate.setWorld(world);
+  // The valley floor, as the app sets it once the global pass is done (decision 122).
+  scene.climate.setValleyFloor(global.finish.display.valleyFloor ?? null, world.maps.height);
   scene.globe.setExaggeration(exaggeration);
   scene.terrain.setExaggeration(exaggeration);
   scene.terrain.buildBudgetMs = 10_000;
@@ -856,6 +858,7 @@ async function renderStrategic(
     });
     scene.resize(width, height);
     scene.setWorld(displayWorld);
+    scene.setValleyFloor(global.finish.display.valleyFloor ?? null);
     scene.setStrategic(campaign.graph, campaign.campaign.cast, campaign.infrastructure);
     // Labels (decision 98): the same fonts as the app, read from node_modules.
     if (process.env.LABELS !== '0') scene.setLabelFonts(labelAtlas());
