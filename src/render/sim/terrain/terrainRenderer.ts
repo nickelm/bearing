@@ -82,6 +82,7 @@ import {
   RoadStyle,
   ruralSpeckle,
 } from '../infra/roadShading';
+import { facetNormal } from './facets';
 import { LandShading } from './landShading';
 import { DEFAULT_LOD, selectTiles } from '../../common/terrain/quadtree';
 import {
@@ -311,7 +312,7 @@ export class TerrainRenderer {
       return p;
     })();
     // Meshes carry no rotation or scale, so object space is world space.
-    const normal = normalize(up.sub(attribute('slope', 'vec3').mul(exaggeration)));
+    const smoothNormal = normalize(up.sub(attribute('slope', 'vec3').mul(exaggeration)));
     const radial = normalize(up);
     const wrapped = wrapOrigin.add(local);
     const L = this.lighting;
@@ -320,6 +321,8 @@ export class TerrainRenderer {
       // per fragment (decision 69) and must not take derivatives themselves.
       const footprint = length(fwidth(positionWorld)).toVar();
       const heightWidth = max(fwidth(rawHeight), 1e-3).toVar();
+      // Flat facets: each triangle's own normal (decision 123).
+      const normal = facetNormal(positionWorld, radial, smoothNormal, this.land.facets).toVar();
       const planet = L.planetPosition(positionWorld);
       // Sunlight, cloud shadow and sky light once for every layer shaded here.
       const at = L.at(positionWorld);

@@ -140,6 +140,8 @@ export interface LightingGuiParams {
   temperatureShift: number;
   /** Terrain albedo detail-noise strength. */
   detail: number;
+  /** Flat-shaded terrain facets (decision 123); off shades smoothly. */
+  facets: boolean;
   /** How readable sub-pixel rivers are (0 = physically faint). */
   riverLegibility: number;
   /** Roads and airfield pavement drawn on the terrain. */
@@ -509,6 +511,9 @@ export class DebugGui {
       .onChange(() => changed(light));
     f.add(light, 'detail', 0, 3, 0.05)
       .name('Ground detail')
+      .onChange(() => changed(light));
+    f.add(light, 'facets')
+      .name('Faceted terrain')
       .onChange(() => changed(light));
     f.add(light, 'riverLegibility', 0, 1, 0.05)
       .name('River legibility')

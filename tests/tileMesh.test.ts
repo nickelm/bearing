@@ -14,7 +14,7 @@ import {
 import type { TileKey } from '../src/core/tiles';
 import { PLANET_RADIUS } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
-import { TILE_SEGMENTS } from '../src/render/common/terrain/quadtree';
+import { DEFAULT_LOD, TILE_SEGMENTS, vertexSpacing } from '../src/render/common/terrain/quadtree';
 import {
   buildTileIndex,
   buildTileMesh,
@@ -121,6 +121,50 @@ describe('buildTileMesh', () => {
       .add(world(mc, 2, 0))
       .scale(0.5);
     expect(m1.distanceTo(mid)).toBeLessThan(0.01);
+  });
+
+  it('keeps flat facets through geomorphing: at morph 0 each child facet lies in a parent facet', () => {
+    // Flat shading shows every triangle (decision 123), so a split must not change
+    // the facets: the child's two triangles per quad share the parent's diagonal
+    // direction, and its odd vertices sit on the parent's edges and diagonals.
+    const parent = tileKey(2, 6, 20, 33);
+    const child = childTiles(parent)[3]!; // (+1, +1) quadrant
+    const mp = build(parent);
+    const mc = build(child);
+    const index = buildTileIndex();
+    const half = TILE_SEGMENTS / 2;
+    const normalOf = (p: Vec3d[]) =>
+      p[1]!.clone().sub(p[0]!).cross(p[2]!.clone().sub(p[0]!)).normalize();
+    let worst = 0;
+    let bent = 0;
+    for (let t = 0; t < 2 * TILE_SEGMENTS * TILE_SEGMENTS; t++) {
+      const tri = [index[3 * t]!, index[3 * t + 1]!, index[3 * t + 2]!];
+      const nc = normalOf(tri.map((v) => world(mc, v, 0)));
+      // Centroid in the parent's grid coordinates, and the parent triangle containing it.
+      const cx = half + tri.reduce((s, v) => s + (v % V), 0) / 6;
+      const cy = half + tri.reduce((s, v) => s + Math.floor(v / V), 0) / 6;
+      const qi = Math.floor(cx);
+      const qj = Math.floor(cy);
+      const g = (i: number, j: number) => j * V + i;
+      const ptri =
+        cx - qi >= cy - qj
+          ? [g(qi, qj), g(qi + 1, qj), g(qi + 1, qj + 1)]
+          : [g(qi, qj), g(qi + 1, qj + 1), g(qi, qj + 1)];
+      const np = normalOf(ptri.map((v) => world(mp, v)));
+      worst = Math.max(worst, Math.acos(Math.min(1, nc.dot(np))));
+      // At full detail the child's own heights bend the facets away from the parent's.
+      const n1 = normalOf(tri.map((v) => world(mc, v, 1)));
+      if (Math.acos(Math.min(1, n1.dot(np))) > 1e-3) bent++;
+    }
+    expect(worst).toBeLessThan(1e-3);
+    expect(bent).toBeGreaterThan(0);
+  });
+
+  it('gives facets of about 20 to 60 m at the finest level', () => {
+    // docs/visual-style.md Part I, Terrain: facets of roughly 20–60 m at low altitude.
+    const s = vertexSpacing(DEFAULT_LOD.maxLevel, R);
+    expect(s).toBeGreaterThanOrEqual(20);
+    expect(s * Math.SQRT2).toBeLessThanOrEqual(60);
   });
 
   it('has outward normals and puts the origin on the sphere', () => {

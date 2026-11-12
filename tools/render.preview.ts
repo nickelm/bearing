@@ -8,6 +8,7 @@
  *   env: SEED (1983), TRES tectonic resolution (256), GRES global resolution (1024),
  *        VIEWS comma list of view names (all), W × H image size (1024 × 576),
  *        EX exaggeration (1, the simulation view's true scale), GRADE=0 leaves airfields ungraded (files get -ungraded),
+ *        FACETS=0 shades the terrain smoothly instead of in flat facets (files get -smooth),
  *        PERF=n times n more frames per view once loaded: ms per frame until the GPU is
  *          done, CPU in scene.render and its parts, terrain loop lengths, draw statistics
  *          (on a software adapter only the ratios mean anything),
@@ -621,6 +622,8 @@ it('renders preview views', async () => {
     scene.clouds.enabled.value = process.env.CLOUDS === '0' ? 0 : 1;
     // RIVERS=x sets how strongly sub-pixel rivers are drawn (0 = their true pixel fraction).
     if (process.env.RIVERS) scene.terrain.riverStyle.legibility.value = Number(process.env.RIVERS);
+    // FACETS=0 shades the terrain smoothly, to compare with the flat facets (decision 123).
+    scene.terrain.land.facets.value = process.env.FACETS === '0' ? 0 : 1;
     // DETAIL=1 adds the instanced trees and buildings (off in the strategic view, decision 71).
     scene.forest.enabled = scene.structures.enabled = process.env.DETAIL === '1';
     // Render until the terrain has loaded everything this view wants.
@@ -741,7 +744,8 @@ it('renders preview views', async () => {
     }
     const rgb = await head.readRgb();
     const ungraded = process.env.GRADE === '0' ? '-ungraded' : '';
-    const file = join(outDir, `render-${seed}-${v.name}${ungraded}.png`);
+    const smooth = process.env.FACETS === '0' ? '-smooth' : '';
+    const file = join(outDir, `render-${seed}-${v.name}${ungraded}${smooth}.png`);
     writeFileSync(file, encodePng(width, height, rgb));
     const s = scene.terrain.stats;
     if (process.env.DEBUG) {

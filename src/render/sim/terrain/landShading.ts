@@ -111,6 +111,8 @@ export class LandShading {
   readonly temperatureOffset = uniform(0);
   /** Albedo detail-noise strength (0 = flat colors). */
   readonly detail = uniform(1);
+  /** 1 shades each terrain triangle flat with its own normal, 0 smooth (decision 123). */
+  readonly facets = uniform(1);
   readonly rockColor = uniform(new Color(0.13, 0.12, 0.105));
   readonly snowColor = uniform(new Color(0.82, 0.85, 0.9));
   readonly autumnColor = uniform(new Color(0.24, 0.13, 0.04));

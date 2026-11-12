@@ -403,7 +403,9 @@ Simulation view (needs S1's `render/sim/` split):
   - [ ] Peak labels show coarse-pass heights (about 1.4 km at most), lower than the eroded summits now; label from the global grid's height near the peak, or drop the height
   - [ ] Airfields on rougher ground: check the 400 m grading margin and embankments at true scale (`VIEWS=airbase,runway`)
   - [ ] Tune the landform gain, radius and tile detail across more seeds and terrain types (plains, coasts, high mountains) with `tools/relief.preview.ts`
-- [ ] Faceted flat shading on terrain (derivative normals), with facets of about 20–60 m at low altitude; check it against geomorphing
+- [x] Faceted flat shading on terrain (derivative normals), with facets of about 20–60 m at low altitude; check it against geomorphing (decision 123: `render/sim/terrain/facets.ts`; GUI → Lighting → Faceted terrain; preview `FACETS=0`)
+  - [ ] Owner: look at the facets in the browser at low altitude and over mountains, toggling GUI → Lighting → Faceted terrain
+  - [ ] Facets read as a grid of squares on gentle ground: the mesh is a regular grid with one diagonal direction, so a quad's two triangles shade almost alike. Consider jittering each vertex by an amount set by the level at which it first appears, which keeps geomorphing exact, and judge again after shade quantization
 - [ ] Per-face shade quantization: three to five shades per biome from slope, altitude, moisture and low-frequency noise, constant per face
 - [ ] Rock and snow by face; drop smooth rock blending (style gap from decision 70)
 - [ ] Voronoi farmland patchwork near settlements and on flat lowland
