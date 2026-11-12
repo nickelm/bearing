@@ -1784,3 +1784,14 @@ The engineering calls made while adopting it:
 - **Checks.** Unit tests for the stick and slider mapping and the observer's touch behavior; the overlay was also driven in headless Chromium with emulated touch (push, release, slider, toggle).
 
 **Reason:** Decision 60 gave the orbit camera map-app gestures, but the observer walks and climbs, which have no natural gesture; a twin-stick layout is the convention for moving a ground camera on a tablet, and keeping looking as a gesture leaves the screen mostly free.
+
+### 115. The observer flies
+
+**Date:** 2026-11-12
+**Decision:** The observer camera (decisions 112–114) flies instead of walking, at the owner's request: it starts at its station as before, but its stick and keys move it through the air.
+
+- **Moving.** Forward (W/S, the touch stick's up and down) moves along the view direction, pitch included, so looking down while pushing forward descends and looking up climbs. Sideways (A/D, the stick's left and right) strafes level. The height slider and R/F climb and sink straight up and down at the same speed. Speed is unchanged: 80 m/s near the ground, twice the height above ground per second higher up, five times faster with Shift or ×5.
+- **Altitude, not height.** The camera now keeps its altitude above sea level instead of a height above the ground, so it no longer follows the terrain: flying out over a valley leaves it high above the valley floor. Its limits are the ground: never closer than 2 m to the ground under the eye, never more than 20 km above it (the simulation view's envelope). The camera asks the scene for the ground (`groundAt`, the finest drawn surface) after each move, so rising ground lifts it in the same frame rather than the next. A station's eye height is applied once the ground under it has loaded.
+- **Unchanged.** It stays within 25 km of its station, and the free camera stays behind the dev flag.
+
+**Reason:** The owner wanted to fly with the joystick rather than stay on the ground, only never below it. Flying along the view is the convention of free-flight cameras and needs no extra control for diving and climbing; following the ground's height would make the camera bob over every rise, which flight should not.

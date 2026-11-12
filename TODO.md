@@ -382,6 +382,8 @@ Simulation view (needs S1's `render/sim/` split):
   - [x] Touch controls for the observer (owner request; decision 114): one finger looks, pinch zooms, on-screen walk stick, height slider and ×5
   - [x] Owner tablet review (2026-11-12): the stick works but is a little slow (now 80 m/s near the ground); finger look felt inverted (now mouse-look, as with the mouse)
   - [ ] Owner: recheck finger look and pace on the tablet
+  - [x] Fly rather than walk (owner request; decision 115): forward along the view, climb straight, altitude kept over valleys, never within 2 m of the ground
+  - [ ] Owner: try flying on the tablet and the desktop (look down and push to dive; the floor at 2 m; whether the 25 km limit gets in the way)
   - [ ] Owner concern: the ground around bases looks flat and uniform. Airbases sit on flat land by design and the grading flattens 400 m beyond; the uniform look is the smooth, one-color-per-biome land shading that the faceted shading, shade quantization and farmland tasks below replace
   - [ ] Ports: a quay layout and buildings, so a port observer stands on the quay rather than at the coarse site point (with C3's ships)
   - [ ] Ease between stations instead of jumping (V4's transition controller)

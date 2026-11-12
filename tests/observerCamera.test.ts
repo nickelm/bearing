@@ -112,6 +112,53 @@ describe('ObserverCamera', () => {
     expect(c.far).toBeGreaterThan(Math.sqrt(2 * R * 20 * KM));
   });
 
+  it('flies where it looks, and never closer than 2 m to the ground', () => {
+    const c = new ObserverCamera(R);
+    c.groundAt = () => 100;
+    c.setStation(station({ height: 20 }));
+    expect(c.altitude).toBe(120);
+    // Looking 30° down and pushing forward: it descends along the view, then stops at the floor.
+    c.pitch = -30 * DEG;
+    c.input.forward = 1;
+    c.update(0.1);
+    expect(c.altitude).toBeCloseTo(120 - 8 * Math.sin(30 * DEG), 6); // 80 m/s for 0.1 s
+    for (let i = 0; i < 50; i++) c.update(0.1);
+    expect(c.altitude).toBe(100 + OBSERVER_MIN_HEIGHT);
+    // Looking up climbs.
+    c.pitch = 30 * DEG;
+    c.update(0.1);
+    expect(c.altitude).toBeGreaterThan(102);
+  });
+
+  it('keeps its altitude over falling ground and is lifted by rising ground', () => {
+    const c = new ObserverCamera(R);
+    let ground = 100;
+    c.groundAt = () => ground;
+    c.setStation(station({ height: 50 }));
+    expect(c.altitude).toBe(150);
+    ground = 20; // a valley: no terrain following
+    c.update(0.1);
+    expect(c.altitude).toBe(150);
+    expect(c.height).toBe(130);
+    ground = 400; // a ridge: lifted to the floor at once
+    c.update(0.1);
+    expect(c.altitude).toBe(400 + OBSERVER_MIN_HEIGHT);
+  });
+
+  it('applies a station eye height once the ground is known', () => {
+    const c = new ObserverCamera(R);
+    let ground: number | null = null;
+    c.groundAt = () => ground;
+    c.setStation(station({ height: 19 }));
+    expect(c.altitude).toBe(19); // over sea level until the ground loads
+    ground = 300;
+    c.update(0.016);
+    expect(c.altitude).toBe(319);
+    ground = 310;
+    c.update(0.016);
+    expect(c.altitude).toBe(319); // only once
+  });
+
   it('walks along its heading and stays on the leash', () => {
     const c = new ObserverCamera(R);
     const s = station({ facing: 0 });

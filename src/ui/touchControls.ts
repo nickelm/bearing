@@ -2,10 +2,12 @@
  * On-screen controls for the observer camera on touch screens (decision 114):
  * what the keyboard does on a desktop.
  *
- * - **Walk stick** (bottom left): push to move; speed grows with the push, as
- *   W/A/S/D at full deflection. A small dead zone keeps a resting thumb still.
- * - **Height slider** (bottom right): push up to rise and down to sink, as R/F;
- *   it springs back to the middle on release.
+ * - **Flight stick** (bottom left): push to fly; up flies along the view
+ *   (looking down while pushing descends), sideways strafes level. Speed grows
+ *   with the push, as W/A/S/D at full deflection; a small dead zone keeps a
+ *   resting thumb still (decision 115).
+ * - **Height slider** (bottom right): push up to climb and down to sink
+ *   straight, as R/F; it springs back to the middle on release.
  * - **×5** (above the slider): toggles the fast pace, as holding Shift.
  *
  * Looking around and zooming stay gestures on the view itself
@@ -72,7 +74,7 @@ export class TouchControls {
 
     const stick = document.createElement('div');
     stick.className = 'touch-stick';
-    stick.title = 'Walk';
+    stick.title = 'Fly';
     this.knob = document.createElement('div');
     this.knob.className = 'touch-knob';
     stick.appendChild(this.knob);

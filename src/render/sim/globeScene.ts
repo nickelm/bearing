@@ -181,8 +181,8 @@ export class GlobeScene {
     if (this.mode === 'observer') {
       const ob = this.observer;
       ob.terrainMaxHeight = this.globe.maxDisplayedHeight;
-      // The finest surface under the eye, so a standing observer stays above the drawn ground.
-      ob.groundHeight = tiles ? this.terrain.displaySurfaceAt(ob.spot) : null;
+      // The finest drawn surface, asked after each move so the observer never dips into it.
+      ob.groundAt = tiles ? (d) => this.terrain.displaySurfaceAt(d) : null;
       ob.update(dt);
       this.camera.fov = ob.fov / DEG;
       o = ob;
