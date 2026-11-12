@@ -557,7 +557,14 @@ it('renders preview views', async () => {
     const station =
       v.observer && base ? stations.find((x) => x.key === `airbase-${base.id}`) : null;
     if (station) {
-      scene.observer.setStation(station);
+      // OBS_HEIGHT (m above the ground) and OBS_PITCH (deg) override the station's;
+      // OBS_HEADING (deg, or 'sun' to face the sun's azimuth) is applied once the sun is set.
+      const env = process.env;
+      scene.observer.setStation({
+        ...station,
+        height: env.OBS_HEIGHT ? Number(env.OBS_HEIGHT) : station.height,
+        pitch: env.OBS_PITCH ? Number(env.OBS_PITCH) * DEG : station.pitch,
+      });
       // The clock and the sun follow the observer's spot.
       o.lat = scene.observer.lat;
       o.lon = scene.observer.lon;
@@ -586,6 +593,18 @@ it('renders preview views', async () => {
       );
     }
     sunDirection(t, params, calendar, scene.sun);
+    if (station && process.env.OBS_HEADING) {
+      const h = process.env.OBS_HEADING;
+      if (h === 'sun') {
+        // Compass azimuth of the sun at the spot: atan2(east, north) of its tangential part.
+        const up = scene.observer.spot;
+        const east = new Vec3d(0, 1, 0).cross(up).normalize();
+        const north = up.clone().cross(east);
+        scene.observer.heading = Math.atan2(scene.sun.dot(east), scene.sun.dot(north));
+      } else {
+        scene.observer.heading = Number(h) * DEG;
+      }
+    }
     scene.terrain.land.seasonPhase.value = seasonPhase(t, params, calendar);
     // HOURS shifts only the clouds' clock (to see them move with the sun held fixed).
     const cloudTime = t + Number(process.env.HOURS ?? 0) * HOUR;
