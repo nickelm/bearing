@@ -56,13 +56,19 @@ export interface GlyphInput {
   windAt?(cell: number): number | null;
 }
 
+/** Region fill threshold (decision 97); the Theater fill needs taller ground. */
+const FILL_MIN_TALL_REGION = 0.3;
+
 /** Per-band spacing (m) and base width (m) of each glyph kind. */
 export const GLYPH_TUNING = {
   theater: {
     ridgeSpacing: 22e3,
-    mountainWidth: [30e3, 50e3],
-    fillSpacing: 30e3,
-    peakWidth: [44e3, 60e3],
+    // 20% smaller than decision 97's, with a sparse fill on the taller ground only
+    // (decision 102), so ranges read as chains and massifs rather than one mass.
+    mountainWidth: [24e3, 40e3],
+    fillSpacing: 50e3,
+    fillMinTall: 0.45,
+    peakWidth: [35e3, 48e3],
     peakMinImportance: 0.55,
     hillSpacing: 40e3,
     hillWidth: 22e3,
@@ -72,6 +78,7 @@ export const GLYPH_TUNING = {
   region: {
     ridgeSpacing: 6.5e3,
     mountainWidth: [10e3, 17e3],
+    fillMinTall: FILL_MIN_TALL_REGION,
     fillSpacing: 9e3,
     peakWidth: [15e3, 22e3],
     peakMinImportance: 0,
@@ -84,6 +91,14 @@ export const GLYPH_TUNING = {
     forestWidth: [2.5e3, 5e3],
   },
 } as const;
+/**
+ * Mounds and dunes keep this share of the darts that pass the spacing test, and move
+ * by up to `SCATTER_NUDGE` of the spacing (decision 102): a maximal dart throw packs
+ * into visible rows, as forest tokens already avoid with `forestKeep`.
+ */
+export const SCATTER_KEEP = 0.6;
+export const SCATTER_NUDGE = 0.2;
+
 /** Range cells below this tallness (0..1, reference 600–3,000 m: 1,320 m) get no fill glyphs. */
 export const FILL_MIN_TALL = 0.3;
 /** Fill glyphs also need this reference slope (rise over run), so high flat ground stays bare. */
@@ -240,6 +255,15 @@ export function layoutGlyphs(input: GlyphInput): GlyphSet[] {
       p[2] + (hash01(c, salt + 2) - 0.5) * j,
     ]);
   };
+  /** A point moved by up to SCATTER_NUDGE of `spacing` in a hashed direction. */
+  const nudge = (p: Point, c: number, salt: number, spacing: number): Point => {
+    const a = (SCATTER_NUDGE * spacing) / radius;
+    return norm([
+      p[0] + (hash01(c, salt) - 0.5) * 2 * a,
+      p[1] + (hash01(c, salt + 1) - 0.5) * 2 * a,
+      p[2] + (hash01(c, salt + 2) - 0.5) * 2 * a,
+    ]);
+  };
   /** Cells of a feature in hashed order, for the dart throw. */
   const shuffled = (cells: number[], salt: number) =>
     cells
@@ -300,12 +324,14 @@ export function layoutGlyphs(input: GlyphInput): GlyphSet[] {
     for (const [id, cells] of ranges) {
       for (const c of shuffled(cells, id * 7 + (band === 'region' ? 1 : 2))) {
         const p = jittered(c, 21);
-        if (tall(p) < FILL_MIN_TALL || slope(c) < FILL_MIN_SLOPE || fill.near(p, t.fillSpacing))
+        if (tall(p) < t.fillMinTall || slope(c) < FILL_MIN_SLOPE || fill.near(p, t.fillSpacing))
           continue;
+        // Nudged like mounds and dunes, so the fill does not read as a lattice.
+        const q = nudge(p, c, 24, 1.75 * t.fillSpacing); // 35% of the spacing
         const k = tall(p);
         mountains.push(
-          p,
-          height(p),
+          q,
+          height(q),
           (0.55 + 0.35 * k) * width(t.mountainWidth, k),
           hash01(c, 23) * Math.PI * 2,
           snow(p),
@@ -323,9 +349,11 @@ export function layoutGlyphs(input: GlyphInput): GlyphSet[] {
       for (const c of shuffled(cells, id * 13 + 3)) {
         const p = jittered(c, 31);
         if (moundBins.near(p, t.hillSpacing)) continue;
+        moundBins.add(p); // spacing counts dropped darts too, so mounds stay scattered
+        if (hash01(c, 35) > SCATTER_KEEP) continue;
+        const q = nudge(p, c, 36, t.hillSpacing);
         const w = t.hillWidth * (0.8 + 0.4 * hash01(c, 33));
-        mounds.push(p, height(p), w, hash01(c, 34) * Math.PI * 2, false, 0);
-        moundBins.add(p);
+        mounds.push(q, height(q), w, hash01(c, 34) * Math.PI * 2, false, 0);
       }
     }
     out.push(mounds.build());
@@ -339,10 +367,12 @@ export function layoutGlyphs(input: GlyphInput): GlyphSet[] {
         if (!input.sandAt(c)) continue;
         const p = jittered(c, 41);
         if (duneBins.near(p, t.duneSpacing)) continue;
+        duneBins.add(p);
+        if (hash01(c, 46) > SCATTER_KEEP) continue;
+        const q = nudge(p, c, 47, t.duneSpacing);
         const wind = input.windAt?.(c) ?? null;
         const heading = (wind ?? hash01(c, 43) * Math.PI * 2) + (hash01(c, 44) - 0.5) * 0.5;
-        dunes.push(p, height(p), t.duneWidth * (0.8 + 0.4 * hash01(c, 45)), heading, false, 0);
-        duneBins.add(p);
+        dunes.push(q, height(q), t.duneWidth * (0.8 + 0.4 * hash01(c, 45)), heading, false, 0);
       }
     }
     out.push(dunes.build());

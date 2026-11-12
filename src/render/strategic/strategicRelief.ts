@@ -146,6 +146,16 @@ const TUSSOCK_MARK = hexToLinear(0x99957c);
 const CRACK_MARK = hexToLinear(0xc9d3d8);
 const REED_MARK = hexToLinear(0x6f8366);
 const HATCH_MARK = hexToLinear(0x7e766d);
+/**
+ * Stylized clouds (decision 102): cover levels of the crisp outer edge and the denser
+ * core, their opacities, and the outline at the outer edge (Part II names no color).
+ */
+const CLOUD_EDGE = 0.5;
+const CLOUD_CORE = 0.75;
+const CLOUD_FILL = 0.28;
+const CLOUD_CORE_FILL = 0.45;
+const CLOUD_LINE = 0xaebbc6;
+const CLOUD_LINE_OPACITY = 0.45;
 /** Part II precipitation hatching color (decision 89). */
 const RAIN_MARK = 0x7c8fa6;
 /**
@@ -351,6 +361,9 @@ export class StrategicRelief {
       ).div(this.reliefScale);
       const depth = waterDepth.toVar();
       const depthWidth = fwidth(waterDepth).toVar();
+      // Cloud cover and its change per pixel, for crisp cloud edges (decision 102).
+      const field = (this.weather ? this.weather.sampleCoverage(radial) : vec2(0, 0)).toVar();
+      const coverWidth = max(fwidth(field.x), 1e-4).toVar();
       // Coast distance at sea for the halo and coastal lines (decisions 83, 85): the
       // per-vertex estimate near the coast, the texture farther out, unknown at its cap.
       const coastField = this.coastDistance.sample(radial).toVar();
@@ -489,19 +502,32 @@ export class StrategicRelief {
       const surfaceColor = mix(withRivers, waterColor, wet);
       const outlined = mix(surfaceColor, water.outlineColor, water.outline.mul(this.biomeMode));
       // Day and night: the night tint and the warm twilight band (decision 87).
-      // Weather (decision 89): faint precipitation hatching under soft, translucent
-      // clouds from the live cloud field, 25% to 45% opaque (decision 90).
-      const field = this.weather ? this.weather.sampleCoverage(radial) : vec2(0, 0);
+      // Weather (decisions 89, 90, 102): stylized clouds as printed weather maps draw
+      // them, with crisp one-pixel edges at two cover levels (a 28% fill above cover 0.5,
+      // 45% above 0.75) and a thin slate outline at the outer edge, over faint
+      // precipitation hatching. The bake's 2 km texels blur no edge this way.
       const weatherOn = this.weatherOn.mul(this.biomeMode);
       const cover = field.x;
-      const rain = masked(field.y.mul(smoothstep(0.3, 0.6, cover)).mul(weatherOn), () =>
-        rainNode(plane, footprint),
-      ).mul(0.7);
-      const cloud = smoothstep(0.3, 0.75, cover)
-        .mul(mix(float(0.25), float(0.45), smoothstep(0.6, 0.95, cover)))
+      const level = (edge: number) => clamp(cover.sub(edge).div(coverWidth).add(0.5), 0, 1);
+      const outer = level(CLOUD_EDGE);
+      const core = level(CLOUD_CORE);
+      const rain = masked(field.y.mul(outer).mul(weatherOn), () => rainNode(plane, footprint)).mul(
+        0.7,
+      );
+      const cloud = outer
+        .mul(CLOUD_FILL)
+        .add(core.mul(CLOUD_CORE_FILL - CLOUD_FILL))
         .mul(this.cloudOpacity)
         .mul(weatherOn);
-      const weathered = mix(mix(outlined, rgb(hexToLinear(RAIN_MARK)), rain), vec3(1, 1, 1), cloud);
+      const cloudLine = clamp(float(1).sub(abs(cover.sub(CLOUD_EDGE)).div(coverWidth)), 0, 1)
+        .mul(CLOUD_LINE_OPACITY)
+        .mul(this.cloudOpacity)
+        .mul(weatherOn);
+      const weathered = mix(
+        mix(mix(outlined, rgb(hexToLinear(RAIN_MARK)), rain), vec3(1, 1, 1), cloud),
+        rgb(hexToLinear(CLOUD_LINE)),
+        cloudLine,
+      );
       const lit = daylightNode(
         weathered,
         dot(radial, this.sunDirection),

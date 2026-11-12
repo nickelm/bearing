@@ -2,7 +2,7 @@
 
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
-When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–100 are reflected in both.
+When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–102 are reflected in both.
 
 ---
 
@@ -1611,7 +1611,7 @@ The engineering calls made while adopting it:
 ### 101. Military overlays: a territory raster, ground-fixed screen-space lines, and what each layer shows
 
 **Date:** 2026-11-11
-**Decision:** S3's strategic overlays (visual-style Part II, *Military Overlays*) live in `render/strategic/overlays/`.
+**Decision:** S3's strategic overlays (visual-style Part II, _Military Overlays_) live in `render/strategic/overlays/`.
 
 - **Territory raster.** Infrastructure placement already computed who holds each coarse cell (`territory.ts`); `Infrastructure.territory` now keeps that raster (−1 sea, 0 neutral, 1 Alliance, 2 Pact), so the map tints the same split that placed airbases and towns. `GENERATOR_VERSION` goes to 10.
 - **Territory tint.** An RGBA8 cube-face texture at the graph's resolution, one channel per holder, filtered linearly; sea cells take the nearest land's holder within three cells, so the tint does not thin along coasts. The relief shader tints dry land below rivers, weather and the night tint: the faction colors at 22%, neutral land `#8C8C8C` at 8%, which Part II names but does not dose. Part II's "about 15%" was faint over the 4× hillshade in the previews (seed 1, front and globe views, with decision 100's single sRGB encode), and 60% buried the map; 22% is a first pick between them, with a GUI slider (Map → Military overlays → Tint opacity) for the owner's tuning. The tint's edge is as soft as the coarse grid (about 40 km); the front line drawn over it is sharp.
@@ -1624,3 +1624,14 @@ The engineering calls made while adopting it:
 - **Not yet.** Convoy icons on lanes wait for convoys in the simulation (C track), and air defense rings for air defense sites.
 
 **Reason:** Reusing the placement raster keeps the tint, the teeth and the bases on the same side of the same line. Screen-sized, ground-anchored strokes follow Part II's "crisp at every zoom" without swimming dashes, and a pure model (`militaryModel.ts`) keeps the choice of what to draw testable on generated worlds without a GPU.
+
+### 102. Crisp stylized map clouds; Theater mountains and scattered glyphs thinned
+
+**Date:** 2026-11-12
+**Decision:** Fixes from the corrected strategic previews (decisions 99, 100):
+
+- **Clouds.** At the floor the cloud bake's 2 km texels drew blurry fog. Clouds now take crisp one-pixel edges at two cover levels, antialiased by the screen-space change of the cover (`fwidth`, taken at the top of the shader): a 28% white fill above cover 0.5, 45% above 0.75, and a thin slate outline (`#AEBBC6`, 45%) at the outer edge, as printed weather maps draw cloud. The bilinear field gives smooth contours, so the 2 km texels no longer show as blur. Precipitation hatching follows the outer edge. Cloud opacity (decision 90) still scales all of it.
+- **Theater mountains** (decision 97). The Theater set crowded the band: glyphs of 30–50 km on a 22 km ridge spacing, plus a fill every 30 km. They are now 20% smaller (24–40 km; peaks 35–48 km), and the Theater fill runs every 50 km and only on taller ground (tallness 0.45 rather than 0.3). The Region set is unchanged. Large ranges whose ridge lines yield few chain glyphs still show as massifs, since dropping the Theater fill entirely emptied them.
+- **Rows of mounds and dunes.** A maximal dart throw packs toward a hexagonal lattice, which read as rows in large deserts. Mounds and dunes now keep 60% of the darts that pass the spacing test (the dropped ones still count for spacing, as forest tokens already do) and move each by up to 20% of the spacing. The mountain fill moves by up to 35%.
+
+**Reason:** Part II asks for cloud shapes thick enough to show a front without hiding the map, and for ranges legible as chains. Edges carry the shape at any zoom where fill opacity alone could not, and thinner glyph sets keep the map readable beneath them.

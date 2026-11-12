@@ -116,9 +116,9 @@ The strategic view from [docs/visual-style.md](docs/visual-style.md) Part II: gl
   - [x] Night lights blew out at globe scale; they thin out with scale (decision 100)
   - [ ] Retune hillshade strength, night darkness and cloud opacity without the AgX curve (they were tuned under it)
   - [x] Check 1 gaps: territory tint, front lines and theater names now show at the Globe band (S3, decision 101; seed 1 `globe` preview); the terminator view moved to 18:30 so the terminator crosses the globe
-  - [ ] Clouds read as blurry fog at the floor (2 km bake): give them a crisper stylized edge band, as printed weather maps do
-  - [ ] Mountain glyphs at the Globe band: Part II lists ranges from the Theater band; hide or thin them above 1,500 km (decision 97's Theater set shows at the globe)
-  - [ ] Hill mounds at Globe and Theater scale read as scattered dirt dots, some in regular rows; check their spacing and band
+  - [x] Clouds read as blurry fog at the floor (2 km bake): give them a crisper stylized edge band, as printed weather maps do (decision 102)
+  - [x] Mountain glyphs at the Globe band: Part II lists ranges from the Theater band; hide or thin them above 1,500 km (decision 97's Theater set shows at the globe) (the Theater set crowded its own band; smaller and sparser, decision 102)
+  - [x] Hill mounds at Globe and Theater scale read as scattered dirt dots, some in regular rows; check their spacing and band (the rows were dunes; both thinned, decision 102)
   - [ ] A dark, noisy speckled patch on steep ground at the floor (rock hatching, tussocks and grain stacking?); find which pattern and calm it
   - [ ] Browser check: vignette and grain visible after the stronger defaults (Paper finish up to 3×)
 - [ ] Acceptance checks 1, 4 and 5 (Part II) against the reference board; ask the owner to add the Civilization VI and Cold War map references
