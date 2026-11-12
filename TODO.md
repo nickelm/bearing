@@ -236,7 +236,7 @@ The strategic graph is the only view of the world that theater detection, castin
   - The range factor is 1.0 for almost every seed (mean 0.98, min 0.73): fronts are 1,500–2,500 km deep, beyond a medium strike radius of 1,300 km. Owner decision: keep real ranges, measure depth to the enemy's industry and base regions instead of 90% of its land, or change the reference radii.
   - Island campaigns are lopsided: the Pact gets a large landmass with no valid front (often a ring continent) and the Alliance a few islands (45–254 vs. 1,200–1,500 airbase sites).
 
-### S4. Settlements and infrastructure (data done; map symbols open; old M5)
+### S4. Settlements and infrastructure (done; old M5)
 
 Civilian geography (settlements, roads, bridges) joins the strategic graph before casting; ports, airbases and targets follow the cast (decision 65). Everything runs on the coarse pass, on the CPU, in `worldgen/strategic/` (decision 72).
 
@@ -255,14 +255,9 @@ Civilian geography (settlements, roads, bridges) joins the strategic graph befor
 - [x] Tools: `npm run maps` graph mode draws settlements, roads, bridges, airbases, ports and targets; `npm run seeds` and the seed browser report them; render preview views `town`, `airbase`, `roads`, `night`
 - [x] Denser settlements (about 2,000), feeder roads, rural night glow (decision 66, after the owner's first look)
 - [x] Strategic view shows the big picture (decision 71, owner review): forests as canopy masses and towns as built-up patches in the terrain shader, guide palette; instanced trees and buildings off by default (simulator detail); procedural shader lanes removed; local roads link neighboring settlements (Gabriel graph, 70 km), so villages sit on through roads
-- [ ] Snap bridges to the rendered (eroded) rivers, which can run a few kilometers from the coarse ones (decision 65)
-- [ ] Keep civilian roads off airfields (a road may cross a taxiway; route around airbase footprints or end them at the gate)
-- [ ] Island campaigns can leave the Alliance under 15 airbases (seed 11: 9), since its islands have little flat land; tied to the lopsided island split noted under S3
 - [x] Urban extent polygons per settlement from the growth model, in the graph (decision 103: radial growth along roads, cut at water)
-  - [ ] Simulation view: built-up patches from the extent polygons instead of the urban radius disk (V3)
 - [x] Road hierarchy from a gravity model: motorway, trunk and secondary from the populations a road connects and the traffic routed over it; `GENERATOR_VERSION` 11 (decision 103)
 - [x] Route numbers from a fictional scheme ("R4", "M12") and names for notable pass and coast roads ("the Kessar Pass Road"), with S2's generator (decision 103)
-  - [ ] Tune across seeds: seed 1983 numbers 33 motorway and 86 trunk chains, many short pieces between junctions; consider merging through junctions across classes
 - [x] Railways linking major cities, ports and industry, with rail yards and rail bridges as targets (decision 103)
 - [x] Capitals: each side's largest settlement (decision 103)
 - [x] Map: urban extent fills and oversized low-poly city glyphs by class (village, town, city, capital with a star) (decision 104)
@@ -270,9 +265,19 @@ Civilian geography (settlements, roads, bridges) joins the strategic graph befor
 - [x] Map: symbols for airbases (runway glyph), ports (pier glyph), factories, refineries, depots and rail yards (decision 104)
 - [x] Labels: route numbers and pass and coast road names along roads; capitals (decision 104)
 - [x] Preview views `cities` (700 km) and `capital` (150 km) on the Alliance capital
-- [ ] Browser check: roads, railways, symbols and building glyphs read well and stay near 60 fps at the floor; symbol and glyph sizes; whether secondary roads crowd the Region band near 400 km
-- [ ] Acceptance checks (Part II) for S4: re-run check 3 with the owner (capitals now exist); checks 1, 2, 4 and 5 on the new views
-- [ ] Checkpoint 6: owner review of towns, roads, airbases, railways and their symbols on the map
+- [x] Check 2 in Node with route and capital labels (tests/labels.test.ts, seed 7: no overlaps at any band)
+- [x] Checkpoint 6: owner review of towns, roads, airbases, railways and their symbols on the map (signed off 2026-11-12 from the seed 1 `cities` and `capital` previews: "Looks great")
+
+#### S4 follow-ups (not blocking)
+
+- [ ] Snap bridges to the rendered (eroded) rivers, which can run a few kilometers from the coarse ones (decision 65)
+- [ ] Keep civilian roads off airfields (a road may cross a taxiway; route around airbase footprints or end them at the gate)
+- [ ] Island campaigns can leave the Alliance under 15 airbases (seed 11: 9), since its islands have little flat land; tied to the lopsided island split noted under S3
+- [ ] Simulation view: built-up patches from the urban extent polygons instead of the urban radius disk (V3)
+- [ ] Tune routes across seeds: seed 1983 numbers 33 motorway and 86 trunk chains, many short pieces between junctions; consider merging through junctions across classes
+- [ ] Bridge marks and the capital star read small at 150 km; the urban fill is faint around small towns
+- [ ] Browser check: frame time at the floor with roads, railways, symbols and building glyphs; whether secondary roads crowd the Region band near 400 km
+- [ ] Acceptance checks on the new views: re-run check 3 with the owner (capitals now exist; S2 deferred that part to S4), and checks 1, 4 and 5 (`SCENE=strategic SEED=1 VIEWS=globe,cities,capital,sharp CVD=1`)
 
 ## Simulation core track
 
