@@ -302,9 +302,11 @@ export class LandShading {
    * or none, switching at about 27° with the noise and jitter dithering the
    * line along facets (decision 125); smooth, it blends.
    */
-  rockCover(steep: F, noise: F, jitter: F, faceted: F): F {
-    const smooth = smoothstep(0.35, 0.7, steep.add(noise.mul(0.15)));
-    const face = step(0.52, steep.add(noise.mul(0.15)).add(jitter.sub(0.5).mul(0.12)));
+  rockCover(steep: F, noise: F, jitter: F, faceted: F, vegetated: F = float(0) as F): F {
+    // Warm, wet slopes hold soil and woods to about 44° (decision 126).
+    const lift = vegetated.mul(0.45);
+    const smooth = smoothstep(lift.add(0.35), lift.add(0.7), steep.add(noise.mul(0.15)));
+    const face = step(lift.add(0.52), steep.add(noise.mul(0.15)).add(jitter.sub(0.5).mul(0.12)));
     return mix(smooth, face, faceted) as F;
   }
 
@@ -401,7 +403,12 @@ export class LandShading {
     a = mix(a, this.autumnColor.mul(noise.mul(0.2).add(1)), autumn) as V3;
 
     // Rock and snow switch per face when faceted (decision 125), and blend otherwise.
-    const rock = this.rockCover(steep, noise, jitter, faceted);
+    // Vegetation holds steeper slopes where it is warm and wet (decision 126).
+    const annualMean = i.climate.x.sub(
+      earthElevationNode(i.height, i.climate.w, this.reliefScale).mul(LAPSE_RATE),
+    );
+    const vegetated = smoothstep(0.3, 0.55, moisture).mul(smoothstep(3, 10, annualMean)) as F;
+    const rock = this.rockCover(steep, noise, jitter, faceted, vegetated);
     // Three rock shades per face, or continuous noise.
     const rockShade = clamp(floor(noise.mul(0.8).add(jitter).mul(3)), 0, 2)
       .mul(0.18)

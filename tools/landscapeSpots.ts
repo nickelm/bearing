@@ -137,6 +137,8 @@ export class WorldSampler {
     eye: number,
     lift = 0,
     prefer?: number,
+    /** 'down' favors standpoints that look down on the target (a rim), 'up' the reverse. */
+    look: 'up' | 'down' = 'up',
   ): { point: Vec3d; facing: number; pitch: number } | null {
     const ht = Math.max(0, this.height(target)) + lift;
     let best: { point: Vec3d; facing: number; pitch: number } | null = null;
@@ -163,10 +165,37 @@ export class WorldSampler {
         const angle = Math.atan2(ht - he, r);
         const facing = this.headingTo(p, target);
         const lit = prefer === undefined ? 0 : 0.08 * Math.cos(facing - prefer);
-        const score = angle + (0.3 * Math.min(clear, 500)) / r + lit;
+        const score = (look === 'up' ? angle : -angle) + (0.3 * Math.min(clear, 500)) / r + lit;
         if (score > bestScore) {
           bestScore = score;
           best = { point: p, facing: this.headingTo(p, target), pitch: angle - 0.04 };
+        }
+      }
+    }
+    return best;
+  }
+
+  /**
+   * The point within `radiusM` of `center` (on a `stepM` grid) that maximizes
+   * `score`, or `center` when none scores above −Infinity.
+   */
+  search(
+    center: Readonly<Vec3d>,
+    radiusM: number,
+    stepM: number,
+    score: (p: Vec3d) => number,
+  ): Vec3d {
+    let best = center.clone();
+    let bestScore = -Infinity;
+    for (let y = -radiusM; y <= radiusM; y += stepM) {
+      for (let x = -radiusM; x <= radiusM; x += stepM) {
+        if (x * x + y * y > radiusM * radiusM) continue;
+        const r = Math.hypot(x, y);
+        const p = r > 0 ? this.offset(center, Math.atan2(x, y), r) : center.clone();
+        const sc = score(p);
+        if (sc > bestScore) {
+          bestScore = sc;
+          best = p;
         }
       }
     }
@@ -216,11 +245,14 @@ export async function findSpots(
         if (h <= 0) continue;
         if (ARID.has(b)) {
           const rel = s.relief(d, [4000, 8000]);
-          offer('canyon', rel + 0.2 * h, c);
+          // A canyon cut into high ground, its floor well above the sea.
+          if (h - rel > 150) offer('canyon', rel + 0.2 * h, c);
           if (rel < 250) offer('buttes', h - 4 * rel, c);
         }
         // A lake among mountains (lake cells carry a water biome).
-        if (lake[c]! > 0)
+        // Low enough to be warm, like Lake Como: under about 450 m physical, which is
+        // about 2.9 km Earth-like at the planet scale (decision 122).
+        if (lake[c]! > 0 && h + lake[c]! < 450)
           offer('lake', Math.min(lake[c]!, 400) + 0.5 * s.relief(d, [5000, 10000]), c);
         if (COLD.has(b) || b === Biome.TemperateForest) {
           const rel = s.relief(d, [5000, 10000]);
@@ -240,7 +272,7 @@ export async function findSpots(
         if (COLD.has(b) || b === Biome.TemperateForest) {
           let sea = 0;
           for (let k = 0; k < 8; k++)
-            if (s.height(s.offset(d, (k * Math.PI) / 4, 3000)) <= 0) sea++;
+            if (s.height(s.offset(d, (k * Math.PI) / 4, 4000)) <= -20) sea++;
           if (sea >= 2 && sea <= 5) {
             const cold = COLD.has(b) ? 1 : 0.6;
             offer('skerries', cold * (300 - s.relief(d, [3000, 6000])), c);
@@ -286,7 +318,7 @@ export async function findSpots(
       case 'canyon': {
         // From the rim, across the deepest ground nearby.
         const low = s.offset(p, s.mostRelief(p, 2000, 6000, -1), 4000);
-        const v = s.vista(low, [5000, 8000, 11000], 80, 0, lit(low));
+        const v = s.vista(low, [3000, 5000, 8000], 60, 0, lit(low), 'down');
         spot = v
           ? { kind, point: v.point, facing: v.facing, height: 80, pitch: v.pitch, note }
           : { kind, point: p, facing: 0, height: 80, pitch: -0.1, note };
@@ -312,9 +344,25 @@ export async function findSpots(
         spot = found ?? { kind, point: p, facing: 0, height: 500, pitch: 0, note };
         break;
       }
-      case 'buttes':
-        spot = { kind, point: p, facing: lit(p) ?? 0, height: 150, pitch: -3 * DEG, note };
+      case 'buttes': {
+        // On the desert floor near the tallest buttes, looking at them.
+        const q = new Vec3d();
+        // Buttes exist only in the tiles: look for tile ground well above the global grid.
+        const excess = (c: Readonly<Vec3d>) => s.height(c) - scan.height(c);
+        const floor = s.search(p, 25000, 1500, (c) => {
+          // A flat desert floor in low global relief: buttes, not hills.
+          if (excess(c) > 30 || scan.relief(c, [2000, 4000]) > 150 || s.relief(c, [300]) > 25)
+            return -Infinity;
+          let hi = -Infinity;
+          for (const r of [1500, 2500, 4000])
+            for (let k = 0; k < 8; k++)
+              hi = Math.max(hi, excess(s.offset(c, (k * Math.PI) / 4, r, q)));
+          return hi;
+        });
+        const facing = s.mostRelief(floor, 1200, 5000, 1);
+        spot = { kind, point: floor, facing, height: 25, pitch: 3 * DEG, note };
         break;
+      }
       case 'lake': {
         // From a slope above the shore, along the lake.
         const v = s.vista(p, [5000, 8000, 11000], 300, 0, lit(p));
@@ -324,13 +372,16 @@ export async function findSpots(
         break;
       }
       case 'skerries': {
-        const sea = s.mostRelief(p, 1000, 6000, -1);
+        // March toward the sea to the tile shoreline, then look out over it.
+        const sea = s.mostRelief(p, 2000, 8000, -1);
+        let at = p.clone();
+        for (let m = 0; m < 80 && s.height(at) > 4; m++) at = s.offset(at, sea, 250);
         spot = {
           kind,
-          point: s.offset(p, sea + Math.PI, 1000),
+          point: s.offset(at, sea + Math.PI, 400),
           facing: sea,
-          height: 120,
-          pitch: -7 * DEG,
+          height: 90,
+          pitch: -6 * DEG,
           note,
         };
         break;

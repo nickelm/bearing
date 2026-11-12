@@ -75,7 +75,7 @@ export const TILE_SYNTH_TUNING = {
   valleyDetail: 0.25,
   ridgeDetail: 1,
   /** Forest thins on global slopes (m/m, physical) between these. */
-  forestSlope: [0.5, 0.8] as [number, number],
+  forestSlope: [0.7, 1.05] as [number, number],
   /** Plains detail falls to this fraction where the global slope is below flatSlope[0]. */
   lowlandDetail: 0.15,
   /** Global slopes (m/m) over which plains detail ramps from lowlandDetail to full. */
@@ -118,13 +118,13 @@ export const TILE_SYNTH_TUNING = {
   strataThickness: 75,
   strataSharpness: [1.6, 3.5] as [number, number],
   strataRegion: 30_000,
-  butteWavelength: 2600,
+  butteWavelength: 3500,
   butteRegion: 45_000,
-  butteThreshold: 0.32,
+  butteThreshold: 0.3,
   butteDensity: 0.3,
   butteEdge: 0.012,
   butteApron: 0.2,
-  butteHeight: 260,
+  butteHeight: 320,
   butteFlat: [0.02, 0.07] as [number, number],
   /**
    * Skerry coasts (decision 126): where glaciation (landform mask y) is high, ground
@@ -142,6 +142,10 @@ export const TILE_SYNTH_TUNING = {
   fallProbe: 400,
   fallRun: 140,
   fallMinWidth: 15,
+  /** Width of the gorge the steps cut, in river widths beyond the bank (plus 60 m). */
+  fallGorge: 4,
+  /** Deltas build only on ground lower than this (m), fading between the two. */
+  deltaHigh: [12, 40] as [number, number],
   /** Green corridor along rivers in dry land (decision 126): half-width in river widths, clamped (m). */
   greenWidths: 9,
   greenMin: 250,
@@ -442,7 +446,8 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     var reachW = 0.0;
     if (bestDist < ${f(t.riverReach)}) {
       // The water surface follows the smooth global height under the channel.
-      var surf = heightAt(normalize(bestPoint)) - 0.5;
+      let smoothSurf = heightAt(normalize(bestPoint)) - 0.5;
+      var surf = smoothSurf;
       // Falls (decision 126): on steep reaches the water surface steps down the
       // rock layers in pools and drops, each drop over about fallRun m.
       let along = normalize(bestAlong + vec3f(1e-9, 0.0, 0.0)) * (${f(t.fallProbe)} / R);
@@ -463,7 +468,9 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
         let x = bestDist / half;
         carve = surf - depth * (1.0 - x * x);
       } else {
-        carve = surf + (bestDist - half) * ${f(t.bankSlope)};
+        // The steps cut a gorge a few widths across; the valley beyond keeps its slope.
+        let banks = mix(surf, smoothSurf, smoothstep(half, half + ${f(t.fallGorge)} * bestWidth + 60.0, bestDist));
+        carve = banks + (bestDist - half) * ${f(t.bankSlope)};
       }
       reachW = 1.0 - smoothstep(0.6 * ${f(t.riverReach)}, ${f(t.riverReach)}, bestDist);
     }
@@ -559,7 +566,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
       let bq = d * (R / ${f(t.butteWavelength)}) + vec3f(41.3, 7.9, 23.1);
       let m = 0.62 * noise3(bq, 512u) + 0.28 * noise3(bq * 2.31, 512u) + 0.1 * noise3(bq * 5.07, 512u);
       let region = noise3(d * (R / ${f(t.butteRegion)}) + vec3f(5.1, 77.7, 3.3), 512u);
-      let theta = ${f(t.butteThreshold)} - ${f(t.butteDensity)} * region;
+      let theta = ${f(t.butteThreshold)} - ${f(t.butteDensity)} * smoothstep(0.0, 0.7, region);
       let cap = smoothstep(theta - ${f(t.butteEdge)}, theta + ${f(t.butteEdge)}, m);
       let apron = smoothstep(theta - ${f(t.butteApron)}, theta, m);
       let tall = ${f(t.butteHeight)} * (0.6 + 0.8 * (0.5 + 0.5 * noise3(d * (R / 9000.0) + vec3f(3.0, 1.0, 9.0), 512u)));
@@ -635,7 +642,10 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     let lobes = 1.0 + 0.18 * noise3(vec3f(theta * 2.2, salt, 0.5), 512u)
       + 0.08 * noise3(vec3f(theta * 7.0, salt, 3.5), 512u);
     let edge = rd * lobes;
-    let fan = (1.0 - smoothstep(0.85 * edge, edge, r)) * (1.0 - smoothstep(1.1, 1.35, abs(theta)));
+    let side = 1.15 + 0.25 * noise3(vec3f(r / 3000.0, salt, 7.5), 512u);
+    let fan = (1.0 - smoothstep(0.8 * edge, edge, r)) * (1.0 - smoothstep(side - 0.3, side, abs(theta)))
+      // Deltas build on low ground and out into the sea; higher ground stays.
+      * (1.0 - smoothstep(${f(t.deltaHigh[0])}, ${f(t.deltaHigh[1])}, h));
     if (fan <= 0.0) { continue; }
     let rel = r / rd;
     var surface = 0.8 + 5.0 * (1.0 - rel) + 0.6 * noise3(d * (R / 700.0), 512u);
@@ -672,7 +682,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   let iceHere = masks.y;
   // Within reach of the shore (land proximity at sea, sea proximity on land) and low.
   let shoreReach = select(smoothstep(0.55, 1.0, masks.w), smoothstep(0.12, 0.45, masks.z), base <= 0.0);
-  let skerry = shoreReach * smoothstep(0.45, 0.85, iceHere)
+  let skerry = shoreReach * smoothstep(0.45, 0.85, iceHere) * (1.0 - smoothstep(0.3, 0.6, masks.x))
     * (1.0 - smoothstep(0.6 * ${f(t.skerryDepth)}, ${f(t.skerryDepth)}, base))
     * select(1.0, 0.0, lakeLevel > base - 1.0);
   if (skerry > 0.0) {
