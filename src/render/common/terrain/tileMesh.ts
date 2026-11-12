@@ -32,7 +32,7 @@ import { Vec3d } from '../../../core/vec3d';
 import { Biome } from '../../../worldgen/biomes';
 import type { TileData } from '../../../worldgen/gpu/tileSynth';
 import { MAX_BAKED_LEVEL, NO_LAKE } from '../../../worldgen/gpu/tileSynth';
-import { BIOME_COLORS, HEIGHT_RAMP, hsl, ramp, srgbToLinear } from '../palette';
+import { BIOME_COLORS, FARMABLE_BIOMES, HEIGHT_RAMP, hsl, ramp, srgbToLinear } from '../palette';
 import type { Rgb } from '../palette';
 import type { SurfaceGrading } from './grading';
 import { TILE_SEGMENTS, vertexSpacing } from './quadtree';
@@ -87,7 +87,10 @@ export interface TileMeshData {
   color: Float32Array;
   /** Forest density 0..1 (decision 44) in the biome view, 0 in debug views; the shader draws the canopy (decision 71). */
   forest: Float32Array;
-  /** Landform masks per vertex, two each: aridity and glaciation, 0..1 (decision 126). */
+  /**
+   * Landform masks per vertex, three each: aridity and glaciation, 0..1 (decision 126),
+   * and 1 where the biome is farmable (decision 127), 0 elsewhere and in debug views.
+   */
   landform: Float32Array;
   /** Displayed height range before exaggeration (m), of this tile and of the parent surface it morphs to. */
   minHeight: number;
@@ -370,7 +373,7 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
   const slope = new Float32Array(n3);
   const color = new Float32Array(n3);
   const forest = new Float32Array(TILE_VERTEX_COUNT);
-  const landform = new Float32Array(TILE_VERTEX_COUNT * 2);
+  const landform = new Float32Array(TILE_VERTEX_COUNT * 3);
 
   // Grid: directions, own heights and parent heights (float64).
   const dirs = new Float64Array(GRID_VERTICES * 3);
@@ -491,8 +494,10 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
       color[v * 3 + 1] = srgbToLinear(rgb[1]);
       color[v * 3 + 2] = srgbToLinear(rgb[2]);
       forest[v] = opts.mode === 'biome' && hOwn[v]! > 0 ? (mat >>> 24) / 255 : 0;
-      landform[v * 2] = ((mat >>> 17) & 15) / 15;
-      landform[v * 2 + 1] = ((mat >>> 21) & 7) / 7;
+      landform[v * 3] = ((mat >>> 17) & 15) / 15;
+      landform[v * 3 + 1] = ((mat >>> 21) & 7) / 7;
+      landform[v * 3 + 2] =
+        opts.mode === 'biome' && hOwn[v]! > 0 && FARMABLE_BIOMES.has(mat & 0xff) ? 1 : 0;
       // No canopy on graded ground (airfields); it thins over the pad's margin.
       if (grade && forest[v]! > 0)
         forest[v] = forest[v]! * (1 - opts.grading!.cover(dirOf(v, gradeDir)));
@@ -519,7 +524,7 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
       water[dst] = water[src]!;
       shore[dst] = shore[src]!;
       forest[dst] = forest[src]!;
-      landform.copyWithin(dst * 2, src * 2, src * 2 + 2);
+      landform.copyWithin(dst * 3, src * 3, src * 3 + 3);
     }
   }
   return {

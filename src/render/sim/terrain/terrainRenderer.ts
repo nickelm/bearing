@@ -382,7 +382,8 @@ export class TerrainRenderer {
           wrapped: faceWrapped,
           forest: surfaceAttr.w,
           face: { spacing: faceSpacing, jitter: faceJitter },
-          landform: attribute('landform', 'vec2'),
+          landform: face.at(attribute('landform', 'vec3')),
+          settled: this.habitability.sample(faceUp),
         }),
         builtAlbedo(planet, footprint, built.y.div(max(built.x.add(built.y), 1e-4))),
         builtCover,
@@ -581,7 +582,7 @@ export class TerrainRenderer {
     g.setAttribute('parentDisp', new BufferAttribute(m.parentDisp, 3));
     g.setAttribute('slope', new BufferAttribute(m.slope, 3));
     g.setAttribute('color', new BufferAttribute(m.color, 3));
-    g.setAttribute('landform', new BufferAttribute(m.landform, 2));
+    g.setAttribute('landform', new BufferAttribute(m.landform, 3));
     g.setIndex(this.index);
     const mesh = new Mesh(g, this.material);
     mesh.frustumCulled = false;

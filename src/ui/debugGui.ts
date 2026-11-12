@@ -142,6 +142,8 @@ export interface LightingGuiParams {
   detail: number;
   /** Flat-shaded terrain facets (decision 123); off shades smoothly. */
   facets: boolean;
+  /** Farmland patchwork on settled, flat lowland (decision 127). */
+  farmland: boolean;
   /** How readable sub-pixel rivers are (0 = physically faint). */
   riverLegibility: number;
   /** Roads and airfield pavement drawn on the terrain. */
@@ -514,6 +516,9 @@ export class DebugGui {
       .onChange(() => changed(light));
     f.add(light, 'facets')
       .name('Faceted terrain')
+      .onChange(() => changed(light));
+    f.add(light, 'farmland')
+      .name('Farmland')
       .onChange(() => changed(light));
     f.add(light, 'riverLegibility', 0, 1, 0.05)
       .name('River legibility')

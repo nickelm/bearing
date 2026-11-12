@@ -10,6 +10,20 @@ import { BOUNDARY_TYPE_COUNT, BoundaryType } from '../../worldgen/boundaries';
 
 export type Rgb = [number, number, number];
 
+/**
+ * Biomes where farmland can lie (decision 80): open and lightly wooded lowland
+ * biomes. The strategic map's biome fill carries this in its alpha channel and
+ * the simulation view's tiles in their landform attribute (decision 127); both
+ * multiply it with habitability to place fields.
+ */
+export const FARMABLE_BIOMES: ReadonlySet<number> = new Set([
+  Biome.TemperateGrassland,
+  Biome.TemperateForest,
+  Biome.Shrubland,
+  Biome.Savanna,
+  Biome.TropicalSeasonalForest,
+]);
+
 function hex(h: number): Rgb {
   return [((h >> 16) & 255) / 255, ((h >> 8) & 255) / 255, (h & 255) / 255];
 }

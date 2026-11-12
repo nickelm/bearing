@@ -183,6 +183,23 @@ describe('buildTileMesh', () => {
     expect(m.maxHeight).toBeGreaterThan(m.minHeight);
   });
 
+  it('marks farmable biomes on land in the landform attribute (decision 127)', () => {
+    const t = tileKey(1, 5, 3, 4);
+    const withBiome = (biome: number, mode: MeshOptions['mode'] = 'biome') => {
+      const data = fakeData(t);
+      const parentData = fakeData(parentTile(t)!);
+      data.material.fill(biome);
+      parentData.material.fill(biome);
+      return buildTileMesh(t, { data, parentData }, { ...opts, mode });
+    };
+    const farmable = (m: TileMeshData) =>
+      Array.from({ length: TILE_VERTEX_COUNT }, (_, v) => m.landform[v * 3 + 2]);
+    // Temperate forest (8) is farmable, taiga (6) is not; debug views carry none.
+    expect(new Set(farmable(withBiome(8)))).toEqual(new Set([1]));
+    expect(new Set(farmable(withBiome(6)))).toEqual(new Set([0]));
+    expect(new Set(farmable(withBiome(8, 'height')))).toEqual(new Set([0]));
+  });
+
   it('keeps raw sea depths but draws the sea flat', () => {
     // Heights from -200 to +200 m around a coast.
     const t = tileKey(4, 6, 20, 30);

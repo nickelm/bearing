@@ -417,7 +417,10 @@ Simulation view (needs S1's `render/sim/` split):
   - [ ] Cliffs sharper than the 48 m baked samples stair-step along the mesh grid; a finer baked level near the observer, or vertex jitter (above), would allow sharper cliffs and falls
   - [ ] Meanders end at every confluence (they taper to zero there); on rivers with many tributaries the bends come in short trains. Carry the phase across confluences of the main stem
   - [ ] Tune the landforms across more seeds (buttes are sparse on seed 1983; skerries need cold, low coasts)
-- [ ] Voronoi farmland patchwork near settlements and on flat lowland
+- [x] Voronoi farmland patchwork near settlements and on flat lowland (decision 127; GUI → Lighting → Farmland; preview view `farmland`, `FARMLAND=0`)
+  - [ ] Owner: judge field size (256 m lattice), crop shares and the stepped field edges in the browser
+  - [ ] Field edges: hedgerows or darker field margins, if the patchwork needs more structure (not in Part I yet)
+  - [ ] Farmland follows the 4 km habitability grid and the biome; S4's urban extents and roads could shape it further (fields along roads, none inside town extents)
 - [ ] Simulation preview views: re-aim Part I checks 1–5 (5 km mixed landscape, 500 m conifer edge with a road, mountains at low sun, airbase at dusk, coast with glint) at or below 20 km in `tools/render.preview.ts`; retire views between 20 and 100 km (`oblique`, `roads`, `coast`) or move them to the strategic set (carried from old M5)
 - [ ] Style audit: compare those views with the reference board and Part I (terrain facets and shade quantization, farmland, rivers, ocean, haze, trees, towns, lights); the old M3 and M5 rendering predates the guide (smooth shading, clump trees). Add a task per gap (carried from old M5)
 - [ ] Frame time over 0–20 km within Part I's budgets

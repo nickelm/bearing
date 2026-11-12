@@ -31,7 +31,7 @@ import type { Node } from 'three/webgpu';
 import { int, texture } from 'three/tsl';
 import { Biome, BIOME_COUNT } from '../../worldgen/biomes';
 import { cubeFaceUv } from '../common/climateTexture';
-import { srgbToLinear } from '../common/palette';
+import { FARMABLE_BIOMES, srgbToLinear } from '../common/palette';
 
 type V3 = Node<'vec3'>;
 
@@ -73,22 +73,9 @@ export function hexToLinear(h: number): [number, number, number] {
   ];
 }
 
-/**
- * Biomes where farmland can lie (decision 80): open and lightly wooded lowland
- * biomes. The alpha channel carries this, blended like the colors, and the shader
- * multiplies it with habitability to place fields.
- */
-const FARMABLE: ReadonlySet<number> = new Set([
-  Biome.TemperateGrassland,
-  Biome.TemperateForest,
-  Biome.Shrubland,
-  Biome.Savanna,
-  Biome.TropicalSeasonalForest,
-]);
-
 /** Linear RGB and farmability per biome; null for sea biomes. */
 const FILL_LINEAR = STRATEGIC_BIOME_FILL.map((h, b) =>
-  h === null ? null : ([...hexToLinear(h), FARMABLE.has(b) ? 1 : 0] as const),
+  h === null ? null : ([...hexToLinear(h), FARMABLE_BIOMES.has(b) ? 1 : 0] as const),
 );
 
 /**

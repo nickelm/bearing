@@ -46,6 +46,7 @@ import type { CubeFace } from '../src/core/coords';
 import { CubeGrid } from '../src/core/cubeGrid';
 import { DAY, DEG, HOUR, KM } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
+import { FARMABLE_BIOMES } from '../src/render/common/palette';
 import { GlobeScene } from '../src/render/sim/globeScene';
 import { buildFontAtlas, FONT_IDS } from '../src/render/strategic/labels/fontAtlas';
 import type { FontId } from '../src/render/strategic/labels/fontAtlas';
@@ -90,7 +91,7 @@ export interface PreviewView {
    * latitude, the densely forested cell nearest the main continent, the
    * largest city, or the first main airbase (milestone 5).
    */
-  target?: 'lake' | 'forest' | 'city' | 'airbase' | 'front' | 'capital' | 'peak';
+  target?: 'lake' | 'forest' | 'city' | 'airbase' | 'front' | 'capital' | 'peak' | 'farmland';
   /** With target 'airbase': stand back along the runway and look down it (heading ignored). */
   alongRunway?: boolean;
   /** Instead of localTime: the first evening time the sun at the camera sinks to this elevation (rad). */
@@ -212,6 +213,17 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     heading: 0,
     localTime: 15,
     target: 'peak',
+  },
+  {
+    // Over the most settled farmable lowland near the main continent (decision 127).
+    name: 'farmland',
+    dLat: 0,
+    dLon: 0,
+    altitude: 2 * KM,
+    tilt: 70 * DEG,
+    heading: 0,
+    localTime: 11,
+    target: 'farmland',
   },
   {
     name: 'sunset',
@@ -540,6 +552,7 @@ it('renders preview views', async () => {
     lake: null,
     forest: null,
     peak: null,
+    farmland: null,
     city: sp.cells.length ? new Vec3d(...settlementPoint(sp, biggest)) : null,
     airbase: base ? new Vec3d(...base.point) : null,
   };
@@ -569,6 +582,32 @@ it('renders preview views', async () => {
     if (forestCandidate && cellDir.dot(main) > nearest) {
       nearest = cellDir.dot(main);
       targets.forest = cellDir.clone();
+    }
+  }
+  // Farmland (decision 127): the most settled cell of the coarse habitability map within
+  // about 600 km of the main continent whose global cell is open, low, farmable land.
+  {
+    const m = infra.habitabilityResolution;
+    let best = 0;
+    for (let h = 0; h < infra.habitability.length; h++) {
+      if (infra.habitability[h]! <= best) continue;
+      const face = Math.floor(h / (m * m)) as CubeFace;
+      cubeFaceUvToDirection(
+        face,
+        ((h % m) + 0.5) / m,
+        ((Math.floor(h / m) % m) + 0.5) / m,
+        cellDir,
+      );
+      if (cellDir.dot(main) < Math.cos((600 * KM) / params.radius)) continue;
+      const uv = directionToCubeFace(cellDir);
+      const g =
+        uv.face * n * n +
+        Math.min(n - 1, Math.floor(uv.v * n)) * n +
+        Math.min(n - 1, Math.floor(uv.u * n));
+      const open = forestMap[g]! < 80 && global.height[g]! > 5 && global.height[g]! < 800;
+      if (!open || !FARMABLE_BIOMES.has(global.finish.biome[g]!)) continue;
+      best = infra.habitability[h]!;
+      targets.farmland = cellDir.clone();
     }
   }
   const outDir = join(import.meta.dirname, 'out');
@@ -747,6 +786,8 @@ it('renders preview views', async () => {
     if (process.env.RIVERS) scene.terrain.riverStyle.legibility.value = Number(process.env.RIVERS);
     // FACETS=0 shades the terrain smoothly, to compare with the flat facets (decision 123).
     scene.terrain.land.facets.value = process.env.FACETS === '0' ? 0 : 1;
+    // FARMLAND=0 leaves the fields out (decision 127).
+    scene.terrain.land.farmland.value = process.env.FARMLAND === '0' ? 0 : 1;
     // DETAIL=1 adds the instanced trees and buildings (off in the strategic view, decision 71).
     scene.forest.enabled = scene.structures.enabled = process.env.DETAIL === '1';
     // Render until the terrain has loaded everything this view wants.

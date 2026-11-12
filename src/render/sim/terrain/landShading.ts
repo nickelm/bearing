@@ -30,9 +30,12 @@ import {
   floor,
   fract,
   fwidth,
+  If,
   length,
   max,
+  min,
   mix,
+  select,
   smoothstep,
   sin,
   step,
@@ -76,8 +79,10 @@ export interface LandInputs {
     /** Per-face random value in [0, 1): dithers the shade thresholds. */
     jitter: F;
   };
-  /** Landform masks: aridity and glaciation, 0..1 (decision 126). */
-  landform?: Node<'vec2'>;
+  /** Landform masks: aridity and glaciation, 0..1 (decision 126), and farmable biome, 0..1 (decision 127). */
+  landform?: V3;
+  /** The strategic graph's habitability, 0..1: farmland lies on settled land (decision 127). */
+  settled?: F;
 }
 
 /** Strata on dry ground (decision 126): layer thickness (m), as tileSynth's strataThickness. */
@@ -117,6 +122,44 @@ function periodicValueNoise(p: V3, cell: number): F {
   return mix(y0, y1, u.z).mul(2).sub(1) as F;
 }
 
+/** Field lattice (m): one Voronoi site per cell, so fields are about this wide (decision 127). */
+export const FIELD_CELL = 256;
+
+/**
+ * The Voronoi field containing wrapped position `p`: its site's lattice cell,
+ * wrapped like the detail noise, so neighboring fragments of one field agree
+ * and the pattern tiles with WAVE_PERIOD. 3D cells cut by the ground read as
+ * irregular polygons, some smaller where the ground slices a cell's corner.
+ */
+function fieldCell(p: V3): V3 {
+  const period = WAVE_PERIOD / FIELD_CELL;
+  const q = p.div(FIELD_CELL);
+  const i = floor(q);
+  const f = fract(q);
+  const best = float(1e9).toVar();
+  const cell = vec3(0).toVar();
+  for (let dz = -1; dz <= 1; dz++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const d = vec3(dx, dy, dz);
+        const c = i.add(d);
+        const w = c.sub(floor(c.div(period)).mul(period));
+        const h = hash3(w as V3);
+        const site = d.add(
+          vec3(h, fract(h.mul(7.13)), fract(h.mul(13.71)))
+            .mul(0.8)
+            .add(0.1),
+        );
+        const r = site.sub(f);
+        const dist = dot(r, r);
+        cell.assign(select(dist.lessThan(best), w, cell));
+        best.assign(min(best, dist));
+      }
+    }
+  }
+  return cell as unknown as V3;
+}
+
 export class LandShading {
   /** 1 applies rock, snow, seasons and detail; 0 in debug color modes. */
   readonly enabled = uniform(1);
@@ -149,6 +192,58 @@ export class LandShading {
   readonly rainforestCanopy = uniform(linearHex(0x2e5a2e));
   /** Forest density at which the canopy closes; the edge is sharp around it. */
   readonly forestThreshold = uniform(0.42);
+  /** Farmland on (1) or off (0), and the crop colors of Part I's palette (decision 127). */
+  readonly farmland = uniform(1);
+  readonly wheat = uniform(linearHex(0xc8a85a));
+  readonly greenCrop = uniform(linearHex(0x6e8b3d));
+  readonly fallow = uniform(linearHex(0x8a6a45));
+  readonly pasture = uniform(linearHex(0x7f944f));
+
+  /**
+   * How much of a point is farmland, 0..1 (decision 127): settled land (the
+   * strategic graph's habitability from 0.25 to 0.45, as the map's farmland,
+   * decision 80) in farmable biomes, on flat (under about 5–9°) lowland
+   * (Earth-like elevation under about 1.2–1.8 km). Faceted, whole faces are
+   * fields or not, dithered by the jitter.
+   */
+  farmCover(settled: F, farmable: F, steep: F, elevation: F, jitter: F, faceted: F): F {
+    const m = smoothstep(0.25, 0.45, settled)
+      .mul(farmable)
+      .mul(smoothstep(0.16, 0.08, steep))
+      .mul(smoothstep(1800, 1200, elevation))
+      .mul(this.farmland);
+    const smooth = smoothstep(0.35, 0.65, m);
+    const face = step(0.5, m.add(jitter.sub(0.5).mul(0.3)));
+    return mix(smooth, face, faceted) as F;
+  }
+
+  /**
+   * The crop color of the field at wrapped position `p`: wheat, fallow, green
+   * crop or pasture, with more wheat on drier land, and ±6% per field. Where
+   * the footprint (facet size or pixel) outgrows the fields, the colors draw
+   * toward their mean, so distant faces do not speckle.
+   */
+  fieldColor(p: V3, moisture: F, footprint: F): V3 {
+    const cell = fieldCell(p);
+    const r = hash3(cell.add(vec3(3.1, 5.7, 1.3)) as V3);
+    const wheatShare = mix(float(0.45), float(0.2), clamp(moisture.mul(1.5), 0, 1));
+    const fallowEnd = wheatShare.add(0.15);
+    const greenEnd = fallowEnd.add(0.25);
+    const crop = select(
+      r.lessThan(wheatShare),
+      this.wheat,
+      select(
+        r.lessThan(fallowEnd),
+        this.fallow,
+        select(r.lessThan(greenEnd), this.greenCrop, this.pasture),
+      ),
+    );
+    const varied = crop.mul(fract(r.mul(53.7)).sub(0.5).mul(0.12).add(1));
+    const crops = [this.wheat, this.fallow, this.greenCrop, this.pasture] as unknown as V3[];
+    const mean = crops[0]!.add(crops[1]!).add(crops[2]!).add(crops[3]!).mul(0.25);
+    const blur = smoothstep(FIELD_CELL * 0.5, FIELD_CELL * 3, footprint).mul(0.6);
+    return mix(varied, mean, blur) as V3;
+  }
 
   /** Surface temperature (°C) today at a height (m) and direction, from the climate sample. */
   surfaceTemperature(climate: V4, height: F, up: V3): F {
@@ -244,12 +339,34 @@ export class LandShading {
       mix(vec3(1.12, 1.06, 0.9), vec3(0.88, 0.97, 0.9), clamp(moisture.mul(1.6).sub(0.2), 0, 1)),
     ) as V3;
     // Detail: ±12% brightness, or one of a few shades per face.
-    const continuous = noise.mul(0.12).add(1);
-    if (i.face) {
-      const shade = this.faceShade(noise, length(i.slope), i.height, i.climate, i.face.jitter);
-      a = a.mul(mix(vec3(continuous), shade, this.facets)) as V3;
-    } else {
-      a = a.mul(continuous) as V3;
+    const continuous = vec3(noise.mul(0.12).add(1));
+    const shadeMul = (
+      i.face
+        ? mix(
+            continuous,
+            this.faceShade(noise, length(i.slope), i.height, i.climate, i.face.jitter),
+            this.facets,
+          )
+        : continuous
+    ) as V3;
+    a = a.mul(shadeMul) as V3;
+    const faceted = (i.face ? this.facets : float(0)) as F;
+    const jitter = (i.face ? i.face.jitter : float(0.5)) as F;
+    const steep = length(i.slope);
+
+    // Farmland (decision 127): a patchwork of crop colors on settled, flat lowland,
+    // a field per Voronoi cell, faintly shaded per face. Only farmed points pay for
+    // the cell search.
+    if (i.settled && i.landform) {
+      const elevation = earthElevationNode(i.height, i.climate.w, this.reliefScale);
+      const farm = this.farmCover(i.settled, i.landform.z, steep, elevation, jitter, faceted);
+      // Derivatives stay outside the branch (decision 69).
+      const fieldFootprint = (footprint ?? length(fwidth(i.wrapped))) as F;
+      const field = vec3(0).toVar();
+      If(farm.greaterThan(0), () => {
+        field.assign(this.fieldColor(i.wrapped, moisture, fieldFootprint));
+      });
+      a = mix(a, field.mul(mix(vec3(1), shadeMul, 0.35)), farm) as V3;
     }
 
     // Forest as dark canopy masses with a crisp edge (decision 71): the density
@@ -284,9 +401,6 @@ export class LandShading {
     a = mix(a, this.autumnColor.mul(noise.mul(0.2).add(1)), autumn) as V3;
 
     // Rock and snow switch per face when faceted (decision 125), and blend otherwise.
-    const faceted = (i.face ? this.facets : float(0)) as F;
-    const jitter = (i.face ? i.face.jitter : float(0.5)) as F;
-    const steep = length(i.slope);
     const rock = this.rockCover(steep, noise, jitter, faceted);
     // Three rock shades per face, or continuous noise.
     const rockShade = clamp(floor(noise.mul(0.8).add(jitter).mul(3)), 0, 2)

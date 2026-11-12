@@ -742,6 +742,7 @@ async function main(): Promise<void> {
     temperatureShift: 0,
     detail: globe.terrain.land.detail.value,
     facets: globe.terrain.land.facets.value > 0,
+    farmland: globe.terrain.land.farmland.value > 0,
     riverLegibility: globe.terrain.riverStyle.legibility.value,
     roads: true,
     roadLegibility: globe.terrain.roadStyle.legibility.value,
@@ -762,6 +763,7 @@ async function main(): Promise<void> {
     globe.terrain.land.temperatureOffset.value = l.temperatureShift;
     globe.terrain.land.detail.value = l.detail;
     globe.terrain.land.facets.value = l.facets ? 1 : 0;
+    globe.terrain.land.farmland.value = l.farmland ? 1 : 0;
     globe.terrain.riverStyle.legibility.value = l.riverLegibility;
     globe.terrain.roadStyle.enabled.value = l.roads ? 1 : 0;
     globe.terrain.roadStyle.legibility.value = l.roadLegibility;
