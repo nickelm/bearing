@@ -54,6 +54,28 @@ export interface Climate {
 
 /** Lapse rate in K per reference meter. */
 export const LAPSE_RATE = 6.5 / 1000;
+
+/**
+ * Earth-like elevation (reference m) for climate (decisions 19, 121): the
+ * valley floor at the planet's scale plus the landform above it at Earth's.
+ * `height` and `floor` are physical meters; below the floor, or with no floor
+ * known (floor ≥ height), it is height ÷ reliefScale as before.
+ */
+export function earthElevation(height: number, floor: number, reliefScale: number): number {
+  const h = Math.max(0, height);
+  const f = Math.max(0, floor);
+  return Math.min(h, f) / reliefScale + Math.max(h - f, 0);
+}
+
+/** Physical height at which `earthElevation` reaches `elevation` (reference m) over a floor. */
+export function heightAtEarthElevation(
+  elevation: number,
+  floor: number,
+  reliefScale: number,
+): number {
+  const f = Math.max(0, floor);
+  return elevation <= f / reliefScale ? elevation * reliefScale : f + (elevation - f / reliefScale);
+}
 /** Solar constant used for the insolation shape (W/m²). */
 const SOLAR_CONSTANT = 1361;
 const EARTH_TILT = 23.44 * DEG;

@@ -116,7 +116,7 @@ export async function buildGlobalWorld(
       precipitation: await grid.readF32('precipitation'),
       seaLevelTemperature: await grid.readF32('seaLevelTemperature'),
       temperatureRange: await grid.readF32('temperatureRange'),
-      landformExcess: grid.has('landformExcess') ? await grid.readF32('landformExcess') : undefined,
+      valleyFloor: grid.has('valleyFloor') ? await grid.readF32('valleyFloor') : undefined,
       reliefScale: params.reliefScale,
       radius: params.radius,
       displayN: T,
@@ -144,7 +144,7 @@ function releaseUnused(grid: GlobalGrid): void {
     'runoff',
     'seaLevelTemperature',
     'temperatureRange',
-    'landformExcess',
+    'valleyFloor',
     'flow',
     'receiver',
   ]) {

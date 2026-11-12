@@ -5,7 +5,7 @@
  * milestone-1 globe renders until tiles exist.
  */
 import { Biome, classifyBiome } from './biomes';
-import { LAPSE_RATE, potentialEvapotranspiration } from './climate';
+import { earthElevation, LAPSE_RATE, potentialEvapotranspiration } from './climate';
 import { computeDrainage } from './drainage';
 import type { Drainage } from './drainage';
 import { forestMaps } from './forest';
@@ -28,10 +28,11 @@ export interface FinishInput {
   /** Display grid cells per face edge; must divide n. */
   displayN: number;
   /**
-   * Reference meters to subtract from physical height ÷ reliefScale for the
-   * Earth-like elevation (decision 121); none when absent.
+   * Valley floor (physical m) for the Earth-like elevation (decision 122):
+   * the floor at the planet's scale, the landform above it at Earth's. Without
+   * it, elevation is height ÷ reliefScale.
    */
-  landformExcess?: Float32Array;
+  valleyFloor?: Float32Array;
 }
 
 export interface DisplayMaps {
@@ -41,6 +42,8 @@ export interface DisplayMaps {
   discharge: Float32Array;
   /** Deepest lake in each display cell (m). */
   lakeDepth: Float32Array;
+  /** Mean valley floor in each display cell (physical m, decision 122); absent without one. */
+  valleyFloor?: Float32Array;
 }
 
 export interface FinishResult {
@@ -61,10 +64,10 @@ export function globalBiomes(input: FinishInput, lakeDepth: Float32Array): Uint8
   const out = new Uint8Array(height.length);
   for (let c = 0; c < height.length; c++) {
     const h = height[c]!;
-    const ref = h / reliefScale;
+    // Sea depths in reference meters; land at its Earth-like elevation (decision 122).
+    const ref =
+      h > 0 ? earthElevation(h, input.valleyFloor?.[c] ?? h, reliefScale) : h / reliefScale;
     const t = seaLevelTemperature[c]! - LAPSE_RATE * Math.max(0, ref);
-    // The alpine rule reads elevation itself: the Earth-like one (decision 121).
-    const earthRef = ref - (input.landformExcess?.[c] ?? 0);
     const moisture = Math.min(
       1,
       Math.max(0, (0.5 * precipitation[c]!) / potentialEvapotranspiration(t)),
@@ -73,7 +76,7 @@ export function globalBiomes(input: FinishInput, lakeDepth: Float32Array): Uint8
     out[c] =
       lakeDepth[c]! > 0
         ? Biome.Shelf
-        : classifyBiome(h, earthRef, t, moisture, t - temperatureRange[c]!);
+        : classifyBiome(h, ref, t, moisture, t - temperatureRange[c]!);
   }
   return out;
 }
@@ -86,6 +89,7 @@ export function downsampleForDisplay(
   biome: Uint8Array,
   discharge: Float32Array,
   lakeDepth: Float32Array,
+  valleyFloor?: Float32Array,
 ): DisplayMaps {
   if (n % displayN !== 0) throw new RangeError(`Display grid ${displayN} does not divide ${n}`);
   const k = n / displayN;
@@ -95,6 +99,7 @@ export function downsampleForDisplay(
     biome: new Uint8Array(m),
     discharge: new Float32Array(m),
     lakeDepth: new Float32Array(m),
+    ...(valleyFloor ? { valleyFloor: new Float32Array(m) } : {}),
   };
   const w = 1 / (k * k);
   const mid = k >> 1;
@@ -106,6 +111,7 @@ export function downsampleForDisplay(
         const di = Math.floor(i / k);
         const d = (face * displayN + dj) * displayN + di;
         out.height[d] += height[c]! * w;
+        if (valleyFloor) out.valleyFloor![d] += valleyFloor[c]! * w;
         if (discharge[c]! > out.discharge[d]!) out.discharge[d] = discharge[c]!;
         if (lakeDepth[c]! > out.lakeDepth[d]!) out.lakeDepth[d] = lakeDepth[c]!;
         if (i % k === mid && j % k === mid) out.biome[d] = biome[c]!;
@@ -138,6 +144,7 @@ export function finishWorld(input: FinishInput): FinishResult {
       biome,
       drainage.discharge,
       drainage.lakeDepth,
+      input.valleyFloor,
     ),
   );
   const { forest, treeline } = time('forest', () => forestMaps(input, biome));

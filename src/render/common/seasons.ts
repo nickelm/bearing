@@ -6,16 +6,29 @@
  *
  *   T = T_sea − LAPSE_RATE · h_ref + halfRange · cos(2π (phase − WARMEST_PHASE)) · hemisphere
  *
- * with h_ref the reference height (m, height ÷ reliefScale) and the hemisphere sign
- * from the latitude, so the south's summer falls half a year after the north's.
+ * with h_ref the Earth-like elevation (m; `earthElevationNode`, decision 122) and the
+ * hemisphere sign from the latitude, so the south's summer falls half a year after
+ * the north's.
  */
 import type { Node } from 'three/webgpu';
-import { clamp, cos, max } from 'three/tsl';
+import { clamp, cos, max, min } from 'three/tsl';
 import { LAPSE_RATE } from '../../worldgen/climate';
 
 type F = Node<'float'>;
 type V3 = Node<'vec3'>;
 type V4 = Node<'vec4'>;
+
+/**
+ * `earthElevation` (worldgen/climate.ts) in TSL: the Earth-like elevation (reference m)
+ * of a physical height over a valley floor (physical m), the climate texel's w.
+ */
+export function earthElevationNode(height: F, floor: F, reliefScale: F | number): F {
+  const h = max(height, 0);
+  const f = max(floor, 0);
+  return min(h, f)
+    .div(reliefScale)
+    .add(max(h.sub(f), 0)) as F;
+}
 
 /** Season phase (fraction of the year after the northern vernal equinox) of the northern summer peak. */
 export const WARMEST_PHASE = 0.25 + 30 / 365;

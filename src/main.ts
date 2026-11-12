@@ -401,6 +401,9 @@ async function main(): Promise<void> {
       gui.setStations(stations.map((x) => x.label));
       globe.observer.station = null;
       applyCamera();
+      // The valley floor, so snow and seasons read the Earth-like elevation (decision 122).
+      globe.climate.setValleyFloor(global.finish.display.valleyFloor ?? null, world.maps.height);
+      strategicView.setValleyFloor(global.finish.display.valleyFloor ?? null);
       // The map's relief mesh draws from the same synthesizer (decision 77).
       strategicView.setTerrainWorld({
         synth,

@@ -13,7 +13,7 @@
  * slope, water and clumping noise (worldgen/gpu/tileSynth.ts).
  */
 import { Biome } from './biomes';
-import { LAPSE_RATE } from './climate';
+import { heightAtEarthElevation, LAPSE_RATE } from './climate';
 import type { FinishInput } from './finishWorld';
 
 /** Warmest-month mean temperature at the treeline (°C). */
@@ -46,7 +46,13 @@ export function forestMaps(input: FinishInput, biome: Uint8Array): ForestMaps {
   for (let c = 0; c < biome.length; c++) {
     forest[c] = Math.round(255 * (FOREST_BASE[biome[c] as Biome] ?? 0));
     const warmest = seaLevelTemperature[c]! + temperatureRange[c]!;
-    treeline[c] = ((warmest - TREELINE_WARMEST_MONTH) / LAPSE_RATE) * reliefScale;
+    // The physical height whose Earth-like elevation reaches the treeline (decision 122).
+    const elevation = (warmest - TREELINE_WARMEST_MONTH) / LAPSE_RATE;
+    const floor = input.valleyFloor?.[c];
+    treeline[c] =
+      floor === undefined
+        ? elevation * reliefScale
+        : heightAtEarthElevation(elevation, floor, reliefScale);
   }
   return { forest, treeline };
 }

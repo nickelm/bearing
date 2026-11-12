@@ -127,6 +127,8 @@ export class StrategicScene {
   /** World and grid waiting to be built; applied on the next render, so a hidden view costs nothing. */
   private pendingGrid: CubeGrid | null = null;
   private pendingWorld: { world: World | null } | null = null;
+  /** Valley floor for the climate texture, applied after any pending world (decision 122). */
+  private pendingFloor: { floor: Float32Array | null } | null = null;
   /** The world and grid on display, and whether the lights need rebuilding. */
   private world: World | null = null;
   private grid: CubeGrid;
@@ -298,6 +300,11 @@ export class StrategicScene {
     this.globe.setViewMode(mode);
   }
 
+  /** Valley floor per tectonic cell (physical m) for the snow line (decision 122). */
+  setValleyFloor(floor: Float32Array | null): void {
+    this.pendingFloor = { floor };
+  }
+
   /** The world's tiles for the relief mesh (null until the global pass, or for none). */
   setTerrainWorld(world: StrategicReliefWorld | null): void {
     this.relief.setWorld(world);
@@ -393,6 +400,10 @@ export class StrategicScene {
       if (this.pendingWorld.world) this.relief.climate.setWorld(this.pendingWorld.world);
       this.world = this.pendingWorld.world;
       this.pendingWorld = null;
+    }
+    if (this.pendingFloor) {
+      this.relief.climate.setValleyFloor(this.pendingFloor.floor);
+      this.pendingFloor = null;
       this.lightsDirty = true;
     }
     if (this.lightsDirty) {

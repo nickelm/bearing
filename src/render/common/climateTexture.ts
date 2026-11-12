@@ -7,8 +7,10 @@
  *      any surface height
  *   G  seasonal half-range (K): (warmest − coldest month) / 2
  *   B  moisture 0..1
- *   A  cloudiness 0..1, from precipitation (unused since clouds follow the live
- *      weather, decision 68)
+ *   A  valley floor (physical m, decision 122): the Earth-like elevation is the
+ *      floor at the planet's scale plus the landform above it at Earth's
+ *      (`earthElevationNode`). Until the global pass delivers it, the cell's
+ *      own height, which gives height ÷ reliefScale as before.
  *
  * Texel (i, j) of layer f is tectonic cell (f, i, j): u runs along i, v along
  * j, row 0 at v = 0. `cubeFaceUv` mirrors core/coords.ts (face by the largest
@@ -32,10 +34,6 @@ import type { World } from '../../worldgen/pipeline';
 
 type V3 = Node<'vec3'>;
 
-/** Precipitation (mm/yr) mapped to cloudiness 0..1. */
-const CLOUD_DRY = 250;
-const CLOUD_WET = 2500;
-
 /** Sea-level temperature (°C) of a cell from its temperature at height. */
 export function seaLevelTemperature(t: number, height: number, reliefScale: number): number {
   return t + LAPSE_RATE * (Math.max(0, height) / reliefScale);
@@ -47,12 +45,10 @@ export function climateTexels(world: World): Float32Array {
   const m = world.maps;
   const out = new Float32Array(6 * n * n * 4);
   for (let c = 0; c < 6 * n * n; c++) {
-    const p = m.precipitation[c]!;
-    const cloud = Math.min(1, Math.max(0, (p - CLOUD_DRY) / (CLOUD_WET - CLOUD_DRY)));
     out[c * 4] = seaLevelTemperature(m.temperature[c]!, m.height[c]!, world.info.reliefScale);
     out[c * 4 + 1] = m.temperatureRange[c]!;
     out[c * 4 + 2] = m.moisture[c]!;
-    out[c * 4 + 3] = cloud;
+    out[c * 4 + 3] = Math.max(0, m.height[c]!);
   }
   return out;
 }
@@ -114,7 +110,24 @@ export class ClimateTexture {
     return t;
   }
 
+  /** The last texels filled, so the valley floor can replace channel A alone. */
+  private texels: Float32Array | null = null;
+
+  /**
+   * Valley floor (physical m) per cell of the current world's grid (the global
+   * pass's display maps, decision 122); null restores the cells' own heights.
+   */
+  setValleyFloor(floor: Float32Array | null, heights?: Float32Array): void {
+    const t = this.texels;
+    if (!t || (floor && floor.length * 4 !== t.length)) return;
+    for (let c = 0; c < t.length / 4; c++) {
+      t[c * 4 + 3] = floor ? floor[c]! : Math.max(0, heights?.[c] ?? t[c * 4 + 3]!);
+    }
+    this.fill(t);
+  }
+
   private fill(texels: Float32Array): void {
+    this.texels = texels;
     const half = this.texture.image.data as Uint16Array;
     for (let i = 0; i < texels.length; i++) half[i] = DataUtils.toHalfFloat(texels[i]!);
     this.texture.needsUpdate = true;
@@ -133,7 +146,7 @@ export class ClimateTexture {
     this.fill(climateTexels(world));
   }
 
-  /** Climate at a direction (need not be normalized): vec4(T_sea °C, half-range K, moisture, cloudiness). */
+  /** Climate at a direction (need not be normalized): vec4(T_sea °C, half-range K, moisture, valley floor m). */
   sample(dir: V3): Node<'vec4'> {
     const { face, uv } = cubeFaceUv(dir);
     // Level 0 explicitly: the texture has no mipmaps, and vertex or compute stages have no derivatives.

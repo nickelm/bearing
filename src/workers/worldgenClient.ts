@@ -70,7 +70,7 @@ export class WorldgenClient {
         input.precipitation,
         input.seaLevelTemperature,
         input.temperatureRange,
-        ...(input.landformExcess ? [input.landformExcess] : []),
+        ...(input.valleyFloor ? [input.valleyFloor] : []),
       ].map((a) => a.buffer as ArrayBuffer);
       worker.postMessage({ type: 'finish', id, input } satisfies ToWorldgenWorker, transfer);
     });

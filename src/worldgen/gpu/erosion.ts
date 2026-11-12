@@ -39,15 +39,10 @@
  * cell that drained into it, so the gain makes no new lakes. Drainage is
  * recomputed afterwards on the CPU, as always.
  *
- * Climate (decision 19) reads elevation as physical height ÷ reliefScale. The
- * landform excess is Earth-scaled, so it counts at its physical height: where
- * the grid has "seaLevelTemperature", it rises by LAPSE_RATE × the excess
- * (amplified − eroded, reference m) × (1 − reliefScale), and every reader of physical height ÷
- * reliefScale (biomes, treeline, snow and season in the shaders) then gets the
- * temperature of the Earth-like elevation without change. The correction
- * itself goes to map "landformExcess" (reference m), for rules that read
- * elevation directly (alpine biome). Landmass-scale height keeps decision
- * 14's scale.
+ * Climate (decisions 19, 122) reads the Earth-like elevation: the valley
+ * floor at the planet's scale plus the landform above it at Earth's
+ * (`earthElevation` in climate.ts). The floor goes to map "valleyFloor"
+ * (physical m). Landmass-scale height keeps decision 14's scale.
  *
  * Maps on the grid: in "height" (physical m), "uplift" and "precipitation";
  * out "height" plus "flow" (drainage area, km² · m/yr of rain) and "receiver".
@@ -55,7 +50,6 @@
 import { CUBE_FACE_COUNT } from '../../core/coords';
 import type { GlobalGrid } from './globalGrid';
 import { LINEAR_ID_WGSL } from './gpuContext';
-import { LAPSE_RATE } from '../climate';
 
 export const EROSION_TUNING = {
   /** Erosion iterations at erosionStrength 1. */
@@ -247,14 +241,15 @@ ${main(`  let hc = h[id];
 ${main(`  var p = hA[id] * RELIEF;
   if (p > ${f(lf.peakSoftLimit)}) { p = ${f(lf.peakSoftLimit)} + (p - ${f(lf.peakSoftLimit)}) * ${f(lf.peakCompression)}; }
   hPhys[id] = p;`)}`);
-  const climateCorrection = gpu.kernel(`${head}
+  // The valley floor for climate (decision 122): physical m on land, 0 at sea.
+  const writeFloor = gpu.kernel(`${head}
 @group(0) @binding(0) var<storage, read> h: array<f32>;
-@group(0) @binding(1) var<storage, read> hPhys: array<f32>;
-@group(0) @binding(2) var<storage, read_write> seaLevelT: array<f32>;
-@group(0) @binding(3) var<storage, read_write> excess: array<f32>;
-${main(`  let e = select(0.0, max(hPhys[id] / RELIEF - h[id], 0.0) * (1.0 - RELIEF), h[id] > 0.0);
-  seaLevelT[id] += ${f(LAPSE_RATE)} * e;
-  excess[id] = e;`)}`);
+@group(0) @binding(1) var<storage, read> valleyFloor: array<f32>;
+@group(0) @binding(2) var<storage, read_write> floorPhys: array<f32>;
+${main(`  let hc = h[id];
+  var p = max(min(valleyFloor[id], hc), 0.0) * RELIEF;
+  if (p > ${f(lf.peakSoftLimit)}) { p = ${f(lf.peakSoftLimit)} + (p - ${f(lf.peakSoftLimit)}) * ${f(lf.peakCompression)}; }
+  floorPhys[id] = select(0.0, p, hc > 0.0);`)}`);
 
   const prefill = gpu.kernel(`${head}
 @group(0) @binding(0) var<storage, read_write> h: array<f32>;
@@ -438,6 +433,11 @@ ${main(`  let hc = hIn[id];
     gpu.dispatchLinear(floorBlur, [grid.get('erosion.h0'), grid.get('erosion.w2')], count);
     grid.swap('erosion.h0', 'erosion.w2');
   }
+  gpu.dispatchLinear(
+    writeFloor,
+    [grid.get('erosion.h'), grid.get('erosion.w'), grid.map('valleyFloor')],
+    count,
+  );
   // The amplified surface, in reference meters, into erosion.w (the floor is no longer needed).
   gpu.dispatchLinear(
     amplify,
@@ -454,13 +454,6 @@ ${main(`  let hc = hIn[id];
     if (p % 32 === 31) await gpu.finish();
   }
   gpu.dispatchLinear(toPhys, [grid.get('erosion.w'), hPhys], count);
-  if (grid.has('seaLevelTemperature')) {
-    gpu.dispatchLinear(
-      climateCorrection,
-      [grid.get('erosion.h'), hPhys, grid.get('seaLevelTemperature'), grid.map('landformExcess')],
-      count,
-    );
-  }
   await gpu.finish();
   for (const name of [
     'erosion.h',

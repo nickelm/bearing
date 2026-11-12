@@ -83,7 +83,7 @@ import { BiomeFillTexture, hexToLinear, STEEP_ROCK_FILL } from './biomeFill';
 import { COAST_DISTANCE_MAX, CoastDistanceTexture } from './coastDistance';
 import { daylightNode, lakeIceNode, SEA_ICE, seaIceNode, SNOW, snowNode } from './mapDaylight';
 import { ClimateTexture } from '../common/climateTexture';
-import { surfaceTemperatureNode } from '../common/seasons';
+import { earthElevationNode, surfaceTemperatureNode } from '../common/seasons';
 import {
   COASTLINE_PX,
   mapWaterNode,
@@ -452,7 +452,7 @@ export class StrategicRelief {
       const seasonsOn = this.seasons.mul(this.biomeMode);
       const landTemperature = surfaceTemperatureNode(
         climate,
-        rawHeight.div(this.reliefScale),
+        earthElevationNode(rawHeight, climate.w, this.reliefScale),
         radial,
         this.seasonPhase,
       );
@@ -521,7 +521,7 @@ export class StrategicRelief {
       const lakeIce = lakeIceNode(
         surfaceTemperatureNode(
           climate,
-          rawHeight.add(max(lakeDepth, 0)).div(this.reliefScale),
+          earthElevationNode(rawHeight.add(max(lakeDepth, 0)), climate.w, this.reliefScale),
           radial,
           this.seasonPhase,
         ),

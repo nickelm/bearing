@@ -39,6 +39,7 @@ import {
   vec3,
 } from 'three/tsl';
 import { LAPSE_RATE } from '../../../worldgen/climate';
+import { earthElevationNode } from '../../common/seasons';
 import { WAVE_PERIOD } from '../water/waterShading';
 import { WARMEST_PHASE } from '../../common/seasons';
 
@@ -122,7 +123,8 @@ export class LandShading {
 
   /** Surface temperature (°C) today at a height (m) and direction, from the climate sample. */
   surfaceTemperature(climate: V4, height: F, up: V3): F {
-    const hRef = max(height, 0).div(this.reliefScale);
+    // Earth-like elevation over the valley floor in the texel's w (decision 122).
+    const hRef = earthElevationNode(height, climate.w, this.reliefScale);
     const mean = climate.x.sub(hRef.mul(LAPSE_RATE));
     // Northern summer peaks at WARMEST_PHASE; the south half a year later.
     const hemisphere = clamp(up.y.mul(20), -1, 1);
@@ -166,7 +168,9 @@ export class LandShading {
     // the heat; a value shift (not a hue shift) breaks up large masses.
     let evergreen: F = float(0);
     if (i.forest) {
-      const meanT = i.climate.x.sub(max(i.height, 0).div(this.reliefScale).mul(LAPSE_RATE));
+      const meanT = i.climate.x.sub(
+        earthElevationNode(i.height, i.climate.w, this.reliefScale).mul(LAPSE_RATE),
+      );
       const conifer = smoothstep(9, 3, meanT);
       const tropical = smoothstep(18, 24, meanT);
       const shade = mix(
