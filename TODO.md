@@ -387,8 +387,9 @@ Simulation view (needs S1's `render/sim/` split):
   - [ ] Owner concern: the ground around bases looks flat and uniform. Airbases sit on flat land by design and the grading flattens 400 m beyond; the uniform look is the smooth, one-color-per-biome land shading that the faceted shading, shade quantization and farmland tasks below replace
   - [ ] Ports: a quay layout and buildings, so a port observer stands on the quay rather than at the coarse site point (with C3's ships)
   - [ ] Ease between stations instead of jumping (V4's transition controller)
-- [ ] Horizon-bounded tile selection: drop tiles beyond √(2Rh) plus a margin (at most about 200 km at 20 km); tests for the bound and that selection never exceeds it
-- [ ] Tile cache budget and prefetch for the bounded radius around the active unit or camera; prefetch the regional level-7 tiles (decision 64)
+- [x] Horizon-bounded tile selection: drop tiles beyond √(2Rh) plus a margin (at most about 200 km at 20 km); tests for the bound and that selection never exceeds it (decision 116: exact tile distance; `horizonRange` and `selectionRange` in `quadtree.ts`)
+  - [ ] The bound grows with the tallest displayed terrain: at the current 10× exaggeration (40 km peaks) it is about 490 km at 20 km; True-scale relief (below) brings it to about 290 km
+- [ ] Tile cache budget and prefetch for the bounded radius around the active unit or camera (`selectionRange`, decision 116); prefetch the regional level-7 tiles (decision 64)
 - [ ] True-scale relief: the simulation view's own exaggeration uniform, default 1×; recheck skirt depth and the near plane; owner look at whether decision 14's relief reads at 1×
 - [ ] Faceted flat shading on terrain (derivative normals), with facets of about 20–60 m at low altitude; check it against geomorphing
 - [ ] Per-face shade quantization: three to five shades per biome from slope, altitude, moisture and low-frequency noise, constant per face

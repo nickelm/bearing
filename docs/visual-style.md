@@ -13,7 +13,7 @@ The two parts share the faction colors and the UI panels, and nothing else is as
 
 # Part I: Simulation View
 
-Everything in Part I applies to the simulation view: chase, target, weapon, flyby, and observer cameras from the ground to about 20 km altitude, with terrain drawn only within the horizon (about 200 km at 20 km). Nothing in it is tuned for orbit; the globe belongs to Part II. Bearing has no cockpits: the player sees their aircraft from outside, with the HUD and displays as 2D overlays (see *HUD and Displays*).
+Everything in Part I applies to the simulation view: chase, target, weapon, flyby, and observer cameras from the ground to about 20 km altitude, with terrain drawn only within the horizon (about 200 km at 20 km, farther for peaks that rise above it). Nothing in it is tuned for orbit; the globe belongs to Part II. Bearing has no cockpits: the player sees their aircraft from outside, with the HUD and displays as 2D overlays (see *HUD and Displays*).
 
 ## Principles
 

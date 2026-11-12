@@ -75,7 +75,7 @@ The architecture separates **simulation** from **presentation**.
 - **Simulation layer.** A headless model of the world, running in a worker that owns the game clock. It contains two parts: a **command layer** per side that plans missions against that side's intelligence picture, and an **execution layer** that moves and resolves everything (flights, formations, convoys, bases, weather).
 - **Presentation layer.** Cameras, renderers, and UI that read simulation state. Two renderers draw the same world in different visual languages:
   - The **strategic view** (`src/render/strategic/`) is an orbit camera from about 3,000 km down to a zoom floor of about 100 km, over an illustrated base map with glyphs, labels, and military overlays.
-  - The **simulation view** (`src/render/sim/`) covers 0 to about 20 km with chase, target, weapon, flyby, and observer cameras. It is entered only through a unit: following a flight or jumping into one of its aircraft, both in the same chase view, or an observer camera at a base or ship. It draws terrain only within the horizon, at most about 200 km away.
+  - The **simulation view** (`src/render/sim/`) covers 0 to about 20 km with chase, target, weapon, flyby, and observer cameras. It is entered only through a unit: following a flight or jumping into one of its aircraft, both in the same chase view, or an observer camera at a base or ship. It draws terrain only within the horizon: about 200 km at 20 km altitude, plus the distance at which the tallest terrain still shows above it (about 90 km for 4 km peaks at true scale).
   - The mission search panel sits over the strategic view. A transition controller (`src/render/common/`) eases the map camera down toward a flight and dissolves through cloud into the simulation view in under two seconds, and back. Both scenes stay resident.
 - **World data.** The global grid's maps (height, biome, moisture, temperature, flow, forest density), tiles synthesized from them on demand, vector data (rivers, roads, settlements, fronts), and the strategic graph. Campaign logic reads only the strategic graph; the execution layer may also query terrain.
 
@@ -307,7 +307,7 @@ The two views share world data, the simulation, and camera-relative rendering, a
 
 ### Simulation View
 
-*Specified in `docs/visual-style.md`, Part I.* Faceted, flat-shaded terrain at true scale from a quadtree limited to the horizon (about 200 km at 20 km altitude), the tree kit with LOD, box-building settlements and the base kit, procedurally built models, the physical sky with aerial perspective, ocean, volumetric-looking clouds from the live weather, and the full post-processing chain. The aircraft the player controls or follows gets a higher detail level with animated parts, and the HUD and displays draw as 2D overlays.
+*Specified in `docs/visual-style.md`, Part I.* Faceted, flat-shaded terrain at true scale from a quadtree limited to the horizon (about 200 km at 20 km altitude, farther for peaks beyond it), the tree kit with LOD, box-building settlements and the base kit, procedurally built models, the physical sky with aerial perspective, ocean, volumetric-looking clouds from the live weather, and the full post-processing chain. The aircraft the player controls or follows gets a higher detail level with animated parts, and the HUD and displays draw as 2D overlays.
 
 ### Transition
 

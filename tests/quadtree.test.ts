@@ -1,13 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { DEG, KM, PLANET_RADIUS } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
-import { tileSampleDirection, TILE_TEXELS } from '../src/core/tiles';
+import { tileKey, tileSampleDirection, TILE_TEXELS } from '../src/core/tiles';
+import type { TileKey } from '../src/core/tiles';
+import { rng } from '../src/core/rng';
+import { randomUnitVector } from '../src/core/coords';
 import { OrbitCamera } from '../src/render/common/orbitCamera';
+import { ObserverCamera } from '../src/render/sim/camera/observerCamera';
 import {
   capBeyondHorizon,
   DEFAULT_LOD,
   geometricError,
+  horizonRange,
+  selectionRange,
   selectTiles,
+  tileAngularDistance,
+  tileQuad,
 } from '../src/render/common/terrain/quadtree';
 import type { LodView } from '../src/render/common/terrain/quadtree';
 
@@ -145,5 +153,158 @@ describe('capBeyondHorizon', () => {
     // A camera standing on a huge tile never culls it.
     const low = new Vec3d(0, 0, R + 2000);
     expect(capBeyondHorizon(low, new Vec3d(0.5, 0, 0.866), 45 * DEG, R, 1500)).toBe(false);
+  });
+});
+
+/** Brute force: the smallest angle from d to a dense grid of points on the tile, edges included. */
+function sampledDistance(t: TileKey, d: Vec3d, n = 64): number {
+  const p = new Vec3d();
+  let best = Math.PI;
+  for (let i = 0; i <= n; i++) {
+    for (let j = 0; j <= n; j++) {
+      tileSampleDirection(t, (i / n) * TILE_TEXELS, (j / n) * TILE_TEXELS, p);
+      best = Math.min(best, Math.acos(Math.min(1, Math.max(-1, p.dot(d)))));
+    }
+  }
+  return best;
+}
+
+describe('tileAngularDistance', () => {
+  it('is 0 inside a tile and matches a dense sampling outside it', () => {
+    const r = rng(7, 'quadtree-test');
+    const d = new Vec3d();
+    const tiles = [
+      tileKey(0, 0, 0, 0),
+      tileKey(2, 3, 5, 1),
+      tileKey(4, 6, 40, 22),
+      tileKey(5, 9, 300, 511),
+    ];
+    for (const t of tiles) {
+      const q = tileQuad(t);
+      expect(tileAngularDistance(q, tileSampleDirection(t, TILE_TEXELS / 2, TILE_TEXELS / 2))).toBe(
+        0,
+      );
+      expect(tileAngularDistance(q, tileSampleDirection(t, 1, TILE_TEXELS - 1))).toBe(0);
+      // Points near the tile (edge and corner regions) and anywhere on the sphere.
+      const size = Math.PI / 2 / (1 << t.level);
+      for (let i = 0; i < 60; i++) {
+        if (i < 40) {
+          tileSampleDirection(
+            t,
+            r.range(-TILE_TEXELS, 2 * TILE_TEXELS),
+            r.range(-TILE_TEXELS, 2 * TILE_TEXELS),
+            d,
+          );
+        } else {
+          randomUnitVector(r, d);
+        }
+        const exact = tileAngularDistance(q, d);
+        const sampled = sampledDistance(t, d);
+        // Sampling only overestimates, by at most about half a sample spacing.
+        expect(exact).toBeLessThanOrEqual(sampled + 1e-12);
+        expect(sampled - exact).toBeLessThan(size / 64);
+      }
+    }
+  });
+});
+
+describe('horizon range', () => {
+  /** An observer's view over the sphere at 40° N, 20° E (eye height above sea level). */
+  function observerView(
+    height: number,
+    heading: number,
+    pitch: number,
+    maxHeight: number,
+  ): LodView {
+    const cam = new ObserverCamera(R);
+    cam.spot.set(
+      Math.sin(20 * DEG) * Math.cos(40 * DEG),
+      Math.sin(40 * DEG),
+      Math.cos(20 * DEG) * Math.cos(40 * DEG),
+    );
+    cam.groundHeight = 0;
+    cam.height = height;
+    cam.heading = heading;
+    cam.pitch = pitch;
+    cam.update(0);
+    return {
+      eye: cam.eye.clone(),
+      forward: cam.forward.clone(),
+      up: cam.up.clone(),
+      fovY: 70 * DEG,
+      aspect: 16 / 9,
+      viewportHeight: 1080,
+      radius: R,
+      exaggeration: 1,
+      maxHeight,
+    };
+  }
+
+  it('is √(2Rh) over flat land plus the horizon of the tallest terrain', () => {
+    const flat = (h: number) => horizonRange(observerView(h, 0, 0, 0));
+    // About 200 km at the simulation view's 20 km ceiling, 32 km at 500 m (Proposal 0001).
+    expect(flat(20 * KM) / KM).toBeCloseTo(198.7, 0);
+    expect(flat(20 * KM)).toBeLessThan(Math.sqrt(2 * R * 20 * KM));
+    expect(flat(500) / KM).toBeCloseTo(31.6, 0);
+    expect(flat(2) / KM).toBeCloseTo(2.0, 1);
+    // A 4 km peak shows up to about 89 km past the horizon.
+    const peaks = horizonRange(observerView(20 * KM, 0, 0, 4 * KM));
+    expect((peaks - flat(20 * KM)) / KM).toBeCloseTo(89.3, 0);
+  });
+
+  it('never draws a tile wholly beyond the range, nor asks for one beyond its margin', () => {
+    const nadir = new Vec3d();
+    let drawn = 0;
+    let wanted = 0;
+    for (const maxHeight of [0, 4 * KM]) {
+      for (const height of [2, 50, 500, 5 * KM, 20 * KM]) {
+        for (const heading of [0, 100 * DEG, 230 * DEG]) {
+          for (const pitch of [0, -30 * DEG, -85 * DEG]) {
+            const v = observerView(height, heading, pitch, maxHeight);
+            const range = horizonRange(v);
+            const outer = selectionRange(v);
+            expect(outer).toBeGreaterThan(range);
+            nadir.copy(v.eye).normalize();
+            const dist = (t: TileKey) => tileAngularDistance(tileQuad(t), nadir) * R;
+            // Every tile at its tallest; every mesh ready, then only coarse ones (so tiles are wanted).
+            for (const ready of [always, (t: TileKey) => t.level <= 6]) {
+              const s = selectTiles(v, ready, DEFAULT_LOD, () => [0, maxHeight]);
+              for (const d of s.draw) expect(dist(d.tile)).toBeLessThanOrEqual(range);
+              for (const w of s.wanted) expect(dist(w.tile)).toBeLessThanOrEqual(outer);
+              for (const k of s.keep) expect(dist(k)).toBeLessThanOrEqual(outer);
+              drawn += s.draw.length;
+              wanted += s.wanted.length;
+            }
+          }
+        }
+      }
+    }
+    expect(drawn).toBeGreaterThan(1000);
+    expect(wanted).toBeGreaterThan(100);
+  });
+
+  it('splits a tile without its children past the horizon and the margin', () => {
+    // Standing 2 m above flat land, the horizon is 2 km away: many level-9 and
+    // level-10 tiles near it have children that no turn of the camera can show.
+    const v = observerView(2, 0, 0, 0);
+    const nadir = v.eye.clone().normalize();
+    const s = selectTiles(v, always, DEFAULT_LOD, () => [0, 0]);
+    expect(Math.max(...s.draw.map((d) => d.tile.level))).toBe(DEFAULT_LOD.maxLevel);
+    // Without meshes beyond the margin, the same tiles split all the same.
+    const outer = selectionRange(v);
+    const near = (t: TileKey) => tileAngularDistance(tileQuad(t), nadir) * R <= outer;
+    const s2 = selectTiles(v, near, DEFAULT_LOD, () => [0, 0]);
+    expect(s2.draw.length).toBe(s.draw.length);
+    expect(s2.wanted.length).toBe(0);
+  });
+
+  it('drops a tile whose bounding cap reaches the horizon but whose nearest point does not', () => {
+    // 500 m over flat land: the horizon is 32 km away. The old cap test kept tiles 157 km out.
+    const v = observerView(500, 0, 0, 0);
+    const nadir = v.eye.clone().normalize();
+    const s = selectTiles(v, always, DEFAULT_LOD, () => [0, 0]);
+    const nearest = s.draw.map((d) => tileAngularDistance(tileQuad(d.tile), nadir) * R);
+    expect(Math.max(...nearest)).toBeLessThanOrEqual(horizonRange(v));
+    expect(s.draw.length).toBeGreaterThan(0);
   });
 });
