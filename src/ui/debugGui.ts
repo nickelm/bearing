@@ -192,7 +192,7 @@ export interface DebugGuiStatus {
   tiles: string;
   trees: string;
   buildings: string;
-  /** The observer's distance from its station (of the 25 km allowed) and height above the ground. */
+  /** The observer's distance from its station and height above the ground. */
   observer: string;
 }
 

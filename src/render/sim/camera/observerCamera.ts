@@ -11,7 +11,8 @@
  *   It keeps its altitude above sea level rather than following the ground,
  *   never closer than 2 m to the ground under the eye (`groundAt`, checked
  *   after each move) nor more than 20 km above it, the simulation view's
- *   envelope, and stays within LEASH of the station. Speed is 80 m/s near the
+ *   envelope. It may fly anywhere: a station is only a starting point
+ *   (decision 118). Speed is 80 m/s near the
  *   ground and twice the height above ground per second higher up, five times
  *   faster with Shift.
  * - **Looking:** a drag (either mouse button, or one or two fingers) is
@@ -38,8 +39,6 @@ import type { ObserverStation } from './observerStations';
 /** Eye height above the ground: from standing to the simulation view's ceiling. */
 export const OBSERVER_MIN_HEIGHT = 2;
 export const OBSERVER_MAX_HEIGHT = 20 * KM;
-/** How far the observer may roam from the station's spot (m): about the promotion bubble. */
-export const OBSERVER_LEASH = 25 * KM;
 /** Vertical field of view: widest and narrowest (binoculars). */
 export const OBSERVER_MAX_FOV = 70 * DEG;
 export const OBSERVER_MIN_FOV = 5 * DEG;
@@ -139,33 +138,20 @@ export class ObserverCamera implements CameraControls {
     return this.height;
   }
 
-  /** Ground distance from the station's spot (m), at most OBSERVER_LEASH. */
+  /** Ground distance from the station's spot (m). */
   get distanceFromStation(): Meters {
     const home = this.station?.point;
     return home ? Math.acos(clamp(this.spot.dot(home), -1, 1)) * this.radius : 0;
   }
 
-  /** Walks the spot `forwardM` along the heading and `rightM` to the right, within the leash. */
+  /** Moves the spot `forwardM` along the heading and `rightM` to the right. */
   walk(forwardM: Meters, rightM: Meters): void {
     const { east, north } = localFrame(this.spot);
     const s = Math.sin(this.heading);
     const c = Math.cos(this.heading);
     const e = (s * forwardM + c * rightM) / this.radius;
     const n = (c * forwardM - s * rightM) / this.radius;
-    const next = this.spot.clone().addScaled(east, e).addScaled(north, n).normalize();
-    const home = this.station?.point;
-    if (home) {
-      const d = Math.acos(clamp(next.dot(home), -1, 1)) * this.radius;
-      if (d > OBSERVER_LEASH) {
-        // Pull back onto the leash's circle around home.
-        const t = OBSERVER_LEASH / d;
-        next
-          .scale(t)
-          .addScaled(home, 1 - t)
-          .normalize();
-      }
-    }
-    this.spot.copy(next);
+    this.spot.addScaled(east, e).addScaled(north, n).normalize();
   }
 
   /**

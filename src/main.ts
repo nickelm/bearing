@@ -24,7 +24,6 @@ import { INFRA_LAYERS } from './render/strategic/infra/infraModel';
 import { InfraScene } from './render/sim/infra/infraScene';
 import { airfieldGrading, globalMapSampler } from './render/sim/infra/airfieldGrading';
 import { observerStations } from './render/sim/camera/observerStations';
-import { OBSERVER_LEASH } from './render/sim/camera/observerCamera';
 import type { ObserverStation } from './render/sim/camera/observerStations';
 import { VIEW_MODES } from './render/common/globeMesh';
 import type { ViewMode } from './render/common/globeMesh';
@@ -860,7 +859,7 @@ async function main(): Promise<void> {
     const ob = globe.observer;
     gui.status.observer =
       globe.cameraMode === 'observer' && ob.station
-        ? `${(ob.distanceFromStation / KM).toFixed(1)} of ${OBSERVER_LEASH / KM} km out, ${ob.height.toFixed(0)} m up`
+        ? `${(ob.distanceFromStation / KM).toFixed(1)} km from the station, ${ob.height.toFixed(0)} m up`
         : '—';
     const rs = strategicView.relief.stats;
     const tileText =

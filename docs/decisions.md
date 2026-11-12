@@ -1816,3 +1816,10 @@ The engineering calls made while adopting it:
 **Decision:** The strategic graph debug overlay on the simulation view starts off (owner request); GUI → Campaign → overlay turns it on. Its own default was on and the GUI's value reached it only when toggled, so it is now also applied at startup, as the View folder's settings are. GUI → Status gains an _Observer_ line: the observer's ground distance from its station out of the 25 km allowed, and its height above the ground.
 
 **Reason:** The owner asked whether the 25 km limit is really 25 km. It is (a test flies 50 km outward and stops between 24.99 and 25 km of ground distance), but it feels shorter because speed grows with height: at 1 km above the ground the observer moves 2 km/s, so the limit is twelve seconds away, two and a half with ×5. The status line makes the distance visible.
+
+### 118. No leash on the observer
+
+**Date:** 2026-11-12
+**Decision:** The observer camera may fly anywhere within the simulation view's 0–20 km envelope; the 25 km leash around its station (decisions 112, 113) is gone. A station is a starting point for jumping between places of interest (GUI → View → Simulation camera → Observer at), not a tether. The status line reports the distance from the station without a limit.
+
+**Reason:** The owner asked why a leash was needed, and nothing needs it. The promotion bubble (decision 49) follows the simulation view's camera wherever it is; terrain, trees and buildings stream around the camera and are bounded by the horizon (decision 116), not by the station; the free camera already roams without one.

@@ -4,7 +4,6 @@ import { latLonToDirection } from '../src/core/coords';
 import { DEG, KM } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
 import {
-  OBSERVER_LEASH,
   OBSERVER_MAX_FOV,
   OBSERVER_MAX_HEIGHT,
   OBSERVER_MIN_FOV,
@@ -159,19 +158,18 @@ describe('ObserverCamera', () => {
     expect(c.altitude).toBe(319); // only once
   });
 
-  it('walks along its heading and stays on the leash', () => {
+  it('moves along its heading, as far as it likes', () => {
     const c = new ObserverCamera(R);
     const s = station({ facing: 0 });
     c.setStation(s);
     c.walk(1000, 0);
     const { north } = localFrame(s.point);
     expect(c.spot.clone().sub(s.point).dot(north) * R).toBeCloseTo(1000, 0);
-    c.walk(50 * KM, 0);
+    // No leash (decision 118): 300 km out in small steps.
+    for (let i = 0; i < 300; i++) c.walk(1 * KM, 0);
     const d = Math.acos(Math.min(1, c.spot.dot(s.point))) * R;
-    expect(d).toBeLessThanOrEqual(OBSERVER_LEASH);
-    expect(d).toBeGreaterThan(OBSERVER_LEASH - 10);
+    expect(d).toBeGreaterThan(300 * KM - 100);
     expect(c.distanceFromStation).toBeCloseTo(d, 6);
-    expect(OBSERVER_LEASH).toBe(25_000); // really 25 km of ground
   });
 });
 
