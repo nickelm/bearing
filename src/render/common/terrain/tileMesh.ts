@@ -87,6 +87,8 @@ export interface TileMeshData {
   color: Float32Array;
   /** Forest density 0..1 (decision 44) in the biome view, 0 in debug views; the shader draws the canopy (decision 71). */
   forest: Float32Array;
+  /** Landform masks per vertex, two each: aridity and glaciation, 0..1 (decision 126). */
+  landform: Float32Array;
   /** Displayed height range before exaggeration (m), of this tile and of the parent surface it morphs to. */
   minHeight: number;
   maxHeight: number;
@@ -368,6 +370,7 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
   const slope = new Float32Array(n3);
   const color = new Float32Array(n3);
   const forest = new Float32Array(TILE_VERTEX_COUNT);
+  const landform = new Float32Array(TILE_VERTEX_COUNT * 2);
 
   // Grid: directions, own heights and parent heights (float64).
   const dirs = new Float64Array(GRID_VERTICES * 3);
@@ -488,6 +491,8 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
       color[v * 3 + 1] = srgbToLinear(rgb[1]);
       color[v * 3 + 2] = srgbToLinear(rgb[2]);
       forest[v] = opts.mode === 'biome' && hOwn[v]! > 0 ? (mat >>> 24) / 255 : 0;
+      landform[v * 2] = ((mat >>> 17) & 15) / 15;
+      landform[v * 2 + 1] = ((mat >>> 21) & 7) / 7;
       // No canopy on graded ground (airfields); it thins over the pad's margin.
       if (grade && forest[v]! > 0)
         forest[v] = forest[v]! * (1 - opts.grading!.cover(dirOf(v, gradeDir)));
@@ -514,6 +519,7 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
       water[dst] = water[src]!;
       shore[dst] = shore[src]!;
       forest[dst] = forest[src]!;
+      landform.copyWithin(dst * 2, src * 2, src * 2 + 2);
     }
   }
   return {
@@ -529,6 +535,7 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
     slope,
     color,
     forest,
+    landform,
     minHeight: minH,
     maxHeight: maxH,
   };

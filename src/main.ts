@@ -366,7 +366,10 @@ async function main(): Promise<void> {
       // tile batch still running on it has finished.
       const old = globalWorld;
       const oldSynth = synth;
-      const riverIndex = new RiverIndex(global.finish.rivers);
+      const riverIndex = new RiverIndex(global.finish.rivers, {
+        height: global.height,
+        radius: params.radius,
+      });
       synth = new TileSynthesizer(global.grid, {
         seed: params.seed,
         reliefScale: params.reliefScale,

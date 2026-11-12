@@ -27,6 +27,7 @@ import {
 import {
   attribute,
   clamp,
+  dot,
   float,
   fwidth,
   Fn,
@@ -39,6 +40,8 @@ import {
   positionLocal,
   positionWorld,
   pow,
+  smoothstep,
+  sqrt,
   step,
   uniform,
   varyingProperty,
@@ -364,6 +367,11 @@ export class TerrainRenderer {
         );
       });
       const builtCover = clamp(built.x.add(built.y), 0, 1).mul(dry);
+      // The facet's steepness: tan of its angle from level, at true scale.
+      const facetSteep = sqrt(max(float(1).sub(dot(normal, radial).pow(2)), 0))
+        .div(max(dot(normal, radial), 0.05))
+        .div(max(exaggeration, 1e-3))
+        .toVar();
       const landAlbedo = mix(
         this.land.albedo({
           albedo: faceBed,
@@ -374,11 +382,15 @@ export class TerrainRenderer {
           wrapped: faceWrapped,
           forest: surfaceAttr.w,
           face: { spacing: faceSpacing, jitter: faceJitter },
+          landform: attribute('landform', 'vec2'),
         }),
         builtAlbedo(planet, footprint, built.y.div(max(built.x.add(built.y), 1e-4))),
         builtCover,
       );
-      const surface = this.water.shade({
+      // Falls (decision 126): river water on steep facets is white water.
+      const falls = river.mul(smoothstep(0.3, 0.75, facetSteep)).mul(this.land.enabled);
+      const foam = L.shadeDiffuse(vec3(0.82, 0.86, 0.88), normal, positionWorld, at);
+      const surfaceWater = this.water.shade({
         albedo: landAlbedo as unknown as typeof normal,
         bed,
         temperature: this.land.surfaceTemperature(climateHere, rawHeight, radial),
@@ -411,6 +423,7 @@ export class TerrainRenderer {
       );
       const roadAlbedo = mix(asphalt, painted, concreteShare) as unknown as typeof normal;
       const roadRadiance = L.shadeDiffuse(roadAlbedo, normal, positionWorld, at);
+      const surface = mix(surfaceWater, foam, falls);
       const withRoads = mix(surface, roadRadiance, paved.x.mul(dry));
       // Settlement lights on the night side (sodium orange), plus a glow along paved roads.
       // By day, at sea and with lights off, none of it runs.
@@ -568,6 +581,7 @@ export class TerrainRenderer {
     g.setAttribute('parentDisp', new BufferAttribute(m.parentDisp, 3));
     g.setAttribute('slope', new BufferAttribute(m.slope, 3));
     g.setAttribute('color', new BufferAttribute(m.color, 3));
+    g.setAttribute('landform', new BufferAttribute(m.landform, 2));
     g.setIndex(this.index);
     const mesh = new Mesh(g, this.material);
     mesh.frustumCulled = false;

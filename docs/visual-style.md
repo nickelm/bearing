@@ -49,7 +49,9 @@ Across all five, edges show slight stair-stepping and the image has faint grain,
 
 - **Facets by design.** Flat shading makes the LOD mesh's triangles visible. At low altitude, target facets of roughly 20 to 60 m, so mountains look carved (reference 3); the finest tile level gives 24 m. With distance the LOD coarsens the mesh at the rate it shrinks on screen, so facets stay about 20 to 40 px across while growing in meters; haze softens them toward the horizon (decision 123).
 - **Shade quantization.** Each biome has three to five shades (four by default). The shader picks a shade from slope, altitude, moisture, and a low-frequency noise term, then holds it constant per face, with the whole land albedo evaluated at the face's center. This produces the mottled, painted look of reference 2 without textures (decision 124).
-- **Rock and snow.** Steep faces switch to rock shades (three per face); cold faces switch to snow (two shades). Transitions follow face boundaries rather than blending smoothly, dithered so the line is not a contour (decision 125).
+- **Rock and snow.** Steep faces switch to rock shades (three per face); cold faces switch to snow (two shades), which slides off faces steeper than about 30–45°, so high ranges show gray rock between snowfields. Transitions follow face boundaries rather than blending smoothly, dithered so the line is not a contour (decisions 125, 126).
+- **Dry rock.** In deserts and dry shrubland, rock is layered: each 75 m stratum is a cliff in one of the sandstone shades over a foot of red shale, and the dry ground below the cliffs takes a red tint (decision 126).
+- **Water in motion.** River water on steep facets (falls and rapids) is drawn as white water rather than a reflecting surface (decision 126).
 - **Farmland.** Near settlements and on flat lowland, a Voronoi field pattern assigns each cell a crop color (wheat, green crop, fallow, pasture). Field cells are a few hundred meters across with slight color variation.
 - **Rivers.** Rivers render as bright ribbons that mirror the sky color, with a narrow darker bank. They should be the most visible terrain feature from altitude, since they matter tactically.
 - **Roads.** Thin, muted gray-brown lines from vector data, visible below about 3 km altitude.
@@ -178,6 +180,7 @@ Starting values; final values get tuned in the model viewer and on the globe.
 | Desert | `#C49A6C`, `#B07F55`, `#D2AE80` |
 | Tundra | `#8C8A6E`, `#7A7860` |
 | Rock | `#6E665E`, `#857B70`, `#5C554F` |
+| Dry rock (strata) | `#B8693C`, `#C98D58`, `#9C4B2C`, `#D9BB8C`, `#A65A36` (cliffs), `#A8664A` (shale) |
 | Snow | `#E8ECEF`, `#D5DCE2` |
 | Roads | `#7A7062` |
 | Runway paint | `#E6E4DC` (white), `#D9A92E` (taxi lines; decision 109) |

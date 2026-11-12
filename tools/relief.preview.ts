@@ -290,8 +290,11 @@ it('relief at a point', { timeout: 1_800_000 }, async () => {
     height: global.height,
     forest: global.finish.forest,
     treeline: global.finish.treeline,
-    index: new RiverIndex(global.finish.rivers),
+    index: new RiverIndex(global.finish.rivers, { height: global.height, radius: R }),
+    // TUNING='{"gullies":0.2}' overrides tile-synthesis tuning, for experiments.
+    tuning: env.TUNING ? (JSON.parse(env.TUNING) as Record<string, number>) : undefined,
   });
+  console.log(`tuning gullies ${synth.tuning.gullies}, octaves ${synth.octavesAt(level)}`);
   const tiles = new Map<string, TileData>();
   for (const d of await synth.generate([...keys.values()])) tiles.set(tileKeyString(d.key), d);
   const tileAt: Sampler = (d) => {
@@ -303,6 +306,24 @@ it('relief at a point', { timeout: 1_800_000 }, async () => {
     const sy = Math.min(TILE_TEXELS, Math.max(0, Math.round(uv.v * size - k.y * TILE_TEXELS)));
     return t.height[(sy + TILE_BORDER) * TILE_STRIDE + sx + TILE_BORDER]!;
   };
+  // MASKS=1: also a map of the landform masks (red aridity, blue glaciation; decision 126).
+  if (env.MASKS === '1') {
+    const img = new Uint8Array(S * S * 3);
+    tDirs.forEach((d, k) => {
+      const kk = tileForDirection(d, level);
+      const t = tiles.get(tileKeyString(kk))!;
+      directionToCubeFace(d, uv);
+      const size = TILE_TEXELS * (1 << level);
+      const sx = Math.min(TILE_TEXELS, Math.max(0, Math.round(uv.u * size - kk.x * TILE_TEXELS)));
+      const sy = Math.min(TILE_TEXELS, Math.max(0, Math.round(uv.v * size - kk.y * TILE_TEXELS)));
+      const m = t.material[(sy + TILE_BORDER) * TILE_STRIDE + sx + TILE_BORDER]!;
+      const h = t.height[(sy + TILE_BORDER) * TILE_STRIDE + sx + TILE_BORDER]!;
+      img[k * 3] = Math.round((((m >>> 17) & 15) / 15) * 255);
+      img[k * 3 + 1] = h > 0 ? 60 : 0;
+      img[k * 3 + 2] = Math.round((((m >>> 21) & 7) / 7) * 255);
+    });
+    writeFileSync(join(out, `relief-${seed}-masks.png`), encodePng(S, S, img));
+  }
   const tCell = (2 * tKm * KM) / S;
   // Tile = global + detail; the what-if scales the global's short wavelengths and the detail.
   const toGlobalCell = (i: number) => ((((i + 0.5) / S - 0.5) * tKm) / gKm) * S + S / 2 - 0.5;

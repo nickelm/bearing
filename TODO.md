@@ -412,6 +412,11 @@ Simulation view (needs S1's `render/sim/` split):
 - [x] Rock and snow by face; drop smooth rock blending (style gap from decision 70) (decision 125; preview view `alpine`)
   - [ ] Owner: look at snow lines and rock faces in the browser, high in a range and from a valley floor
   - [ ] Owner idea (2026-11-12): more color variation per facet, possibly from textures, later; keep it value-first and constant per face (Part I)
+- [x] Memorable landforms (owner request; decision 126): landform masks, a branching erosion filter, alpine crests, glacial troughs and lakes, layered dry rock with buttes and mesas, meanders, deltas, green corridors, falls and skerries; `SPOTS=all` in `tools/render.preview.ts` renders a spot for each
+  - [ ] Owner: fly to the spots in the browser (`npx vitest run --config vitest.tools.config.ts tools/spots.preview.ts --silent=false` lists them for seed 1983) and judge each against its Earth reference
+  - [ ] Cliffs sharper than the 48 m baked samples stair-step along the mesh grid; a finer baked level near the observer, or vertex jitter (above), would allow sharper cliffs and falls
+  - [ ] Meanders end at every confluence (they taper to zero there); on rivers with many tributaries the bends come in short trains. Carry the phase across confluences of the main stem
+  - [ ] Tune the landforms across more seeds (buttes are sparse on seed 1983; skerries need cold, low coasts)
 - [ ] Voronoi farmland patchwork near settlements and on flat lowland
 - [ ] Simulation preview views: re-aim Part I checks 1–5 (5 km mixed landscape, 500 m conifer edge with a road, mountains at low sun, airbase at dusk, coast with glint) at or below 20 km in `tools/render.preview.ts`; retire views between 20 and 100 km (`oblique`, `roads`, `coast`) or move them to the strategic set (carried from old M5)
 - [ ] Style audit: compare those views with the reference board and Part I (terrain facets and shade quantization, farmland, rivers, ocean, haze, trees, towns, lights); the old M3 and M5 rendering predates the guide (smooth shading, clump trees). Add a task per gap (carried from old M5)

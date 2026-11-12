@@ -28,6 +28,7 @@
  * Output per tile, TILE_STRIDE² samples (row-major from the border corner):
  *   height   f32, physical meters above sea level
  *   material u32: biome | river coverage (0..255) << 8 | lake << 16
+ *                 | aridity (0..15) << 17 | glaciation (0..7) << 21 (decision 126)
  *                 | forest density (0..255) << 24 (decision 44)
  *   lake     f32, lake surface (m) where a lake is within about one global
  *            cell, NO_LAKE elsewhere. The level is defined on dry ground near
@@ -39,12 +40,14 @@ import { rng } from '../../core/rng';
 import type { WorldSeed } from '../../core/rng';
 import { TILE_BORDER, TILE_STRIDE, TILE_TEXELS } from '../../core/tiles';
 import type { TileKey } from '../../core/tiles';
-import { RIVER_INDEX_LEVEL, RIVER_SEGMENT_FIELDS, RiverIndex } from '../riverIndex';
+import { DELTA_FIELDS, RIVER_INDEX_LEVEL, RIVER_SEGMENT_FIELDS, RiverIndex } from '../riverIndex';
 import type { GlobalGrid } from './globalGrid';
 import { WORKGROUP_SIZE } from './gpuContext';
 import { bicubicSamplerWgsl } from './gridWgsl';
 import { NOISE_WGSL, packPermutations } from './noiseWgsl';
 import { LANDFORM } from './erosion';
+import { Biome } from '../biomes';
+import { buildLandformMasks, LANDFORM_MASK_WGSL } from './landformMasks';
 
 export const TILE_SYNTH_TUNING = {
   /** First detail octave, in global cells: just below what the global grid resolves (the detail stage covers 3+ cells). */
@@ -58,8 +61,8 @@ export const TILE_SYNTH_TUNING = {
    * uplift. On land it is multiplied by the landform gain as well as reliefScale
    * (decision 121); on the sea floor by reliefScale only.
    */
-  detailPlains: 12,
-  detailPerUplift: 0.025,
+  detailPlains: 6,
+  detailPerUplift: 0.008,
   /**
    * Landscape position (decision 121): the global height minus its mean on a ring
    * `positionRing` global cells out, over `positionScale` m plus `positionSlope` × the
@@ -77,8 +80,19 @@ export const TILE_SYNTH_TUNING = {
   lowlandDetail: 0.15,
   /** Global slopes (m/m) over which plains detail ramps from lowlandDetail to full. */
   flatSlope: [0.002, 0.015] as [number, number],
-  /** Gully depth per (slope × wavelength). */
-  gullies: 0.06,
+  /**
+   * High mountains (decision 126): ridged octaves of `alpineRelief` m at
+   * `alpineWavelength` × the first detail wavelength, over ground from
+   * `alpineHeight[0]` to `alpineHeight[1]` m (physical) with mountain uplift.
+   */
+  alpineHeight: [1500, 4000] as [number, number],
+  alpineRelief: 900,
+  alpineWavelength: 1.6,
+  /** Gully depth per (slope × wavelength), the share kept on valley floors, the slope at which depth stops growing, and the per-octave decay. */
+  gullies: 0.35,
+  gullyValley: 0.3,
+  gullySlopeCap: 1.2,
+  gullyDecay: 0.85,
   /** Floodplain half-width in channel widths, and at least this many meters. */
   floodplainWidths: 8,
   floodplainMin: 250,
@@ -91,6 +105,52 @@ export const TILE_SYNTH_TUNING = {
   forestClumping: 0.9,
   /** Forest thins out over this height band around the treeline (physical m). */
   treelineBand: 30,
+  /**
+   * Arid landforms (decision 126). Aridity (landform mask x) is remapped from
+   * `aridRange` to 0..1. Rock is layered in strata `strataThickness` m thick; each
+   * layer is stepped into a bench and a cliff by s ↦ s^p with p from
+   * `strataSharpness` (per layer), where the regional layering noise (wavelength
+   * `strataRegion` m) is high. Buttes and mesas rise `butteHeight` m from dry plains
+   * and plateaus (global slope below `butteFlat`), where fBm noise of wavelength
+   * `butteWavelength` m exceeds a threshold that varies over `butteRegion` m.
+   */
+  aridRange: [0.35, 0.85] as [number, number],
+  strataThickness: 75,
+  strataSharpness: [1.6, 3.5] as [number, number],
+  strataRegion: 30_000,
+  butteWavelength: 2600,
+  butteRegion: 45_000,
+  butteThreshold: 0.32,
+  butteDensity: 0.3,
+  butteEdge: 0.012,
+  butteApron: 0.2,
+  butteHeight: 260,
+  butteFlat: [0.02, 0.07] as [number, number],
+  /**
+   * Skerry coasts (decision 126): where glaciation (landform mask y) is high, ground
+   * within `skerryDepth` m of sea level is scaled by `skerryShelf` toward it and
+   * rounded knobs `skerryHeight` m tall, first wavelength `skerryWavelength` m, rise
+   * through it.
+   */
+  skerryDepth: 160,
+  /**
+   * Falls (decision 126): rivers at least `fallMinWidth` m wide whose bed falls
+   * `fallGradient` (m/m over ±`fallProbe` m, ramped) step down in pools and drops one
+   * stratum (`strataThickness`) high, each drop over about `fallRun` m.
+   */
+  fallGradient: [0.012, 0.03] as [number, number],
+  fallProbe: 400,
+  fallRun: 140,
+  fallMinWidth: 15,
+  /** Green corridor along rivers in dry land (decision 126): half-width in river widths, clamped (m). */
+  greenWidths: 9,
+  greenMin: 250,
+  greenMax: 2300,
+  skerryShelf: 0.12,
+  skerryHeight: 30,
+  skerryWavelength: 900,
+  /** Depth (m) of the skerry shelf where the land proximity reaches 0. */
+  skerrySeaDepth: 70,
 };
 
 /** Deepest level with baked tiles (about 48 m samples at R = 1,000 km). */
@@ -171,6 +231,8 @@ export class TileSynthesizer {
   private readonly perm: GPUBuffer;
   /** Per global cell: packed material, and the lake level's f32 bits (WebGPU allows 8 storage buffers). */
   private readonly material: GPUBuffer;
+  /** Per global cell: landform masks, four unorm8 (landformMasks.ts). */
+  private readonly masks: GPUBuffer;
   private readonly firstWavelength: number;
 
   constructor(
@@ -199,19 +261,22 @@ export class TileSynthesizer {
       packed[c * 2 + 1] = toHalf(level) | (toHalf(Math.max(-60_000, opts.treeline[c]!)) << 16);
     }
     this.material = gpu.storageFrom(packed, 'tiles.globalMaterial');
+    this.masks = buildLandformMasks(grid, opts.biome, opts.height, opts.treeline);
 
     const code = /* wgsl */ `${grid.wgsl}
-struct Tile { face: i32, level: i32, x: i32, y: i32, segStart: u32, segCount: u32, octaves: u32, pad: u32 };
+struct Tile { face: i32, level: i32, x: i32, y: i32, segStart: u32, segCount: u32, octaves: u32,
+  deltaStart: u32, deltaCount: u32, pad0: u32, pad1: u32, pad2: u32 };
 @group(0) @binding(0) var<storage, read> perm: array<u32>;
 @group(0) @binding(1) var<storage, read> gHeight: array<f32>;
 @group(0) @binding(2) var<storage, read> gUplift: array<f32>;
 @group(0) @binding(3) var<storage, read> gMaterial: array<vec2u>;
 @group(0) @binding(4) var<storage, read> segs: array<f32>;
 @group(0) @binding(5) var<storage, read> tiles: array<Tile>;
-// Per sample: height and lake level.
-@group(0) @binding(6) var<storage, read_write> outHeight: array<vec2f>;
-@group(0) @binding(7) var<storage, read_write> outMaterial: array<u32>;
+// Per sample: height and lake level (f32 bits), material, unused.
+@group(0) @binding(6) var<storage, read_write> outSample: array<vec4u>;
+@group(0) @binding(7) var<storage, read> gMasks: array<u32>;
 ${NOISE_WGSL}
+${LANDFORM_MASK_WGSL}
 ${bicubicSamplerWgsl('sampleHeight', 'gHeight')}
 ${bicubicSamplerWgsl('sampleUplift', 'gUplift')}
 
@@ -253,6 +318,16 @@ fn upliftAt(d: vec3f) -> f32 {
   return sampleUplift(face, uv.x, uv.y);
 }
 
+// Ridged noise for high mountains: crests where the noise crosses zero, squared to sharpen them.
+fn alpineRidge(q: vec3f) -> f32 {
+  let r = 1.0 - abs(noise3(q, 0u));
+  return r * r;
+}
+
+fn hash1(k: f32) -> f32 {
+  return f32(pcg3(vec3u(bitcast<u32>(i32(k)), 0x9e37u, 0x79b9u)).x & 0xffffu) / 65535.0;
+}
+
 fn pcg3(v0: vec3u) -> vec3u {
   var v = v0 * 1664525u + 1013904223u;
   v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
@@ -262,9 +337,11 @@ fn pcg3(v0: vec3u) -> vec3u {
 }
 
 // Erosion filter: Gabor waves varying along t (across the slope), on a jittered 3D lattice.
-fn gully(q: vec3f, t: vec3f, salt: u32) -> f32 {
+// Returns the wave sum and its sine sum (the derivative along t is −2π × the latter).
+fn gully(q: vec3f, t: vec3f, salt: u32) -> vec2f {
   let cell = floor(q);
   var sum = 0.0;
+  var dsum = 0.0;
   var wsum = 0.0;
   for (var k = 0; k < 27; k++) {
     let o = vec3f(f32(k % 3 - 1), f32((k / 3) % 3 - 1), f32(k / 9 - 1));
@@ -273,10 +350,12 @@ fn gully(q: vec3f, t: vec3f, salt: u32) -> f32 {
     let jitter = vec3f(h & vec3u(0xffffu)) / 65535.0;
     let dlt = q - (lc + jitter);
     let w = exp(-2.0 * dot(dlt, dlt));
-    sum += w * cos(TWO_PI * dot(dlt, t));
+    let phase = TWO_PI * dot(dlt, t);
+    sum += w * cos(phase);
+    dsum += w * sin(phase);
     wsum += w;
   }
-  return sum / max(wsum, 1e-6);
+  return vec2f(sum, dsum) / max(wsum, 1e-6);
 }
 
 @compute @workgroup_size(${WORKGROUP_SIZE})
@@ -316,6 +395,12 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   let sampleSpacing = R * 2.0 * QUARTER_PI / denom;
   var riverCover = 0.0;
   var forest = 0.0;
+  // Landform masks for the renderer: aridity in bits 17–20, glaciation in 21–23.
+  let masks = landformMasks(d);
+  let maskBits = (u32(round(masks.x * 15.0)) << 17u) | (u32(round(masks.y * 7.0)) << 21u);
+  var biomeOut = mat & 0xffu;
+  // Green ground by water in dry land (decision 126): along rivers and on deltas.
+  var fertile = 0.0;
 
   if (base > 0.0) {
     // Rivers: the nearest channel (relative to its floodplain) shapes the terrain.
@@ -323,6 +408,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     var bestDist = 1.0e9;
     var bestWidth = 0.0;
     var bestPoint = d;
+    var bestAlong = vec3f(0.0);
     for (var s = 0u; s < tile.segCount; s++) {
       let o = (tile.segStart + s) * SEG_FIELDS;
       let a = vec3f(segs[o], segs[o + 1u], segs[o + 2u]);
@@ -342,15 +428,35 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
         nearest = dist / plain;
         bestDist = dist;
         bestWidth = w;
+        bestAlong = ab;
         bestPoint = p;
       }
     }
     let fade = smoothstep(0.0, 1.0, nearest);
+    // A green corridor along rivers through dry land, wider for wider rivers, with a
+    // ragged edge (irrigation and gallery woods; the Nile's valley).
+    let belt = clamp(${f(t.greenWidths)} * bestWidth, ${f(t.greenMin)}, ${f(t.greenMax)})
+      * (1.0 + 0.35 * noise3(d * (R / 1500.0) + vec3f(8.1, 2.2, 6.6), 512u));
+    fertile = 1.0 - smoothstep(0.75 * belt, belt, bestDist);
     var carve = 1.0e9;
     var reachW = 0.0;
     if (bestDist < ${f(t.riverReach)}) {
       // The water surface follows the smooth global height under the channel.
-      let surf = heightAt(normalize(bestPoint)) - 0.5;
+      var surf = heightAt(normalize(bestPoint)) - 0.5;
+      // Falls (decision 126): on steep reaches the water surface steps down the
+      // rock layers in pools and drops, each drop over about fallRun m.
+      let along = normalize(bestAlong + vec3f(1e-9, 0.0, 0.0)) * (${f(t.fallProbe)} / R);
+      let fallGrad = abs(heightAt(normalize(bestPoint + along)) - heightAt(normalize(bestPoint - along)))
+        / (2.0 * ${f(t.fallProbe)});
+      let T = ${f(t.strataThickness)};
+      let stepW = smoothstep(${f(t.fallGradient[0])}, ${f(t.fallGradient[1])}, fallGrad)
+        * smoothstep(3.0 * T, 1.2 * T, sampleSpacing) * step(${f(t.fallMinWidth)}, bestWidth);
+      if (stepW > 0.0 && surf > T) {
+        let xs = surf / T;
+        let ks = floor(xs);
+        let eps = clamp(${f(t.fallRun)} * fallGrad / T, 0.005, 0.5);
+        surf = mix(surf, (ks + smoothstep(1.0 - eps, 1.0, xs - ks)) * T, stepW);
+      }
       let half = 0.5 * bestWidth;
       let depth = 1.0 + 0.02 * bestWidth;
       if (bestDist < half) {
@@ -395,19 +501,84 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
       lambda *= 0.5;
     }
 
-    // Gullies across the global slope.
-    var gullies = 0.0;
-    if (slope > 1e-5) {
-      let across = cross(d, grad / slope);
-      lambda = LAMBDA0;
-      for (var o = 0u; o < tile.octaves; o++) {
-        let q = d * (R / lambda);
-        gullies += ${f(t.gullies)} * slope * lambda * gully(q, across, o * 7919u);
+    // Erosion filter (decision 126): gullies across the slope, so they run downhill,
+    // with depth ∝ slope × wavelength. Each octave follows the gradient accumulated
+    // so far (global slope plus the coarser gullies), so finer gullies bend into
+    // coarser ones and branch like tributaries, and the ground between them is left
+    // as sharp spurs. Gullies sharpen into creases: valleys V-shaped, ridges rounded
+    // by the cosine's crest. Fewer on valley floors (landscape position).
+    // High mountains (decision 126): ridged octaves whose crests become arêtes and
+    // horns, strongest on high, uplifted ground and on ridges. Their gradient feeds
+    // the erosion filter below, so gullies cut down between the crests.
+    var peaks = 0.0;
+    var g = grad;
+    let alpine = smoothstep(${f(t.alpineHeight[0])}, ${f(t.alpineHeight[1])}, base) * mountain
+      * mix(0.35, 1.0, position) * fade * dryBed;
+    if (alpine > 0.0) {
+      lambda = LAMBDA0 * ${f(t.alpineWavelength)};
+      var pa = ${f(t.alpineRelief)} * alpine;
+      for (var o = 0u; o < 2u; o++) {
+        if (lambda < 2.0 * sampleSpacing) { break; }
+        let q = d * (R / lambda) + vec3f(23.9, 71.3, 5.7) * f32(o + 1u);
+        let dq = 0.15;
+        let rc = alpineRidge(q);
+        let gx = (alpineRidge(q + dq * e0) - alpineRidge(q - dq * e0)) / (2.0 * dq);
+        let gy = (alpineRidge(q + dq * n0) - alpineRidge(q - dq * n0)) / (2.0 * dq);
+        peaks += pa * (rc - 0.4);
+        g += pa * (gx * e0 + gy * n0) / lambda;
         lambda *= 0.5;
+        pa *= 0.45;
       }
     }
 
-    h = base + (detail + gullies) * fade * dryBed;
+    var gullies = 0.0;
+    lambda = LAMBDA0;
+    var gAmp = ${f(t.gullies)} * mix(${f(t.gullyValley)}, 1.0, position);
+    for (var o = 0u; o < tile.octaves; o++) {
+      let gs = length(g);
+      if (gs > 1e-5) {
+        let across = normalize(cross(d, g / gs));
+        let q = d * (R / lambda);
+        let w = gully(q, across, o * 7919u);
+        let depth = gAmp * min(gs, ${f(t.gullySlopeCap)}) * lambda;
+        // Creases: 1 − |sin| style valleys from the wave (−1 at gully floors).
+        gullies += depth * w.x;
+        g += depth * (-TWO_PI / lambda) * w.y * across;
+      }
+      lambda *= 0.5;
+      gAmp *= ${f(t.gullyDecay)};
+    }
+
+    h = base + (detail + gullies) * fade * dryBed + peaks;
+
+    // Arid landforms (decision 126): buttes and mesas on dry plains and plateaus,
+    // then the layered rock stepped into benches and cliffs.
+    let arid = smoothstep(${f(t.aridRange[0])}, ${f(t.aridRange[1])}, masks.x) * dryBed;
+    if (arid > 0.0) {
+      let flat = 1.0 - smoothstep(${f(t.butteFlat[0])}, ${f(t.butteFlat[1])}, slope);
+      let bq = d * (R / ${f(t.butteWavelength)}) + vec3f(41.3, 7.9, 23.1);
+      let m = 0.62 * noise3(bq, 512u) + 0.28 * noise3(bq * 2.31, 512u) + 0.1 * noise3(bq * 5.07, 512u);
+      let region = noise3(d * (R / ${f(t.butteRegion)}) + vec3f(5.1, 77.7, 3.3), 512u);
+      let theta = ${f(t.butteThreshold)} - ${f(t.butteDensity)} * region;
+      let cap = smoothstep(theta - ${f(t.butteEdge)}, theta + ${f(t.butteEdge)}, m);
+      let apron = smoothstep(theta - ${f(t.butteApron)}, theta, m);
+      let tall = ${f(t.butteHeight)} * (0.6 + 0.8 * (0.5 + 0.5 * noise3(d * (R / 9000.0) + vec3f(3.0, 1.0, 9.0), 512u)));
+      // Buttes need a few samples across; coarse tiles leave them out.
+      let resolvedB = smoothstep(4.0, 10.0, ${f(t.butteWavelength)} / sampleSpacing);
+      h += arid * flat * resolvedB * tall * (0.75 * cap + 0.25 * apron * apron);
+
+      let layered = 0.5 + 0.5 * noise3(d * (R / ${f(t.strataRegion)}) + vec3f(12.7, 3.1, 55.5), 512u);
+      let T = ${f(t.strataThickness)};
+      let resolvedT = smoothstep(3.0 * T, 1.2 * T, sampleSpacing);
+      let strength = arid * smoothstep(0.2, 0.5, layered) * resolvedT;
+      if (strength > 0.0 && h > 0.0) {
+        let x = h / T;
+        let k = floor(x);
+        let s = x - k;
+        let p = mix(${f(t.strataSharpness[0])}, ${f(t.strataSharpness[1])}, hash1(k));
+        h = mix(h, (k + pow(s, p)) * T, strength);
+      }
+    }
     // Rivers shape the terrain within reach; carving never raises it.
     // Not under lakes: a river crossing a lake has no channel in the lake bed.
     h = mix(h, min(h, carve), reachW * dryBed);
@@ -445,9 +616,92 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     }
     h = min(base + detail * RELIEF, -0.05);
   }
-  outHeight[slot] = vec2f(h, lakeLevel);
-  outMaterial[slot] = (mat & 0xffu) | (u32(riverCover * 255.0) << 8u) | (mat & 0x10000u)
-    | (u32(clamp(forest, 0.0, 1.0) * 255.0) << 24u);
+
+  // Deltas (decision 126): a low fan from an apex upstream of the mouth out into
+  // the sea, a few meters above it, cut by distributaries that fan out and branch.
+  for (var k = 0u; k < tile.deltaCount; k++) {
+    let o = (tile.deltaStart + k) * SEG_FIELDS;
+    let mouth = vec3f(segs[o], segs[o + 1u], segs[o + 2u]);
+    let sea = vec3f(segs[o + 3u], segs[o + 4u], segs[o + 5u]);
+    let width = segs[o + 6u];
+    let rd = segs[o + 7u];
+    let apex = normalize(mouth - sea * (0.3 * rd / R));
+    let v = (d - apex) * R;
+    let x = dot(v, sea);
+    let y = dot(v, cross(apex, sea));
+    let r = length(vec2f(x, y));
+    let theta = atan2(y, x);
+    let salt = f32(k) * 13.7 + mouth.x * 1000.0;
+    let lobes = 1.0 + 0.18 * noise3(vec3f(theta * 2.2, salt, 0.5), 512u)
+      + 0.08 * noise3(vec3f(theta * 7.0, salt, 3.5), 512u);
+    let edge = rd * lobes;
+    let fan = (1.0 - smoothstep(0.85 * edge, edge, r)) * (1.0 - smoothstep(1.1, 1.35, abs(theta)));
+    if (fan <= 0.0) { continue; }
+    let rel = r / rd;
+    var surface = 0.8 + 5.0 * (1.0 - rel) + 0.6 * noise3(d * (R / 700.0), 512u);
+    // Distributaries: channels along warped rays from the apex, splitting with distance.
+    var channel = 0.0;
+    for (var j = 0; j < 7; j++) {
+      let base_j = (f32(j) / 6.0 - 0.5) * 2.0;
+      let born = 0.12 + 0.35 * abs(base_j) * abs(base_j);
+      let warp = 0.13 * noise3(vec3f(r / 2600.0, f32(j) * 3.1, salt), 512u);
+      let off = abs(theta + warp - base_j) * r;
+      let cw = width * mix(0.45, 0.18, rel) + 25.0;
+      channel = max(channel, (1.0 - smoothstep(0.6 * cw, cw, off)) * smoothstep(born, born + 0.05, rel));
+    }
+    surface = mix(surface, -2.5, channel);
+    h = mix(h, surface, fan);
+    fertile = max(fertile, fan * (1.0 - channel));
+    if (h > 0.0 && biomeOut <= ${Biome.SeaIce}u) { biomeOut = ${Biome.Savanna}u; }
+  }
+  if (h > 0.0 && fertile > 0.0) {
+    // Dry biomes turn green; the corridor's inner part is wooded in clumps.
+    let dry = smoothstep(0.3, 0.7, masks.x) + select(0.0, 1.0, biomeOut == ${Biome.Savanna}u);
+    if (dry > 0.0 && fertile > 0.5) {
+      biomeOut = ${Biome.TemperateGrassland}u;
+      let groves = smoothstep(0.1, 0.4, noise3(d * (R / 450.0) + vec3f(1.0, 9.0, 4.0), 0u));
+      forest = max(forest, 0.6 * groves * smoothstep(0.6, 1.0, fertile) * (1.0 - riverCover));
+    }
+  } else if (h <= 0.0) {
+    forest = 0.0;
+  }
+
+  // Skerry coasts (decision 126): on glaciated, low coasts the shore zone is
+  // flattened toward sea level and rounded rock knobs (roches moutonnées) rise
+  // through it, as islands at sea and as inlets and ponds on land.
+  let iceHere = masks.y;
+  // Within reach of the shore (land proximity at sea, sea proximity on land) and low.
+  let shoreReach = select(smoothstep(0.55, 1.0, masks.w), smoothstep(0.12, 0.45, masks.z), base <= 0.0);
+  let skerry = shoreReach * smoothstep(0.45, 0.85, iceHere)
+    * (1.0 - smoothstep(0.6 * ${f(t.skerryDepth)}, ${f(t.skerryDepth)}, base))
+    * select(1.0, 0.0, lakeLevel > base - 1.0);
+  if (skerry > 0.0) {
+    var knob = 0.0;
+    var kl = ${f(t.skerryWavelength)};
+    var ka = 1.0;
+    for (var o = 0; o < 5; o++) {
+      let r = smoothstep(2.0, 4.0, kl / sampleSpacing);
+      let n = noise3(d * (R / kl) + vec3f(61.7, 14.3, 29.9) + f32(o) * vec3f(5.3, 1.1, 7.7), 512u);
+      // Rounded knobs: the noise's positive lobes, softened.
+      knob += ka * r * (n + 0.35 * abs(n));
+      kl *= 0.42;
+      ka *= 0.55;
+    }
+    // The sea floor shoals toward the shore whatever its depth; land is flattened.
+    let floor = select(base * ${f(t.skerryShelf)}, -${f(t.skerrySeaDepth)} * (1.0 - masks.z) - 4.0, base <= 0.0);
+    let shelf = floor + ${f(t.skerryHeight)} * knob;
+    h = mix(h, shelf, skerry);
+    // New islands are bare, ice-polished rock, with pines on the higher knobs.
+    if (h > 0.0 && biomeOut <= ${Biome.SeaIce}u) {
+      biomeOut = ${Biome.Alpine}u;
+      forest = 0.55 * smoothstep(6.0, 16.0, h)
+        * smoothstep(0.0, 0.3, noise3(d * (R / 300.0) + vec3f(4.4, 8.8, 1.2), 0u) + 0.2);
+    }
+    if (h <= 0.0) { forest = 0.0; }
+  }
+  outSample[slot] = vec4u(bitcast<u32>(h), bitcast<u32>(lakeLevel),
+    biomeOut | (u32(riverCover * 255.0) << 8u) | (mat & 0x10000u) | maskBits
+    | (u32(clamp(forest, 0.0, 1.0) * 255.0) << 24u), 0u);
 }`;
     this.pipeline = gpu.kernel(code);
   }
@@ -466,15 +720,17 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     if (keys.length === 0) return [];
     const gpu = this.grid.gpu;
     const t = this.tuning;
-    const tileWords = new Int32Array(keys.length * 8);
+    const TILE_WORDS = 12;
+    const tileWords = new Int32Array(keys.length * TILE_WORDS);
     const segIds: number[] = [];
+    const deltaIds: number[][] = [];
     keys.forEach((k, slot) => {
       if (k.level > MAX_BAKED_LEVEL) throw new RangeError(`Level ${k.level} > ${MAX_BAKED_LEVEL}`);
       const ids =
         k.level >= RIVER_INDEX_LEVEL
           ? this.opts.index.forTile(k, t.riverReach, this.opts.radius)
           : [];
-      const w = slot * 8;
+      const w = slot * TILE_WORDS;
       tileWords[w] = k.face;
       tileWords[w + 1] = k.level;
       tileWords[w + 2] = k.x;
@@ -483,19 +739,36 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
       tileWords[w + 5] = ids.length;
       tileWords[w + 6] = this.octavesAt(k.level);
       segIds.push(...ids);
+      deltaIds.push(this.opts.index.deltasForTile(k, this.opts.radius));
+    });
+    // Delta records follow the segments in the same buffer (same stride).
+    let deltaAt = segIds.length;
+    deltaIds.forEach((ids, slot) => {
+      tileWords[slot * TILE_WORDS + 7] = deltaAt;
+      tileWords[slot * TILE_WORDS + 8] = ids.length;
+      deltaAt += ids.length;
     });
     const src = this.opts.index.segments.data;
-    const segData = new Float32Array(Math.max(1, segIds.length) * RIVER_SEGMENT_FIELDS);
+    const segData = new Float32Array(Math.max(1, deltaAt) * RIVER_SEGMENT_FIELDS);
     segIds.forEach((s, i) => {
       for (let k = 0; k < RIVER_SEGMENT_FIELDS; k++) {
         segData[i * RIVER_SEGMENT_FIELDS + k] = src[s * RIVER_SEGMENT_FIELDS + k]!;
       }
     });
+    const deltas = this.opts.index.deltas;
+    let at = segIds.length;
+    for (const ids of deltaIds) {
+      for (const id of ids) {
+        for (let k = 0; k < DELTA_FIELDS; k++) {
+          segData[at * RIVER_SEGMENT_FIELDS + k] = deltas[id * DELTA_FIELDS + k]!;
+        }
+        at++;
+      }
+    }
 
     const tilesBuf = gpu.storageFrom(tileWords, 'tiles.params');
     const segBuf = gpu.storageFrom(segData, 'tiles.segments');
-    const outH = gpu.storage(keys.length * SAMPLES * 8, 'tiles.heightLake');
-    const outM = gpu.storage(keys.length * SAMPLES * 4, 'tiles.material');
+    const out = gpu.storage(keys.length * SAMPLES * 16, 'tiles.samples');
     gpu.dispatch(
       this.pipeline,
       [
@@ -505,19 +778,22 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
         this.material,
         segBuf,
         tilesBuf,
-        outH,
-        outM,
+        out,
+        this.masks,
       ],
       [Math.ceil(SAMPLES / WORKGROUP_SIZE), 1, keys.length],
     );
-    const heightLake = new Float32Array(await gpu.read(outH));
-    const materials = new Uint32Array(await gpu.read(outM));
-    for (const b of [tilesBuf, segBuf, outH, outM]) b.destroy();
+    const raw = await gpu.read(out);
+    for (const b of [tilesBuf, segBuf, out]) b.destroy();
+    const asF32 = new Float32Array(raw);
+    const asU32 = new Uint32Array(raw);
     const heights = new Float32Array(keys.length * SAMPLES);
     const lakes = new Float32Array(keys.length * SAMPLES);
+    const materials = new Uint32Array(keys.length * SAMPLES);
     for (let i = 0; i < heights.length; i++) {
-      heights[i] = heightLake[i * 2]!;
-      lakes[i] = heightLake[i * 2 + 1]!;
+      heights[i] = asF32[i * 4]!;
+      lakes[i] = asF32[i * 4 + 1]!;
+      materials[i] = asU32[i * 4 + 2]!;
     }
 
     return keys.map((key, slot) => {
@@ -542,5 +818,6 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   dispose(): void {
     this.perm.destroy();
     this.material.destroy();
+    this.masks.destroy();
   }
 }

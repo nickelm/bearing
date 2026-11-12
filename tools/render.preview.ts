@@ -32,7 +32,16 @@ import {
   sunDirection,
   withLocalTime,
 } from '../src/core/calendar';
-import { cubeFaceUvToDirection, latLonToDirection } from '../src/core/coords';
+import { cubeFaceUvToDirection, directionToCubeFace, latLonToDirection } from '../src/core/coords';
+import {
+  tileForDirection,
+  tileKeyString,
+  TILE_BORDER,
+  TILE_STRIDE,
+  TILE_TEXELS,
+} from '../src/core/tiles';
+import type { TileKey } from '../src/core/tiles';
+import type { TileData } from '../src/worldgen/gpu/tileSynth';
 import type { CubeFace } from '../src/core/coords';
 import { CubeGrid } from '../src/core/cubeGrid';
 import { DAY, DEG, HOUR, KM } from '../src/core/units';
@@ -61,6 +70,8 @@ import { airfieldGrading } from '../src/render/sim/infra/airfieldGrading';
 import { buildWeatherClimate } from '../src/sim/weather/climate';
 import { WeatherGrid } from '../src/sim/weather/grid';
 import { createSimWorld } from '../src/sim/world';
+import { findSpots, SPOT_KINDS } from './landscapeSpots';
+import type { LandscapeSpot } from './landscapeSpots';
 
 export interface PreviewView {
   name: string;
@@ -89,6 +100,8 @@ export interface PreviewView {
    * height, facing and pitch (altitude, tilt, heading and target are ignored).
    */
   observer?: boolean;
+  /** Through the observer camera at a landscape spot (SPOTS=…, tools/landscapeSpots.ts). */
+  spot?: LandscapeSpot;
   /** Image size for this view (strategic previews; default W × H). */
   width?: number;
   height?: number;
@@ -456,7 +469,10 @@ it('renders preview views', async () => {
   scene.terrain.setExaggeration(exaggeration);
   scene.terrain.buildBudgetMs = 10_000;
   scene.terrain.budgetMiB = 600; // the app's default (GUI → Tile memory)
-  const riverIndex = new RiverIndex(global.finish.rivers);
+  const riverIndex = new RiverIndex(global.finish.rivers, {
+    height: global.height,
+    radius: params.radius,
+  });
   const synth = new TileSynthesizer(global.grid, {
     seed: params.seed,
     reliefScale: params.reliefScale,
@@ -559,6 +575,78 @@ it('renders preview views', async () => {
   mkdirSync(outDir, { recursive: true });
 
   const stations = observerStations(campaign.infrastructure, params.radius);
+  // SPOTS=all or a comma list of landscape kinds: observer views at landscape spots.
+  if (process.env.SPOTS) {
+    const kinds =
+      process.env.SPOTS === 'all'
+        ? [...SPOT_KINDS]
+        : (process.env.SPOTS.split(',') as (typeof SPOT_KINDS)[number][]);
+    // The sun's compass azimuth at a spot at the spot views' local time, for framing.
+    const spotHour = Number(process.env.SPOT_TIME ?? 15.5);
+    const sunAzimuth = (p: Readonly<Vec3d>) => {
+      const lon = Math.atan2(p.x, p.z);
+      let at = withLocalTime(0, lon, spotHour * HOUR, params, calendar);
+      if (at < 0) at = withLocalTime(DAY, lon, spotHour * HOUR, params, calendar);
+      const sun = sunDirection(at, params, calendar, new Vec3d());
+      const east = new Vec3d(0, 1, 0).cross(p).normalize();
+      const north = p.clone().cross(east);
+      return Math.atan2(sun.dot(east), sun.dot(north));
+    };
+    // Framing reads synthesized level-6 tiles (about 100 m samples) around each spot.
+    const prepare = async (center: Readonly<Vec3d>, radiusM: number) => {
+      const level = 6;
+      const keys = new Map<string, TileKey>();
+      const east = new Vec3d(0, 1, 0).cross(center).normalize();
+      const north = center.clone().cross(east);
+      for (let y = -radiusM; y <= radiusM; y += 4000) {
+        for (let x = -radiusM; x <= radiusM; x += 4000) {
+          const d = center
+            .clone()
+            .addScaled(east, x / params.radius)
+            .addScaled(north, y / params.radius)
+            .normalize();
+          const k = tileForDirection(d, level);
+          keys.set(tileKeyString(k), k);
+        }
+      }
+      const tiles = new Map<string, TileData>();
+      for (const t of await synth.generate([...keys.values()])) tiles.set(tileKeyString(t.key), t);
+      const uv = { face: 0, u: 0, v: 0 } as ReturnType<typeof directionToCubeFace>;
+      return (d: Readonly<Vec3d>) => {
+        const k = tileForDirection(d, level);
+        const t = tiles.get(tileKeyString(k));
+        if (!t) return 0;
+        directionToCubeFace(d, uv);
+        const size = TILE_TEXELS * (1 << level);
+        const sx = Math.min(TILE_TEXELS, Math.max(0, Math.round(uv.u * size - k.x * TILE_TEXELS)));
+        const sy = Math.min(TILE_TEXELS, Math.max(0, Math.round(uv.v * size - k.y * TILE_TEXELS)));
+        return t.height[(sy + TILE_BORDER) * TILE_STRIDE + sx + TILE_BORDER]!;
+      };
+    };
+    const spots = await findSpots(global, params.radius, sunAzimuth, prepare);
+    for (const k of kinds) {
+      const spot = spots.get(k);
+      if (!spot) {
+        console.log(`spot ${k}: none in this world`);
+        continue;
+      }
+      const lat = Math.asin(spot.point.y) / DEG;
+      const lon = Math.atan2(spot.point.x, spot.point.z) / DEG;
+      console.log(
+        `spot ${k}: ${lat.toFixed(3)}, ${lon.toFixed(3)} facing ${(spot.facing / DEG).toFixed(0)}° at ${spot.height.toFixed(0)} m (${spot.note})`,
+      );
+      views.push({
+        name: `spot-${k}`,
+        dLat: 0,
+        dLon: 0,
+        altitude: 0,
+        tilt: 0,
+        heading: 0,
+        localTime: Number(process.env.SPOT_TIME ?? 15.5),
+        spot,
+      });
+    }
+  }
   for (const v of views) {
     const o = scene.orbit;
     const target = v.target ? targets[v.target] : null;
@@ -580,8 +668,20 @@ it('renders preview views', async () => {
     o.altitude = o.targetAltitude = v.altitude;
     o.tilt = v.tilt;
     o.heading = v.alongRunway && base ? base.heading : v.heading;
-    const station =
-      v.observer && base ? stations.find((x) => x.key === `airbase-${base.id}`) : null;
+    const station = v.spot
+      ? {
+          key: `spot-${v.spot.kind}`,
+          label: v.spot.kind,
+          kind: 'port' as const,
+          side: 'alliance' as const,
+          point: v.spot.point,
+          facing: v.spot.facing,
+          height: v.spot.height,
+          pitch: v.spot.pitch,
+        }
+      : v.observer && base
+        ? stations.find((x) => x.key === `airbase-${base.id}`)
+        : null;
     if (station) {
       // OBS_HEIGHT (m above the ground) and OBS_PITCH (deg) override the station's;
       // OBS_HEADING (deg, or 'sun' to face the sun's azimuth) is applied once the sun is set.
@@ -833,7 +933,10 @@ async function renderStrategic(
     },
     info: { ...world.info, maxHeight },
   };
-  const riverIndex = new RiverIndex(global.finish.rivers);
+  const riverIndex = new RiverIndex(global.finish.rivers, {
+    height: global.height,
+    radius: params.radius,
+  });
   // The relief mesh (decision 77) from the same synthesizer as the terrain.
   const synth = new TileSynthesizer(global.grid, {
     seed: params.seed,

@@ -28,6 +28,11 @@ import type { Rivers } from './rivers';
 
 export const RIVER_INDEX_LEVEL = 4;
 
+function smoothstep(a: number, b: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
+
 export interface RiverSegments {
   count: number;
   /** Per segment: a.xyz, b.xyz (unit directions), widthA, widthB (m). */
@@ -61,11 +66,135 @@ export function chaikin(pts: number[][], passes: number): number[][] {
   return p;
 }
 
+/**
+ * Meanders (decision 126): lowland rivers wind across their floodplains. A
+ * polyline whose bed falls less than `maxGradient` (m/m, physical) and whose
+ * width reaches `minWidth` m is displaced sideways by a meander train of
+ * wavelength `wavelength` × width (varying ±`wavelengthJitter` per bend) and
+ * amplitude `amplitude` × wavelength, with a third harmonic that skews and
+ * fattens the bends. The displacement tapers to zero over a wavelength at both
+ * ends, so confluences and mouths stay where they are.
+ */
+export const MEANDER_TUNING = {
+  maxGradient: 0.0012,
+  fullGradient: 0.0004,
+  minWidth: 25,
+  wavelength: 11,
+  wavelengthJitter: 0.3,
+  amplitude: 0.32,
+  /** Point spacing along a meandering river, in wavelengths. */
+  spacing: 1 / 14,
+};
+
+export interface MeanderOptions {
+  /** Physical height per global cell (the rivers' `cells` index it). */
+  height: Float32Array;
+  radius: number;
+  tuning?: Partial<typeof MEANDER_TUNING>;
+}
+
+/** Deterministic hash of two integers to [0, 1). */
+function hash2(a: number, b: number): number {
+  let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x632be5ab, 0xc2b2ae35);
+  h ^= h >>> 15;
+  h = Math.imul(h, 0x2c1b3c6d);
+  h ^= h >>> 12;
+  return (h >>> 0) / 4294967296;
+}
+
+/** A polyline (unit vectors + width) with meanders added (see MEANDER_TUNING). */
+export function meander(
+  pts: number[][],
+  id: number,
+  radius: number,
+  t: typeof MEANDER_TUNING,
+  strength: number,
+): number[][] {
+  if (pts.length < 2 || strength <= 0) return pts;
+  // Arclength (m) at each point.
+  const s = [0];
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1]!;
+    const b = pts[i]!;
+    const dot = Math.min(1, a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!);
+    s.push(s[i - 1]! + Math.acos(dot) * radius);
+  }
+  const L = s[s.length - 1]!;
+  const meanWidth = pts.reduce((acc, p) => acc + p[3]!, 0) / pts.length;
+  const lambda0 = t.wavelength * Math.max(meanWidth, t.minWidth);
+  if (L < 1.5 * lambda0) return pts;
+  // Resample evenly.
+  const step = lambda0 * t.spacing;
+  const count = Math.max(2, Math.ceil(L / step));
+  const out: number[][] = [];
+  let seg = 0;
+  let phase = hash2(id, 7) * 2 * Math.PI;
+  let bend = 0;
+  let bendLambda = lambda0 * (1 + t.wavelengthJitter * (2 * hash2(id, bend) - 1));
+  let prevS = 0;
+  const p = new Vec3d();
+  const q = new Vec3d();
+  const tangent = new Vec3d();
+  const side = new Vec3d();
+  for (let k = 0; k <= count; k++) {
+    const sk = (k / count) * L;
+    while (seg < pts.length - 2 && s[seg + 1]! < sk) seg++;
+    const a = pts[seg]!;
+    const b = pts[seg + 1]!;
+    const f = Math.min(1, Math.max(0, (sk - s[seg]!) / Math.max(s[seg + 1]! - s[seg]!, 1e-9)));
+    p.set(
+      a[0]! + (b[0]! - a[0]!) * f,
+      a[1]! + (b[1]! - a[1]!) * f,
+      a[2]! + (b[2]! - a[2]!) * f,
+    ).normalize();
+    const w = a[3]! + (b[3]! - a[3]!) * f;
+    // Phase advances by 2π per bend wavelength; each half bend draws a new length.
+    const before = Math.floor(phase / Math.PI);
+    phase += ((sk - prevS) / bendLambda) * 2 * Math.PI;
+    prevS = sk;
+    if (Math.floor(phase / Math.PI) !== before) {
+      bend++;
+      bendLambda = lambda0 * (1 + t.wavelengthJitter * (2 * hash2(id, bend) - 1));
+    }
+    const taper =
+      Math.min(1, sk / lambda0, (L - sk) / lambda0) ** 2 *
+      (3 - 2 * Math.min(1, sk / lambda0, (L - sk) / lambda0));
+    const amp = strength * taper * t.amplitude * bendLambda;
+    const y = amp * (Math.sin(phase) - 0.18 * Math.sin(3 * phase + 0.6));
+    q.set(b[0]! - a[0]!, b[1]! - a[1]!, b[2]! - a[2]!);
+    tangent.copy(q).addScaled(p, -q.dot(p)).normalize();
+    side.copy(p).cross(tangent);
+    const d = p
+      .clone()
+      .addScaled(side, y / radius)
+      .normalize();
+    out.push([d.x, d.y, d.z, w]);
+  }
+  return out;
+}
+
+/**
+ * Deltas (decision 126): the mouths of rivers at least `minWidth` m wide build
+ * a fan of radius `radiusWidths` × width (at most `maxRadius` m) into the sea.
+ */
+export const DELTA_TUNING = {
+  minWidth: 140,
+  radiusWidths: 45,
+  maxRadius: 26_000,
+};
+
+/** Per delta: mouth.xyz, seaward direction.xyz (tangent, unit), width (m), fan radius (m). */
+export const DELTA_FIELDS = 8;
+
 export class RiverIndex {
   readonly segments: RiverSegments;
+  /** River mouths that build deltas, DELTA_FIELDS per record. */
+  readonly deltas: Float64Array;
   private readonly byTile = new Map<string, number[]>();
 
-  constructor(rivers: Rivers) {
+  /** With `meanders`, lowland rivers wind across their floodplains (decision 126). */
+  constructor(rivers: Rivers, meanders?: MeanderOptions) {
+    const mt = { ...MEANDER_TUNING, ...meanders?.tuning };
     const segs: number[] = [];
     for (let k = 0; k < rivers.count; k++) {
       const pts: number[][] = [];
@@ -77,7 +206,25 @@ export class RiverIndex {
           rivers.width[p]!,
         ]);
       }
-      const sm = chaikin(pts, 2);
+      let sm = chaikin(pts, 2);
+      if (meanders && pts.length >= 2) {
+        // Bed gradient over the polyline, from the global grid.
+        const first = rivers.offsets[k]!;
+        const last = rivers.offsets[k + 1]! - 1;
+        const drop = meanders.height[rivers.cells[first]!]! - meanders.height[rivers.cells[last]!]!;
+        let len = 0;
+        for (let i = 1; i < pts.length; i++) {
+          const a = pts[i - 1]!;
+          const b = pts[i]!;
+          len +=
+            Math.acos(Math.min(1, a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!)) * meanders.radius;
+        }
+        const gradient = Math.max(0, drop) / Math.max(len, 1);
+        const strength =
+          (1 - smoothstep(mt.fullGradient, mt.maxGradient, gradient)) *
+          smoothstep(mt.minWidth, 2 * mt.minWidth, Math.max(...pts.map((p) => p[3]!)));
+        if (strength > 0) sm = meander(sm, k, meanders.radius, mt, strength);
+      }
       for (let i = 0; i + 1 < sm.length; i++) {
         const a = sm[i]!;
         const b = sm[i + 1]!;
@@ -85,6 +232,31 @@ export class RiverIndex {
       }
     }
     this.segments = { count: segs.length / FIELDS, data: Float64Array.from(segs) };
+    // Deltas at mouths of wide rivers: the last land point and the sea point after it.
+    const deltas: number[] = [];
+    for (let k = 0; k < rivers.count; k++) {
+      if (rivers.downstream[k] !== -1) continue;
+      const end = rivers.offsets[k + 1]! - 1;
+      if (end - rivers.offsets[k]! < 1) continue;
+      const w = rivers.width[end - 1]!;
+      if (w < DELTA_TUNING.minWidth) continue;
+      const m = new Vec3d(
+        rivers.points[(end - 1) * 3]!,
+        rivers.points[(end - 1) * 3 + 1]!,
+        rivers.points[(end - 1) * 3 + 2]!,
+      );
+      // Seaward: from a few points upstream to the sea point, in the tangent plane.
+      const up = Math.max(rivers.offsets[k]!, end - 4);
+      const dir = new Vec3d(
+        rivers.points[end * 3]! - rivers.points[up * 3]!,
+        rivers.points[end * 3 + 1]! - rivers.points[up * 3 + 1]!,
+        rivers.points[end * 3 + 2]! - rivers.points[up * 3 + 2]!,
+      );
+      dir.addScaled(m, -dir.dot(m)).normalize();
+      const r = Math.min(DELTA_TUNING.maxRadius, DELTA_TUNING.radiusWidths * w);
+      deltas.push(m.x, m.y, m.z, dir.x, dir.y, dir.z, w, r);
+    }
+    this.deltas = Float64Array.from(deltas);
     const d = new Vec3d();
     for (let s = 0; s < this.segments.count; s++) {
       const keys = new Set<string>();
@@ -98,6 +270,22 @@ export class RiverIndex {
         list.push(s);
       }
     }
+  }
+
+  /** Deltas whose fan may reach tile `k` (with its border), by record index. */
+  deltasForTile(k: TileKey, radius: number): number[] {
+    const c = tileSampleDirection(k, TILE_TEXELS / 2, TILE_TEXELS / 2);
+    const corner = tileSampleDirection(k, -2, -2);
+    const capAngle = Math.acos(Math.min(1, c.dot(corner)));
+    const out: number[] = [];
+    const n = this.deltas.length / DELTA_FIELDS;
+    for (let i = 0; i < n; i++) {
+      const o = i * DELTA_FIELDS;
+      const dot = c.x * this.deltas[o]! + c.y * this.deltas[o + 1]! + c.z * this.deltas[o + 2]!;
+      const reach = (1.6 * this.deltas[o + 7]!) / radius;
+      if (Math.acos(Math.min(1, dot)) <= capAngle + reach) out.push(i);
+    }
+    return out;
   }
 
   /**

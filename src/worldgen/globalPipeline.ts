@@ -145,6 +145,7 @@ function releaseUnused(grid: GlobalGrid): void {
     'seaLevelTemperature',
     'temperatureRange',
     'valleyFloor',
+    'glacier',
     'flow',
     'receiver',
   ]) {

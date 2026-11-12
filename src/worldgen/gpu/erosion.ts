@@ -129,6 +129,33 @@ export const LANDFORM = {
   peakCompression: 0.4,
 };
 
+/**
+ * Glacial landforms (decision 126), carved into the amplified surface after the
+ * breach: ground an ice age would have covered (Earth-like annual mean below
+ * `iceTemperature` °C, full by `iceFull`), spread `iceSpread` cells downhill and
+ * around as valley glaciers, turns valleys into troughs and deepens their floors.
+ *
+ * - **Troughs.** Within `troughRadius` cells, x = (h − floor) / (top − floor) is
+ *   remapped to x^`troughPower`: floors widen and flatten, walls steepen toward
+ *   the shoulders (a U-shaped cross section instead of a V).
+ * - **Overdeepening.** Valley floors (x below `floorShare`) with drainage area
+ *   above `deepenArea` km²·m/yr sink by up to `deepen` physical m, scaled by the ice
+ *   and by the drainage. Where the ice thins toward its end the cut ends, so the
+ *   floor rises again downstream: long lakes behind the old terminus (Lake Como,
+ *   the Swedish mountain lakes). Drainage, lakes and rivers come from the CPU
+ *   pass afterwards, as always.
+ */
+export const GLACIAL = {
+  iceTemperature: 3,
+  iceFull: -2,
+  iceSpread: 12,
+  troughRadius: 3,
+  troughPower: 1.8,
+  floorShare: 0.3,
+  deepen: 350,
+  deepenArea: 200,
+};
+
 const f = (x: number) => (Number.isInteger(x) ? `${x}.0` : String(x));
 const RCV_MASK = 0x0fffffff;
 
@@ -139,6 +166,8 @@ export interface ErosionOptions {
   tuning?: Partial<ErosionTuning>;
   /** Landform relief settings (decision 121); gain 1 leaves the eroded relief as it is. */
   landform?: Partial<typeof LANDFORM>;
+  /** Glacial landform settings (decision 126); deepen 0 and troughPower 1 turn them off. */
+  glacial?: Partial<typeof GLACIAL>;
   onProgress?: (fraction: number) => void;
 }
 
@@ -146,6 +175,7 @@ export interface ErosionOptions {
 export async function runErosion(grid: GlobalGrid, opts: ErosionOptions): Promise<void> {
   const t = { ...EROSION_TUNING, ...opts.tuning };
   const lf = { ...LANDFORM, ...opts.landform };
+  const gl = { ...GLACIAL, ...opts.glacial };
   const gpu = grid.gpu;
   const n = grid.n;
   if (CUBE_FACE_COUNT * n * n > RCV_MASK) throw new RangeError(`Grid ${n} too large`);
@@ -241,6 +271,55 @@ ${main(`  let hc = h[id];
 ${main(`  var p = hA[id] * RELIEF;
   if (p > ${f(lf.peakSoftLimit)}) { p = ${f(lf.peakSoftLimit)} + (p - ${f(lf.peakSoftLimit)}) * ${f(lf.peakCompression)}; }
   hPhys[id] = p;`)}`);
+  // Glacial landforms (decision 126). Ice from the Earth-like temperature of the
+  // amplified surface (reference m) over the valley floor (physical m).
+  const iceSource = gpu.kernel(`${head}
+@group(0) @binding(0) var<storage, read> hA: array<f32>;
+@group(0) @binding(1) var<storage, read> floorPhys: array<f32>;
+@group(0) @binding(2) var<storage, read> seaT: array<f32>;
+@group(0) @binding(3) var<storage, read_write> ice: array<f32>;
+${main(`  let h = hA[id] * RELIEF;
+  let fl = floorPhys[id];
+  let earth = min(max(h, 0.0), fl) / RELIEF + max(h - fl, 0.0);
+  let t = seaT[id] - 0.0065 * earth;
+  ice[id] = select(0.0, smoothstep(${f(gl.iceTemperature)}, ${f(gl.iceFull)}, t), hA[id] > 0.0);`)}`);
+  const iceSpread = gpu.kernel(`${head}
+@group(0) @binding(0) var<storage, read> vIn: array<f32>;
+@group(0) @binding(1) var<storage, read_write> vOut: array<f32>;
+${main(`  var m = vIn[id];
+  for (var k = 0; k < 8; k++) {
+    let nb = neighbor(c, k);
+    if (nb >= 0) { m = max(m, 0.93 * vIn[nb]); }
+  }
+  vOut[id] = m;`)}`);
+  const localMax = gpu.kernel(`${head}
+@group(0) @binding(0) var<storage, read> vIn: array<f32>;
+@group(0) @binding(1) var<storage, read_write> vOut: array<f32>;
+${main(`  var m = vIn[id];
+  for (var k = 0; k < 8; k++) {
+    let nb = neighbor(c, k);
+    if (nb >= 0) { m = max(m, vIn[nb]); }
+  }
+  vOut[id] = m;`)}`);
+  const glaciate = gpu.kernel(`${head}
+@group(0) @binding(0) var<storage, read> hA: array<f32>;
+@group(0) @binding(1) var<storage, read> lo: array<f32>;
+@group(0) @binding(2) var<storage, read> hi: array<f32>;
+@group(0) @binding(3) var<storage, read> ice: array<f32>;
+@group(0) @binding(4) var<storage, read> area: array<f32>;
+@group(0) @binding(5) var<storage, read_write> hOut: array<f32>;
+${main(`  let h = hA[id];
+  let g = ice[id];
+  if (h <= 0.0 || g <= 0.0) { hOut[id] = h; return; }
+  let fl = min(lo[id], h);
+  let span = max(hi[id] - fl, 1e-3);
+  let x = clamp((h - fl) / span, 0.0, 1.0);
+  var hn = mix(h, fl + span * pow(x, ${f(gl.troughPower)}), g);
+  let valley = 1.0 - smoothstep(0.0, ${f(gl.floorShare)}, x);
+  let drain = smoothstep(${f(gl.deepenArea)}, ${f(4 * gl.deepenArea)}, area[id]);
+  hn -= ${f(gl.deepen)} / RELIEF * g * g * valley * drain;
+  hOut[id] = max(hn, ${f(t.minLand)});`)}`);
+
   // The valley floor for climate (decision 122): physical m on land, 0 at sea.
   const writeFloor = gpu.kernel(`${head}
 @group(0) @binding(0) var<storage, read> h: array<f32>;
@@ -452,6 +531,51 @@ ${main(`  let hc = hIn[id];
     );
     grid.swap('erosion.w', 'erosion.w2');
     if (p % 32 === 31) await gpu.finish();
+  }
+  // Glacial landforms (decision 126) on the amplified surface in erosion.w.
+  if ((gl.troughPower !== 1 || gl.deepen > 0) && grid.has('seaLevelTemperature')) {
+    const ice = grid.map('glacier');
+    gpu.dispatchLinear(
+      iceSource,
+      [grid.get('erosion.w'), grid.get('valleyFloor'), grid.get('seaLevelTemperature'), ice],
+      count,
+    );
+    for (let p = 0; p < gl.iceSpread; p++) {
+      gpu.dispatchLinear(iceSpread, [grid.get('glacier'), grid.get('erosion.w2')], count);
+      grid.swap('glacier', 'erosion.w2');
+    }
+    for (let p = 0; p < 2; p++) {
+      gpu.dispatchLinear(floorBlur, [grid.get('glacier'), grid.get('erosion.w2')], count);
+      grid.swap('glacier', 'erosion.w2');
+    }
+    // Local floor (erosion.h0) and top (erosion.h2) within the trough radius, smoothed.
+    gpu.copy(grid.get('erosion.w'), grid.get('erosion.h0'));
+    gpu.copy(grid.get('erosion.w'), grid.get('erosion.h2'));
+    for (let p = 0; p < gl.troughRadius; p++) {
+      gpu.dispatchLinear(floorMin, [grid.get('erosion.h0'), grid.get('erosion.w2')], count);
+      grid.swap('erosion.h0', 'erosion.w2');
+      gpu.dispatchLinear(localMax, [grid.get('erosion.h2'), grid.get('erosion.w2')], count);
+      grid.swap('erosion.h2', 'erosion.w2');
+    }
+    for (let p = 0; p < gl.troughRadius; p++) {
+      gpu.dispatchLinear(floorBlur, [grid.get('erosion.h0'), grid.get('erosion.w2')], count);
+      grid.swap('erosion.h0', 'erosion.w2');
+      gpu.dispatchLinear(floorBlur, [grid.get('erosion.h2'), grid.get('erosion.w2')], count);
+      grid.swap('erosion.h2', 'erosion.w2');
+    }
+    gpu.dispatchLinear(
+      glaciate,
+      [
+        grid.get('erosion.w'),
+        grid.get('erosion.h0'),
+        grid.get('erosion.h2'),
+        grid.get('glacier'),
+        grid.get('flow'),
+        grid.get('erosion.w2'),
+      ],
+      count,
+    );
+    grid.swap('erosion.w', 'erosion.w2');
   }
   gpu.dispatchLinear(toPhys, [grid.get('erosion.w'), hPhys], count);
   await gpu.finish();

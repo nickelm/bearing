@@ -1,4 +1,4 @@
-/** Rock and snow by face (decision 125): LandShading's cover functions as a compute kernel on Dawn. */
+/** Rock and snow by face (decision 125; snow slope limit, decision 126): LandShading's cover functions as a compute kernel on Dawn. */
 import { describe, expect, it } from 'vitest';
 import { Fn, instanceIndex, instancedArray, vec4 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
@@ -55,7 +55,7 @@ describe.skipIf(!gpu)('rock and snow by face (TSL on Dawn)', () => {
       // Smooth: the blends of before (decision 43).
       expect(rockSmooth).toBeCloseTo(smoothstep(0.35, 0.7, steep! + noise! * 0.15), 5);
       const snow =
-        smoothstep(0, -5, t!) * (1 - smoothstep(0.9, 1.5, steep!)) * smoothstep(0.03, 0.2, 0.5);
+        smoothstep(0, -5, t!) * (1 - smoothstep(0.55, 1.0, steep!)) * smoothstep(0.03, 0.2, 0.5);
       expect(snowSmooth).toBeCloseTo(snow, 5);
       // A face is rock where the smooth cover is past about half, snow likewise.
       if (jitter === 0.5 && noise === 0) {
