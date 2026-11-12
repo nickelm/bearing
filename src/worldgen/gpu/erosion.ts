@@ -110,7 +110,7 @@ export type ErosionTuning = typeof EROSION_TUNING;
  * from landmasses (ranges, plateaus, continents).
  */
 export const LANDFORM = {
-  gain: 5,
+  gain: 12,
   radius: 20_000,
   /**
    * Blur passes on the relief above the floor before the gain: the stepwise
@@ -126,6 +126,13 @@ export const LANDFORM = {
    */
   breachPasses: 128,
   breachDrop: 0.05,
+  /**
+   * Physical height (m) above which land rises at `peakCompression` of the
+   * rate, so the tallest massifs end near Earth's highest peaks (about 8 km)
+   * rather than 11 km. Monotone, so drainage is unchanged.
+   */
+  peakSoftLimit: 6500,
+  peakCompression: 0.4,
 };
 
 const f = (x: number) => (Number.isInteger(x) ? `${x}.0` : String(x));
@@ -237,13 +244,15 @@ ${main(`  let hc = h[id];
   const toPhys = gpu.kernel(`${head}
 @group(0) @binding(0) var<storage, read> hA: array<f32>;
 @group(0) @binding(1) var<storage, read_write> hPhys: array<f32>;
-${main('  hPhys[id] = hA[id] * RELIEF;')}`);
+${main(`  var p = hA[id] * RELIEF;
+  if (p > ${f(lf.peakSoftLimit)}) { p = ${f(lf.peakSoftLimit)} + (p - ${f(lf.peakSoftLimit)}) * ${f(lf.peakCompression)}; }
+  hPhys[id] = p;`)}`);
   const climateCorrection = gpu.kernel(`${head}
 @group(0) @binding(0) var<storage, read> h: array<f32>;
-@group(0) @binding(1) var<storage, read> hA: array<f32>;
+@group(0) @binding(1) var<storage, read> hPhys: array<f32>;
 @group(0) @binding(2) var<storage, read_write> seaLevelT: array<f32>;
 @group(0) @binding(3) var<storage, read_write> excess: array<f32>;
-${main(`  let e = select(0.0, (hA[id] - h[id]) * (1.0 - RELIEF), h[id] > 0.0);
+${main(`  let e = select(0.0, max(hPhys[id] / RELIEF - h[id], 0.0) * (1.0 - RELIEF), h[id] > 0.0);
   seaLevelT[id] += ${f(LAPSE_RATE)} * e;
   excess[id] = e;`)}`);
 
@@ -448,12 +457,7 @@ ${main(`  let hc = hIn[id];
   if (grid.has('seaLevelTemperature')) {
     gpu.dispatchLinear(
       climateCorrection,
-      [
-        grid.get('erosion.h'),
-        grid.get('erosion.w'),
-        grid.get('seaLevelTemperature'),
-        grid.map('landformExcess'),
-      ],
+      [grid.get('erosion.h'), hPhys, grid.get('seaLevelTemperature'), grid.map('landformExcess')],
       count,
     );
   }

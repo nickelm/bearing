@@ -1867,3 +1867,16 @@ The engineering calls made while adopting it:
 - **True scale.** The simulation view's exaggeration defaults to 1 (GUI → View → Height exaggeration, still 1–40), the decision-14 relief it was exaggerating to show having been the problem. At 8 km facing the sun this also drew 13 tiles instead of 107 (decision 120's measurement). The strategic view keeps its own 4×.
 
 **Reason:** The owner wants erosion to smooth hills and fill valleys, bigger geographical features and more height difference in the simulation view, and approved this proposal: planet-scaled landmasses, Earth-scaled landforms. Applying the gain to the eroded surface, rather than adding landform noise before erosion, keeps the drainage structure erosion produces and leaves the coast and the campaign untouched.
+
+### 122. Landform gain 12 for dramatic vistas; a soft limit near Earth's highest peaks
+
+**Date:** 2026-11-12
+**Decision:** The landform gain of decision 121 goes from 5 to 12, and above 6.5 km physical land rises at 40% of the rate (`LANDFORM.peakSoftLimit`, `peakCompression`), so the tallest massifs end near 8 km. The simulation view stays at true scale (1×) by default: the drama is in the world's heights, not in a display exaggeration.
+
+- **The owner's review.** At 1× after decision 121 the terrain looked flat and uninteresting; with the exaggeration slider at 10–20× it looked much better. The owner wants Earth-scale variation even though the world is smaller, and dramatic vistas.
+- **Why not the slider.** Exaggeration is display only (decision 31). From P1, aircraft, terrain following and line of sight use physical heights; a displayed mountain the physics does not know about would be a bug. So the physical relief should be what the owner liked, and 1× should show it.
+- **Measured** at the owner's spot (9.853, −48.200, seed 1983) with gain 12, before the soft limit: across 300 km the RMS height difference is 105 m at 1 km, 247 m at 3 km and 565 m at 10 km (233 m at gain 5, 52 m before decision 121; the owner's 10× of the old terrain was about 520 m); across 40 km the ground spans 500–2,056 m. Planet heights reached 10.8 km, hence the soft limit. Lakes cover 0.38% of the land, alpine terrain 14.5% and ice 7.8%: taller mountains are colder.
+- **Climate.** The correction now reads the final physical height (after the soft limit), so the Earth-like elevation is the one drawn.
+- **The strategic map** keeps its own 4× for now; its relief at landform scale is about 2.4 times taller than at gain 5. Owner check in TODO.
+
+**Reason:** The owner's direction: Earth-scale variation and dramatic vistas at true scale. A soft limit rather than a hard cap keeps summits shaped and drainage unchanged.
