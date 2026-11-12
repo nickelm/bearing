@@ -154,10 +154,10 @@ export const TILE_SYNTH_TUNING = {
   greenMin: 250,
   greenMax: 2300,
   skerryShelf: 0.12,
-  skerryHeight: 30,
+  skerryHeight: 44,
   skerryWavelength: 900,
   /** Depth (m) of the skerry shelf where the land proximity reaches 0. */
-  skerrySeaDepth: 70,
+  skerrySeaDepth: 50,
 };
 
 /** Deepest level with baked tiles (about 48 m samples at R = 1,000 km). */

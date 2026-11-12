@@ -229,9 +229,19 @@ export async function findSpots(
   const receiver = g.finish.drainage.receiver;
   const d = new Vec3d();
   const best = new Map<SpotKind, { score: number; cell: number }>();
+  // Skerry candidates: the archipelago shows only in the tiles, so the best few
+  // coasts by the global scan are judged on tile heights below.
+  const skerryCands: { score: number; cell: number }[] = [];
   const offer = (k: SpotKind, score: number, cell: number) => {
     const b = best.get(k);
     if (!b || score > b.score) best.set(k, { score, cell });
+    if (k === 'skerries' && score > 0) {
+      skerryCands.push({ score, cell });
+      if (skerryCands.length > 400) {
+        skerryCands.sort((x, y) => y.score - x.score);
+        skerryCands.length = 200;
+      }
+    }
   };
   const stride = 3;
   for (let face = 0; face < 6; face++) {
@@ -285,7 +295,9 @@ export async function findSpots(
             if (s.height(s.offset(d, (k * Math.PI) / 4, 4000)) <= -20) sea++;
           if (sea >= 2 && sea <= 5) {
             const cold = COLD.has(b) ? 1 : 0.6;
-            offer('skerries', cold * (300 - s.relief(d, [3000, 6000])), c);
+            // Summer light: the campaign starts in the northern summer (calendar.ts).
+            const summer = d.y > 0 ? 1 : 0.3;
+            offer('skerries', summer * cold * (400 - Math.min(380, s.relief(d, [3000, 6000]))), c);
           }
         }
         // Falls: a steep reach of a sizable river that crosses a stratum boundary
@@ -382,16 +394,62 @@ export async function findSpots(
         break;
       }
       case 'skerries': {
-        // March toward the sea to the tile shoreline, then look out over it.
-        const sea = s.mostRelief(p, 2000, 8000, -1);
-        let at = p.clone();
-        for (let m = 0; m < 80 && s.height(at) > 4; m++) at = s.offset(at, sea, 250);
+        // Over the water where the coastline is most broken: the most land–sea changes
+        // around rings 0.8–3 km out, in the tiles.
+        const q = new Vec3d();
+        const maze = (c: Readonly<Vec3d>) => {
+          if (s.height(c) > 0) return -Infinity;
+          let changes = 0;
+          for (const r of [800, 1600, 3000]) {
+            let prev = s.height(s.offset(c, 0, r, q)) > 0;
+            for (let k = 1; k <= 24; k++) {
+              const land = s.height(s.offset(c, (k * Math.PI) / 12, r, q)) > 0;
+              if (land !== prev) changes++;
+              prev = land;
+            }
+          }
+          return changes;
+        };
+        // The most broken coast among the best candidates, at least 150 km apart.
+        skerryCands.sort((x, y) => y.score - x.score);
+        const picks: Vec3d[] = [];
+        for (const cand of skerryCands) {
+          const cp = cellCenterDirection(n, cand.cell, new Vec3d());
+          if (picks.every((q2) => cp.dot(q2) < Math.cos(150_000 / radius))) picks.push(cp);
+          if (picks.length >= 8) break;
+        }
+        let at = s.search(p, 20000, 1000, maze);
+        let atScore = maze(at);
+        if (prepare) {
+          for (const cp of picks) {
+            const cs = new WorldSampler(g, radius, await prepare(cp, 22_000));
+            const cmaze = (c: Readonly<Vec3d>) => {
+              if (cs.height(c) > 0) return -Infinity;
+              let changes = 0;
+              for (const r of [800, 1600, 3000]) {
+                let prev = cs.height(cs.offset(c, 0, r, q)) > 0;
+                for (let k = 1; k <= 24; k++) {
+                  const land = cs.height(cs.offset(c, (k * Math.PI) / 12, r, q)) > 0;
+                  if (land !== prev) changes++;
+                  prev = land;
+                }
+              }
+              return changes;
+            };
+            const ca = cs.search(cp, 18000, 1500, cmaze);
+            const sc = cmaze(ca);
+            if (sc > atScore) {
+              atScore = sc;
+              at = ca;
+            }
+          }
+        }
         spot = {
           kind,
-          point: s.offset(at, sea + Math.PI, 400),
-          facing: sea,
-          height: 90,
-          pitch: -6 * DEG,
+          point: at,
+          facing: lit(at) ?? s.mostRelief(at, 1000, 5000, -1),
+          height: 150,
+          pitch: -9 * DEG,
           note,
         };
         break;
