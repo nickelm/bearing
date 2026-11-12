@@ -265,9 +265,13 @@ Civilian geography (settlements, roads, bridges) joins the strategic graph befor
   - [ ] Tune across seeds: seed 1983 numbers 33 motorway and 86 trunk chains, many short pieces between junctions; consider merging through junctions across classes
 - [x] Railways linking major cities, ports and industry, with rail yards and rail bridges as targets (decision 103)
 - [x] Capitals: each side's largest settlement (decision 103)
-- [ ] Map: urban extent fills and oversized low-poly city glyphs by class (village, town, city, capital with a star)
-- [ ] Map: road ribbons with casing by class, bridge marks, railway lines with ticks
-- [ ] Map: symbols for airbases (runway glyph), ports (pier glyph), factories, refineries, depots and rail yards
+- [x] Map: urban extent fills and oversized low-poly city glyphs by class (village, town, city, capital with a star) (decision 104)
+- [x] Map: road ribbons with casing by class, bridge marks, railway lines with ticks (decision 104)
+- [x] Map: symbols for airbases (runway glyph), ports (pier glyph), factories, refineries, depots and rail yards (decision 104)
+- [x] Labels: route numbers and pass and coast road names along roads; capitals (decision 104)
+- [x] Preview views `cities` (700 km) and `capital` (150 km) on the Alliance capital
+- [ ] Browser check: roads, railways, symbols and building glyphs read well and stay near 60 fps at the floor; symbol and glyph sizes; whether secondary roads crowd the Region band near 400 km
+- [ ] Acceptance checks (Part II) for S4: re-run check 3 with the owner (capitals now exist); checks 1, 2, 4 and 5 on the new views
 - [ ] Checkpoint 6: owner review of towns, roads, airbases, railways and their symbols on the map
 
 ## Simulation core track

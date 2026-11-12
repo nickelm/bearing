@@ -4,7 +4,9 @@
  *
  * - **Water** in blue italic serif (EB Garamond), letter-spaced for oceans and seas.
  * - **Landforms** in brown, letter-spaced sans capitals (Fira Sans).
- * - **Settlements** in dark sans with a light halo, sized by class.
+ * - **Settlements** in dark sans with a light halo, sized by class; capitals in
+ *   spaced capitals (decision 104).
+ * - **Roads:** route numbers and road names in small brown sans (decision 104).
  * - **Theaters** in near-black spaced capitals; **invasion corridors** in the
  *   attacker's faction color (decision 101).
  *
@@ -23,12 +25,14 @@ export type LabelStyleId =
   | 'landformSmall'
   | 'peak'
   | 'island'
+  | 'capital'
   | 'city'
   | 'town'
   | 'village'
   | 'theater'
   | 'corridorAlliance'
-  | 'corridorPact';
+  | 'corridorPact'
+  | 'road';
 
 export interface LabelStyle {
   font: FontId;
@@ -142,6 +146,16 @@ export const LABEL_STYLES: Record<LabelStyleId, LabelStyle> = {
     haloWidth: 1.8,
     haloOpacity: 0.7,
   },
+  capital: {
+    font: 'sansBold',
+    size: 15.5,
+    tracking: 0.06,
+    uppercase: true,
+    color: SETTLEMENT,
+    halo: HALO,
+    haloWidth: 2.2,
+    haloOpacity: 0.9,
+  },
   city: {
     font: 'sansBold',
     size: 14,
@@ -200,6 +214,16 @@ export const LABEL_STYLES: Record<LabelStyleId, LabelStyle> = {
     color: 0xd0532b,
     halo: HALO,
     haloWidth: 2,
+    haloOpacity: 0.85,
+  },
+  road: {
+    font: 'sans',
+    size: 10.5,
+    tracking: 0.04,
+    uppercase: false,
+    color: 0x5a3e2b,
+    halo: HALO,
+    haloWidth: 1.6,
     haloOpacity: 0.85,
   },
 };

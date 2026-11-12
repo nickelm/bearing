@@ -16,11 +16,13 @@
  * | hills, wetland | – | – | all |
  * | river | – | ≥ 0.5 | all |
  * | peak (with its height) | – | ≥ 0.58 | all |
+ * | capital (each side's, decision 104) | – | all | all |
  * | city | – | all | all |
  * | town | – | – | all |
  * | village | – | – | ≥ 10,000 people |
  * | theater | all | – | – |
  * | corridor (in the attacker's color) | – | all | all |
+ * | road (route numbers, pass and coast road names; decision 104) | – | – | all |
  */
 import type { Cast } from '../../../campaign/cast';
 import {
@@ -29,9 +31,15 @@ import {
   featurePolyline,
   labelText,
   polylinePoint,
+  RoadClass,
+  RouteKind,
+  roadPolyline,
   settlementKind,
 } from '../../../worldgen/strategic/graph';
 import type { Point, StrategicGraph } from '../../../worldgen/strategic/graph';
+import type { Infrastructure } from '../../../worldgen/strategic/infrastructure';
+import { routeLabel } from '../../../worldgen/strategic/routes';
+import { smoothPolyline } from '../infra/infraModel';
 import type { ZoomBand } from '../zoomBands';
 import type { MilitaryOverlays } from '../overlays/militaryModel';
 import type { LabelStyleId } from './labelStyles';
@@ -77,11 +85,13 @@ export const BAND_TABLE: Record<string, Row> = {
   wetland: { region: 0 },
   river: { theater: 0.5, region: 0 },
   peak: { theater: 0.58, region: 0 },
+  capital: { theater: 0, region: 0 },
   city: { theater: 0, region: 0 },
   town: { region: 0 },
   village: { region: 0 },
   theater: { globe: 0 },
   corridor: { theater: 0, region: 0 },
+  road: { region: 0 },
 };
 /** Gap (px) between a front or lane theater's name and the line it is anchored on. */
 export const THEATER_LINE_GAP = 12;
@@ -155,6 +165,7 @@ export function buildLabels(
   cast: Cast | null,
   heightAt: (p: Readonly<Point>) => number,
   military: MilitaryOverlays | null = null,
+  infra: Infrastructure | null = null,
 ): MapLabel[] {
   const out: MapLabel[] = [];
   const f = graph.features;
@@ -179,12 +190,15 @@ export function buildLabels(
     });
   }
   const s = graph.settlements;
+  const capitals = new Set(infra ? [infra.capitals.alliance, infra.capitals.pact] : []);
   for (let i = 0; i < s.cells.length; i++) {
     const pop = s.population[i]!;
-    const cls = settlementKind(pop);
+    const cls = capitals.has(i) ? 'capital' : settlementKind(pop);
     if (cls === 'village' && pop < VILLAGE_LABEL_MIN) continue;
-    // Importance from population: 0.3 for a 10,000-person village to 0.95 for a million.
-    const importance = Math.min(0.95, 0.3 + 0.13 * Math.log2(Math.max(1, pop / 10_000)));
+    // Importance from population: 0.3 for a 10,000-person village to 0.95 for a million;
+    // capitals above every other settlement.
+    const importance =
+      cls === 'capital' ? 0.99 : Math.min(0.95, 0.3 + 0.13 * Math.log2(Math.max(1, pop / 10_000)));
     const bands = bandsFor(cls, importance);
     if (bands.length === 0) continue;
     const anchor: Point = [s.points[i * 3]!, s.points[i * 3 + 1]!, s.points[i * 3 + 2]!];
@@ -197,8 +211,32 @@ export function buildLabels(
       anchor,
       height: Math.max(0, heightAt(anchor)),
       path: null,
-      gap: cls === 'city' ? 5 : 4,
+      // Beside the settlement glyph (and a capital's star).
+      gap: SETTLEMENT_GAP[cls],
       bands,
+    });
+  }
+  // Route numbers and the names of pass and coast roads, along the road.
+  const rt = graph.routes;
+  for (let i = 0; i < rt.count; i++) {
+    const text = routeLabel(rt, i);
+    if (!text) continue;
+    const path = routePath(graph, i);
+    if (path.length < 6) continue;
+    const mid = polylinePoint(path, Math.floor(path.length / 6));
+    const named = rt.kind[i] !== RouteKind.Numbered;
+    out.push({
+      id: out.length,
+      text,
+      style: 'road',
+      importance: named ? 0.62 : rt.roadClass[i] === RoadClass.Motorway ? 0.55 : 0.45,
+      placement: 'line',
+      anchor: mid,
+      height: Math.max(0, heightAt(mid)),
+      path,
+      gap: 0,
+      bands: bandsFor('road', 1),
+      layer: 'roads',
     });
   }
   for (const t of cast?.theaters ?? []) {
@@ -237,6 +275,46 @@ export function buildLabels(
     });
   }
   return out;
+}
+
+/** Gap (px) between a settlement's anchor and its label, clearing its glyph. */
+const SETTLEMENT_GAP: Record<string, number> = { capital: 12, city: 9, town: 6, village: 4 };
+
+/** A route's polylines joined end to end into one smoothed path. */
+function routePath(graph: StrategicGraph, i: number): Float64Array {
+  const rt = graph.routes;
+  const r = graph.roads;
+  const pts: number[] = [];
+  let lastCell = -1;
+  for (let o = rt.offsets[i]!; o < rt.offsets[i + 1]!; o++) {
+    const k = rt.roads[o]!;
+    const first = r.cells[r.offsets[k]!]!;
+    const line = roadPolyline(r, k);
+    const n = line.length / 3;
+    // Orient each polyline to continue from the previous one.
+    const forward = lastCell < 0 ? !isEndOf(graph, rt, i, o, first) : first === lastCell;
+    for (let p = 0; p < n; p++) {
+      const q = forward ? p : n - 1 - p;
+      if (pts.length > 0 && p === 0) continue;
+      pts.push(line[q * 3]!, line[q * 3 + 1]!, line[q * 3 + 2]!);
+    }
+    lastCell = forward ? r.cells[r.offsets[k + 1]! - 1]! : first;
+  }
+  return smoothPolyline(Float64Array.from(pts));
+}
+
+/** True if `cell` (an end of the route's polyline at `o`) joins the next polyline. */
+function isEndOf(
+  graph: StrategicGraph,
+  rt: StrategicGraph['routes'],
+  i: number,
+  o: number,
+  cell: number,
+): boolean {
+  if (o + 1 >= rt.offsets[i + 1]!) return false;
+  const r = graph.roads;
+  const next = rt.roads[o + 1]!;
+  return cell === r.cells[r.offsets[next]!] || cell === r.cells[r.offsets[next + 1]! - 1];
 }
 
 function theaterAnchor(graph: StrategicGraph, t: Cast['theaters'][number]): Point | null {

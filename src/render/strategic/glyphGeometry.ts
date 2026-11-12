@@ -139,3 +139,143 @@ export function duneModel(): GlyphModel {
   }
   return m.build();
 }
+
+// ---- Settlement glyphs (decision 104) ----
+
+/**
+ * A building: a box of half sizes (hw, hd) and wall height h at (cx, cy), turned by
+ * `rot` (rad), with a gable roof `roof` high along its length, or flat when 0. Walls
+ * are part 0; roofs (and flat tops) part 1, the accent color.
+ */
+function building(
+  m: ModelBuilder,
+  cx: number,
+  cy: number,
+  hw: number,
+  hd: number,
+  h: number,
+  roof: number,
+  rot = 0,
+): void {
+  const c = Math.cos(rot);
+  const s = Math.sin(rot);
+  const at = (x: number, y: number, z: number) => [cx + x * c - y * s, cy + x * s + y * c, z];
+  const b = [at(-hw, -hd, 0), at(hw, -hd, 0), at(hw, hd, 0), at(-hw, hd, 0)];
+  const t = [at(-hw, -hd, h), at(hw, -hd, h), at(hw, hd, h), at(-hw, hd, h)];
+  for (let i = 0; i < 4; i++) {
+    const j = (i + 1) % 4;
+    m.tri(b[i]!, b[j]!, t[j]!);
+    m.tri(b[i]!, t[j]!, t[i]!);
+  }
+  if (roof <= 0) {
+    m.tri(t[0]!, t[1]!, t[2]!, 1);
+    m.tri(t[0]!, t[2]!, t[3]!, 1);
+    return;
+  }
+  const r0 = at(-hw, 0, h + roof);
+  const r1 = at(hw, 0, h + roof);
+  m.tri(t[0]!, t[1]!, r1, 1);
+  m.tri(t[0]!, r1, r0, 1);
+  m.tri(t[2]!, t[3]!, r0, 1);
+  m.tri(t[2]!, r0, r1, 1);
+  m.tri(t[3]!, t[0]!, r0);
+  m.tri(t[1]!, t[2]!, r1);
+}
+
+/** A tower with a pyramid roof (a church or a landmark). */
+function tower(
+  m: ModelBuilder,
+  cx: number,
+  cy: number,
+  hw: number,
+  h: number,
+  spire: number,
+): void {
+  building(m, cx, cy, hw, hw, h, 0);
+  const apex = [cx, cy, h + spire];
+  const t = [
+    [cx - hw, cy - hw, h],
+    [cx + hw, cy - hw, h],
+    [cx + hw, cy + hw, h],
+    [cx - hw, cy + hw, h],
+  ];
+  for (let i = 0; i < 4; i++) m.tri(t[i]!, t[(i + 1) % 4]!, apex, 1);
+}
+
+/** A faceted dome on an octagonal drum (a capital's seat of government). */
+function dome(m: ModelBuilder, cx: number, cy: number, r: number, h: number): void {
+  const n = 8;
+  const ring = (rr: number, z: number, off = 0) =>
+    Array.from({ length: n }, (_, i) => {
+      const a = ((i + off) / n) * Math.PI * 2;
+      return [cx + rr * Math.cos(a), cy + rr * Math.sin(a), z];
+    });
+  const base = ring(r, 0);
+  const top = ring(r, h);
+  const mid = ring(r * 0.72, h + r * 0.55, 0.5);
+  const apex = [cx, cy, h + r * 0.95];
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    m.tri(base[i]!, base[j]!, top[j]!);
+    m.tri(base[i]!, top[j]!, top[i]!);
+    m.tri(top[i]!, top[j]!, mid[i]!, 1);
+    m.tri(top[j]!, mid[j]!, mid[i]!, 1);
+    m.tri(mid[i]!, mid[j]!, apex, 1);
+  }
+}
+
+/** A village: three houses with gable roofs. */
+export function villageModel(): GlyphModel {
+  const m = new ModelBuilder();
+  building(m, -0.2, -0.12, 0.17, 0.11, 0.16, 0.12, 0.3);
+  building(m, 0.2, -0.04, 0.15, 0.1, 0.15, 0.11, -0.4);
+  building(m, -0.02, 0.24, 0.14, 0.1, 0.14, 0.1, 1.2);
+  return m.build();
+}
+
+/** A town: houses round a square, a hall with a flat roof and a church tower. */
+export function townModel(): GlyphModel {
+  const m = new ModelBuilder();
+  const houses: [number, number, number][] = [
+    [-0.32, -0.22, 0.2],
+    [0.3, -0.26, -0.3],
+    [0.36, 0.14, 1.4],
+    [-0.36, 0.18, 1.7],
+    [-0.08, -0.36, 0.05],
+    [0.08, 0.36, -0.1],
+  ];
+  for (const [x, y, rot] of houses) building(m, x, y, 0.12, 0.08, 0.13, 0.09, rot);
+  building(m, 0.02, 0, 0.14, 0.11, 0.2, 0);
+  tower(m, -0.14, 0.06, 0.05, 0.3, 0.16);
+  return m.build();
+}
+
+/** City blocks: (x, y, half width, half depth, height, roof). */
+const CITY_BLOCKS: readonly [number, number, number, number, number, number][] = [
+  [-0.32, -0.3, 0.13, 0.11, 0.18, 0],
+  [-0.02, -0.34, 0.12, 0.1, 0.24, 0],
+  [0.3, -0.3, 0.12, 0.12, 0.15, 0.08],
+  [-0.36, 0.02, 0.1, 0.13, 0.26, 0],
+  [0.34, 0.02, 0.11, 0.12, 0.2, 0],
+  [-0.3, 0.32, 0.12, 0.1, 0.14, 0.08],
+  [0.02, 0.34, 0.13, 0.1, 0.18, 0],
+  [0.32, 0.32, 0.1, 0.1, 0.16, 0.07],
+];
+
+/** A city: blocks of mixed heights round two towers. */
+export function cityModel(): GlyphModel {
+  const m = new ModelBuilder();
+  for (const [x, y, hw, hd, h, r] of CITY_BLOCKS) building(m, x, y, hw, hd, h, r);
+  building(m, -0.08, 0.02, 0.08, 0.08, 0.55, 0);
+  building(m, 0.12, -0.06, 0.07, 0.07, 0.42, 0);
+  return m.build();
+}
+
+/** A capital: the city's blocks round a domed seat of government and a tower. */
+export function capitalModel(): GlyphModel {
+  const m = new ModelBuilder();
+  for (const [x, y, hw, hd, h, r] of CITY_BLOCKS) building(m, x, y, hw, hd, h, r);
+  dome(m, 0, 0, 0.13, 0.2);
+  building(m, 0.17, 0.14, 0.06, 0.06, 0.5, 0);
+  return m.build();
+}

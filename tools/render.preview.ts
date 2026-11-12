@@ -13,7 +13,7 @@
  *          (on a software adapter only the ratios mean anything),
  *        PROF=<file> also writes a V8 CPU profile of those frames (.cpuprofile),
  *        SCENE=strategic draws the strategic view (StrategicScene, decisions 74, 93) instead,
- *          from STRATEGIC_PREVIEW_VIEWS (globe, night, theater, region, floor, front, winter,
+ *          from STRATEGIC_PREVIEW_VIEWS (globe, night, theater, region, floor, cities, capital, front, winter,
  *          and sharp at 1920 × 1080; front centers on the first front line), with clouds, tile counts and frame times per view;
  *          CVD=1 also writes each image as seen with protanopia, deuteranopia, tritanopia;
  *          OVERLAY=1 adds the graph debug overlay, TINT=x sets the territory tint opacity
@@ -76,7 +76,7 @@ export interface PreviewView {
    * latitude, the densely forested cell nearest the main continent, the
    * largest city, or the first main airbase (milestone 5).
    */
-  target?: 'lake' | 'forest' | 'city' | 'airbase' | 'front';
+  target?: 'lake' | 'forest' | 'city' | 'airbase' | 'front' | 'capital';
   /** Image size for this view (strategic previews; default W × H). */
   width?: number;
   height?: number;
@@ -249,6 +249,29 @@ export const STRATEGIC_PREVIEW_VIEWS: PreviewView[] = [
   },
   { name: 'floor', dLat: 0, dLon: 0, altitude: 100 * KM, tilt: 0, heading: 0, localTime: 11 },
   // The military overlays (decision 101) at the Theater band, centered on the first front.
+  // Settlements and infrastructure (decision 104) round the Alliance capital: the
+  // Theater band's cities, motorways and airbases, and the Region band's roads,
+  // railways, bridges and symbols.
+  {
+    name: 'cities',
+    dLat: 0,
+    dLon: 0,
+    altitude: 700 * KM,
+    tilt: 0,
+    heading: 0,
+    localTime: 11,
+    target: 'capital',
+  },
+  {
+    name: 'capital',
+    dLat: 0,
+    dLon: 0,
+    altitude: 150 * KM,
+    tilt: 0,
+    heading: 0,
+    localTime: 11,
+    target: 'capital',
+  },
   {
     name: 'front',
     dLat: 0,
@@ -424,6 +447,7 @@ it('renders preview views', async () => {
   const base = campaign.infrastructure.airbases.find((a) => a.kind === 'main');
   const targets: Record<NonNullable<PreviewView['target']>, Vec3d | null> = {
     front: null, // strategic previews only
+    capital: null,
     lake: null,
     forest: null,
     city: sp.cells.length ? new Vec3d(...settlementPoint(sp, biggest)) : null,
@@ -720,6 +744,14 @@ async function renderStrategic(
           cam.lon = Math.atan2(p[0]!, p[2]!) + v.dLon;
         } else
           console.log(`strategic ${v.name}: no continental front; centered on the main continent`);
+      }
+      if (v.target === 'capital') {
+        const cap = campaign.infrastructure.capitals.alliance;
+        const sp = campaign.graph.settlements.points;
+        if (cap >= 0) {
+          cam.lat = Math.asin(sp[cap * 3 + 1]!) + v.dLat;
+          cam.lon = Math.atan2(sp[cap * 3]!, sp[cap * 3 + 2]!) + v.dLon;
+        }
       }
       cam.altitude = cam.targetAltitude = v.altitude;
       cam.heading = v.heading;

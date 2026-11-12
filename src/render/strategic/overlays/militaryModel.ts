@@ -67,10 +67,12 @@ export interface LineStyle {
   /** Round ends (true) or flat ends cut at the end point. */
   roundEnds: boolean;
   teeth: TeethStyle | null;
+  /** Casing color (sRGB hex); the pale `CASING_COLOR` when absent. */
+  casingColor?: number;
 }
 
-export interface OverlayLine {
-  layer: OverlayLayer;
+export interface OverlayLine<L extends string = OverlayLayer> {
+  layer: L;
   /** Unit directions, xyz interleaved, at most MAX_STEP apart. */
   points: Float64Array;
   style: LineStyle;
@@ -80,14 +82,45 @@ export interface OverlayLine {
   side?: Side;
 }
 
-export type MarkShape = 'arrowhead' | 'diamond';
+/**
+ * Mark shapes. Arrowheads and diamonds are sized by `length` × `width`; the symbols
+ * after them (decision 104) fit a square `length` px wide, drawn upright on screen
+ * unless `axis` orients them (an airbase's runway, a bridge's road).
+ */
+export type MarkShape =
+  | 'arrowhead'
+  | 'diamond'
+  | 'airbase'
+  | 'port'
+  | 'factory'
+  | 'refinery'
+  | 'power-plant'
+  | 'supply-depot'
+  | 'fuel-depot'
+  | 'rail-yard'
+  | 'bridge'
+  | 'star';
+export const MARK_SHAPES: readonly MarkShape[] = [
+  'arrowhead',
+  'diamond',
+  'airbase',
+  'port',
+  'factory',
+  'refinery',
+  'power-plant',
+  'supply-depot',
+  'fuel-depot',
+  'rail-yard',
+  'bridge',
+  'star',
+];
 
 /** A mark lying on the map at a point: its own frame is `axis` (along) and the left of it. */
-export interface OverlayMark {
-  layer: OverlayLayer;
+export interface OverlayMark<L extends string = OverlayLayer> {
+  layer: L;
   shape: MarkShape;
   point: Point;
-  /** Unit tangent at the point: an arrowhead points along it. */
+  /** Unit tangent at the point: an arrowhead points along it. [0, 0, 0]: upright on screen. */
   axis: Point;
   /** Length along the axis and width across it (px). */
   length: number;
@@ -97,11 +130,13 @@ export interface OverlayMark {
   outline: number;
   casing: number;
   bands: readonly ZoomBand[];
+  /** Casing color (sRGB hex); the pale `CASING_COLOR` when absent. */
+  casingColor?: number;
 }
 
-export interface MilitaryOverlays {
-  lines: OverlayLine[];
-  marks: OverlayMark[];
+export interface MilitaryOverlays<L extends string = OverlayLayer> {
+  lines: OverlayLine<L>[];
+  marks: OverlayMark<L>[];
 }
 
 /** Longest great-circle step of a drawn line (radians on the unit sphere, about 10 km on Earth). */

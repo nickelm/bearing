@@ -69,6 +69,11 @@ import { MAX_BAKED_LEVEL } from '../../worldgen/gpu/tileSynth';
 import { placeCameraRelative } from '../common/cameraRelative';
 import { HabitabilityTexture } from '../common/habitabilityTexture';
 import { TerritoryTexture } from './overlays/territoryTexture';
+import { UrbanTexture } from './infra/urbanTexture';
+
+/** Part II's urban extent fill (sRGB), and how much of it covers the land (decision 104). */
+export const URBAN_FILL = 0xcbb8a0;
+export const URBAN_OPACITY = 0.9;
 import { FACTION_COLORS, NEUTRAL_COLOR } from './overlays/militaryModel';
 import type { WeatherField } from '../common/weatherField';
 import { BiomeFillTexture, hexToLinear, STEEP_ROCK_FILL } from './biomeFill';
@@ -227,6 +232,9 @@ export class StrategicRelief {
   readonly habitability = new HabitabilityTexture(null, 1);
   /** The cast's territory for the faction tint (decision 101). */
   readonly territory = new TerritoryTexture();
+  /** Urban extents for the urban fill (decision 104), and its toggle. */
+  readonly urban = new UrbanTexture();
+  readonly urbanOn = uniform(1);
   /** Territory tint on (1) or off (0), and its opacity for the sides and for neutral land. */
   readonly territoryOn = uniform(1);
   readonly territoryOpacity = uniform(TERRITORY_TINT);
@@ -418,6 +426,13 @@ export class StrategicRelief {
       // Steep rock with its hatching.
       const hatch = masked(steep.mul(this.patterns), () => hatchNode(plane, footprint));
       const mapLand = mix(mix(marked, rock, steep), rgb(HATCH_MARK), hatch);
+      // Urban extents over the land fills and patterns, under snow and the hillshade
+      // (decision 104).
+      const urbanCover = this.urban
+        .sample(radial)
+        .mul(this.urbanOn.mul(this.belowGlobe))
+        .mul(URBAN_OPACITY);
+      const builtLand = mix(mapLand, rgb(hexToLinear(URBAN_FILL)), urbanCover);
       // Seasonal snow over the land colors, below the hillshade (decision 87).
       const climate = this.climate.sample(radial);
       const seasonsOn = this.seasons.mul(this.biomeMode);
@@ -428,7 +443,7 @@ export class StrategicRelief {
         this.seasonPhase,
       );
       const snow = snowNode(landTemperature, climate.z, steep).mul(seasonsOn);
-      const snowy = mix(mapLand, rgb(hexToLinear(SNOW)), snow);
+      const snowy = mix(builtLand, rgb(hexToLinear(SNOW)), snow);
       const land = mix(attribute('color', 'vec3'), snowy, this.biomeMode);
       // Water: flat depth bands with a dark coastline and lake outlines (decision 82);
       // no relief light. Debug color modes show the vertex colors only.
@@ -739,6 +754,7 @@ export class StrategicRelief {
     this.biomeFill.dispose();
     this.habitability.dispose();
     this.territory.dispose();
+    this.urban.dispose();
     this.coastDistance.dispose();
     this.climate.texture.dispose();
   }

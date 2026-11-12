@@ -24,8 +24,17 @@ import type { CubeGrid } from '../../core/cubeGrid';
 import { FeatureKind, featurePolyline } from '../../worldgen/strategic/graph';
 import type { FeatureList, Point } from '../../worldgen/strategic/graph';
 
-export type GlyphKind = 'mountain' | 'mound' | 'forest' | 'dune';
-export const GLYPH_KINDS: readonly GlyphKind[] = ['mountain', 'mound', 'forest', 'dune'];
+export type GlyphKind = 'mountain' | 'mound' | 'forest' | 'dune' | SettlementGlyph;
+/** Settlement glyphs by class (decision 104; infra/cityGlyphs.ts places them). */
+export type SettlementGlyph = 'village' | 'town' | 'city' | 'capital';
+export const SETTLEMENT_GLYPHS: readonly SettlementGlyph[] = ['village', 'town', 'city', 'capital'];
+export const GLYPH_KINDS: readonly GlyphKind[] = [
+  'mountain',
+  'mound',
+  'forest',
+  'dune',
+  ...SETTLEMENT_GLYPHS,
+];
 export type GlyphBand = 'theater' | 'region';
 export const GLYPH_BANDS: readonly GlyphBand[] = ['theater', 'region'];
 

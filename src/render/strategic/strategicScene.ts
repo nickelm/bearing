@@ -53,6 +53,10 @@ import { MilitaryLayer } from './overlays/militaryLayer';
 import { buildMilitaryOverlays, OVERLAY_LAYERS } from './overlays/militaryModel';
 import type { MilitaryOverlays, OverlayLayer } from './overlays/militaryModel';
 import { Biome } from '../../worldgen/biomes';
+import { buildInfraOverlays, INFRA_LAYERS } from './infra/infraModel';
+import type { InfraLayer } from './infra/infraModel';
+import { layoutCityGlyphs } from './infra/cityGlyphs';
+import { SETTLEMENT_GLYPHS } from './glyphLayout';
 
 export interface StrategicSceneOptions {
   radius: number;
@@ -81,6 +85,14 @@ export class StrategicScene {
   readonly military: MilitaryLayer;
   /** The territory tint (GUI toggle; decision 101). */
   showTerritory = true;
+  /**
+   * Roads and railways (under the glyphs) and site symbols (over them): the map's
+   * infrastructure, drawn like the military overlays (decision 104).
+   */
+  readonly infraLines: MilitaryLayer<InfraLayer>;
+  readonly infraSites: MilitaryLayer<InfraLayer>;
+  /** Urban fills and settlement glyphs (GUI toggle; decision 104). */
+  showTowns = true;
   /** Settlement, base and industry lights on the night side (decision 88). */
   readonly lights: MapLights;
   /** Mountains, hills, forest tokens and dunes (decision 97). */
@@ -148,6 +160,23 @@ export class StrategicScene {
     this.overlay = new StrategicOverlay(options.radius);
     this.overlay.enabled = false;
     this.military = new MilitaryLayer(options.radius, { exaggeration: this.relief.exaggeration });
+    const infraUniforms = {
+      exaggeration: this.relief.exaggeration,
+      daylight: {
+        sunDirection: this.relief.sunDirection,
+        nightStrength: this.relief.nightStrength,
+        twilightStrength: this.relief.twilightStrength,
+      },
+    };
+    // Roads and railways draw before the glyphs and night lights; symbols after them.
+    this.infraLines = new MilitaryLayer<InfraLayer>(options.radius, infraUniforms, {
+      layers: INFRA_LAYERS.filter((l) => l !== 'sites'),
+      renderOrder: -10,
+    });
+    this.infraSites = new MilitaryLayer<InfraLayer>(options.radius, infraUniforms, {
+      layers: ['sites'],
+      renderOrder: 12,
+    });
     this.lights = new MapLights(options.radius, this.relief.exaggeration);
     this.glyphs = new GlyphLayer(options.radius, {
       exaggeration: this.relief.exaggeration,
@@ -172,6 +201,8 @@ export class StrategicScene {
       this.glyphs.group,
       this.overlay.group,
       this.lights.group,
+      this.infraLines.group,
+      this.infraSites.group,
       this.military.group,
     );
     this.overlayScene.add(this.labels.group);
@@ -284,6 +315,8 @@ export class StrategicScene {
     // The territory tint (decision 101), on the graph's coarse grid.
     const territoryGrid = graph && infrastructure ? this.coarseGrid(graph.resolution) : null;
     this.relief.territory.set(infrastructure?.territory ?? null, territoryGrid);
+    // Urban extents for the urban fill (decision 104).
+    this.relief.urban.set(graph?.urban ?? null);
     this.strategicData = graph ? { graph, cast, infra: infrastructure } : null;
     this.lightsDirty = true;
   }
@@ -314,10 +347,24 @@ export class StrategicScene {
     return buildMilitaryOverlays(graph, cast, territory);
   }
 
+  /** Shows or hides roads, railways or site symbols (decision 104); route names go with roads. */
+  setInfraVisible(layer: InfraLayer, on: boolean): void {
+    this.infraLines.visible[layer] = on;
+    this.infraSites.visible[layer] = on;
+    this.updateHiddenLabels();
+  }
+
+  private updateHiddenLabels(): void {
+    this.labels.setHidden([
+      ...OVERLAY_LAYERS.filter((l) => !this.military.visible[l]),
+      ...(this.infraLines.visible.roads ? [] : ['roads']),
+    ]);
+  }
+
   /** Shows or hides an overlay layer, its labels with it (decision 101). */
   setLayerVisible(layer: OverlayLayer, on: boolean): void {
     this.military.visible[layer] = on;
-    this.labels.setHidden(OVERLAY_LAYERS.filter((l) => !this.military.visible[l]));
+    this.updateHiddenLabels();
   }
 
   /** The label fonts' atlas (fontAtlas.ts); labels draw once it is set. */
@@ -363,16 +410,26 @@ export class StrategicScene {
             (x, y, z) => w.maps.height[grid.cellOfDirection(dir.set(x, y, z))]!,
           ),
         );
-        this.glyphs.setGlyphs(glyphSets(d.graph, w, grid));
         const heightAt = (p: Readonly<[number, number, number]>) =>
           w.maps.height[grid.cellOfDirection(dir.set(p[0], p[1], p[2]))]!;
+        const capitals = d.infra ? [d.infra.capitals.alliance, d.infra.capitals.pact] : [];
+        this.glyphs.setGlyphs([
+          ...glyphSets(d.graph, w, grid),
+          ...layoutCityGlyphs(d.graph.settlements, capitals, (x, y, z) => heightAt([x, y, z])),
+        ]);
         const military = this.militaryOverlays(d.graph, d.cast, d.infra);
-        this.military.setOverlays(military, (p) => Math.max(0, heightAt(p)));
-        this.labels.setLabels(buildLabels(d.graph, d.cast, heightAt, military));
+        const dry = (p: Readonly<[number, number, number]>) => Math.max(0, heightAt(p));
+        this.military.setOverlays(military, dry);
+        const infra = buildInfraOverlays(d.graph, d.infra);
+        this.infraLines.setOverlays(infra, dry);
+        this.infraSites.setOverlays(infra, dry);
+        this.labels.setLabels(buildLabels(d.graph, d.cast, heightAt, military, d.infra));
       } else {
         this.lights.setLights(null);
         this.glyphs.setGlyphs(null);
         this.military.setOverlays(null, () => 0);
+        this.infraLines.setOverlays(null, () => 0);
+        this.infraSites.setOverlays(null, () => 0);
         this.labels.setLabels(null);
       }
     }
@@ -449,11 +506,19 @@ export class StrategicScene {
     // Military overlays in CSS pixels, like the labels (decision 101).
     const cssPixelAngle = fovY / this.viewportHeight;
     this.relief.territoryOn.value = this.showTerritory ? 1 : 0;
-    this.military.update(o.eye, cssPixelAngle, o.range * cssPixelAngle, {
+    const fades = {
       globe: this.bands.fade('globe'),
       theater: this.bands.fade('theater'),
       region: this.bands.fade('region'),
-    });
+    };
+    this.military.update(o.eye, cssPixelAngle, o.range * cssPixelAngle, fades);
+    this.infraLines.update(o.eye, cssPixelAngle, o.range * cssPixelAngle, fades, o.up);
+    this.infraSites.update(o.eye, cssPixelAngle, o.range * cssPixelAngle, fades, o.up);
+    this.relief.urbanOn.value = this.showTowns ? 1 : 0;
+    for (const k of SETTLEMENT_GLYPHS) {
+      if (this.showTowns) this.glyphs.hidden.delete(k);
+      else this.glyphs.hidden.add(k);
+    }
     this.glyphs.group.visible = this.showGlyphs;
     this.glyphs.update(o.eye, {
       theater: this.bands.fade('theater'),
@@ -512,6 +577,8 @@ export class StrategicScene {
     this.relief.dispose();
     this.overlay.dispose();
     this.military.dispose();
+    this.infraLines.dispose();
+    this.infraSites.dispose();
     this.lights.dispose();
     this.glyphs.dispose();
     this.labels.dispose();

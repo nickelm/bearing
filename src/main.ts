@@ -20,6 +20,7 @@ import type { PlanetParams } from './worldgen/params';
 import { GlobeScene } from './render/sim/globeScene';
 import { StrategicScene } from './render/strategic/strategicScene';
 import { OVERLAY_LAYERS } from './render/strategic/overlays/militaryModel';
+import { INFRA_LAYERS } from './render/strategic/infra/infraModel';
 import { InfraScene } from './render/sim/infra/infraScene';
 import { VIEW_MODES } from './render/common/globeMesh';
 import type { ViewMode } from './render/common/globeMesh';
@@ -628,6 +629,10 @@ async function main(): Promise<void> {
     lanes: true,
     chokepoints: true,
     graphDebug: false,
+    towns: true,
+    roads: true,
+    railways: true,
+    sites: true,
   };
   gui.addMapControls(mapParams, (m) => {
     // The relief applies exaggeration in its shader; the fallback grid globe rebuilds.
@@ -652,6 +657,8 @@ async function main(): Promise<void> {
     relief.territoryOpacity.value = m.territoryOpacity;
     for (const layer of OVERLAY_LAYERS) strategicView.setLayerVisible(layer, m[layer]);
     strategicView.overlay.enabled = m.graphDebug;
+    strategicView.showTowns = m.towns;
+    for (const layer of INFRA_LAYERS) strategicView.setInfraVisible(layer, m[layer]);
     relief.finish.value = m.finish;
   });
   const lighting = globe.lighting;

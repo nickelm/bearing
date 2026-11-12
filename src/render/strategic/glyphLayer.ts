@@ -1,9 +1,10 @@
 /**
  * Geographic glyphs on the strategic map (visual-style Part II, Geographic Glyphs;
  * decision 97): mountains, hill mounds, forest tokens and dunes, instanced from
- * glyphLayout.ts with the models of glyphGeometry.ts.
+ * glyphLayout.ts with the models of glyphGeometry.ts; and settlement glyphs, low-poly
+ * building clusters by class (decision 104), from infra/cityGlyphs.ts.
  *
- * - **Placement.** One instanced mesh per glyph kind and band (eight draw calls).
+ * - **Placement.** One instanced mesh per glyph kind and band (at most twelve draw calls).
  *   The group is planet-centered (placed at −eye, rule 4); each instance sits on
  *   the displayed terrain (raw height × the relief's exaggeration), turned to its
  *   heading in the local east–north frame and scaled by its width.
@@ -43,9 +44,19 @@ import {
 import type { Vec3d } from '../../core/vec3d';
 import { placePlanetCentered } from '../common/cameraRelative';
 import { srgbToLinear } from '../common/palette';
-import { duneModel, forestModel, moundModel, mountainModel } from './glyphGeometry';
+import {
+  capitalModel,
+  cityModel,
+  duneModel,
+  forestModel,
+  moundModel,
+  mountainModel,
+  townModel,
+  villageModel,
+} from './glyphGeometry';
 import type { GlyphModel } from './glyphGeometry';
-import type { GlyphBand, GlyphKind, GlyphSet } from './glyphLayout';
+import { SETTLEMENT_GLYPHS } from './glyphLayout';
+import type { GlyphBand, GlyphKind, GlyphSet, SettlementGlyph } from './glyphLayout';
 import { daylightNode } from './mapDaylight';
 import { paperFinish } from './mapFinish';
 
@@ -57,6 +68,12 @@ export const GLYPH_COLORS: Record<GlyphKind, [number, number]> = {
   mound: [0xa99b73, 0xa99b73],
   forest: [0x4e6a48, 0x4e6a48],
   dune: [0xd8bd8c, 0xc4a473],
+  // Settlements (decision 104): pale walls, muted terracotta roofs in the country,
+  // slate roofs in cities.
+  village: [0xe9e1d2, 0xa65e45],
+  town: [0xe9e1d2, 0xa65e45],
+  city: [0xe4ddd0, 0x7d7a78],
+  capital: [0xe4ddd0, 0x7d7a78],
 };
 /** Lift above the terrain under the glyph's center (m), so its base does not sink. */
 const LIFT = 150;
@@ -72,6 +89,10 @@ const MODELS: Record<GlyphKind, () => GlyphModel> = {
   mound: moundModel,
   forest: forestModel,
   dune: duneModel,
+  village: villageModel,
+  town: townModel,
+  city: cityModel,
+  capital: capitalModel,
 };
 
 export interface GlyphUniforms {
@@ -96,6 +117,8 @@ export class GlyphLayer {
   private readonly materials = new Map<string, MeshBasicNodeMaterial>();
   private readonly models = new Map<GlyphKind, GlyphModel>();
   private meshes: Mesh[] = [];
+  /** Glyph kinds hidden by a GUI toggle (settlement glyphs go with the towns toggle). */
+  readonly hidden = new Set<GlyphKind>();
 
   constructor(
     private readonly radius: number,
@@ -130,7 +153,11 @@ export class GlyphLayer {
     const [body, accent] = GLYPH_COLORS[kind];
     // Snow on mountain caps where the instance is snowy; dunes always show their slip face.
     const accentShare =
-      kind === 'mountain' ? varying(part.mul(is.z)) : kind === 'dune' ? varying(part) : float(0);
+      kind === 'mountain'
+        ? varying(part.mul(is.z))
+        : kind === 'dune' || SETTLEMENT_GLYPHS.includes(kind as SettlementGlyph)
+          ? varying(part)
+          : float(0);
     const albedo = mix(linear(body), linear(accent), accentShare as F);
     const shade = float(0.42).add(max(dot(normalFlat, vec3(...LIGHT)), 0).mul(0.9));
     const mu = dot(varying(dir), u.sunDirection) as F;
@@ -164,6 +191,7 @@ export class GlyphLayer {
       g.setAttribute('iShape', new InstancedBufferAttribute(set.shape, 4));
       g.instanceCount = set.count;
       const mesh = new Mesh(g, this.material(set.kind, set.band));
+      mesh.userData.kind = set.kind;
       mesh.frustumCulled = false;
       // Glyphs draw after the relief, theater before region.
       mesh.renderOrder = set.band === 'theater' ? 2 : 3;
@@ -177,7 +205,7 @@ export class GlyphLayer {
     placePlanetCentered(this.group, eye);
     for (const mesh of this.meshes) {
       const band = (mesh.material as MeshBasicNodeMaterial).name as GlyphBand;
-      mesh.visible = fade[band] > 0.001;
+      mesh.visible = fade[band] > 0.001 && !this.hidden.has(mesh.userData.kind as GlyphKind);
     }
   }
 

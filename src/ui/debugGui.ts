@@ -105,6 +105,11 @@ export interface MapGuiParams {
   chokepoints: boolean;
   /** The strategic graph debug overlay on the map (a developer view). */
   graphDebug: boolean;
+  /** Settlements and infrastructure (decision 104). */
+  towns: boolean;
+  roads: boolean;
+  railways: boolean;
+  sites: boolean;
 }
 
 export interface LightingGuiParams {
@@ -404,6 +409,18 @@ export class DebugGui {
     o.add(map, 'territoryOpacity', 0, 0.6, 0.01)
       .name('Tint opacity')
       .onChange(() => changed(map));
+    const infra = f.addFolder('Settlements and infrastructure');
+    const infraLayers: [keyof MapGuiParams, string][] = [
+      ['towns', 'Towns (urban fill, glyphs)'],
+      ['roads', 'Roads and route names'],
+      ['railways', 'Railways'],
+      ['sites', 'Bases, ports, industry, bridges'],
+    ];
+    for (const [key, name] of infraLayers)
+      infra
+        .add(map, key)
+        .name(name)
+        .onChange(() => changed(map));
     f.close();
   }
 

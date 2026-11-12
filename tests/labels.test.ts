@@ -215,7 +215,7 @@ describe('band content tables', () => {
 describe('labels on a generated world (acceptance check 2 in Node)', () => {
   const grid = new CubeGrid(128);
   const w = generateCampaignWorld({ ...DEFAULT_PLANET_PARAMS, seed: 7 }, { grid });
-  const labels = buildLabels(w.graph, w.campaign.cast, () => 0);
+  const labels = buildLabels(w.graph, w.campaign.cast, () => 0, null, w.infrastructure);
 
   it('places labels in every band without any overlap', () => {
     const cam = new StrategicCamera(DEFAULT_PLANET_PARAMS.radius);
