@@ -84,6 +84,22 @@ import {
 } from '../infra/roadShading';
 import { LandShading } from './landShading';
 import { DEFAULT_LOD, selectTiles } from '../../common/terrain/quadtree';
+import {
+  aheadView,
+  bubblePriority,
+  BUBBLE_LEVEL,
+  lookAheadPriority,
+  LOOK_AHEAD_SECONDS,
+  PROMOTION_BUBBLE,
+  tilesWithin,
+} from '../../common/terrain/prefetch';
+import type { NearTile } from '../../common/terrain/prefetch';
+import {
+  DATA_SHARE,
+  DATA_TILE_BYTES,
+  DEFAULT_TILE_MEMORY_MIB,
+  MESH_TILE_BYTES,
+} from '../../common/terrain/terrainBudget';
 import type { LodOptions, LodView } from '../../common/terrain/quadtree';
 import { TileCache, TileLoader, TileRequestQueue } from '../../common/terrain/tileCache';
 import {
@@ -96,18 +112,9 @@ import {
 } from '../../common/terrain/tileMesh';
 import type { MeshOptions, TileViewMode } from '../../common/terrain/tileMesh';
 
-const DATA_BYTES = TILE_STRIDE * TILE_STRIDE * 8;
 const ZERO = new Vector3();
-/**
- * Share of the tile memory budget for CPU tile data; the rest holds meshes.
- * Low views draw about 400 meshes plus their fallback parents, against about
- * 200 data tiles (deeper meshes share a level-7 data tile).
- */
-const DATA_SHARE = 0.45;
 /** A planet coordinate modulo the wave period, in float64 (decision 38). */
 const wrapCoordinate = (x: number) => ((x % WAVE_PERIOD) + WAVE_PERIOD) % WAVE_PERIOD;
-/** base, up, parentBase, parentDisp, slope, color (vec3) + height, water, shore (float), float32. */
-const MESH_BYTES = TILE_VERTEX_COUNT * (6 * 3 + 3) * 4;
 
 export interface TerrainStats {
   drawn: number;
@@ -118,6 +125,25 @@ export interface TerrainStats {
   deepest: number;
   /** Quadtree nodes visited by the last selection. */
   visited: number;
+  /** Level-7 data tiles in the promotion bubble, and how many are loaded (decision 119). */
+  bubble: number;
+  bubbleReady: number;
+  /** Data tiles the look-ahead asked for this frame. */
+  ahead: number;
+  /** Tiles the view wants but cannot build for lack of data: detail arriving late. */
+  waiting: number;
+}
+
+/** A frame's view for the terrain, with the camera's velocity for the look-ahead. */
+export type TerrainView = Omit<LodView, 'exaggeration'> & { velocity?: Readonly<Vec3d> };
+
+/** Prefetch settings (decision 119). */
+export interface TerrainPrefetch {
+  enabled: boolean;
+  /** Radius of the level-7 bubble around the camera's nadir (m). */
+  bubble: number;
+  /** How far ahead the look-ahead places a moving camera (s). */
+  aheadSeconds: number;
 }
 
 export interface TerrainWorld {
@@ -143,6 +169,15 @@ export class TerrainRenderer {
     pending: 0,
     deepest: 0,
     visited: 0,
+    bubble: 0,
+    bubbleReady: 0,
+    ahead: 0,
+    waiting: 0,
+  };
+  readonly prefetch: TerrainPrefetch = {
+    enabled: true,
+    bubble: PROMOTION_BUBBLE,
+    aheadSeconds: LOOK_AHEAD_SECONDS,
   };
   lod: LodOptions = { ...DEFAULT_LOD };
   geomorph = true;
@@ -169,14 +204,25 @@ export class TerrainRenderer {
   readonly riverStyle = new RiverStyle();
   /** Land albedo: moisture, rock, snow, season and detail (decision 43). */
   readonly land = new LandShading();
-  private readonly data = new TileCache<TileData>(DATA_SHARE * 600 * 2 ** 20);
-  private readonly meshes = new TileCache<Mesh>((1 - DATA_SHARE) * 600 * 2 ** 20, (e) => {
-    this.group.remove(e.value);
-    // The index buffer is shared by every tile: detach it, or dispose() would free it for all.
-    e.value.geometry.setIndex(null);
-    e.value.geometry.dispose();
-  });
+  private readonly data = new TileCache<TileData>(DATA_SHARE * DEFAULT_TILE_MEMORY_MIB * 2 ** 20);
+  private readonly meshes = new TileCache<Mesh>(
+    (1 - DATA_SHARE) * DEFAULT_TILE_MEMORY_MIB * 2 ** 20,
+    (e) => {
+      this.group.remove(e.value);
+      // The index buffer is shared by every tile: detach it, or dispose() would free it for all.
+      e.value.geometry.setIndex(null);
+      e.value.geometry.dispose();
+    },
+  );
   private readonly queue = new TileRequestQueue();
+  /** The bubble's tiles, recomputed when the nadir moves (decision 119). */
+  private bubbleTiles: NearTile[] = [];
+  private readonly bubbleKeys = new Set<string>();
+  private readonly bubbleCenter = new Vec3d();
+  private bubbleRadius = -1;
+  /** The look-ahead's wanted tiles, re-requested each frame and recomputed every few. */
+  private aheadWanted: { tile: TileKey; priority: number }[] = [];
+  private aheadFrame = 0;
   private readonly loader: TileLoader<TileData>;
   private visible = new Set<Mesh>();
 
@@ -195,7 +241,7 @@ export class TerrainRenderer {
         const out = await w.synth.generate(tiles);
         // A world switched while generating: drop the stale batch.
         if (this.world !== w) return [];
-        return out.map((d) => ({ tile: d.key, value: d, bytes: DATA_BYTES }));
+        return out.map((d) => ({ tile: d.key, value: d, bytes: DATA_TILE_BYTES }));
       },
       8,
     );
@@ -520,12 +566,12 @@ export class TerrainRenderer {
     mesh.userData.lightCount = light?.count ?? 0;
     mesh.visible = false;
     this.group.add(mesh);
-    this.meshes.set(t, mesh, MESH_BYTES);
+    this.meshes.set(t, mesh, MESH_TILE_BYTES);
     return mesh;
   }
 
   /** Selects, builds, requests and places tiles for this frame. */
-  update(view: Omit<LodView, 'exaggeration'>): void {
+  update(view: TerrainView): void {
     if (!this.world) {
       for (const m of this.visible) m.visible = false;
       this.visible.clear();
@@ -558,7 +604,13 @@ export class TerrainRenderer {
       }
     }
     if (built > 0) sel = selectTiles(v, ready, this.lod, heightRange);
-    for (const w of sel.wanted) if (!this.sources(w.tile)) this.requestData(w.tile, w.priority);
+    let waiting = 0;
+    for (const w of sel.wanted) {
+      if (this.sources(w.tile)) continue;
+      this.requestData(w.tile, w.priority);
+      waiting++;
+    }
+    this.requestPrefetch(v, view.velocity ?? null, heightRange);
 
     // Place drawn meshes camera-relative and keep their data alive.
     // Split tiles and their unseen children stay cached (decision 113).
@@ -584,7 +636,8 @@ export class TerrainRenderer {
     void this.loader.update();
     this.queue.beginFrame();
     this.meshes.evict();
-    this.data.evict();
+    // The bubble's data stays while the camera is near it.
+    this.data.evict((t) => t.level === BUBBLE_LEVEL && this.bubbleKeys.has(tileKeyString(t)));
 
     const s = this.stats;
     s.drawn = now.size;
@@ -594,6 +647,75 @@ export class TerrainRenderer {
     s.pending = this.loader.pending;
     s.deepest = deepest;
     s.visited = sel.visited;
+    s.waiting = waiting;
+    s.bubble = this.bubbleTiles.length;
+    s.bubbleReady = this.bubbleTiles.filter((b) => this.data.has(b.tile)).length;
+    s.ahead = this.aheadWanted.length;
+  }
+
+  /**
+   * Asks for the bubble's level-7 data and for the data a moving camera will
+   * need in a few seconds, below what the view needs now (decision 119).
+   */
+  private requestPrefetch(
+    v: LodView,
+    velocity: Readonly<Vec3d> | null,
+    heightRange: (t: TileKey) => [number, number] | null,
+  ): void {
+    const p = this.prefetch;
+    if (!p.enabled) {
+      this.bubbleTiles = [];
+      this.bubbleKeys.clear();
+      this.aheadWanted = [];
+      return;
+    }
+    // The bubble: recomputed when the nadir has moved a tenth of its radius.
+    const nadir = v.eye.clone().normalize();
+    const moved = nadir.distanceTo(this.bubbleCenter) * v.radius;
+    if (p.bubble !== this.bubbleRadius || moved > 0.1 * p.bubble) {
+      this.bubbleCenter.copy(nadir);
+      this.bubbleRadius = p.bubble;
+      this.bubbleTiles = p.bubble > 0 ? tilesWithin(nadir, p.bubble, v.radius, BUBBLE_LEVEL) : [];
+      this.bubbleKeys.clear();
+      for (const b of this.bubbleTiles) this.bubbleKeys.add(tileKeyString(b.tile));
+    }
+    for (const b of this.bubbleTiles) {
+      if (!this.data.has(b.tile)) this.queue.request(b.tile, bubblePriority(b.distance, p.bubble));
+    }
+
+    // The look-ahead: a selection from the predicted eye that descends wherever data
+    // exists, so its wanted tiles are the data a mesh there would lack.
+    const speed = velocity ? velocity.length() : 0;
+    if (speed < 1 || p.aheadSeconds <= 0) {
+      this.aheadWanted = [];
+    } else if (this.aheadFrame++ % 4 === 0) {
+      const ahead = aheadView(v, velocity!, p.aheadSeconds);
+      // Tiles without meshes there are bounded by their data's heights, else the
+      // planet's tallest peak would refine everything near the camera (decision 69).
+      const range = (t: TileKey) => heightRange(t) ?? this.dataHeightRange(t);
+      const sel = selectTiles(ahead, (t) => this.hasData(t), this.lod, range);
+      this.aheadWanted = sel.wanted;
+    }
+    for (const w of this.aheadWanted) this.requestData(w.tile, lookAheadPriority(w.priority));
+  }
+
+  /**
+   * Displayed height range (m) of the data a mesh of t reads, padded a tenth of
+   * its span and 20 m for render detail below level 7; null if not cached.
+   */
+  private dataHeightRange(t: TileKey): [number, number] | null {
+    const d = this.data.peek(dataTileFor(t));
+    if (!d) return null;
+    const lo = Math.max(0, d.minHeight);
+    const hi = Math.max(0, d.maxHeight);
+    const x = this.exaggeration;
+    return [lo * x, (hi + 0.1 * (hi - lo) + 20) * x];
+  }
+
+  /** Whether the data a mesh of t reads is cached, without marking it used. */
+  private hasData(t: TileKey): boolean {
+    if (!this.data.has(dataTileFor(t))) return false;
+    return t.level === 0 || t.level > MAX_BAKED_LEVEL || this.data.has(parentTile(t)!);
   }
 
   /**

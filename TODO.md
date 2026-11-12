@@ -390,7 +390,9 @@ Simulation view (needs S1's `render/sim/` split):
   - [ ] Ease between stations instead of jumping (V4's transition controller)
 - [x] Horizon-bounded tile selection: drop tiles beyond √(2Rh) plus a margin (at most about 200 km at 20 km); tests for the bound and that selection never exceeds it (decision 116: exact tile distance; `horizonRange` and `selectionRange` in `quadtree.ts`)
   - [ ] The bound grows with the tallest displayed terrain: at the current 10× exaggeration (40 km peaks) it is about 490 km at 20 km; True-scale relief (below) brings it to about 290 km
-- [ ] Tile cache budget and prefetch for the bounded radius around the active unit or camera (`selectionRange`, decision 116); prefetch the regional level-7 tiles (decision 64)
+- [x] Tile cache budget and prefetch for the bounded radius around the active unit or camera (`selectionRange`, decision 116); prefetch the regional level-7 tiles (decision 64) (decision 119: `prefetch.ts`, `terrainBudget.ts`; GUI → View → Terrain tiles → Prefetch; status shows the bubble)
+  - [ ] Recheck the working set and the 600 MiB default after true-scale relief (below); at today's 10× the views need more meshes, and a lower default would suit tablets
+  - [ ] The sim worker's line of sight (C3, P1) reads its own level-7 tiles; give it `regionTiles` inside the bubble then, since the renderer's cache lives on the main thread
 - [ ] True-scale relief: the simulation view's own exaggeration uniform, default 1×; recheck skirt depth and the near plane; owner look at whether decision 14's relief reads at 1×
 - [ ] Faceted flat shading on terrain (derivative normals), with facets of about 20–60 m at low altitude; check it against geomorphing
 - [ ] Per-face shade quantization: three to five shades per biome from slope, altitude, moisture and low-frequency noise, constant per face

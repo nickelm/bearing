@@ -31,6 +31,8 @@ export interface ViewGuiParams {
   sse: number;
   /** Tile memory budget (MiB). */
   tileMemory: number;
+  /** Prefetch the bubble's level-7 tiles and the look-ahead (decision 119). */
+  prefetch: boolean;
   /** Instanced tree clumps near the camera. */
   trees: boolean;
   /** Tree range (km). */
@@ -329,6 +331,9 @@ export class DebugGui {
     t.add(view, 'tileMemory', 128, 2048, 64)
       .name('Tile memory (MiB)')
       .onFinishChange(() => callbacks.viewChanged(view));
+    t.add(view, 'prefetch')
+      .name('Prefetch (bubble, ahead)')
+      .onChange(() => callbacks.viewChanged(view));
     t.add(view, 'trees')
       .name('Trees (sim detail)')
       .onChange(() => callbacks.viewChanged(view));

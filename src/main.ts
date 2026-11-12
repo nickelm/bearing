@@ -48,6 +48,7 @@ import { GpuContext } from './worldgen/gpu/gpuContext';
 import { TileSynthesizer } from './worldgen/gpu/tileSynth';
 import { RiverIndex } from './worldgen/riverIndex';
 import { DEFAULT_LOD } from './render/common/terrain/quadtree';
+import { DEFAULT_TILE_MEMORY_MIB } from './render/common/terrain/terrainBudget';
 import type { TileViewMode } from './render/common/terrain/tileMesh';
 import {
   buildGlobalWorld,
@@ -141,7 +142,8 @@ async function main(): Promise<void> {
     tiles: true,
     geomorph: true,
     sse: DEFAULT_LOD.sseThreshold,
-    tileMemory: 600,
+    tileMemory: DEFAULT_TILE_MEMORY_MIB,
+    prefetch: true,
     // Individual trees and buildings are simulator detail (decision 71).
     trees: false,
     treeRange: 5,
@@ -192,6 +194,7 @@ async function main(): Promise<void> {
   globe.globe.setExaggeration(viewParams.exaggeration);
   globe.terrain.setExaggeration(viewParams.exaggeration);
   globe.terrain.budgetMiB = viewParams.tileMemory;
+  globe.terrain.prefetch.enabled = viewParams.prefetch;
   // The strategic view (decision 72): its own scene and camera, resident beside the
   // simulation view; only the active view renders and takes input (decision 74).
   const strategicView = new StrategicScene(renderer, {
@@ -570,6 +573,7 @@ async function main(): Promise<void> {
       globe.terrain.geomorph = v.geomorph;
       globe.terrain.lod.sseThreshold = v.sse;
       globe.terrain.budgetMiB = v.tileMemory;
+      globe.terrain.prefetch.enabled = v.prefetch;
       globe.forest.enabled = v.trees;
       globe.forest.range.value = v.treeRange * KM;
       globe.structures.enabled = v.buildings;
@@ -865,7 +869,7 @@ async function main(): Promise<void> {
     const tileText =
       activeView === 'strategic'
         ? `map: ${rs.drawn} drawn, L${rs.deepest} deepest, ${rs.meshes} meshes, ${rs.dataTiles} data, ${rs.pending} loading`
-        : `${ts.drawn} drawn, L${ts.deepest} deepest, ${ts.meshes} meshes, ${ts.dataTiles} data, ${ts.pending} loading`;
+        : `${ts.drawn} drawn, L${ts.deepest} deepest, ${ts.meshes} meshes, ${ts.dataTiles} data, ${ts.pending} loading, bubble ${ts.bubbleReady}/${ts.bubble}${ts.ahead ? `, ${ts.ahead} ahead` : ''}`;
     const tilesOn = activeView === 'strategic' ? strategicView.useTiles : globe.useTiles;
     gui.status.tiles = !globe.terrainReady
       ? 'waiting for the global pass'

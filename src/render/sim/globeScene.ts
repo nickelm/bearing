@@ -27,6 +27,7 @@ import { ForestLayer } from './forest/forestLayer';
 import { GlobeMesh } from '../common/globeMesh';
 import { PlanetLighting } from './lighting/planetLighting';
 import { TerrainRenderer } from './terrain/terrainRenderer';
+import { MotionEstimate } from '../common/terrain/prefetch';
 import { OrbitCamera, attachOrbitInput } from '../common/orbitCamera';
 import { StrategicOverlay } from '../strategic/strategicOverlay';
 import { StructureLayer } from './infra/structureLayer';
@@ -83,6 +84,8 @@ export class GlobeScene {
   private detachInput: (() => void) | null = null;
   private mode: SimCameraMode = 'free';
   private readonly scratch = new Vec3d();
+  /** The camera's velocity, for the terrain's look-ahead (decision 119). */
+  private readonly motion = new MotionEstimate();
   private viewportHeight = 1;
   private readonly sunLight = new DirectionalLight(0xffffff, 2.5);
 
@@ -220,6 +223,7 @@ export class GlobeScene {
     if (tiles) {
       this.terrain.update({
         eye: o.eye,
+        velocity: this.motion.update(o.eye, dt),
         forward: o.forward,
         up: o.up,
         fovY: (this.camera.fov * Math.PI) / 180,

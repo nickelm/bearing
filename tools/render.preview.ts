@@ -624,6 +624,13 @@ it('renders preview views', async () => {
       const turn = Number(process.env.FLICKER_TURN ?? 0.004);
       if (scene.cameraMode === 'observer') scene.observer.heading += turn;
       else o.heading += turn;
+      // FLICKER_FORWARD (−1..1) moves the observer along the view, FLICKER_CLIMB (−1..1) climbs,
+      // FLICKER_BOOST=1 moves five times faster;
+      // PREFETCH=0 turns the terrain's prefetch off (decision 119), to compare.
+      scene.observer.input.forward = Number(process.env.FLICKER_FORWARD ?? 0);
+      scene.observer.input.climb = Number(process.env.FLICKER_CLIMB ?? 0);
+      scene.observer.input.boost = process.env.FLICKER_BOOST === '1' ? 1 : 0;
+      scene.terrain.prefetch.enabled = process.env.PREFETCH !== '0';
       scene.render(1 / 30);
       await gpu.finish();
       const px = await head.readRgb();
@@ -631,7 +638,7 @@ it('renders preview views', async () => {
       for (let i = (px.length / 2) | 0; i < px.length; i++) sum += px[i]!;
       const s = scene.terrain.stats;
       console.log(
-        `  frame ${f}: lower mean ${(sum / (px.length / 2)).toFixed(1)}, drawn ${s.drawn}, deepest ${s.deepest}, meshes ${s.meshes}, data ${s.dataTiles}, pending ${s.pending}, generated ${s.generated}`,
+        `  frame ${f}: lower mean ${(sum / (px.length / 2)).toFixed(1)}, drawn ${s.drawn}, deepest ${s.deepest}, meshes ${s.meshes}, data ${s.dataTiles}, pending ${s.pending}, generated ${s.generated}, waiting ${s.waiting}, bubble ${s.bubbleReady}/${s.bubble}, ahead ${s.ahead}`,
       );
     }
     const perfFrames = Number(process.env.PERF ?? 0);
