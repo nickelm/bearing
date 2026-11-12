@@ -616,6 +616,24 @@ it('renders preview views', async () => {
     }
     scene.render(0);
     // PERF=n: time n more frames of the loaded view (CPU in scene.render, and until the GPU is done).
+    // FLICKER=n: n frames at 30 fps with the view turning slowly (as when dragging),
+    // logging terrain statistics and the lower half's brightness per frame.
+    const flicker = Number(process.env.FLICKER ?? 0);
+    for (let f = 0; f < flicker; f++) {
+      // FLICKER_TURN: radians per frame (default 0.004, about 7°/s).
+      const turn = Number(process.env.FLICKER_TURN ?? 0.004);
+      if (scene.cameraMode === 'observer') scene.observer.heading += turn;
+      else o.heading += turn;
+      scene.render(1 / 30);
+      await gpu.finish();
+      const px = await head.readRgb();
+      let sum = 0;
+      for (let i = (px.length / 2) | 0; i < px.length; i++) sum += px[i]!;
+      const s = scene.terrain.stats;
+      console.log(
+        `  frame ${f}: lower mean ${(sum / (px.length / 2)).toFixed(1)}, drawn ${s.drawn}, deepest ${s.deepest}, meshes ${s.meshes}, data ${s.dataTiles}, pending ${s.pending}, generated ${s.generated}`,
+      );
+    }
     const perfFrames = Number(process.env.PERF ?? 0);
     if (perfFrames > 0) {
       await gpu.finish();

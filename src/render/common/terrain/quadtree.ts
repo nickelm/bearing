@@ -75,6 +75,12 @@ export interface LodSelection {
   draw: DrawnTile[];
   /** Tiles to make ready, with priorities (screen-space error, higher first). */
   wanted: { tile: TileKey; priority: number }[];
+  /**
+   * Ready tiles not drawn this frame whose meshes must stay cached: the split
+   * tiles above the drawn ones, and their children outside the view, which
+   * the next turn of the camera may bring in.
+   */
+  keep: TileKey[];
   /** Tiles visited, for diagnostics. */
   visited: number;
 }
@@ -261,7 +267,7 @@ export function selectTiles(
       : boundsCache.get(t, view.radius, 0, view.maxHeight);
   };
   const k = view.viewportHeight / (2 * Math.tan(view.fovY / 2));
-  const out: LodSelection = { draw: [], wanted: [], visited: 0 };
+  const out: LodSelection = { draw: [], wanted: [], keep: [], visited: 0 };
 
   const sse = (t: TileKey, b: Bounds) => {
     const dist = Math.max(1, view.eye.distanceTo(b.center) - b.radius);
@@ -283,12 +289,18 @@ export function selectTiles(
         ? 1
         : Math.min(1, Math.max(0, (parentSse / opts.sseThreshold - 1) / (opts.morphRange - 1)));
     if (e > opts.sseThreshold && t.level < opts.maxLevel) {
-      const kids = childTiles(t)
-        .map((c) => ({ c, b: tileBounds(c) }))
-        .filter((x) => visible(x.b));
+      // A tile splits only when all four children are ready, seen or not: a child
+      // outside the view would otherwise have no mesh when a turn brings it in, and
+      // its parent, perhaps a level-1 tile, would stand in for the whole subtree for
+      // a frame (decision 113).
+      const kids = childTiles(t).map((c) => ({ c, b: tileBounds(c) }));
       const missing = kids.filter((x) => !ready(x.c));
       if (missing.length === 0) {
-        for (const x of kids) visit(x.c, x.b, e);
+        out.keep.push(t);
+        for (const x of kids) {
+          if (visible(x.b)) visit(x.c, x.b, e);
+          else out.keep.push(x.c);
+        }
         return;
       }
       for (const x of missing) out.wanted.push({ tile: x.c, priority: e });

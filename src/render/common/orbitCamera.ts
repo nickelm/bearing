@@ -46,7 +46,12 @@ export interface OrbitInput {
   right: number;
   turn: number;
   climb: number;
+  /** Shift held: move this many times faster (0 when not held). */
+  boost?: number;
 }
+
+/** How much faster Shift moves a camera. */
+export const BOOST = 5;
 
 const WORLD_UP = new Vec3d(0, 1, 0);
 
@@ -191,7 +196,7 @@ export class OrbitCamera implements CameraControls {
     const inp = this.input;
     if (dt > 0) {
       // Ground speed proportional to height above ground: crossing a screen takes about two seconds.
-      const speed = Math.max(50, this.heightAboveGround);
+      const speed = Math.max(50, this.heightAboveGround) * (inp.boost ? BOOST : 1);
       if (inp.forward || inp.right) this.move(inp.forward * speed * dt, inp.right * speed * dt);
       if (inp.turn) this.heading = wrapAngle(this.heading + inp.turn * 0.8 * dt);
       if (inp.climb) this.targetAltitude *= Math.exp(inp.climb * 1.2 * dt);
@@ -249,7 +254,7 @@ export class OrbitCamera implements CameraControls {
   }
 }
 
-const KEYS: Record<string, [keyof OrbitInput, number]> = {
+const KEYS: Record<string, [Exclude<keyof OrbitInput, 'boost'> | 'boost', number]> = {
   KeyW: ['forward', 1],
   KeyS: ['forward', -1],
   KeyD: ['right', 1],
@@ -258,6 +263,8 @@ const KEYS: Record<string, [keyof OrbitInput, number]> = {
   KeyQ: ['turn', -1],
   KeyR: ['climb', 1],
   KeyF: ['climb', -1],
+  ShiftLeft: ['boost', 1],
+  ShiftRight: ['boost', 1],
 };
 
 /** Screen-space change between two finger pairs: centroid motion, scale and rotation. */
@@ -301,7 +308,7 @@ export function twoFingerStep(a0: Point, b0: Point, a1: Point, b1: Point): TwoFi
  *   horizontally, the wheel zooms.
  * - Touch: one finger drags the ground; two fingers pan, pinch-zoom and twist
  *   about their midpoint, as in map apps; three fingers dragged up or down tilt.
- * - Keys: W/A/S/D move, Q/E turn, R/F climb and descend.
+ * - Keys: W/A/S/D move, Q/E turn, R/F climb and descend, Shift moves BOOST times faster.
  *
  * Returns a function that detaches the listeners.
  */
@@ -384,10 +391,10 @@ export function attachOrbitInput(
   const held = new Set<string>();
   const applyKeys = () => {
     const inp = camera.input;
-    inp.forward = inp.right = inp.turn = inp.climb = 0;
+    inp.forward = inp.right = inp.turn = inp.climb = inp.boost = 0;
     for (const code of held) {
       const k = KEYS[code];
-      if (k) inp[k[0]] += k[1];
+      if (k) inp[k[0]] = (inp[k[0]] ?? 0) + k[1];
     }
   };
   const typing = (e: KeyboardEvent) => {

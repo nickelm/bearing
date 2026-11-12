@@ -733,6 +733,8 @@ export class StrategicRelief {
     if (built > 0) sel = selectTiles(v, ready, this.lod, heightRange);
     for (const w of sel.wanted) if (!this.sources(w.tile)) this.requestData(w.tile, w.priority);
 
+    // Split tiles and their unseen children stay cached (decision 113).
+    for (const k of sel.keep) this.meshes.get(k);
     const now = new Set<Mesh>();
     let deepest = 0;
     for (const d of sel.draw) {

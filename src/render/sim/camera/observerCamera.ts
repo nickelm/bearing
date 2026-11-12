@@ -6,11 +6,13 @@
  *
  * - **Where:** over a station's spot (observerStations.ts), at an eye height
  *   above the ground from 2 m to 20 km, the simulation view's envelope.
- *   W/A/S/D walk the spot around within LEASH of the station, faster the
- *   higher the eye; R/F raise and lower the eye.
- * - **Looking:** drag (or one finger) turns the head with grab semantics;
+ *   W/A/S/D move the spot within LEASH of the station, at 40 m/s near the
+ *   ground and faster the higher the eye, five times faster with Shift; R/F
+ *   raise and lower the eye.
+ * - **Looking:** drag (either button, or one finger) is mouse-look: right
+ *   turns right, down looks down (owner review: grab semantics felt inverted);
  *   Q/E turn; the wheel and pinch zoom the field of view from 70° down to 5°,
- *   like binoculars; right drag or three fingers pitch.
+ *   like binoculars.
  * - **Ground:** the scene sets `groundHeight`, the displayed surface under the
  *   eye, every frame; until it is known the eye stands over sea level.
  * - **Clip planes:** a near plane of a tenth of the eye height (at most 1 m,
@@ -20,6 +22,7 @@
 import { DEG, KM } from '../../../core/units';
 import type { Meters, Radians } from '../../../core/units';
 import { Vec3d } from '../../../core/vec3d';
+import { BOOST } from '../../common/orbitCamera';
 import type { CameraControls, OrbitInput } from '../../common/orbitCamera';
 import { localFrame } from '../infra/infraScene';
 import type { ObserverStation } from './observerStations';
@@ -27,8 +30,8 @@ import type { ObserverStation } from './observerStations';
 /** Eye height above the ground: from standing to the simulation view's ceiling. */
 export const OBSERVER_MIN_HEIGHT = 2;
 export const OBSERVER_MAX_HEIGHT = 20 * KM;
-/** How far the observer may walk from the station's spot (m). */
-export const OBSERVER_LEASH = 5 * KM;
+/** How far the observer may roam from the station's spot (m): about the promotion bubble. */
+export const OBSERVER_LEASH = 25 * KM;
 /** Vertical field of view: widest and narrowest (binoculars). */
 export const OBSERVER_MAX_FOV = 70 * DEG;
 export const OBSERVER_MIN_FOV = 5 * DEG;
@@ -126,11 +129,14 @@ export class ObserverCamera implements CameraControls {
     this.spot.copy(next);
   }
 
-  /** Turns the head by a screen drag (grab semantics: the view follows the cursor). */
+  /**
+   * Turns the head by a screen drag, as mouse-look: dragging right turns right
+   * and dragging down looks down, by the angle the drag spans on screen.
+   */
   drag(dxPixels: number, dyPixels: number, radPerPixel: number): void {
     // radPerPixel is for the scene camera's field of view, which follows this.fov.
-    this.heading = wrapAngle(this.heading - dxPixels * radPerPixel);
-    this.pitch = clamp(this.pitch + dyPixels * radPerPixel, -MAX_PITCH, MAX_PITCH);
+    this.heading = wrapAngle(this.heading + dxPixels * radPerPixel);
+    this.pitch = clamp(this.pitch - dyPixels * radPerPixel, -MAX_PITCH, MAX_PITCH);
   }
 
   zoomAt(factor: number): void {
@@ -158,8 +164,8 @@ export class ObserverCamera implements CameraControls {
   update(dt: number): void {
     const inp = this.input;
     if (dt > 0) {
-      // Walking pace on the ground, faster from higher up.
-      const speed = Math.max(15, 0.5 * this.height);
+      // A brisk pace on the ground, faster from higher up; Shift for more.
+      const speed = Math.max(40, 1.5 * this.height) * (inp.boost ? BOOST : 1);
       if (inp.forward || inp.right) this.walk(inp.forward * speed * dt, inp.right * speed * dt);
       if (inp.turn) this.heading = wrapAngle(this.heading + inp.turn * 0.8 * dt);
       if (inp.climb) {

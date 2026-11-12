@@ -377,7 +377,9 @@ Done in old M2, for the renderer that served orbit to ground:
 Simulation view (needs S1's `render/sim/` split):
 
 - [x] Camera envelope 0–20 km; an observer camera at an airbase or port from the cast; the free camera kept as a debug tool behind a dev flag until V4 (decision 72; decision 112)
-  - [ ] Owner: the observer at an airbase in the browser (GUI → View → Simulation camera → Observer at); walking (W/A/S/D), height (R/F), binocular zoom (wheel), and whether the eye ever drops under the ground
+  - [x] Owner review (2026-11-12): the ground flickered to sea or black for single frames while turning (fixed, decision 113: tiles split only when all four children are ready); horizontal drag felt inverted (mouse-look now); movement too slow (40 m/s, Shift ×5, 25 km leash)
+  - [ ] Owner: recheck the observer in the browser after decision 113 (no flicker while turning or walking; drag and Shift feel right)
+  - [ ] Owner concern: the ground around bases looks flat and uniform. Airbases sit on flat land by design and the grading flattens 400 m beyond; the uniform look is the smooth, one-color-per-biome land shading that the faceted shading, shade quantization and farmland tasks below replace
   - [ ] Ports: a quay layout and buildings, so a port observer stands on the quay rather than at the coarse site point (with C3's ships)
   - [ ] Ease between stations instead of jumping (V4's transition controller)
 - [ ] Horizon-bounded tile selection: drop tiles beyond √(2Rh) plus a margin (at most about 200 km at 20 km); tests for the bound and that selection never exceeds it

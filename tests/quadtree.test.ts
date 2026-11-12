@@ -86,6 +86,27 @@ describe('selectTiles', () => {
     expect(s.wanted.every((w) => w.tile.level === 3)).toBe(true);
   });
 
+  it('splits a tile only when its unseen children are ready too, and keeps them cached', () => {
+    // Low and looking at the horizon: many split tiles have children outside the view.
+    const v = viewAt(500, 80 * DEG);
+    const key = (t: { face: number; level: number; x: number; y: number }) =>
+      `${t.face}/${t.level}/${t.x}/${t.y}`;
+    const all = selectTiles(v, always);
+    const drawn = new Set(all.draw.map((d) => key(d.tile)));
+    const unseen = all.keep.filter((t) => !drawn.has(key(t)) && t.level >= 2);
+    expect(unseen.length).toBeGreaterThan(0);
+    // The parent of an unseen child is itself kept (a split tile), never drawn.
+    const child = unseen[unseen.length - 1]!;
+    const parentKey = `${child.face}/${child.level - 1}/${child.x >> 1}/${child.y >> 1}`;
+    expect(all.keep.map(key)).toContain(parentKey);
+    expect(drawn.has(parentKey)).toBe(false);
+    // Without that child's mesh, its parent draws instead of splitting, and the child is wanted:
+    // a later turn toward it then finds it ready, rather than the parent standing in.
+    const s2 = selectTiles(v, (t) => key(t) !== key(child));
+    expect(s2.draw.map((d) => key(d.tile))).toContain(parentKey);
+    expect(s2.wanted.map((w) => key(w.tile))).toContain(key(child));
+  });
+
   it('morphs from parent-like to full detail', () => {
     const s = selectTiles(viewAt(20 * KM), always);
     for (const d of s.draw) {

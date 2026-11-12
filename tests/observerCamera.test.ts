@@ -69,14 +69,14 @@ describe('ObserverCamera', () => {
     expect(c.tilt).toBeCloseTo(80 * DEG, 9);
   });
 
-  it('turns the head with grab semantics and clamps the pitch', () => {
+  it('turns the head as mouse-look and clamps the pitch', () => {
     const c = new ObserverCamera(R);
     c.setStation(station());
-    c.drag(100, 0, 0.001); // content moves right: the head turns left
-    expect(c.heading).toBeCloseTo(-0.1, 9);
-    c.drag(0, 50, 0.001); // content moves down: the head looks up
-    expect(c.pitch).toBeCloseTo(0.05, 9);
-    c.drag(0, 1e6, 0.001);
+    c.drag(100, 0, 0.001); // drag right: turn right
+    expect(c.heading).toBeCloseTo(0.1, 9);
+    c.drag(0, 50, 0.001); // drag down: look down
+    expect(c.pitch).toBeCloseTo(-0.05, 9);
+    c.drag(0, -1e6, 0.001);
     expect(c.pitch).toBeLessThan(Math.PI / 2);
     c.tiltBy(1e6);
     expect(c.pitch).toBeGreaterThan(-Math.PI / 2);
