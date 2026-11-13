@@ -6,7 +6,7 @@
  *
  *   npx vitest run --config vitest.tools.config.ts tools/render.preview.ts
  *   env: SEED (1983), TRES tectonic resolution (256), GRES global resolution (1024),
- *        VIEWS comma list of view names (all), W × H image size (1024 × 576),
+ *        VIEWS comma list of view names (all; `checks` adds the Part I acceptance checks 1–5), W × H image size (1024 × 576),
  *        EX exaggeration (1, the simulation view's true scale), GRADE=0 leaves airfields ungraded (files get -ungraded),
  *        FACETS=0 shades the terrain smoothly instead of in flat facets (files get -smooth),
  *        PERF=n times n more frames per view once loaded: ms per frame until the GPU is
@@ -71,6 +71,7 @@ import { airfieldGrading } from '../src/render/sim/infra/airfieldGrading';
 import { buildWeatherClimate } from '../src/sim/weather/climate';
 import { WeatherGrid } from '../src/sim/weather/grid';
 import { createSimWorld } from '../src/sim/world';
+import { findCheckTargets } from './checkViews';
 import { findSpots, SPOT_KINDS } from './landscapeSpots';
 import type { LandscapeSpot } from './landscapeSpots';
 
@@ -91,7 +92,27 @@ export interface PreviewView {
    * latitude, the densely forested cell nearest the main continent, the
    * largest city, or the first main airbase (milestone 5).
    */
-  target?: 'lake' | 'forest' | 'city' | 'airbase' | 'front' | 'capital' | 'peak' | 'farmland';
+  target?:
+    | 'lake'
+    | 'forest'
+    | 'city'
+    | 'airbase'
+    | 'front'
+    | 'capital'
+    | 'peak'
+    | 'farmland'
+    | 'mixed'
+    | 'conifer'
+    | 'beach';
+  /**
+   * With a target: face this far clockwise of the sun's azimuth (rad; 0 looks into
+   * the sun, π puts it behind), standing back from the target along that heading.
+   */
+  sunHeading?: number;
+  /** Trees and buildings on for this view (as DETAIL=1; DETAIL=0 still turns them off). */
+  detail?: boolean;
+  /** The Part I acceptance check this view captures (1–5; VIEWS=checks). */
+  check?: number;
   /** With target 'airbase': stand back along the runway and look down it (heading ignored). */
   alongRunway?: boolean;
   /** Instead of localTime: the first evening time the sun at the camera sinks to this elevation (rad). */
@@ -108,15 +129,80 @@ export interface PreviewView {
   height?: number;
 }
 
+/**
+ * Simulation-view previews, all within its 0–20 km envelope (decision 72). The
+ * five named for Part I's acceptance checks 1–5 carry `check` (VIEWS=checks
+ * renders them; decision 128); the others look at single features. Views of
+ * the globe and the map's scales are in STRATEGIC_PREVIEW_VIEWS.
+ */
 export const PREVIEW_VIEWS: PreviewView[] = [
   {
-    name: 'oblique',
+    // Part I check 1: 5 km over forest, farmland, a river and a town, sun behind and to the side.
+    name: 'mixed',
     dLat: 0,
     dLon: 0,
-    altitude: 20 * KM,
-    tilt: 78 * DEG,
-    heading: 30 * DEG,
-    localTime: 15,
+    altitude: 5 * KM,
+    tilt: 68 * DEG,
+    heading: 0,
+    localTime: 10.5,
+    target: 'mixed',
+    sunHeading: 140 * DEG,
+    detail: true,
+    check: 1,
+  },
+  {
+    // Part I check 2: 500 m over a conifer forest edge with a road.
+    name: 'conifer',
+    dLat: 0,
+    dLon: 0,
+    altitude: 500,
+    tilt: 76 * DEG,
+    heading: 0,
+    localTime: 14,
+    target: 'conifer',
+    sunHeading: 150 * DEG,
+    detail: true,
+    check: 2,
+  },
+  {
+    // Part I check 3: the highest range near the main continent at low sun, lit from the side.
+    name: 'range',
+    dLat: 0,
+    dLon: 0,
+    altitude: 12 * KM,
+    tilt: 80 * DEG,
+    heading: 0,
+    sunElevation: 8 * DEG,
+    target: 'peak',
+    sunHeading: 80 * DEG,
+    check: 3,
+  },
+  {
+    // Part I check 4: an airbase at dusk with its runway lit (V3).
+    name: 'dusk',
+    dLat: 0,
+    dLon: 0,
+    altitude: 300,
+    tilt: 80 * DEG,
+    heading: 0,
+    sunElevation: -1 * DEG,
+    target: 'airbase',
+    alongRunway: true,
+    detail: true,
+    check: 4,
+  },
+  {
+    // Part I check 5: a warm, low coast with a shallow shelf, facing the sun for its glint.
+    name: 'beach',
+    dLat: 0,
+    dLon: 0,
+    altitude: 1500,
+    tilt: 80 * DEG,
+    heading: 0,
+    localTime: 16.5,
+    target: 'beach',
+    sunHeading: 0,
+    check: 5,
   },
   {
     name: 'low',
@@ -126,24 +212,6 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     tilt: 82 * DEG,
     heading: 200 * DEG,
     localTime: 9,
-  },
-  {
-    name: 'coast',
-    dLat: -30 * DEG,
-    dLon: 0,
-    altitude: 80 * KM,
-    tilt: 45 * DEG,
-    heading: 180 * DEG,
-    localTime: 10.5,
-  },
-  {
-    name: 'glint',
-    dLat: -38 * DEG,
-    dLon: 0,
-    altitude: 40 * KM,
-    tilt: 62 * DEG,
-    heading: 250 * DEG,
-    localTime: 16.5,
   },
   {
     name: 'sea',
@@ -167,8 +235,8 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     name: 'lake',
     dLat: 0,
     dLon: 0,
-    altitude: 30 * KM,
-    tilt: 30 * DEG,
+    altitude: 8 * KM,
+    tilt: 70 * DEG,
     heading: 0,
     localTime: 13,
     target: 'lake',
@@ -184,24 +252,16 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     target: 'forest',
   },
   {
+    // The check-1 landscape in midwinter: snow on fields and open ground, dark forests.
     name: 'winter',
     dLat: 0,
     dLon: 0,
-    altitude: 1500 * KM,
-    tilt: 0,
+    altitude: 4 * KM,
+    tilt: 68 * DEG,
     heading: 0,
     localTime: 12,
     day: 150,
-  },
-  {
-    name: 'mountains',
-    dLat: 12 * DEG,
-    dLon: 0,
-    altitude: 25 * KM,
-    tilt: 65 * DEG,
-    heading: 0,
-    localTime: 14,
-    day: 0,
+    target: 'mixed',
   },
   {
     // The highest summit near the main continent: rock and snow by face (decision 125).
@@ -288,35 +348,15 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     observer: true,
   },
   {
-    // Part I check 4: an airbase at dusk with its runway lit (V3).
-    name: 'dusk',
-    dLat: 0,
-    dLon: 0,
-    altitude: 300,
-    tilt: 80 * DEG,
-    heading: 0,
-    sunElevation: -1 * DEG,
-    target: 'airbase',
-    alongRunway: true,
-  },
-  {
-    name: 'roads',
-    dLat: 0,
-    dLon: 0,
-    altitude: 60 * KM,
-    tilt: 0,
-    heading: 0,
-    localTime: 10,
-    target: 'city',
-  },
-  {
+    // Settlement and road lights at night, over the largest city.
     name: 'night',
     dLat: 0,
     dLon: 0,
-    altitude: 1500 * KM,
-    tilt: 0,
+    altitude: 6 * KM,
+    tilt: 65 * DEG,
     heading: 0,
-    localTime: 0,
+    localTime: 23,
+    target: 'city',
   },
 ];
 
@@ -444,7 +484,10 @@ it('renders preview views', async () => {
   const wanted = env('VIEWS', '');
   const strategic = env('SCENE', 'sim') === 'strategic';
   const views = (strategic ? STRATEGIC_PREVIEW_VIEWS : PREVIEW_VIEWS).filter(
-    (v) => !wanted || wanted.split(',').includes(v.name),
+    (v) =>
+      !wanted ||
+      wanted.split(',').includes(v.name) ||
+      (wanted.split(',').includes('checks') && v.check !== undefined),
   );
 
   // The campaign world first: the global pass uses the seed that passed the validity check.
@@ -546,6 +589,16 @@ it('renders preview views', async () => {
   for (let i = 1; i < sp.cells.length; i++)
     if (sp.population[i]! > sp.population[biggest]!) biggest = i;
   const base = campaign.infrastructure.airbases.find((a) => a.kind === 'main');
+  // Check targets (decision 128); tiles judge the conifer candidates only when a view needs them.
+  const needsTiles = views.some((v) => v.target === 'conifer');
+  const { notes: checkNotes, ...checks } = await findCheckTargets(
+    global,
+    campaign.graph,
+    main,
+    params.radius,
+    needsTiles ? synth : undefined,
+  );
+  for (const note of checkNotes) console.log(note);
   const targets: Record<NonNullable<PreviewView['target']>, Vec3d | null> = {
     front: null, // strategic previews only
     capital: null,
@@ -553,6 +606,7 @@ it('renders preview views', async () => {
     forest: null,
     peak: null,
     farmland: null,
+    ...checks,
     city: sp.cells.length ? new Vec3d(...settlementPoint(sp, biggest)) : null,
     airbase: base ? new Vec3d(...base.point) : null,
   };
@@ -764,6 +818,19 @@ it('renders preview views', async () => {
       );
     }
     sunDirection(t, params, calendar, scene.sun);
+    if (target && v.sunHeading !== undefined && !station) {
+      // Face relative to the sun's azimuth at the target, standing back along that heading.
+      const east = new Vec3d(0, 1, 0).cross(target).normalize();
+      const north = target.clone().cross(east);
+      o.heading = Math.atan2(scene.sun.dot(east), scene.sun.dot(north)) + v.sunHeading;
+      const back = v.altitude * Math.tan(Math.min(v.tilt, 70 * DEG));
+      const p = offsetPoint(target, o.heading, -back, 0, params.radius);
+      o.lat = Math.asin(p.y);
+      o.lon = Math.atan2(p.x, p.z);
+      console.log(
+        `${v.name}: target ${(Math.asin(target.y) / DEG).toFixed(3)}, ${(Math.atan2(target.x, target.z) / DEG).toFixed(3)}, heading ${(o.heading / DEG).toFixed(0)}°`,
+      );
+    }
     if (station && process.env.OBS_HEADING) {
       const h = process.env.OBS_HEADING;
       if (h === 'sun') {
@@ -789,7 +856,9 @@ it('renders preview views', async () => {
     // FARMLAND=0 leaves the fields out (decision 127).
     scene.terrain.land.farmland.value = process.env.FARMLAND === '0' ? 0 : 1;
     // DETAIL=1 adds the instanced trees and buildings (off in the strategic view, decision 71).
-    scene.forest.enabled = scene.structures.enabled = process.env.DETAIL === '1';
+    // A view's own detail flag turns them on unless DETAIL=0.
+    scene.forest.enabled = scene.structures.enabled =
+      process.env.DETAIL === '1' || (v.detail === true && process.env.DETAIL !== '0');
     // Render until the terrain has loaded everything this view wants.
     let stable = 0;
     let last = '';

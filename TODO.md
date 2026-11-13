@@ -423,7 +423,12 @@ Simulation view (needs S1's `render/sim/` split):
   - [ ] Owner: judge field size (256 m lattice), crop shares and the stepped field edges in the browser
   - [ ] Field edges: hedgerows or darker field margins, if the patchwork needs more structure (not in Part I yet)
   - [ ] Farmland follows the 4 km habitability grid and the biome; S4's urban extents and roads could shape it further (fields along roads, none inside town extents)
-- [ ] Simulation preview views: re-aim Part I checks 1–5 (5 km mixed landscape, 500 m conifer edge with a road, mountains at low sun, airbase at dusk, coast with glint) at or below 20 km in `tools/render.preview.ts`; retire views between 20 and 100 km (`oblique`, `roads`, `coast`) or move them to the strategic set (carried from old M5)
+- [x] Simulation preview views: re-aim Part I checks 1–5 (5 km mixed landscape, 500 m conifer edge with a road, mountains at low sun, airbase at dusk, coast with glint) at or below 20 km in `tools/render.preview.ts`; retire views between 20 and 100 km (`oblique`, `roads`, `coast`) or move them to the strategic set (carried from old M5) (decision 128: `mixed`, `conifer`, `range`, `dusk`, `beach`; `VIEWS=checks`; targets in `tools/checkViews.ts`)
+  - [ ] Check 1 (`mixed`): at 5 km the view looks down onto a cloud layer, which ends in a hard straight edge across the frame; with `CLOUDS=0` the landscape reads. Find the cloud edge (near fade, or the layer's intersection with the view)
+  - [ ] Check 1: the river at the town is hard to find at 5 km; rivers should be the most visible terrain feature from altitude (Part I)
+  - [ ] Check 2 (`conifer`): the town's built-up patch reads as large triangles of roof and wall colors under the buildings; the road is faint at 500 m
+  - [ ] Check 4 (`dusk`): no parked aircraft yet (aircraft meshes in the simulation view, V4)
+  - [ ] Check 5 (`beach`): no beach: the coast has the foam line and shallow water but no sand strip
 - [ ] Style audit: compare those views with the reference board and Part I (terrain facets and shade quantization, farmland, rivers, ocean, haze, trees, towns, lights); the old M3 and M5 rendering predates the guide (smooth shading, clump trees). Add a task per gap (carried from old M5)
 - [ ] Frame time over 0–20 km within Part I's budgets
 - [ ] Checkpoint: owner review of the simulation view's terrain from an observer camera

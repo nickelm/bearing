@@ -294,7 +294,7 @@ Before a visual milestone with simulation-view work closes, capture these views 
 9. The aircraft stays readable and centered in a maximum-rate turn.
 10. The camera never clips terrain during low-level flight through valleys.
 
-Checks 1–5 are named views in `tools/render.preview.ts`; check 6 runs in the model viewer. Checks 7–10 are scripted flight sequences in `tools/render.preview.ts` and apply from milestone V4 (camera rig and flight path marker); check 9 needs the flight model (P1), and the gun pipper part of check 8 needs guns (P4).
+Checks 1–5 are the views `mixed`, `conifer`, `range`, `dusk` and `beach` in `tools/render.preview.ts` (`VIEWS=checks`), aimed at places the preview finds in each world (decision 128); check 6 runs in the model viewer. Checks 7–10 are scripted flight sequences in `tools/render.preview.ts` and apply from milestone V4 (camera rig and flight path marker); check 9 needs the flight model (P1), and the gun pipper part of check 8 needs guns (P4).
 
 # Part II: Strategic View
 

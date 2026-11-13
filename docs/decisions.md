@@ -1954,3 +1954,20 @@ The engineering calls made while adopting it:
 - **Preview:** a new view, `farmland`, looks from 2 km over the most settled farmable lowland within 600 km of the main continent; `FARMLAND=0` leaves the fields out. It shows a patchwork of fields between dark forest masses, muted toward the horizon. GUI → Lighting → Farmland switches it in the app.
 
 **Reason:** Reference 2's patchwork is the main thing that tells inhabited lowland from wilderness at a glance, and Part I asks for it. Placing fields by the map's own rule keeps both views agreeing on where people farm; evaluating fields per face keeps them in the faceted style of decisions 123–125.
+
+### 128. Simulation preview views for Part I's checks, all within 20 km
+
+**Date:** 2026-11-13
+**Decision:** `tools/render.preview.ts` names one view per Part I acceptance check and keeps every simulation-view preview within the view's 0–20 km envelope (decision 72). `VIEWS=checks` renders the five.
+
+- **The checks.** Each looks at a place the preview finds in the world, so every seed has its own check views; `tools/checkViews.ts` holds the searches.
+  - `mixed` (check 1): 5 km above the town or city near the main continent with the most even mix of forest and open farmable ground within 6 km and a river (discharge at least 40 m³/s) nearby, with the sun behind and to the side.
+  - `conifer` (check 2): 500 m above a road through a forest edge. Road points with taiga and open ground within 2 km are ranked on the global grid, preferring the main continent's side of the world, and the best eight, at least 30 km apart, are judged on synthesized level-7 tiles. The tiles cut the global forest by the treeline at the fine height, slope and water, so the global grid alone picked a road through bare plateau (13 taiga cells in the grid, no canopy in the tiles).
+  - `range` (check 3): 12 km beside the highest summit within 600 km of the main continent (decision 125's `peak`), when the sun has sunk to 8°, lit from the side.
+  - `dusk` (check 4): the existing view down the main airbase's runway at sunset, now with trees and buildings.
+  - `beach` (check 5): 1.5 km above a low, warm coast (land under 25 m in a warm biome, little relief) with the broadest shelf shallower than 40 m within 4.5 km, facing the sun for its glint.
+- **View fields.** `sunHeading` turns a targeted view relative to the sun's azimuth at the target and stands back from it along that heading; `detail` turns trees and buildings on for that view (`DETAIL=0` still turns them off); `check` marks the five.
+- **Retired and re-aimed.** `oblique` (20 km), `coast` (80 km), `glint` (40 km), `mountains` (25 km) and `roads` (60 km) are gone: the strategic previews cover those scales, and `range` and `beach` replace the two that served checks. `lake` moves from 30 to 8 km, `winter` from 1,500 km to 4 km over the check-1 landscape in midwinter, and `night` from 1,500 km to 6 km over the largest city at 23:00. The strategic set keeps its own `winter` and `night`.
+- **What the first run on seed 1983 shows** (gaps in TODO under the task): `range` and `dusk` match their checks (faceted rock and snow at low sun with layered haze; a lit runway, hangars and buttes against an orange sky). `conifer` shows conifer trees along a forest edge, a road and a town at the edge. `mixed` looks down onto a cloud layer that ends in a hard straight edge across the frame; without clouds, forest, roads, towns, fields and distant mountains read, but the river does not. `beach` shows the glint, the shallow teal shelf and the foam line, but no sand. `dusk` has no parked aircraft yet.
+
+**Reason:** Part I's checks are only useful if they look at what they name, in the simulation view's own envelope. Fixed offsets from the main continent's center found sea or bare ground on other seeds, and several old views looked from heights the simulation view no longer reaches.
