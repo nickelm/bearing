@@ -453,6 +453,7 @@ export class FlightModel {
       dt,
       bank: tel.bank,
       pitch: tel.pitch,
+      radarAltitude: tel.radarAltitude,
     };
     tel.lawInput = lawIn;
     // Stick prefilter (as in the F-16's FCS): shapes the command's onset.

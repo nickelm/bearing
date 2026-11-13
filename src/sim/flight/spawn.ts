@@ -46,5 +46,7 @@ export function spawnInAir(
   model.gear = 0;
   model.speedbrake = 0;
   model.power = 0.45;
+  // Long airborne, as far as the control laws know: not the moment of a liftoff.
+  model.lawState.airborne = 30;
   model.afterburner = 0;
 }

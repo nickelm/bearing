@@ -120,7 +120,7 @@ export interface FlightSpec {
     /** Integral gain of the pitch-rate loop (1/s²). */
     rateIntegral: number;
     /**
-     * Pitch rate at full stick in the rate law on the ground (rad): the rotation;
+     * Pitch rate at full stick in the rate law on the ground (rad/s): the rotation;
      * it grows to `maxPitchRate` in the first seconds of flight (decision 136).
      */
     groundPitchRate: number;
@@ -128,6 +128,10 @@ export interface FlightSpec {
     groundGain: number;
     /** Nose-down pitch rate (rad/s) with neutral stick after a landing. */
     derotationRate: number;
+    /** Gain of the gear-down law's path hold (rad/s per g). */
+    holdGain: number;
+    /** The path hold never pulls past this angle of attack (rad): the approach's. */
+    approachAlpha: number;
     sideslipGain: number;
     alphaGain: number;
   };
@@ -292,6 +296,8 @@ export function parseFlightSpec(raw: unknown, id = '?'): FlightSpec {
   for (const k of ['blendLow', 'blendHigh', 'sideslipGain', 'alphaGain', 'rateIntegral'])
     pos(c, k, 'controls');
   pos(c, 'groundGain', 'controls');
+  pos(c, 'holdGain', 'controls');
+  c.approachAlpha = pos(c, 'approachAlpha', 'controls') * DEG;
   for (const k of [
     'maxRollRate',
     'maxPitchRate',
@@ -330,6 +336,8 @@ export function parseFlightSpec(raw: unknown, id = '?'): FlightSpec {
     'cornering',
   ])
     pos(g, k, 'gear');
+  if (!((g.steerOff as number) > (g.steerFade as number)))
+    fail('gear.steerOff', 'must exceed steerFade');
   g.steerLow = num(g, 'steerLow', 'gear') * DEG;
   g.steerHigh = num(g, 'steerHigh', 'gear') * DEG;
   pos(s.speedbrake, 'transit', 'speedbrake');

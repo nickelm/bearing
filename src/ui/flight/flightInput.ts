@@ -139,6 +139,8 @@ export class FlightInput {
   /** Called on a press of a toggle action (gear, help, pause...). */
   onAction: ((a: FlightAction) => void) | null = null;
   enabled = false;
+  /** On the wheels mouse aim hands the stick to the keys (set by the app each frame). */
+  directOnGround = false;
 
   private readonly held = new Set<string>();
   private readonly keyAction = new Map<string, FlightAction>();
@@ -271,7 +273,7 @@ export class FlightInput {
       const dz = (v: number) => (Math.abs(v) < 0.04 ? 0 : (v - Math.sign(v) * 0.04) / 0.96);
       c.pitch = clamp(dz(-this.cursor.y / 0.7), -1, 1);
       c.roll = clamp(dz(this.cursor.x / 0.7), -1, 1);
-    } else if (this.mode === 'keyboard') {
+    } else if (this.mode === 'keyboard' || (this.mode === 'mouse-aim' && this.directOnGround)) {
       c.pitch = axis(c.pitch, 'pitchDown', 'pitchUp');
       c.roll = axis(c.roll, 'rollLeft', 'rollRight');
     }

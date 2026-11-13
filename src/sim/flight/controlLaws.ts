@@ -6,15 +6,18 @@
  * - **Pitch.** With the gear up the stick commands load factor (neutral stick
  *   holds 1 g, less the centripetal relief of level flight over the small
  *   planet, so it trims itself for level flight; full aft 9 g, full forward −3 g).
- *   With the gear down (takeoff and landing) it commands pitch rate, gently (5°/s
- *   at full stick), and neutral stick holds the attitude: the gear handle selects
- *   the gains, as in the F-16. A PI rate loop reaches the commanded rate. An
+ *   With the gear down (takeoff and landing) it commands pitch rate, gently on the
+ *   runway (5°/s at full stick) and up to 12°/s a few seconds after liftoff, and
+ *   neutral stick holds the attitude: the gear handle selects the gains, as in the
+ *   F-16 (decision 136; `pitchCommand`). A PI rate loop reaches the commanded rate. An
  *   angle-of-attack limiter caps the pitch rate as α nears its limit (about 25°),
  *   and the load-factor command is clamped to +9/−3 g.
  * - **Roll.** Lateral stick commands roll rate, reduced at high α; none on the ground.
  * - **Yaw.** Pedals command sideslip; with pedals neutral the law yaws the
  *   aircraft to keep the sideslip at zero (turn coordination). On the ground the
- *   rudder acts open loop and the nosewheel steers.
+ *   rudder acts open loop at taxi speeds, where the nosewheel steers; from about
+ *   30 m/s the pedals command a gentle yaw rate (3°/s at full pedal), closed loop,
+ *   so a pedal held on the takeoff roll does not ground-loop the jet.
  *
  * The rate loops ask for the moment that drives the body rates toward their
  * commands in a fraction of a second; the aircraft model adds damping, weathercock
@@ -101,6 +104,8 @@ export interface LawInput {
   bank: number;
   /** Pitch attitude (rad), so derotation after landing stops at the ground attitude. */
   pitch: number;
+  /** Height of the wheels above the ground (m): the path hold gives way in the flare. */
+  radarAltitude: number;
 }
 
 export interface LawOutput {
@@ -153,6 +158,10 @@ export function newLawState(): LawState {
   return { pitchI: 0, airborne: 0, landed: false };
 }
 
+const DEG_ = Math.PI / 180;
+/** Yaw rate (rad/s) full pedal commands on the runway above taxi speed. */
+const GROUND_YAW_RATE = 3 * DEG_;
+
 /** Largest pitch rate (rad/s) the rate law's load-factor hold adds or takes away. */
 const HOLD_LIMIT = 4 * (Math.PI / 180);
 
@@ -177,8 +186,10 @@ export interface PitchCommand {
  *   pitch rate of a level turn at the present bank and, from 6–12 s after liftoff,
  *   a load-factor hold on the commanded path, so neutral stick holds a turn in
  *   the pattern instead of sinking, while just after liftoff it holds the
- *   attitude the pilot rotated to. After a landing, neutral stick lowers the nose
- *   at `derotationRate` onto the nosewheel.
+ *   attitude the pilot rotated to; it gives way below 20 m and above the approach
+ *   angle of attack. After a landing, neutral stick lowers the nose at
+ *   `derotationRate` onto the nosewheel; forward stick on the gear stops at the
+ *   ground attitude.
  * - **Load-factor law** (gear up): the stick commands load factor.
  * - **The handover** as the gear moves: the load law's steady part is weighted
  *   by the blend and its error term by the blend squared, so the first percent
@@ -216,14 +227,29 @@ export function pitchCommand(
     // direction (−g cos γ cos(bank)), so a climb or a turn is held, not pulled into.
     const nPath = -s.gravityLift / (s.g * cb * cb);
     const nRef = nPath - s.curvature / s.g + (stickRate * v) / s.g;
-    const hold = clamp(c.loadGain * (nRef - s.load), -HOLD_LIMIT, HOLD_LIMIT);
+    // A gentle gain: at the load law's gain the hold briefly added several times
+    // the stick's own rate to every small input, and a steady pilot bobbed.
+    let hold = clamp(c.holdGain * (nRef - s.load), -HOLD_LIMIT, HOLD_LIMIT);
+    // It gives way near the ground (the flare holds the attitude) and never pulls
+    // past the approach angle of attack: at idle in a flare it raised the nose
+    // toward the stall.
+    hold *= smoothstep(10, 20, s.radarAltitude);
+    if (hold > 0 && s.alpha > c.approachAlpha) hold = 0;
     // The hold comes in 6–12 s after liftoff: until then the rate law holds the
     // attitude the pilot rotated to, as a takeoff wants; in a landing pattern, long
     // after liftoff, it holds the path in turns.
     qRate += air * smoothstep(6, 12, airborne) * hold;
   }
-  if (state?.landed && s.wow > 0.3 && Math.abs(st) < 0.1 && s.pitch > 1 * (Math.PI / 180))
-    qRate = -c.derotationRate;
+  if (s.wow > 0.3) {
+    // After a landing, near-neutral stick lowers the nose: a floor that eases out
+    // as the stick comes aft (monotonic in the stick, which the flight director's
+    // inversion needs), until the nose is down.
+    if (state?.landed && s.pitch > 1 * DEG_)
+      qRate = Math.min(qRate, -c.derotationRate * (1 - st / 0.1));
+    // Forward stick never drives the nose below its ground attitude: pressing the
+    // nosewheel down overloads it and makes the jet swerve at speed.
+    if (s.pitch < 0.5 * DEG_) qRate = Math.max(qRate, 0);
+  }
   let q = blend * steady + blend * blend * loadTerm + (1 - blend) * qRate;
   if (s.tas > 20 && air > 0.5) {
     q = Math.min(q, c.alphaGain * (c.maxAlpha - s.alpha));
@@ -235,7 +261,6 @@ export function pitchCommand(
   return { q, n, blend };
 }
 
-/** The load factor the pitch stick commands (g), before the limiters. */
 /**
  * The load factor the pitch stick commands (g), before the limiters. The stick is
  * shaped as on the F-16, gentle near center: s·(0.3 + 0.7|s|), so a fifth of the
@@ -272,9 +297,12 @@ export function controlLaws(
     if (s.wow > 0.05) {
       if (state.airborne > 2) state.landed = true;
       state.airborne = 0;
+      // Derotated: the latch has done its work (a later takeoff run is not a landing).
+      if (s.wow > 0.9 && s.pitch < 0.5 * DEG_) state.landed = false;
     } else {
       state.airborne += s.dt;
-      if (state.airborne > 0.5) state.landed = false;
+      // As long to clear as to set, so a skip on landing keeps it.
+      if (state.airborne > 2) state.landed = false;
     }
   }
   const pitch = pitchCommand(spec, ctl.pitch, s, state ?? null);
@@ -317,7 +345,13 @@ export function controlLaws(
   const mx = clamp(ixx * kp * (pCmd - s.p) - dampX, -authX, authX);
 
   // ---- Yaw ----
-  let mz = clamp(ctl.yaw, -1, 1) * authZ * s.wow;
+  // On the ground: open-loop rudder at taxi speeds, and from about 30 m/s a gentle
+  // yaw-rate command (3°/s at full pedal) closed by the rudder.
+  const pedal = clamp(ctl.yaw, -1, 1);
+  const closed = smoothstep(20, 35, s.tas);
+  const groundYaw =
+    pedal * authZ * (1 - closed) + closed * izz * kr * (pedal * GROUND_YAW_RATE - s.r);
+  let mz = groundYaw * s.wow;
   if (flying) {
     const betaCmd = -clamp(ctl.yaw, -1, 1) * c.maxSideslip;
     const ca = Math.max(0.3, Math.cos(s.alpha));

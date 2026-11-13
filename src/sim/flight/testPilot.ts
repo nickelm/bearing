@@ -212,7 +212,7 @@ export class TestPilot {
         const dir = toward(model, carrot);
         const vsDes = -(0.25 * Math.max(pos.h, 0) + 0.6);
         let gamma = Math.asin(vsDes / v);
-        // Never above 12.5° of pitch: the tail strikes at about 14°.
+        // Never above 12.5° of pitch: the tail strikes at about 13.5°.
         if (tel.pitch > 12.5 * DEG) gamma = Math.min(gamma, tel.gamma - 0.5 * DEG);
         const speed = pos.h > 4 ? speedForAlpha(model, APPROACH_ALPHA) : null;
         this.director.fly(model, { course: dir.course, gamma, speed, maxBank: 10 * DEG }, ctl, dt);

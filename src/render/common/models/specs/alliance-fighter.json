@@ -422,7 +422,9 @@
       "rateIntegral": 4,
       "groundPitchRate": 5,
       "groundGain": 5,
-      "derotationRate": 2.5
+      "derotationRate": 2.5,
+      "holdGain": 0.12,
+      "approachAlpha": 13
     },
     "gear": {
       "wheels": [

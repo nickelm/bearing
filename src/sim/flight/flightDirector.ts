@@ -30,6 +30,11 @@ export interface DirectorTarget {
   maxBank?: number;
   /** Turn-rate limit (rad/s); default 12°/s. */
   maxTurnRate?: number;
+  /**
+   * Most load factor (g) the path change may add to or take from the path's own
+   * cos γ / cos(bank); default 0.6 g, so a gentle descent is not a push to 0.2 g.
+   */
+  maxLoadDelta?: number;
   /** Whether the throttle may enter the afterburner. */
   afterburner?: boolean;
 }
@@ -94,11 +99,18 @@ export class FlightDirector {
     const bankCmd = clamp(Math.atan((v * turn) / g), -maxBank, maxBank);
     const pDes = clamp(this.bankGain * (bankCmd - t.bank), -2, 2);
     ctl.roll = clamp(pDes / spec.controls.maxRollRate, -1, 1);
-    ctl.yaw = 0;
+    // In the air the laws coordinate the turn; on the wheels the pedals stay the pilot's.
+    if (t.wow < 0.5) ctl.yaw = 0;
     // Vertical: flight path error → climb rate → load factor.
     const gammaRate = clamp(this.gammaGain * (target.gamma - t.gamma), -0.25, 0.25);
     const cb = Math.cos(clamp(t.bank, -80 * DEG, 80 * DEG));
-    const nDes = (Math.cos(t.gamma) + (v * gammaRate) / g) / cb;
+    const nPathOnly = Math.cos(t.gamma) / cb;
+    const dn = target.maxLoadDelta ?? 0.6;
+    const nDes = clamp(
+      (Math.cos(t.gamma) + (v * gammaRate) / g) / cb,
+      nPathOnly - dn,
+      nPathOnly + dn,
+    );
     const c = spec.controls;
     const sLoad = nDes >= 1 ? (nDes - 1) / (c.maxLoad - 1) : (nDes - 1) / (1 - c.minLoad);
     // At low speed the stick commands pitch rate: the body rate of that path.

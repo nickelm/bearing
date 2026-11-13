@@ -486,6 +486,8 @@ export class FreeFlight {
     const m = this.model;
     if (!m || !this.ground || !this.monitor) return;
     const chase = this.deps.globe.chase;
+    // Mouse aim flies only in the air; on the wheels the keys steer and rotate.
+    this.input.directOnGround = m.onGround;
     this.input.update(this.state === 'flying' ? dt : 0);
     chase.lookHeld = this.input.lookHeld;
     if (this.input.lookHeld) {
@@ -503,7 +505,8 @@ export class FreeFlight {
         this.acc -= FLIGHT_STEP;
         steps++;
         if (this.pilot) this.pilot.fly(m, ctl, FLIGHT_STEP);
-        else if (this.input.mode === 'mouse-aim' && this.state === 'flying') this.mouseAim(m, ctl);
+        else if (this.input.mode === 'mouse-aim' && this.state === 'flying' && !m.onGround)
+          this.mouseAim(m, ctl);
         const p0 = m.pos.clone();
         m.step(ctl, this.ground);
         this.distance += p0.distanceTo(m.pos);
@@ -545,7 +548,14 @@ export class FreeFlight {
     const a = along(m, dir);
     this.director.fly(
       m,
-      { course: a.course, gamma: a.gamma, speed: null, maxBank: 80 * DEG, maxTurnRate: 20 * DEG },
+      {
+        course: a.course,
+        gamma: a.gamma,
+        speed: null,
+        maxBank: 80 * DEG,
+        maxTurnRate: 20 * DEG,
+        maxLoadDelta: 4,
+      },
       ctl,
       FLIGHT_STEP,
     );

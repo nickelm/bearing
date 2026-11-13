@@ -51,11 +51,11 @@ export type FlightWarning = 'gear-speed' | 'stall' | 'pull-up' | 'tail-strike';
 
 /**
  * Tail-strike warning (decision 136): with weight on the wheels, when the pitch
- * half a second ahead (pitch + 0.5 s × pitch rate) passes this; the tail touches
- * near 13.5°. A normal flare or rotation stays under it; a fast rotation past 10°
+ * 0.4 s ahead (pitch + 0.4 s × pitch rate) passes this; the tail touches near
+ * 13.5°. A normal flare or rotation stays under it; a fast rotation past 10.5°
  * does not.
  */
-export const TAIL_WARNING_PITCH = 12.5 * DEG;
+export const TAIL_WARNING_PITCH = 12.8 * DEG;
 
 export function gradeLanding(sinkRate: number): LandingGrade {
   if (sinkRate < 1) return 'smooth';
@@ -199,7 +199,7 @@ export function flightWarnings(model: FlightModel): FlightWarning[] {
   const out: FlightWarning[] = [];
   if (model.crashed) return out;
   if (model.gear > 0.01 && t.cas > model.spec.gear.maxSpeed) out.push('gear-speed');
-  if (model.onGround && t.pitch + 0.5 * model.omega.y > TAIL_WARNING_PITCH) out.push('tail-strike');
+  if (model.onGround && t.pitch + 0.4 * model.omega.y > TAIL_WARNING_PITCH) out.push('tail-strike');
   const airborne = !model.onGround && t.radarAltitude > 3;
   if (airborne && t.alpha > model.spec.controls.maxAlpha - 1.5 * DEG && t.cas < 100)
     out.push('stall');
