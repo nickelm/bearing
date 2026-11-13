@@ -429,7 +429,14 @@ Simulation view (needs S1's `render/sim/` split):
   - [ ] Check 2 (`conifer`): the town's built-up patch reads as large triangles of roof and wall colors under the buildings; the road is faint at 500 m
   - [ ] Check 4 (`dusk`): no parked aircraft yet (aircraft meshes in the simulation view, V4)
   - [ ] Check 5 (`beach`): no beach: the coast has the foam line and shallow water but no sand strip
-- [ ] Style audit: compare those views with the reference board and Part I (terrain facets and shade quantization, farmland, rivers, ocean, haze, trees, towns, lights); the old M3 and M5 rendering predates the guide (smooth shading, clump trees). Add a task per gap (carried from old M5)
+- [x] Style audit: compare those views with the reference board and Part I (terrain facets and shade quantization, farmland, rivers, ocean, haze, trees, towns, lights); the old M3 and M5 rendering predates the guide (smooth shading, clump trees). Add a task per gap (carried from old M5) ([docs/style/audit-sim-2026-11-13.md](docs/style/audit-sim-2026-11-13.md); light and post-processing gaps are under V2)
+  - [ ] Owner: compare the audit's previews with the reference board (the screenshots are local only)
+  - [ ] Rivers are gray ribbons at 2 km and hard to find at 5 km (`mixed`); Part I wants them the most visible terrain feature from altitude: brighter sky mirror, wider legibility floor from altitude, or a darker bank
+  - [ ] In `trees`, a river leaves a lake as a straight canal between even grass banks; find which layer draws it (channel carving, the green corridor of decision 126, or the river polyline)
+  - [ ] Shallow water in `shore` ends in straight edges; check the shelf depth field and the seabed color at tile or grid boundaries
+  - [ ] Beaches: a sand strip (`#C9B48A`, `#B9A276`) on low, gentle coasts between open ground and the foam line (Part I palette), per face
+  - [ ] Built-up patches (decision 71) read as large triangles of roof and wall colors under the buildings (`conifer`): give them a block pattern finer than the facets, or evaluate them per fragment
+  - [ ] The `town` view scatters buildings across hills and does not frame the city; aim it at the city's urban extent
 - [ ] Frame time over 0–20 km within Part I's budgets
 - [ ] Checkpoint: owner review of the simulation view's terrain from an observer camera
 
@@ -461,6 +468,11 @@ Simulation view (needs S1's `render/sim/` split):
 - [ ] Tree LOD, following the guide's bands: instanced trees casting shadows to 1.5 km, merged cluster meshes (10–30 trees each, no shadows) to 5 km, terrain forest shade beyond, with the 5 km seam hidden by haze and matched colors (decision 45: ~6.6 M triangles over dense forest at the default 5 km range today; budget under 2 M per frame and about 50,000 instances within 1.5 km)
 - [ ] Denser forests: closer clump spacing in closed-canopy biomes, paid for by the tree LOD (owner request at checkpoint 4)
 - [ ] Sky, haze and clouds tuned for 0–20 km only (Part I): drop orbit-only work such as the limb glow from the simulation view
+- [ ] Cast shadows: cascaded shadow maps within a few kilometers for terrain, trees and buildings (Part I, Lighting); at low sun ridges cast none today (style audit, `range`)
+- [ ] Exposure tied to time of day (Part I, Post-Processing): at sunset the ground is black, sRGB (2, 2, 1), under an orange sky (style audit, `sunset`)
+- [ ] Night: settled land glows a uniform warm brown at 6 km with no distinct town lights (style audit, `night`); keep the rural glow to points and let towns read as clusters of lights
+- [ ] Post-processing for the simulation view: bloom on emissives and glints, a grading table per time-of-day band, faint film grain (Part I, Post-Processing; none today)
+- [ ] Pixelation option: nearest-neighbor upscale of the reduced render scale, with optional ordered dithering on sky gradients, default 75% on desktop (Part I; decision 69's render scale upscales smoothly)
 - [ ] Acceptance checks 1–5 (Part I) against the reference board; owner checkpoint
 
 ### V3. Models and bases

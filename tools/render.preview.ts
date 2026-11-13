@@ -113,6 +113,8 @@ export interface PreviewView {
   detail?: boolean;
   /** The Part I acceptance check this view captures (1–5; VIEWS=checks). */
   check?: number;
+  /** With a target: the day of its hemisphere's midwinter instead of `day`. */
+  midwinter?: boolean;
   /** With target 'airbase': stand back along the runway and look down it (heading ignored). */
   alongRunway?: boolean;
   /** Instead of localTime: the first evening time the sun at the camera sinks to this elevation (rad). */
@@ -214,22 +216,28 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     localTime: 9,
   },
   {
+    // Low over the check-5 coast, looking out to sea into the sun.
     name: 'sea',
-    dLat: -32 * DEG,
-    dLon: 1 * DEG,
+    dLat: 0,
+    dLon: 0,
     altitude: 600,
     tilt: 84 * DEG,
-    heading: 250 * DEG,
+    heading: 0,
     localTime: 16.8,
+    target: 'beach',
+    sunHeading: 0,
   },
   {
+    // The check-5 coast with the sun behind: shallow water and foam without the glint.
     name: 'shore',
-    dLat: -32.6 * DEG,
-    dLon: -1.5 * DEG,
+    dLat: 0,
+    dLon: 0,
     altitude: 900,
     tilt: 60 * DEG,
-    heading: 250 * DEG,
+    heading: 0,
     localTime: 14,
+    target: 'beach',
+    sunHeading: 180 * DEG,
   },
   {
     name: 'lake',
@@ -252,16 +260,18 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     target: 'forest',
   },
   {
-    // The check-1 landscape in midwinter: snow on fields and open ground, dark forests.
+    // The check-2 forest edge in its hemisphere's midwinter: snow on open ground, dark conifers.
     name: 'winter',
     dLat: 0,
     dLon: 0,
-    altitude: 4 * KM,
-    tilt: 68 * DEG,
+    altitude: 2 * KM,
+    tilt: 72 * DEG,
     heading: 0,
     localTime: 12,
-    day: 150,
-    target: 'mixed',
+    target: 'conifer',
+    sunHeading: 150 * DEG,
+    midwinter: true,
+    detail: true,
   },
   {
     // The highest summit near the main continent: rock and snow by face (decision 125).
@@ -303,6 +313,7 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     heading: 0,
     localTime: 10,
     target: 'city',
+    detail: true,
   },
   {
     name: 'airbase',
@@ -740,9 +751,15 @@ it('renders preview views', async () => {
       });
     }
   }
-  for (const v of views) {
+  for (const view of views) {
+    const target = view.target ? targets[view.target] : null;
+    // Midwinter: about 150 days after the campaign's mid-August start in the main
+    // continent's hemisphere, mid-July of the next year in the other.
+    const v =
+      view.midwinter && target
+        ? { ...view, day: Math.sign(target.y) === Math.sign(main.y) ? 150 : 335 }
+        : view;
     const o = scene.orbit;
-    const target = v.target ? targets[v.target] : null;
     if (target && v.alongRunway && base) {
       // Back from the runway's threshold, looking down it.
       const back = v.altitude * Math.tan(Math.min(v.tilt, 70 * DEG));
