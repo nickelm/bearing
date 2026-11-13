@@ -30,7 +30,7 @@ import type {
 } from '../../../worldgen/strategic/graph';
 import type { Infrastructure, TargetKind } from '../../../worldgen/strategic/infrastructure';
 import { builtUpRadius } from '../../../worldgen/strategic/urban';
-import { densify, FACTION_COLORS } from '../overlays/militaryModel';
+import { densify, FACTION_COLORS, siteBadge, SYMBOL_SHARE } from '../overlays/militaryModel';
 import type {
   LineStyle,
   MarkShape,
@@ -63,8 +63,9 @@ export const RAIL = { width: 1.2, casing: 0.6, tickLength: 6, tickPeriod: 9, tic
 /** Bridge marks and symbols (CSS px). */
 export const BRIDGE_SIZE = 13;
 export const BRIDGE_COLOR = 0x2a2a2a;
-export const SYMBOL_SIZE = 16;
-export const AIRBASE_SIZE = { theater: 13, region: 19 } as const;
+/** Site badges (decision 133): tile sizes; the symbol inside is SYMBOL_SHARE.site of it. */
+export const SYMBOL_SIZE = 22;
+export const AIRBASE_SIZE = { theater: 20, region: 26 } as const;
 export const STAR_SIZE = 18;
 
 const THEATER_DOWN: readonly ZoomBand[] = ['theater', 'region'];
@@ -182,6 +183,23 @@ function symbol(
   };
 }
 
+/** A site's symbol on its badge tile (decision 133): `size` is the tile. */
+function site(
+  shape: MarkShape,
+  point: V,
+  color: number,
+  size: number,
+  bands: readonly ZoomBand[],
+  axis: V = [0, 0, 0],
+): OverlayMark<InfraLayer> {
+  const inner = Math.round(size * SYMBOL_SHARE.site);
+  return {
+    ...symbol(shape, point, color, inner, bands, axis),
+    casing: 1.5,
+    badge: siteBadge(color, size),
+  };
+}
+
 export function buildInfraOverlays(
   graph: StrategicGraph,
   infra: Infrastructure | null,
@@ -293,16 +311,16 @@ export function buildInfraOverlays(
       const { east, north } = frame(a.point);
       const axis = unit(add(add([0, 0, 0], north, Math.cos(a.heading)), east, Math.sin(a.heading)));
       const color = FACTION_COLORS[a.side];
-      marks.push(symbol('airbase', a.point, color, AIRBASE_SIZE.theater, THEATER, axis));
-      marks.push(symbol('airbase', a.point, color, AIRBASE_SIZE.region, REGION, axis));
+      marks.push(site('airbase', a.point, color, AIRBASE_SIZE.theater, THEATER, axis));
+      marks.push(site('airbase', a.point, color, AIRBASE_SIZE.region, REGION, axis));
     }
     for (const p of infra.ports) {
-      marks.push(symbol('port', p.point, FACTION_COLORS[p.side], SYMBOL_SIZE, REGION));
+      marks.push(site('port', p.point, FACTION_COLORS[p.side], SYMBOL_SIZE, REGION));
     }
     for (const t of infra.targets) {
       if (t.kind === 'rail-yard' && t.settlement >= 0) yardTargets.add(t.settlement);
       const point = edgeOf(t.settlement, t.point);
-      marks.push(symbol(TARGET_SHAPES[t.kind], point, FACTION_COLORS[t.side], SYMBOL_SIZE, REGION));
+      marks.push(site(TARGET_SHAPES[t.kind], point, FACTION_COLORS[t.side], SYMBOL_SIZE, REGION));
     }
   }
   const yards = graph.railways.yards;
@@ -310,7 +328,7 @@ export function buildInfraOverlays(
     const town = graph.railways.yardSettlement[i]!;
     if (yardTargets.has(town)) continue;
     const p: V = [yards.points[i * 3]!, yards.points[i * 3 + 1]!, yards.points[i * 3 + 2]!];
-    marks.push(symbol('rail-yard', edgeOf(town, p), RAIL_COLOR, SYMBOL_SIZE - 1, REGION));
+    marks.push(site('rail-yard', edgeOf(town, p), RAIL_COLOR, SYMBOL_SIZE - 2, REGION));
   }
   if (infra) {
     for (const side of ['alliance', 'pact'] as Side[]) {

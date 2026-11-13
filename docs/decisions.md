@@ -2042,3 +2042,18 @@ The engineering calls made while adopting it:
 - **Worker and map.** The sim worker sends the full list of live missions when it changes (a planning tick, a completion) and after init and seek; the main thread computes positions from the routes at the display time. The strategic view draws flights as small aircraft icons with their heading and a four-minute trail, and carrier groups as ship icons, in faction colors, above the military overlays. GUI → Map → Air war toggles them, draws every route as a debug view (the guide's routes on hover and selection wait for mission search), and sets the viewing side; its default, both, shows ground truth until the intelligence overlay exists.
 
 **Reason:** The owner asked for the gameplay track after the terrain work. These four steps give the war a visible air traffic on the map at any time acceleration, with every model the ATO, intelligence and the chase camera (V4) build on, while keeping the planner simple enough to replace.
+
+### 133. Map icons as badges that stand out and can be clicked
+
+**Date:** 2026-11-13
+**Decision:** The owner found the map's icons too subtle: the air war's flights read as faint crosses, and site symbols were thin outlines in a faction color over a busy map. Every icon becomes a badge with a solid backing, sized in screen pixels at every zoom, and flights and carriers can be selected.
+
+- **Two kinds of badge.** Forces that move (flights, carrier groups; convoys and formations later) are discs filled with the faction color, a dark 1.5 px rim and a pale symbol. Fixed sites (airbases, ports, industry, depots, rail yards) are pale rounded tiles with a 2 px rim and the symbol in the holder's color. Both have a pale halo. The fill tells moving forces from places at a glance.
+- **Sizes.** Flights 26 px, carrier groups 30 px; airbases 20 px at the Theater band and 26 px in the Region band, other sites 22 px (were 13, 19 and 16 px outlines). The symbol fills about two thirds of its badge. Trails are 2.5 px with a pale casing. Bridges, the capital star and the front's marks are line decorations, not icons, and stay as they were.
+- **Orientation.** Badges face the screen like the upright symbols of decision 105; an oriented symbol (an aircraft's heading, a carrier's course, a runway) turns inside its badge to its axis as seen on screen.
+- **Selection.** A click within a flight's or carrier's badge plus 6 px selects it (it wins over the range rings' ground selection); the cursor shows a pointer over an icon, and Escape or the panel's close button clears it. The selected icon grows by a quarter, takes a 3 px amber rim and draws on top; a selected mission's route shows as a dashed line. A panel names the flight (callsign, aircraft, mission, the need it serves, phase and the time to its next step, unit, base and target, priority) or the carrier group (theater, course, air wing in the air). Mission search (C2) builds on it.
+- **Drawing.** The mark shader gains a badge (fill, rim, shape and size per instance) and turns the symbol by the axis projected on the screen frame. The symbol's shape code is rounded before it is compared: an exact comparison of the interpolated code failed on scattered pixels and speckled the higher-numbered symbols.
+
+`docs/visual-style.md` Part II, *Base Map* (sites) and *Military Overlays* (icons, routes), now say this.
+
+**Reason:** Icons are how the player finds the war on the map and the way into missions; they must be seen at once over relief, patterns, territory tint and clouds, and be easy to hit with a mouse or a finger.

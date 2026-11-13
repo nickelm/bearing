@@ -43,6 +43,30 @@ export const NEUTRAL_COLOR = 0x8c8c8c;
 /** Pale casing under lines and marks, the label halo color. */
 export const CASING_COLOR = 0xf4efe4;
 
+/**
+ * Icon badges (decision 133). Forces that move (flights, naval groups) are discs in
+ * their side's color with a pale symbol and a dark rim; fixed sites are pale tiles
+ * with a rim and symbol in their holder's color. A selected icon grows and takes the
+ * selection rim. Sizes are CSS px; the symbol fills SYMBOL_SHARE of the badge.
+ */
+export const UNIT_RIM = 0x1e1e1e;
+export const SELECTION_RIM = 0xffc83d;
+export const SYMBOL_SHARE = { unit: 0.66, site: 0.64 } as const;
+
+export function unitBadge(color: number, size: number, selected = false): MarkBadge {
+  return {
+    shape: 'disc',
+    size: selected ? size * 1.25 : size,
+    fill: color,
+    rim: selected ? SELECTION_RIM : UNIT_RIM,
+    rimWidth: selected ? 3 : 1.5,
+  };
+}
+
+export function siteBadge(color: number, size: number): MarkBadge {
+  return { shape: 'square', size, fill: CASING_COLOR, rim: color, rimWidth: 2 };
+}
+
 /** Teeth along a line: triangles on one side, spaced along the line. */
 export interface TeethStyle {
   /** +1: on the line's left (looking from point 0 toward the end), −1: on its right. */
@@ -136,6 +160,22 @@ export interface OverlayMark<L extends string = OverlayLayer> {
   bands: readonly ZoomBand[];
   /** Casing color (sRGB hex); the pale `CASING_COLOR` when absent. */
   casingColor?: number;
+  /**
+   * A badge behind a symbol (decision 133): the mark faces the screen, the badge
+   * fills a disc or rounded square of `size` px with a rim, and the symbol (`length`
+   * px, in `color`) turns to `axis` as seen on screen. The casing rings the badge.
+   */
+  badge?: MarkBadge;
+  /** Identifies a pickable mark, e.g. "mission:12" or "carrier:0". */
+  key?: string;
+}
+
+export interface MarkBadge {
+  shape: 'disc' | 'square';
+  size: number;
+  fill: number;
+  rim: number;
+  rimWidth: number;
 }
 
 export interface MilitaryOverlays<L extends string = OverlayLayer> {

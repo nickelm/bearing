@@ -281,3 +281,41 @@ body {
   background: #ffb347;
   border-color: #ffb347;
 }
+
+/* The selected flight or carrier on the map (decision 133). */
+.air-panel {
+  position: fixed;
+  top: 56px;
+  left: 8px;
+  max-width: min(26rem, calc(100vw - 32px));
+  padding: 8px 28px 8px 12px;
+  background: rgb(0 0 0 / 0.75);
+  border-left: 3px solid #ffc83d;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.air-panel[hidden] {
+  display: none;
+}
+
+.air-panel h2 {
+  margin: 0 0 4px;
+  font-size: 14px;
+}
+
+.air-panel p {
+  margin: 3px 0;
+}
+
+.air-panel .close {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  color: inherit;
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+}

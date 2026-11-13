@@ -107,7 +107,17 @@ const SEGMENT_ATTRS = [
   'iBand',
   'iCasing',
 ];
-const MARK_ATTRS = ['iP', 'iAxis', 'iSize', 'iColor', 'iBand', 'iCasing'];
+const MARK_ATTRS = [
+  'iP',
+  'iAxis',
+  'iSize',
+  'iColor',
+  'iBand',
+  'iCasing',
+  'iBadge',
+  'iRim',
+  'iExtra',
+];
 
 type F = Node<'float'>;
 
@@ -200,11 +210,15 @@ function symbolDistance(code: F, x: F, y: F): F {
     // Two bars along the road, either side of it.
     bridge: () => min(sdBox(x, y, -0.6, 0, 0.18, 0.8), sdBox(x, y, 0.6, 0, 0.18, 0.8)),
     star: () => sdStar(x, y, 0.45),
-    // A small aircraft seen from above, nose along the axis: fuselage, wings, tailplane.
+    // An aircraft seen from above, nose along the axis: fuselage, wings and tailplane
+    // swept back (y shifted by |x|), so it reads as an aircraft rather than a cross.
     aircraft: () =>
       min(
-        sdBox(x, y, 0, 0, 0.2, 0.95),
-        min(sdBox(x, y, 0, 0.1, 0.95, 0.22), sdBox(x, y, 0, -0.72, 0.45, 0.16)),
+        sdBox(x, y, 0, 0.02, 0.15, 0.95),
+        min(
+          sdBox(x, y.add(abs(x).mul(0.6)), 0, 0.2, 0.95, 0.15),
+          sdBox(x, y.add(abs(x).mul(0.5)), 0, -0.68, 0.42, 0.11),
+        ),
       ),
     // A carrier from above: a long flight deck with the island on its right.
     carrier: () => min(sdBox(x, y, -0.06, 0, 0.32, 0.95), sdBox(x, y, 0.38, 0.12, 0.12, 0.26)),
@@ -442,20 +456,31 @@ export class MilitaryLayer<L extends string = OverlayLayer> {
     const iColor = attribute('iColor', 'vec4'); // rgb, casing opacity
     const iBand = attribute('iBand', 'vec4');
     const iCasing = attribute('iCasing', 'vec4'); // casing rgb
+    const iBadge = attribute('iBadge', 'vec4'); // badge fill rgb, badge size (px; 0: none)
+    const iRim = attribute('iRim', 'vec4'); // badge rim rgb, rim width (px)
+    const iExtra = attribute('iExtra', 'vec4'); // badge shape (1 disc, 2 rounded square)
     const c = this.ground(iP);
     const toEye = this.eye.sub(c);
     const mpp = length(toEye).mul(this.pixelAngle);
     const dir = normalize(iP.xyz);
     // Oriented marks lie flat on the ground along their axis; upright symbols face the
     // screen (billboards), so the map's tilt does not squash them (decision 105).
+    // Badges (decision 133) always face the screen; an oriented badge turns its symbol
+    // to the axis as seen on screen.
+    const hasBadge = iBadge.w.greaterThan(0);
     const oriented = length(iAxis.xyz).greaterThan(0.5);
-    const axis = select(oriented, normalize(iAxis.xyz), normalize(this.screenUp));
-    const left = select(
-      oriented,
-      normalize(cross(dir, axis)),
-      normalize(cross(normalize(toEye), this.screenUp)),
-    );
-    const half = max(iSize.x, iSize.y).add(iSize.w).add(1.5);
+    const flat = oriented.and(hasBadge.not());
+    const screenAxis = normalize(this.screenUp);
+    const screenLeft = normalize(cross(normalize(toEye), this.screenUp));
+    const axis = select(flat, normalize(iAxis.xyz), screenAxis);
+    const left = select(flat, normalize(cross(dir, axis)), screenLeft);
+    const worldAxis = select(oriented, normalize(iAxis.xyz), screenAxis);
+    const fa = dot(worldAxis, screenAxis);
+    const fs = dot(worldAxis, screenLeft);
+    const fl = length(vec2(fa, fs)).max(1e-4);
+    const rotA = select(hasBadge, fa.div(fl), float(1));
+    const rotS = select(hasBadge, fs.div(fl), float(0));
+    const half = max(max(iSize.x, iSize.y), iBadge.w.mul(0.5)).add(iSize.w).add(1.5);
     m.positionNode = c.add(axis.mul(corner.x).add(left.mul(corner.y)).mul(half).mul(mpp));
     const visibleV = smoothstep(0, 0.04, dot(dir, normalize(toEye))).mul(
       dot(iBand.xyz, this.bandFade),
@@ -463,6 +488,7 @@ export class MilitaryLayer<L extends string = OverlayLayer> {
     const local = varying(
       vec4(corner.x.mul(half), corner.y.mul(half), iAxis.w, visibleV),
     ) as Node<'vec4'>;
+    const rot = varying(vec4(rotA, rotS, iExtra.x, 0)) as Node<'vec4'>;
     const x = local.x;
     const y = local.y;
     const shape = local.z;
@@ -485,13 +511,34 @@ export class MilitaryLayer<L extends string = OverlayLayer> {
       .div(length(vec2(hl, hw)).max(1e-3));
     const ring = abs(solid.add(size.z.mul(0.5))).sub(size.z.mul(0.5));
     const diamond = select(size.z.greaterThan(0), ring, solid);
-    // Map symbols: unit coordinates with x to the right and y up (along the axis).
+    // Map symbols: unit coordinates with x to the right and y up (along the axis),
+    // turned inside a badge to the axis on screen.
+    const xr = x.mul(rot.x).add(y.mul(rot.y));
+    const yr = y.mul(rot.x).sub(x.mul(rot.y));
     const half2 = len.mul(0.5);
-    const symbol = symbolDistance(shape, y.negate().div(half2), x.div(half2)).mul(half2);
+    const symbol = symbolDistance(shape, yr.negate().div(half2), xr.div(half2)).mul(half2);
     const isSymbol = shape.greaterThan(1.5);
     const d = select(isSymbol, symbol, select(shape.lessThan(0.5), arrow, diamond));
-    const outer = select(isSymbol, symbol, select(shape.lessThan(0.5), arrow, solid));
+    // The badge: a disc or a rounded square of the badge size, with a rim.
+    const fill = varying(iBadge) as Node<'vec4'>;
+    const rim = varying(iRim) as Node<'vec4'>;
+    const badged = fill.w.greaterThan(0);
+    const rb = fill.w.mul(0.5);
+    const disc = length(vec2(x, y)).sub(rb);
+    const k = rb.mul(0.3);
+    const qx = abs(x).sub(rb.sub(k));
+    const qy = abs(y).sub(rb.sub(k));
+    const square = length(vec2(max(qx, 0), max(qy, 0)))
+      .add(min(max(qx, qy), 0))
+      .sub(k);
+    const badge = select(rot.z.greaterThan(1.5), square, disc);
+    const outer = select(
+      badged,
+      badge,
+      select(isSymbol, symbol, select(shape.lessThan(0.5), arrow, solid)),
+    );
     const visible = local.w;
+    const ink = (varying(iColor) as Node<'vec4'>).xyz;
     if (casingPass) {
       m.colorNode = this.lit((varying(iCasing) as Node<'vec4'>).xyz, dir);
       // The casing surrounds the whole mark, inside of a hollow one included.
@@ -499,8 +546,11 @@ export class MilitaryLayer<L extends string = OverlayLayer> {
         .mul((varying(iColor) as Node<'vec4'>).w)
         .mul(visible);
     } else {
-      m.colorNode = this.lit((varying(iColor) as Node<'vec4'>).xyz, dir);
-      m.opacityNode = clamp(float(0.5).sub(d), 0, 1).mul(visible);
+      const inkShare = clamp(float(0.5).sub(d), 0, 1);
+      const rimShare = clamp(badge.add(rim.w).add(0.5), 0, 1);
+      const badgeColor = mix(mix(fill.xyz, ink, inkShare), rim.xyz, rimShare);
+      m.colorNode = this.lit(select(badged, badgeColor, ink), dir);
+      m.opacityNode = select(badged, clamp(float(0.5).sub(badge), 0, 1), inkShare).mul(visible);
     }
     return m;
   }
@@ -684,7 +734,10 @@ export class MilitaryLayer<L extends string = OverlayLayer> {
     const marks = o.marks.filter((m) => m.layer === layer);
     if (marks.length === 0) return null;
     const data = MARK_ATTRS.map(() => new Float32Array(marks.length * 4));
-    const [P, X, S, C, BN, CS] = data as [
+    const [P, X, S, C, BN, CS, BG, RM, EX] = data as [
+      Float32Array,
+      Float32Array,
+      Float32Array,
       Float32Array,
       Float32Array,
       Float32Array,
@@ -693,6 +746,12 @@ export class MilitaryLayer<L extends string = OverlayLayer> {
       Float32Array,
     ];
     marks.forEach((m, k) => {
+      const b = m.badge;
+      if (b) {
+        BG.set([...linear(b.fill), b.size], k * 4);
+        RM.set([...linear(b.rim), b.rimWidth], k * 4);
+        EX.set([b.shape === 'square' ? 2 : 1, 0, 0, 0], k * 4);
+      }
       P.set([...m.point, heightAt(m.point)], k * 4);
       X.set([...m.axis, MARK_SHAPES.indexOf(m.shape)], k * 4);
       CS.set([...linear(m.casingColor ?? CASING_COLOR), 0], k * 4);

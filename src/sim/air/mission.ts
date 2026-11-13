@@ -233,6 +233,8 @@ export interface Mission {
   package: number;
   /** Squadron (AirOps.squadrons index), aircraft type and aircraft in the flight. */
   squadron: number;
+  /** The squadron's name, for the mission panel. */
+  unit: string;
   aircraftType: string;
   aircraft: number;
   loadout: string;

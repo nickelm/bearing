@@ -524,6 +524,7 @@ export class InterimTasker implements TickProcess {
         theater: n.theater,
         package: pkg,
         squadron: sq.id,
+        unit: sq.name,
         aircraftType: c.type.id,
         aircraft: c.type.flightSize,
         loadout: c.loadout.id,

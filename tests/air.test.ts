@@ -355,5 +355,24 @@ describe('air operations', () => {
       airborne.filter((m) => m.side === 'pact').length,
     );
     expect(pact.lines.some((l) => l.layer === 'routes')).toBe(false);
+    // Icons are badges (decision 133): discs in the side's color, keyed for picking.
+    for (const m of both.marks) {
+      expect(m.badge?.shape).toBe('disc');
+      expect(m.badge!.size).toBeGreaterThanOrEqual(24);
+      expect(m.key).toMatch(/^(mission|carrier):\d+$/);
+    }
+    // Selecting a flight draws its route alone, enlarges its badge and puts it on top.
+    const pick = airborne[0]!;
+    const sel = buildAirOverlays(missions, air.carriers, t, R, {
+      side: 'both',
+      routes: false,
+      selected: `mission:${pick.id}`,
+    });
+    expect(sel.lines.filter((l) => l.layer === 'routes').length).toBe(1);
+    const last = sel.marks[sel.marks.length - 1]!;
+    expect(last.key).toBe(`mission:${pick.id}`);
+    expect(last.badge!.size).toBeGreaterThan(
+      both.marks.find((m) => m.key === last.key)!.badge!.size,
+    );
   });
 });

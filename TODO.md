@@ -340,7 +340,10 @@ Civilian geography (settlements, roads, bridges) joins the strategic graph befor
 
 - [x] Debug GUI toggle for the viewing side (developer tool until I1): GUI → Map → Air war → Viewing side; 'both' shows ground truth until the intelligence overlay
 - [x] Mission icons (small aircraft with heading and short trails) and route lines on the strategic map (`render/strategic/overlays/airModel.ts`; carrier groups as ship icons; every route as a debug toggle until selection draws one; `VIEWS=air` in the strategic preview)
-  - [ ] Owner: watch the flights in the browser at 64× and 256× (icon size, trail length, legibility over the front and at the Globe band)
+  - [x] Icons as badges that stand out, and click selection of flights and carriers with an info panel (decision 133)
+  - [ ] Owner: watch the flights in the browser at 64× and 256× (badge size, trail length, legibility over the front and at the Globe band; clicking flights and carriers)
+  - [ ] Badges for convoys and NATO-style formation symbols (C3), with the same grammar: filled discs move, pale tiles stay
+  - [ ] Declutter where badges overlap (an airbase's departing flights, a strike package): offset or stack them
   - [ ] Models for the types without one (`model: null` in the table), for V4's chase view
 - [ ] Mission search panel: ongoing and upcoming missions of the viewing side
 - [ ] Filters: mission type, aircraft, theater, current phase, threat level, time until action

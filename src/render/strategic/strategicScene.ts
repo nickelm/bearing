@@ -59,6 +59,10 @@ import { layoutCityGlyphs } from './infra/cityGlyphs';
 import { SETTLEMENT_GLYPHS } from './glyphLayout';
 import { AIR_LAYERS, buildAirOverlays } from './overlays/airModel';
 import type { AirLayer, AirViewOptions } from './overlays/airModel';
+import type { OverlayMark } from './overlays/militaryModel';
+
+/** Extra reach around an icon's badge for a click to pick it (CSS px). */
+const PICK_SLOP = 6;
 import type { Mission } from '../../sim/air/mission';
 import { carrierTrack } from '../../sim/naval/carrierGroup';
 import type { CarrierTrack } from '../../sim/naval/carrierGroup';
@@ -156,6 +160,11 @@ export class StrategicScene {
   private airRevision = 0;
   /** Raw terrain height (m, 0 at sea) for draping, once the world is on display. */
   private dryHeight: ((p: Readonly<[number, number, number]>) => number) | null = null;
+  /** The air icons last drawn (for picking), and the selected one. */
+  private airMarks: OverlayMark<AirLayer>[] = [];
+  private airSelection: string | null = null;
+  /** Called when a click selects or clears a flight or carrier. */
+  onAirSelect: ((key: string | null) => void) | null = null;
   private coarse: CubeGrid | null = null;
   /** Background rim uniforms: planet center relative to the camera, radians per pixel. */
   private readonly planetCenter = uniform(new Vector3());
@@ -262,9 +271,9 @@ export class StrategicScene {
   }
 
   /**
-   * Selection for the range rings (decision 91): a click (press and release within
-   * 5 px and 400 ms, so drags still pan) selects the ground point under the cursor;
-   * Escape clears it.
+   * Selection (decisions 91, 133): a click (press and release within 5 px and 400 ms,
+   * so drags still pan) selects the flight or carrier under the cursor, or else the
+   * ground point for the range rings; Escape clears both.
    */
   private attachSelection(el: HTMLElement): () => void {
     let down: { x: number; y: number; t: number } | null = null;
@@ -277,21 +286,37 @@ export class StrategicScene {
       if (!d || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 5) return;
       if (performance.now() - d.t > 400) return;
       const rect = el.getBoundingClientRect();
-      this.selectAt(
-        ((e.clientX - rect.left) / rect.width) * 2 - 1,
-        1 - ((e.clientY - rect.top) / rect.height) * 2,
-      );
+      const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = 1 - ((e.clientY - rect.top) / rect.height) * 2;
+      // A flight or carrier under the cursor wins over the ground (decision 133).
+      const icon = this.pickIcon(x, y);
+      this.airSelected = icon;
+      if (!icon) this.selectAt(x, y);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.code === 'Escape') this.selection = null;
+      if (e.code === 'Escape') {
+        this.selection = null;
+        this.airSelected = null;
+      }
+    };
+    // A pointer over an icon shows that it can be clicked (mouse only; no buttons held).
+    const onMove = (e: PointerEvent) => {
+      if (e.pointerType !== 'mouse' || e.buttons !== 0) return;
+      const rect = el.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = 1 - ((e.clientY - rect.top) / rect.height) * 2;
+      el.style.cursor = this.pickIcon(x, y) ? 'pointer' : '';
     };
     el.addEventListener('pointerdown', onDown);
     el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointermove', onMove);
     window.addEventListener('keydown', onKey);
     return () => {
       el.removeEventListener('pointerdown', onDown);
       el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointermove', onMove);
       window.removeEventListener('keydown', onKey);
+      el.style.cursor = '';
     };
   }
 
@@ -377,14 +402,68 @@ export class StrategicScene {
   private updateAir(): void {
     const height = this.dryHeight;
     if (!height) return;
-    const key = `${this.airRevision}:${this.airView.side}:${this.airView.routes}`;
+    this.airView.selected = this.airSelection;
+    const v = this.airView;
+    const key = `${this.airRevision}:${v.side}:${v.routes}:${v.selected}`;
     if (this.airDrawn && this.airDrawn.time === this.airTime && this.airDrawn.key === key) return;
     this.airDrawn = { time: this.airTime, key };
     const radius = this.strategicData?.graph.radius ?? 1;
-    this.air.updateOverlays(
-      buildAirOverlays(this.missions, this.carriers, this.airTime, radius, this.airView),
-      height,
-    );
+    const overlays = buildAirOverlays(this.missions, this.carriers, this.airTime, radius, v);
+    this.airMarks = overlays.marks;
+    this.air.updateOverlays(overlays, height);
+  }
+
+  /**
+   * The flight or carrier icon under normalized device coordinates (x, y in −1..1),
+   * within its badge plus PICK_SLOP px, nearest first; null if none (decision 133).
+   */
+  pickIcon(x: number, y: number): string | null {
+    const height = this.dryHeight;
+    if (!height) return null;
+    const o = this.orbit;
+    const tan = Math.tan((this.camera.fov * Math.PI) / 360);
+    const right = o.forward.clone().cross(o.up);
+    const radius = o.radius;
+    const ex = this.relief.exaggeration.value;
+    const w = this.viewportWidth / 2;
+    const h = this.viewportHeight / 2;
+    const p = new Vec3d();
+    let best: string | null = null;
+    let bestDistance = Infinity;
+    for (const m of this.airMarks) {
+      if (!m.key || !this.air.visible[m.layer]) continue;
+      const r = radius + Math.max(0, height(m.point)) * ex + 300;
+      p.set(m.point[0] * r, m.point[1] * r, m.point[2] * r);
+      // Beyond the horizon: the point faces away from the eye.
+      if (
+        m.point[0] * (o.eye.x - p.x) + m.point[1] * (o.eye.y - p.y) + m.point[2] * (o.eye.z - p.z) <
+        0
+      )
+        continue;
+      p.sub(o.eye);
+      const z = p.dot(o.forward);
+      if (z <= 0) continue;
+      const sx = p.dot(right) / (z * tan * this.camera.aspect);
+      const sy = p.dot(o.up) / (z * tan);
+      const d = Math.hypot((sx - x) * w, (sy - y) * h);
+      const reach = (m.badge?.size ?? m.length) / 2 + PICK_SLOP;
+      if (d <= reach && d < bestDistance) {
+        bestDistance = d;
+        best = m.key;
+      }
+    }
+    return best;
+  }
+
+  /** The selected flight or carrier ("mission:<id>", "carrier:<id>"), or null. */
+  get airSelected(): string | null {
+    return this.airSelection;
+  }
+
+  set airSelected(key: string | null) {
+    if (key === this.airSelection) return;
+    this.airSelection = key;
+    this.onAirSelect?.(key);
   }
 
   /** The graph's coarse grid (the display grid when they match), built once per resolution. */

@@ -26,7 +26,7 @@ import type { Mission } from '../../../sim/air/mission';
 import { ORBIT_LEG, routeState } from '../../../sim/air/route';
 import { carrierState } from '../../../sim/naval/carrierGroup';
 import type { CarrierTrack } from '../../../sim/naval/carrierGroup';
-import { FACTION_COLORS } from './militaryModel';
+import { CASING_COLOR, FACTION_COLORS, SYMBOL_SHARE, unitBadge } from './militaryModel';
 import type { LineStyle, MilitaryOverlays, OverlayLine, OverlayMark } from './militaryModel';
 
 export type AirLayer = 'routes' | 'trails' | 'carriers' | 'flights';
@@ -34,9 +34,9 @@ export const AIR_LAYERS: readonly AirLayer[] = ['routes', 'trails', 'carriers', 
 
 export const TRAIL_TIME = 4 * MINUTE;
 export const TRAIL_SAMPLES = 8;
-/** Icon sizes (CSS px). */
-export const FLIGHT_ICON = 18;
-export const CARRIER_ICON = 18;
+/** Badge sizes (CSS px; decision 133): large enough to see at a glance and to click. */
+export const FLIGHT_BADGE = 26;
+export const CARRIER_BADGE = 30;
 /** Largest step between route points, as a central angle (rad): about 10 km on the 1,000 km planet. */
 const MAX_STEP = 0.01;
 const ORBIT_SAMPLES = 24;
@@ -45,31 +45,36 @@ const BANDS = ['globe', 'theater', 'region'] as const;
 
 const TRAIL_STYLE = (color: number): LineStyle => ({
   color,
-  width: 1.5,
-  casing: 0,
-  casingOpacity: 0,
+  width: 2.5,
+  casing: 1,
+  casingOpacity: 0.8,
   dash: 0,
   duty: 1,
   roundEnds: true,
   teeth: null,
 });
 
-const ROUTE_STYLE = (color: number): LineStyle => ({
+const ROUTE_STYLE = (color: number, selected: boolean): LineStyle => ({
   color,
-  width: 1,
+  width: selected ? 2.5 : 1.5,
   casing: 1,
-  casingOpacity: 0.6,
-  dash: 10,
-  duty: 0.55,
+  casingOpacity: 0.8,
+  dash: selected ? 14 : 10,
+  duty: 0.6,
   roundEnds: true,
   teeth: null,
 });
 
 export interface AirViewOptions {
   side: Side | 'both';
-  /** Draw every visible mission's route (debug until selection exists). */
+  /** Draw every visible mission's route (a debug view). */
   routes: boolean;
+  /** The selected icon's key ("mission:<id>" or "carrier:<id>"), or null; a selected mission's route shows. */
+  selected?: string | null;
 }
+
+export const missionKey = (id: number): string => `mission:${id}`;
+export const carrierKey = (id: number): string => `carrier:${id}`;
 
 function densify(points: Dir[]): Float64Array {
   const out: number[] = [];
@@ -121,13 +126,14 @@ export function buildAirOverlays(
     if (!visible(m.side)) continue;
     const color = FACTION_COLORS[m.side];
     const now = routeState(m.route, t, radius);
-    if (options.routes && now.segment >= 0) {
+    const selected = options.selected === missionKey(m.id);
+    if ((options.routes || selected) && now.segment >= 0) {
       const track = routeTrack(m, radius);
       if (track.length >= 2) {
         lines.push({
           layer: 'routes',
           points: densify(track),
-          style: ROUTE_STYLE(color),
+          style: ROUTE_STYLE(color, selected),
           bands: BANDS,
         });
       }
@@ -151,12 +157,14 @@ export function buildAirOverlays(
       shape: 'aircraft',
       point: now.point,
       axis: headingTangent(now.point, now.heading),
-      length: FLIGHT_ICON,
-      width: FLIGHT_ICON,
-      color,
+      length: FLIGHT_BADGE * SYMBOL_SHARE.unit,
+      width: FLIGHT_BADGE * SYMBOL_SHARE.unit,
+      color: CASING_COLOR,
       outline: 0,
       casing: 1.5,
       bands: BANDS,
+      badge: unitBadge(color, FLIGHT_BADGE, selected),
+      key: missionKey(m.id),
     });
   }
   for (const c of carriers) {
@@ -167,13 +175,21 @@ export function buildAirOverlays(
       shape: 'carrier',
       point: s.point,
       axis: headingTangent(s.point, s.heading),
-      length: CARRIER_ICON,
-      width: CARRIER_ICON,
-      color: FACTION_COLORS[c.cast.side],
+      length: CARRIER_BADGE * SYMBOL_SHARE.unit,
+      width: CARRIER_BADGE * SYMBOL_SHARE.unit,
+      color: CASING_COLOR,
       outline: 0,
       casing: 1.5,
       bands: BANDS,
+      badge: unitBadge(
+        FACTION_COLORS[c.cast.side],
+        CARRIER_BADGE,
+        options.selected === carrierKey(c.cast.id),
+      ),
+      key: carrierKey(c.cast.id),
     });
   }
+  // The selected icon draws on top of its neighbors.
+  marks.sort((a, b) => Number(a.key === options.selected) - Number(b.key === options.selected));
   return { lines, marks };
 }

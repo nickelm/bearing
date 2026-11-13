@@ -71,6 +71,7 @@ import type {
 import { FrameTimeOverlay } from './ui/frameTimeOverlay';
 import { BuildStamp } from './ui/buildStamp';
 import { CampaignPanel } from './ui/campaignPanel';
+import { AirPanel } from './ui/airPanel';
 import { SeedBrowser } from './ui/seedBrowser';
 import { THEATER_LABELS } from './campaign/theaters';
 import type { StrategicWorld } from './worldgen/campaignWorld';
@@ -240,6 +241,8 @@ async function main(): Promise<void> {
     // The observer stays at its station (it is entered through the station, decision 72).
     const from = activeOrbit();
     activeView = view;
+    // The selection panel belongs to the map.
+    if (view !== 'strategic') strategicView.airSelected = null;
     const to = activeView === 'strategic' ? strategicView.orbit : globe.orbit;
     if (to !== globe.orbit || globe.cameraMode === 'free') {
       to.lat = from.lat;
@@ -276,6 +279,10 @@ async function main(): Promise<void> {
     coarseSeconds: 0,
   };
   const campaignPanel = new CampaignPanel();
+  // The flight or carrier clicked on the map (decision 133).
+  const airPanel = new AirPanel();
+  strategicView.onAirSelect = (key) => airPanel.select(key);
+  airPanel.onClose = () => (strategicView.airSelected = null);
   const showStrategic = (s: StrategicWorld | null) => {
     globe.strategic.setWorld(s?.graph ?? null, s?.campaign.cast ?? null, s?.infrastructure ?? null);
     strategicView.setStrategic(
@@ -283,6 +290,8 @@ async function main(): Promise<void> {
       s?.campaign.cast ?? null,
       s?.infrastructure ?? null,
     );
+    strategicView.airSelected = null;
+    airPanel.setCampaign(s?.campaign.cast ?? null, s?.infrastructure ?? null, s?.graph.radius ?? 1);
     if (!s) {
       campaignPanel.visible = false;
       campaignParams.seedUsed = '—';
@@ -852,6 +861,7 @@ async function main(): Promise<void> {
     strategicView.sun.copy(globe.sun);
     strategicView.relief.seasonPhase.value = globe.terrain.land.seasonPhase.value;
     strategicView.setAirTime(gameTime);
+    if (activeView === 'strategic') airPanel.update(sim.missions, gameTime, now);
     globe.clouds.time.value = gameTime;
     globe.weather.update(sim.weather, gameTime);
     touchControls.visible =
