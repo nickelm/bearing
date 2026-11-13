@@ -486,7 +486,11 @@ Simulation view (needs S1's `render/sim/` split):
 - [ ] Cast shadows: cascaded shadow maps within a few kilometers for terrain, trees and buildings (Part I, Lighting); at low sun ridges cast none today (style audit, `range`)
 - [ ] Exposure tied to time of day (Part I, Post-Processing): at sunset the ground is black, sRGB (2, 2, 1), under an orange sky (style audit, `sunset`)
 - [ ] Night: settled land glows a uniform warm brown at 6 km with no distinct town lights (style audit, `night`); keep the rural glow to points and let towns read as clusters of lights
-- [ ] Post-processing for the simulation view: bloom on emissives and glints, a grading table per time-of-day band, faint film grain (Part I, Post-Processing; none today)
+- [x] Post-processing for the simulation view: bloom on emissives and glints, a grade per time-of-day band, faint film grain and dither, a low-resolution volumetric stage and an overlay scene (`render/sim/post/`, decision 138)
+  - [ ] Check the pipeline in a real browser: the validation guard, the canvas path, switching views (nothing ran in a browser, decision 135)
+  - [ ] Revisit bloom strength and thresholds at 1080p once clouds and the new sky exist (tuned at 640×360)
+  - [ ] Runway lights barely bloom at dusk: they are as bright as the sky then (`StructureLayer.lightBrightness`)
+  - [ ] Optional pixelation pass (Part I, Post-Processing)
 - [ ] Pixelation option: nearest-neighbor upscale of the reduced render scale, with optional ordered dithering on sky gradients, default 75% on desktop (Part I; decision 69's render scale upscales smoothly)
 - [ ] Acceptance checks 1–5 (Part I) against the reference board; owner checkpoint
 

@@ -13,6 +13,12 @@
  *          done, CPU in scene.render and its parts, terrain loop lengths, draw statistics
  *          (on a software adapter only the ratios mean anything),
  *        PROF=<file> also writes a V8 CPU profile of those frames (.cpuprofile),
+ *        POST=0 draws without the post-processing pipeline; BLOOM=0, GRAIN=0, GRADE_TOD=0 leave
+ *          out its bloom, its grain and dither, its time-of-day grade; VOLTEST=1 adds a test
+ *          height fog through its volumetric path (VOLSCALE, VOLDENSITY); PERF_POST=n times
+ *          the frame drawn directly, through the bare pipeline, with its stages and with the
+ *          test fog, interleaved over n rounds; MSAA=4 draws the simulation view with four
+ *          samples per pixel, as the app does (default none),
  *        SCENE=strategic draws the strategic view (StrategicScene, decisions 74, 93) instead,
  *          from STRATEGIC_PREVIEW_VIEWS (globe, night, theater, region, floor, cities, capital, front, winter,
  *          and sharp at 1920 × 1080; front centers on the first front line), with clouds, tile counts and frame times per view;
@@ -61,6 +67,7 @@ import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
 import { RiverIndex } from '../src/worldgen/riverIndex';
 import { testGpu } from '../tests/gpu/device';
 import { headlessRenderer } from '../tests/gpu/renderer';
+import { heightFogTestSource } from '../src/render/sim/post/heightFog';
 import { encodePng } from './png';
 import { previewWorld } from './previewWorld';
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
@@ -556,13 +563,33 @@ it('renders preview views', async () => {
     });
     return;
   }
-  const head = await headlessRenderer(gpu.device, width, height);
+  // The app antialiases with four samples (`antialias: true`); the previews draw one unless asked.
+  const head = await headlessRenderer(gpu.device, width, height, Number(process.env.MSAA ?? 0));
   const scene = new GlobeScene(head.renderer, {
     radius: params.radius,
     grid: new CubeGrid(tres),
     input: false,
   });
   scene.resize(width, height);
+  // POST=0 draws directly, without the post-processing pipeline; BLOOM=0, GRAIN=0 (grain and
+  // dither) and GRADE_TOD=0 (time-of-day grade) leave single stages out. VOLTEST=1 puts a
+  // test height fog through the volumetric path (VOLSCALE sets its resolution, default 1/3;
+  // VOLDENSITY its extinction at sea level, 1/m).
+  scene.postEnabled = process.env.POST !== '0';
+  if (scene.pipeline) {
+    const pipeline = scene.pipeline;
+    pipeline.bloom = process.env.BLOOM !== '0';
+    pipeline.grain = pipeline.dither = process.env.GRAIN !== '0';
+    pipeline.grading = process.env.GRADE_TOD !== '0';
+    if (process.env.VOLSCALE) pipeline.volumetricScale = Number(process.env.VOLSCALE);
+    if (process.env.VOLTEST === '1') {
+      pipeline.volumetrics = heightFogTestSource({
+        eye: scene.lighting.eye,
+        radius: params.radius,
+        density: process.env.VOLDENSITY ? Number(process.env.VOLDENSITY) : undefined,
+      });
+    }
+  }
   scene.globe.setWorld(world);
   scene.climate.setWorld(world);
   // The valley floor, as the app sets it once the global pass is done (decision 122).
@@ -1033,6 +1060,70 @@ it('renders preview views', async () => {
         `  perf ${v.name}: ${wall.toFixed(1)} ms/frame, CPU ${(cpu / perfFrames).toFixed(1)} ms, ` +
           drawStats(scene),
       );
+    }
+    // PERF_POST=n: n rounds of the frame drawn directly, through the bare pipeline (every stage
+    // off), through the pipeline as configured, and with the volumetric source on, interleaved
+    // so that other load on the machine falls on all four alike. Prints the median ms per frame.
+    const postRounds = Number(process.env.PERF_POST ?? 0);
+    if (postRounds > 0 && scene.pipeline) {
+      const pipeline = scene.pipeline;
+      const saved = {
+        post: scene.postEnabled,
+        bloom: pipeline.bloom,
+        grading: pipeline.grading,
+        grain: pipeline.grain,
+        dither: pipeline.dither,
+        volumetrics: pipeline.volumetricsEnabled,
+      };
+      pipeline.volumetrics ??= heightFogTestSource({
+        eye: scene.lighting.eye,
+        radius: params.radius,
+      });
+      const stages = (on: boolean) => {
+        pipeline.bloom = on && saved.bloom;
+        pipeline.grading = on && saved.grading;
+        pipeline.grain = on && saved.grain;
+        pipeline.dither = on && saved.dither;
+      };
+      const modes: [string, () => void][] = [
+        ['direct', () => (scene.postEnabled = false)],
+        [
+          'bare',
+          () => ((scene.postEnabled = true), stages(false), (pipeline.volumetricsEnabled = false)),
+        ],
+        ['pipeline', () => (stages(true), (pipeline.volumetricsEnabled = false))],
+        ['volumetric', () => (pipeline.volumetricsEnabled = true)],
+      ];
+      const times: Record<string, number[]> = {};
+      for (let round = -1; round < postRounds; round++) {
+        for (const [name, set] of modes) {
+          set();
+          scene.render(0);
+          await gpu.finish();
+          const q0 = performance.now();
+          scene.render(0);
+          await gpu.finish();
+          // Round −1 compiles each mode's shaders.
+          if (round >= 0) (times[name] ??= []).push(performance.now() - q0);
+        }
+      }
+      const median = (a: number[]) => [...a].sort((x, y) => x - y)[a.length >> 1]!;
+      console.log(
+        `  post ${v.name}: ` +
+          modes
+            .map(
+              ([name]) =>
+                `${name} ${median(times[name]!).toFixed(1)} (least ${Math.min(...times[name]!).toFixed(1)})`,
+            )
+            .join(', ') +
+          ` ms/frame (median of ${postRounds}); passes ${pipeline.stats.passes}, targets ${pipeline.stats.targets}`,
+      );
+      scene.postEnabled = saved.post;
+      stages(true);
+      pipeline.volumetricsEnabled = saved.volumetrics;
+      if (process.env.VOLTEST !== '1') pipeline.volumetrics = null;
+      scene.render(0);
+      await gpu.finish();
     }
     const rgb = await head.readRgb();
     const ungraded = process.env.GRADE === '0' ? '-ungraded' : '';

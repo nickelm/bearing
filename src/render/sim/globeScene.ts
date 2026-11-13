@@ -7,6 +7,9 @@
  * - the **free camera**, the old orbit camera from orbit down to 500 m, kept as a
  *   development tool until V4 (decision 72; the app offers it behind a dev flag);
  * - the **chase camera** behind the aircraft flown in Free Flight (decision 134).
+ *
+ * The frame goes through the post-processing pipeline (post/simPipeline.ts);
+ * `postEnabled = false`, or a pipeline that fails, draws directly as before.
  */
 import {
   AgXToneMapping,
@@ -35,6 +38,7 @@ import { OrbitCamera, attachOrbitInput } from '../common/orbitCamera';
 import { StrategicOverlay } from '../strategic/strategicOverlay';
 import { StructureLayer } from './infra/structureLayer';
 import type { InfraScene } from './infra/infraScene';
+import { SimPipeline } from './post/simPipeline';
 
 export type SimCameraMode = 'observer' | 'free' | 'chase';
 
@@ -89,6 +93,13 @@ export class GlobeScene {
   readonly strategic: StrategicOverlay;
   /** Unit vector toward the sun, world frame. Set by the app from the ephemeris. */
   readonly sun = new Vec3d(1, 0.6, 0.8).normalize();
+  /**
+   * The post-processing pipeline: volumetrics, overlay, bloom, grade, grain
+   * (post/simPipeline.ts). Null if it could not be built or failed while drawing.
+   */
+  pipeline: SimPipeline | null = null;
+  /** Draw through the pipeline; false draws the scene directly, with the renderer's tone curve only. */
+  postEnabled = true;
   /** Draw the tiled terrain when available (otherwise the M1 grid mesh). */
   useTiles = true;
   /** Whether the terrain has a world to draw (set by the app). */
@@ -134,6 +145,11 @@ export class GlobeScene {
     // Light directions are translation-invariant, so camera-relative offsets do not affect them.
     this.scene.add(this.sunLight, new AmbientLight(0xffffff, 0.35));
     renderer.toneMapping = AgXToneMapping;
+    try {
+      this.pipeline = new SimPipeline(renderer);
+    } catch (error) {
+      console.warn('Post-processing is unavailable; the simulation view draws directly.', error);
+    }
 
     this.inputEnabled = options.input !== false;
   }
@@ -282,6 +298,27 @@ export class GlobeScene {
 
     // Cloud coverage for shadows, re-baked when the clouds have moved (decision 69).
     this.clouds.bake(this.renderer, performance.now());
+    this.draw(o.eye);
+  }
+
+  /** Draws the frame through the pipeline, or directly without one. */
+  private draw(eye: Readonly<Vec3d>): void {
+    const pipeline = this.postEnabled ? this.pipeline : null;
+    if (pipeline) {
+      // The time-of-day grade follows the sun's elevation at the camera; the sun rises in the east.
+      const up = this.scratch.copy(eye).normalize();
+      pipeline.sunElevation.value = Math.asin(Math.min(1, Math.max(-1, up.dot(this.sun))));
+      const eastward = this.sun.x * up.z - this.sun.z * up.x;
+      pipeline.morning.value = Math.min(1, Math.max(-1, eastward / 0.2));
+      try {
+        pipeline.render(this.scene, this.camera);
+        return;
+      } catch (error) {
+        console.warn('Post-processing failed; the simulation view draws directly.', error);
+        pipeline.dispose();
+        this.pipeline = null;
+      }
+    }
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -293,5 +330,6 @@ export class GlobeScene {
     this.structures.dispose();
     this.clouds.dispose();
     this.strategic.dispose();
+    this.pipeline?.dispose();
   }
 }

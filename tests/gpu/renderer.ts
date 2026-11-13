@@ -18,11 +18,15 @@ export interface HeadlessRenderer {
   dispose(): void;
 }
 
-/** `width` must be a multiple of 64 (texture readback rows are 256-byte aligned). */
+/**
+ * `width` must be a multiple of 64 (texture readback rows are 256-byte aligned).
+ * `samples` sets the MSAA sample count (the app's `antialias: true` is 4); default none.
+ */
 export async function headlessRenderer(
   device: GPUDevice,
   width: number,
   height: number,
+  samples = 0,
 ): Promise<HeadlessRenderer> {
   if (width % 64 !== 0) throw new Error('headless width must be a multiple of 64');
   const canvas = {
@@ -38,6 +42,7 @@ export async function headlessRenderer(
     device,
     canvas: canvas as unknown as HTMLCanvasElement,
     antialias: false,
+    samples,
     // As in the app (decision 112).
     reversedDepthBuffer: true,
   });

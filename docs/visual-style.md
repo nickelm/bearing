@@ -218,9 +218,9 @@ Starting values; final values get tuned in the model viewer and on the globe.
 ## Post-Processing
 
 - **Tone mapping.** AgX or ACES filmic, with exposure tied to time of day.
-- **Color grading.** A lookup table per time-of-day band (dawn, day, golden hour, dusk, night), blended as the sun moves.
-- **Bloom.** Thresholded so only the sun, emissive lights, afterburners, and bright sky glints bloom.
-- **Film grain.** Faint, constant, and cheap.
+- **Color grading.** A grade per time-of-day band (dawn, day, golden hour, dusk, night: gain tint, saturation, gamma and lift), blended as the sun moves (decision 138).
+- **Bloom.** Thresholded so only the sun, emissive lights, afterburners, and bright sky glints bloom. The threshold follows the time of day, low at night and high by day.
+- **Film grain.** Faint, constant in strength, and cheap, with a dither of half a code value so sky gradients never band.
 - **Pixelation (optional).** Render at 50 to 75% internal resolution and upscale with nearest-neighbor sampling, optionally with ordered dithering on sky gradients. This reproduces the stair-stepped edges of the references and doubles as a performance setting for weaker devices. Default to 75% on desktop and offer a toggle.
 - **Letterboxing.** Only in cinematic views: base arrivals, mission briefings, and replays.
 
