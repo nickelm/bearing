@@ -36,6 +36,7 @@ import {
   emptyLawOutput,
   MIL_DETENT,
   neutralControls,
+  newLawState,
   pitchBlend,
 } from './controlLaws';
 import type { FlightControls, LawInput, LawOutput, LawState } from './controlLaws';
@@ -112,6 +113,8 @@ export interface FlightTelemetry {
   fuelFlow: number;
   air: AirState;
   laws: LawOutput;
+  /** What the control laws read last substep (the flight director inverts the pitch law with it). */
+  lawInput: LawInput | null;
 }
 
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
@@ -153,7 +156,7 @@ export class FlightModel {
   /** Prefiltered stick, and the controls the laws see. */
   private readonly stick = { pitch: 0, roll: 0 };
   /** The control laws' integrators. */
-  private readonly lawState: LawState = { pitchI: 0 };
+  readonly lawState: LawState = newLawState();
   private readonly shaped: FlightControls = neutralControls();
   private readonly scratch = {
     up: new Vec3d(),
@@ -211,6 +214,7 @@ export class FlightModel {
       fuelFlow: 0,
       air: standardAtmosphere(0),
       laws: emptyLawOutput(),
+      lawInput: null,
     };
   }
 
@@ -259,7 +263,7 @@ export class FlightModel {
     this.crashed = null;
     this.stick.pitch = 0;
     this.stick.roll = 0;
-    this.lawState.pitchI = 0;
+    Object.assign(this.lawState, newLawState());
     for (const w of this.wheels) {
       w.anchor = null;
       w.load = 0;
@@ -393,10 +397,15 @@ export class FlightModel {
     const mb = sc.mb.set(0, 0, 0);
     let totalLoad = 0;
     const gearDown = this.gear >= 0.999;
-    const steerAngle =
-      clamp(ctl.yaw, -1, 1) *
-      (spec.gear.steerHigh +
-        (spec.gear.steerLow - spec.gear.steerHigh) * Math.max(0, 1 - tas / spec.gear.steerFade));
+    // Nosewheel steering: full at taxi speed, a few degrees above `steerFade`, and
+    // none by `steerOff`, where a pedal tap at takeoff speed would roll the jet onto
+    // a wingtip.
+    const gs = spec.gear;
+    const steerGain =
+      tas <= gs.steerFade
+        ? gs.steerHigh + (gs.steerLow - gs.steerHigh) * (1 - tas / gs.steerFade)
+        : gs.steerHigh * Math.max(0, 1 - (tas - gs.steerFade) / (gs.steerOff - gs.steerFade));
+    const steerAngle = clamp(ctl.yaw, -1, 1) * steerGain;
     // Wheels and hard points only near the ground (one query otherwise).
     const low = altitude - groundUnder < 40;
     for (const w of this.wheels) {
@@ -442,7 +451,10 @@ export class FlightModel {
       halfRhoV: 0.5 * air.density * tas,
       gear: this.gear,
       dt,
+      bank: tel.bank,
+      pitch: tel.pitch,
     };
+    tel.lawInput = lawIn;
     // Stick prefilter (as in the F-16's FCS): shapes the command's onset.
     const pitchTau =
       PITCH_PREFILTER_GEAR +
@@ -593,10 +605,19 @@ export class FlightModel {
     let dl = d.dot(l);
     const k = g.gripStiffness;
     const c = g.gripDamping;
-    // Lateral grip.
+    // Lateral grip: the grip spring at rest and taxi speeds (no creep), and at speed
+    // a tire's cornering force from its slip angle (cornering · load per radian),
+    // both capped by friction. The spring's damping alone acted like a cornering
+    // stiffness some thirty times a tire's at takeoff speed, so any heading change
+    // saturated the tires and could roll the jet onto a wingtip (decision 136).
     const capL = g.lateral * n;
     dl = clamp(dl, -capL / k, capL / k);
-    const Fl = clamp(-k * dl - c * vl, -capL, capL);
+    const spring = clamp(-k * dl - c * vl, -capL, capL);
+    const slip = Math.atan2(vl, Math.abs(vf));
+    const corner = clamp(-g.cornering * n * slip, -capL, capL);
+    const atSpeed = smooth01((Math.abs(vf) - 2) / 4);
+    const Fl = spring * (1 - atSpeed) + corner * atSpeed;
+    if (atSpeed > 0) dl *= 1 - atSpeed;
     // Rolling: braked wheels grip up to their braking friction; free wheels roll.
     let brake = 0;
     if (w.spec.braked) {

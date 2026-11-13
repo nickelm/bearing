@@ -407,7 +407,7 @@
       "pitchAuthority": 0.25,
       "yawAuthority": 0.04,
       "maxRollRate": 230,
-      "maxPitchRate": 5,
+      "maxPitchRate": 12,
       "maxLoad": 9,
       "minLoad": -3,
       "maxAlpha": 25,
@@ -419,7 +419,10 @@
       "rateGain": [8, 15, 4],
       "sideslipGain": 2,
       "alphaGain": 4,
-      "rateIntegral": 4
+      "rateIntegral": 4,
+      "groundPitchRate": 5,
+      "groundGain": 5,
+      "derotationRate": 2.5
     },
     "gear": {
       "wheels": [
@@ -459,8 +462,10 @@
       "gripStiffness": 400000,
       "gripDamping": 40000,
       "steerLow": 32,
-      "steerHigh": 4,
-      "steerFade": 12
+      "steerHigh": 3,
+      "steerFade": 12,
+      "steerOff": 35,
+      "cornering": 6
     },
     "speedbrake": {
       "transit": 2

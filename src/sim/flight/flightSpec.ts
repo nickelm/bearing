@@ -98,7 +98,7 @@ export interface FlightSpec {
     rollAuthority: number;
     pitchAuthority: number;
     yawAuthority: number;
-    /** Commanded limits: roll rate (rad/s), pitch rate with the gear down (rad/s), load factor. */
+    /** Commanded limits: roll rate (rad/s), pitch rate in the rate law in the air (rad/s), load factor. */
     maxRollRate: number;
     maxPitchRate: number;
     maxLoad: number;
@@ -119,6 +119,15 @@ export interface FlightSpec {
     rateGain: [number, number, number];
     /** Integral gain of the pitch-rate loop (1/s²). */
     rateIntegral: number;
+    /**
+     * Pitch rate at full stick in the rate law on the ground (rad): the rotation;
+     * it grows to `maxPitchRate` in the first seconds of flight (decision 136).
+     */
+    groundPitchRate: number;
+    /** Multiplier of the pitch-rate gain with weight on the wheels (takeoff gains). */
+    groundGain: number;
+    /** Nose-down pitch rate (rad/s) with neutral stick after a landing. */
+    derotationRate: number;
     sideslipGain: number;
     alphaGain: number;
   };
@@ -138,6 +147,10 @@ export interface FlightSpec {
     steerLow: number;
     steerHigh: number;
     steerFade: number;
+    /** Speed (m/s) above which the nosewheel no longer steers: the rudder does. */
+    steerOff: number;
+    /** Tire cornering force per unit load per radian of slip, at speed. */
+    cornering: number;
   };
   /** Speedbrake transit time (s). */
   speedbrake: { transit: number };
@@ -278,7 +291,16 @@ export function parseFlightSpec(raw: unknown, id = '?'): FlightSpec {
   num(c, 'minLoad', 'controls');
   for (const k of ['blendLow', 'blendHigh', 'sideslipGain', 'alphaGain', 'rateIntegral'])
     pos(c, k, 'controls');
-  for (const k of ['maxRollRate', 'maxPitchRate', 'maxAlpha', 'minAlpha', 'maxSideslip'])
+  pos(c, 'groundGain', 'controls');
+  for (const k of [
+    'maxRollRate',
+    'maxPitchRate',
+    'groundPitchRate',
+    'derotationRate',
+    'maxAlpha',
+    'minAlpha',
+    'maxSideslip',
+  ])
     c[k] = num(c, k, 'controls') * DEG;
   const rg = vec(c.rateGain, 'controls.rateGain');
   if (!rg.every((x) => x > 0)) fail('controls.rateGain', 'must be positive');
@@ -304,6 +326,8 @@ export function parseFlightSpec(raw: unknown, id = '?'): FlightSpec {
     'gripStiffness',
     'gripDamping',
     'steerFade',
+    'steerOff',
+    'cornering',
   ])
     pos(g, k, 'gear');
   g.steerLow = num(g, 'steerLow', 'gear') * DEG;

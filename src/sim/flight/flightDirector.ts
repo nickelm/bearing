@@ -13,7 +13,7 @@
 import type { Vec3d } from '../../core/vec3d';
 import { DEG } from '../../core/units';
 import { SEA_LEVEL_DENSITY } from './atmosphere';
-import { MIL_DETENT, pitchBlend } from './controlLaws';
+import { MIL_DETENT, pitchBlend, pitchCommand } from './controlLaws';
 import type { FlightControls } from './controlLaws';
 import { lookup } from './flightSpec';
 import type { FlightModel } from './flightModel';
@@ -103,9 +103,29 @@ export class FlightDirector {
     const sLoad = nDes >= 1 ? (nDes - 1) / (c.maxLoad - 1) : (nDes - 1) / (1 - c.minLoad);
     // At low speed the stick commands pitch rate: the body rate of that path.
     const qDes = (g / v) * (nDes - Math.cos(t.gamma) * cb);
-    const sRate = qDes / c.maxPitchRate;
-    const w = pitchBlend(spec, t.cas, model.gear);
-    ctl.pitch = clamp(w * sLoad + (1 - w) * sRate, -1, 1);
+    const law = t.lawInput;
+    if (law) {
+      // Invert the pitch law exactly (decision 136): the pitch rate the law would
+      // command if the stick asked for nDes in its load part and qDes in its rate
+      // part, then the stick that makes the law command it. The command grows with
+      // the stick, so bisection finds it; mixing two stick estimates did not, and
+      // porpoised while the gear came up.
+      const w = pitchBlend(spec, law.cas, law.gear);
+      const vv = Math.max(law.tas, 30);
+      const steady = (nDes * law.g + law.gravityLift) / vv;
+      const want = w * steady + w * w * c.loadGain * (nDes - law.load) + (1 - w) * qDes;
+      let lo = -1;
+      let hi = 1;
+      for (let i = 0; i < 24; i++) {
+        const mid = 0.5 * (lo + hi);
+        if (pitchCommand(spec, mid, law, model.lawState).q < want) lo = mid;
+        else hi = mid;
+      }
+      ctl.pitch = 0.5 * (lo + hi);
+    } else {
+      const w = pitchBlend(spec, t.cas, model.gear);
+      ctl.pitch = clamp(w * sLoad + (1 - w) * (qDes / c.maxPitchRate), -1, 1);
+    }
     // Speed: PI on calibrated airspeed.
     if (target.speed !== null) {
       const e = target.speed - t.cas;

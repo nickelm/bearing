@@ -97,6 +97,10 @@ export interface LawInput {
   dt: number;
   /** ½ρV (kg/(m²·s)), for the damping the laws compensate. */
   halfRhoV: number;
+  /** Bank angle (rad, + right wing down), for the rate law's turn compensation. */
+  bank: number;
+  /** Pitch attitude (rad), so derotation after landing stops at the ground attitude. */
+  pitch: number;
 }
 
 export interface LawOutput {
@@ -135,16 +139,112 @@ export function pitchBlend(spec: FlightSpec, cas: number, gear: number): number 
   return (1 - gear) * smoothstep(spec.controls.blendLow, spec.controls.blendHigh, cas);
 }
 
-/** Integrator state of the control laws, kept by the aircraft between substeps. */
+/** State of the control laws, kept by the aircraft between substeps. */
 export interface LawState {
   /** Integrated pitch-rate error, as a moment (N·m). */
   pitchI: number;
+  /** Seconds since the wheels last carried weight (0 on the ground). */
+  airborne: number;
+  /** True from a touchdown after flight until the wheels leave the ground again. */
+  landed: boolean;
+}
+
+export function newLawState(): LawState {
+  return { pitchI: 0, airborne: 0, landed: false };
+}
+
+/** Largest pitch rate (rad/s) the rate law's load-factor hold adds or takes away. */
+const HOLD_LIMIT = 4 * (Math.PI / 180);
+
+/** The pitch command and how it was made. */
+export interface PitchCommand {
+  /** Commanded pitch rate (rad/s). */
+  q: number;
+  /** Commanded load factor (g), for the HUD's debug panel. */
+  n: number;
+  /** Weight of the load-factor law (0: rate command). */
+  blend: number;
+}
+
+/**
+ * The pitch-rate command for a stick position, shared by the control laws and
+ * the flight director, which inverts it to fly a desired path (decision 136).
+ *
+ * - **Rate law** (gear down, or slow): the stick commands pitch rate. On the
+ *   ground the most it asks is `groundPitchRate` (5°/s), a gentle rotation; in the
+ *   air that grows to `maxPitchRate` over a few seconds after liftoff, so a stick
+ *   still held aft at liftoff does not whip the nose up. In the air it adds the
+ *   pitch rate of a level turn at the present bank and, from 6–12 s after liftoff,
+ *   a load-factor hold on the commanded path, so neutral stick holds a turn in
+ *   the pattern instead of sinking, while just after liftoff it holds the
+ *   attitude the pilot rotated to. After a landing, neutral stick lowers the nose
+ *   at `derotationRate` onto the nosewheel.
+ * - **Load-factor law** (gear up): the stick commands load factor.
+ * - **The handover** as the gear moves: the load law's steady part is weighted
+ *   by the blend and its error term by the blend squared, so the first percent
+ *   of gear travel does not hand the stick a 9 g loop gain.
+ * - **Limiters:** angle of attack and load factor, in the air.
+ */
+export function pitchCommand(
+  spec: FlightSpec,
+  stick: number,
+  s: Readonly<LawInput>,
+  state: Readonly<LawState> | null,
+): PitchCommand {
+  const c = spec.controls;
+  const st = clamp(stick, -1, 1);
+  const blend = pitchBlend(spec, s.cas, s.gear);
+  const v = Math.max(s.tas, 30);
+  const air = 1 - s.wow;
+  const nStick = clamp(loadCommand(spec, st) - s.curvature / s.g, c.minLoad, c.maxLoad);
+  const steady = (nStick * s.g + s.gravityLift) / v;
+  const loadTerm = c.loadGain * (nStick - s.load);
+  // Rate law: gentle on the ground, the full rate a few seconds after liftoff.
+  const airborne = state ? state.airborne : air > 0.95 ? 10 : 0;
+  const fade = smoothstep(1, 4, airborne);
+  const maxRate = c.groundPitchRate + (c.maxPitchRate - c.groundPitchRate) * fade;
+  let qRate = st * maxRate;
+  if (air > 0) {
+    // In the air: the pitch rate of a level turn at this bank, and a load-factor
+    // hold on the path the stick asks for (cos γ / cos(bank), plus the stick's rate
+    // as load), as the F-16's landing gains hold 1 g.
+    const bank = clamp(Math.abs(s.bank), 0, 70 * (Math.PI / 180));
+    const cb = Math.cos(bank);
+    const stickRate = qRate;
+    qRate += air * (s.g / v) * (1 / cb - cb);
+    // The path's load factor: cos γ / cos(bank), from gravity along the lift
+    // direction (−g cos γ cos(bank)), so a climb or a turn is held, not pulled into.
+    const nPath = -s.gravityLift / (s.g * cb * cb);
+    const nRef = nPath - s.curvature / s.g + (stickRate * v) / s.g;
+    const hold = clamp(c.loadGain * (nRef - s.load), -HOLD_LIMIT, HOLD_LIMIT);
+    // The hold comes in 6–12 s after liftoff: until then the rate law holds the
+    // attitude the pilot rotated to, as a takeoff wants; in a landing pattern, long
+    // after liftoff, it holds the path in turns.
+    qRate += air * smoothstep(6, 12, airborne) * hold;
+  }
+  if (state?.landed && s.wow > 0.3 && Math.abs(st) < 0.1 && s.pitch > 1 * (Math.PI / 180))
+    qRate = -c.derotationRate;
+  let q = blend * steady + blend * blend * loadTerm + (1 - blend) * qRate;
+  if (s.tas > 20 && air > 0.5) {
+    q = Math.min(q, c.alphaGain * (c.maxAlpha - s.alpha));
+    q = Math.max(q, c.alphaGain * (c.minAlpha - s.alpha));
+    if (s.load > c.maxLoad) q -= c.loadGain * (s.load - c.maxLoad);
+    if (s.load < c.minLoad) q += c.loadGain * (c.minLoad - s.load);
+  }
+  const n = blend < 0.5 ? 1 + (q * v) / s.g : nStick;
+  return { q, n, blend };
 }
 
 /** The load factor the pitch stick commands (g), before the limiters. */
+/**
+ * The load factor the pitch stick commands (g), before the limiters. The stick is
+ * shaped as on the F-16, gentle near center: s·(0.3 + 0.7|s|), so a fifth of the
+ * travel asks for 1.7 g rather than 2.6 g, and full travel still for 9 g.
+ */
 export function loadCommand(spec: FlightSpec, stick: number): number {
   const c = spec.controls;
-  const s = clamp(stick, -1, 1);
+  const s0 = clamp(stick, -1, 1);
+  const s = s0 * (0.3 + 0.7 * Math.abs(s0));
   return s >= 0 ? 1 + s * (c.maxLoad - 1) : 1 + s * (1 - c.minLoad);
 }
 
@@ -167,21 +267,21 @@ export function controlLaws(
   const air = 1 - s.wow;
 
   // ---- Pitch ----
-  const blend = pitchBlend(spec, s.cas, s.gear);
-  let nCmd = clamp(loadCommand(spec, ctl.pitch) - s.curvature / s.g, c.minLoad, c.maxLoad);
-  const v = Math.max(s.tas, 30);
-  // Steady pitch rate for the commanded load factor, plus a load-error term.
-  const qLoad = (nCmd * s.g + s.gravityLift) / v + c.loadGain * (nCmd - s.load);
-  const qRate = clamp(ctl.pitch, -1, 1) * c.maxPitchRate;
-  let qCmd = blend * qLoad + (1 - blend) * qRate;
-  if (flying && air > 0.5) {
-    qCmd = Math.min(qCmd, c.alphaGain * (c.maxAlpha - s.alpha));
-    qCmd = Math.max(qCmd, c.alphaGain * (c.minAlpha - s.alpha));
-    // Load-factor limiter on the rate law as well.
-    if (s.load > c.maxLoad) qCmd -= c.loadGain * (s.load - c.maxLoad);
-    if (s.load < c.minLoad) qCmd += c.loadGain * (c.minLoad - s.load);
+  if (state) {
+    // Liftoff and touchdown, for the rate law's schedule.
+    if (s.wow > 0.05) {
+      if (state.airborne > 2) state.landed = true;
+      state.airborne = 0;
+    } else {
+      state.airborne += s.dt;
+      if (state.airborne > 0.5) state.landed = false;
+    }
   }
-  if (blend < 0.5) nCmd = 1 + (qCmd * v) / s.g;
+  const pitch = pitchCommand(spec, ctl.pitch, s, state ?? null);
+  const qCmd = pitch.q;
+  const nCmd = pitch.n;
+  const blend = pitch.blend;
+  const v = Math.max(s.tas, 30);
   const dampY = s.halfRhoV * w.area * w.chord * w.chord * 0.5 * spec.aero.cmq * s.q;
   // PI rate loop: the integrator holds the attitude against steady moments (the
   // changes of trim), so the commanded rate is reached rather than approached.
@@ -189,11 +289,11 @@ export function controlLaws(
   // authority, and is clamped to it.
   const errQ = qCmd - s.q;
   let pitchI = state ? clamp(state.pitchI, -authY, authY) : 0;
-  // Takeoff gains: three times the rate gain with weight on wheels, so the
-  // proportional loop overcomes the main gear's nose-down moment during rotation
-  // (with the integrator frozen there, a plain gain settled at a third of the
-  // commanded rate and the nose came up sluggishly).
-  const pd = iyy * kq * (1 + 2 * s.wow) * errQ - dampY;
+  // Takeoff gains: a higher rate gain with weight on wheels, so the proportional
+  // loop overcomes the main gear's nose-down moment during rotation (with the
+  // integrator frozen there, a plain gain settled well short of the commanded rate
+  // and the nose came up sluggishly).
+  const pd = iyy * kq * (1 + (c.groundGain - 1) * s.wow) * errQ - dampY;
   if (state) {
     const raw = pd + pitchI;
     const saturated = (raw >= authY && errQ > 0) || (raw <= -authY && errQ < 0);

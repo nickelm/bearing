@@ -22,6 +22,7 @@ import { flightWarnings, FlightMonitor, gradeLanding } from '../src/sim/flight/o
 import type { FlightEvent } from '../src/sim/flight/outcomes';
 import { runwayEnds, runwayFrame, toRunway } from '../src/sim/flight/runway';
 import { spawnInAir, spawnOnRunway } from '../src/sim/flight/spawn';
+import { TestPilot } from '../src/sim/flight/testPilot';
 import { flatGround, kestrel, kestrelSpec, RADIUS, testRunway } from './helpers/flight';
 import specJson from '../src/render/common/models/specs/alliance-fighter.json';
 
@@ -459,13 +460,177 @@ describe('rotation with a keyboard (owner report: sluggish, then a tail strike)'
     expect(r.maxGroundPitch).toBeLessThan(12.5);
   });
 
-  it('warns of a tail strike on the ground above 10.5° of pitch', () => {
+  it('warns of a tail strike from the pitch half a second ahead, with weight on the wheels only', () => {
     const m = kestrel();
     spawnOnRunway(m, runway, end);
     run(m, neutralControls(), 1);
-    expect(flightWarnings(m)).not.toContain('tail-strike');
-    m.telemetry.pitch = 11 * DEG;
-    expect(flightWarnings(m)).toContain('tail-strike');
+    const at = (pitch: number, rate: number) => {
+      m.telemetry.pitch = pitch * DEG;
+      m.omega.y = rate * DEG;
+      return flightWarnings(m).includes('tail-strike');
+    };
+    expect(at(11, 0)).toBe(false);
+    expect(at(12.6, 0)).toBe(true);
+    expect(at(11, 4)).toBe(true);
+  });
+
+  it("gives no tail-strike warning in a normal keyboard takeoff or on the test pilot's landing", () => {
+    const m = kestrel();
+    spawnOnRunway(m, runway, end);
+    const ctl = neutralControls();
+    const pilot = new TestPilot(runway, end, RADIUS);
+    let warnings = 0;
+    for (let i = 0; i < 900 / FLIGHT_STEP && !m.crashed && pilot.phase !== 'stopped'; i++) {
+      pilot.fly(m, ctl, FLIGHT_STEP);
+      m.step(ctl, ground);
+      if (flightWarnings(m).includes('tail-strike')) warnings++;
+    }
+    expect(m.crashed).toBeNull();
+    expect(warnings).toBe(0);
+    expect(keyboardTakeoff(9).m.crashed).toBeNull();
+  });
+});
+
+describe('the gear-down pitch law in flight, the handover, and the rollout (decision 136)', () => {
+  it('holds the flight path in a 30° turn with the gear down and the stick released', () => {
+    const m = kestrel();
+    spawnInAir(m, runway, end, 600, 200 * KNOT);
+    m.gear = 1;
+    const ctl = neutralControls();
+    ctl.gearDown = true;
+    ctl.throttle = 0.45;
+    // Long enough after the air start for the pattern's path hold (6–12 s).
+    run(m, ctl, 14);
+    const vs0 = m.telemetry.verticalSpeed;
+    ctl.roll = 0.3;
+    for (let i = 0; i < 3 / FLIGHT_STEP && m.telemetry.bank < 30 * DEG; i++) m.step(ctl, ground);
+    ctl.roll = 0;
+    let worst = 0;
+    for (let i = 0; i < 15 / FLIGHT_STEP; i++) {
+      m.step(ctl, ground);
+      worst = Math.max(worst, Math.abs(m.telemetry.verticalSpeed - vs0));
+    }
+    expect(m.telemetry.bank / DEG).toBeGreaterThan(25);
+    expect(worst).toBeLessThan(2);
+  });
+
+  it('gives the full pitch rate in the air with the gear down, a few seconds after liftoff', () => {
+    const m = kestrel();
+    spawnInAir(m, runway, end, 1500, 250 * KNOT);
+    m.gear = 1;
+    const ctl = neutralControls();
+    ctl.gearDown = true;
+    ctl.throttle = 0.5;
+    run(m, ctl, 6);
+    ctl.pitch = 1;
+    let q = 0;
+    run(m, ctl, 2);
+    for (let i = 0; i < 1 / FLIGHT_STEP; i++) {
+      m.step(ctl, ground);
+      q = Math.max(q, m.omega.y / DEG);
+    }
+    // Not capped at the ground's 5°/s.
+    expect(q).toBeGreaterThan(8);
+    expect(q).toBeLessThan(18);
+  });
+
+  it('hands over to the load-factor law smoothly as the gear comes up', () => {
+    const m = kestrel();
+    spawnOnRunway(m, runway, end);
+    const ctl = neutralControls();
+    ctl.throttle = 1;
+    let gearAt = -1;
+    let t = 0;
+    let qMax = -Infinity;
+    let qMin = Infinity;
+    let nMax = 0;
+    for (let i = 0; i < 40 / FLIGHT_STEP && !m.crashed; i++) {
+      t += FLIGHT_STEP;
+      const tel = m.telemetry;
+      if (gearAt < 0) ctl.pitch = tel.cas > 150 * KNOT && tel.pitch < 9 * DEG ? 1 : 0;
+      if (gearAt < 0 && !m.onGround && tel.radarAltitude > 15) {
+        gearAt = t;
+        ctl.gearDown = false;
+        ctl.pitch = 0;
+      }
+      m.step(ctl, ground);
+      if (gearAt > 0 && t - gearAt < 8) {
+        qMax = Math.max(qMax, m.omega.y / DEG);
+        qMin = Math.min(qMin, m.omega.y / DEG);
+        nMax = Math.max(nMax, tel.load);
+      }
+    }
+    expect(m.crashed).toBeNull();
+    expect(qMax).toBeLessThan(8);
+    expect(qMin).toBeGreaterThan(-6);
+    expect(nMax).toBeLessThan(1.5);
+  });
+
+  it('keeps the flight director steady through the gear transit (no porpoising)', () => {
+    const m = kestrel();
+    spawnOnRunway(m, runway, end);
+    const ctl = neutralControls();
+    const pilot = new TestPilot(runway, end, RADIUS, { afterburner: false });
+    let nMax = 0;
+    let nMin = Infinity;
+    for (let i = 0; i < 60 / FLIGHT_STEP && !m.crashed; i++) {
+      pilot.fly(m, ctl, FLIGHT_STEP);
+      m.step(ctl, ground);
+      if (m.gear > 0.01 && m.gear < 0.99 && !m.onGround) {
+        nMax = Math.max(nMax, m.telemetry.load);
+        nMin = Math.min(nMin, m.telemetry.load);
+      }
+    }
+    expect(m.crashed).toBeNull();
+    expect(nMin).toBeGreaterThan(0.7);
+    expect(nMax).toBeLessThan(1.9);
+  });
+
+  it('shrugs off pedal inputs at takeoff speed: no wingtip on the runway', () => {
+    for (const [pedal, seconds] of [
+      [0.25, 0.2],
+      [1, 0.5],
+    ] as const) {
+      const m = kestrel();
+      spawnOnRunway(m, runway, end);
+      const ctl = neutralControls();
+      ctl.throttle = 1;
+      let at = -1;
+      let t = 0;
+      let bank = 0;
+      for (let i = 0; i < 25 / FLIGHT_STEP && !m.crashed; i++) {
+        t += FLIGHT_STEP;
+        if (at < 0 && m.telemetry.cas > 150 * KNOT) at = t;
+        ctl.yaw = at > 0 && t - at < seconds ? pedal : 0;
+        if (m.telemetry.cas > 165 * KNOT) ctl.throttle = 0;
+        m.step(ctl, ground);
+        if (m.onGround) bank = Math.max(bank, Math.abs(m.telemetry.bank / DEG));
+      }
+      expect(m.crashed, `${pedal} for ${seconds} s`).toBeNull();
+      expect(bank).toBeLessThan(6);
+    }
+  });
+
+  it('lowers the nose onto the nosewheel within seconds of a landing with the stick released', () => {
+    const m = kestrel();
+    spawnOnRunway(m, runway, end);
+    const ctl = neutralControls();
+    const pilot = new TestPilot(runway, end, RADIUS);
+    const mon = new FlightMonitor([runway], RADIUS);
+    let touchdown = -1;
+    let noseDown = -1;
+    let t = 0;
+    for (let i = 0; i < 900 / FLIGHT_STEP && !m.crashed && noseDown < 0; i++) {
+      t += FLIGHT_STEP;
+      pilot.fly(m, ctl, FLIGHT_STEP);
+      if (pilot.phase === 'rollout') ctl.pitch = 0;
+      m.step(ctl, ground);
+      for (const e of mon.update(m, FLIGHT_STEP)) if (e.kind === 'touchdown') touchdown = t;
+      if (touchdown > 0 && m.wheels[0]!.load > 0) noseDown = t - touchdown;
+    }
+    expect(m.crashed).toBeNull();
+    expect(noseDown).toBeGreaterThan(0.5);
+    expect(noseDown).toBeLessThan(8);
   });
 });
 
