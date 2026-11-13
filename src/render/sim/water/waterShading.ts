@@ -62,6 +62,18 @@ type V3 = Node<'vec3'>;
 
 /** Absorption of clear water per reference meter (red goes first, blue last). */
 const ABSORPTION: [number, number, number] = [0.35, 0.055, 0.022];
+/** Physical depths (m) over which water color goes from Earth depth to the planet's reference depth (decision 129). */
+export const SHALLOW_DEPTH: [number, number] = [8, 60];
+
+/** Depth for water color: physical meters in the shallows, reference meters (÷ relief scale) in deep water. */
+export function shallowDepth(physical: F, reliefScale: F): F {
+  return mix(
+    physical,
+    physical.div(reliefScale),
+    smoothstep(SHALLOW_DEPTH[0], SHALLOW_DEPTH[1], physical),
+  ) as F;
+}
+
 /** Nominal river depth (reference m) for color: deep enough to read as water, not land. */
 const RIVER_DEPTH = 30;
 /** Wave field period (m): every wave vector is an integer multiple of 2π/WAVE_PERIOD. */
@@ -195,7 +207,17 @@ export class WaterShading {
           float(RIVER_DEPTH).mul(this.reliefScale),
           river.mul(float(1).sub(lake)),
         );
-        const depth = vec3(waterDepth.div(this.reliefScale));
+        // Shallows read at Earth depth (decision 129): reefs, lagoons, sandbanks and
+        // skerry sounds a few meters deep are true shallows, turquoise over sand; deeper
+        // water scales with the planet's relief as before (decision 14).
+        // Rivers keep their nominal reference depth, so their silt still reads.
+        const depth = vec3(
+          mix(
+            shallowDepth(standing, this.reliefScale),
+            waterDepth.div(this.reliefScale),
+            river.mul(float(1).sub(lake)),
+          ),
+        );
         const bedVisible = exp(depth.mul(vec3(...ABSORPTION)).mul(-2));
         const clear = mix(this.deepColor, i.bed, bedVisible) as V3;
         // Warm rivers carry silt (decision 126): the Amazon's and the Nile's brown.

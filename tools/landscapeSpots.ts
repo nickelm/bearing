@@ -14,6 +14,7 @@
  *   delta      the mouth of the largest river in a dry climate (the Nile delta)
  *   jungle     the largest river in tropical rainforest (the Amazon)
  *   falls      a river dropping steeply across a step (Niagara)
+ *   reef       a warm island coast with a reef and lagoon (the Pacific, decision 129)
  */
 import { directionToCubeFace } from '../src/core/coords';
 import { Vec3d } from '../src/core/vec3d';
@@ -31,6 +32,7 @@ export const SPOT_KINDS = [
   'delta',
   'jungle',
   'falls',
+  'reef',
 ] as const;
 export type SpotKind = (typeof SPOT_KINDS)[number];
 
@@ -300,6 +302,17 @@ export async function findSpots(
             offer('skerries', summer * cold * (400 - Math.min(380, s.relief(d, [3000, 6000]))), c);
           }
         }
+        // Reef: a small warm island (tropical land with sea all around within 6 km).
+        if (
+          b === Biome.TropicalRainforest ||
+          b === Biome.TropicalSeasonalForest ||
+          b === Biome.Savanna
+        ) {
+          let sea = 0;
+          for (let k = 0; k < 8; k++)
+            if (s.height(s.offset(d, (k * Math.PI) / 4, 6000)) <= -20) sea++;
+          if (sea >= 5) offer('reef', sea * 100 - h, c);
+        }
         // Falls: a steep reach of a sizable river that crosses a stratum boundary
         // (tileSynth steps its surface there, decision 126).
         if (discharge[c]! > 60 && r >= 0 && height[r]! > 0) {
@@ -478,6 +491,13 @@ export async function findSpots(
           pitch: -8 * DEG,
           note,
         };
+        break;
+      }
+      case 'reef': {
+        // From over the sea, a few kilometers out, looking back at the island.
+        const sea = s.mostRelief(p, 3000, 8000, -1);
+        const at = s.offset(p, sea, 6000);
+        spot = { kind, point: at, facing: sea + Math.PI, height: 600, pitch: -10 * DEG, note };
         break;
       }
       case 'falls': {

@@ -74,6 +74,8 @@ export const TILE_SYNTH_TUNING = {
   positionSlope: 0.5,
   valleyDetail: 0.25,
   ridgeDetail: 1,
+  /** Height above a nearby lake's level (m) over which detail grows back to full (decision 129). */
+  lakeCalm: 120,
   /** Forest thins on global slopes (m/m, physical) between these. */
   forestSlope: [0.7, 1.05] as [number, number],
   /** Plains detail falls to this fraction where the global slope is below flatSlope[0]. */
@@ -149,6 +151,15 @@ export const TILE_SYNTH_TUNING = {
   fallGorge: 4,
   /** Deltas build only on ground lower than this (m), fading between the two. */
   deltaHigh: [12, 40] as [number, number],
+  /**
+   * Reefs (decision 129): on warm coasts the crest runs `reefDistance` km offshore
+   * (varying over 14 km), about `reefWidth` m wide, with a lagoon `reefLagoon` m deep
+   * behind it. Coarse tiles fade the reef out below `reefResolve` samples across it.
+   */
+  reefDistance: [3.5, 8] as [number, number],
+  reefWidth: 260,
+  reefLagoon: [3, 9] as [number, number],
+  reefResolve: 2,
   /** Green corridor along rivers in dry land (decision 126): half-width in river widths, clamped (m). */
   greenWidths: 9,
   greenMin: 250,
@@ -281,7 +292,7 @@ struct Tile { face: i32, level: i32, x: i32, y: i32, segStart: u32, segCount: u3
 @group(0) @binding(5) var<storage, read> tiles: array<Tile>;
 // Per sample: height and lake level (f32 bits), material, unused.
 @group(0) @binding(6) var<storage, read_write> outSample: array<vec4u>;
-@group(0) @binding(7) var<storage, read> gMasks: array<u32>;
+@group(0) @binding(7) var<storage, read> gMasks: array<vec2u>;
 ${NOISE_WGSL}
 ${LANDFORM_MASK_WGSL}
 ${bicubicSamplerWgsl('sampleHeight', 'gHeight')}
@@ -312,6 +323,47 @@ fn lakeLevelAt(d: vec3f) -> f32 {
     if (l > NO_LAKE_HALF * 0.5 && l > level && dot(cellDir(c), d) > reach) { level = l; }
   }
   return level;
+}
+
+// Bilinear share of lake cells around d (the lake bit of the global material).
+fn lakeFraction(d: vec3f) -> f32 {
+  let face = dirFace(d);
+  let uv = projectToFace(d, face);
+  let fi = uv.x * f32(N) - 0.5;
+  let fj = uv.y * f32(N) - 0.5;
+  let i0 = i32(floor(fi));
+  let j0 = i32(floor(fj));
+  let tx = fi - floor(fi);
+  let ty = fj - floor(fj);
+  let a = f32((gMaterial[wrapCellSafe(face, i0, j0)].x >> 16u) & 1u);
+  let b = f32((gMaterial[wrapCellSafe(face, i0 + 1, j0)].x >> 16u) & 1u);
+  let c = f32((gMaterial[wrapCellSafe(face, i0, j0 + 1)].x >> 16u) & 1u);
+  let e = f32((gMaterial[wrapCellSafe(face, i0 + 1, j0 + 1)].x >> 16u) & 1u);
+  return mix(mix(a, b, tx), mix(c, e, tx), ty);
+}
+
+// The biome of the nearest land cell among the 5×5 around d; with none, one by
+// latitude (decision 129). Land the tiles raise over global sea cells (islets,
+// coastal ground) would otherwise take the sea's color.
+fn landBiomeNear(d: vec3f) -> u32 {
+  let face = dirFace(d);
+  let uv = projectToFace(d, face);
+  let i0 = i32(floor(uv.x * f32(N)));
+  let j0 = i32(floor(uv.y * f32(N)));
+  var best = 0u;
+  var bestDot = -2.0;
+  for (var k = 0; k < 25; k++) {
+    let c = wrapCellSafe(face, i0 + k % 5 - 2, j0 + k / 5 - 2);
+    let b = gMaterial[c].x & 0xffu;
+    let dd = dot(cellDir(c), d);
+    if (b > ${Biome.SeaIce}u && ((gMaterial[c].x >> 16u) & 1u) == 0u && dd > bestDot) {
+      best = b;
+      bestDot = dd;
+    }
+  }
+  if (bestDot > -2.0) { return best; }
+  let lat = abs(d.y);
+  return select(select(${Biome.Tundra}u, ${Biome.TemperateGrassland}u, lat < 0.82), ${Biome.Savanna}u, lat < 0.42);
 }
 
 fn heightAt(d: vec3f) -> f32 {
@@ -383,7 +435,10 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   let lakeLevel = lakeLevelAt(d);
   // Lake beds are sediment-filled: no detail where the smooth surface lies below the
   // lake, so a lake reads as one body of water rather than puddles in rough ground.
-  let dryBed = 1.0 - clamp((lakeLevel - base) / 2.0, 0.0, 1.0);
+  // Near a lake, detail calms toward its level (decision 129): gullies and crests cut
+  // hundreds of meters into trough walls and would let the lake spill into them.
+  let dryBed = (1.0 - clamp((lakeLevel - base) / 2.0, 0.0, 1.0))
+    * select(1.0, smoothstep(0.0, ${f(t.lakeCalm)}, base - lakeLevel), lakeLevel > NO_LAKE * 0.5);
   // Biome from the global cell under a noise-jittered position (about one cell),
   // so biome borders are organic rather than 1.5 km steps.
   let cellAngle = 2.0 * QUARTER_PI / f32(N);
@@ -714,6 +769,42 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     }
     if (h <= 0.0) { forest = 0.0; }
   }
+  // Reefs (decision 129): along warm coasts, a reef crest runs offshore at a
+  // distance set by the land proximity, with a sandy lagoon behind it a few meters
+  // deep and the open sea beyond; low points of the crest break the surface as
+  // sand islets. Fringing reefs hug the shore, barrier reefs stand kilometers out.
+  let warmCoast = landformMasks2(d).x;
+  if (base <= 0.0 && skerry <= 0.0 && warmCoast > 0.1 && h < 0.0) {
+    let cellKm = 2.0 * QUARTER_PI * R / f32(N) / 1000.0;
+    let distKm = log(max(masks.z, 1e-4)) / log(${f(0.86)}) * cellKm;
+    let ring = ${f(t.reefDistance[0])} + ${f(t.reefDistance[1] - t.reefDistance[0])}
+      * (0.5 + 0.5 * noise3(d * (R / 14000.0) + vec3f(2.2, 9.1, 5.5), 512u));
+    let wobble = 0.12 * noise3(d * (R / 900.0) + vec3f(7.7, 1.3, 3.9), 512u);
+    let off = distKm + wobble - ring;
+    let crest = 1.0 - smoothstep(0.05, 0.18, abs(off));
+    let lagoon = 1.0 - smoothstep(-0.05, 0.05, off);
+    // Ragged: the crest breaks into separate reefs and passes.
+    let patches = smoothstep(-0.05, 0.25, noise3(d * (R / 2500.0) + vec3f(4.1, 6.6, 0.4), 512u));
+    let lagoonDepth = ${f(t.reefLagoon[0])} + ${f(t.reefLagoon[1] - t.reefLagoon[0])}
+      * (0.5 + 0.5 * noise3(d * (R / 1800.0) + vec3f(3.3, 3.3, 8.8), 512u));
+    let crestTop = -0.8 + 1.6 * max(noise3(d * (R / 500.0) + vec3f(9.9, 2.4, 6.1), 512u), 0.0);
+    var reef = mix(-lagoonDepth, crestTop, crest * patches);
+    let w = smoothstep(0.1, 0.35, warmCoast) * max(lagoon, crest * patches)
+      * smoothstep(0.0, ${f(t.reefResolve)}, ${f(t.reefWidth)} / sampleSpacing);
+    h = mix(h, max(h, reef), w);
+    if (h > 0.0) { biomeOut = ${Biome.HotDesert}u; forest = 0.0; }
+  }
+
+  // Lake water stands only on the lake's cells (decision 129): elsewhere within the
+  // lake level's reach, ground the interpolation or detail left below the level is
+  // raised to just above it, so the lake does not spill out to the reach's blocky edge.
+  if (lakeLevel > NO_LAKE * 0.5) {
+    let outside = 1.0 - smoothstep(0.3, 0.5, lakeFraction(d));
+    h = max(h, mix(h, lakeLevel + 0.6, outside));
+  }
+  // Dry ground on a water biome (lake shores, islets and coastal ground over global
+  // sea cells) takes a land biome near it, not the water's color (decision 129).
+  if (h > 0.0 && h >= lakeLevel && biomeOut <= ${Biome.SeaIce}u) { biomeOut = landBiomeNear(d); }
   outSample[slot] = vec4u(bitcast<u32>(h), bitcast<u32>(lakeLevel),
     biomeOut | (u32(riverCover * 255.0) << 8u) | (mat & 0x10000u) | maskBits
     | (u32(clamp(forest, 0.0, 1.0) * 255.0) << 24u), 0u);

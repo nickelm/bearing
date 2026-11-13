@@ -418,7 +418,9 @@ Simulation view (needs S1's `render/sim/` split):
   - [ ] Meanders end at every confluence (they taper to zero there); on rivers with many tributaries the bends come in short trains. Carry the phase across confluences of the main stem
   - [ ] Tune the landforms across more seeds (buttes are sparse on seed 1983; skerries need cold, low coasts)
   - [ ] Buttes, terraces and skerries come from tile noise that knows nothing of roads and towns placed by the coarse pass: a road can run into a 320 m butte cliff or a skerry inlet. Suppress the landforms within a few hundred meters of roads and urban extents (as airfield grading does), or let roads cut through
-  - [ ] Lake shores in glacial troughs show small steps where the smooth, detail-free lake bed meets the detailed land (`dryBed`); blend the detail over a wider band
+  - [x] Owner review (2026-11-13): archipelagos showed light-blue, raised patches. Two causes (decision 129): lakes spilled over gully-cut ground to the blocky edge of the lake level's reach, and land the tiles raise over global sea or lake cells took the water's biome color. Also asked for lighter shallow water and reefs (decision 129)
+  - [ ] Owner: recheck archipelagos, lake shores and the reef spot (`SPOTS=reef`) in the browser
+  - [ ] Lakes along diagonal troughs read as a chain of beads: the lake cells form a staircase and the water is held to them. Smooth the lake share (a blurred lake mask) so narrow diagonal lakes stay continuous
 - [x] Voronoi farmland patchwork near settlements and on flat lowland (decision 127; GUI → Lighting → Farmland; preview view `farmland`, `FARMLAND=0`)
   - [ ] Owner: judge field size (256 m lattice), crop shares and the stepped field edges in the browser
   - [ ] Field edges: hedgerows or darker field margins, if the patchwork needs more structure (not in Part I yet)

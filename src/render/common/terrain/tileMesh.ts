@@ -293,7 +293,11 @@ function hexRgb(h: number): Rgb {
 
 /** Seabed albedo (sRGB): sand in the shallows, darker silt in deep water. */
 function seabedColor(h: number, reliefScale: number): Rgb {
-  const t = Math.min(1, -h / (200 * reliefScale));
+  // Shallows at Earth depth, deep water at the planet's (decision 129; as the water shader).
+  const d = Math.max(0, -h);
+  const k = Math.min(1, Math.max(0, (d - 8) / 52));
+  const ref = d + (d / reliefScale - d) * k * k * (3 - 2 * k);
+  const t = Math.min(1, ref / 200);
   return [0.66 - 0.3 * t, 0.6 - 0.28 * t, 0.46 - 0.2 * t];
 }
 

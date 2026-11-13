@@ -13,10 +13,15 @@
  *      (skerry coasts need the distance to the shore, which the sea floor's
  *      depth does not give: it plunges within a cell of the coast)
  *
+ * A second word holds:
+ *   x  warm-coast proximity, at sea: the land proximity of warm coasts
+ *      (tropical forest, savanna and hot desert), where reefs grow (decision 129)
+ *   y, z, w  reserved
+ *
  * Each source comes from the global biome and treeline maps, is spread by a
  * max filter where noted, then blurred with seam-aware passes on the GPU, so
  * the masks change over kilometers rather than at cell edges. The result is
- * one u32 per cell (four unorm8 channels), sampled bilinearly by the tiles.
+ * two u32 per cell (four unorm8 channels each), sampled bilinearly by the tiles.
  */
 import { Biome } from '../biomes';
 import type { GlobalGrid } from './globalGrid';
@@ -44,13 +49,20 @@ export const LANDFORM_MASK_TUNING = {
   iceSpread: 8,
   /** Blur passes per mask. */
   blurPasses: 6,
+  /** Warmth of a coast per biome, for reefs (decision 129); others are 0. */
+  warm: {
+    [Biome.TropicalRainforest]: 1,
+    [Biome.TropicalSeasonalForest]: 1,
+    [Biome.Savanna]: 1,
+    [Biome.HotDesert]: 0.8,
+  } as Record<number, number>,
   /** Proximity decay per cell, and passes (cells) for the land and sea proximity. */
   coastDecay: 0.86,
   landReach: 14,
   seaReach: 6,
 };
 
-/** Builds the packed mask buffer (one u32 per global cell). The caller owns it. */
+/** Builds the packed mask buffer (two u32 per global cell). The caller owns it. */
 export function buildLandformMasks(
   grid: GlobalGrid,
   biome: Uint8Array,
@@ -63,12 +75,14 @@ export function buildLandformMasks(
   const arid = new Float32Array(count);
   const ice = new Float32Array(count);
   const land = new Float32Array(count);
+  const warm = new Float32Array(count);
   const sea = new Float32Array(count);
   for (let c = 0; c < count; c++) {
     const b = biome[c]!;
     arid[c] = t.arid[b] ?? 0;
     const h = height[c]!;
     land[c] = h > 0 ? 1 : 0;
+    warm[c] = h > 0 ? (t.warm[b] ?? 0) : 0;
     sea[c] = h > 0 ? 0 : 1;
     const above = h > 0 ? (h - treeline[c]! + t.iceBelowTreeline) / t.iceBelowTreeline : 0;
     // Dry ground has no glaciers however high it lies relative to its (low) treeline.
@@ -110,14 +124,18 @@ ${main(`  var sum = 2.0 * vIn[id];
 @group(0) @binding(1) var<storage, read> b: array<f32>;
 @group(0) @binding(2) var<storage, read> z: array<f32>;
 @group(0) @binding(3) var<storage, read> w: array<f32>;
-@group(0) @binding(4) var<storage, read_write> out: array<u32>;
-${main(`  out[id] = pack4x8unorm(clamp(vec4f(a[id], b[id], z[id], w[id]), vec4f(0.0), vec4f(1.0)));`)}`);
+@group(0) @binding(4) var<storage, read> warm: array<f32>;
+@group(0) @binding(5) var<storage, read_write> out: array<vec2u>;
+${main(`  out[id] = vec2u(
+    pack4x8unorm(clamp(vec4f(a[id], b[id], z[id], w[id]), vec4f(0.0), vec4f(1.0))),
+    pack4x8unorm(vec4f(clamp(warm[id], 0.0, 1.0), 0.0, 0.0, 0.0)));`)}`);
 
-  const names = ['mask.arid', 'mask.ice', 'mask.land', 'mask.sea', 'mask.tmp'];
+  const names = ['mask.arid', 'mask.ice', 'mask.land', 'mask.sea', 'mask.warm', 'mask.tmp'];
   grid.upload('mask.arid', arid);
   grid.upload('mask.ice', ice);
   grid.upload('mask.land', land);
   grid.upload('mask.sea', sea);
+  grid.upload('mask.warm', warm);
   grid.map('mask.tmp');
   const passes = (kernel: GPUComputePipeline, name: string, n: number) => {
     for (let p = 0; p < n; p++) {
@@ -132,10 +150,19 @@ ${main(`  out[id] = pack4x8unorm(clamp(vec4f(a[id], b[id], z[id], w[id]), vec4f(
   passes(blur, 'mask.land', 2);
   passes(coast, 'mask.sea', t.seaReach);
   passes(blur, 'mask.sea', 2);
-  const out = gpu.storage(count * 4, 'tiles.landformMasks');
+  passes(coast, 'mask.warm', t.landReach);
+  passes(blur, 'mask.warm', 2);
+  const out = gpu.storage(count * 8, 'tiles.landformMasks');
   gpu.dispatchLinear(
     pack,
-    [grid.get('mask.arid'), grid.get('mask.ice'), grid.get('mask.land'), grid.get('mask.sea'), out],
+    [
+      grid.get('mask.arid'),
+      grid.get('mask.ice'),
+      grid.get('mask.land'),
+      grid.get('mask.sea'),
+      grid.get('mask.warm'),
+      out,
+    ],
     count,
   );
   gpu.flush();
@@ -144,11 +171,12 @@ ${main(`  out[id] = pack4x8unorm(clamp(vec4f(a[id], b[id], z[id], w[id]), vec4f(
 }
 
 /**
- * WGSL: `landformMasks(d)`, the bilinear mask vector at direction d, reading
- * `gMasks: array<u32>` on the global grid (needs the grid's WGSL).
+ * WGSL: `landformMasks(d)` and `landformMasks2(d)`, the bilinear mask vectors (first and
+ * second word) at direction d, reading
+ * `gMasks: array<vec2u>` on the global grid (needs the grid's WGSL).
  */
 export const LANDFORM_MASK_WGSL = /* wgsl */ `
-fn landformMasks(d: vec3f) -> vec4f {
+fn landformMaskWord(d: vec3f, word: u32) -> vec4f {
   let face = dirFace(d);
   let uv = projectToFace(d, face);
   let fi = uv.x * f32(N) - 0.5;
@@ -157,10 +185,12 @@ fn landformMasks(d: vec3f) -> vec4f {
   let j0 = i32(floor(fj));
   let tx = fi - floor(fi);
   let ty = fj - floor(fj);
-  let a = unpack4x8unorm(gMasks[wrapCellSafe(face, i0, j0)]);
-  let b = unpack4x8unorm(gMasks[wrapCellSafe(face, i0 + 1, j0)]);
-  let c = unpack4x8unorm(gMasks[wrapCellSafe(face, i0, j0 + 1)]);
-  let e = unpack4x8unorm(gMasks[wrapCellSafe(face, i0 + 1, j0 + 1)]);
+  let a = unpack4x8unorm(gMasks[wrapCellSafe(face, i0, j0)][word]);
+  let b = unpack4x8unorm(gMasks[wrapCellSafe(face, i0 + 1, j0)][word]);
+  let c = unpack4x8unorm(gMasks[wrapCellSafe(face, i0, j0 + 1)][word]);
+  let e = unpack4x8unorm(gMasks[wrapCellSafe(face, i0 + 1, j0 + 1)][word]);
   return mix(mix(a, b, tx), mix(c, e, tx), ty);
 }
+fn landformMasks(d: vec3f) -> vec4f { return landformMaskWord(d, 0u); }
+fn landformMasks2(d: vec3f) -> vec4f { return landformMaskWord(d, 1u); }
 `;
