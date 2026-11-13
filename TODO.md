@@ -298,6 +298,7 @@ Civilian geography (settlements, roads, bridges) joins the strategic graph befor
 - [x] Clouds rendered from the live weather field (replaces the static M3 field)
 - [x] Tools: `tools/weather.preview.ts` draws cloud, precipitation, isobars and 850 hPa winds and prints statistics
 - [x] Checkpoint 7: owner review of the time bar, auto-slowdown and clouds from live weather in the browser (signed off 2026-11-11; the GPU cloud test now runs on lavapipe and caught clear skies that were not clear, decision 69)
+- [x] Storm and dust channels (rain from drizzle to 55 mm/h in storm cores), weather presets, the standalone weather for Free Flight, and the `WeatherState` uniforms the effects share (decision 137)
 - Carried to V2: weather fields not yet used in the renderer (fog and visibility, rain and snow on the ground, live winds for wave direction)
 
 ### C2. Air tasking and mission search (old M7, without models and the chase camera)

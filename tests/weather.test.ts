@@ -5,9 +5,18 @@ import { rng } from '../src/core/rng';
 import { DAY, HOUR } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
 import { buildWeatherClimate } from '../src/sim/weather/climate';
-import { CEILING_COVER, Channel, WeatherView } from '../src/sim/weather/frame';
+import {
+  CEILING_COVER,
+  CHANNEL_COUNT,
+  Channel,
+  dustVisibility,
+  DUST_VISIBILITY,
+  MM_PER_HOUR,
+  WeatherView,
+  WIND_LEVELS,
+} from '../src/sim/weather/frame';
 import { WeatherGrid } from '../src/sim/weather/grid';
-import { SystemKind } from '../src/sim/weather/model';
+import { dustSource, SystemKind } from '../src/sim/weather/model';
 import { createSimWorld } from '../src/sim/world';
 import { RADIUS, syntheticConfig } from './helpers/weatherWorld';
 
@@ -181,6 +190,105 @@ describe('weather model', () => {
     expect(deepest / checked).toBeGreaterThan(0.5);
   });
 
+  it('appends dust and storm after the winds without moving the other channels', () => {
+    expect(Channel.WindEast0).toBe(7);
+    expect(Channel.Dust).toBe(7 + 2 * WIND_LEVELS.length);
+    expect(Channel.Storm).toBe(Channel.Dust + 1);
+    expect(CHANNEL_COUNT).toBe(Channel.Storm + 1);
+    const w = createSimWorld(syntheticConfig());
+    expect(w.weather.frameData(0).length).toBe(CHANNEL_COUNT * w.weather.grid.count);
+  });
+
+  it('puts thunderstorms in a minority of the rain, with the heaviest of it', () => {
+    const w = createSimWorld(syntheticConfig());
+    const n = w.weather.grid.count;
+    const hours = 20 * 24;
+    let raining = 0;
+    let stormy = 0;
+    let stormRate = 0;
+    let plainRate = 0;
+    let drizzle = 0;
+    let skyfall = 0;
+    let both = 0;
+    let outOfRange = 0;
+    let rateSum = 0;
+    for (let k = 1; k <= hours; k++) {
+      w.sim.advanceTo(k * HOUR);
+      const f = w.weather.frameData(w.weather.hour);
+      for (let s = 0; s < n; s++) {
+        const rate = f[Channel.Precipitation * n + s]! / MM_PER_HOUR;
+        const storm = f[Channel.Storm * n + s]!;
+        if (!(storm >= 0 && storm <= 1)) outOfRange++;
+        rateSum += rate / (n * hours);
+        if (storm > 0 && f[Channel.Snow * n + s]! > 0) both++;
+        if (rate >= 0.05 && rate < 1) drizzle++;
+        if (rate >= 30) skyfall++;
+        if (rate < 0.2) continue;
+        raining++;
+        if (storm >= 0.2) {
+          stormy++;
+          stormRate += rate;
+        } else {
+          plainRate += rate;
+        }
+      }
+    }
+    expect(outOfRange).toBe(0);
+    // Storms occur, in a minority of the rain, and it rains several times harder in them.
+    expect(stormy).toBeGreaterThan(0);
+    expect(stormy / raining).toBeGreaterThan(0.01);
+    expect(stormy / raining).toBeLessThan(0.2);
+    expect(stormRate / stormy).toBeGreaterThan((3 * plainRate) / (raining - stormy));
+    // The whole range exists, from drizzle to a skyfall, and the mean stays moderate.
+    expect(drizzle).toBeGreaterThan(0);
+    expect(skyfall).toBeGreaterThan(0);
+    expect(skyfall).toBeLessThan(0.05 * raining);
+    expect(rateSum).toBeLessThan(0.4);
+    // The weather texture packs storm and snow into one channel: never both at a sample.
+    expect(both).toBe(0);
+  });
+
+  it('raises dust only over arid land in a strong dry wind', () => {
+    const config = syntheticConfig();
+    const w = createSimWorld(config);
+    const n = w.weather.grid.count;
+    const hours = 30 * 24;
+    let sourceHours = 0;
+    let dusty = 0;
+    let storms = 0;
+    let misplaced = 0;
+    for (let k = 1; k <= hours; k++) {
+      w.sim.advanceTo(k * HOUR);
+      const f = w.weather.frameData(w.weather.hour);
+      for (let s = 0; s < n; s++) {
+        const dust = f[Channel.Dust * n + s]!;
+        const source = dustSource(config.climate, s);
+        if (source > 0.5) sourceHours++;
+        if (dust === 0) continue;
+        // Only where the ground gives dust, in wind, without rain, and never more than the ground allows.
+        const wind = Math.hypot(f[Channel.WindEast0 * n + s]!, f[(Channel.WindEast0 + 1) * n + s]!);
+        if (
+          !(source > 0 && dust <= source + 1e-6 && wind > 6) ||
+          f[Channel.Precipitation * n + s]! / MM_PER_HOUR >= 0.3 ||
+          // Dust lowers the visibility.
+          f[Channel.Visibility * n + s]! > dustVisibility(dust) * 1.0001
+        ) {
+          misplaced++;
+        }
+        if (source > 0.5 && dust >= 0.5) dusty++;
+        if (dust >= 0.9) storms++;
+      }
+    }
+    expect(misplaced).toBe(0);
+    // The synthetic world has arid land; dust storms there are real but rare.
+    expect(sourceHours).toBeGreaterThan(0);
+    expect(dusty).toBeGreaterThan(0);
+    expect(dusty / sourceHours).toBeLessThan(0.1);
+    expect(storms / sourceHours).toBeLessThan(0.03);
+    expect(dustVisibility(1)).toBe(DUST_VISIBILITY);
+    expect(dustVisibility(0)).toBe(Infinity);
+  });
+
   it('interpolates between hourly frames', () => {
     const w = createSimWorld(syntheticConfig());
     w.sim.advanceTo(10 * HOUR);
@@ -194,6 +302,8 @@ describe('weather model', () => {
     // A report gives a ceiling only under broken or overcast cloud.
     const r = view.report(d, 10.25 * HOUR);
     expect(Number.isFinite(r.ceiling)).toBe(r.cloudCover >= CEILING_COVER);
+    expect(r.dust).toBe(view.sample(Channel.Dust, d, 10.25 * HOUR));
+    expect(r.storm).toBe(view.sample(Channel.Storm, d, 10.25 * HOUR));
     // The next hour's frame shifts the bracket.
     w.sim.advanceTo(11 * HOUR);
     view.add(w.weather.frame(12));

@@ -18,7 +18,7 @@ Guidance for Claude Code sessions in this repository. `docs/design.md` is the so
 | Format                   | `npm run format`                                                |
 | Render world maps to PNG | `npm run maps` (env: `SEED`, `RES`, `MODES`) → `tools/out/`     |
 | Seed browser (theaters)  | `npm run seeds` (env: `SEEDS`, `FROM`, `COUNT`, `BRIEFING=1`)   |
-| Weather preview          | `npm run weather` (env: `SEED`, `HOURS`, `DAYS`) → `tools/out/` |
+| Weather preview          | `npm run weather` (env: `SEED`, `HOURS`, `DAYS`, `PRESET`) → `tools/out/` |
 | Flight-model figures     | `npx vitest run --config vitest.tools.config.ts tools/flight.preview.ts` |
 | Free Flight renders      | `tools/freeflight.preview.ts` (env: `SEED`, `GRES`, `TOD`, `SHOTS`), then `node tools/freeflight.screens.mjs` with `npm run dev` up → `docs/reports/screens/` |
 
@@ -45,7 +45,8 @@ src/campaign/       theater detection, casting (carrier groups in carriers.ts), 
                     strategic graph only)
 src/sim/            headless simulation; runs in a worker: event queue + fixed ticks (simulation.ts),
                     time acceleration (host.ts), world factory (world.ts)
-  weather/          hourly weather model on a bordered 24² cube grid; WeatherView for queries
+  weather/          hourly weather model on a bordered 24² cube grid; WeatherView for queries; presets and the
+                    standalone weather for Free Flight (decision 137)
   air/              the air war (C2, decision 132): aircraft type table, order of battle, missions,
                     analytic routes (great-circle legs, racetracks, fuel) and AirOps (live missions, phase events)
   naval/            carrier groups on their patrol tracks (analytic position); convoys and amphibious groups in C3

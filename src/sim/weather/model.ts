@@ -20,6 +20,18 @@
  *   visibility follow from it, plus fog on calm, humid nights.
  * - **Temperature** from the climate's annual mean, the seasonal cycle and a
  *   diurnal cycle damped by cloud.
+ * - **Storm** (thunderstorm intensity) where saturated air meets deep
+ *   convection: the cores and bands of tropical lows, the frontal bands of
+ *   deep mid-latitude lows, and afternoon convection over warm, humid land,
+ *   broken into cells by a faster noise. Storm cores add the heavy rain the
+ *   stratiform formula lacks (up to STORM_CORE_RATE on top of it). Storms need
+ *   air above freezing, so a sample never has both a storm and snowfall.
+ * - **Dust** where a strong, gusty surface wind crosses dry, unfrozen, arid
+ *   land. It lowers the visibility (frame.ts, dustVisibility).
+ *
+ * Storm and dust are derived from the same systems, climate and noise, with
+ * no further draws, so adding them left every other field's value unchanged
+ * except precipitation and visibility inside storms and dust.
  *
  * Because the state advances only on hourly ticks and each tick draws from
  * its own fork, the weather at a given game time is identical at any time
@@ -37,7 +49,14 @@ import { Vec3d } from '../../core/vec3d';
 import type { StateHasher } from '../stateHash';
 import type { Simulation, TickProcess } from '../simulation';
 import type { WeatherClimate } from './climate';
-import { Channel, newFrameData, WeatherView, WIND_LEVELS } from './frame';
+import {
+  Channel,
+  dustVisibility,
+  MM_PER_HOUR,
+  newFrameData,
+  WeatherView,
+  WIND_LEVELS,
+} from './frame';
 import type { WeatherFrame } from './frame';
 import { WeatherGrid } from './grid';
 
@@ -69,6 +88,9 @@ export interface WeatherConfig {
   calendar: CampaignCalendar;
   climate: WeatherClimate;
 }
+
+/** Samples whose fields are computed between two looks at the clock (frameDataWithin). */
+const FIELD_CHUNK = 256;
 
 /** Hours simulated before campaign start, so the first weather is mature. */
 export const SPIN_UP_HOURS = 120;
@@ -118,7 +140,24 @@ const LEVEL_JET = [0, 0.25, 0.65, 1];
 /** Wavelength of the mesoscale humidity noise (m), and the time over which it evolves by about one feature (s). */
 const NOISE_WAVELENGTH = 400 * KM;
 const NOISE_EVOLVE = 36 * HOUR;
-const MM_PER_HOUR = 0.001 / HOUR;
+/**
+ * Rain a full storm core adds to the stratiform rate, growing with the square
+ * of the intensity: in mm/h, as the field formulas work, and in m/s of water.
+ */
+const STORM_CORE_MM_H = 50;
+export const STORM_CORE_RATE = STORM_CORE_MM_H * MM_PER_HOUR;
+/** Storm cells: wavelength of the noise that breaks convective areas into cells (m), and its evolution time (s). */
+const CELL_WAVELENGTH = 220 * KM;
+const CELL_EVOLVE = 5 * HOUR;
+/** Humidity proxy at which convection starts to produce storms, and at which they are fully developed. */
+const STORM_HUMIDITY: [number, number] = [0.96, 1.22];
+/** Surface wind (m/s, gusts included) at which dust starts to lift, and at which the air is full of it. */
+const DUST_WIND: [number, number] = [10.5, 20];
+/** Wetness (climate.ts) above which the ground is too vegetated or damp to give dust. */
+const DUST_WETNESS = 0.12;
+/** Gusts: wavelength (m) and evolution time (s) of the noise that modulates the surface wind for dust. */
+const GUST_WAVELENGTH = 260 * KM;
+const GUST_EVOLVE = 9 * HOUR;
 
 const gauss = (x: number, mu: number, sigma: number) => Math.exp(-(((x - mu) / sigma) ** 2));
 const clamp = (x: number, lo: number, hi: number) => (x < lo ? lo : x > hi ? hi : x);
@@ -136,6 +175,19 @@ function seasonal(phase: number, lat: number): number {
 function jet(latDeg: number, season: number): number {
   const a = Math.abs(latDeg);
   return (26 * gauss(a, 35, 11) + 8 * gauss(a, 60, 12)) * (1 + 0.35 * Math.max(0, -season));
+}
+
+/**
+ * How readily a sample's ground gives dust, 0..1: arid land that is not frozen
+ * for much of the year. Zero over sea and wherever the climate is wetter than
+ * DUST_WETNESS.
+ */
+export function dustSource(c: WeatherClimate, p: number): number {
+  return (
+    c.land[p]! *
+    (1 - smoothstep(0, DUST_WETNESS, c.wetness[p]!)) *
+    smoothstep(2, 10, c.temperature[p]!)
+  );
 }
 
 /** Life envelope: grows over the first quarter, fills over the last 40%. */
@@ -156,6 +208,8 @@ export class WeatherModel implements TickProcess {
   private previous: WeatherSystem[] | null = null;
   private latestHour = 0;
   private readonly cache = new Map<number, Float32Array>();
+  /** Fields of an hour computed up to sample `next` (frameDataWithin). */
+  private partial: { hour: number; data: Float32Array; next: number } | null = null;
   private readonly viewState: WeatherView;
 
   constructor(private readonly config: WeatherConfig) {
@@ -185,10 +239,17 @@ export class WeatherModel implements TickProcess {
     if (k !== this.latestHour) {
       throw new Error(`Weather tick ${k} out of order (expected ${this.latestHour})`);
     }
+    this.advance();
+  }
+
+  /** One hourly tick outside a simulation (standalone.ts): from `hour` to the next. */
+  advance(): void {
+    const k = this.latestHour;
     this.previous = this.latest;
     this.latest = this.evolve(this.latest, k);
     this.latestHour = k + 1;
     for (const h of this.cache.keys()) if (h < k) this.cache.delete(h);
+    if (this.partial && this.partial.hour < k) this.partial = null;
   }
 
   /** Hours whose fields exist: the latest, and the one before once the first tick has run. */
@@ -198,14 +259,35 @@ export class WeatherModel implements TickProcess {
 
   /** Fields at a whole hour: the latest hour or the one before. Cached; do not modify. */
   frameData(hour: number): Float32Array {
-    let data = this.cache.get(hour);
-    if (data) return data;
+    return this.frameDataWithin(hour, () => false)!;
+  }
+
+  /**
+   * The same fields, computed a part at a time for callers that must not stall
+   * (standalone.ts): works on the hour's fields until they are complete or
+   * `spent()` says stop, asked every FIELD_CHUNK samples, and returns them once
+   * complete, null before. The next call for the same hour continues.
+   */
+  frameDataWithin(hour: number, spent: () => boolean): Float32Array | null {
+    const cached = this.cache.get(hour);
+    if (cached) return cached;
     const systems =
       hour === this.latestHour ? this.latest : hour === this.latestHour - 1 ? this.previous : null;
     if (!systems) throw new RangeError(`No weather state for hour ${hour}`);
-    data = this.computeFields(systems, hour * HOUR);
-    this.cache.set(hour, data);
-    return data;
+    let job = this.partial;
+    if (!job || job.hour !== hour) {
+      job = this.partial = { hour, data: newFrameData(this.grid), next: 0 };
+    }
+    const count = this.grid.count;
+    while (job.next < count) {
+      const to = Math.min(count, job.next + FIELD_CHUNK);
+      this.computeFields(systems, hour * HOUR, job.data, job.next, to);
+      job.next = to;
+      if (to < count && spent()) return null;
+    }
+    this.partial = null;
+    this.cache.set(hour, job.data);
+    return job.data;
   }
 
   /** A copy of a frame, safe to transfer. */
@@ -332,12 +414,18 @@ export class WeatherModel implements TickProcess {
 
   // ---- Fields ----
 
-  private computeFields(systems: readonly WeatherSystem[], t: GameTime): Float32Array {
+  /** Writes the fields of the samples `from` to `to` (exclusive) at game time t into `out`. */
+  private computeFields(
+    systems: readonly WeatherSystem[],
+    t: GameTime,
+    out: Float32Array,
+    from: number,
+    to: number,
+  ): void {
     const g = this.grid;
     const c = this.config.climate;
     const R = this.config.radius;
     const count = g.count;
-    const out = newFrameData(g);
     const phase = seasonPhase(t, this.config.orbit, this.config.calendar);
     const L = WIND_LEVELS.length;
     const windE = new Float64Array(L);
@@ -367,8 +455,12 @@ export class WeatherModel implements TickProcess {
     });
     const evolve = t / NOISE_EVOLVE;
     const freq = R / NOISE_WAVELENGTH;
+    const cellEvolve = t / CELL_EVOLVE;
+    const cellFreq = R / CELL_WAVELENGTH;
+    const gustEvolve = t / GUST_EVOLVE;
+    const gustFreq = R / GUST_WAVELENGTH;
 
-    for (let p = 0; p < count; p++) {
+    for (let p = from; p < to; p++) {
       const dx = g.directions[p * 3]!;
       const dy = g.directions[p * 3 + 1]!;
       const dz = g.directions[p * 3 + 2]!;
@@ -393,6 +485,8 @@ export class WeatherModel implements TickProcess {
         101_325 + 900 * gauss(Math.abs(latDeg), 30, 10) - 700 * gauss(Math.abs(latDeg), 62, 12);
       let humidity = 0.47 + 0.2 * c.wetness[p]!;
       const surfaceFriction = 0.9 - 0.3 * land;
+      // Deep convection the systems bring to this sample, 0..1 (for storms).
+      let convection = 0;
 
       for (const q of sys) {
         const s = q.s;
@@ -405,7 +499,8 @@ export class WeatherModel implements TickProcess {
         const strength = Math.abs(q.amp);
         if (q.amp < 0) {
           // Lift: a core of cloud, plus a frontal band spiralling out from the center.
-          humidity += 0.55 * (strength / 2000) * Math.exp(-((rr / 0.9) ** 2));
+          const core = Math.exp(-((rr / 0.9) ** 2));
+          humidity += 0.55 * (strength / 2000) * core;
           // Angle of this sample around the center, in the center's east/north frame.
           const tx = dx - s.x * cosang;
           const ty = dy - s.y * cosang;
@@ -422,6 +517,11 @@ export class WeatherModel implements TickProcess {
             Math.exp(-(((rr - 1.1) / 0.8) ** 2)) *
             smoothstep(0.15, 0.4, rr);
           humidity += 0.38 * (strength / 2000) * band;
+          // Tropical lows are convective throughout; mid-latitude lows along the fronts of deep ones.
+          convection +=
+            s.kind === SystemKind.Tropical
+              ? smoothstep(600, 2200, strength) * Math.max(core, band)
+              : smoothstep(1300, 2300, strength) * band;
         } else {
           humidity -= 0.4 * (q.amp / 1500) * gaussR;
         }
@@ -457,6 +557,7 @@ export class WeatherModel implements TickProcess {
       const temperatureMean = c.temperature[p]! + c.temperatureRange[p]! * season;
       const afternoon = local > 10 && local < 19 ? Math.sin((Math.PI * (local - 10)) / 9) : 0;
       humidity += 0.3 * land * smoothstep(16, 28, temperatureMean) * afternoon;
+      const heating = land * smoothstep(16, 28, temperatureMean) * afternoon;
 
       // Mesoscale structure, evolving slowly.
       humidity +=
@@ -471,10 +572,26 @@ export class WeatherModel implements TickProcess {
       const cover = smoothstep(0.38, 0.88, humidity);
       const spread = clamp(1.02 - humidity, 0, 0.8) / 0.8;
       const cloudBase = 150 + 3000 * spread ** 1.2;
-      const precipMmH = 5 * smoothstep(0.82, 1.3, humidity);
       const diurnal = (1 + 5 * land) * (1 - 0.6 * cover);
       const temperature = temperatureMean + diurnal * Math.cos((2 * Math.PI * (local - 15)) / 24);
       const snow = 1 - smoothstep(-1.5, 1.5, temperature);
+
+      // Thunderstorms: saturated air under deep convection, in cells, above freezing.
+      let storm = 0;
+      const unstable = Math.min(1, convection + (0.3 + 0.7 * c.wetness[p]!) * heating);
+      // Heated land breaks into storms in air a little short of the saturation fronts need.
+      const saturated = smoothstep(STORM_HUMIDITY[0], STORM_HUMIDITY[1], humidity + 0.15 * heating);
+      if (unstable > 0 && saturated > 0 && temperature > 1.5) {
+        const cells = this.noise.fbm(
+          dx * cellFreq + 17.3 + 0.71 * cellEvolve,
+          dy * cellFreq + 5.9 - 0.43 * cellEvolve,
+          dz * cellFreq + 11.1 + 0.29 * cellEvolve,
+          2,
+        );
+        storm =
+          unstable * saturated * smoothstep(-0.05, 0.3, cells) * smoothstep(1.5, 9, temperature);
+      }
+      const precipMmH = 5 * smoothstep(0.82, 1.3, humidity) + STORM_CORE_MM_H * storm * storm;
 
       // Visibility: humid haze, precipitation, and fog on calm humid nights.
       let visibility = 40_000 - 28_000 * clamp((humidity - 0.35) / 0.6, 0, 1);
@@ -484,9 +601,31 @@ export class WeatherModel implements TickProcess {
         visibility = Math.min(visibility, rain + (snowVis - rain) * snow);
       }
       const night = clamp(-1.5 * Math.cos((2 * Math.PI * (local - 14)) / 24), 0, 1);
-      const calm = 1 - smoothstep(2, 7, Math.hypot(windE[0]!, windN[0]!));
+      const surfaceWind = Math.hypot(windE[0]!, windN[0]!);
+      const calm = 1 - smoothstep(2, 7, surfaceWind);
       const fog = smoothstep(0.78, 0.95, humidity) * night * calm * (0.4 + 0.6 * land);
       visibility += (300 - visibility) * fog;
+
+      // Dust: a strong, gusty wind over arid ground that is neither frozen nor wet from rain.
+      let dust = 0;
+      const arid = dustSource(c, p);
+      if (arid > 0 && surfaceWind > 0.6 * DUST_WIND[0] && precipMmH < 0.3 && temperature > -2) {
+        const gust =
+          1 +
+          0.45 *
+            this.noise.fbm(
+              dx * gustFreq + 3.1 - 0.37 * gustEvolve,
+              dy * gustFreq + 29.7 + 0.61 * gustEvolve,
+              dz * gustFreq + 13.3 + 0.23 * gustEvolve,
+              2,
+            );
+        dust =
+          arid *
+          smoothstep(DUST_WIND[0], DUST_WIND[1], surfaceWind * gust) *
+          (1 - smoothstep(0.02, 0.3, precipMmH)) *
+          smoothstep(-2, 4, temperature);
+        visibility = Math.min(visibility, dustVisibility(dust));
+      }
 
       out[Channel.Cover * count + p] = cover;
       out[Channel.CloudBase * count + p] = cloudBase;
@@ -499,8 +638,9 @@ export class WeatherModel implements TickProcess {
         out[(Channel.WindEast0 + 2 * k) * count + p] = windE[k]!;
         out[(Channel.WindEast0 + 2 * k + 1) * count + p] = windN[k]!;
       }
+      out[Channel.Dust * count + p] = dust;
+      out[Channel.Storm * count + p] = storm;
     }
-    return out;
   }
 }
 

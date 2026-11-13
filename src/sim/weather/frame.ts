@@ -32,11 +32,27 @@ export const Channel = {
   Pressure: 6,
   /** Wind east and north components (m/s) at WIND_LEVELS[k]: channels 7 + 2k and 8 + 2k. */
   WindEast0: 7,
+  /** Dust or sand load of the air near the ground, 0..1 (1 = a full dust storm). */
+  Dust: 7 + 2 * WIND_LEVELS.length,
+  /** Thunderstorm intensity, 0..1: deep convection with lightning and a heavy core. */
+  Storm: 8 + 2 * WIND_LEVELS.length,
 } as const;
-export const CHANNEL_COUNT = 7 + 2 * WIND_LEVELS.length;
+/** Dust and storm were appended after the winds, so the earlier channels keep their indices. */
+export const CHANNEL_COUNT = 9 + 2 * WIND_LEVELS.length;
+
+/** A precipitation rate of 1 mm/h, in m/s of water. */
+export const MM_PER_HOUR = 0.001 / HOUR;
 
 /** A ceiling exists where cover is broken or overcast (at least 5/8). */
 export const CEILING_COVER = 5 / 8;
+
+/** Visibility in a full dust storm (dust = 1), in meters. */
+export const DUST_VISIBILITY: Meters = 200;
+
+/** Visibility through dust alone (m): DUST_VISIBILITY at a load of 1, Infinity in clean air. */
+export function dustVisibility(dust: number): Meters {
+  return dust > 0 ? DUST_VISIBILITY / (dust * dust) : Infinity;
+}
 
 /** Weather at one place and time, for flight operations. */
 export interface WeatherReport {
@@ -54,6 +70,10 @@ export interface WeatherReport {
   temperature: number;
   /** Sea-level pressure (Pa). */
   pressure: number;
+  /** Dust or sand load near the ground, 0..1 (already counted in `visibility`). */
+  dust: number;
+  /** Thunderstorm intensity, 0..1. */
+  storm: number;
 }
 
 export interface Wind {
@@ -143,6 +163,8 @@ export class WeatherView {
       snow: this.sample(Channel.Snow, d, t),
       temperature: this.sample(Channel.Temperature, d, t),
       pressure: this.sample(Channel.Pressure, d, t),
+      dust: this.sample(Channel.Dust, d, t),
+      storm: this.sample(Channel.Storm, d, t),
     };
   }
 
