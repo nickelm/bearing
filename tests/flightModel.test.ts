@@ -18,7 +18,7 @@ import { FlightDirector } from '../src/sim/flight/flightDirector';
 import { FLIGHT_STEP } from '../src/sim/flight/flightModel';
 import type { FlightModel, GroundQuery } from '../src/sim/flight/flightModel';
 import { FlightSpecError, lookup, lookup2, parseFlightSpec } from '../src/sim/flight/flightSpec';
-import { FlightMonitor, gradeLanding } from '../src/sim/flight/outcomes';
+import { flightWarnings, FlightMonitor, gradeLanding } from '../src/sim/flight/outcomes';
 import type { FlightEvent } from '../src/sim/flight/outcomes';
 import { runwayEnds, runwayFrame, toRunway } from '../src/sim/flight/runway';
 import { spawnInAir, spawnOnRunway } from '../src/sim/flight/spawn';
@@ -379,6 +379,93 @@ describe('outcomes', () => {
     spawnInAir(m, runway, end, 1000, 300 * KNOT);
     run(m, neutralControls(), 1, hills);
     expect(m.crashed).not.toBeNull();
+  });
+});
+
+describe('rotation with a keyboard (owner report: sluggish, then a tail strike)', () => {
+  /**
+   * Afterburner takeoff; at 150 KCAS the pilot holds full aft stick (ramping in as
+   * the keyboard does, 2.5/s) until the pitch reaches `target`, and lets go a
+   * quarter second later (the stick recentres at 4/s).
+   */
+  function keyboardTakeoff(target: number, reaction = 0.25) {
+    const m = kestrel();
+    spawnOnRunway(m, runway, end);
+    const ctl = neutralControls();
+    ctl.throttle = 1;
+    let held = false;
+    let reached = -1;
+    let released = -1;
+    let t = 0;
+    let maxPitch = 0;
+    let maxGroundPitch = 0;
+    let maxRate = 0;
+    let maxBlend = 0;
+    let pitchAtRelease = 0;
+    let after: number[] = [];
+    for (let i = 0; i < 40 / FLIGHT_STEP && !m.crashed; i++) {
+      t += FLIGHT_STEP;
+      const tel = m.telemetry;
+      if (!held && released < 0 && tel.cas > 150 * KNOT) held = true;
+      if (held && reached < 0 && tel.pitch >= target * DEG) reached = t;
+      if (held && reached >= 0 && t - reached >= reaction) {
+        held = false;
+        released = t;
+        pitchAtRelease = tel.pitch / DEG;
+      }
+      const rate = held ? 2.5 : 4;
+      ctl.pitch += Math.max(
+        -rate * FLIGHT_STEP,
+        Math.min(rate * FLIGHT_STEP, (held ? 1 : 0) - ctl.pitch),
+      );
+      m.step(ctl, ground);
+      maxPitch = Math.max(maxPitch, tel.pitch / DEG);
+      if (m.onGround) maxGroundPitch = Math.max(maxGroundPitch, tel.pitch / DEG);
+      maxRate = Math.max(maxRate, m.omega.y / DEG);
+      maxBlend = Math.max(maxBlend, tel.laws.blend);
+      if (released > 0 && t > released + 1 && t < released + 4) after.push(tel.pitch / DEG);
+      if (released > 0 && t > released + 4) break;
+    }
+    after = after.length ? after : [NaN];
+    return {
+      m,
+      maxPitch,
+      maxGroundPitch,
+      maxRate,
+      maxBlend,
+      pitchAtRelease,
+      settle: Math.max(...after) - Math.min(...after),
+    };
+  }
+
+  it('rotates at the commanded rate and stops short of the tail when released at 9°', () => {
+    const r = keyboardTakeoff(9);
+    expect(r.m.crashed).toBeNull();
+    expect(r.m.onGround).toBe(false);
+    // 5°/s commanded; no whip-up when the wheels unload.
+    expect(r.maxRate).toBeLessThan(6);
+    // The tail strikes near 13.5°.
+    expect(r.maxPitch).toBeLessThan(12.5);
+    // With the gear down the pitch law stays in rate command through liftoff.
+    expect(r.maxBlend).toBe(0);
+    // Released, the attitude holds.
+    expect(r.settle).toBeLessThan(1);
+  });
+
+  it('forgives a late release: held to 11° and released half a second later, no tail strike', () => {
+    const r = keyboardTakeoff(11, 0.5);
+    expect(r.m.crashed).toBeNull();
+    // Airborne by then: the tail clears the runway (it strikes near 13.5° on the gear).
+    expect(r.maxGroundPitch).toBeLessThan(12.5);
+  });
+
+  it('warns of a tail strike on the ground above 10.5° of pitch', () => {
+    const m = kestrel();
+    spawnOnRunway(m, runway, end);
+    run(m, neutralControls(), 1);
+    expect(flightWarnings(m)).not.toContain('tail-strike');
+    m.telemetry.pitch = 11 * DEG;
+    expect(flightWarnings(m)).toContain('tail-strike');
   });
 });
 

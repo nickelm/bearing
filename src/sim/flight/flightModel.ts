@@ -30,8 +30,15 @@ import { Quatd } from '../../core/quat';
 import { Vec3d } from '../../core/vec3d';
 import { calibratedAirspeed, G0, standardAtmosphere } from './atmosphere';
 import type { AirState } from './atmosphere';
-import { AB_GATE, controlLaws, emptyLawOutput, MIL_DETENT, neutralControls } from './controlLaws';
-import type { FlightControls, LawInput, LawOutput } from './controlLaws';
+import {
+  AB_GATE,
+  controlLaws,
+  emptyLawOutput,
+  MIL_DETENT,
+  neutralControls,
+  pitchBlend,
+} from './controlLaws';
+import type { FlightControls, LawInput, LawOutput, LawState } from './controlLaws';
 import { lookup, lookup2 } from './flightSpec';
 import type { FlightSpec, WheelSpec } from './flightSpec';
 import { headingOf } from './runway';
@@ -41,6 +48,8 @@ export const FLIGHT_STEP = 1 / 120;
 export const SUBSTEPS = 4;
 /** Time constants of the stick prefilter (s). */
 const PITCH_PREFILTER = 0.25;
+/** With the gear down (pitch-rate command), a quick prefilter: letting go stops the rotation. */
+const PITCH_PREFILTER_GEAR = 0.08;
 const ROLL_PREFILTER = 0.08;
 
 export type SurfaceKind = 'runway' | 'field' | 'land' | 'water';
@@ -143,6 +152,8 @@ export class FlightModel {
   private readonly inertia: [number, number, number];
   /** Prefiltered stick, and the controls the laws see. */
   private readonly stick = { pitch: 0, roll: 0 };
+  /** The control laws' integrators. */
+  private readonly lawState: LawState = { pitchI: 0 };
   private readonly shaped: FlightControls = neutralControls();
   private readonly scratch = {
     up: new Vec3d(),
@@ -248,6 +259,7 @@ export class FlightModel {
     this.crashed = null;
     this.stick.pitch = 0;
     this.stick.roll = 0;
+    this.lawState.pitchI = 0;
     for (const w of this.wheels) {
       w.anchor = null;
       w.load = 0;
@@ -428,16 +440,20 @@ export class FlightModel {
       wow,
       curvature: Math.max(0, this.vel.lengthSq() - this.vel.dot(up) ** 2) / r,
       halfRhoV: 0.5 * air.density * tas,
+      gear: this.gear,
+      dt,
     };
     // Stick prefilter (as in the F-16's FCS): shapes the command's onset.
-    this.stick.pitch +=
-      (clamp(ctl.pitch, -1, 1) - this.stick.pitch) * Math.min(1, dt / PITCH_PREFILTER);
+    const pitchTau =
+      PITCH_PREFILTER_GEAR +
+      (PITCH_PREFILTER - PITCH_PREFILTER_GEAR) * pitchBlend(spec, cas, this.gear);
+    this.stick.pitch += (clamp(ctl.pitch, -1, 1) - this.stick.pitch) * Math.min(1, dt / pitchTau);
     this.stick.roll +=
       (clamp(ctl.roll, -1, 1) - this.stick.roll) * Math.min(1, dt / ROLL_PREFILTER);
     this.shaped.pitch = this.stick.pitch;
     this.shaped.roll = this.stick.roll;
     this.shaped.yaw = ctl.yaw;
-    const laws = controlLaws(spec, this.inertia, this.shaped, lawIn, tel.laws);
+    const laws = controlLaws(spec, this.inertia, this.shaped, lawIn, tel.laws, this.lawState);
 
     // ---- Moments ----
     const b = spec.wing.span;

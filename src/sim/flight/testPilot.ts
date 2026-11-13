@@ -34,6 +34,9 @@ interface Waypoint {
 /** The test pilot's approach angle of attack: a degree under the HUD's 13° target, for flare margin. */
 const APPROACH_ALPHA = 12 * DEG;
 
+/** The flight director's flight-path gain (1/s) during the flare. */
+const FLARE_GAMMA_GAIN = 2.5;
+
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
@@ -51,6 +54,7 @@ export interface TestPilotOptions {
 export class TestPilot {
   phase: PilotPhase = 'lineup';
   readonly director = new FlightDirector();
+  private readonly normalGammaGain = this.director.gammaGain;
   private readonly frame: RunwayFrame;
   private readonly waypoints: Waypoint[];
   private leg = 0;
@@ -105,6 +109,7 @@ export class TestPilot {
   }
 
   private setPhase(p: PilotPhase): void {
+    if (this.phase === 'flare') this.director.gammaGain = this.normalGammaGain;
     this.phase = p;
     this.phaseTime = 0;
   }
@@ -200,6 +205,8 @@ export class TestPilot {
         break;
       }
       case 'flare': {
+        // A firmer hand on the flight path for the flare's few seconds.
+        this.director.gammaGain = FLARE_GAMMA_GAIN;
         const v = Math.max(tel.tas, 50);
         const carrot = this.point(pos.t + 1500, 0, 0);
         const dir = toward(model, carrot);

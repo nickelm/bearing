@@ -138,6 +138,7 @@ const WARNING_TEXT: Record<FlightWarning, string> = {
   'gear-speed': 'GEAR SPEED LIMIT',
   stall: 'STALL',
   'pull-up': 'PULL UP',
+  'tail-strike': 'PITCH — TAIL STRIKE',
 };
 
 export class Hud {

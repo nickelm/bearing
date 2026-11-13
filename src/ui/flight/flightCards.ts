@@ -249,7 +249,7 @@ export class HelpOverlay {
     rows.push('<tr><td>Right drag</td><td>Free look; the camera springs back on release</td></tr>');
     this.el.innerHTML = `<h1>Controls</h1><table>${rows.join('')}</table>
       <div class="ff-note">Ctrl+W closes the browser tab; the page asks first while you fly. The throttle also moves with = and −.</div>
-      <div class="ff-note">Takeoff: release the parking brake (P), full throttle, rotate at about 150 kt to 10° of pitch, gear up (G). Landing: gear down below 300 kt, fly the approach at 13° angle of attack, 3° glide path, brake (Space) after the nosewheel is down.</div>`;
+      <div class="ff-note">Takeoff: release the parking brake (P), full throttle; at about 150 kt hold the stick back until about 9° of pitch and let go: with the gear down the stick commands pitch rate (5°/s) and the attitude holds. Gear up (G) once climbing; the stick then commands g. Landing: gear down below 300 kt, fly the approach at 13° angle of attack, 3° glide path, brake (Space) after the nosewheel is down.</div>`;
   }
 
   get visible(): boolean {

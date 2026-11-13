@@ -407,7 +407,7 @@
       "pitchAuthority": 0.25,
       "yawAuthority": 0.04,
       "maxRollRate": 230,
-      "maxPitchRate": 12,
+      "maxPitchRate": 5,
       "maxLoad": 9,
       "minLoad": -3,
       "maxAlpha": 25,
@@ -416,9 +416,10 @@
       "blendLow": 75,
       "blendHigh": 110,
       "loadGain": 0.5,
-      "rateGain": [8, 6, 4],
+      "rateGain": [8, 15, 4],
       "sideslipGain": 2,
-      "alphaGain": 4
+      "alphaGain": 4,
+      "rateIntegral": 4
     },
     "gear": {
       "wheels": [

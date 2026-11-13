@@ -104,7 +104,7 @@ export class FlightDirector {
     // At low speed the stick commands pitch rate: the body rate of that path.
     const qDes = (g / v) * (nDes - Math.cos(t.gamma) * cb);
     const sRate = qDes / c.maxPitchRate;
-    const w = pitchBlend(spec, t.cas, t.wow);
+    const w = pitchBlend(spec, t.cas, model.gear);
     ctl.pitch = clamp(w * sLoad + (1 - w) * sRate, -1, 1);
     // Speed: PI on calibrated airspeed.
     if (target.speed !== null) {

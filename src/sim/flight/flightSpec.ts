@@ -98,7 +98,7 @@ export interface FlightSpec {
     rollAuthority: number;
     pitchAuthority: number;
     yawAuthority: number;
-    /** Commanded limits: roll rate (rad/s), pitch rate in rate mode (rad/s), load factor. */
+    /** Commanded limits: roll rate (rad/s), pitch rate with the gear down (rad/s), load factor. */
     maxRollRate: number;
     maxPitchRate: number;
     maxLoad: number;
@@ -108,12 +108,17 @@ export interface FlightSpec {
     minAlpha: number;
     /** Sideslip at full rudder (rad). */
     maxSideslip: number;
-    /** Calibrated airspeeds (m/s) over which pitch blends from rate to load-factor command. */
+    /**
+     * Calibrated airspeeds (m/s) over which pitch blends from rate to load-factor
+     * command with the gear up (the gear handle selects rate command; controlLaws.ts).
+     */
     blendLow: number;
     blendHigh: number;
     /** Loop gains: load factor (rad/s per g), body rates (1/s), sideslip (1/s), α limiter (1/s). */
     loadGain: number;
     rateGain: [number, number, number];
+    /** Integral gain of the pitch-rate loop (1/s²). */
+    rateIntegral: number;
     sideslipGain: number;
     alphaGain: number;
   };
@@ -271,7 +276,8 @@ export function parseFlightSpec(raw: unknown, id = '?'): FlightSpec {
   for (const k of ['rollAuthority', 'pitchAuthority', 'yawAuthority', 'maxLoad', 'loadGain'])
     pos(c, k, 'controls');
   num(c, 'minLoad', 'controls');
-  for (const k of ['blendLow', 'blendHigh', 'sideslipGain', 'alphaGain']) pos(c, k, 'controls');
+  for (const k of ['blendLow', 'blendHigh', 'sideslipGain', 'alphaGain', 'rateIntegral'])
+    pos(c, k, 'controls');
   for (const k of ['maxRollRate', 'maxPitchRate', 'maxAlpha', 'minAlpha', 'maxSideslip'])
     c[k] = num(c, k, 'controls') * DEG;
   const rg = vec(c.rateGain, 'controls.rateGain');

@@ -3,12 +3,14 @@
  * 134). They turn stick and pedal positions into body moments, bounded by the
  * control authority the dynamic pressure allows:
  *
- * - **Pitch.** In flight the stick commands load factor (neutral stick holds 1 g,
- *   less the centripetal relief of level flight over the small planet, so it
- *   trims itself for level flight; full aft 9 g, full forward −3 g). At low calibrated airspeed and on the ground
- *   it blends to a pitch-rate command, so neutral stick holds the pitch attitude
- *   for takeoff and landing. An angle-of-attack limiter caps the pitch rate as α
- *   nears its limit (about 25°), and the load-factor command is clamped to +9/−3 g.
+ * - **Pitch.** With the gear up the stick commands load factor (neutral stick
+ *   holds 1 g, less the centripetal relief of level flight over the small
+ *   planet, so it trims itself for level flight; full aft 9 g, full forward −3 g).
+ *   With the gear down (takeoff and landing) it commands pitch rate, gently (5°/s
+ *   at full stick), and neutral stick holds the attitude: the gear handle selects
+ *   the gains, as in the F-16. A PI rate loop reaches the commanded rate. An
+ *   angle-of-attack limiter caps the pitch rate as α nears its limit (about 25°),
+ *   and the load-factor command is clamped to +9/−3 g.
  * - **Roll.** Lateral stick commands roll rate, reduced at high α; none on the ground.
  * - **Yaw.** Pedals command sideslip; with pedals neutral the law yaws the
  *   aircraft to keep the sideslip at zero (turn coordination). On the ground the
@@ -89,6 +91,10 @@ export interface LawInput {
   curvature: number;
   /** Weight on wheels, 0 (airborne) to 1 (fully on the gear). */
   wow: number;
+  /** Gear position, 0 (up) to 1 (down): selects the pitch law's gains. */
+  gear: number;
+  /** Substep (s), for the pitch integrator. */
+  dt: number;
   /** ½ρV (kg/(m²·s)), for the damping the laws compensate. */
   halfRhoV: number;
 }
@@ -116,9 +122,23 @@ export function smoothstep(e0: number, e1: number, x: number): number {
   return t * t * (3 - 2 * t);
 }
 
-/** The weight of the load-factor law in the pitch channel (0: pitch-rate command). */
-export function pitchBlend(spec: FlightSpec, cas: number, wow: number): number {
-  return (1 - wow) * smoothstep(spec.controls.blendLow, spec.controls.blendHigh, cas);
+/**
+ * The weight of the load-factor law in the pitch channel (0: pitch-rate command).
+ * As in the F-16's flight controls, the gear handle selects the gains: with the
+ * gear down (takeoff and landing) the stick commands pitch rate and the laws
+ * hold the attitude; as the gear comes up the load-factor law takes over, and
+ * also below `blendLow` of calibrated airspeed. Weight on wheels plays no part:
+ * blending on it switched laws at the moment of liftoff, with the stick still
+ * aft, and whipped the nose up into a tail strike.
+ */
+export function pitchBlend(spec: FlightSpec, cas: number, gear: number): number {
+  return (1 - gear) * smoothstep(spec.controls.blendLow, spec.controls.blendHigh, cas);
+}
+
+/** Integrator state of the control laws, kept by the aircraft between substeps. */
+export interface LawState {
+  /** Integrated pitch-rate error, as a moment (N·m). */
+  pitchI: number;
 }
 
 /** The load factor the pitch stick commands (g), before the limiters. */
@@ -134,6 +154,7 @@ export function controlLaws(
   ctl: Readonly<FlightControls>,
   s: Readonly<LawInput>,
   out: LawOutput,
+  state?: LawState,
 ): LawOutput {
   const c = spec.controls;
   const w = spec.wing;
@@ -146,7 +167,7 @@ export function controlLaws(
   const air = 1 - s.wow;
 
   // ---- Pitch ----
-  const blend = pitchBlend(spec, s.cas, s.wow);
+  const blend = pitchBlend(spec, s.cas, s.gear);
   let nCmd = clamp(loadCommand(spec, ctl.pitch) - s.curvature / s.g, c.minLoad, c.maxLoad);
   const v = Math.max(s.tas, 30);
   // Steady pitch rate for the commanded load factor, plus a load-error term.
@@ -162,7 +183,30 @@ export function controlLaws(
   }
   if (blend < 0.5) nCmd = 1 + (qCmd * v) / s.g;
   const dampY = s.halfRhoV * w.area * w.chord * w.chord * 0.5 * spec.aero.cmq * s.q;
-  const my = clamp(iyy * kq * (qCmd - s.q) - dampY, -authY, authY);
+  // PI rate loop: the integrator holds the attitude against steady moments (the
+  // changes of trim), so the commanded rate is reached rather than approached.
+  // Anti-windup: it integrates only in the air and while the demand is inside the
+  // authority, and is clamped to it.
+  const errQ = qCmd - s.q;
+  let pitchI = state ? clamp(state.pitchI, -authY, authY) : 0;
+  // Takeoff gains: three times the rate gain with weight on wheels, so the
+  // proportional loop overcomes the main gear's nose-down moment during rotation
+  // (with the integrator frozen there, a plain gain settled at a third of the
+  // commanded rate and the nose came up sluggishly).
+  const pd = iyy * kq * (1 + 2 * s.wow) * errQ - dampY;
+  if (state) {
+    const raw = pd + pitchI;
+    const saturated = (raw >= authY && errQ > 0) || (raw <= -authY && errQ < 0);
+    if (s.wow > 0.05) {
+      // Frozen and bled off with weight on the wheels: the gear's reaction would wind
+      // it up and release it all at liftoff.
+      pitchI *= Math.max(0, 1 - 4 * s.dt);
+    } else if (!saturated) {
+      pitchI = clamp(pitchI + iyy * c.rateIntegral * errQ * s.dt, -authY, authY);
+    }
+    state.pitchI = pitchI;
+  }
+  const my = clamp(pd + pitchI, -authY, authY);
 
   // ---- Roll ----
   const alphaFrac = clamp(s.alpha / c.maxAlpha, 0, 1);
