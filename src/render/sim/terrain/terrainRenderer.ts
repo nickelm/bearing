@@ -27,6 +27,8 @@ import {
 import {
   attribute,
   clamp,
+  dFdx,
+  dFdy,
   dot,
   float,
   fwidth,
@@ -34,6 +36,7 @@ import {
   If,
   length,
   max,
+  min,
   mix,
   modelWorldMatrix,
   normalize,
@@ -335,6 +338,8 @@ export class TerrainRenderer {
       // Derivatives first, in uniform control flow: the layers below branch
       // per fragment (decision 69) and must not take derivatives themselves.
       const footprint = length(fwidth(positionWorld)).toVar();
+      // The pixel's smaller extent on the ground, for the snow's glints.
+      const pixel = min(length(dFdx(positionWorld)), length(dFdy(positionWorld))).toVar();
       const heightWidth = max(fwidth(rawHeight), 1e-3).toVar();
       // Flat facets: each triangle's own normal (decision 123).
       const normal = facetNormal(positionWorld, radial, smoothNormal, this.land.facets).toVar();
@@ -372,19 +377,22 @@ export class TerrainRenderer {
         .div(max(dot(normal, radial), 0.05))
         .div(max(exaggeration, 1e-3))
         .toVar();
+      const ground = this.land.surface({
+        albedo: faceBed,
+        slope: faceSlope,
+        height: faceHeight,
+        up: faceUp,
+        climate: this.climate.sample(faceUp),
+        wrapped: faceWrapped,
+        forest: surfaceAttr.w,
+        face: { spacing: faceSpacing, jitter: faceJitter },
+        landform: face.at(attribute('landform', 'vec3')),
+        settled: this.habitability.sample(faceUp),
+      });
+      const snow = ground.snow.toVar();
+      const canopy = ground.canopy.toVar();
       const landAlbedo = mix(
-        this.land.albedo({
-          albedo: faceBed,
-          slope: faceSlope,
-          height: faceHeight,
-          up: faceUp,
-          climate: this.climate.sample(faceUp),
-          wrapped: faceWrapped,
-          forest: surfaceAttr.w,
-          face: { spacing: faceSpacing, jitter: faceJitter },
-          landform: face.at(attribute('landform', 'vec3')),
-          settled: this.habitability.sample(faceUp),
-        }),
+        ground.albedo,
         builtAlbedo(planet, footprint, built.y.div(max(built.x.add(built.y), 1e-4))),
         builtCover,
       );
@@ -422,7 +430,10 @@ export class TerrainRenderer {
         paintYellow,
         clamp(built.w.negate(), 0, 1),
       );
-      const roadAlbedo = mix(asphalt, painted, concreteShare) as unknown as typeof normal;
+      // Rain darkens the pavement as it does the ground.
+      const roadAlbedo = this.land.wet(
+        mix(asphalt, painted, concreteShare) as unknown as typeof normal,
+      );
       const roadRadiance = L.shadeDiffuse(roadAlbedo, normal, positionWorld, at);
       const surface = mix(surfaceWater, foam, falls);
       const withRoads = mix(surface, roadRadiance, paved.x.mul(dry));
@@ -450,7 +461,31 @@ export class TerrainRenderer {
             .mul(0.12),
         );
       });
-      const lit = withRoads.add(vec3(1, 0.7, 0.38).mul(glow));
+      // Wet pavement and level ground reflect a little sky, and sunlit snow sparkles
+      // (decision 139); both ride on the facet's shading.
+      const view = normalize(positionWorld).negate().toVar();
+      const bare = dry.mul(float(1).sub(paved.x)).mul(float(1).sub(builtCover));
+      const level = smoothstep(0.96, 0.995, dot(normal, radial))
+        .mul(float(1).sub(snow))
+        .mul(float(1).sub(canopy));
+      const sheen = this.land
+        .wetSheen(normal, view, at.sky, max(paved.x, level))
+        .mul(dry.mul(float(1).sub(river)));
+      const sparkle = this.land.snowSparkle({
+        snow: snow.mul(bare).mul(float(1).sub(river)),
+        wrapped,
+        footprint: pixel,
+        distance: length(positionWorld),
+        normal,
+        view,
+        up: radial,
+        sun: L.sunDirection,
+        sunlight: at.sunlight,
+      });
+      const lit = withRoads
+        .add(vec3(1, 0.7, 0.38).mul(glow))
+        .add(sheen)
+        .add(sparkle);
       return L.applyAerial(lit, apInscatter, apTransmittance);
     })();
     return material;

@@ -483,8 +483,18 @@ Simulation view (needs S1's `render/sim/` split):
 - [ ] Tree LOD, following the guide's bands: instanced trees casting shadows to 1.5 km, merged cluster meshes (10–30 trees each, no shadows) to 5 km, terrain forest shade beyond, with the 5 km seam hidden by haze and matched colors (decision 45: ~6.6 M triangles over dense forest at the default 5 km range; decision 131's culling and distance thinning bring the densest view to 1.3 M tree triangles meanwhile; budget under 2 M per frame and about 50,000 instances within 1.5 km)
 - [ ] Denser forests: closer clump spacing in closed-canopy biomes, paid for by the tree LOD (owner request at checkpoint 4)
 - [ ] Sky, haze and clouds tuned for 0–20 km only (Part I): drop orbit-only work such as the limb glow from the simulation view
-- [ ] Cast shadows: cascaded shadow maps within a few kilometers for terrain, trees and buildings (Part I, Lighting); at low sun ridges cast none today (style audit, `range`)
-- [ ] Exposure tied to time of day (Part I, Post-Processing): at sunset the ground is black, sRGB (2, 2, 1), under an orange sky (style audit, `sunset`)
+- [x] Cast shadows from terrain: a height-field shadow baked around the camera, three nested grids, soft edges; deeper sky fill, a low-sun exposure for surfaces, snow sparkle and wet ground (`render/sim/lighting/terrainShadow.ts`, decision 139)
+  - [ ] Wire the app: `globe.shadows.setHeights(global.height, global.n)` next to `globe.terrain.setWorld(...)` in `main.ts` and in Free Flight; until then only the previews show shadows
+  - [ ] Shadows cast by trees, buildings and aircraft (Part I: the aircraft's shadow on the ground is a height cue)
+  - [ ] Cross-fade when finer tile heights arrive under the near grid (the field is replaced at once today)
+  - [ ] Conifer forest in a mountain's shadow at a 3° sun is close to black (luma 9–14): a shadow lift in the golden and dusk grade bands
+  - [ ] GUI controls: `shadows.enabled`, `land.sparkle`, `lighting.skyLean`, `lighting.lowSunExposure`
+- [x] Sky: a sky-view LUT with multiple scattering, sun disk with halo, moon with phases and moonlight, stars, clear-air haze that keeps the ground's palette, twilight gain and sunset vibrance (`render/sim/atmosphere/skyView.ts`, `core/moon.ts`, decision 140)
+  - [ ] Wire the app: `globe.gameTime`, `globe.planetOrbit`, `globe.calendar` and `globe.weatherView` in `main.ts` and in Free Flight; until then the moon stays at its game-time-0 place and the stars do not turn
+  - [ ] Moon glint on water; clouds shading moonlight
+  - [ ] GUI sliders for `atmosphere.haze` and `lighting.sunsetVibrance`, a toggle for `twilightAdaptation`
+  - [ ] Point the `sunset` preview view at a real sunset (its sun is at −6.7°)
+- [x] Exposure tied to time of day (Part I, Post-Processing): a twilight gain on the sun's illuminance, a low-sun sky fill and a low-sun exposure for surfaces (decisions 139, 140); the `sunset` view's ground median went from luma 10 to 29
 - [ ] Night: settled land glows a uniform warm brown at 6 km with no distinct town lights (style audit, `night`); keep the rural glow to points and let towns read as clusters of lights
 - [x] Post-processing for the simulation view: bloom on emissives and glints, a grade per time-of-day band, faint film grain and dither, a low-resolution volumetric stage and an overlay scene (`render/sim/post/`, decision 138)
   - [ ] Check the pipeline in a real browser: the validation guard, the canvas path, switching views (nothing ran in a browser, decision 135)

@@ -25,7 +25,7 @@
  *   the GGX roughness, so from orbit the glint widens into a sunglint instead
  *   of aliasing.
  * - Fresnel (Schlick, F0 = 0.02) mixes the water body with a reflection of
- *   the average sky.
+ *   the sky where the mirrored view ray points (the sky-view LUT, decision 140).
  *
  * Coastal foam (decision 39): distance to the shore comes per vertex
  * (tileMesh `shore`: depth ÷ depth gradient from the samples). Foam
@@ -55,6 +55,7 @@ import {
   vec3,
 } from 'three/tsl';
 import { rng } from '../../../core/rng';
+import { SKY_MARCH_STEPS_COARSE } from '../atmosphere/skyView';
 import type { LightAt, PlanetLighting } from '../lighting/planetLighting';
 
 type F = Node<'float'>;
@@ -286,11 +287,13 @@ export class WaterShading {
         // Specular radiance: π·E·D·F/(4·N·V) with E = π × the display sun illuminance (decision 34).
         const sunLight = at.sunlight;
         const glint = sunLight.mul(ggx.mul(fresnel).mul(nDotL).div(nDotV.mul(4)).mul(Math.PI));
-        // Sky reflection: the average sky radiance at this sun elevation.
-        const sky = L.atmosphere
-          .skyIrradiance(dot(i.up, sun))
-          .mul(L.sunIlluminance.mul(L.skyLight))
-          .mul(fresnel);
+        // Sky reflection: the sky where the mirrored view ray points (decision 140), lifted
+        // above the horizon, since the far side of a wave would mirror the ground.
+        const mirrored = waveNormal.mul(dot(waveNormal, v).mul(2)).sub(v);
+        const lifted = normalize(
+          mirrored.add(i.up.mul(max(float(0.03).sub(dot(mirrored, i.up)), 0))),
+        ) as V3;
+        const sky = L.atmosphere.skyRadiance(lifted, SKY_MARCH_STEPS_COARSE).mul(fresnel);
         // Coastal foam.
         const shoreDistance = max(i.shore, 0);
         const band = this.foamWidth;

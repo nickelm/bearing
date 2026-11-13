@@ -21,7 +21,10 @@ import {
 } from 'three/webgpu';
 import type { WebGPURenderer } from 'three/webgpu';
 import { placePlanetCentered } from '../common/cameraRelative';
+import { EARTH_ORBIT } from '../../core/calendar';
+import type { CampaignCalendar, OrbitParams } from '../../core/calendar';
 import type { CubeGrid } from '../../core/cubeGrid';
+import { celestialRotation, moonDirection, moonIlluminatedFraction } from '../../core/moon';
 import { DEG } from '../../core/units';
 import { Vec3d } from '../../core/vec3d';
 import { ObserverCamera } from './camera/observerCamera';
@@ -32,6 +35,8 @@ import { WeatherTexture } from './clouds/weatherTexture';
 import { ForestLayer } from './forest/forestLayer';
 import { GlobeMesh } from '../common/globeMesh';
 import { PlanetLighting } from './lighting/planetLighting';
+import { TerrainShadow } from './lighting/terrainShadow';
+import { WeatherState } from './weather/weatherState';
 import { TerrainRenderer } from './terrain/terrainRenderer';
 import { MotionEstimate } from '../common/terrain/prefetch';
 import { OrbitCamera, attachOrbitInput } from '../common/orbitCamera';
@@ -39,6 +44,7 @@ import { StrategicOverlay } from '../strategic/strategicOverlay';
 import { StructureLayer } from './infra/structureLayer';
 import type { InfraScene } from './infra/infraScene';
 import { SimPipeline } from './post/simPipeline';
+import type { WeatherView } from '../../sim/weather/frame';
 
 export type SimCameraMode = 'observer' | 'free' | 'chase';
 
@@ -81,6 +87,13 @@ export class GlobeScene {
   readonly climate = new ClimateTexture();
   /** Live cloud cover and precipitation from the sim (decision 68). */
   readonly weather = new WeatherTexture();
+  /** The weather at the camera as uniforms for every effect (weather/weatherState.ts). */
+  readonly weatherState = new WeatherState();
+  /**
+   * Mountain shadows on everything the sun lights (lighting/terrainShadow.ts). They need the
+   * world's global heights: `shadows.setHeights(global.height, global.n)` with the terrain's world.
+   */
+  readonly shadows: TerrainShadow;
   /** Tiled LOD terrain; drawn instead of the M1 grid mesh once a world has a global pass. */
   readonly terrain: TerrainRenderer;
   /** Instanced tree clumps near the camera (decision 45). */
@@ -93,6 +106,18 @@ export class GlobeScene {
   readonly strategic: StrategicOverlay;
   /** Unit vector toward the sun, world frame. Set by the app from the ephemeris. */
   readonly sun = new Vec3d(1, 0.6, 0.8).normalize();
+  /**
+   * Game time of the frame (s), set by the app each frame before `render`: the moon and the
+   * stars are placed from it, with `planetOrbit` and `calendar` (core/moon.ts).
+   */
+  gameTime = 0;
+  /** The planet's orbit and the campaign's calendar, for the moon and the stars (set by the app). */
+  planetOrbit: OrbitParams = EARTH_ORBIT;
+  calendar: CampaignCalendar = { startDay: 0, startTimeOfDay: 0 };
+  /** Unit vector toward the moon, world frame: from the ephemeris at `gameTime`, each frame. */
+  readonly moon = new Vec3d(0, -1, 0);
+  /** The weather read at the camera each frame, or null for clear air (set by the app). */
+  weatherView: WeatherView | null = null;
   /**
    * The post-processing pipeline: volumetrics, overlay, bloom, grade, grain
    * (post/simPipeline.ts). Null if it could not be built or failed while drawing.
@@ -124,10 +149,14 @@ export class GlobeScene {
     // Clouds first: their shadow hook must be in place before lit materials are built.
     this.clouds = new CloudLayer(options.radius, this.lighting, this.weather);
     this.lighting.sunVisibility = (p) => this.clouds.shadow(p);
+    // Likewise the terrain's shadow; its bake reads the terrain's tiles.
+    this.shadows = new TerrainShadow(this.lighting.sunDirection, options.radius);
+    this.lighting.terrainShadow = (p) => this.shadows.visibility(p);
     this.terrain = new TerrainRenderer(this.lighting, this.climate);
+    this.shadows.tiles = this.terrain;
     this.forest = new ForestLayer(this.terrain, this.lighting, this.climate, this.terrain.land);
     this.structures = new StructureLayer(this.terrain, this.lighting);
-    // The sky: single scattering along each view ray, drawn behind everything (decision 35).
+    // The sky, drawn behind everything: its LUT, the sun, the moon and the stars (decision 140).
     this.scene.backgroundNode = this.lighting.atmosphere.skyNode();
     this.globe = new GlobeMesh(options.grid, options.radius);
     this.strategic = new StrategicOverlay(options.radius);
@@ -254,7 +283,22 @@ export class GlobeScene {
 
     this.sunLight.position.set(this.sun.x, this.sun.y, this.sun.z);
     this.clouds.update(o.eye);
-    this.lighting.update(o.eye, this.sun);
+    moonDirection(this.gameTime, this.planetOrbit, this.calendar, this.moon);
+    this.lighting.update(o.eye, this.sun, this.moon);
+    this.weatherState.update(
+      this.weatherView,
+      o.eye,
+      o.eye.length() - this.lighting.radius,
+      this.gameTime,
+      dt,
+    );
+    this.lighting.atmosphere.sky.setCelestial(
+      this.lighting.sunElevation,
+      this.lighting.night,
+      moonIlluminatedFraction(this.sun, this.moon),
+      celestialRotation(this.gameTime, this.planetOrbit, this.calendar),
+      this.weatherState.clock.value,
+    );
 
     // World object placement: float64 subtraction first, then write float32.
     placePlanetCentered(this.globe.group, o.eye);
@@ -298,6 +342,14 @@ export class GlobeScene {
 
     // Cloud coverage for shadows, re-baked when the clouds have moved (decision 69).
     this.clouds.bake(this.renderer, performance.now());
+    // The sky-view LUT, re-baked when the camera's height or the lights have changed.
+    this.lighting.atmosphere.bakeSky(this.renderer);
+    // Mountain shadows, a compute pass or so per frame while the sun is low.
+    this.shadows.exaggeration = this.terrain.exaggerationUniform.value;
+    if (tiles) this.shadows.update(this.renderer, o.eye, this.sun, dt);
+    else this.shadows.strength.value = 0;
+    // Rain darkens the ground.
+    this.terrain.land.wetness.value = this.weatherState.wetness.value;
     this.draw(o.eye);
   }
 
@@ -329,7 +381,9 @@ export class GlobeScene {
     this.forest.dispose();
     this.structures.dispose();
     this.clouds.dispose();
+    this.shadows.dispose();
     this.strategic.dispose();
+    this.lighting.atmosphere.dispose();
     this.pipeline?.dispose();
   }
 }

@@ -41,7 +41,7 @@ Across all five, edges show slight stair-stepping and the image has faint grain,
 - **Flat shading.** All models and terrain use per-face normals. In Three.js, `MeshStandardNodeMaterial` with `flatShading: true` derives normals from screen-space derivatives, so terrain chunks need no special geometry.
 - **Color source.** Models use vertex colors (`vertexColors: true`). Terrain colors come from the biome maps, quantized to a small number of shades per biome so adjacent faces read as distinct facets.
 - **Materials.** Mostly rough, non-metallic surfaces (roughness 0.8 to 1.0). Canopies, water, and wet surfaces get lower roughness for specular highlights. Bare-metal bombers get a modest metalness.
-- **Lighting.** One directional sun plus hemispheric sky light, with the sky light's colors taken from the current sky gradient so shadows pick up the sky's tint. Shadows use cascaded shadow maps within a few kilometers of the camera; beyond that, the haze hides their absence.
+- **Lighting.** One directional sun plus hemispheric sky light, with the sky light's colors taken from the current sky gradient so shadows pick up the sky's tint. Terrain casts shadows through a height-field shadow baked around the camera, with soft edges that widen with distance and reach of hundreds of kilometers at low sun (decision 139); trees, buildings and aircraft receive them and cast none yet. Shadows are deep and blue, never black: under a low sun, surfaces are exposed up to 1.7× over the sky so the ground stays readable under a bright dusk sky. Sunlit snow sparkles toward a low sun, and rain darkens the ground and leaves a sheen on pavement.
 - **Ambient occlusion.** Bake per-vertex AO into model vertex colors at build time. Screen-space AO is optional and off by default.
 - **Ink outlines on models, no cel shading.** Models (aircraft, vehicles, ships, buildings) carry a dark ink outline, `#1A1B1D` and about 1.5 to 2 px wide, around their silhouettes and where their parts meet, drawn by an inflated back-face hull. It is an owner's choice beyond the references, on by default and switchable in the GUI; terrain, trees and clouds stay unoutlined, and shading keeps its flat facets without cel bands (decision 107).
 
@@ -103,8 +103,8 @@ Beyond 5 km, forests are dark canopy masses in the terrain shading with a sharp 
 
 ## Sky, Atmosphere, and Clouds
 
-- **Aerial perspective.** The single most important effect for scale. Distant terrain fades toward the horizon color of the sky, with a slight violet cast at dusk (references 2 and 5). Tune haze so ridges 30 to 60 km away read as layered silhouettes.
-- **Sky gradient.** A physically motivated single-scattering sky, then color-graded toward warm, painterly tones.
+- **Aerial perspective.** The single most important effect for scale. Distant terrain fades toward the horizon color of the sky, with a slight violet cast at dusk (references 2 and 5). Tune haze so ridges 30 to 60 km away read as layered silhouettes. Clear air shows about a third of the physically consistent haze over ground nearer than about 20 km, so the ground keeps its palette, and the full amount toward the horizon; weather raises it (decision 140).
+- **Sky gradient.** A physically motivated sky from a sky-view lookup table with multiple scattering, soft and free of facets, then color-graded toward warm, painterly tones: in-scattered light gains saturation around sunrise and sunset (decision 140). The sun is a small white-hot disk with a halo; the moon shows its phase; stars come out in deep twilight and turn with the planet.
 - **Time of day.** Full day-night cycle. Golden hour and dusk are the showcase; midday uses a pale, slightly hazy sky (reference 3); night relies on emissive lights, moonlight, and a dark blue ambient.
 - **Clouds.** Soft, volumetric-looking cumulus and stratus layers that contrast with the hard geometry (references 2 and 4). Start with a raymarched 2.5D cloud layer at quarter resolution, driven by the live weather field (cover, cloud base, precipitation) with finer detail noise inside each weather cell. Clouds catch warm light on top and stay cool and gray underneath.
 
@@ -217,7 +217,7 @@ Starting values; final values get tuned in the model viewer and on the globe.
 
 ## Post-Processing
 
-- **Tone mapping.** AgX or ACES filmic, with exposure tied to time of day.
+- **Tone mapping.** AgX, with exposure tied to time of day: the pipeline's exposure is constant and the sun's illuminance carries a twilight gain instead, so lamps and moonlight keep their level (decision 140).
 - **Color grading.** A grade per time-of-day band (dawn, day, golden hour, dusk, night: gain tint, saturation, gamma and lift), blended as the sun moves (decision 138).
 - **Bloom.** Thresholded so only the sun, emissive lights, afterburners, and bright sky glints bloom. The threshold follows the time of day, low at night and high by day.
 - **Film grain.** Faint, constant in strength, and cheap, with a dither of half a code value so sky gradients never band.

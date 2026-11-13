@@ -19,22 +19,35 @@
  *
  * `surfaceTemperature` is shared with the water shader (frozen lakes) and the
  * forest layer.
+ *
+ * Two things ride on top of the facets (decision 139):
+ *
+ * - wet ground: rain (`wetness`, from the weather at the camera) darkens and
+ *   saturates everything but snow (`wet`), and flat or paved surfaces reflect
+ *   a little sky at grazing angles (`wetSheen`);
+ * - snow sparkle (`snowSparkle`): sunlit snow near the camera glints in small
+ *   points that switch on and off as the camera moves.
  */
 import { Color } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import {
+  abs,
+  ceil,
   clamp,
   cos,
   dot,
+  exp2,
   float,
   floor,
   fract,
   fwidth,
   If,
   length,
+  log2,
   max,
   min,
   mix,
+  normalize,
   select,
   smoothstep,
   sin,
@@ -84,6 +97,47 @@ export interface LandInputs {
   /** The strategic graph's habitability, 0..1: farmland lies on settled land (decision 127). */
   settled?: F;
 }
+
+/** What `snowSparkle` needs at a fragment. */
+export interface SparkleInputs {
+  /** Snow cover 0..1 (`surface().snow`). */
+  snow: F;
+  /** Fragment position modulo the wave period (decision 38). */
+  wrapped: V3;
+  /**
+   * The pixel's smaller extent on the surface (m): the lesser of the position's
+   * two screen derivatives, taken outside any branch. At grazing angles a pixel
+   * is long and narrow on the ground; cells of its length would be streaks.
+   */
+  footprint: F;
+  /** Distance from the camera (m). */
+  distance: F;
+  /** The facet's unit normal. */
+  normal: V3;
+  /** Unit vector from the fragment to the camera. */
+  view: V3;
+  /** Unit radial direction. */
+  up: V3;
+  /** Unit vector toward the sun. */
+  sun: V3;
+  /** Direct sunlight at the fragment, after the air, the clouds and the terrain's shadow. */
+  sunlight: V3;
+}
+
+/** Snow glints fade out between 40% of this distance and this distance (m). */
+export const SPARKLE_RANGE = 2500;
+/** A glint's cell, in pixels across (two to four, by the power of two): one crystal each. */
+const SPARKLE_CELL_PIXELS = 2;
+/** The smallest cell (m): closer than about 7 m, glints grow on screen instead of multiplying. */
+const SPARKLE_MIN_CELL = 0.01;
+/** How far a crystal's normal strays from the facet's (tangent of the half-angle, per axis). */
+const SPARKLE_SPREAD = 0.55;
+/** A crystal lights between these cosines of the angle from its normal to the mirror direction (6° to 3°). */
+const SPARKLE_COS = [0.9945, 0.9986] as const;
+/** A glint's width on screen (pixels). */
+const SPARKLE_POINT_PIXELS = 1.3;
+/** Radiance of a glint per unit of sunlight: several times a white surface, so the bloom takes it. */
+const SPARKLE_GAIN = 10;
 
 /** Strata on dry ground (decision 126): layer thickness (m), as tileSynth's strataThickness. */
 export const STRATA_THICKNESS = 75;
@@ -198,6 +252,112 @@ export class LandShading {
   readonly greenCrop = uniform(linearHex(0x6e8b3d));
   readonly fallow = uniform(linearHex(0x8a6a45));
   readonly pasture = uniform(linearHex(0x7f944f));
+  /** Ground wetness 0..1 (WeatherState.wetness; the scene copies it each frame). */
+  readonly wetness = uniform(0);
+  /** Snow sparkle strength (0 = off, 1 = default). */
+  readonly sparkle = uniform(1);
+
+  /**
+   * An albedo on wet ground: darker (water fills the pores, to about 60%) and
+   * more saturated. Snow and water are not passed through it.
+   */
+  wet(albedo: V3): V3 {
+    const dark = albedo.mul(mix(float(1), float(0.6), this.wetness));
+    const luma = dot(dark, vec3(0.2126, 0.7152, 0.0722));
+    return max(mix(vec3(luma), dark, this.wetness.mul(0.35).add(1)), 0) as V3;
+  }
+
+  /**
+   * Sky reflected by a wet surface: `sky` (the sky light at the point) by a
+   * Fresnel term, 4% head-on and rising toward grazing angles. `smoothness`
+   * is 1 on pavement and for level ground, 0 for slopes and rough ground.
+   */
+  wetSheen(normal: V3, view: V3, sky: V3, smoothness: F): V3 {
+    const out = vec3(0).toVar();
+    // A uniform branch: dry ground pays nothing.
+    If(this.wetness.greaterThan(0), () => {
+      const x = float(1).sub(max(dot(normal, view), 0));
+      const fresnel = x.mul(x).mul(x.mul(x)).mul(0.6).add(0.04);
+      out.assign(sky.mul(fresnel.mul(this.wetness).mul(smoothness)));
+    });
+    return out as unknown as V3;
+  }
+
+  /**
+   * Glints on sunlit snow (radiance to add to the shaded surface). The
+   * surface, seen along the axis its facet faces most, is cut into cells a
+   * few pixels wide, a power of two of the pixel footprint, so the points
+   * stay small at any distance; each cell holds one crystal whose normal
+   * strays from the facet's by a hash of the cell. The crystal
+   * lights when it mirrors the sun to the camera within about 5°, so points
+   * switch on and off as the camera moves and stand still when it does not,
+   * and they crowd where the view meets the sun's reflection: looking toward
+   * a low sun. A glint is a point about a pixel across on screen, whatever
+   * the angle the snow is seen at. They take the sunlight's color and
+   * strength, so there are none in shadow or under cloud, and fade out with
+   * distance. One hash per snow fragment in range, behind a branch.
+   */
+  snowSparkle(i: SparkleInputs): V3 {
+    const out = vec3(0).toVar();
+    const sunlit = max(i.sunlight.x, i.sunlight.y);
+    If(
+      i.snow
+        .greaterThan(0.5)
+        .and(this.sparkle.greaterThan(0))
+        .and(i.distance.lessThan(SPARKLE_RANGE))
+        .and(sunlit.greaterThan(1e-3)),
+      () => {
+        const size = exp2(ceil(log2(max(i.footprint.mul(SPARKLE_CELL_PIXELS), SPARKLE_MIN_CELL))));
+        // Cells on the plane across the normal's largest axis: a lattice in space would
+        // band the glints where a facet cuts through its layers.
+        const a = abs(i.normal);
+        const major = a.x.greaterThan(max(a.y, a.z));
+        const second = a.y.greaterThan(a.z);
+        const onPlane = (v: V3) => select(major, v.yz, select(second, v.xz, v.xy));
+        const q = onPlane(i.wrapped.div(size) as V3);
+        const plane = select(major, float(1), select(second, float(2), float(3)));
+        const cell = floor(q);
+        // The hash wants small integers: the pattern repeats every 256 cells.
+        const h = hash3(vec3(cell.sub(floor(cell.div(256)).mul(256)), plane) as V3);
+        const stray = vec3(h, fract(h.mul(57.31)), fract(h.mul(113.7)))
+          .sub(0.5)
+          .mul(2 * SPARKLE_SPREAD);
+        const crystal = normalize(i.normal.add(stray));
+        const mirror = dot(crystal, normalize(i.view.add(i.sun)));
+        const glint = smoothstep(SPARKLE_COS[0], SPARKLE_COS[1], mirror);
+        // A point about a pixel across on screen. Seen at a grazing angle a cell is wide and
+        // flat, and a round point on the ground would be a dash: the point is narrow across
+        // the view (a little over a pixel) and as long along it as that takes.
+        const toward = onPlane(i.view);
+        const along = toward.div(max(length(toward), 1e-4));
+        const offset = fract(q).sub(0.5);
+        const across = abs(offset.x.mul(along.y).sub(offset.y.mul(along.x)));
+        const depth = abs(dot(offset, along));
+        const half = clamp(i.footprint.div(size).mul(SPARKLE_POINT_PIXELS / 2), 0.15, 0.35);
+        const reach = min(half.div(max(dot(i.normal, i.view), 0.05)), 0.5);
+        const point = float(1)
+          .sub(smoothstep(half.mul(0.5), half, across))
+          .mul(float(1).sub(smoothstep(reach.mul(0.5), reach, depth)));
+        const near = smoothstep(SPARKLE_RANGE, SPARKLE_RANGE * 0.4, i.distance);
+        // Stronger at low sun, and none on facets that face away from it.
+        const low = float(1).sub(max(dot(i.up, i.sun), 0).mul(0.6));
+        const facing = smoothstep(0, 0.12, dot(i.normal, i.sun));
+        out.assign(
+          i.sunlight.mul(
+            glint
+              .mul(point)
+              .mul(near)
+              .mul(low)
+              .mul(facing)
+              .mul(i.snow)
+              .mul(this.sparkle)
+              .mul(SPARKLE_GAIN),
+          ),
+        );
+      },
+    );
+    return out as unknown as V3;
+  }
 
   /**
    * How much of a point is farmland, 0..1 (decision 127): settled land (the
@@ -329,6 +489,14 @@ export class LandShading {
 
   /** The land albedo for a fragment. */
   albedo(i: LandInputs): V3 {
+    return this.surface(i).albedo;
+  }
+
+  /**
+   * The land albedo for a fragment, its snow cover 0..1 (for the sparkle) and
+   * its canopy cover 0..1 (a forest's crowns take no sheen from the rain).
+   */
+  surface(i: LandInputs): { albedo: V3; snow: F; canopy: F } {
     // Per face, noise finer than a few facets would only speckle (decision 124).
     const footprint = i.face
       ? (mix(length(fwidth(i.wrapped)), i.face.spacing, this.facets) as F)
@@ -376,6 +544,7 @@ export class LandShading {
     // Shade by the annual mean temperature: conifers in the cold, rainforest in
     // the heat; a value shift (not a hue shift) breaks up large masses.
     let evergreen: F = float(0);
+    let cover: F = float(0);
     if (i.forest) {
       const meanT = i.climate.x.sub(
         earthElevationNode(i.height, i.climate.w, this.reliefScale).mul(LAPSE_RATE),
@@ -393,6 +562,7 @@ export class LandShading {
         i.forest.add(noise.mul(0.08)),
       ) as F;
       evergreen = max(conifer, tropical).mul(canopy) as F;
+      cover = canopy;
       a = mix(a, shade, canopy) as V3;
     }
 
@@ -431,6 +601,8 @@ export class LandShading {
     // Dry ground below the cliffs takes the rock's tint too: talus and red sand.
     a = mix(a, a.mul(mix(vec3(1), vec3(1.12, 0.86, 0.72), dryRock.mul(0.6))), dryRock) as V3;
     a = mix(a, mix(this.rockColor, banded, dryRock).mul(rockTone), rock) as V3;
+    // Rain darkens the ground, the rock and the canopy; snow stays as it is.
+    a = this.wet(a);
 
     // Snow lies under evergreen canopy more than on it: forests stay dark in winter.
     const snow = this.snowCover(t, steep, moisture, jitter, faceted).mul(
@@ -440,6 +612,10 @@ export class LandShading {
     const snowTone = mix(float(1), step(0.5, jitter).mul(0.06).add(0.94), faceted);
     a = mix(a, this.snowColor.mul(snowTone), snow) as V3;
 
-    return mix(i.albedo, a, this.enabled) as V3;
+    return {
+      albedo: mix(i.albedo, a, this.enabled) as V3,
+      snow: snow.mul(this.enabled) as F,
+      canopy: cover.mul(this.enabled) as F,
+    };
   }
 }

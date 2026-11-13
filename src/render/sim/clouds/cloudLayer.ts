@@ -228,7 +228,7 @@ export class CloudLayer implements WeatherField {
     // Lit from above: brighter as the sun climbs; undersides of thick cloud are darker.
     const sunlight = L.sunlightAt(p).mul(clamp(sunUp.add(0.25), 0, 1).mul(0.7).add(0.15));
     const sky = L.atmosphere.skyIrradiance(sunUp).mul(L.sunIlluminance.mul(L.skyLight));
-    const night = vec3(0.55, 0.65, 1.0).mul(L.nightLight);
+    const night = L.nightLightAt(p, up);
     const shade = mix(float(1), float(0.4).add(cover.oneMinus().mul(0.6)), this.below);
     // Rain and snow clouds are thicker and darker.
     const wet = float(1).sub(field.y.mul(0.4));

@@ -19,6 +19,27 @@
  *          the frame drawn directly, through the bare pipeline, with its stages and with the
  *          test fog, interleaved over n rounds; MSAA=4 draws the simulation view with four
  *          samples per pixel, as the app does (default none),
+ *        the sky (decision 140): views sunrise, golden, golden-away, twilight6, twilight6-away,
+ *          twilight12, moonlit and stars look at it from the tower, and moonlit-range at the
+ *          highest range under a full moon; SUN_EL (deg) sets any view's
+ *          sun elevation and MORNING=1 takes the morning's, MOON_AGE (days; 0 new, 14.8 full)
+ *          moves a view to the day whose moon is that old, OBS_HEADING also takes sun, moon and
+ *          antisun, PERF_SKY=n times the frame with the sky from its LUT against the march per
+ *          pixel that it replaced, interleaved over n rounds; OUT=dir writes the images there;
+ *          HAZE=x sets the clear-air haze over the ground (default 0.32; 1 = all of the
+ *          in-scattered light), LOW_SUN_FILL=x the sky light's gain under a low sun (π/2) and
+ *          VIBRANCE=x the sky's saturation around sunset (1 = as computed), LIGHTS=0 puts
+ *          the settlements' night glow on the ground out (to judge moonlight on its own),
+ *        shadows, snow and rain (decision 139): SHADOW=0 leaves the mountain shadows out,
+ *          SPARKLE=0 the snow's glints; SKY_LIGHT=x sets the sky light on surfaces (the fill in
+ *          the shadows, default 2); WET=x (0..1) wets the ground whatever the weather;
+ *          TEMP_OFFSET (°C) shifts every surface temperature (−30 puts snow on most ground);
+ *          PERF_SHADOW=n times the frame without the shadow lookup and the glints, with the
+ *          lookup, and with both, interleaved over n rounds; SHADOW_LIVE=1 keeps the shadows the
+ *          app's per-frame bake made while the view settled, instead of baking them in one go;
+ *          LOW_SUN_EXPOSURE=x sets the exposure of lit surfaces over the sky's under a low sun
+ *          (default 1.7), SKY_LEAN=x how far the sky's light leans toward the sun (0.5),
+ *          DAYLIGHT=x the sun's illuminance by day (1.4),
  *        SCENE=strategic draws the strategic view (StrategicScene, decisions 74, 93) instead,
  *          from STRATEGIC_PREVIEW_VIEWS (globe, night, theater, region, floor, cities, capital, front, winter,
  *          and sharp at 1920 × 1080; front centers on the first front line), with clouds, tile counts and frame times per view;
@@ -39,6 +60,7 @@ import {
   withLocalTime,
 } from '../src/core/calendar';
 import { cubeFaceUvToDirection, directionToCubeFace, latLonToDirection } from '../src/core/coords';
+import { moonAge, moonDirection, SYNODIC_MONTH_DAYS } from '../src/core/moon';
 import {
   tileForDirection,
   tileKeyString,
@@ -127,6 +149,18 @@ export interface PreviewView {
   alongRunway?: boolean;
   /** Instead of localTime: the first evening time the sun at the camera sinks to this elevation (rad). */
   sunElevation?: number;
+  /** With sunElevation: the morning time the sun stands at that elevation, not the evening's. */
+  morning?: boolean;
+  /**
+   * The moon's age in days (0 new, 14.8 full): the view moves to the day, from `day` on, whose
+   * moon at the view's time comes closest (core/moon.ts).
+   */
+  moonAge?: number;
+  /** With observer: face the sun's or the moon's azimuth, or away from the sun's. */
+  face?: 'sun' | 'moon' | 'antisun';
+  /** With observer: pitch (rad) and height above the ground (m) instead of the station's. */
+  pitch?: number;
+  eyeHeight?: number;
   /**
    * Through the observer camera (V1) at the main airbase's tower, at its station's
    * height, facing and pitch (altitude, tilt, heading and target are ignored).
@@ -138,6 +172,9 @@ export interface PreviewView {
   width?: number;
   height?: number;
 }
+
+/** An observer view at the main airbase's tower; the view's own fields aim it. */
+const TOWER = { dLat: 0, dLon: 0, altitude: 0, tilt: 0, heading: 0, observer: true } as const;
 
 /**
  * Simulation-view previews, all within its 0–20 km envelope (decision 72). The
@@ -378,6 +415,36 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     target: 'mixed',
     sunHeading: 140 * DEG,
     detail: true,
+  },
+  // The sky through the day's edge, from the tower (decision 140): into the sun and away from it.
+  {
+    name: 'sunrise',
+    ...TOWER,
+    sunElevation: 1 * DEG,
+    morning: true,
+    face: 'sun',
+    pitch: 9 * DEG,
+  },
+  { name: 'golden', ...TOWER, sunElevation: 5 * DEG, face: 'sun', pitch: 9 * DEG },
+  { name: 'golden-away', ...TOWER, sunElevation: 5 * DEG, face: 'antisun', pitch: 9 * DEG },
+  { name: 'twilight6', ...TOWER, sunElevation: -6 * DEG, face: 'sun', pitch: 12 * DEG },
+  { name: 'twilight6-away', ...TOWER, sunElevation: -6 * DEG, face: 'antisun', pitch: 12 * DEG },
+  { name: 'twilight12', ...TOWER, sunElevation: -12 * DEG, face: 'sun', pitch: 12 * DEG },
+  // A full-moon night with the moon in view, and a new-moon night under the stars.
+  { name: 'moonlit', ...TOWER, localTime: 19.5, moonAge: 14.77, face: 'moon', pitch: 12 * DEG },
+  { name: 'stars', ...TOWER, localTime: 23.5, moonAge: 0, face: 'antisun', pitch: 16 * DEG },
+  {
+    // The highest range under a full moon, far from any settlement's lights: moonlight alone.
+    name: 'moonlit-range',
+    dLat: 0,
+    dLon: 0,
+    altitude: 12 * KM,
+    tilt: 80 * DEG,
+    heading: 0,
+    sunElevation: -30 * DEG,
+    moonAge: 14.77,
+    target: 'peak',
+    sunHeading: 80 * DEG,
   },
   {
     // Settlement and road lights at night, over the largest city.
@@ -626,6 +693,37 @@ it('renders preview views', async () => {
   });
   scene.setInfrastructure(infra);
   scene.terrainReady = true;
+  // Mountain shadows (decision 139) from the global heights; SHADOW=0 leaves them out.
+  // SPARKLE=0 leaves the snow's glints out; WET=x (0..1) wets the ground whatever the weather.
+  if (process.env.SHADOW !== '0') scene.shadows.setHeights(global.height, global.n);
+  if (process.env.SPARKLE === '0') scene.terrain.land.sparkle.value = 0;
+  // SKY_LIGHT=x sets the sky light on surfaces (PlanetLighting.skyLight): the fill in the shadows.
+  if (process.env.SKY_LIGHT) scene.lighting.skyLight.value = Number(process.env.SKY_LIGHT);
+  // DAYLIGHT=x sets the sun's illuminance by day (PlanetLighting.daylight, default 1.4): the exposure.
+  if (process.env.DAYLIGHT) scene.lighting.daylight = Number(process.env.DAYLIGHT);
+  // LOW_SUN_EXPOSURE=x sets the exposure of lit surfaces over the sky's under a low sun
+  // (PlanetLighting.lowSunExposure, default 1.7; 1 exposes the ground as the sky).
+  if (process.env.LOW_SUN_EXPOSURE) {
+    scene.lighting.lowSunExposure = Number(process.env.LOW_SUN_EXPOSURE);
+  }
+  // SKY_LEAN=x sets how far the sky's light leans toward the sun (PlanetLighting.skyLean).
+  if (process.env.SKY_LEAN) scene.lighting.skyLean.value = Number(process.env.SKY_LEAN);
+  // HAZE=x sets the clear-air haze in front of surfaces (AtmosphereNodes.haze; 1 = all of the
+  // in-scattered light), LOW_SUN_FILL=x the sky light's gain under a low sun and VIBRANCE=x the
+  // sky's saturation around sunset (PlanetLighting.lowSunFill, sunsetVibrance; decision 140).
+  if (process.env.HAZE) scene.lighting.atmosphere.haze.value = Number(process.env.HAZE);
+  if (process.env.LOW_SUN_FILL) scene.lighting.lowSunFill = Number(process.env.LOW_SUN_FILL);
+  if (process.env.VIBRANCE) scene.lighting.sunsetVibrance = Number(process.env.VIBRANCE);
+  // LIGHTS=0 puts the settlements' and roads' night glow out, to judge moonlight on its own.
+  if (process.env.LIGHTS === '0') scene.terrain.roadStyle.lights.value = 0;
+  if (process.env.WET) {
+    const state = scene.weatherState;
+    const update = state.update.bind(state);
+    state.update = (...a: Parameters<typeof update>) => {
+      update(...a);
+      state.wetness.value = Number(process.env.WET);
+    };
+  }
 
   const main = new Vec3d(...world.info.mainContinent);
   const lat0 = Math.asin(main.y);
@@ -738,7 +836,8 @@ it('renders preview views', async () => {
       targets.farmland = cellDir.clone();
     }
   }
-  const outDir = join(import.meta.dirname, 'out');
+  // OUT=dir writes the images there instead of tools/out (several sessions rendering at once).
+  const outDir = process.env.OUT ?? join(import.meta.dirname, 'out');
   mkdirSync(outDir, { recursive: true });
 
   const stations = observerStations(campaign.infrastructure, params.radius);
@@ -814,7 +913,13 @@ it('renders preview views', async () => {
       });
     }
   }
-  for (const view of views) {
+  for (const listed of views) {
+    // ALT (m) and TILT (deg) override a view's altitude and tilt.
+    const view: PreviewView = {
+      ...listed,
+      altitude: process.env.ALT ? Number(process.env.ALT) : listed.altitude,
+      tilt: process.env.TILT ? Number(process.env.TILT) * DEG : listed.tilt,
+    };
     const target = view.target ? targets[view.target] : null;
     // Midwinter: about 150 days after the campaign's mid-August start in the main
     // continent's hemisphere, mid-July of the next year in the other.
@@ -861,8 +966,8 @@ it('renders preview views', async () => {
       const env = process.env;
       scene.observer.setStation({
         ...station,
-        height: env.OBS_HEIGHT ? Number(env.OBS_HEIGHT) : station.height,
-        pitch: env.OBS_PITCH ? Number(env.OBS_PITCH) * DEG : station.pitch,
+        height: env.OBS_HEIGHT ? Number(env.OBS_HEIGHT) : (v.eyeHeight ?? station.height),
+        pitch: env.OBS_PITCH ? Number(env.OBS_PITCH) * DEG : (v.pitch ?? station.pitch),
       });
       // OBS_LAT and OBS_LON (deg) move the observer from the station to that spot.
       if (env.OBS_LAT && env.OBS_LON) {
@@ -877,32 +982,70 @@ it('renders preview views', async () => {
     scene.cameraMode = station ? 'observer' : 'free';
     const localAt = (day: number) =>
       withLocalTime(day * DAY, o.lon, (v.localTime ?? 11) * HOUR, params, calendar);
+    // MOON_AGE (days; 0 new, 14.8 full) or the view's moonAge moves the view to the day, of the
+    // month from its own on, whose moon at the view's time comes closest.
+    const wantedAge = process.env.MOON_AGE ? Number(process.env.MOON_AGE) : v.moonAge;
+    let day = v.day ?? 0;
+    if (wantedAge !== undefined) {
+      let best = Infinity;
+      for (let d = v.day ?? 0; d < (v.day ?? 0) + 30; d++) {
+        const off = Math.abs(moonAge(Math.max(0, localAt(d)), params, calendar) - wantedAge);
+        const miss = Math.min(off, SYNODIC_MONTH_DAYS - off);
+        if (miss < best) {
+          best = miss;
+          day = d;
+        }
+      }
+    }
     // The sim starts at campaign start: an early local time on day 0 can fall before it.
-    let t = localAt(v.day ?? 0);
-    if (t < 0) t = localAt((v.day ?? 0) + 1);
-    if (v.sunElevation !== undefined) {
-      // Step through the afternoon and evening until the sun sinks to the elevation.
+    let t = localAt(day);
+    if (t < 0) t = localAt(day + 1);
+    // SUN_EL (deg) overrides the view's sun elevation; MORNING=1 takes the morning's.
+    const wantedElevation = process.env.SUN_EL ? Number(process.env.SUN_EL) * DEG : v.sunElevation;
+    if (wantedElevation !== undefined) {
+      // Step through the afternoon and evening until the sun sinks to the elevation
+      // (back through the morning for the rising sun).
+      const morning = process.env.MORNING ? process.env.MORNING === '1' : v.morning === true;
       const up = latLonToDirection(o.lat, o.lon);
       const sun = new Vec3d();
-      for (let h = 12; h < 24; h += 1 / 60) {
-        let at = withLocalTime((v.day ?? 0) * DAY, o.lon, h * HOUR, params, calendar);
-        if (at < 0) at = withLocalTime((v.day ?? 0) * DAY + DAY, o.lon, h * HOUR, params, calendar);
-        if (sunDirection(at, params, calendar, sun).dot(up) < Math.sin(v.sunElevation)) {
+      for (let k = 0; k < 12 * 60; k++) {
+        const h = morning ? 12 - k / 60 : 12 + k / 60;
+        let at = withLocalTime(day * DAY, o.lon, h * HOUR, params, calendar);
+        if (at < 0) at = withLocalTime(day * DAY + DAY, o.lon, h * HOUR, params, calendar);
+        if (sunDirection(at, params, calendar, sun).dot(up) < Math.sin(wantedElevation)) {
           t = at;
           break;
         }
       }
       const el = Math.asin(sunDirection(t, params, calendar, sun).dot(up)) / DEG;
       console.log(
-        `${v.name}: sun at ${el.toFixed(1)}° (wanted ${(v.sunElevation / DEG).toFixed(1)}°)`,
+        `${v.name}: sun at ${el.toFixed(1)}° (wanted ${(wantedElevation / DEG).toFixed(1)}°)`,
+      );
+    }
+    // The moon and the stars follow the game time (decision 140).
+    scene.gameTime = t;
+    scene.planetOrbit = params;
+    scene.calendar = calendar;
+    {
+      const up = latLonToDirection(o.lat, o.lon);
+      const moon = moonDirection(t, params, calendar);
+      const sun = sunDirection(t, params, calendar, new Vec3d());
+      console.log(
+        `${v.name}: sun ${(Math.asin(sun.dot(up)) / DEG).toFixed(1)}° up, ` +
+          `moon ${moonAge(t, params, calendar).toFixed(1)} days old, ` +
+          `${(Math.asin(moon.dot(up)) / DEG).toFixed(1)}° up`,
       );
     }
     sunDirection(t, params, calendar, scene.sun);
-    if (target && v.sunHeading !== undefined && !station) {
+    // SUN_HEADING (deg) overrides a view's facing relative to the sun (0 looks into it).
+    const sunHeading = process.env.SUN_HEADING
+      ? Number(process.env.SUN_HEADING) * DEG
+      : v.sunHeading;
+    if (target && sunHeading !== undefined && !station) {
       // Face relative to the sun's azimuth at the target, standing back along that heading.
       const east = new Vec3d(0, 1, 0).cross(target).normalize();
       const north = target.clone().cross(east);
-      o.heading = Math.atan2(scene.sun.dot(east), scene.sun.dot(north)) + v.sunHeading;
+      o.heading = Math.atan2(scene.sun.dot(east), scene.sun.dot(north)) + sunHeading;
       const back = v.altitude * Math.tan(Math.min(v.tilt, 70 * DEG));
       const p = offsetPoint(target, o.heading, -back, 0, params.radius);
       o.lat = Math.asin(p.y);
@@ -911,14 +1054,16 @@ it('renders preview views', async () => {
         `${v.name}: target ${(Math.asin(target.y) / DEG).toFixed(3)}, ${(Math.atan2(target.x, target.z) / DEG).toFixed(3)}, heading ${(o.heading / DEG).toFixed(0)}°`,
       );
     }
-    if (station && process.env.OBS_HEADING) {
-      const h = process.env.OBS_HEADING;
-      if (h === 'sun') {
-        // Compass azimuth of the sun at the spot: atan2(east, north) of its tangential part.
+    if (station && (process.env.OBS_HEADING || v.face)) {
+      const h = process.env.OBS_HEADING ?? v.face!;
+      if (h === 'sun' || h === 'moon' || h === 'antisun') {
+        // Compass azimuth of the body at the spot: atan2(east, north) of its tangential part.
         const up = scene.observer.spot;
         const east = new Vec3d(0, 1, 0).cross(up).normalize();
         const north = up.clone().cross(east);
-        scene.observer.heading = Math.atan2(scene.sun.dot(east), scene.sun.dot(north));
+        const body = h === 'moon' ? moonDirection(t, params, calendar) : scene.sun;
+        scene.observer.heading =
+          Math.atan2(body.dot(east), body.dot(north)) + (h === 'antisun' ? Math.PI : 0);
       } else {
         scene.observer.heading = Number(h) * DEG;
       }
@@ -933,6 +1078,10 @@ it('renders preview views', async () => {
     if (process.env.RIVERS) scene.terrain.riverStyle.legibility.value = Number(process.env.RIVERS);
     // FACETS=0 shades the terrain smoothly, to compare with the flat facets (decision 123).
     scene.terrain.land.facets.value = process.env.FACETS === '0' ? 0 : 1;
+    // TEMP_OFFSET (°C) shifts every surface temperature: −30 puts snow on most ground.
+    if (process.env.TEMP_OFFSET) {
+      scene.terrain.land.temperatureOffset.value = Number(process.env.TEMP_OFFSET);
+    }
     // FARMLAND=0 leaves the fields out (decision 127).
     scene.terrain.land.farmland.value = process.env.FARMLAND === '0' ? 0 : 1;
     // DETAIL=1 adds the instanced trees and buildings (off in the strategic view, decision 71).
@@ -958,6 +1107,24 @@ it('renders preview views', async () => {
         (scene.structures.group.visible ? scene.structures.stats.pending : 0);
       stable = s.pending === 0 && treesPending === 0 && sig === last ? stable + 1 : 0;
       last = sig;
+    }
+    if (process.env.SHADOW_LIVE === '1') {
+      // SHADOW_LIVE=1: the mountain shadows as the app bakes them, a pass per frame while the
+      // view settled (and until the last grid is published), to compare with the bake in one go.
+      let frames = 0;
+      while (scene.shadows.busy && frames++ < 600) scene.render(1 / 60);
+      for (let f = 0; f < 60; f++) scene.render(1 / 60);
+      const st = scene.shadows.stats;
+      console.log(
+        `  shadows live: ${st.bakes} grids in ${st.passes} passes, ${st.sourceRows} rows of tile heights, ` +
+          `${frames} more frames, strength ${scene.shadows.strength.value.toFixed(2)}`,
+      );
+    } else {
+      // The mountain shadows in one go for the settled view; the app spreads the passes over frames.
+      const e = scene.lighting.eye.value;
+      scene.shadows.reset();
+      scene.shadows.exaggeration = exaggeration;
+      scene.shadows.bake(head.renderer, new Vec3d(e.x, e.y, e.z), scene.sun);
     }
     scene.render(0);
     // PERF=n: time n more frames of the loaded view (CPU in scene.render, and until the GPU is done).
@@ -1061,6 +1228,33 @@ it('renders preview views', async () => {
           drawStats(scene),
       );
     }
+    // PERF_SKY=n: n rounds of the frame with the sky from its LUT and from the march per pixel
+    // that it replaced (decision 140), interleaved; prints the median ms per frame of each.
+    const skyRounds = Number(process.env.PERF_SKY ?? 0);
+    if (skyRounds > 0) {
+      const sky = scene.lighting.atmosphere.sky;
+      const times: Record<string, number[]> = { lut: [], march: [] };
+      for (let round = -1; round < skyRounds; round++) {
+        for (const mode of ['lut', 'march'] as const) {
+          sky.forceMarch = mode === 'march';
+          scene.render(0);
+          await gpu.finish();
+          const q0 = performance.now();
+          scene.render(0);
+          await gpu.finish();
+          // Round −1 compiles and bakes.
+          if (round >= 0) times[mode]!.push(performance.now() - q0);
+        }
+      }
+      sky.forceMarch = false;
+      const median = (a: number[]) => [...a].sort((x, y) => x - y)[a.length >> 1]!;
+      console.log(
+        `  sky ${v.name}: LUT ${median(times.lut!).toFixed(1)} ms/frame, march ${median(times.march!).toFixed(1)} ms/frame ` +
+          `(medians of ${skyRounds}); ${sky.bakes} bakes so far`,
+      );
+      scene.render(0);
+      await gpu.finish();
+    }
     // PERF_POST=n: n rounds of the frame drawn directly, through the bare pipeline (every stage
     // off), through the pipeline as configured, and with the volumetric source on, interleaved
     // so that other load on the machine falls on all four alike. Prints the median ms per frame.
@@ -1122,6 +1316,44 @@ it('renders preview views', async () => {
       stages(true);
       pipeline.volumetricsEnabled = saved.volumetrics;
       if (process.env.VOLTEST !== '1') pipeline.volumetrics = null;
+      scene.render(0);
+      await gpu.finish();
+    }
+    // PERF_SHADOW=n: n rounds of the frame without the mountain shadows' lookup and the snow's
+    // glints, with the lookup, and with both, interleaved like PERF_POST. Nothing is baked
+    // meanwhile (the view is still), so this is the cost per shaded fragment.
+    const shadowRounds = Number(process.env.PERF_SHADOW ?? 0);
+    if (shadowRounds > 0) {
+      const land = scene.terrain.land;
+      const modes: [string, () => void][] = [
+        ['neither', () => ((scene.shadows.enabled = false), (land.sparkle.value = 0))],
+        ['shadows', () => ((scene.shadows.enabled = true), (land.sparkle.value = 0))],
+        ['shadows and sparkle', () => ((scene.shadows.enabled = true), (land.sparkle.value = 1))],
+      ];
+      const times: Record<string, number[]> = {};
+      for (let round = -1; round < shadowRounds; round++) {
+        for (const [name, set] of modes) {
+          set();
+          scene.render(0);
+          await gpu.finish();
+          const q0 = performance.now();
+          scene.render(0);
+          await gpu.finish();
+          if (round >= 0) (times[name] ??= []).push(performance.now() - q0);
+        }
+      }
+      const median = (a: number[]) => [...a].sort((x, y) => x - y)[a.length >> 1]!;
+      console.log(
+        `  shadow ${v.name}: ` +
+          modes
+            .map(
+              ([name]) =>
+                `${name} ${median(times[name]!).toFixed(1)} (least ${Math.min(...times[name]!).toFixed(1)})`,
+            )
+            .join(', ') +
+          ` ms/frame (median of ${shadowRounds}); strength ${scene.shadows.strength.value.toFixed(2)}, bake passes ${scene.shadows.stats.passes}`,
+      );
+      land.sparkle.value = process.env.SPARKLE === '0' ? 0 : 1;
       scene.render(0);
       await gpu.finish();
     }

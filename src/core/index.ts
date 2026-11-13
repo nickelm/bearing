@@ -12,3 +12,4 @@ export * from './tiles';
 export * from './noise';
 export * from './heap';
 export * from './calendar';
+export * from './moon';
