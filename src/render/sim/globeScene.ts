@@ -232,12 +232,20 @@ export class GlobeScene {
         radius: this.orbit.radius,
         maxHeight: this.globe.maxDisplayedHeight,
       });
-      this.forest.update(o.eye, aboveGround);
+      // Trees and buildings skip tiles outside the frustum (decision 131).
+      const cull = {
+        eye: o.eye,
+        forward: o.forward,
+        up: o.up,
+        fovY: (this.camera.fov * Math.PI) / 180,
+        aspect: this.camera.aspect,
+      };
+      this.forest.update(o.eye, aboveGround, cull);
       this.structures.setInk(
         this.structures.inkWidth,
         (this.camera.fov * Math.PI) / 180 / this.viewportHeight,
       );
-      this.structures.update(o.eye, aboveGround);
+      this.structures.update(o.eye, aboveGround, cull);
     } else {
       this.forest.group.visible = false;
       this.structures.group.visible = false;

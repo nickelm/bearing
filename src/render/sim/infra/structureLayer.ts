@@ -61,6 +61,10 @@ import { treeDataTile } from '../forest/forestLayer';
 import type { PlanetLighting } from '../lighting/planetLighting';
 import type { TerrainRenderer } from '../terrain/terrainRenderer';
 import { lakeSampler, surfaceSampler } from '../../common/terrain/tileMesh';
+import { sphereOutsideView } from '../../common/terrain/quadtree';
+import type { CullView } from '../../common/terrain/quadtree';
+import { instanceExtent, instanceSphere } from '../instanceBounds';
+import type { InstanceExtent } from '../instanceBounds';
 import type { MeshOptions } from '../../common/terrain/tileMesh';
 import { nightFactor } from './roadShading';
 import {
@@ -419,7 +423,12 @@ interface BuiltTile {
   meshes: Mesh[];
   origin: Vec3d;
   lastUsed: number;
+  /** Where its buildings and lights stand, for the frustum test (decision 131). */
+  extent: InstanceExtent;
 }
+
+/** The largest building's height and half-length, with a mast's (m): the bounding sphere's margin. */
+const BUILDING_MARGIN = 150;
 
 export class StructureLayer {
   readonly group = new Group();
@@ -435,6 +444,7 @@ export class StructureLayer {
   readonly stats = { tiles: 0, instances: 0, pending: 0 };
   private scene: InfraScene | null = null;
   private readonly tiles = new Map<string, BuiltTile>();
+  private readonly center = new Vec3d();
   private readonly material: MeshBasicNodeMaterial;
   private readonly inkMaterial: MeshBasicNodeMaterial;
   /** Ink outlines on buildings (GUI toggle; decision 107). */
@@ -559,7 +569,11 @@ export class StructureLayer {
     return m;
   }
 
-  update(eye: Readonly<Vec3d>, heightAboveGround: number): void {
+  /**
+   * Builds and places the building tiles around `eye`. With `view`, tiles whose
+   * bounding sphere lies outside its frustum are not drawn (decision 131).
+   */
+  update(eye: Readonly<Vec3d>, heightAboveGround: number, view?: CullView): void {
     this.frame++;
     const world = this.terrain.currentWorld;
     const opts = this.terrain.meshOptions();
@@ -620,14 +634,17 @@ export class StructureLayer {
     }
     this.stats.pending = pending;
     let instances = 0;
+    const ex = this.terrain.exaggerationUniform.value;
     for (const [s, tile] of this.tiles) {
       if (wanted.has(s)) {
         tile.lastUsed = this.frame;
+        const radius = instanceSphere(tile.origin, tile.extent, ex, BUILDING_MARGIN, this.center);
+        const seen = !view || !sphereOutsideView(this.center, radius, view);
         for (const m of tile.meshes) {
-          if (!m.userData.ink && !m.userData.light)
+          if (seen && !m.userData.ink && !m.userData.light)
             instances += (m.geometry as InstancedBufferGeometry).instanceCount;
           placeCameraRelative(m, tile.origin, eye);
-          m.visible = !m.userData.ink || this.ink;
+          m.visible = seen && (!m.userData.ink || this.ink);
         }
       } else {
         for (const m of tile.meshes) m.visible = false;
@@ -708,7 +725,9 @@ export class StructureLayer {
       this.group.add(mesh);
       meshes.push(mesh);
     }
-    return { meshes, origin: inst.origin, lastUsed: this.frame };
+    const extent = instanceExtent([...inst.data.values()], BUILDING_FLOATS);
+    instanceExtent([inst.lights], LIGHT_FLOATS, 9, extent);
+    return { meshes, origin: inst.origin, lastUsed: this.frame, extent };
   }
 
   private dropTile(tile: BuiltTile): void {

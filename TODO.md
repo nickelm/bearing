@@ -440,7 +440,10 @@ Simulation view (needs S1's `render/sim/` split):
   - [ ] Beaches: a sand strip (`#C9B48A`, `#B9A276`) on low, gentle coasts between open ground and the foam line (Part I palette), per face
   - [ ] Built-up patches (decision 71) read as large triangles of roof and wall colors under the buildings (`conifer`): give them a block pattern finer than the facets, or evaluate them per fragment
   - [ ] The `town` view scatters buildings across hills and does not frame the city; aim it at the city's urban extent
-- [ ] Frame time over 0–20 km within Part I's budgets
+- [x] Frame time over 0–20 km within Part I's budgets (decision 131: draw calls, triangles and CPU per frame measured headless with `PERF`; trees and buildings culled by the frustum, trees thinned with distance; every view from 2 m to 20 km now under 2 M triangles and 100 draws)
+  - [ ] Owner: frame rate in the browser on the desktop and the tablet, low over dense forest (`trees`-like) and over a town; Status shows fps
+  - [ ] GPU timing on real hardware (timestamp queries, I1) to split terrain, trees and clouds; the headless software renderer gives only counts and CPU time
+  - [ ] One frame in ten takes 170–320 ms of CPU in the headless preview (garbage collection in a heap of several GB, probably); check for hitches in the browser's performance panel
 - [ ] Checkpoint: owner review of the simulation view's terrain from an observer camera
 
 ### V2. Atmosphere and nature (mostly done; old M3)
@@ -468,7 +471,7 @@ Simulation view (needs S1's `render/sim/` split):
   - [x] Clouds moved by prevailing winds without stretching, and regularly clear everywhere (decisions 58, 59)
 - [ ] Weather in the renderer (from C1): fog and visibility, rain and snow on the ground, live winds for wave direction
 - [ ] Tree kit from model specs ([docs/visual-style.md](docs/visual-style.md) Part I, Vegetation): conifer, broadleaf, birch/poplar, palm, acacia, shrub, dead/burnt, each within the guide's triangle budget and sturdy proportions (canopy width ≥ ½ height, trunk ≥ ⅒); per-instance scale 0.8–1.3, yaw, tilt under 4°, and a value-first shade shift within the biome's canopy shades; types assigned by biome; clustered placement with a sharp forest edge and a scattered fringe of trees and shrubs. Replaces the old M3 clump trees (needs V3's model builder)
-- [ ] Tree LOD, following the guide's bands: instanced trees casting shadows to 1.5 km, merged cluster meshes (10–30 trees each, no shadows) to 5 km, terrain forest shade beyond, with the 5 km seam hidden by haze and matched colors (decision 45: ~6.6 M triangles over dense forest at the default 5 km range today; budget under 2 M per frame and about 50,000 instances within 1.5 km)
+- [ ] Tree LOD, following the guide's bands: instanced trees casting shadows to 1.5 km, merged cluster meshes (10–30 trees each, no shadows) to 5 km, terrain forest shade beyond, with the 5 km seam hidden by haze and matched colors (decision 45: ~6.6 M triangles over dense forest at the default 5 km range; decision 131's culling and distance thinning bring the densest view to 1.3 M tree triangles meanwhile; budget under 2 M per frame and about 50,000 instances within 1.5 km)
 - [ ] Denser forests: closer clump spacing in closed-canopy biomes, paid for by the tree LOD (owner request at checkpoint 4)
 - [ ] Sky, haze and clouds tuned for 0–20 km only (Part I): drop orbit-only work such as the limb glow from the simulation view
 - [ ] Cast shadows: cascaded shadow maps within a few kilometers for terrain, trees and buildings (Part I, Lighting); at low sun ridges cast none today (style audit, `range`)

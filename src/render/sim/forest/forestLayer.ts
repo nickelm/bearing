@@ -35,7 +35,9 @@ import {
   cos,
   cross,
   dot,
+  float,
   Fn,
+  instanceIndex,
   max,
   mix,
   modelWorldMatrix,
@@ -49,6 +51,10 @@ import {
   vec4,
 } from 'three/tsl';
 import { placeCameraRelative } from '../../common/cameraRelative';
+import { sphereOutsideView } from '../../common/terrain/quadtree';
+import type { CullView } from '../../common/terrain/quadtree';
+import { instanceExtent, instanceSphere } from '../instanceBounds';
+import type { InstanceExtent } from '../instanceBounds';
 import { cubeFaceUvToDirection } from '../../../core/coords';
 import { rng } from '../../../core/rng';
 import type { WorldSeed } from '../../../core/rng';
@@ -116,6 +122,24 @@ function forestAt(data: TileData, fx: number, fy: number): number {
 export function treeDataTile(t: TileKey): TileKey {
   const s = t.level - MAX_BAKED_LEVEL;
   return tileKey(t.face, MAX_BAKED_LEVEL, t.x >> s, t.y >> s);
+}
+
+/**
+ * Rows of `stride` floats in a deterministic random order (Fisher–Yates from
+ * a stream named by `key`), so that any prefix is a uniform sample (decision 131).
+ */
+export function shuffled(data: Float32Array, stride: number, key: string): Float32Array {
+  const n = data.length / stride;
+  const order = Array.from({ length: n }, (_, i) => i);
+  const r = rng(0, 'render/tree-order').fork(key);
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.floor(r.nextFloat() * (i + 1));
+    [order[i], order[j]] = [order[j]!, order[i]!];
+  }
+  const out = new Float32Array(data.length);
+  for (let i = 0; i < n; i++)
+    out.set(data.subarray(order[i]! * stride, (order[i]! + 1) * stride), i * stride);
+  return out;
 }
 
 /** Places the tree clumps of level-9 tile `t`, deterministically. Pure: no GPU. */
@@ -200,6 +224,29 @@ interface TreeTile {
   meshes: Mesh[];
   origin: Vec3d;
   lastUsed: number;
+  /** Where its trees stand, for the frustum test (decision 131). */
+  extent: InstanceExtent;
+}
+
+/** Height of the tallest tree plus a clump's spread (m): the bounding sphere's margin. */
+const TREE_MARGIN = 45;
+
+/**
+ * Distance thinning (decision 131): beyond THIN_START a clump is kept with
+ * probability (THIN_START / distance)², but at least THIN_MIN. Clumps are
+ * shuffled when a tile is built, so a clump's rank (index + ½) / count is a
+ * uniform draw; the vertex shader shrinks a clump away as its distance's
+ * keep fraction falls past its rank, and the CPU draws only the ranks that
+ * the tile's nearest point keeps.
+ */
+export const THIN_START = 1500;
+export const THIN_MIN = 0.25;
+/** Rank band over which a clump shrinks away as it is thinned. */
+const THIN_BAND = 0.05;
+
+/** Share of clumps kept at distance `d` (m). */
+export function thinKeep(d: number): number {
+  return d <= THIN_START ? 1 : Math.max(THIN_MIN, (THIN_START / d) ** 2);
 }
 
 export class ForestLayer {
@@ -222,6 +269,7 @@ export class ForestLayer {
   private readonly geometries: Record<TreeKind, TreeGeometryData>;
   private frame = 0;
   private readonly scratch = new Vec3d();
+  private readonly center = new Vec3d();
   private lastWorld: unknown = null;
   private clearings: ((d: Readonly<Vec3d>) => boolean) | undefined;
 
@@ -246,6 +294,10 @@ export class ForestLayer {
     const up = normalize(attribute('iUp', 'vec3'));
     const params = attribute('iParams', 'vec4'); // height, scale, angle, kind
     const ex = this.terrain.exaggerationUniform;
+    // Instances in this mesh, for each clump's rank.
+    const total = uniform(1).onObjectUpdate(
+      ({ object }) => ((object as Mesh | undefined)?.userData.total as number | undefined) ?? 1,
+    );
     // Tree frame: up, and two tangents rotated by the instance angle.
     const t0 = normalize(cross(up, vec3(0.0001, 1, 0.0002)));
     const t1 = cross(up, t0);
@@ -262,7 +314,12 @@ export class ForestLayer {
       // Shrink clumps away toward the edge of the range.
       const groundRel = modelWorldMatrix.mul(vec4(ground, 1)).xyz;
       const dist = groundRel.length();
-      const s = params.y.mul(smoothstep(this.range, this.range.sub(this.fade), dist));
+      // Thin with distance: a clump shrinks away once the keep fraction falls past its rank.
+      const keep = clamp(float(THIN_START).div(max(dist, 1)).pow(2), THIN_MIN, 1);
+      const rank = float(instanceIndex).add(0.5).div(max(total, 1));
+      const s = params.y
+        .mul(smoothstep(this.range, this.range.sub(this.fade), dist))
+        .mul(smoothstep(rank, rank.add(THIN_BAND), keep));
       const p = ground.add(ax.mul(local.x).add(up.mul(local.y)).add(az.mul(local.z)).mul(s));
       const ap = lighting.atmosphere.aerialPerspective(
         modelWorldMatrix.mul(vec4(p, 1)).xyz as V3,
@@ -304,7 +361,11 @@ export class ForestLayer {
   }
 
   /** Builds, places and evicts tree tiles around the camera. Call once per frame after the terrain. */
-  update(eye: Readonly<Vec3d>, heightAboveGround: number): void {
+  /**
+   * Builds and places the tree tiles around `eye`. With `view`, tiles whose
+   * bounding sphere lies outside its frustum are not drawn (decision 131).
+   */
+  update(eye: Readonly<Vec3d>, heightAboveGround: number, view?: CullView): void {
     this.frame++;
     const world = this.terrain.currentWorld;
     const opts = this.terrain.meshOptions();
@@ -365,14 +426,21 @@ export class ForestLayer {
 
     // Place, and evict tiles not wanted for a while.
     let instances = 0;
+    const ex = this.terrain.exaggerationUniform.value;
     for (const [s, tile] of this.tiles) {
       if (wanted.has(s)) {
         tile.lastUsed = this.frame;
+        const radius = instanceSphere(tile.origin, tile.extent, ex, TREE_MARGIN, this.center);
+        const seen = !view || !sphereOutsideView(this.center, radius, view);
+        // Draw the ranks the tile's nearest point keeps; the shader thins the rest.
+        const keep = thinKeep(Math.max(0, this.center.distanceTo(eye) - radius));
         for (const m of tile.meshes) {
           const g = m.geometry as InstancedBufferGeometry;
-          instances += g.instanceCount;
+          const total = m.userData.total as number;
+          g.instanceCount = Math.min(total, Math.ceil(total * keep));
+          if (seen) instances += g.instanceCount;
           placeCameraRelative(m, tile.origin, eye);
-          m.visible = true;
+          m.visible = seen;
         }
       } else {
         for (const m of tile.meshes) m.visible = false;
@@ -392,7 +460,7 @@ export class ForestLayer {
   private build(inst: TreeInstances): TreeTile {
     const meshes: Mesh[] = [];
     for (const kind of ['conifer', 'broadleaf'] as const) {
-      const data = inst[kind];
+      const data = shuffled(inst[kind], INSTANCE_FLOATS, `${tileKeyString(inst.tile)}/${kind}`);
       const count = data.length / INSTANCE_FLOATS;
       if (count === 0) continue;
       const g = new InstancedBufferGeometry();
@@ -414,12 +482,18 @@ export class ForestLayer {
       g.setAttribute('iParams', new InstancedBufferAttribute(params, 4));
       g.instanceCount = count;
       const mesh = new Mesh(g, this.materials[kind]);
+      mesh.userData.total = count;
       mesh.frustumCulled = false;
       mesh.visible = false;
       this.group.add(mesh);
       meshes.push(mesh);
     }
-    return { meshes, origin: inst.origin, lastUsed: this.frame };
+    return {
+      meshes,
+      origin: inst.origin,
+      lastUsed: this.frame,
+      extent: instanceExtent([inst.conifer, inst.broadleaf], INSTANCE_FLOATS),
+    };
   }
 
   /** Drops all trees (world change). */

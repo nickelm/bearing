@@ -1997,3 +1997,32 @@ The engineering calls made while adopting it:
 
 **Reason:** The owner saw light-blue regions above sea level and regular coasts in one place, and ragged, convincing archipelagos in another. Lakes must read as water and keep organic shores, dry basins should be pans rather than water, and coasts need detail across the shoreline itself.
 
+### 131. Frame budgets over 0–20 km: trees and buildings culled by the frustum, trees thinned with distance
+
+**Date:** 2026-11-13
+**Decision:** The simulation view meets Part I's draw-call and triangle budgets everywhere in its envelope. Tree and building tiles outside the camera's frustum are no longer drawn, and beyond 1.5 km tree clumps thin with distance.
+
+- **Measuring.** The headless preview cannot time a real GPU, but draw calls, triangles and CPU time per frame do not depend on it. `PERF=n` now counts triangles of non-indexed instanced meshes (trees and buildings counted as zero before) and prints the median and maximum CPU per frame. A new view, `ceiling`, looks from 20 km. Measured at 1408 × 792 (about 75% of 1080p), trees and buildings on, ten frames per view, seed 1983.
+- **Before.** Draw calls stayed under 150 (budget 500), but triangles reached 6.0 M in `trees` (700 m over dense forest; budget 2 M), 4.4 M in `farmland`, 3.8 M in `conifer`, and 2.1–2.5 M in `runway`, `mixed` and `tower`, nearly all trees: `trees` drew 141,000 clumps of four, about 564,000 trees within 5 km. Tree and building tiles had `frustumCulled` off and no test of their own, so every tile within range was drawn, behind the camera too.
+- **Frustum culling.** Each tree or building tile gets a bounding sphere when built, from its instances' base points and ground heights (`render/sim/instanceBounds.ts`; 45 m of margin for trees, 150 m for buildings and masts), placed at the current height exaggeration. The scene passes the camera's frustum to both layers, which hide tiles whose sphere lies outside it; the test is the terrain's own (`sphereOutsideView` in `quadtree.ts`). `trees` dropped to 2.3 M tree triangles.
+- **Distance thinning.** A clump at distance d is kept with probability (1.5 km / d)², at least a quarter (`thinKeep`). Clumps are shuffled once when a tile is built (a deterministic Fisher–Yates per tile and kind), so a clump's rank (index + ½) / count is a uniform draw. The vertex shader shrinks a clump away over a rank band of 0.05 as the keep fraction at its own distance falls past its rank, so clumps leave one at a time, not tile by tile; the CPU draws only the ranks kept at the tile's nearest point, which includes every clump the shader can keep. Within 1.5 km every clump stays, as Part I's 0–1.5 km band asks. This stands in for the merged cluster meshes of Part I's 1.5–5 km band until V2's tree LOD: the terrain's canopy shading (decision 71) shows through more and more toward 5 km.
+- **After** (draws; triangles; median CPU per frame):
+
+  | View | Draws | Triangles | CPU |
+  |---|---|---|---|
+  | `tower` (2 m) | 73 | 0.52 M | 7.9 ms |
+  | `runway` (150 m) | 58 | 0.45 M | 7.1 ms |
+  | `conifer` (500 m) | 87 | 1.18 M | 7.3 ms |
+  | `trees` (700 m) | 54 | 1.69 M | 6.4 ms |
+  | `low` (2 km) | 36 | 0.33 M | 5.7 ms |
+  | `farmland` (2 km) | 43 | 0.72 M | 7.9 ms |
+  | `mixed` (5 km) | 65 | 0.53 M | 8.1 ms |
+  | `alpine` (10 km) | 23 | 0.22 M | 5.0 ms |
+  | `range` (12 km) | 28 | 0.27 M | 5.5 ms |
+  | `ceiling` (20 km) | 16 | 0.16 M | 4.5 ms |
+
+  The software renderer's frame time fell by about half in the forest views (`trees` 2.1 s to 0.8 s), which says the GPU work fell too, not how fast a real GPU runs it.
+- **Not settled here.** The 60 fps budget needs a real GPU: an owner check on the desktop and the tablet, and GPU timestamp queries (I1). Every ten-frame run also has one frame of 170–320 ms CPU, in a different layer each time, most likely garbage collection in the preview's heap of several GB; the browser needs its own check for hitches.
+- **Tests:** the sphere contains every instance as drawn at exaggerations 1, 4 and 40; the frustum test culls spheres behind and beside the camera and keeps those reaching into it; `thinKeep` and the shuffle (deterministic, a permutation of whole rows).
+
+**Reason:** V1's last measurable task is frame time over 0–20 km within Part I's budgets. Culling is what the terrain already does and costs a sphere test per tile; thinning keeps the near band at full density, where trees read individually, and spends triangles where they show.

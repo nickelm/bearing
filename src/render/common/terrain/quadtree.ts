@@ -346,7 +346,10 @@ interface Frustum {
   ny: number;
 }
 
-function frustumOf(view: LodView): Frustum {
+/** What a frustum test needs of a view. */
+export type CullView = Pick<LodView, 'eye' | 'forward' | 'up' | 'fovY' | 'aspect'>;
+
+function frustumOf(view: CullView): Frustum {
   const right = view.forward.clone().cross(view.up).normalize();
   const up = right.clone().cross(view.forward).normalize();
   const tanY = Math.tan(view.fovY / 2);
@@ -363,7 +366,11 @@ function frustumOf(view: LodView): Frustum {
 
 const relScratch = new Vec3d();
 
-function outsideFrustum(b: Bounds, view: LodView, f: Frustum = frustumOf(view)): boolean {
+function outsideFrustum(
+  b: Pick<Bounds, 'center' | 'radius'>,
+  view: CullView,
+  f: Frustum = frustumOf(view),
+): boolean {
   const { right, up, tanX, tanY, nx, ny } = f;
   const rel = relScratch.copy(b.center).sub(view.eye);
   const z = rel.dot(view.forward);
@@ -376,6 +383,15 @@ function outsideFrustum(b: Bounds, view: LodView, f: Frustum = frustumOf(view)):
   if ((y - z * tanY) * ny > b.radius) return true;
   if ((-y - z * tanY) * ny > b.radius) return true;
   return false;
+}
+
+/** True if a sphere (planet-centered, m) lies wholly outside the view's frustum. */
+export function sphereOutsideView(
+  center: Readonly<Vec3d>,
+  radius: number,
+  view: CullView,
+): boolean {
+  return outsideFrustum({ center: center as Vec3d, radius }, view);
 }
 
 /**

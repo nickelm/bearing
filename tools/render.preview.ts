@@ -359,6 +359,19 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     observer: true,
   },
   {
+    // The simulation view's ceiling: 20 km over the check-1 landscape (frame-time budgets).
+    name: 'ceiling',
+    dLat: 0,
+    dLon: 0,
+    altitude: 20 * KM,
+    tilt: 75 * DEG,
+    heading: 0,
+    localTime: 10.5,
+    target: 'mixed',
+    sunHeading: 140 * DEG,
+    detail: true,
+  },
+  {
     // Settlement and road lights at night, over the largest city.
     name: 'night',
     dLat: 0,
@@ -466,13 +479,23 @@ function drawStats(scene: GlobeScene): string {
       g.traverseVisible((o) => {
         const m = o as unknown as {
           isMesh?: boolean;
-          geometry?: { index?: { count: number }; instanceCount?: number };
+          geometry?: {
+            index?: { count: number } | null;
+            instanceCount?: number;
+            attributes: Record<string, { count: number; isInstancedBufferAttribute?: boolean }>;
+          };
         };
-        if (!m.isMesh) return;
+        if (!m.isMesh || !m.geometry) return;
         n++;
-        const instances = m.geometry?.instanceCount;
-        tris +=
-          ((m.geometry?.index?.count ?? 0) / 3) * (Number.isFinite(instances) ? instances! : 1);
+        const g = m.geometry;
+        // Indexed or not; instanced geometry draws its instance attributes' count
+        // unless instanceCount limits it (three's default is Infinity).
+        const vertices = g.index?.count ?? g.attributes.position?.count ?? 0;
+        let instances = 1;
+        for (const a of Object.values(g.attributes))
+          if (a.isInstancedBufferAttribute) instances = a.count;
+        if (Number.isFinite(g.instanceCount)) instances = Math.min(instances, g.instanceCount!);
+        tris += (vertices / 3) * instances;
       });
       return n ? `${names.get(g) ?? g.type} ${n} draws ${(tris / 1e6).toFixed(2)} M tris` : '';
     })
@@ -920,7 +943,7 @@ it('renders preview views', async () => {
       for (let i = (px.length / 2) | 0; i < px.length; i++) sum += px[i]!;
       const s = scene.terrain.stats;
       console.log(
-        `  frame ${f}: lower mean ${(sum / (px.length / 2)).toFixed(1)}, drawn ${s.drawn}, deepest ${s.deepest}, meshes ${s.meshes}, data ${s.dataTiles}, pending ${s.pending}, generated ${s.generated}, waiting ${s.waiting}, bubble ${s.bubbleReady}/${s.bubble}, ahead ${s.ahead}`,
+        `  frame ${f}: lower mean ${(sum / (px.length / 2)).toFixed(1)}, drawn ${s.drawn}, visited ${s.visited}, deepest ${s.deepest}, meshes ${s.meshes}, data ${s.dataTiles}, pending ${s.pending}, generated ${s.generated}, waiting ${s.waiting}, bubble ${s.bubbleReady}/${s.bubble}, ahead ${s.ahead}`,
       );
     }
     const perfFrames = Number(process.env.PERF ?? 0);
@@ -953,12 +976,18 @@ it('renders preview views', async () => {
         await session.post('Profiler.enable');
         await session.post('Profiler.start');
       }
+      const frameCpu: number[] = [];
       for (let f = 0; f < perfFrames; f++) {
         const c0 = performance.now();
         scene.render(0);
-        cpu += performance.now() - c0;
+        frameCpu.push(performance.now() - c0);
+        cpu += frameCpu[f]!;
         await gpu.finish();
       }
+      frameCpu.sort((a, b) => a - b);
+      console.log(
+        `  CPU per frame: median ${frameCpu[frameCpu.length >> 1]!.toFixed(1)} ms, max ${frameCpu[frameCpu.length - 1]!.toFixed(1)} ms`,
+      );
       const wall = (performance.now() - p0) / perfFrames;
       if (session) {
         const { profile } = await session.post('Profiler.stop');

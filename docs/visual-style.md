@@ -91,6 +91,8 @@ Trees are the defining element of the landscape and deserve the most care. They 
 
 The transition at 5 km must be hidden by haze and by matching the cluster colors to the terrain's forest shade.
 
+Until merged cluster meshes exist, instanced clumps thin with distance beyond 1.5 km instead, a clump kept with probability (1.5 km / distance)², at least a quarter, so the canopy shading shows through more and more toward 5 km (decision 131).
+
 Beyond 5 km, forests are dark canopy masses in the terrain shading with a sharp edge on the forest density contour (decision 71). The strategic view draws no individual trees at all (Part II).
 
 ## Water
