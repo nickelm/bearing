@@ -259,7 +259,7 @@ A full pitch ladder is confusing when seen from outside the aircraft, so the com
 ### Layout and Style
 
 - **Layout.** The aircraft sits slightly below screen center. Tapes flank it; the radar and moving map occupy the lower corners; the threat warning sits upper right; messages sit upper left; stores sit at bottom center. Each display can be collapsed, and a minimal mode shows only the world-anchored symbols and tapes.
-- **HUD symbology.** A single color (green by default, amber as an option) with a thin dark halo, so it stays legible against bright sky, snow, and night. Exact values are tuned with the HUD (milestone P2).
+- **HUD symbology.** A single color (green by default, amber as an option) with a thin dark halo, so it stays legible against bright sky, snow, and night. Free Flight's first HUD (decision 135) starts from green `#6CFF8A` with a halo of `rgba(0, 18, 6, 0.75)` and amber `#FFB347` for warnings; exact values are tuned with the HUD (milestone P2).
 - **Displays.** The dark translucent panels and monospaced type of *User Interface*, with phosphor-colored vector graphics for radar and RWR.
 - **Implementation.** A Canvas 2D overlay at device pixel ratio for HUD symbols and vector displays, the strategic renderer in a viewport for the moving map, and render targets for targeting sensors.
 

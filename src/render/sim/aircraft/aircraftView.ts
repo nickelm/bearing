@@ -141,6 +141,8 @@ export class AircraftView {
     const shadowGeo = new BufferGeometry();
     shadowGeo.setAttribute('position', new BufferAttribute(new Float32Array(count), 3));
     this.geometries.push(shadowGeo);
+    // Overlapping triangles darken twice; a strict depth test streaks (coplanar
+    // depths differ by rounding), so a stencil pass is the later fix (TODO).
     const sm = new MeshBasicNodeMaterial({
       transparent: true,
       depthWrite: false,

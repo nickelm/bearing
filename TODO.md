@@ -497,7 +497,7 @@ Aircraft, vehicles, ships, buildings and trees are generated in code from small 
 - [x] Airbase runway meshes (drawn as concrete in the terrain shader, plus hangar and shelter meshes; decision 65) (old M5)
 - [x] Flatten the terrain under runways (they follow the fine terrain's detail noise) (old M5): a height hook in `surfaceSampler` that blends toward the field elevation inside the airfield, and a terrain rebuild when the infrastructure arrives (decision 108)
   - [ ] Owner: look at an airfield low and along the runway in the browser (embankment height, margin width); `VIEWS=runway` in the preview
-  - [ ] Move the grading to a layer the sim's execution layer can import (flight, line of sight) once those query terrain (P1)
+  - [ ] Move the grading to a layer the sim's execution layer can import (flight, line of sight) once those query terrain (P1). Free Flight's flight model receives the ground as a function (`freeflight/ground.ts`, decision 134), so it imports no render code yet
 - [x] Model spec JSON format and types (decision 106): lofted fuselages from 6–8-sided cross-sections along the length; wings and tails as extruded planforms with sweep, dihedral, thickness and a sharp leading edge; primitives (box, beveled box, pyramid stack, coarse icosphere blob, cylinder); mirroring; named face groups; camouflage schemes mapping face groups to palette colors; emissive points (afterburners, navigation lights). Validation with clear errors, and tests
 - [x] Procedural model builder (decision 106): spec → non-indexed, flat-shaded `BufferGeometry` with vertex colors and baked per-vertex AO, plus emissive anchors; deterministic (same spec, same bytes); fails a test when a model exceeds its class's triangle budget from the guide
 - [x] Faction palettes and camouflage schemes from the guide's palette tables, as data shared by the builder and the viewer (plus ship schemes, decision 106)
@@ -558,13 +558,39 @@ Follow a flight from mission search into the simulation view and back. Chase cam
 - [ ] Scripted flythrough camera path for screenshots, including a dawn and a weather front, across both views
 - [ ] Check every demo goal against the design doc and decisions
 
+## Free Flight (sandbox; decisions 134, 135)
+
+A sandbox outside the campaign: pick a seed and an airbase, take off in the F-21 Kestrel, fly anywhere, land at any airbase. It pulls a first version of P1 and part of P2 forward; the plan is [docs/plans/free-flight.md](docs/plans/free-flight.md) and the report [docs/reports/free-flight-report.md](docs/reports/free-flight-report.md).
+
+- [x] Plan: survey, what to build and reuse, deviations (`docs/plans/free-flight.md`)
+- [x] Entry: `?mode=freeflight&seed=…&base=…` (`tod`, `spawn`, `fuel`, `autopilot`), and a GUI button; no war simulation in the mode
+- [x] Start screen: seed, airbases with side, region and runway, a map click picks the nearest base; time of day (17:00), unlimited fuel, runway or air start
+- [x] Runways: the coarse pass's heading and length, the graded pads (decision 108) as the flight model's ground; touchdown-zone bars in the paint
+- [x] Flight model in `src/sim/flight/`: standard atmosphere, thrust, lift, drag, control laws, ground model, gear, outcomes; data in the Kestrel's spec; deterministic at 120 Hz
+- [x] Controls: one remappable binding table, keyboard stick, mouse as stick, throttle detents, free look; mouse aim through the flight director (simplified, decision 135); basic gamepad axes
+- [x] Chase camera with springs, free look and terrain clearance; animated gear, surfaces, speedbrakes, afterburner and a shadow on the Kestrel
+- [x] HUD: flight path marker, boresight, runway marker, tapes, attitude, G, AoA indexer, throttle, fuel, states, landing aid, messages, F3 debug panel
+- [x] Session: pause menu, summary card after a stop or a crash, refuel and take off from another base
+- [x] Tests: atmosphere, tables, limits, rest stability, determinism, outcomes, plausibility, the headless circuit from a generated airbase; renders and HUD composites in `docs/reports/screens/`
+- [ ] Owner: fly it in a desktop browser (takeoff, circuit, landing at another base) and judge the feel: rotation, roll rate, pitch response, the flare, ground handling
+- [ ] Owner: runway pavement concrete (as now) or dark asphalt (decision 135)
+- [ ] Mouse aim as in Proposal 0002: a world-locked aim point that the camera follows, not the cursor's direction in the chase view (P1)
+- [ ] The Kestrel at the controlled-aircraft detail level (1,500–4,000 triangles) with navigation lights and a blinking beacon at night (V4)
+- [ ] Shadow without double darkening where triangles overlap (a stencil or a max-blend pass)
+- [ ] Weather in Free Flight: run the weather model without the war, so clouds and winds show (decision 134 flies in clear air)
+- [ ] Initial fuel option: with unlimited fuel the Kestrel always weighs 13.3 t and approaches at about 164 kt; a landing at 1,000 kg of fuel comes in near 145 kt
+- [ ] Nosewheel steering switch (castoring nosewheel without it), so differential braking alone can turn the aircraft
+- [ ] Key remapping in the UI (the table exists; there is no settings page), and gamepad buttons for gear, brakes and throttle detents
+- [ ] Browser check on a machine with a GPU: the cloud session's headless Chromium loses its WebGPU device in the world's GPU pass (decision 135), so the app was not flown end to end in a browser
+- [ ] Departures and spins: the control laws hold the aircraft inside the α and g limits, and the model has no aerodynamic moment tables yet (decision 134)
+
 ## Piloting track (after the demo)
 
 Player flight control in the chase view, with the HUD and displays as 2D overlays and no cockpits ([docs/proposals/0002-third-person-flight.md](docs/proposals/0002-third-person-flight.md), decision 94). AI pilots and the player share one flight director and one flight model. P1 depends on V4. P2 depends on P1. P3 depends on P2 and S4. P4 and P5 depend on P3. All P milestones touch rendering or UI, so they close only after the Part I acceptance checks.
 
 ### P1. Flight model and controls
 
-Table-driven flight model, flight director shared with the AI, mouse-aim and direct schemes, flight stick support through the Gamepad API, take control and hand back.
+Table-driven flight model, flight director shared with the AI, mouse-aim and direct schemes, flight stick support through the Gamepad API, take control and hand back. Free Flight (decision 134) has a first version of the flight model, the control laws, the flight director, direct control and the animated parts; P1 extends them to every type and to the campaign.
 
 - [ ] Flight-model tables in the aircraft JSON spec (thrust, drag, lift, instantaneous and sustained turn rates, specific excess power, roll rate, and the effects of altitude, wing sweep and stores), with validation and tests
 - [ ] Table-driven flight model in `src/sim/` (SI units, deterministic, no `Math.random`): energy management, stalls and departures in simplified form; tests that sustained turn rate and specific excess power match the tables
@@ -583,7 +609,7 @@ Table-driven flight model, flight director shared with the AI, mouse-aim and dir
 
 ### P2. HUD and display framework
 
-Canvas overlay, layout system, world-anchored and screen-anchored symbology, message log, collapsible displays.
+Canvas overlay, layout system, world-anchored and screen-anchored symbology, message log, collapsible displays. Free Flight's HUD (decision 135, `src/ui/flight/hud.ts`) is the starting point.
 
 - [ ] Overlay and layout system: aircraft slightly below center, tapes flanking it, display slots in the corners, upper edge and bottom center; collapsible displays; minimal mode with only world-anchored symbols and tapes
 - [ ] World-anchored symbology framework: projection from the scene each frame, boresight cross, target boxes, waypoint and target diamonds, missile seeker circles (extends V4's flight path marker)

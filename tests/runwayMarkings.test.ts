@@ -70,6 +70,19 @@ describe('runway and taxiway paint', () => {
     expect(east(DIGIT_U + 0.5, -DIGIT_V)).toBe('white');
   });
 
+  it('draws touchdown-zone bars from 150 m to 900 m past each threshold', () => {
+    // The end at along = −L/2 reads u from −1500 inward; three bars at 150 m, one at 900 m.
+    expect(at(-L / 2 + 160, 6.9)).toBe('white');
+    expect(at(-L / 2 + 160, 10.2)).toBe('white');
+    expect(at(-L / 2 + 160, 13.5)).toBe('white');
+    expect(at(-L / 2 + 160, 8.5)).toBeNull();
+    expect(at(-L / 2 + 910, 6.9)).toBe('white');
+    expect(at(-L / 2 + 910, 10.2)).toBeNull();
+    expect(at(L / 2 - 460, -6.9)).toBe('white');
+    // Nothing between the zones' rows.
+    expect(at(-L / 2 + 200, 6.9)).toBeNull();
+  });
+
   it('draws aiming points, side stripes and centerline dashes', () => {
     expect(west(320, 10)).toBe('white');
     expect(east(320, -10)).toBe('white');

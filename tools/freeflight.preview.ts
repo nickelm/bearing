@@ -182,7 +182,7 @@ it('renders Free Flight shots', async () => {
   let gameTime = withLocalTime(DAY, lon, Number(env('TOD', '17')) * HOUR, params, calendar);
   const outDir = join(import.meta.dirname, 'out');
   mkdirSync(outDir, { recursive: true });
-  const messages: string[][] = [];
+  const messages: { t: number; lines: string[] }[] = [];
 
   for (const shot of SHOTS) {
     // Fly to the shot's moment.
@@ -193,12 +193,15 @@ it('renders Free Flight shots', async () => {
       m.step(ctl, ground);
       gameTime += FLIGHT_STEP;
       for (const e of monitor.update(m, FLIGHT_STEP)) {
-        if (e.kind === 'liftoff') messages.push(['AIRBORNE']);
+        if (e.kind === 'liftoff') messages.push({ t: gameTime, lines: ['AIRBORNE'] });
         if (e.kind === 'touchdown')
-          messages.push([
-            `TOUCHDOWN: ${e.touchdown.grade.toUpperCase()}`,
-            ...touchdownLines(e.touchdown),
-          ]);
+          messages.push({
+            t: gameTime,
+            lines: [
+              `TOUCHDOWN: ${e.touchdown.grade.toUpperCase()}`,
+              ...touchdownLines(e.touchdown),
+            ],
+          });
       }
     }
     if (m.crashed) throw new Error(`crashed before ${shot.name}: ${m.crashed}`);
@@ -256,7 +259,8 @@ it('renders Free Flight shots', async () => {
         width,
         height,
         frame,
-        messages: messages.slice(-2),
+        // As in the app, messages show for a few seconds.
+        messages: messages.filter((x) => x.t > gameTime - 8).map((x) => x.lines),
         view: Array.from(scene.camera.matrixWorldInverse.elements),
         projection: Array.from(scene.camera.projectionMatrix.elements),
       }),

@@ -7,8 +7,10 @@
  * origin.
  *
  * - **Frame.** The camera's own forward and up axes follow the aircraft's with
- *   critically damped springs (rotation lag); its up leans a third of the way
- *   toward the local vertical, so the horizon stays readable in a roll.
+ *   critically damped springs (rotation lag); in flight the forward axis leans
+ *   toward the velocity, so what lies along the flight path (a runway on final)
+ *   shows above the aircraft; its up leans a third of the way toward the local
+ *   vertical, so the horizon stays readable in a roll.
  * - **Distance.** The offset behind the aircraft stretches with forward
  *   acceleration through a spring (acceleration lag).
  * - **Free look.** While held, yaw and pitch offsets orbit the camera around the
@@ -40,7 +42,7 @@ export interface ChaseRig {
 /** The rig for fast jets: further back and looser (Proposal 0002, Per-type rigs). */
 export const FAST_JET_RIG: ChaseRig = {
   distance: 19,
-  height: 4.5,
+  height: 4,
   groundDistance: 14,
   groundHeight: 2.6,
   rotation: 3.5,
@@ -63,6 +65,11 @@ export interface ChaseTarget {
 
 const MIN_CLEARANCE = 1.5;
 const MAX_LOOK_PITCH = 80 * DEG;
+
+function smooth(t: number): number {
+  const x = Math.max(0, Math.min(1, t));
+  return x * x * (3 - 2 * x);
+}
 
 /** Critically damped spring step for a scalar. */
 function spring(x: number, v: number, target: number, omega: number, dt: number): [number, number] {
@@ -167,11 +174,22 @@ export class ChaseCamera {
     const a = (speed - this.lastSpeed) / h;
     this.lastSpeed = speed;
     this.accel += (a - this.accel) * Math.min(1, dt * 3);
+    // In flight the frame leans toward the velocity (85% above 60 m/s): at an
+    // approach's 12° of angle of attack a nose-aligned camera would put the runway,
+    // which lies along the flight path, behind the airframe.
+    const vw = t.onGround ? 0 : 0.85 * smooth((speed - 30) / 30);
+    const aimFwd = t.forward.clone();
+    if (vw > 0 && speed > 1)
+      aimFwd
+        .scale(1 - vw)
+        .addScaled(t.velocity, vw / speed)
+        .normalize();
+    const aimUp = t.up.clone().addScaled(aimFwd, -t.up.dot(aimFwd)).normalize();
     // Rotation lag: critically damped springs on the camera's axes.
     const w = rig.rotation;
     for (const [x, v, target] of [
-      [this.camFwd, this.fwdVel, t.forward],
-      [this.camUp, this.upVel, t.up],
+      [this.camFwd, this.fwdVel, aimFwd],
+      [this.camUp, this.upVel, aimUp],
     ] as const) {
       const acc = target
         .clone()
@@ -237,8 +255,9 @@ export class ChaseCamera {
       this.height = eye.length() - this.radius;
     }
     this.eye.copy(eye);
-    // Look at a point a little ahead of and above the aircraft, so it sits below center.
-    const aim = t.pos.clone().addScaled(f, 6).addScaled(u, 1.2);
+    // Look at a point well ahead of the aircraft, so it sits below the center
+    // and the way ahead (a runway on approach) shows above it.
+    const aim = t.pos.clone().addScaled(f, 25).addScaled(u, 1);
     this.forward.copy(aim.sub(this.eye)).normalize();
     this.up.copy(u).addScaled(this.forward, -u.dot(this.forward)).normalize();
     this.fov = rig.fov;

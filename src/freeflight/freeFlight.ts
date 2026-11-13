@@ -26,7 +26,7 @@ import { FLIGHT_STEP, FlightModel } from '../sim/flight/flightModel';
 import { parseFlightSpec } from '../sim/flight/flightSpec';
 import { FlightMonitor } from '../sim/flight/outcomes';
 import type { FlightEvent } from '../sim/flight/outcomes';
-import { nearestRunway, runwayEnds } from '../sim/flight/runway';
+import { runwayEnds } from '../sim/flight/runway';
 import type { Runway } from '../sim/flight/runway';
 import { spawnInAir, spawnOnRunway } from '../sim/flight/spawn';
 import { TestPilot } from '../sim/flight/testPilot';
@@ -107,6 +107,8 @@ export class FreeFlight {
   readonly summary: SummaryCard;
   private readonly options: FreeFlightOptions;
   private bases: BaseEntry[] = [];
+  /** Airbase positions (unit directions) from the coarse pass, known before the terrain is. */
+  private basePoints = new Map<number, Vec3d>();
   private runways: Runway[] = [];
   private ground: AirfieldGround | null = null;
   private model: FlightModel | null = null;
@@ -185,11 +187,19 @@ export class FreeFlight {
       groundHeight: 0,
     };
     deps.strategic.onGroundPick = (dir) => {
-      if (this.state !== 'menu' || this.runways.length === 0) return;
-      const n = nearestRunway(this.runways, dir, deps.radius);
-      if (n && n.distance < 40_000) {
-        this.menu.select(n.runway.id);
-        this.writeUrl(n.runway.id);
+      if (this.state !== 'menu') return;
+      let best: number | null = null;
+      let bestDot = Math.cos(40_000 / deps.radius);
+      for (const [id, p] of this.basePoints) {
+        const d = p.dot(dir);
+        if (d > bestDot) {
+          bestDot = d;
+          best = id;
+        }
+      }
+      if (best !== null) {
+        this.menu.select(best);
+        this.writeUrl(best);
       }
     };
     deps.globe.beforeDraw = (eye) => {
@@ -204,6 +214,7 @@ export class FreeFlight {
   setStrategic(s: StrategicWorld | null): void {
     this.runways = [];
     this.ground = null;
+    this.basePoints.clear();
     this.menu.setReady(false);
     if (!s) {
       this.bases = [];
@@ -211,6 +222,8 @@ export class FreeFlight {
       return;
     }
     const g = s.graph;
+    for (const b of s.infrastructure.airbases)
+      this.basePoints.set(b.id, new Vec3d(...b.point).normalize());
     this.bases = s.infrastructure.airbases.map((b) => {
       const node = b.node >= 0 ? g.nodes[b.node] : undefined;
       const region = node && node.feature >= 0 ? (g.features.names[node.feature] ?? '') : '';
@@ -281,9 +294,8 @@ export class FreeFlight {
 
   private focusBase(id: number): void {
     this.writeUrl(id);
-    const b = this.runway(id);
     const s = this.deps.strategic;
-    const p = b?.center;
+    const p = this.basePoints.get(id);
     if (!p) return;
     s.orbit.lat = Math.asin(Math.max(-1, Math.min(1, p.y)));
     s.orbit.lon = Math.atan2(p.x, p.z);
@@ -316,7 +328,8 @@ export class FreeFlight {
     this.model = m;
     this.monitor = new FlightMonitor(this.runways, R);
     this.monitor.reset(spawn === 'air');
-    this.input.reset(spawn === 'runway', spawn === 'air' ? 0.5 : 0);
+    // An air start holds about the throttle for 300 kt (trim is near 0.15 of the lever).
+    this.input.reset(spawn === 'runway', spawn === 'air' ? 0.2 : 0);
     this.input.mode = 'keyboard';
     this.director.reset();
     this.pilot = this.autopilot && spawn === 'runway' ? new TestPilot(r, end, R) : null;

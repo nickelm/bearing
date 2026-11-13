@@ -174,7 +174,7 @@ export class FreeFlightMenu {
         tr.dataset.id = String(b.id);
         const ft = Math.round(b.runwayLength / FOOT / 100) * 100;
         tr.innerHTML = `<td></td><td class="${b.side}">${SIDE_LABEL[b.side]}</td><td></td><td>${b.designators}</td><td>${b.runwayLength.toLocaleString('en-US')} m</td>`;
-        tr.title = `${b.name}: ${b.kind} base, runway ${b.designators}, ${b.runwayLength.toLocaleString('en-US')} m (${ft.toLocaleString('en-US')} ft)`;
+        tr.title = `${b.name} (id ${b.id}): ${b.kind} base, runway ${b.designators}, ${b.runwayLength.toLocaleString('en-US')} m (${ft.toLocaleString('en-US')} ft)`;
         tr.cells[0]!.textContent = b.name;
         tr.cells[2]!.textContent = b.region;
         tr.addEventListener('click', () => {

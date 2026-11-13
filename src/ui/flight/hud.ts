@@ -204,13 +204,17 @@ export class Hud {
     const s = Math.min(1.25, Math.max(0.75, H / 900));
     c.font = `${Math.round(14 * s)}px ui-monospace, 'JetBrains Mono', Consolas, monospace`;
 
+    // Tapes flank the aircraft at a share of the width; the numbers stack under them.
+    const tx = Math.min(0.3 * W, 400 * s);
+    const span = 120 * s;
     this.worldSymbols(f, project, s);
-    this.speedTape(f, cx - 300 * s, cy, s);
-    this.altitudeTape(f, cx + 300 * s, cy, s);
+    this.speedTape(f, cx - tx, cy, s);
+    this.altitudeTape(f, cx + tx, cy, s);
     this.headingTape(f, cx, 70 * s, s);
-    this.attitude(f, cx - 300 * s, cy + 190 * s, s);
-    this.status(f, cx + 300 * s, cy + 150 * s, s);
-    this.landingAid(f, cx + 170 * s, cy - 210 * s, s);
+    this.numbers(f, cx - tx - 28 * s, cy + span + 44 * s, s);
+    this.attitude(f, cx - tx + 6 * s, cy + span + 118 * s, s);
+    this.status(f, cx + tx, cy + span + 44 * s, s);
+    this.landingAid(f, cx + tx - 150 * s, cy - span - 120 * s, s);
     this.messagesAndWarnings(f, cx, 130 * s, s);
     // Below the app's frame-time readout.
     if (f.debug) this.debugPanel(f, 16, 64, s);
@@ -464,17 +468,19 @@ export class Hud {
       x + r + 6 * s,
       y + 10 * s,
     );
-    // Numbers beside the speed tape.
-    const lx = x - r;
-    const ly = y - 92 * s;
-    this.text(`G ${f.load.toFixed(1)}`, lx, ly);
-    this.text(`α ${(f.alpha / DEG).toFixed(1)}`, lx, ly + 18 * s);
-    // Approach indexer (13° on speed) with the gear down.
+  }
+
+  /** Load factor, angle of attack and the approach indexer (13° on speed, gear down). */
+  private numbers(f: HudFrame, x: number, y: number, s: number): void {
+    const c = this.ctx;
+    this.text(`G ${f.load.toFixed(1)}`, x, y);
+    this.text(`α ${(f.alpha / DEG).toFixed(1)}`, x, y + 18 * s);
     if (f.gearDown && !f.onGround) {
       const a = f.alpha / DEG;
-      const ix = lx + 90 * s;
-      const iy = ly + 18 * s;
+      const ix = x + 84 * s;
+      const iy = y + 18 * s;
       const d = 6 * s;
+      const off = a > 14.5 || a < 11.5;
       this.stroke(
         () => {
           c.beginPath();
@@ -492,7 +498,7 @@ export class Hud {
             c.arc(ix, iy, d * 0.8, 0, 2 * Math.PI);
           }
         },
-        a > 14.5 || a < 11.5 ? WARN_COLOR : HUD_COLOR,
+        off ? WARN_COLOR : HUD_COLOR,
       );
     }
   }
@@ -500,6 +506,7 @@ export class Hud {
   private status(f: HudFrame, x: number, y: number, s: number): void {
     const lines: [string, string?][] = [];
     const lever = f.throttle;
+    x += 28 * s;
     const thr =
       f.afterburner > 0.02 || lever > 0.81
         ? `AB ${Math.max(1, Math.min(5, Math.ceil(((lever - 0.82) / 0.18) * 5) || 1))}`

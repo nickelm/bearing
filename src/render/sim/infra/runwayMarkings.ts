@@ -9,8 +9,8 @@
  * into the runway, `v` to the right of a pilot landing there.
  *
  * - White, per end: threshold bars (five each side of the centerline), the
- *   two-digit designation in seven-segment figures, and the aiming-point
- *   blocks; side stripes along both edges and centerline dashes between the
+ *   two-digit designation in seven-segment figures, the aiming-point blocks
+ *   and the touchdown-zone bars; side stripes along both edges and centerline dashes between the
  *   designations.
  * - Yellow: the taxiway centerline and its links to the runway ends and the
  *   apron.
@@ -68,6 +68,25 @@ export const RUNWAY_BOXES: readonly MarkBox[] = [
   // Aiming-point blocks.
   [300, 350, 5, 14],
   [300, 350, -14, -5],
+  // Touchdown-zone bars (decision 134): 3, 2, 2, 1, 1 bars each side at 150–900 m,
+  // 22.5 m long, 1.8 m wide on 3.3 m centers, inside the aiming points' lanes.
+  ...(
+    [
+      [150, 3],
+      [450, 2],
+      [600, 2],
+      [750, 1],
+      [900, 1],
+    ] as const
+  ).flatMap(([u, n]): MarkBox[] =>
+    Array.from({ length: n }, (_, k): MarkBox[] => {
+      const v0 = 6 + 3.3 * k;
+      return [
+        [u, u + 22.5, v0, v0 + 1.8],
+        [u, u + 22.5, -v0 - 1.8, -v0],
+      ];
+    }).flat(),
+  ),
 ];
 
 /** Designation figures: bottom edge at DIGIT_U, height and width (m), centers at ±DIGIT_V. */

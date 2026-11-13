@@ -19,6 +19,8 @@ Guidance for Claude Code sessions in this repository. `docs/design.md` is the so
 | Render world maps to PNG | `npm run maps` (env: `SEED`, `RES`, `MODES`) → `tools/out/`     |
 | Seed browser (theaters)  | `npm run seeds` (env: `SEEDS`, `FROM`, `COUNT`, `BRIEFING=1`)   |
 | Weather preview          | `npm run weather` (env: `SEED`, `HOURS`, `DAYS`) → `tools/out/` |
+| Flight-model figures     | `npx vitest run --config vitest.tools.config.ts tools/flight.preview.ts` |
+| Free Flight renders      | `tools/freeflight.preview.ts` (env: `SEED`, `GRES`, `TOD`, `SHOTS`), then `node tools/freeflight.screens.mjs` with `npm run dev` up → `docs/reports/screens/` |
 
 ## Directory map
 
@@ -49,7 +51,9 @@ src/sim/            headless simulation; runs in a worker: event queue + fixed t
   naval/            carrier groups on their patrol tracks (analytic position); convoys and amphibious groups in C3
   command/          per-side command layer (graph and cast only): campaign input from the main thread, the interim
                     tasker (until the ATO), later the intelligence picture and the ATO
-  flight/           (planned, P1) flight model, flight director and sensor model, shared by AI and player
+  flight/           flight model, control laws, ground model, runways, outcomes, flight director and a
+                    scripted test pilot, shared by AI and player (Free Flight, decision 134; P1 extends it;
+                    the sensor model comes with P3)
 src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Both scenes stay resident;
                     the app renders the active one (GUI → View → View). Until V1, sim/'s GlobeScene
                     still draws orbit to ground.
@@ -59,7 +63,8 @@ src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Bo
                     water/ (river segment tables and river shading), models/ (model spec format,
                     procedural builder, palettes and schemes, specs/*.json; decision 106);
                     later the transition controller
-  sim/              simulation view: GlobeScene, camera/ (observer camera and stations), terrain/
+  sim/              simulation view: GlobeScene, camera/ (observer, chase camera and stations), aircraft/
+                    (the flown aircraft with animated parts, decision 135), terrain/
                     (TerrainRenderer), atmosphere/, water/ (sea), clouds/, forest/, infra/, lighting/;
                     later the camera rig and the HUD overlay (V4, P2)
   strategic/        strategic view: StrategicScene, StrategicCamera, zoom bands, relief mesh, hillshade,
@@ -71,7 +76,10 @@ src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Bo
     infra/          settlements and infrastructure (decision 104): urban fill texture, building
                     glyph placement, the model of roads, railways, bridges and site symbols
                     (overlays/airModel.ts draws flights, trails, routes and carrier groups; decision 132)
-src/ui/             lil-gui debug panel, overlays, time controls
+src/ui/             lil-gui debug panel, overlays, time controls; flight/ (Free Flight's start screen, input
+                    bindings, HUD, pause menu and cards; decisions 134, 135)
+src/freeflight/     the Free Flight mode's glue on the main thread: world and runways, ground query, clock,
+                    session flow (?mode=freeflight; decision 134)
 src/viewer/         the model viewer page (viewer.html, a second Vite page; decision 106)
 src/workers/        worker entry points and message protocols
 src/main.ts         app entry: WebGPU checks, renderer, scene, GUI

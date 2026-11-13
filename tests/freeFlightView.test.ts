@@ -107,6 +107,24 @@ describe('chase camera', () => {
     expect(c.eye.length() - R).toBeGreaterThanOrEqual(481.5 - 1e-6);
   });
 
+  it('keeps the flight path visible above the aircraft at approach angle of attack', () => {
+    const c = camera();
+    // Nose 12° above a 3° descent: the runway lies along the velocity.
+    const a = 12 * DEG;
+    const g = -3 * DEG;
+    c.target.velocity.set(75 * Math.cos(g), 0, 75 * Math.sin(g));
+    c.target.forward.set(Math.cos(g + a), 0, Math.sin(g + a));
+    c.target.up.set(-Math.sin(g + a), 0, Math.cos(g + a));
+    for (let i = 0; i < 180; i++) c.update(1 / 60);
+    // Screen elevation of a direction: its angle above the camera's forward, along its up.
+    const elev = (d: Vec3d) => Math.atan2(d.dot(c.up), d.dot(c.forward)) / DEG;
+    const path = c.target.velocity.clone().normalize();
+    const aircraft = c.target.pos.clone().sub(c.eye).normalize();
+    expect(elev(path)).toBeGreaterThan(elev(aircraft) + 8);
+    expect(elev(path)).toBeLessThan(15);
+    expect(elev(aircraft)).toBeGreaterThan(-20);
+  });
+
   it('springs back from free look when released', () => {
     const c = camera();
     c.lookHeld = true;
