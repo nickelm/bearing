@@ -8,7 +8,10 @@
  *   n interior texels plus a one-texel border evaluated at its own direction
  *   across the seam, as in the weather texture (decision 68), so bilinear
  *   filtering stays continuous across face edges.
- *   R = coverage, G = precipitation fraction.
+ *   R = coverage, G = precipitation fraction, B = cloud base above sea level
+ *   in units of BASE_SCALE (cloudForm.ts), A = development (cloudForm.ts): the kind and depth
+ *   of cloud. The volumetric march and the cloud shadow read all four with
+ *   one read per sample (decision 141); the strategic map reads R and G.
  * - Refresh: a compute pass re-evaluates the field when the game clock has
  *   moved enough for the clouds to move a fraction of a texel, when the
  *   weather frames or the cloud settings change, and at most every
@@ -29,7 +32,6 @@ import {
   uvec2,
   vec2,
   vec3,
-  vec4,
 } from 'three/tsl';
 import { CUBE_FACES } from '../../../core/coords';
 import { cubeFaceUv } from '../../common/climateTexture';
@@ -45,10 +47,11 @@ const MAX_AGE = 30;
 const MIN_INTERVAL_MS = 100;
 
 export interface CoverageSource {
-  /** Coverage 0..1 at a direction (any length). */
-  coverage(direction: V3): F;
-  /** Precipitation fraction 0..1 at a direction. */
-  precipitation(direction: V3): F;
+  /**
+   * What a texel stores at a direction (unit length): coverage 0..1,
+   * precipitation fraction 0..1, cloud base in units of BASE_SCALE, development.
+   */
+  texel(direction: V3): Node<'vec4'>;
 }
 
 /** Direction of cube-face coordinates (u, v), in TSL; mirrors `cubeFaceUvToDirection`. */
@@ -109,7 +112,7 @@ export class CoverageBake {
       textureStore(
         this.texture,
         uvec2(col.mul(m).add(x), row.mul(m).add(y)),
-        vec4(source.coverage(dir), source.precipitation(dir), 0, 1),
+        source.texel(dir),
       ).toWriteOnly();
     })().compute(count);
   }
@@ -142,5 +145,18 @@ export class CoverageBake {
     const cell = vec2(face.mod(3).toFloat(), face.div(3).toFloat());
     const atlas = cell.add(st).div(vec2(3, 2));
     return texture(this.texture, atlas).level(int(0)).xy as Node<'vec2'>;
+  }
+
+  /**
+   * All four baked channels at a direction (any length): coverage,
+   * precipitation, cloud base in units of BASE_SCALE, development. One read.
+   */
+  sampleAll(direction: V3): Node<'vec4'> {
+    const { face, uv } = cubeFaceUv(direction);
+    const m = this.m;
+    const st = uv.mul(this.n).add(1).div(m);
+    const cell = vec2(face.mod(3).toFloat(), face.div(3).toFloat());
+    const atlas = cell.add(st).div(vec2(3, 2));
+    return texture(this.texture, atlas).level(int(0)) as unknown as Node<'vec4'>;
   }
 }

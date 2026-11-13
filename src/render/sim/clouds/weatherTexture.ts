@@ -54,7 +54,8 @@ import { int, max, mix, texture, uniform, vec2 } from 'three/tsl';
 import { HOUR, KM } from '../../../core/units';
 import { Channel } from '../../../sim/weather/frame';
 import type { WeatherFrame, WeatherView } from '../../../sim/weather/frame';
-import { WEATHER_RESOLUTION } from '../../../sim/weather/grid';
+import { WEATHER_RESOLUTION, WeatherGrid } from '../../../sim/weather/grid';
+import type { Vec3d } from '../../../core/vec3d';
 import { cubeFaceUv } from '../../common/climateTexture';
 import { frameFog } from '../weather/weatherState';
 
@@ -86,6 +87,10 @@ export interface WeatherSample {
   storm: F;
 }
 
+function newExtent(): WeatherExtent {
+  return { cover: 0, precip: 0, baseMin: 0, baseMax: 0, fog: 0, dust: 0, storm: 0 };
+}
+
 /** Values for `fill` beyond cover and precipitation. */
 export interface WeatherFill {
   /** Cloud base above sea level (m). */
@@ -97,6 +102,24 @@ export interface WeatherFill {
   storm?: number;
 }
 
+/**
+ * The most the weather holds within an angle of a direction: what the
+ * volumetric march needs to know before it starts (decision 141).
+ */
+export interface WeatherExtent {
+  /** Largest cloud cover fraction. */
+  cover: number;
+  /** Largest precipitation, as a fraction of 4 mm/h (not capped). */
+  precip: number;
+  /** Lowest and highest cloud base above sea level (m); both 0 without cloud. */
+  baseMin: number;
+  baseMax: number;
+  /** Largest fog extinction (1/m), dust load and storm intensity. */
+  fog: number;
+  dust: number;
+  storm: number;
+}
+
 export class WeatherTexture {
   /** Cover and precipitation of both frames (see the file comment). */
   readonly texture: DataArrayTexture;
@@ -106,6 +129,8 @@ export class WeatherTexture {
   readonly blend = uniform(0);
   /** Counts uploads of new frames, so baked fields know when the frames changed. */
   version = 0;
+  /** Counts rebuilds of the CPU-blended fields (cloud base, storm), for the same purpose. */
+  fieldVersion = 0;
   private readonly m: number;
   private frames: [WeatherFrame, WeatherFrame] | null = null;
   /** Fog extinction per sample of the two frames (1/m). */
@@ -113,6 +138,20 @@ export class WeatherTexture {
   private ground: ArrayLike<number> | null = null;
   /** Blend the field texture was last built at. */
   private fieldBlend = Number.NaN;
+  /** The values `fill` wrote, while no frames are set. */
+  private filled: Required<WeatherFill> & { cover: number; precip: number } = {
+    cover: 0,
+    precip: 0,
+    base: DEFAULT_BASE,
+    fog: 0,
+    snow: 0,
+    dust: 0,
+    storm: 0,
+  };
+  /** The samples' directions, for the CPU's queries. */
+  private grid: WeatherGrid | null = null;
+  private readonly index = new Int32Array(4);
+  private readonly weight = new Float64Array(4);
 
   constructor(private readonly n = WEATHER_RESOLUTION) {
     this.m = n + 2;
@@ -193,8 +232,79 @@ export class WeatherTexture {
     for (let s = 0; s < half.length / 4; s++) half.set([c, c, p, p], s * 4);
     this.texture.needsUpdate = true;
     this.frames = null;
+    this.filled = {
+      cover,
+      precip,
+      base: extra.base ?? DEFAULT_BASE,
+      fog: extra.fog ?? 0,
+      snow: extra.snow ?? 0,
+      dust: extra.dust ?? 0,
+      storm: extra.storm ?? 0,
+    };
     this.fillFields(extra);
     this.version++;
+  }
+
+  /**
+   * The most of each field within `angle` (rad) of a direction from the planet
+   * center (unit length), in either hourly frame: an upper bound of what a
+   * shader can sample there at any blend. About 4,000 dot products.
+   */
+  extent(dir: Readonly<Vec3d>, angle: number, out: WeatherExtent = newExtent()): WeatherExtent {
+    out.cover = out.precip = out.fog = out.dust = out.storm = 0;
+    out.baseMin = Infinity;
+    out.baseMax = -Infinity;
+    if (!this.frames) {
+      const f = this.filled;
+      out.cover = f.cover;
+      out.precip = f.precip;
+      out.baseMin = out.baseMax = f.base;
+      out.fog = f.fog;
+      out.dust = f.dust;
+      out.storm = f.storm;
+      return out;
+    }
+    const grid = (this.grid ??= new WeatherGrid(this.n));
+    const [a, b] = this.frames;
+    const count = grid.count;
+    // A sample's values reach half a cell past it (bilinear filtering).
+    const cosine = Math.cos(Math.min(Math.PI, angle + 1.5 / this.n));
+    const d = grid.directions;
+    const ground = this.ground;
+    const [fogA, fogB] = this.fog;
+    for (let s = 0; s < count; s++) {
+      if (d[s * 3]! * dir.x + d[s * 3 + 1]! * dir.y + d[s * 3 + 2]! * dir.z < cosine) continue;
+      for (const data of a === b ? [a.data] : [a.data, b.data]) {
+        const cover = data[Channel.Cover * count + s]!;
+        if (cover > out.cover) out.cover = cover;
+        const precip = data[Channel.Precipitation * count + s]! / PRECIP_FULL;
+        if (precip > out.precip) out.precip = precip;
+        const base = data[Channel.CloudBase * count + s]! + (ground ? ground[s]! : 0);
+        if (base < out.baseMin) out.baseMin = base;
+        if (base > out.baseMax) out.baseMax = base;
+        const dust = data[Channel.Dust * count + s]!;
+        if (dust > out.dust) out.dust = dust;
+        const storm = data[Channel.Storm * count + s]!;
+        if (storm > out.storm) out.storm = storm;
+      }
+      const fog = Math.max(fogA[s]!, fogB[s]!);
+      if (fog > out.fog) out.fog = fog;
+    }
+    if (out.baseMin > out.baseMax) out.baseMin = out.baseMax = 0;
+    return out;
+  }
+
+  /**
+   * Mean ground height above sea level (m) around a direction from the planet
+   * center (unit length), from the heights `setGround` was given; 0 without them.
+   */
+  groundAt(dir: Readonly<Vec3d>): number {
+    if (!this.ground) return 0;
+    const grid = (this.grid ??= new WeatherGrid(this.n));
+    grid.bilinear(dir, this.index, this.weight);
+    let sum = 0;
+    for (let k = 0; k < 4; k++) sum += this.weight[k]! * this.ground[this.index[k]!]!;
+    return sum;
   }
 
   /** Sets the blend for game time t from the view's frame hours. */
@@ -235,6 +345,7 @@ export class WeatherTexture {
     for (let s = 0; s < half.length / 4; s++) half.set(texel, s * 4);
     this.fields.needsUpdate = true;
     this.fieldBlend = Number.NaN;
+    this.fieldVersion++;
   }
 
   /** Builds the field texture from the two frames at a blend 0..1. */
@@ -260,5 +371,6 @@ export class WeatherTexture {
     }
     this.fields.needsUpdate = true;
     this.fieldBlend = blend;
+    this.fieldVersion++;
   }
 }
