@@ -18,7 +18,8 @@
  * 5. Range factor from the two reach targets (decision 51).
  * 6. Regions for industry, ports, bases and ground combat, which milestone 5
  *    turns into sites.
- * 7. Briefing.
+ * 7. Carrier groups on station at sea (carriers.ts; decision 56).
+ * 8. Briefing.
  */
 import { rng } from '../core/rng';
 import type { Rng, WorldSeed } from '../core/rng';
@@ -34,6 +35,7 @@ import {
   surfaceDistance,
 } from '../worldgen/strategic/graph';
 import { writeBriefing } from './briefing';
+import { castCarrierGroups } from './carriers';
 import type {
   Cast,
   LogisticsLink,
@@ -285,6 +287,8 @@ export function castCampaign(graph: StrategicGraph, detection: Detection, seed: 
 
   // 6. Regions.
   const regions = castRegions(graph, theaters, owners, r.fork('regions'));
+  // 7. Carrier groups (decision 56).
+  const carriers = castCarrierGroups(graph, theaters, owners, r.fork('carriers'));
 
   const cast: Cast = {
     theaters,
@@ -294,6 +298,7 @@ export function castCampaign(graph: StrategicGraph, detection: Detection, seed: 
     rangeTargets,
     regions,
     airbases,
+    carriers,
     nodeNames,
     briefing: '',
   };

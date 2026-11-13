@@ -71,6 +71,23 @@ export interface RangeFactorTarget {
   reference: number;
 }
 
+/**
+ * A carrier group (decision 56): a mobile base for its side's air wing. It
+ * patrols `track`, a stretch of sea lane, back and forth (sim/naval/).
+ */
+export interface CarrierGroupCast {
+  id: number;
+  side: Side;
+  /** Name of the carrier, e.g. "CVN-73 Resolute". */
+  name: string;
+  /** Theater it serves (index into Cast.theaters). */
+  theater: number;
+  /** Sea lane it patrols. */
+  lane: number;
+  /** Patrol track: unit directions, xyz interleaved, along the lane. */
+  track: number[];
+}
+
 export interface Cast {
   theaters: Theater[];
   /** Owner of each strategic-graph node. */
@@ -82,6 +99,8 @@ export interface Cast {
   regions: Region[];
   /** Airbase sites in each side's territory. */
   airbases: Record<Side, number>;
+  /** Carrier groups of both sides (decision 56). */
+  carriers: CarrierGroupCast[];
   /** Generated names: node names by id, plus theater names. */
   nodeNames: string[];
   briefing: string;

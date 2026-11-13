@@ -99,7 +99,9 @@ export type MarkShape =
   | 'fuel-depot'
   | 'rail-yard'
   | 'bridge'
-  | 'star';
+  | 'star'
+  | 'aircraft'
+  | 'carrier';
 export const MARK_SHAPES: readonly MarkShape[] = [
   'arrowhead',
   'diamond',
@@ -113,6 +115,8 @@ export const MARK_SHAPES: readonly MarkShape[] = [
   'rail-yard',
   'bridge',
   'star',
+  'aircraft',
+  'carrier',
 ];
 
 /** A mark lying on the map at a point: its own frame is `axis` (along) and the left of it. */

@@ -57,6 +57,12 @@ import { buildInfraOverlays, INFRA_LAYERS } from './infra/infraModel';
 import type { InfraLayer } from './infra/infraModel';
 import { layoutCityGlyphs } from './infra/cityGlyphs';
 import { SETTLEMENT_GLYPHS } from './glyphLayout';
+import { AIR_LAYERS, buildAirOverlays } from './overlays/airModel';
+import type { AirLayer, AirViewOptions } from './overlays/airModel';
+import type { Mission } from '../../sim/air/mission';
+import { carrierTrack } from '../../sim/naval/carrierGroup';
+import type { CarrierTrack } from '../../sim/naval/carrierGroup';
+import type { GameTime } from '../../core/units';
 
 export interface StrategicSceneOptions {
   radius: number;
@@ -91,6 +97,10 @@ export class StrategicScene {
    */
   readonly infraLines: MilitaryLayer<InfraLayer>;
   readonly infraSites: MilitaryLayer<InfraLayer>;
+  /** Flights, their trails and routes, and carrier groups (C2), moving with the game clock. */
+  readonly air: MilitaryLayer<AirLayer>;
+  /** What the air layer shows (decision 48: the side is a view). */
+  readonly airView: AirViewOptions = { side: 'both', routes: false };
   /** Urban fills and settlement glyphs (GUI toggle; decision 104). */
   showTowns = true;
   /** Settlement, base and industry lights on the night side (decision 88). */
@@ -138,6 +148,14 @@ export class StrategicScene {
     infra: Infrastructure | null;
   } | null = null;
   private lightsDirty = false;
+  /** Missions from the sim and the cast's carrier tracks; the air layer redraws when these or the time change. */
+  private missions: readonly Mission[] = [];
+  private carriers: CarrierTrack[] = [];
+  private airTime: GameTime = 0;
+  private airDrawn: { time: GameTime; key: string } | null = null;
+  private airRevision = 0;
+  /** Raw terrain height (m, 0 at sea) for draping, once the world is on display. */
+  private dryHeight: ((p: Readonly<[number, number, number]>) => number) | null = null;
   private coarse: CubeGrid | null = null;
   /** Background rim uniforms: planet center relative to the camera, radians per pixel. */
   private readonly planetCenter = uniform(new Vector3());
@@ -179,6 +197,12 @@ export class StrategicScene {
       layers: ['sites'],
       renderOrder: 12,
     });
+    // Above the military overlays: flights cross the front.
+    this.air = new MilitaryLayer<AirLayer>(
+      options.radius,
+      { exaggeration: this.relief.exaggeration },
+      { layers: AIR_LAYERS, renderOrder: 60 },
+    );
     this.lights = new MapLights(options.radius, this.relief.exaggeration);
     this.glyphs = new GlyphLayer(options.radius, {
       exaggeration: this.relief.exaggeration,
@@ -206,6 +230,7 @@ export class StrategicScene {
       this.infraLines.group,
       this.infraSites.group,
       this.military.group,
+      this.air.group,
     );
     this.overlayScene.add(this.labels.group);
     this.scene.add(this.reliefLight, new AmbientLight(0xffffff, 0.55));
@@ -325,7 +350,41 @@ export class StrategicScene {
     // Urban extents for the urban fill (decision 104).
     this.relief.urban.set(graph?.urban ?? null);
     this.strategicData = graph ? { graph, cast, infra: infrastructure } : null;
+    this.carriers =
+      graph && cast ? (cast.carriers ?? []).map((c) => carrierTrack(c, graph.radius)) : [];
+    this.missions = [];
+    this.airRevision++;
     this.lightsDirty = true;
+  }
+
+  /** The sim's live missions (both sides; the air view filters). */
+  setMissions(missions: readonly Mission[]): void {
+    this.missions = missions;
+    this.airRevision++;
+  }
+
+  /** Game time the air layer shows (the display clock). */
+  setAirTime(t: GameTime): void {
+    this.airTime = t;
+  }
+
+  /** Shows or hides flights, trails, routes or carriers. */
+  setAirVisible(layer: AirLayer, on: boolean): void {
+    this.air.visible[layer] = on;
+  }
+
+  /** Rebuilds the air layer when the time, the missions or the view changed. */
+  private updateAir(): void {
+    const height = this.dryHeight;
+    if (!height) return;
+    const key = `${this.airRevision}:${this.airView.side}:${this.airView.routes}`;
+    if (this.airDrawn && this.airDrawn.time === this.airTime && this.airDrawn.key === key) return;
+    this.airDrawn = { time: this.airTime, key };
+    const radius = this.strategicData?.graph.radius ?? 1;
+    this.air.updateOverlays(
+      buildAirOverlays(this.missions, this.carriers, this.airTime, radius, this.airView),
+      height,
+    );
   }
 
   /** The graph's coarse grid (the display grid when they match), built once per resolution. */
@@ -430,6 +489,8 @@ export class StrategicScene {
         ]);
         const military = this.militaryOverlays(d.graph, d.cast, d.infra);
         const dry = (p: Readonly<[number, number, number]>) => Math.max(0, heightAt(p));
+        this.dryHeight = dry;
+        this.airDrawn = null;
         this.military.setOverlays(military, dry);
         const infra = buildInfraOverlays(d.graph, d.infra);
         this.infraLines.setOverlays(infra, dry);
@@ -441,6 +502,8 @@ export class StrategicScene {
         this.military.setOverlays(null, () => 0);
         this.infraLines.setOverlays(null, () => 0);
         this.infraSites.setOverlays(null, () => 0);
+        this.air.setOverlays(null, () => 0);
+        this.dryHeight = null;
         this.labels.setLabels(null);
       }
     }
@@ -525,6 +588,8 @@ export class StrategicScene {
     this.military.update(o.eye, cssPixelAngle, o.range * cssPixelAngle, fades);
     this.infraLines.update(o.eye, cssPixelAngle, o.range * cssPixelAngle, fades, o.up);
     this.infraSites.update(o.eye, cssPixelAngle, o.range * cssPixelAngle, fades, o.up);
+    this.updateAir();
+    this.air.update(o.eye, cssPixelAngle, o.range * cssPixelAngle, fades, o.up);
     this.relief.urbanOn.value = this.showTowns ? 1 : 0;
     for (const k of SETTLEMENT_GLYPHS) {
       if (this.showTowns) this.glyphs.hidden.delete(k);
@@ -590,6 +655,7 @@ export class StrategicScene {
     this.military.dispose();
     this.infraLines.dispose();
     this.infraSites.dispose();
+    this.air.dispose();
     this.lights.dispose();
     this.glyphs.dispose();
     this.labels.dispose();

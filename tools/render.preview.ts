@@ -71,6 +71,7 @@ import { airfieldGrading } from '../src/render/sim/infra/airfieldGrading';
 import { buildWeatherClimate } from '../src/sim/weather/climate';
 import { WeatherGrid } from '../src/sim/weather/grid';
 import { createSimWorld } from '../src/sim/world';
+import { campaignInput } from '../src/sim/command/campaignInput';
 import { findCheckTargets } from './checkViews';
 import { findSpots, SPOT_KINDS } from './landscapeSpots';
 import type { LandscapeSpot } from './landscapeSpots';
@@ -437,6 +438,18 @@ export const STRATEGIC_PREVIEW_VIEWS: PreviewView[] = [
     tilt: 0,
     heading: 0,
     localTime: 11,
+    target: 'front',
+  },
+  // The air war (C2): flights, trails and carriers over the first front a day into the war.
+  {
+    name: 'air',
+    dLat: 0,
+    dLon: 0,
+    altitude: 900 * KM,
+    tilt: 0,
+    heading: 0,
+    localTime: 14,
+    day: 1,
     target: 'front',
   },
   {
@@ -1121,7 +1134,15 @@ async function renderStrategic(
       params.radius,
     ),
   };
-  let simWorld = createSimWorld(weatherConfig);
+  // The air war (C2) runs with the weather; FLIGHTS=0 leaves it out, ROUTES=1 draws every route.
+  const airConfig = {
+    ...weatherConfig,
+    campaign:
+      process.env.FLIGHTS === '0'
+        ? null
+        : campaignInput(campaign.graph, campaign.campaign.cast, campaign.infrastructure),
+  };
+  let simWorld = createSimWorld(airConfig);
   const outDir = join(import.meta.dirname, 'out');
   mkdirSync(outDir, { recursive: true });
   // One renderer and scene per image size.
@@ -1196,8 +1217,18 @@ async function renderStrategic(
       if (when < 0) when = localAt((v.day ?? 0) + 1);
       sunDirection(when, params, calendar, scene.sun);
       scene.relief.seasonPhase.value = seasonPhase(when, params, calendar);
-      if (when < simWorld.sim.time) simWorld = createSimWorld(weatherConfig);
+      if (when < simWorld.sim.time) simWorld = createSimWorld(airConfig);
       simWorld.sim.advanceTo(when);
+      scene.setMissions(simWorld.air?.liveMissions() ?? []);
+      scene.setAirTime(when);
+      scene.airView.routes = process.env.ROUTES === '1';
+      scene.setAirVisible('routes', scene.airView.routes);
+      if (simWorld.air) {
+        const a = simWorld.air;
+        console.log(
+          `strategic ${v.name}: ${a.missions.size} missions, airborne ${a.airborneAt('alliance', when)} Alliance / ${a.airborneAt('pact', when)} Pact, ${a.carriers.length} carriers`,
+        );
+      }
       const view = simWorld.weather.view();
       weather.setFrames(view);
       weather.update(view, when);

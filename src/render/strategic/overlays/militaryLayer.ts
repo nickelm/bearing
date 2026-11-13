@@ -30,6 +30,7 @@
 import {
   BufferAttribute,
   DoubleSide,
+  DynamicDrawUsage,
   Group,
   InstancedInterleavedBuffer,
   InterleavedBufferAttribute,
@@ -199,6 +200,14 @@ function symbolDistance(code: F, x: F, y: F): F {
     // Two bars along the road, either side of it.
     bridge: () => min(sdBox(x, y, -0.6, 0, 0.18, 0.8), sdBox(x, y, 0.6, 0, 0.18, 0.8)),
     star: () => sdStar(x, y, 0.45),
+    // A small aircraft seen from above, nose along the axis: fuselage, wings, tailplane.
+    aircraft: () =>
+      min(
+        sdBox(x, y, 0, 0, 0.14, 0.95),
+        min(sdBox(x, y, 0, 0.12, 0.95, 0.14), sdBox(x, y, 0, -0.75, 0.42, 0.11)),
+      ),
+    // A carrier from above: a long flight deck with the island on its right.
+    carrier: () => min(sdBox(x, y, -0.06, 0, 0.32, 0.95), sdBox(x, y, 0.38, 0.12, 0.12, 0.26)),
   };
   let d: F = float(FAR);
   MARK_SHAPES.forEach((name, k) => {
@@ -208,25 +217,38 @@ function symbolDistance(code: F, x: F, y: F): F {
   return d;
 }
 
+/** Packs per-attribute vec4 arrays into one interleaved array of `capacity` instances. */
+function packInstances(
+  names: readonly string[],
+  data: Float32Array[],
+  capacity: number,
+): Float32Array {
+  const count = data[0]!.length / 4;
+  const stride = names.length * 4;
+  const packed = new Float32Array(Math.max(capacity, count) * stride);
+  for (let i = 0; i < count; i++)
+    for (let a = 0; a < names.length; a++)
+      packed.set(data[a]!.subarray(i * 4, i * 4 + 4), i * stride + a * 4);
+  return packed;
+}
+
 /**
  * Sets vec4 instance attributes from one interleaved buffer: a pipeline may read at
  * most eight vertex buffers, and the segments have nine attributes with the quad.
+ * Room for `capacity` instances, so `updateOverlays` can rewrite it in place.
  */
 function setInstanceAttributes(
   g: InstancedBufferGeometry,
   names: readonly string[],
   data: Float32Array[],
-): void {
-  const count = data[0]!.length / 4;
+  capacity: number,
+): InstancedInterleavedBuffer {
   const stride = names.length * 4;
-  const packed = new Float32Array(count * stride);
-  for (let i = 0; i < count; i++)
-    for (let a = 0; a < names.length; a++)
-      packed.set(data[a]!.subarray(i * 4, i * 4 + 4), i * stride + a * 4);
-  const buffer = new InstancedInterleavedBuffer(packed, stride, 1);
+  const buffer = new InstancedInterleavedBuffer(packInstances(names, data, capacity), stride, 1);
   names.forEach((name, a) =>
     g.setAttribute(name, new InterleavedBufferAttribute(buffer, 4, a * 4)),
   );
+  return buffer;
 }
 
 export interface MilitaryUniforms {
@@ -492,14 +514,61 @@ export class MilitaryLayer<L extends string = OverlayLayer> {
     if (!o) return;
     this.layers.forEach((layer, i) => {
       const list: Mesh[] = [];
-      const segs = this.segmentGeometry(o, layer, heightAt);
-      if (segs) list.push(...this.pair(segs, 0, 4 * i));
-      const marks = this.markGeometry(o, layer, heightAt);
-      if (marks) list.push(...this.pair(marks, 2, 4 * i + 2));
+      const segs = this.segmentData(o, layer, heightAt);
+      if (segs)
+        list.push(...this.pair(this.geometry('segment', segs, segs[0]!.length / 4), 0, 4 * i));
+      const marks = this.markData(o, layer, heightAt);
+      if (marks)
+        list.push(...this.pair(this.geometry('mark', marks, marks[0]!.length / 4), 2, 4 * i + 2));
       if (list.length) {
         this.meshes.set(layer, list);
         this.group.add(...list);
       }
+    });
+  }
+
+  /**
+   * Replaces the overlays of moving things (flights, carriers) every frame: each
+   * layer's instance buffers are rewritten in place while they have room, and grow
+   * to the next power of two when they do not.
+   */
+  updateOverlays(o: MilitaryOverlays<L>, heightAt: (p: Readonly<Point>) => number): void {
+    this.layers.forEach((layer, i) => {
+      const list = this.meshes.get(layer) ?? [];
+      const kinds = [
+        { kind: 'segment' as const, data: this.segmentData(o, layer, heightAt), material: 0 },
+        { kind: 'mark' as const, data: this.markData(o, layer, heightAt), material: 2 },
+      ];
+      for (const { kind, data, material } of kinds) {
+        const names = kind === 'segment' ? SEGMENT_ATTRS : MARK_ATTRS;
+        const count = data ? data[0]!.length / 4 : 0;
+        const k = list.findIndex((m) => m.userData.kind === kind);
+        const mesh = k >= 0 ? list[k]! : null;
+        const g = mesh?.geometry as InstancedBufferGeometry | undefined;
+        const buffer = mesh?.userData.buffer as InstancedInterleavedBuffer | undefined;
+        const capacity = (mesh?.userData.capacity as number | undefined) ?? 0;
+        if (g && buffer && count <= capacity) {
+          if (data) (buffer.array as Float32Array).set(packInstances(names, data, capacity));
+          buffer.needsUpdate = true;
+          g.instanceCount = count;
+          continue;
+        }
+        if (count === 0) continue;
+        if (mesh) {
+          const pairMeshes = list.filter((m) => m.geometry === mesh.geometry);
+          for (const m of pairMeshes) {
+            this.group.remove(m);
+            list.splice(list.indexOf(m), 1);
+          }
+          mesh.geometry.dispose();
+        }
+        let cap = 16;
+        while (cap < count) cap *= 2;
+        const fresh = this.pair(this.geometry(kind, data!, cap), material, 4 * i + material);
+        list.push(...fresh);
+        this.group.add(...fresh);
+      }
+      if (list.length) this.meshes.set(layer, list);
     });
   }
 
@@ -508,17 +577,49 @@ export class MilitaryLayer<L extends string = OverlayLayer> {
     const casing = new Mesh(g, this.materials[material]!);
     const ink = new Mesh(g, this.materials[material + 1]!);
     casing.userData.ownsGeometry = true;
+    for (const mesh of [casing, ink]) {
+      mesh.userData.kind = g.userData.kind;
+      mesh.userData.buffer = g.userData.buffer;
+      mesh.userData.capacity = g.userData.capacity;
+    }
     casing.renderOrder = this.baseOrder + order;
     ink.renderOrder = this.baseOrder + 1 + order;
     for (const mesh of [casing, ink]) mesh.frustumCulled = false;
     return [casing, ink];
   }
 
-  private segmentGeometry(
+  /** An instanced quad geometry for segments or marks with room for `capacity` instances. */
+  private geometry(
+    kind: 'segment' | 'mark',
+    data: Float32Array[],
+    capacity: number,
+  ): InstancedBufferGeometry {
+    const g = new InstancedBufferGeometry();
+    const quad =
+      kind === 'segment'
+        ? [0, -1, 0, 1, -1, 0, 1, 1, 0, 0, 1, 0]
+        : [-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0];
+    g.setAttribute('position', new BufferAttribute(new Float32Array(quad), 3));
+    g.setIndex([0, 1, 2, 0, 2, 3]);
+    const buffer = setInstanceAttributes(
+      g,
+      kind === 'segment' ? SEGMENT_ATTRS : MARK_ATTRS,
+      data,
+      capacity,
+    );
+    buffer.setUsage(DynamicDrawUsage);
+    g.instanceCount = data[0]!.length / 4;
+    g.userData.kind = kind;
+    g.userData.buffer = buffer;
+    g.userData.capacity = Math.max(capacity, g.instanceCount);
+    return g;
+  }
+
+  private segmentData(
     o: MilitaryOverlays<L>,
     layer: L,
     heightAt: (p: Readonly<Point>) => number,
-  ): InstancedBufferGeometry | null {
+  ): Float32Array[] | null {
     const lines = o.lines.filter((l) => l.layer === layer);
     let count = 0;
     for (const l of lines) count += Math.max(0, l.points.length / 3 - 1);
@@ -569,22 +670,14 @@ export class MilitaryLayer<L extends string = OverlayLayer> {
         CS.set([...casing, 0], k * 4);
       }
     }
-    const g = new InstancedBufferGeometry();
-    g.setAttribute(
-      'position',
-      new BufferAttribute(new Float32Array([0, -1, 0, 1, -1, 0, 1, 1, 0, 0, 1, 0]), 3),
-    );
-    g.setIndex([0, 1, 2, 0, 2, 3]);
-    setInstanceAttributes(g, SEGMENT_ATTRS, data);
-    g.instanceCount = count;
-    return g;
+    return data;
   }
 
-  private markGeometry(
+  private markData(
     o: MilitaryOverlays<L>,
     layer: L,
     heightAt: (p: Readonly<Point>) => number,
-  ): InstancedBufferGeometry | null {
+  ): Float32Array[] | null {
     const marks = o.marks.filter((m) => m.layer === layer);
     if (marks.length === 0) return null;
     const data = MARK_ATTRS.map(() => new Float32Array(marks.length * 4));
@@ -604,15 +697,7 @@ export class MilitaryLayer<L extends string = OverlayLayer> {
       C.set([...linear(m.color), 0.8], k * 4);
       BN.set([...bandMask(m.bands), 0], k * 4);
     });
-    const g = new InstancedBufferGeometry();
-    g.setAttribute(
-      'position',
-      new BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, 1, 0]), 3),
-    );
-    g.setIndex([0, 1, 2, 0, 2, 3]);
-    setInstanceAttributes(g, MARK_ATTRS, data);
-    g.instanceCount = marks.length;
-    return g;
+    return data;
   }
 
   /**

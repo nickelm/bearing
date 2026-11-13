@@ -6,6 +6,8 @@
  */
 import type { CampaignCalendar, OrbitParams } from '../core/calendar';
 import type { GameTime } from '../core/units';
+import type { Mission } from '../sim/air/mission';
+import type { CampaignInput } from '../sim/command/campaignInput';
 import type { WeatherClimate } from '../sim/weather/climate';
 
 export interface PingMessage {
@@ -24,6 +26,8 @@ export interface InitMessage {
   orbit: OrbitParams;
   calendar: CampaignCalendar;
   climate: WeatherClimate;
+  /** The campaign for the air war (C2); null runs the weather alone. */
+  campaign: CampaignInput | null;
 }
 
 export interface SetRateMessage {
@@ -68,8 +72,12 @@ export const SnapshotField = {
   WeatherSystems: 5,
   /** Real milliseconds the last step took in the worker. */
   StepMs: 6,
+  /** Live missions (planned or flying), and aircraft in the air per side. */
+  Missions: 7,
+  AirborneAlliance: 8,
+  AirbornePact: 9,
 } as const;
-export const SNAPSHOT_FIELDS = 7;
+export const SNAPSHOT_FIELDS = 10;
 
 /**
  * State snapshot, sent after every worker step that changed anything. The
@@ -87,6 +95,12 @@ export interface SnapshotMessage {
   slowed: boolean;
   /** Determinism hash of the whole state (only after a seek, or when asked). */
   hash?: string;
+  /**
+   * Every live mission, sent when the set changes (a planning tick, a
+   * completion) and after init or seek. Routes are analytic, so the main
+   * thread computes positions and phases for any display time itself.
+   */
+  missions?: Mission[];
 }
 
 export interface SimErrorMessage {

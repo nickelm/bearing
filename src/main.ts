@@ -75,6 +75,7 @@ import { SeedBrowser } from './ui/seedBrowser';
 import { THEATER_LABELS } from './campaign/theaters';
 import type { StrategicWorld } from './worldgen/campaignWorld';
 import { SimClient } from './workers/simClient';
+import { campaignInput } from './sim/command/campaignInput';
 import { SnapshotField } from './workers/protocol';
 import { buildWeatherClimate } from './sim/weather/climate';
 import { WeatherGrid } from './sim/weather/grid';
@@ -177,16 +178,25 @@ async function main(): Promise<void> {
   };
   const sim = new SimClient();
   const weatherGrid = new WeatherGrid();
-  /** Starts the simulation for a world: its climate drives the weather (decision 68). */
-  const startSim = (world: World, seed: string, radius: number) => {
+  /**
+   * Starts the simulation for a world: its climate drives the weather (decision 68),
+   * its campaign the air war (C2).
+   */
+  const startSim = (world: World, strategic: StrategicWorld, radius: number) => {
     const climate = buildWeatherClimate(
       { ...world.maps, resolution: world.info.resolution, reliefScale: world.info.reliefScale },
       weatherGrid,
       radius,
     );
-    sim.init(seed, radius, orbitParams, calendar, climate);
+    const campaign = campaignInput(
+      strategic.graph,
+      strategic.campaign.cast,
+      strategic.infrastructure,
+    );
+    sim.init(String(strategic.seed), radius, orbitParams, calendar, climate, campaign);
   };
   sim.onWeather = () => globe.weather.setFrames(sim.weather);
+  sim.onMissions = () => strategicView.setMissions(sim.missions);
 
   let grid = new CubeGrid(worldParams.resolution);
   const globe = new GlobeScene(renderer, { radius: DEFAULT_PLANET_PARAMS.radius, grid });
@@ -453,7 +463,7 @@ async function main(): Promise<void> {
       if (stored?.strategic) {
         showTectonic(stored.tectonic);
         showStrategic(stored.strategic);
-        startSim(stored.tectonic, String(stored.strategic.seed), params.radius);
+        startSim(stored.tectonic, stored.strategic, params.radius);
         showGlobal(
           stored.tectonic,
           restoreGlobalWorld(gpu, stored.global),
@@ -471,7 +481,7 @@ async function main(): Promise<void> {
       const { strategic, ...world } = generated;
       showTectonic(world);
       showStrategic(strategic);
-      startSim(world, String(strategic.seed), params.radius);
+      startSim(world, strategic, params.radius);
       // Everything after this uses the seed that passed the validity check.
       const worldSeedParams: PlanetParams = { ...params, seed: strategic.seed };
       console.table(strategic.timings.map((t) => ({ stage: t.stage, ms: Math.round(t.ms) })));
@@ -702,6 +712,11 @@ async function main(): Promise<void> {
     roads: true,
     railways: true,
     sites: true,
+    flights: true,
+    trails: true,
+    carriers: true,
+    routes: false,
+    viewingSide: 'both',
   };
   gui.addMapControls(mapParams, (m) => {
     // The relief applies exaggeration in its shader; the fallback grid globe rebuilds.
@@ -728,6 +743,12 @@ async function main(): Promise<void> {
     strategicView.overlay.enabled = m.graphDebug;
     strategicView.showTowns = m.towns;
     for (const layer of INFRA_LAYERS) strategicView.setInfraVisible(layer, m[layer]);
+    strategicView.setAirVisible('flights', m.flights);
+    strategicView.setAirVisible('trails', m.trails);
+    strategicView.setAirVisible('carriers', m.carriers);
+    strategicView.setAirVisible('routes', m.routes);
+    strategicView.airView.side = m.viewingSide;
+    strategicView.airView.routes = m.routes;
     relief.finish.value = m.finish;
   });
   const lighting = globe.lighting;
@@ -830,6 +851,7 @@ async function main(): Promise<void> {
     // The map shares the sun and the season (decision 87).
     strategicView.sun.copy(globe.sun);
     strategicView.relief.seasonPhase.value = globe.terrain.land.seasonPhase.value;
+    strategicView.setAirTime(gameTime);
     globe.clouds.time.value = gameTime;
     globe.weather.update(sim.weather, gameTime);
     touchControls.visible =
@@ -929,7 +951,8 @@ function describeSim(sim: SimClient): string {
   const F = SnapshotField;
   return (
     `${h[F.Rate]}×, ${h[F.Events]} events, ${h[F.Ticks]} ticks, ${h[F.Pending]} pending, ` +
-    `${h[F.WeatherSystems]} weather systems, step ${h[F.StepMs]!.toFixed(1)} ms`
+    `${h[F.WeatherSystems]} weather systems, ${h[F.Missions]} missions, ` +
+    `airborne ${h[F.AirborneAlliance]} Alliance / ${h[F.AirbornePact]} Pact, step ${h[F.StepMs]!.toFixed(1)} ms`
   );
 }
 

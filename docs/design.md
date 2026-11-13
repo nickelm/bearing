@@ -58,7 +58,7 @@ The war is seen in two views of the same world. The **strategic view** is an ill
 
 We keep a radius of about **1,000 km**, which gives a maximum surface distance of about 3,100 km and a surface area of about 12.6 million km².
 
-Since geography now varies, a fixed range factor no longer fits every world. The casting step chooses a **range factor** between 0.35 and 1.0 per campaign, so that the theaters it detected remain playable. Two targets set it: a medium strike aircraft operating from rear bases must reach the full depth of the enemy side of a front, and a long-range bomber must reach across the widest contested sea lane. The factor scales fuel capacity and burn rate only. Speeds, climb rates, and weapon ranges stay real.
+Since geography now varies, a fixed range factor no longer fits every world. The casting step chooses a **range factor** between 0.35 and 1.0 per campaign, so that the theaters it detected remain playable. Two targets set it: a medium strike aircraft operating from rear bases must reach the full depth of the enemy side of a front, and a long-range bomber must reach across the widest contested sea lane. The factor scales the fuel load only, and burn rates stay real, so radius scales by the factor (decision 132). Speeds, climb rates, and weapon ranges stay real.
 
 Landmasses are scaled to the planet; landforms are not (decision 121). Elevations and depths at the scale of continents, ranges and plateaus are Earth-like reference values times R / R_Earth ≈ 0.157, so the mean ocean depth is about 600 m. Hills, valleys and ridges, the relief within about 20 km of a valley floor, have Earth-scale height (decisions 121, 122): erosion carves them in reference meters, and their height above the local valley floor is multiplied by a landform gain of 12 when converting to physical meters, so mountain valleys run a kilometer or more deep. Above 6.5 km land rises at 40% of the rate, so the highest peaks end near 8 km. Climate (lapse rate, snow, tree line) uses the Earth-like elevation: the valley floor in reference meters plus the height above it in physical meters. The atmosphere, aircraft performance, and service ceilings stay real. The strategic view exaggerates relief about 4× so ranges read on the map; the simulation view shows true scale.
 
@@ -224,13 +224,13 @@ Each side's command layer produces an **air tasking order** (ATO) for each game 
 
 The planner never searches or learns. It must produce a plausible war, and its decisions must be legible to a player browsing missions: each mission records the need it serves and its score. Ties break by stable ids, and random draws come from per-side, per-day forks.
 
-- **Known targets only.** Each side plans against its intelligence picture (see *Intelligence*), not against ground truth.
+- **Known targets only.** Each side plans against its intelligence picture (see *Intelligence*), not against ground truth. Fixed installations are known from the outbreak; everything that moves must be found first.
 - **Weather and daylight.** Missions are cancelled below their weather minimums, winds aloft change ground speeds, and low-level strikes favor night and bad weather.
 - **Carriers.** A carrier group is a mobile base on an analytic sea route. Its air wing flies ATO missions, launching and recovering at the group's predicted position, with no deck operations.
 
 ## Intelligence
 
-Each side keeps an intelligence picture of contacts (position, type, time last seen, confidence, source), and its confidence decays with age, fastest for moving units.
+Each side keeps an intelligence picture of contacts (position, type, time last seen, confidence, source), and its confidence decays with age, fastest for moving units. Fixed installations (airbases, industry, depots, rail yards, ports) are known to both sides at the outbreak from peacetime intelligence; the picture tracks what moves and what was hit (decision 132).
 
 - **Reconnaissance satellites** fly fixed circular orbits modeled on Cold War systems (film-return and digital imaging, radar and ELINT ocean reconnaissance, late radar imaging). Optical imaging needs daylight and clear sky. A contact carries its observation time but reaches the picture only after its delivery delay, from minutes for ocean reconnaissance to days for film return.
 - **Ground radar and AWACS** give the air picture within the radar horizon and terrain masking. The air picture also drives the Pact's ground-controlled interception.
@@ -295,7 +295,7 @@ The demo shows battalions as unit symbols moving along the front under the aggre
 
 ## Naval Forces
 
-Convoys, carrier groups, and amphibious groups exist wherever the cast contains a sea lane, chokepoint, or island campaign. AI controls them. They are targets and protectees for air missions, and convoy arrivals deliver reinforcements and supplies to the receiving theater. Casting assigns carrier groups to sides, and their air wings fly ATO missions (see *Air Tasking*). The demo shows naval groups as aggregate units on analytic sea routes. Naval combat comes later.
+Convoys, carrier groups, and amphibious groups exist wherever the cast contains a sea lane, chokepoint, or island campaign. AI controls them. They are targets and protectees for air missions, and convoy arrivals deliver reinforcements and supplies to the receiving theater. Casting assigns carrier groups to sides, and their air wings fly ATO missions (see *Air Tasking*). A group starts the war on station, patrolling a stretch of a sea lane in its theater (decision 132). The demo shows naval groups as aggregate units on analytic sea routes. Naval combat comes later.
 
 ## Rendering
 

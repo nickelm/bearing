@@ -121,6 +121,13 @@ export interface MapGuiParams {
   roads: boolean;
   railways: boolean;
   sites: boolean;
+  /** The air war (C2): flights and their trails, carrier groups, and every route (a debug view). */
+  flights: boolean;
+  trails: boolean;
+  carriers: boolean;
+  routes: boolean;
+  /** Viewing side (decision 48; a developer toggle until I1): 'both' shows ground truth. */
+  viewingSide: 'both' | 'alliance' | 'pact';
 }
 
 export interface LightingGuiParams {
@@ -482,6 +489,22 @@ export class DebugGui {
         .add(map, key)
         .name(name)
         .onChange(() => changed(map));
+    const air = f.addFolder('Air war');
+    const airLayers: [keyof MapGuiParams, string][] = [
+      ['flights', 'Flights'],
+      ['trails', 'Trails'],
+      ['carriers', 'Carrier groups'],
+      ['routes', 'All routes (debug)'],
+    ];
+    for (const [key, name] of airLayers)
+      air
+        .add(map, key)
+        .name(name)
+        .onChange(() => changed(map));
+    air
+      .add(map, 'viewingSide', ['both', 'alliance', 'pact'])
+      .name('Viewing side (dev)')
+      .onChange(() => changed(map));
     f.close();
   }
 

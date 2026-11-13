@@ -304,12 +304,15 @@ Civilian geography (settlements, roads, bridges) joins the strategic graph befor
 
 #### Data model and flight
 
-- [ ] Aircraft type table for both sides: fictional names, reference type, role, speeds, ceiling, combat radius before the range factor, loadouts
-- [ ] Squadrons, bases and inventories per side (aircraft, readiness, stocks)
-- [ ] Carrier groups as mobile bases on analytic sea routes; air wings launch and recover at the group's predicted position (decision 56)
-- [ ] Mission model: type, side, theater, package, target or station, phase timeline, originating need and score (decision 50), per-mission seed ready for promotion
-- [ ] Great-circle routes with climb and descent profiles; analytic position(t); fuel with the cast's range factor (decision 51)
-- [ ] Phase timeline per mission type (departure, climb-out, ingress, fence-in, on target or on station, egress, approach, recovery) as scheduled events
+- [x] Aircraft type table for both sides: fictional names, reference type, role, speeds, ceiling, combat radius before the range factor, loadouts (`sim/air/aircraft.ts`, 31 types; decision 132)
+- [x] Squadrons, bases and inventories per side (aircraft, readiness, stocks) (`sim/air/orbat.ts`)
+- [x] Carrier groups as mobile bases on analytic sea routes; air wings launch and recover at the group's predicted position (decision 56): cast by `campaign/carriers.ts`, on station from the outbreak, patrolling a stretch of sea lane (`sim/naval/carrierGroup.ts`; decision 132)
+- [x] Mission model: type, side, theater, package, target or station, phase timeline, originating need and score (decision 50), per-mission seed ready for promotion (`sim/air/mission.ts`)
+- [x] Great-circle routes with climb and descent profiles; analytic position(t); fuel with the cast's range factor (decision 51) (`sim/air/route.ts`, `missionRoute.ts`)
+  - [ ] Winds aloft in ground speeds (with the ATO's weather task)
+  - [ ] Altitudes are above sea level and low level is 100 m: terrain following in the execution layer (V4, P1)
+- [x] Phase timeline per mission type (departure, climb-out, ingress, fence-in, on target or on station, egress, approach, recovery) as scheduled events (`sim/air/airOps.ts`)
+- [x] Interim tasker until the ATO below replaces it (`sim/command/tasker.ts`; decision 132): standing CAP, AEW and tanker orbits, CAS, strikes on fixed sites with escort and SEAD, reconnaissance, airlift; fixed installations known from the outbreak
 
 #### Intelligence (decisions 53, 57)
 
@@ -330,13 +333,15 @@ Civilian geography (settlements, roads, bridges) joins the strategic graph befor
 - [ ] Doctrine scheduler: Pact strikes in large waves, Alliance missions spread evenly; daily ATO plus a replanning tick every few game hours
 - [ ] Weather and daylight in tasking: cancellations below minimums, winds aloft in ground speed, night and bad-weather low-level strikes
 - [ ] Aggregate mission resolution: target damage and losses from package composition, defenses and weather
-- [ ] Concurrency cap so that 20–50 aircraft are airborne
-- [ ] Determinism tests: identical ATO at 1× and 64×, and independent of the viewing side (decision 48)
+- [x] Concurrency cap so that 20–50 aircraft are airborne (MAX_AIRBORNE, 24 per side, in the interim tasker; keep it in the ATO)
+- [ ] Determinism tests: identical ATO at 1× and 64×, and independent of the viewing side (decision 48) (the interim tasker's hash is step-size independent, `tests/air.test.ts`; repeat for the ATO)
 
 #### Mission search and the map
 
-- [ ] Debug GUI toggle for the viewing side (developer tool until I1)
-- [ ] Mission icons (small aircraft with heading and short trails) and route lines on the strategic map
+- [x] Debug GUI toggle for the viewing side (developer tool until I1): GUI → Map → Air war → Viewing side; 'both' shows ground truth until the intelligence overlay
+- [x] Mission icons (small aircraft with heading and short trails) and route lines on the strategic map (`render/strategic/overlays/airModel.ts`; carrier groups as ship icons; every route as a debug toggle until selection draws one; `VIEWS=air` in the strategic preview)
+  - [ ] Owner: watch the flights in the browser at 64× and 256× (icon size, trail length, legibility over the front and at the Globe band)
+  - [ ] Models for the types without one (`model: null` in the table), for V4's chase view
 - [ ] Mission search panel: ongoing and upcoming missions of the viewing side
 - [ ] Filters: mission type, aircraft, theater, current phase, threat level, time until action
 - [ ] Focus the strategic camera on a selected mission and draw its route
@@ -510,7 +515,7 @@ Aircraft, vehicles, ships, buildings and trees are generated in code from small 
   - [x] The terrain's built-up patch is still the urban radius disk; draw it from the extent polygon too (decision 111)
   - [ ] Town buildings read as dark specks from 3 km (`DETAIL=1 VIEWS=town`): walls facing away from the sun get only a weak sky light; tune with V1's style audit
 - [x] Ship specs: carrier (CVN-73 Resolute), Alliance destroyer, Pact cruiser (decision 106)
-  - [ ] Ship meshes in the simulation view once ships exist (C3)
+  - [ ] Ship meshes in the simulation view once ships exist (carrier groups exist since C2, decision 132; convoys and amphibious groups in C3)
 - [ ] Checkpoint: owner review in the model viewer (done 2026-11-12) and at an airbase in the simulation view (waits for a camera that can get close: V1's observer camera; from the free camera the owner cannot see hangars)
 
 ### V4. Transition, camera rig, and spectator HUD

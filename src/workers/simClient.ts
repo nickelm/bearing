@@ -6,6 +6,8 @@
  */
 import type { CampaignCalendar, OrbitParams } from '../core/calendar';
 import type { GameTime } from '../core/units';
+import type { Mission } from '../sim/air/mission';
+import type { CampaignInput } from '../sim/command/campaignInput';
 import { climateBuffers } from '../sim/weather/climate';
 import type { WeatherClimate } from '../sim/weather/climate';
 import { WeatherView } from '../sim/weather/frame';
@@ -40,8 +42,12 @@ export class SimClient {
   hash = '';
   /** True once a world's simulation is running. */
   started = false;
+  /** Live missions of both sides from the last update (decision 48: the view filters by side). */
+  missions: Mission[] = [];
   /** Called when the weather frames change. */
   onWeather: (() => void) | null = null;
+  /** Called when the mission list changes. */
+  onMissions: (() => void) | null = null;
   onFlagged: ((n: FlaggedNotice) => void) | null = null;
   onStatus: ((status: string) => void) | null = null;
 
@@ -68,14 +74,17 @@ export class SimClient {
     orbit: OrbitParams,
     calendar: CampaignCalendar,
     climate: WeatherClimate,
+    campaign: CampaignInput | null = null,
   ): void {
     this.session++;
     this.weather.clear();
+    this.missions = [];
+    this.onMissions?.();
     this.snapshotTime = this.lastDisplay = 0;
     this.receivedAt = performance.now();
     this.started = true;
     this.send(
-      { type: 'init', session: this.session, seed, radius, orbit, calendar, climate },
+      { type: 'init', session: this.session, seed, radius, orbit, calendar, climate, campaign },
       climateBuffers(climate),
     );
     // The worker starts paused; keep the player's chosen rate.
@@ -145,5 +154,9 @@ export class SimClient {
     for (const f of msg.weather) this.weather.add(f);
     if (msg.weather.length > 0) this.onWeather?.();
     if (msg.flagged.length > 0) this.onFlagged?.({ events: msg.flagged, slowed: msg.slowed });
+    if (msg.missions) {
+      this.missions = msg.missions;
+      this.onMissions?.();
+    }
   }
 }

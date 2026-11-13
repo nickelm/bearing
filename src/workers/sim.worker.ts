@@ -27,6 +27,8 @@ let lastSentTime = NaN;
 let lastSentRate = NaN;
 /** Weather hours already sent this session. */
 let sentHours = new Set<number>();
+/** Air revision last sent (missions go out when it changes). */
+let sentAirRevision = -1;
 let timer: ReturnType<typeof setTimeout> | null = null;
 
 function init(msg: InitMessage): void {
@@ -37,11 +39,13 @@ function init(msg: InitMessage): void {
     orbit: msg.orbit,
     calendar: msg.calendar,
     climate: msg.climate,
+    campaign: msg.campaign,
   };
   const autoSlowdown = host?.autoSlowdown ?? true;
   host = new SimHost(() => createSimWorld(config));
   host.autoSlowdown = autoSlowdown;
   sentHours = new Set();
+  sentAirRevision = -1;
   lastSentTime = NaN;
   post([], false, true);
   lastReal = performance.now();
@@ -78,7 +82,9 @@ function post(
   const available = world.weather.availableHours();
   const weather = available.filter((h) => !sentHours.has(h)).map((h) => world.weather.frame(h));
   const unchanged = time === lastSentTime && host.rate === lastSentRate;
-  if (!force && weather.length === 0 && flagged.length === 0 && unchanged) return;
+  const air = world.air;
+  const airChanged = air !== null && (force || air.revision !== sentAirRevision);
+  if (!force && weather.length === 0 && flagged.length === 0 && unchanged && !airChanged) return;
   sentHours = new Set(available);
   const header = new Float64Array(SNAPSHOT_FIELDS);
   const stats = world.sim.stats;
@@ -89,6 +95,11 @@ function post(
   header[SnapshotField.Pending] = stats.pending;
   header[SnapshotField.WeatherSystems] = world.weather.systems.length;
   header[SnapshotField.StepMs] = stepMs;
+  header[SnapshotField.Missions] = air?.missions.size ?? 0;
+  header[SnapshotField.AirborneAlliance] = air?.airborneAt('alliance', time) ?? 0;
+  header[SnapshotField.AirbornePact] = air?.airborneAt('pact', time) ?? 0;
+  const missions = airChanged ? air.liveMissions() : undefined;
+  if (airChanged) sentAirRevision = air.revision;
   lastSentTime = time;
   lastSentRate = host.rate;
   ctx.postMessage(
@@ -100,6 +111,7 @@ function post(
       flagged,
       slowed,
       hash: force ? world.sim.hash() : undefined,
+      missions,
     },
     [header.buffer, ...weather.map((f) => f.data.buffer)],
   );
@@ -123,6 +135,7 @@ ctx.onmessage = (e) => {
         try {
           // Backward seeks rebuild the world: send its frames again.
           if (msg.time < host.time) sentHours = new Set();
+          sentAirRevision = -1;
           host.seek(msg.time);
           post([], false, true);
         } catch (err) {

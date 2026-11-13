@@ -187,5 +187,20 @@ export function writeBriefing(g: StrategicGraph, cast: Cast, names: NameGenerato
     `Aircraft carry ${pct(cast.rangeFactor)} of their real fuel, so that strike aircraft reach the depth of the theaters without crossing the world in one sortie. ` +
       `The Alliance has room for ${cast.airbases.alliance} airbases, the Pact for ${cast.airbases.pact}.`,
   );
+  const carriers = cast.carriers ?? [];
+  if (carriers.length > 0) {
+    const list = (side: 'alliance' | 'pact') =>
+      carriers
+        .filter((c) => c.side === side)
+        .map((c) => `${c.name} (${cast.theaters[c.theater]!.name})`)
+        .join(', ');
+    const a = list('alliance');
+    const p = list('pact');
+    paragraphs.push(
+      'Carrier groups are on station at the outbreak. ' +
+        (a ? `Alliance: ${a}. ` : 'The Alliance has none at sea. ') +
+        (p ? `Pact: ${p}.` : 'The Pact keeps its carriers in port.'),
+    );
+  }
   return paragraphs.join('\n\n');
 }
