@@ -18,6 +18,10 @@ Free Flight is a sandbox: pick a seed and an airbase, spawn on the runway in the
 
 ### Screenshots
 
+The start screen in headless Chromium, with a base selected (it writes `base=5` into the URL). The map behind it is black and **Fly** stays disabled, because this container's WebGPU device is lost in the world's GPU pass (see above); on a desktop the map draws and **Fly** enables when the terrain is ready.
+
+![Start screen](screens/start.png)
+
 Rendered by `tools/freeflight.preview.ts` (Dawn on lavapipe, the same `GlobeScene` the app draws) while the scripted pilot flies seed 1's Guq Air Base at 13:00 local. The HUD was drawn over each render by `tools/freeflight.screens.mjs` in Chromium, using the app's own `hud.ts`. Clouds are off; Free Flight has no weather.
 
 |                                                                       |                                                                    |
