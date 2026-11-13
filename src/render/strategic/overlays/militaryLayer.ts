@@ -210,9 +210,12 @@ function symbolDistance(code: F, x: F, y: F): F {
     carrier: () => min(sdBox(x, y, -0.06, 0, 0.32, 0.95), sdBox(x, y, 0.38, 0.12, 0.12, 0.26)),
   };
   let d: F = float(FAR);
+  // The code arrives as an interpolated varying: round it, since an exact float
+  // comparison fails on scattered pixels for the higher codes (speckled symbols).
+  const c = round(code);
   MARK_SHAPES.forEach((name, k) => {
     const f = shapes[name];
-    if (f) d = select(code.equal(k), f(), d) as F;
+    if (f) d = select(c.equal(k), f(), d) as F;
   });
   return d;
 }
