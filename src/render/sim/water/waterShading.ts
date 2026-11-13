@@ -62,6 +62,9 @@ type V3 = Node<'vec3'>;
 
 /** Absorption of clear water per reference meter (red goes first, blue last). */
 const ABSORPTION: [number, number, number] = [0.35, 0.055, 0.022];
+/** Shallowest depth (physical m) a lake is colored as, so shallow lakes still read as water (decision 130). */
+const LAKE_COLOR_DEPTH = 6;
+
 /** Physical depths (m) over which water color goes from Earth depth to the planet's reference depth (decision 129). */
 export const SHALLOW_DEPTH: [number, number] = [8, 60];
 
@@ -213,7 +216,13 @@ export class WaterShading {
         // Rivers keep their nominal reference depth, so their silt still reads.
         const depth = vec3(
           mix(
-            shallowDepth(standing, this.reliefScale),
+            // Lakes read as water, not pale ground: reference depth, at least LAKE_COLOR_DEPTH
+            // (decision 130); the sea's shallows at Earth depth (decision 129).
+            mix(
+              max(i.lake, LAKE_COLOR_DEPTH).div(this.reliefScale),
+              shallowDepth(max(i.height.negate(), 0), this.reliefScale),
+              sea,
+            ),
             waterDepth.div(this.reliefScale),
             river.mul(float(1).sub(lake)),
           ),

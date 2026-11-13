@@ -1985,3 +1985,15 @@ The engineering calls made while adopting it:
 
 **Reason:** The owner found the archipelagos wrong (raised light-blue areas unlike the sea) and asked for lighter water in shallows and reefs. Holding lakes to their cells and giving raised ground a land biome remove artifacts decision 126 made common; counting shallow depth physically makes the shallows the owner expects visible without changing deep water.
 
+### 130. Ragged coasts, lake shores that wander, darker lakes, and salt pans
+
+**Date:** 2026-11-13
+**Decision:** Second pass on the owner's archipelago review. The light-blue patches still seen above sea level were real lakes from the global drainage: shallow ones, which decision 129's Earth-depth shading made pale enough to read as ground, held to their cells in staircase outlines, and many in dry land. The coast, meanwhile, was the global grid's smooth zero contour: tile detail never crossed it.
+
+- **Ragged coasts.** In a band either side of the coast (sea proximity above 0.55–0.95 on land, land proximity above 0.3–0.8 at sea, decision 126's masks), five octaves of fractal noise from 3.2 km raise and lower the ground by the local slope × 900 m, clamped to 2–45 m: headlands, coves, inlets and offshore rocks, so the shore moves by up to about a kilometer. Not in lakes; skerries, deltas and reefs are built on top.
+- **Lake shores.** The lake share of decision 129 is read at a noise-warped position (0.9 cells, the biome jitter's field) against a noisy threshold (0.42 ± 0.12 over 700 m), so shores wander instead of tracing the cells' staircase.
+- **Darker lakes.** Lakes are colored at reference depth again, and at least as deep as 6 m physical: they read as water. Decision 129's Earth-depth shallows apply to the sea only.
+- **Salt pans.** The drainage fills every closed hollow, whatever the climate. Where aridity is high (0.45–0.65), a lake's floor becomes a flat salt pan a little below its level, in the ice sheet's white, with no water (Bonneville, Etosha).
+
+**Reason:** The owner saw light-blue regions above sea level and regular coasts in one place, and ragged, convincing archipelagos in another. Lakes must read as water and keep organic shores, dry basins should be pans rather than water, and coasts need detail across the shoreline itself.
+

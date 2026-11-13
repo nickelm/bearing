@@ -160,6 +160,16 @@ export const TILE_SYNTH_TUNING = {
   reefWidth: 260,
   reefLagoon: [3, 9] as [number, number],
   reefResolve: 2,
+  /**
+   * Ragged coasts (decision 130): first noise wavelength (m), the shore shift (m)
+   * the noise aims for, and the amplitude's clamp (m).
+   */
+  coastWavelength: 3200,
+  coastShift: 900,
+  coastAmp: [2, 45] as [number, number],
+  /** Lake outlines (decision 130): warp in global cells; aridity over which lakes become salt pans. */
+  lakeWarp: 0.9,
+  playaArid: [0.45, 0.65] as [number, number],
   /** Green corridor along rivers in dry land (decision 126): half-width in river widths, clamped (m). */
   greenWidths: 9,
   greenMin: 250,
@@ -684,6 +694,32 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     h = min(base + detail * RELIEF, -0.05);
   }
 
+  // Ragged coasts (decision 130): the coastline is the global grid's smooth zero
+  // contour, so in a band either side of it fractal noise moves the shore by up to
+  // about coastShift m (scaled by the local slope): headlands, coves, inlets and
+  // offshore rocks. Not in lakes.
+  let coastW = select(smoothstep(0.55, 0.95, masks.w), smoothstep(0.3, 0.8, masks.z), base <= 0.0)
+    * select(1.0, 0.0, lakeLevel > NO_LAKE * 0.5);
+  if (coastW > 0.0) {
+    let ce = normalize(cross(vec3f(0.0, 1.0, 0.0), d) + vec3f(1e-7, 0.0, 0.0));
+    let cn = cross(d, ce);
+    let cd = 0.5 * QUARTER_PI * 2.0 / f32(N);
+    let cgx = heightAt(normalize(d + cd * ce)) - heightAt(normalize(d - cd * ce));
+    let cgy = heightAt(normalize(d + cd * cn)) - heightAt(normalize(d - cd * cn));
+    let cslope = length(vec2f(cgx, cgy)) / (2.0 * cd * R);
+    let amp = clamp(cslope * ${f(t.coastShift)}, ${f(t.coastAmp[0])}, ${f(t.coastAmp[1])});
+    var cnoise = 0.0;
+    var cl = ${f(t.coastWavelength)};
+    var ca = 1.0;
+    for (var o = 0; o < 5; o++) {
+      let r = smoothstep(2.0, 4.0, cl / sampleSpacing);
+      cnoise += ca * r * noise3(d * (R / cl) + vec3f(13.1, 5.9, 21.7) + f32(o) * vec3f(3.7, 9.2, 1.4), 512u);
+      cl *= 0.47;
+      ca *= 0.6;
+    }
+    h += amp * cnoise * coastW;
+  }
+
   // Deltas (decision 126): a low fan from an apex upstream of the mouth out into
   // the sea, a few meters above it, cut by distributaries that fan out and branch.
   for (var k = 0u; k < tile.deltaCount; k++) {
@@ -798,14 +834,28 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   // Lake water stands only on the lake's cells (decision 129): elsewhere within the
   // lake level's reach, ground the interpolation or detail left below the level is
   // raised to just above it, so the lake does not spill out to the reach's blocky edge.
+  // The share is read at a noise-warped position with a noisy threshold, so shores
+  // wander instead of tracing the cells' staircase (decision 130).
+  var lakeOut = lakeLevel;
   if (lakeLevel > NO_LAKE * 0.5) {
-    let outside = 1.0 - smoothstep(0.3, 0.5, lakeFraction(d));
+    let share = lakeFraction(normalize(d + ${f(t.lakeWarp)} * cellAngle * jit));
+    let edge = 0.42 + 0.12 * noise3(d * (R / 700.0) + vec3f(6.2, 0.7, 2.9), 512u);
+    let outside = 1.0 - smoothstep(edge - 0.08, edge + 0.08, share);
     h = max(h, mix(h, lakeLevel + 0.6, outside));
+    // Lakes in dry land are salt pans (decision 130): flat white ground a little
+    // below the level, no water (Bonneville, the Etosha pan).
+    let playa = smoothstep(${f(t.playaArid[0])}, ${f(t.playaArid[1])}, masks.x);
+    if (playa > 0.5 && h < lakeLevel) {
+      h = max(lakeLevel - 0.4, 0.3);
+      lakeOut = NO_LAKE;
+      biomeOut = ${Biome.IceSheet}u;
+      forest = 0.0;
+    }
   }
   // Dry ground on a water biome (lake shores, islets and coastal ground over global
   // sea cells) takes a land biome near it, not the water's color (decision 129).
-  if (h > 0.0 && h >= lakeLevel && biomeOut <= ${Biome.SeaIce}u) { biomeOut = landBiomeNear(d); }
-  outSample[slot] = vec4u(bitcast<u32>(h), bitcast<u32>(lakeLevel),
+  if (h > 0.0 && h >= lakeOut && biomeOut <= ${Biome.SeaIce}u) { biomeOut = landBiomeNear(d); }
+  outSample[slot] = vec4u(bitcast<u32>(h), bitcast<u32>(lakeOut),
     biomeOut | (u32(riverCover * 255.0) << 8u) | (mat & 0x10000u) | maskBits
     | (u32(clamp(forest, 0.0, 1.0) * 255.0) << 24u), 0u);
 }`;
