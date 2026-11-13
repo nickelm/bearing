@@ -203,8 +203,8 @@ function symbolDistance(code: F, x: F, y: F): F {
     // A small aircraft seen from above, nose along the axis: fuselage, wings, tailplane.
     aircraft: () =>
       min(
-        sdBox(x, y, 0, 0, 0.14, 0.95),
-        min(sdBox(x, y, 0, 0.12, 0.95, 0.14), sdBox(x, y, 0, -0.75, 0.42, 0.11)),
+        sdBox(x, y, 0, 0, 0.2, 0.95),
+        min(sdBox(x, y, 0, 0.1, 0.95, 0.22), sdBox(x, y, 0, -0.72, 0.45, 0.16)),
       ),
     // A carrier from above: a long flight deck with the island on its right.
     carrier: () => min(sdBox(x, y, -0.06, 0, 0.32, 0.95), sdBox(x, y, 0.38, 0.12, 0.12, 0.26)),

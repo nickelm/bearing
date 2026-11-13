@@ -35,7 +35,7 @@ export const AIR_LAYERS: readonly AirLayer[] = ['routes', 'trails', 'carriers', 
 export const TRAIL_TIME = 4 * MINUTE;
 export const TRAIL_SAMPLES = 8;
 /** Icon sizes (CSS px). */
-export const FLIGHT_ICON = 14;
+export const FLIGHT_ICON = 18;
 export const CARRIER_ICON = 18;
 /** Largest step between route points, as a central angle (rad): about 10 km on the 1,000 km planet. */
 const MAX_STEP = 0.01;
