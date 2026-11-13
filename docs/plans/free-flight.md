@@ -1,6 +1,6 @@
 # Plan: Free Flight mode
 
-*Drafted 2026-11-13 for the overnight Free Flight task. Branch `feature/free-flight`. The decisions this plan leads to are recorded in `docs/decisions.md` (134 onward).*
+_Drafted 2026-11-13 for the overnight Free Flight task. Branch `feature/free-flight`. The decisions this plan leads to are recorded in `docs/decisions.md` (134 onward)._
 
 ## Goal
 
@@ -8,21 +8,21 @@ A sandbox mode: pick a seed and an airbase, spawn on the runway in the F-21 Kest
 
 ## What exists
 
-| Area | State | Where |
-| --- | --- | --- |
-| Simulation view | Faceted terrain quadtree to 20 km, sky, sea, clouds, trees, buildings; observer and free cameras | `render/sim/globeScene.ts`, `render/sim/terrain/` |
-| Terrain heights on the CPU | `TerrainRenderer.displaySurfaceAt` (the finest drawn surface, graded) and `heightAt` | `render/sim/terrain/terrainRenderer.ts` |
-| Airbases | Coarse-pass facts: id, name, kind, side, land node, theater, point, runway heading (0..π) and length (2,000–3,600 m) | `worldgen/strategic/infrastructure.ts` |
-| Runway geometry | 45 m wide runway, parallel taxiway, apron, links, as pavement segments | `render/sim/infra/infraScene.ts` |
-| Runway grading | Flat pad per airbase (runway + 200 m overruns, taxiway, apron) at the mean global height, 400 m smootherstep margin; applied in every tile and in `heightAt` | `render/common/terrain/grading.ts`, `render/sim/infra/airfieldGrading.ts` (decision 108) |
-| Runway paint | Threshold bars, designators, aiming points, edge stripes, centerline dashes, taxi lines in the terrain shader | `render/sim/infra/runwayMarkings.ts` (decision 109) |
-| Runway lights | Edge lights every 60 m, green threshold and red end rows, fading in at dusk | `render/sim/infra/lightPoints.ts` (decision 110) |
-| Base kit | Hangars, shelters, tower, radar, fuel tanks, revetments | `render/sim/infra/structureLayer.ts` |
-| F-16 analogue | `alliance-fighter.json` (F-21 Kestrel), 400-odd triangles, one static mesh, no gear, no hinges | `render/common/models/specs/` |
-| Aircraft performance table | F-21 entry (speeds, ceiling, fuel) for the analytic air war | `sim/air/aircraft.ts` |
-| Camera rig, flight model, flight director, HUD, flight input | None | – |
-| Start screen | None: the app opens the simulation view with the debug GUI | `main.ts`, `ui/debugGui.ts` |
-| Map click | A click picks a flight icon or a ground point for the range rings | `render/strategic/strategicScene.ts` |
+| Area                                                         | State                                                                                                                                                        | Where                                                                                    |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| Simulation view                                              | Faceted terrain quadtree to 20 km, sky, sea, clouds, trees, buildings; observer and free cameras                                                             | `render/sim/globeScene.ts`, `render/sim/terrain/`                                        |
+| Terrain heights on the CPU                                   | `TerrainRenderer.displaySurfaceAt` (the finest drawn surface, graded) and `heightAt`                                                                         | `render/sim/terrain/terrainRenderer.ts`                                                  |
+| Airbases                                                     | Coarse-pass facts: id, name, kind, side, land node, theater, point, runway heading (0..π) and length (2,000–3,600 m)                                         | `worldgen/strategic/infrastructure.ts`                                                   |
+| Runway geometry                                              | 45 m wide runway, parallel taxiway, apron, links, as pavement segments                                                                                       | `render/sim/infra/infraScene.ts`                                                         |
+| Runway grading                                               | Flat pad per airbase (runway + 200 m overruns, taxiway, apron) at the mean global height, 400 m smootherstep margin; applied in every tile and in `heightAt` | `render/common/terrain/grading.ts`, `render/sim/infra/airfieldGrading.ts` (decision 108) |
+| Runway paint                                                 | Threshold bars, designators, aiming points, edge stripes, centerline dashes, taxi lines in the terrain shader                                                | `render/sim/infra/runwayMarkings.ts` (decision 109)                                      |
+| Runway lights                                                | Edge lights every 60 m, green threshold and red end rows, fading in at dusk                                                                                  | `render/sim/infra/lightPoints.ts` (decision 110)                                         |
+| Base kit                                                     | Hangars, shelters, tower, radar, fuel tanks, revetments                                                                                                      | `render/sim/infra/structureLayer.ts`                                                     |
+| F-16 analogue                                                | `alliance-fighter.json` (F-21 Kestrel), 400-odd triangles, one static mesh, no gear, no hinges                                                               | `render/common/models/specs/`                                                            |
+| Aircraft performance table                                   | F-21 entry (speeds, ceiling, fuel) for the analytic air war                                                                                                  | `sim/air/aircraft.ts`                                                                    |
+| Camera rig, flight model, flight director, HUD, flight input | None                                                                                                                                                         | –                                                                                        |
+| Start screen                                                 | None: the app opens the simulation view with the debug GUI                                                                                                   | `main.ts`, `ui/debugGui.ts`                                                              |
+| Map click                                                    | A click picks a flight icon or a ground point for the range rings                                                                                            | `render/strategic/strategicScene.ts`                                                     |
 
 Phase 1's runway generator and most of Phase 2 therefore already exist. The runway heading follows the prevailing winds rather than the flattest axis; Free Flight keeps it, since changing it would change every existing world's airfields.
 
@@ -62,7 +62,7 @@ Phase 1's runway generator and most of Phase 2 therefore already exist. The runw
 
 ## Deviations from the docs
 
-1. **Free Flight pulls player flight control forward.** Proposal 0002 and the design keep takeoff and landing with the AI and put player flight control in P1 after the demo. Free Flight adds a first version of P1 (flight model, control laws, direct control, a flight director) and part of P2 (a HUD) now, plus ground handling and landing gear, which the proposal ruled out. Recorded as a decision; the design's *Non-goals* and *Later* sections and the visual style's "No landing gear animation" are amended to name the exception.
+1. **Free Flight pulls player flight control forward.** Proposal 0002 and the design keep takeoff and landing with the AI and put player flight control in P1 after the demo. Free Flight adds a first version of P1 (flight model, control laws, direct control, a flight director) and part of P2 (a HUD) now, plus ground handling and landing gear, which the proposal ruled out. Recorded as a decision; the design's _Non-goals_ and _Later_ sections and the visual style's "No landing gear animation" are amended to name the exception.
 2. **Direct control is Free Flight's default**, not mouse aim, because takeoff and landing need direct inputs. Mouse aim exists through the flight director.
 3. **The player's flight model runs on the main thread** in Free Flight, at fixed 120 Hz steps, since there is no sim worker in the mode and input latency matters. This answers P1's open item for this mode only.
 4. **Rotational dynamics are control-law driven.** The control laws compute the moments that achieve their commanded rates, bounded by an authority proportional to dynamic pressure; there are no aerodynamic moment tables (Cm(α), Cl(β)). This keeps the model stable and tunable at medium fidelity. Departures are not modeled.

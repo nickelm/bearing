@@ -141,7 +141,7 @@ The aircraft the player controls or follows fills the center of the screen for e
 - **Detail level.** 1,500 to 4,000 triangles, still flat-shaded, with the same construction, camouflage, and markings as the standard level. Other aircraft keep the budgets above.
 - **Animated parts.** Ailerons, elevators or stabilators, rudders, flaps, slats, airbrakes, and speedbrakes respond to control inputs. Swing wings (the F-111, F-14, Tornado, Su-24, MiG-23, and Tu-22M analogues) animate with speed. Afterburner nozzles open and glow. Helicopter rotors blur into discs.
 - **Stores.** Weapons hang visibly on pylons and disappear as they are released. Fuel tanks can be jettisoned.
-- **No landing gear animation.** Takeoff and landing stay with the AI, so gear only needs to exist on parked and AI-controlled aircraft.
+- **Landing gear.** In the campaign, takeoff and landing stay with the AI, so gear only needs to exist on parked and AI-controlled aircraft. The Free Flight sandbox (decision 134) flies from the runway, so its aircraft animates gear extension and retraction from hinges in its model spec.
 - **Effects.** Vapor and wingtip vortices at high G, contrails at altitude, heat shimmer behind engines, dust and spray at very low level, rotor wash for helicopters, and smoke, fire, and missing parts for damage.
 - **Shadow.** The aircraft's shadow on terrain is a key height cue at low level and must stay visible down to the ground.
 - **Crew figures.** The blocky crew figures stay visible through canopies.

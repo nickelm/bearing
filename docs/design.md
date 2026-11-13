@@ -52,7 +52,7 @@ The war is seen in two views of the same world. The **strategic view** is an ill
 12. Show day and night, seasons, and live weather in both views, and let weather and daylight constrain flight operations.
 13. Run in a desktop browser.
 
-**Non-goals for the demo:** player flight control, HUD, and displays (the demo has only a read-only HUD for followed flights), combat between individual entities, the campaign economy, naval combat, sound, and multiplayer.
+**Non-goals for the demo:** player flight control, HUD, and displays (the demo has only a read-only HUD for followed flights; the Free Flight sandbox, decision 134, is the one exception), combat between individual entities, the campaign economy, naval combat, sound, and multiplayer.
 
 ## Scale and Range
 
@@ -281,6 +281,7 @@ For the demo, the panel, the chase camera, and a read-only HUD are in scope. Pla
 - **HUD and displays.** World-anchored symbols are projected from the scene every frame (flight path marker, boresight, gun pipper, CCIP fall lines, target boxes, waypoint diamonds, seeker circles); screen-anchored instruments sit at fixed positions (airspeed, altitude, and heading tapes, a compact attitude indicator instead of a pitch ladder, Mach, G, fuel, master caution). The displays are radar, a moving map drawn by the strategic renderer, threat warning, stores, a targeting sensor where the aircraft has one, messages, and systems.
 - **Sensors.** A sensor model filters simulation state per aircraft: radar by type, mode, range, radar cross-section, aspect, terrain masking, and clutter; RWR; visual detection; datalinks and AWACS with lower precision and a delay; targeting pods and terrain-following radar. Avionics profiles per type set which sensors exist and how good they are. The displays show only this filtered picture, and the AI uses the same one.
 - **Crews.** See *Factions and Sides*. Transports and heavy helicopters add a drop zone marker and release cue for airdrops and a hook camera for sling loads.
+- **Free Flight** (decision 134). A sandbox outside the campaign: pick a seed and an airbase, take off in the F-21 Kestrel, fly anywhere and land at any airbase, with no war, traffic or weapons. It brings a first version of P1 (flight model, control laws, direct control, flight director) and part of P2 (the HUD) forward, adds ground handling and landing gear, and builds them where P1 and P2 will extend them. Takeoff and landing stay with the AI in the campaign.
 
 ## The Ground War
 
@@ -396,4 +397,4 @@ When the roadmap was adopted (revision 7), F1, F2, C1, and most of S3 and S4 wer
 
 ## Later (Out of Scope)
 
-Campaign economy with factories, resources, pilot training, and resupply; air defense networks; player flight control, HUD, and displays, and flight stick support (the Piloting track); CSAR missions; carriers, surface combatants, and submarines in combat; multiplayer. On the map: enemy territory that friendly reconnaissance has not covered recently drawn in a sketched, desaturated style, revealed by reconnaissance missions.
+Campaign economy with factories, resources, pilot training, and resupply; air defense networks; player flight control, HUD, and displays, and flight stick support (the Piloting track; Free Flight, decision 134, has a first version); CSAR missions; carriers, surface combatants, and submarines in combat; multiplayer. On the map: enemy territory that friendly reconnaissance has not covered recently drawn in a sketched, desaturated style, revealed by reconnaissance missions.

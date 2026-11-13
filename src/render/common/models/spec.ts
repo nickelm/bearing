@@ -142,6 +142,11 @@ export interface ModelSpec {
   emissives?: EmissiveSpec[];
   /** Darken faces near y = 0 (models standing on the ground). Default true for buildings. */
   ground?: boolean;
+  /**
+   * Flight-model tables (decision 134), checked by sim/flight/flightSpec.ts's
+   * parseFlightSpec; the builder ignores them.
+   */
+  flight?: unknown;
 }
 
 export class ModelSpecError extends Error {}
