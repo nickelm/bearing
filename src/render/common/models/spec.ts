@@ -31,7 +31,8 @@
  *   widths.
  *
  * Any part may set `mirror: true` to add its reflection across z = 0, and `yaw` (deg)
- * to turn it about the y axis through `center` (box, frustum, house, arch).
+ * to turn it about the y axis through `center` (box, frustum, house, arch). Parts of
+ * the controlled aircraft may set `anim` to turn about a hinge (decision 134).
  */
 import { EMISSIVE_COLORS, MODEL_COLORS, SCHEMES } from './palettes';
 
@@ -63,9 +64,30 @@ export interface Station {
   square?: number;
 }
 
+/**
+ * Animation channels of the controlled aircraft's parts (decision 134), driven by
+ * the flight model: control surfaces by the control laws' deflections, the gear
+ * and speedbrake by their positions.
+ */
+export const ANIM_CHANNELS = ['stabilator', 'flaperon', 'rudder', 'speedbrake', 'gear'] as const;
+export type AnimChannel = (typeof ANIM_CHANNELS)[number];
+
+/**
+ * A part that turns about a hinge: the axis from `hinge[0]` to `hinge[1]` (model
+ * frame), by up to `angle` degrees (right-handed about the axis). A mirrored part
+ * turns about the mirrored axis, symmetrically (the gear folds both legs inward;
+ * differential channels such as roll take the side into account).
+ */
+export interface PartAnim {
+  channel: AnimChannel;
+  hinge: [Vec3, Vec3];
+  angle: number;
+}
+
 interface PartBase {
   group: string;
   mirror?: boolean;
+  anim?: PartAnim;
 }
 
 export type PartSpec =
@@ -241,6 +263,15 @@ export function validateSpec(raw: unknown, id = '?'): ModelSpec {
         if (!isNum(q.x) || !isNum(q.w) || !isNum(q.h) || (q.w as number) < 0 || (q.h as number) < 0)
           fail(`${path}.stations[${j}]`, 'needs x, w ≥ 0 and h ≥ 0');
       });
+    }
+    if (part.anim !== undefined) {
+      const a = part.anim as Record<string, unknown>;
+      if (!(ANIM_CHANNELS as readonly string[]).includes(a.channel as string))
+        fail(`${path}.anim.channel`, `must be one of ${ANIM_CHANNELS.join(', ')}`);
+      const h = a.hinge as unknown[];
+      if (!Array.isArray(h) || h.length !== 2 || !isVec(h[0], 3) || !isVec(h[1], 3))
+        fail(`${path}.anim.hinge`, 'must be two points [[x, y, z], [x, y, z]]');
+      if (!isNum(a.angle)) fail(`${path}.anim.angle`, 'must be a number (degrees)');
     }
     for (const k of ['size', 'radius'] as const) {
       const v = part[k];

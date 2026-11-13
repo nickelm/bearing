@@ -1,0 +1,236 @@
+/*
+ * Free Flight panels (decision 134): visual-style Part I, User Interface: dark
+ * translucent panels, white monospaced text, amber for highlights and selection,
+ * square corners, no drop shadows.
+ */
+.ff-panel {
+  position: fixed;
+  background: rgb(0 0 0 / 0.66);
+  color: #f2f2f2;
+  font:
+    13px/1.45 'JetBrains Mono',
+    'Share Tech Mono',
+    ui-monospace,
+    Consolas,
+    monospace;
+  padding: 12px 14px;
+  border-radius: 0;
+  box-sizing: border-box;
+  z-index: 20;
+}
+
+.ff-panel[hidden] {
+  display: none;
+}
+
+.ff-panel h1,
+.ff-panel h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.ff-panel h2 {
+  font-size: 13px;
+  margin-top: 10px;
+}
+
+.ff-panel .ff-note {
+  color: #b9c0c8;
+  font-size: 12px;
+}
+
+.ff-panel button,
+.ff-panel select,
+.ff-panel input[type='text'] {
+  font: inherit;
+  color: #f2f2f2;
+  background: rgb(255 255 255 / 0.08);
+  border: 1px solid rgb(255 255 255 / 0.3);
+  border-radius: 0;
+  padding: 3px 8px;
+}
+
+.ff-panel button {
+  cursor: pointer;
+}
+
+.ff-panel button:hover:not(:disabled) {
+  border-color: #ffb347;
+  color: #ffb347;
+}
+
+.ff-panel button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ff-panel button.ff-primary {
+  border-color: #ffb347;
+  color: #ffb347;
+  padding: 6px 18px;
+  font-weight: 600;
+}
+
+/* The start screen: a column on the right, over the map. */
+.ff-menu {
+  top: 16px;
+  right: 16px;
+  bottom: 16px;
+  width: min(36rem, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ff-menu .ff-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.ff-menu .ff-bases {
+  flex: 1 1 auto;
+  min-height: 6rem;
+  overflow-y: auto;
+  border: 1px solid rgb(255 255 255 / 0.15);
+}
+
+.ff-menu table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ff-menu th,
+.ff-menu td {
+  text-align: left;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+.ff-menu th {
+  position: sticky;
+  top: 0;
+  background: rgb(0 0 0 / 0.85);
+  font-weight: 600;
+  color: #b9c0c8;
+}
+
+.ff-menu tbody tr {
+  cursor: pointer;
+}
+
+.ff-menu tbody tr:hover {
+  background: rgb(255 255 255 / 0.08);
+}
+
+.ff-menu tbody tr.selected {
+  background: rgb(255 179 71 / 0.22);
+  color: #ffb347;
+}
+
+.ff-menu .alliance {
+  color: #8fb4e6;
+}
+
+.ff-menu .pact {
+  color: #e69a8f;
+}
+
+.ff-menu tr.selected .alliance,
+.ff-menu tr.selected .pact {
+  color: inherit;
+}
+
+.ff-menu label {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.ff-menu input[type='range'] {
+  width: 10rem;
+  accent-color: #ffb347;
+}
+
+/* Centered cards: pause menu, summary, help. */
+.ff-card {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  min-width: min(24rem, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ff-card .ff-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ff-card dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 14px;
+  margin: 0;
+}
+
+.ff-card dt {
+  color: #b9c0c8;
+}
+
+.ff-card dd {
+  margin: 0;
+}
+
+.ff-card .ff-good {
+  color: #9ee6a0;
+}
+
+.ff-card .ff-bad {
+  color: #ff8a7a;
+}
+
+.ff-help table td:first-child {
+  color: #ffb347;
+  padding-right: 14px;
+  white-space: nowrap;
+}
+
+/* HUD canvas over the view. */
+.ff-hud {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.ff-hint {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 10px;
+  background: rgb(0 0 0 / 0.55);
+  color: #f2f2f2;
+  font:
+    12px/1.4 ui-monospace,
+    Consolas,
+    monospace;
+  pointer-events: none;
+  z-index: 11;
+}
+
+.ff-hint[hidden] {
+  display: none;
+}

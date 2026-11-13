@@ -165,6 +165,8 @@ export class StrategicScene {
   private airSelection: string | null = null;
   /** Called when a click selects or clears a flight or carrier. */
   onAirSelect: ((key: string | null) => void) | null = null;
+  /** Called with the ground point (unit direction) a click selected, e.g. to pick an airbase. */
+  onGroundPick: ((dir: Readonly<Vec3d>) => void) | null = null;
   private coarse: CubeGrid | null = null;
   /** Background rim uniforms: planet center relative to the camera, radians per pixel. */
   private readonly planetCenter = uniform(new Vector3());
@@ -331,6 +333,7 @@ export class StrategicScene {
       .addScaled(o.up, y * t)
       .normalize();
     this.selection = pickSphere(o.eye, dir, o.radius);
+    if (this.selection) this.onGroundPick?.(this.selection);
   }
 
   setGrid(grid: CubeGrid): void {

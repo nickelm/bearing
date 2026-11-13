@@ -21,7 +21,7 @@
 import { EMISSIVE_COLORS, hexToLinear, MODEL_COLORS, SCHEMES } from './palettes';
 import type { CamoScheme } from './palettes';
 import { MODEL_BUDGETS } from './spec';
-import type { ModelClass, ModelSpec, PartSpec, Station, Vec3 } from './spec';
+import type { AnimChannel, ModelClass, ModelSpec, PartSpec, Station, Vec3 } from './spec';
 
 export interface Emissive {
   kind: string;
@@ -667,4 +667,94 @@ export function outlineNormals(position: Float32Array, normal: Float32Array): Fl
     else out.set([sum[0] / l, sum[1] / l, sum[2] / l], i);
   }
   return out;
+}
+
+// ---- Animated parts (decision 134) ----
+
+export interface AnimatedPiece {
+  model: BuiltModel;
+  channel: AnimChannel;
+  /** Hinge point and unit axis (model frame). */
+  origin: Vec3;
+  axis: Vec3;
+  /** Full deflection (rad). */
+  angle: number;
+  /** +1 for the part as specified, −1 for its mirror image across z = 0. */
+  side: 1 | -1;
+}
+
+export interface AnimatedModel {
+  /** Everything that does not move, with the spec's emissives. */
+  body: BuiltModel;
+  pieces: AnimatedPiece[];
+}
+
+/** The mirror image of a built model across z = 0 (orientation kept outward). */
+function mirrorModel(m: BuiltModel): BuiltModel {
+  const flip = (a: Float32Array) => {
+    const o = new Float32Array(a.length);
+    for (let t = 0; t < a.length; t += 9) {
+      // Swap the second and third vertex, negating z.
+      for (const [dst, src] of [
+        [0, 0],
+        [3, 6],
+        [6, 3],
+      ] as const) {
+        o[t + dst] = a[t + src]!;
+        o[t + dst + 1] = a[t + src + 1]!;
+        o[t + dst + 2] = -a[t + src + 2]!;
+      }
+    }
+    return o;
+  };
+  const swap = (a: Float32Array, k: number) => {
+    const o = new Float32Array(a.length);
+    for (let t = 0; t < a.length; t += 3 * k) {
+      o.set(a.subarray(t, t + k), t);
+      o.set(a.subarray(t + 2 * k, t + 3 * k), t + k);
+      o.set(a.subarray(t + k, t + 2 * k), t + 2 * k);
+    }
+    return o;
+  };
+  return {
+    ...m,
+    position: flip(m.position),
+    normal: flip(m.normal),
+    outlineNormal: flip(m.outlineNormal),
+    color: swap(m.color, 3),
+    ao: swap(m.ao, 1),
+    bounds: {
+      min: [m.bounds.min[0], m.bounds.min[1], -m.bounds.max[2]],
+      max: [m.bounds.max[0], m.bounds.max[1], -m.bounds.min[2]],
+    },
+  };
+}
+
+/**
+ * Builds a spec as a static body plus one piece per animated part (and per mirror
+ * image), each with its hinge, for the controlled aircraft. The pieces together
+ * with the body hold the same triangles as `buildModel(spec)`.
+ */
+export function buildAnimatedModel(spec: ModelSpec, options: BuildOptions = {}): AnimatedModel {
+  const body = buildModel({ ...spec, parts: spec.parts.filter((p) => !p.anim) }, options);
+  const pieces: AnimatedPiece[] = [];
+  for (const p of spec.parts) {
+    if (!p.anim) continue;
+    const m = buildModel({ ...spec, parts: [{ ...p, mirror: false }], emissives: [] }, options);
+    const [a, b] = p.anim.hinge;
+    const axis = norm(sub(b, a));
+    const angle = (p.anim.angle * Math.PI) / 180;
+    pieces.push({ model: m, channel: p.anim.channel, origin: [...a], axis, angle, side: 1 });
+    if (p.mirror) {
+      pieces.push({
+        model: mirrorModel(m),
+        channel: p.anim.channel,
+        origin: [a[0], a[1], -a[2]],
+        axis: [axis[0], axis[1], -axis[2]],
+        angle,
+        side: -1,
+      });
+    }
+  }
+  return { body, pieces };
 }

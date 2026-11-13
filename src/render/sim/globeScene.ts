@@ -5,12 +5,14 @@
  * - the **observer camera** at a base or port (V1), the simulation view's own, from the
  *   ground to 20 km;
  * - the **free camera**, the old orbit camera from orbit down to 500 m, kept as a
- *   development tool until V4 (decision 72; the app offers it behind a dev flag).
+ *   development tool until V4 (decision 72; the app offers it behind a dev flag);
+ * - the **chase camera** behind the aircraft flown in Free Flight (decision 134).
  */
 import {
   AgXToneMapping,
   AmbientLight,
   DirectionalLight,
+  Group,
   PerspectiveCamera,
   Scene,
 } from 'three/webgpu';
@@ -20,6 +22,7 @@ import type { CubeGrid } from '../../core/cubeGrid';
 import { DEG } from '../../core/units';
 import { Vec3d } from '../../core/vec3d';
 import { ObserverCamera } from './camera/observerCamera';
+import { ChaseCamera } from './camera/chaseCamera';
 import { ClimateTexture } from '../common/climateTexture';
 import { CloudLayer } from './clouds/cloudLayer';
 import { WeatherTexture } from './clouds/weatherTexture';
@@ -33,7 +36,7 @@ import { StrategicOverlay } from '../strategic/strategicOverlay';
 import { StructureLayer } from './infra/structureLayer';
 import type { InfraScene } from './infra/infraScene';
 
-export type SimCameraMode = 'observer' | 'free';
+export type SimCameraMode = 'observer' | 'free' | 'chase';
 
 /** What the scene reads from either camera each frame. */
 interface ViewCamera {
@@ -58,6 +61,15 @@ export class GlobeScene {
   readonly orbit: OrbitCamera;
   /** The observer camera at a base or port (V1). */
   readonly observer: ObserverCamera;
+  /** The chase camera behind a flown aircraft (Free Flight, decision 134); its input is the app's. */
+  readonly chase: ChaseCamera;
+  /** Aircraft and other vehicles, placed camera-relative by their owners in `beforeDraw`. */
+  readonly vehicles = new Group();
+  /**
+   * Called each frame once the camera has moved, before drawing, with the eye:
+   * where vehicle owners place their objects camera-relative (rule 4).
+   */
+  beforeDraw: ((eye: Readonly<Vec3d>) => void) | null = null;
   readonly globe: GlobeMesh;
   /** Sun and camera uniforms shared by every lit planet material (decision 34). */
   readonly lighting: PlanetLighting;
@@ -96,6 +108,7 @@ export class GlobeScene {
     this.camera = new PerspectiveCamera(45, 1, 1, 2);
     this.orbit = new OrbitCamera(options.radius);
     this.observer = new ObserverCamera(options.radius);
+    this.chase = new ChaseCamera(options.radius);
     this.lighting = new PlanetLighting(options.radius);
     // Clouds first: their shadow hook must be in place before lit materials are built.
     this.clouds = new CloudLayer(options.radius, this.lighting, this.weather);
@@ -114,6 +127,7 @@ export class GlobeScene {
       this.structures.group,
       this.clouds.group,
       this.strategic.group,
+      this.vehicles,
     );
 
     // Scene lights serve only the M1 grid mesh (a debug view); the terrain lights itself.
@@ -134,7 +148,10 @@ export class GlobeScene {
 
   set inputEnabled(on: boolean) {
     if (on === this.inputEnabled) return;
-    if (on) {
+    if (on && this.mode === 'chase') {
+      // The flown aircraft's input belongs to the app (ui/flight/flightInput.ts).
+      this.detachInput = () => {};
+    } else if (on) {
       this.detachInput = attachOrbitInput(
         this.renderer.domElement,
         this.mode === 'observer' ? this.observer : this.orbit,
@@ -181,7 +198,15 @@ export class GlobeScene {
     let o: ViewCamera;
     /** Height of the eye above the ground (m). */
     let aboveGround: number;
-    if (this.mode === 'observer') {
+    if (this.mode === 'chase') {
+      const ch = this.chase;
+      ch.terrainMaxHeight = this.globe.maxDisplayedHeight;
+      ch.groundAt = tiles ? (d) => this.terrain.displaySurfaceAt(d) : null;
+      ch.update(dt);
+      this.camera.fov = ch.fov / DEG;
+      o = ch;
+      aboveGround = ch.height;
+    } else if (this.mode === 'observer') {
       const ob = this.observer;
       ob.terrainMaxHeight = this.globe.maxDisplayedHeight;
       // The finest drawn surface, asked after each move so the observer never dips into it.
@@ -217,6 +242,7 @@ export class GlobeScene {
 
     // World object placement: float64 subtraction first, then write float32.
     placePlanetCentered(this.globe.group, o.eye);
+    this.beforeDraw?.(o.eye);
 
     this.globe.group.visible = !tiles;
     this.terrain.group.visible = tiles;

@@ -84,6 +84,7 @@ import { TimeControls } from './ui/timeControls';
 import { hasTouch, TouchControls } from './ui/touchControls';
 import { GenerationCancelled, WorldgenClient } from './workers/worldgenClient';
 import { fetchLabelFonts } from './render/strategic/labels/fonts';
+import { FreeFlight, parseFreeFlightUrl } from './freeflight/freeFlight';
 import { buildFontAtlas } from './render/strategic/labels/fontAtlas';
 
 async function main(): Promise<void> {
@@ -122,6 +123,8 @@ async function main(): Promise<void> {
 
   // URL parameters: ?seed=<integer or text>&res=<tectonic cells per face edge>&gres=<global grid>
   const query = new URLSearchParams(location.search);
+  // Free Flight (decision 134): ?mode=freeflight&seed=…&base=…, a sandbox without the war.
+  const freeFlightMode = query.get('mode') === 'freeflight';
   const queryRes = Number(query.get('res'));
   const queryGres = Number(query.get('gres'));
   const worldParams: WorldGuiParams = {
@@ -156,7 +159,7 @@ async function main(): Promise<void> {
     nightLights: 3,
     renderScale: 'auto',
     targetFps: 30,
-    scene: query.get('view') === 'strategic' ? 'strategic' : 'simulation',
+    scene: query.get('view') === 'strategic' || freeFlightMode ? 'strategic' : 'simulation',
     simCamera: 'observer',
     station: '',
   };
@@ -184,6 +187,8 @@ async function main(): Promise<void> {
    * its campaign the air war (C2).
    */
   const startSim = (world: World, strategic: StrategicWorld, radius: number) => {
+    // Free Flight runs no war simulation (decision 134).
+    if (freeFlightMode) return;
     const climate = buildWeatherClimate(
       { ...world.maps, resolution: world.info.resolution, reliefScale: world.info.reliefScale },
       weatherGrid,
@@ -228,6 +233,8 @@ async function main(): Promise<void> {
     console.info(`Zoom band: ${previous} → ${band}`),
   );
   let activeView: 'simulation' | 'strategic' = 'simulation';
+  /** The Free Flight mode, when the URL asks for it (created once the GUI exists). */
+  let freeFlight: FreeFlight | null = null;
   /** The camera of the view on screen; the clock and status read their position from it. */
   const activeOrbit = () =>
     activeView === 'strategic'
@@ -261,6 +268,8 @@ async function main(): Promise<void> {
    * camera shows the globe while it generates.
    */
   const applyCamera = () => {
+    // The chase camera belongs to Free Flight while it flies.
+    if (globe.cameraMode === 'chase') return;
     const station = stations.find((x) => x.label === viewParams.station) ?? stations[0] ?? null;
     const observer = station !== null && (viewParams.simCamera === 'observer' || !devCamera);
     if (observer && globe.observer.station?.key !== station.key) globe.observer.setStation(station);
@@ -284,6 +293,7 @@ async function main(): Promise<void> {
   strategicView.onAirSelect = (key) => airPanel.select(key);
   airPanel.onClose = () => (strategicView.airSelected = null);
   const showStrategic = (s: StrategicWorld | null) => {
+    freeFlight?.setStrategic(s);
     globe.strategic.setWorld(s?.graph ?? null, s?.campaign.cast ?? null, s?.infrastructure ?? null);
     strategicView.setStrategic(
       s?.graph ?? null,
@@ -402,6 +412,7 @@ async function main(): Promise<void> {
       });
       // Roads, airfields, lights and buildings from the coarse pass (decision 65).
       const infra = new InfraScene(strategic.graph, strategic.infrastructure, params.radius);
+      const grading = airfieldGrading(infra, global.height, global.n);
       globe.terrain.setWorld({
         synth,
         seed: params.seed,
@@ -410,7 +421,14 @@ async function main(): Promise<void> {
         rivers: riverIndex,
         infra,
         // Airfields graded flat into the terrain (V3).
-        grading: airfieldGrading(infra, global.height, global.n),
+        grading,
+      });
+      freeFlight?.setTerrain({
+        infra,
+        grading,
+        height: global.height,
+        n: global.n,
+        airbases: strategic.infrastructure,
       });
       globe.setInfrastructure(infra);
       globe.terrainReady = true;
@@ -685,6 +703,8 @@ async function main(): Promise<void> {
     },
   });
   const timeControls = new TimeControls((rate) => sim.setRate(rate));
+  // Free Flight keeps its own clock, and Space is the wheel brakes there.
+  if (freeFlightMode) timeControls.dispose();
   // On-screen walk stick, height slider and ×5 for the observer on touch screens (decision 114).
   const touchControls = new TouchControls(globe.observer.stick);
   const touchDevice = hasTouch();
@@ -836,6 +856,57 @@ async function main(): Promise<void> {
   };
   window.addEventListener('resize', onResize);
   onResize();
+
+  // Free Flight: its start screen over the map, then the flight (decision 134).
+  if (freeFlightMode) {
+    freeFlight = new FreeFlight(
+      {
+        canvas: renderer.domElement,
+        globe,
+        strategic: strategicView,
+        radius: DEFAULT_PLANET_PARAMS.radius,
+        orbit: orbitParams,
+        calendar: () => calendar,
+        setView: (v) => {
+          viewParams.scene = v;
+          setActiveView(v);
+        },
+        loadSeed: (seed) => {
+          worldParams.seed = seed;
+          gui.refresh();
+          void regenerate();
+        },
+        exit: () => {
+          const u = new URL(location.href);
+          for (const k of ['mode', 'base', 'tod', 'spawn', 'fuel', 'autopilot'])
+            u.searchParams.delete(k);
+          location.href = u.toString();
+        },
+        status: () =>
+          `World ${worldParams.seed}: ${gui.status.generation}${globe.terrainReady ? '' : ' (the terrain must finish before you fly)'}`,
+      },
+      parseFreeFlightUrl(query, worldParams.seed),
+    );
+    // The debug GUI stays out of the way unless asked for (?dev).
+    if (!query.has('dev')) gui.gui.hide();
+    // Tools and screenshots drive the mode from the page (dev server, or ?autopilot).
+    if (import.meta.env.DEV || query.has('autopilot'))
+      (window as unknown as { freeFlight: FreeFlight }).freeFlight = freeFlight;
+  } else {
+    gui.gui
+      .add(
+        {
+          'Free Flight…': () => {
+            const u = new URL(location.href);
+            u.searchParams.set('mode', 'freeflight');
+            u.searchParams.set('seed', worldParams.seed);
+            location.href = u.toString();
+          },
+        },
+        'Free Flight…',
+      )
+      .name('Free Flight (fly from an airbase)…');
+  }
   // Apply the View folder's starting values (once onResize exists): before this, the
   // scene kept its own defaults, buildings off, until a View control changed.
   guiCallbacks.viewChanged(viewParams);
@@ -854,7 +925,9 @@ async function main(): Promise<void> {
       if (scale !== null) applyRenderScale(scale, now);
     }
     const dt = Math.min(frameMs, 100) / 1000;
-    gameTime = sim.displayTime(now);
+    freeFlight?.frame(Math.min(frameMs, 250) / 1000, frameMs);
+    gameTime =
+      freeFlight && freeFlight.state !== 'menu' ? freeFlight.gameTime : sim.displayTime(now);
     sunDirection(gameTime, orbitParams, calendar, globe.sun);
     globe.terrain.land.seasonPhase.value = seasonPhase(gameTime, orbitParams, calendar);
     // The map shares the sun and the season (decision 87).
@@ -868,6 +941,7 @@ async function main(): Promise<void> {
       touchDevice && activeView === 'simulation' && globe.cameraMode === 'observer';
     if (activeView === 'strategic') strategicView.render(dt);
     else globe.render(dt);
+    if (freeFlight && activeView === 'simulation') freeFlight.drawHud(globe.camera);
 
     const lon = activeOrbit().lon;
     timeParams.day = localDayOfYear(gameTime, lon, orbitParams, calendar);
@@ -879,12 +953,13 @@ async function main(): Promise<void> {
       const weather = describeWeather(sim, here, gameTime);
       timeParams.weather = weather;
       timeParams.sim = describeSim(sim);
-      timeControls.update({
-        rate: sim.rate,
-        local: `${timeParams.date} local`,
-        campaign: `T+${campaignClock(gameTime, orbitParams.solarDay)}`,
-        weather,
-      });
+      if (!freeFlightMode)
+        timeControls.update({
+          rate: sim.rate,
+          local: `${timeParams.date} local`,
+          campaign: `T+${campaignClock(gameTime, orbitParams.solarDay)}`,
+          weather,
+        });
     }
 
     const o = activeOrbit();
