@@ -75,6 +75,8 @@ export class Ambience {
   private readonly wind: GainNode;
   private readonly windBand: BiquadFilterNode;
   private readonly hiss: GainNode;
+  /** The value each parameter was last eased toward. */
+  private readonly targets = new Map<AudioParam, number>();
 
   constructor(
     private readonly context: BaseAudioContext,
@@ -132,11 +134,27 @@ export class Ambience {
     }
   }
 
-  /** Eases the graph toward the ambience of the levels. */
+  /**
+   * Eases the graph toward the ambience of the levels. May be called every
+   * frame: a parameter is scheduled only when its target has changed, so
+   * steady weather schedules nothing.
+   */
   set(levels: AmbienceLevels): void {
     const mix = ambienceMix(levels);
     const now = this.context.currentTime;
-    const ease = (param: AudioParam, value: number) => param.setTargetAtTime(value, now, EASE);
+    const ease = (param: AudioParam, value: number) => {
+      const last = this.targets.get(param);
+      // A gain within a thousandth, a frequency within a hertz: not worth an event. Silence is exact.
+      const tolerance = value > 20 ? 1 : 1e-3;
+      if (
+        last === value ||
+        (last !== undefined && value !== 0 && Math.abs(value - last) < tolerance)
+      ) {
+        return;
+      }
+      this.targets.set(param, value);
+      param.setTargetAtTime(value, now, EASE);
+    };
     ease(this.patter.gain, mix.patter);
     ease(this.patterBand.frequency, mix.patterFrequency);
     ease(this.roar.gain, mix.roar);

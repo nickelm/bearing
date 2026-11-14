@@ -165,7 +165,7 @@ export const OVERCAST_TINT = [0.96, 0.99, 1.05] as const;
  * A deck scatters the sun's light down as well as the sky's, so thin overcast
  * is brighter than a clear sky's shade; under a storm little arrives.
  */
-export const OVERCAST_GAIN: readonly [number, number] = [2.3, 0.7];
+export const OVERCAST_GAIN: readonly [number, number] = [2.3, 0.35];
 
 /**
  * The sky's light on a surface under cloud. `overcast` is how closed and deep

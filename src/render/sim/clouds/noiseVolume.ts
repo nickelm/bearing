@@ -2,9 +2,12 @@
  * Tiling 3D noise for the volumetric clouds, fog and dust (decision 141): two
  * small volumes, generated on the CPU from an integer hash (no random numbers,
  * rule 5; no transcendental functions, so every machine gets the same bytes)
- * and uploaded as RGBA8 3D textures that repeat in every direction.
+ * and uploaded as half-float RGBA 3D textures that repeat in every direction.
+ * Half floats, not bytes: some GPUs filter 8-bit textures to 8-bit results,
+ * and a cloud's density is a narrow range of the noise, so its edges came
+ * out in steps (the software rasterizer the previews run on does).
  *
- * `shape`, 64³ (1 MiB), sampled at 10 km per tile (heaps of 1 to 2 km):
+ * `shape`, 64³ (2 MiB), sampled at 10 km per tile (heaps of 1 to 2 km):
  *
  *   R  cloud shape: Perlin noise dilated by cellular noise, cut by a cellular
  *      fractal (three octaves), so heaps have rounded, cauliflower outlines
@@ -13,27 +16,28 @@
  *   B  Perlin fractal (three octaves): wisps, for fog banks, veils and cirrus
  *   A  a cellular fractal of finer cells: billows, for dust walls
  *
- * `detail`, 32³ (128 KiB), sampled at about 2.4 km per tile:
+ * `detail`, 32³ (256 KiB), sampled at about 2.4 km per tile:
  *
  *   R  cellular fractal (three octaves): erodes cloud edges near the camera
  *   G  Perlin fractal (three octaves): fine wisps
  *   B  one octave of cells
- *   A  unused (255)
+ *   A  unused (1)
  *
  * R and G of `shape` are equalized: their values are spread evenly over
  * 0..1, so the share of the volume above a threshold 1 − c is c. The cloud
  * density thresholds them by the local coverage, and that makes the coverage
  * drawn follow the coverage asked for.
  *
- * Generation takes about 0.2 s (`generateShapeNoise`, `generateDetailNoise`)
+ * Generation takes about 0.3 s (`generateShapeNoise`, `generateDetailNoise`)
  * and happens once, on first use (`cloudNoise`).
  */
 import {
   Data3DTexture,
+  DataUtils,
+  HalfFloatType,
   LinearFilter,
   RepeatWrapping,
   RGBAFormat,
-  UnsignedByteType,
 } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import { int, texture3D } from 'three/tsl';
@@ -230,21 +234,21 @@ function equalize(field: Float32Array): void {
   }
 }
 
-function pack(size: number, channels: (Float32Array | null)[]): Uint8Array<ArrayBuffer> {
+function pack(size: number, channels: (Float32Array | null)[]): Uint16Array<ArrayBuffer> {
   const count = size * size * size;
-  const data = new Uint8Array(count * 4);
+  const data = new Uint16Array(count * 4);
   for (let c = 0; c < 4; c++) {
     const field = channels[c];
     for (let i = 0; i < count; i++) {
       const v = field ? field[i]! : 1;
-      data[i * 4 + c] = Math.round(255 * Math.min(1, Math.max(0, v)));
+      data[i * 4 + c] = DataUtils.toHalfFloat(Math.min(1, Math.max(0, v)));
     }
   }
   return data;
 }
 
 /** The shape volume's bytes: RGBA per voxel, x fastest (see the file comment). */
-export function generateShapeNoise(size = SHAPE_SIZE, seed = 0x51ab): Uint8Array<ArrayBuffer> {
+export function generateShapeNoise(size = SHAPE_SIZE, seed = 0x51ab): Uint16Array<ArrayBuffer> {
   const count = size * size * size;
   // Perlin, two octaves, about 0..1.
   const perlin = new Float32Array(count).fill(0.5);
@@ -278,7 +282,7 @@ export function generateShapeNoise(size = SHAPE_SIZE, seed = 0x51ab): Uint8Array
 }
 
 /** The detail volume's bytes: RGBA per voxel, x fastest (see the file comment). */
-export function generateDetailNoise(size = DETAIL_SIZE, seed = 0x7c35): Uint8Array<ArrayBuffer> {
+export function generateDetailNoise(size = DETAIL_SIZE, seed = 0x7c35): Uint16Array<ArrayBuffer> {
   const count = size * size * size;
   const cells = new Float32Array(count);
   addWorley(cells, size, 3, seed + 1, 0.625);
@@ -293,11 +297,11 @@ export function generateDetailNoise(size = DETAIL_SIZE, seed = 0x7c35): Uint8Arr
   return pack(size, [cells, wisps, single, null]);
 }
 
-function volumeTexture(data: Uint8Array<ArrayBuffer>, size: number, name: string): Data3DTexture {
+function volumeTexture(data: Uint16Array<ArrayBuffer>, size: number, name: string): Data3DTexture {
   const t = new Data3DTexture(data, size, size, size);
   t.name = name;
   t.format = RGBAFormat;
-  t.type = UnsignedByteType;
+  t.type = HalfFloatType;
   t.minFilter = LinearFilter;
   t.magFilter = LinearFilter;
   t.wrapS = RepeatWrapping;

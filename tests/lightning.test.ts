@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { float } from 'three/tsl';
+import type { Node } from 'three/webgpu';
 import { latLonToDirection } from '../src/core/coords';
 import { DEG, KM, PLANET_RADIUS } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
@@ -35,11 +37,12 @@ import { WeatherGrid } from '../src/sim/weather/grid';
 const grid = new WeatherGrid();
 
 /** A view of two hours of the same weather everywhere: a storm of an intensity under a cloud base. */
-function stormView(storm: number, cloudBase = 800): WeatherView {
+function stormView(storm: number, cloudBase = 800, cover = 1): WeatherView {
   const view = new WeatherView(grid);
   for (const hour of [0, 1]) {
     const data = newFrameData(grid);
     data.fill(storm, Channel.Storm * grid.count, (Channel.Storm + 1) * grid.count);
+    data.fill(cover, Channel.Cover * grid.count, (Channel.Cover + 1) * grid.count);
     data.fill(cloudBase, Channel.CloudBase * grid.count, (Channel.CloudBase + 1) * grid.count);
     data.fill(20_000, Channel.Visibility * grid.count, (Channel.Visibility + 1) * grid.count);
     view.add({ hour, data });
@@ -333,6 +336,41 @@ describe('Lightning', () => {
     }
   });
 
+  it('shows and thunders the same when the game clock moves in steps of its own', () => {
+    // Free Flight's clock advances by whole flight-model steps (1/120 s), whatever the frame
+    // rate: a frame may hold none of them, or two or three. That is not acceleration.
+    const smooth = play(1, 0, 31, 1 / 120);
+    for (const fps of [144, 60, 50, 37]) {
+      const state = new WeatherState();
+      const lightning = new Lightning(PLANET_RADIUS, state, lighting, null);
+      lightning.seed = 1983;
+      const thunder: ThunderEvent[] = [];
+      lightning.onThunder = (e) => thunder.push(e);
+      const view = stormView(1);
+      let acc = 0;
+      let steps = 0;
+      let lit = 0;
+      for (let frame = 0; steps < 30 * 120; frame++) {
+        // Frame times that wander by a third, as a browser's do.
+        const dt = (1 / fps) * (1 + 0.33 * Math.sin(frame * 1.7));
+        acc += dt;
+        while (acc >= 1 / 120) {
+          acc -= 1 / 120;
+          steps++;
+        }
+        const gameTime = steps / 120;
+        lightning.update({ view, eye, gameTime, dt, pixelAngle: 0.001 });
+        // What a clock that runs smoothly shows at this game time.
+        const expected = smooth.trace[steps]!;
+        expect(state.flash.value).toBeCloseTo(expected, 5);
+        if (expected > 0.02) lit++;
+      }
+      expect(lit).toBeGreaterThan(20);
+      expect(thunder).toEqual(smooth.thunder.filter((e) => e.time <= steps / 120));
+      lightning.dispose();
+    }
+  });
+
   it('writes the flash to the weather state and the lighting', () => {
     const state = new WeatherState();
     const lightning = new Lightning(PLANET_RADIUS, state, lighting, null);
@@ -364,6 +402,41 @@ describe('Lightning', () => {
     lightning.dispose();
   });
 
+  it('hides the bolt under the cloud deck from a camera above it', () => {
+    const state = new WeatherState();
+    const sceneDistance = float(1e9) as unknown as Node<'float'>;
+    const lightning = new Lightning(PLANET_RADIUS, state, lighting, sceneDistance);
+    const place = HERE.clone()
+      .scale(PLANET_RADIUS)
+      .addScaled(new Vec3d(0, 1, 0).cross(HERE).normalize(), 5 * KM);
+    const showing = (height: number, view: WeatherView | null, seed: number) => {
+      lightning.forced = { strike: strikeAtPlace(place, seed), age: 0.01 };
+      lightning.update({
+        view,
+        eye: HERE.clone().scale(PLANET_RADIUS + height),
+        gameTime: 50,
+        dt: 0.016,
+        pixelAngle: 0.001,
+      });
+      expect(lightning.group.visible).toBe(true);
+      return lightning.boltShowing;
+    };
+    const overcast = stormView(1, 800, 1);
+    // Below the base (800 m, and the channel reaches 150 m into the cloud) the bolt shows in full.
+    expect(showing(300, overcast, 1)).toBe(1);
+    expect(showing(800, overcast, 1)).toBe(1);
+    // From above the deck it is the cloud that shows, glowing; the channel under it does not.
+    expect(showing(3000, overcast, 1)).toBe(0);
+    expect(showing(12_000, overcast, 1)).toBe(0);
+    // Broken cloud hides it in part; with no cloud, or no weather to ask, it shows.
+    const broken = showing(12_000, stormView(1, 800, 0.4), 2);
+    expect(broken).toBeGreaterThan(0.3);
+    expect(broken).toBeLessThan(0.7);
+    expect(showing(12_000, stormView(1, 800, 0), 3)).toBe(1);
+    expect(showing(12_000, null, 4)).toBe(1);
+    lightning.dispose();
+  });
+
   it('stays dark and silent without a storm, without weather and when switched off', () => {
     const calm = play(0.05, 0, 120, 0.1);
     expect(Math.max(...calm.trace)).toBe(0);
@@ -391,17 +464,47 @@ describe('Lightning', () => {
     expect(fast.flashes).toBeLessThanOrEqual(most);
     expect(fast.thunder.length).toBeLessThanOrEqual(most);
     expect(fast.thunder.length).toBeGreaterThan(10);
+    expect(fast.lightning.gameRate).toBeCloseTo(speed, 3);
     // At the speed of real time the same storm shows every strike.
     const real = play(1, 0, realSeconds, 1 / 60);
     expect(real.thunder.length).toBeGreaterThan(6);
+    expect(real.lightning.gameRate).toBeCloseTo(1, 6);
     // A jump of the clock is not acceleration: nothing new shows on the frame after it.
     const state = new WeatherState();
     const lightning = new Lightning(PLANET_RADIUS, state, lighting, null);
+    lightning.seed = 1983;
     let heard = 0;
     lightning.onThunder = () => heard++;
     const view = stormView(1);
     lightning.update({ view, eye, gameTime: 10, dt: 1 / 60, pixelAngle: 0.001 });
     lightning.update({ view, eye, gameTime: 2000, dt: 1 / 60, pixelAngle: 0.001 });
     expect(heard).toBe(0);
+    // Nor does it make the clock fast: real time goes on after it as before, thunder and all.
+    expect(lightning.gameRate).toBeCloseTo(1, 6);
+    for (let t = 2000; t < 2030; t += 1 / 60) {
+      lightning.update({ view, eye, gameTime: t, dt: 1 / 60, pixelAngle: 0.001 });
+    }
+    expect(heard).toBe(
+      strikesBetween(
+        SEED,
+        cellsNear(HERE, STRIKE_RANGE + 2 * KM, PLANET_RADIUS),
+        view,
+        2000,
+        2030 - 1 / 60 + 1e-9,
+      ).length,
+    );
+    // A clock that is switched to sixty times real time is fast from its first frames on; back
+    // at the speed of real time, every strike shows again within a few seconds.
+    let t = 2030;
+    for (let i = 0; i < 4; i++) {
+      t += 1;
+      lightning.update({ view, eye, gameTime: t, dt: 1 / 60, pixelAngle: 0.001 });
+    }
+    expect(lightning.gameRate).toBeGreaterThan(10);
+    for (let i = 0; i < 240; i++) {
+      t += 1 / 60;
+      lightning.update({ view, eye, gameTime: t, dt: 1 / 60, pixelAngle: 0.001 });
+    }
+    expect(lightning.gameRate).toBeCloseTo(1, 2);
   });
 });

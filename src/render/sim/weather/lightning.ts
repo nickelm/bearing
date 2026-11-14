@@ -18,9 +18,14 @@
  * most one new strike every `ACCELERATED_GAP` real seconds, the strongest as
  * seen from the camera of those that began in the frame's interval (at most
  * the last two slots of it), each flickering over its real fraction of a
- * second. Only the strikes shown thunder. A single long step is a jump of
- * the clock, not acceleration: it shows nothing of what was skipped, and
- * neither does a step backward.
+ * second. Only the strikes shown thunder. How fast the clock runs is an
+ * average over about `RATE_WINDOW` real seconds, not one frame's step: a
+ * clock that advances in steps of its own (Free Flight's moves by whole
+ * flight-model steps, the campaign's follows the worker's snapshots) gives
+ * frames with no step and frames with several, and those are not
+ * acceleration. A single long step is a jump of the clock: it shows nothing
+ * of what was skipped, and neither does a step backward; a second long step
+ * right after it is taken for the clock's new speed.
  *
  * **The bolt** is one instanced mesh in the pipeline's overlay scene: a quad
  * per segment of the channel (lightningStrikes.ts `buildBolt`), turned to
@@ -30,8 +35,19 @@
  * It runs from just inside the cloud base to the ground under it and hides
  * behind terrain (the scene's depth) and behind the planet's curve (a strike
  * beyond the horizon shows only what stands above it); the air between dims
- * it by the weather's visibility. Branches glow with the first stroke only:
- * later strokes follow the main channel.
+ * it by the weather's visibility, less than it dims the ground
+ * (`BOLT_PENETRATION`). The overlay is drawn over the clouds, so a camera
+ * above the cloud base would see the channel through the deck: there the bolt
+ * fades by the cloud cover over the strike (`boltShowing`), and what shows of
+ * the strike from above is the cloud's glow. Branches glow with the first
+ * stroke only: later strokes follow the main channel.
+ *
+ * **Warming up.** The bolt's material and the pipeline's variant with the
+ * overlay in it are compiled when they are first drawn, which stalls a frame
+ * or several: the first bolt of a storm would be over before it showed. So
+ * the mesh is drawn once without light in the first frame, and again when a
+ * strike to the ground is a few seconds off (the schedule is known ahead), at
+ * most every `WARM_GAP` real seconds (`warm`).
  *
  * Positions follow rule 4: the bolt's segments are stored relative to its
  * ground point, in world axes, and the ground point is given to the shader
@@ -103,10 +119,16 @@ export const ACCELERATION_LIMIT = 1.5;
 export const ACCELERATED_GAP: Seconds = 0.9;
 /** Game time a frame may span and still thunder for every strike in it (s). */
 export const CATCH_UP: Seconds = 2;
+/** Real time over which the game clock's speed is averaged (s). */
+export const RATE_WINDOW: Seconds = 0.3;
+/** Weight of the assumption that the clock runs at the speed of real time, before it has been watched (real s). */
+const RATE_PRIOR: Seconds = 0.1;
+/** A step this many times the clock's average step (and longer than CATCH_UP) is a jump. */
+const JUMP_FACTOR = 4;
 /** Distance at which a strike's light on the ground has fallen to half (m). */
 export const FLASH_REACH: Meters = 8 * KM;
 /** Light of the strongest flash on a surface under it, in display units (daylight is 1.4). */
-export const FLASH_ILLUMINANCE = 2;
+export const FLASH_ILLUMINANCE = 0.6;
 /** The light's color: blue-white. */
 export const FLASH_TINT: readonly [number, number, number] = [0.78, 0.86, 1];
 /** Radiance of a bolt's core in display units: far above every bloom threshold. */
@@ -116,8 +138,16 @@ const BOLT_HALF_WIDTH: Meters = 1.6;
 const BOLT_MIN_PIXELS = 0.9;
 /** Half-width of a segment's quad in core half-widths: room for the halo. */
 const BOLT_HALO = 6;
+/**
+ * Share of the air's extinction that dims a bolt. A channel is some ten thousand times as
+ * bright as the display's range holds, so it shows through rain at more than twice the
+ * distance at which a hangar is lost in it.
+ */
+const BOLT_PENETRATION = 0.35;
 /** How far the channel's top is inside the cloud, above its base (m). */
 const BOLT_INTO_CLOUD: Meters = 150;
+/** Least real time between two frames that draw the bolt's mesh without light, to have its shaders compiled (s). */
+const WARM_GAP: Seconds = 2;
 /** The camera moves this far before the cells around it are listed again (m). */
 const CELL_REFRESH: Meters = 2 * KM;
 
@@ -201,8 +231,11 @@ export class Lightning {
   /** The strike shown while game time is accelerated, and when it began on the real clock. */
   private shown: { strike: Strike; start: Seconds } | null = null;
   private lastShown = -Infinity;
-  /** Frames in a row in which game time ran faster than `ACCELERATION_LIMIT`. */
-  private fastFrames = 0;
+  /** Game and real seconds of the last frames, the older the less (`RATE_WINDOW`): their ratio is the clock's speed. */
+  private gameSpan = RATE_PRIOR;
+  private realSpan = RATE_PRIOR;
+  /** The last frame's step was a jump of the clock. */
+  private jumped = false;
 
   private readonly mesh: Mesh | null = null;
   private readonly geometry: InstancedBufferGeometry | null = null;
@@ -213,6 +246,10 @@ export class Lightning {
   private boltOf: Strike | null = null;
   private readonly boltGround = new Vec3d();
   private boltHeight = 0;
+  /** Cloud cover over the strike the mesh holds, 0..1. */
+  private boltCover = 0;
+  /** Share of the bolt's light that reaches the camera past the cloud, 0..1 (as of the last update). */
+  boltShowing = 1;
   /** The bolt's ground point relative to the camera (m). */
   private readonly anchor = uniform(new Vector3());
   private readonly boltIntensity = uniform(0);
@@ -224,6 +261,11 @@ export class Lightning {
   private readonly horizon = uniform(1);
   private readonly scratch = new Vec3d();
   private readonly position = new Vec3d();
+  /** The next frame draws the bolt's mesh without light (`warm`). */
+  private warming = true;
+  private lastWarm = -Infinity;
+  /** The time slot for which the strikes ahead were last looked up. */
+  private warmSlot = NaN;
 
   /**
    * `sceneDistance` is the pipeline's (post/simPipeline.ts); without it there
@@ -235,6 +277,7 @@ export class Lightning {
     private readonly lighting: PlanetLighting,
     sceneDistance: F | null,
   ) {
+    lighting.flashReach.value = FLASH_REACH;
     if (!sceneDistance) return;
     const quad = new InstancedBufferGeometry();
     // x: −1..1 across the segment, y: 0 at its start and 1 at its end.
@@ -338,13 +381,26 @@ export class Lightning {
     } else if (this.enabled && view?.ready) {
       const cells = this.cellsAround(eye);
       const seed = this.seedValue;
+      // Once per time slot: is a strike to the ground coming up? Then its shaders are due.
+      const slot = Math.floor(gameTime / STRIKE_SLOT);
+      if (slot !== this.warmSlot) {
+        this.warmSlot = slot;
+        if (
+          this.mesh &&
+          this.realClock - this.lastWarm >= WARM_GAP &&
+          strikesBetween(seed, cells, view, gameTime, gameTime + 2 * STRIKE_SLOT).some(
+            (s) => s.ground,
+          )
+        ) {
+          this.warming = true;
+        }
+      }
       const step = gameTime - last;
-      const fast = dt > 0 && step > ACCELERATION_LIMIT * dt;
-      this.fastFrames = fast ? this.fastFrames + 1 : 0;
-      if (fast) {
-        // Accelerated: a choice of the strikes, each shown in real time. The first fast frame
-        // may be a jump of the clock and shows nothing new.
-        if (this.fastFrames > 1 && this.realClock - this.lastShown >= ACCELERATED_GAP) {
+      const jump = this.watchClock(step, dt);
+      if (this.gameRate > ACCELERATION_LIMIT) {
+        // Accelerated: a choice of the strikes, each shown in real time. A jump of the clock
+        // shows nothing new.
+        if (!jump && step > 0 && this.realClock - this.lastShown >= ACCELERATED_GAP) {
           const from = Math.max(last, gameTime - 2 * STRIKE_SLOT);
           let best: Strike | null = null;
           let bestScore = 0;
@@ -389,7 +445,7 @@ export class Lightning {
             boltAge = a;
           }
         }
-        if (step > 0 && step <= CATCH_UP) {
+        if (!jump && step > 0 && step <= CATCH_UP) {
           for (const s of strikesBetween(seed, cells, view, last, gameTime)) {
             this.thunder(s, view, eye);
           }
@@ -417,6 +473,40 @@ export class Lightning {
       light.flashLight.value.set(0, 0, 0);
     }
     this.drawBolt(bolt, boltAge, view, eye);
+  }
+
+  /** Game seconds per real second, averaged over the last frames (1 until the clock has been watched). */
+  get gameRate(): number {
+    return this.realSpan > 0 ? this.gameSpan / this.realSpan : 1;
+  }
+
+  /**
+   * Takes a frame's step of the game clock into the clock's average speed.
+   * Returns true if the step is a jump (a seek, a step backward, the first
+   * frame), which shows no new strike and thunders for none.
+   */
+  private watchClock(step: Seconds, dt: Seconds): boolean {
+    if (!(step >= 0)) {
+      this.jumped = false;
+      return true;
+    }
+    if (!(dt > 0)) return false;
+    const long = step > CATCH_UP && step > JUMP_FACTOR * Math.max(1, this.gameRate) * dt;
+    if (long && !this.jumped) {
+      this.jumped = true;
+      return true;
+    }
+    if (long) {
+      // A second long step in a row: this is how fast the clock runs now.
+      this.gameSpan = step;
+      this.realSpan = dt;
+    } else {
+      const keep = Math.exp(-dt / RATE_WINDOW);
+      this.gameSpan = this.gameSpan * keep + step;
+      this.realSpan = this.realSpan * keep + dt;
+    }
+    this.jumped = false;
+    return false;
   }
 
   /** The cells within range of the camera, listed again once it has moved a while. */
@@ -482,25 +572,53 @@ export class Lightning {
     const mesh = this.mesh;
     if (!mesh || !this.geometry) return;
     const intensity = strike ? strikeIntensity(strike, age) : 0;
+    const shown = strike !== null && intensity > 0.004;
+    const warm = this.warming && !shown && this.enabled;
+    if (shown || warm) this.warming = false;
     // The pipeline draws its overlay pass only while something in it is visible.
-    this.group.visible = mesh.visible = intensity > 0.004;
-    if (!strike || !mesh.visible) return;
+    this.group.visible = mesh.visible = shown || warm;
+    if (warm) {
+      // The mesh as it is, without light: nothing shows, and the shaders get compiled.
+      this.lastWarm = this.realClock;
+      this.boltIntensity.value = 0;
+      if (this.geometry.instanceCount === 0) {
+        // No bolt yet: one segment, well away from the camera.
+        this.end[1] = 1;
+        (this.geometry.getAttribute('bEnd') as InstancedBufferAttribute).needsUpdate = true;
+        this.geometry.instanceCount = 1;
+        this.anchor.value.set(0, 0, 10_000);
+      }
+      return;
+    }
+    if (!strike || !shown) return;
     if (strike !== this.boltOf && !this.sameStrike(strike, this.boltOf)) {
       this.buildMesh(strike, view);
     }
     this.boltOf = strike;
     const g = this.boltGround;
     this.anchor.value.set(g.x - eye.x, g.y - eye.y, g.z - eye.z);
-    this.boltIntensity.value = intensity * (0.6 + 0.4 * strike.energy);
+    // Seen from above the cloud base, the deck hides the channel under it.
+    const over = eye.length() - g.length() - this.boltHeight;
+    const t = Math.min(1, Math.max(0, (over + 100) / 500));
+    const above = t * t * (3 - 2 * t);
+    this.boltShowing = 1 - above * Math.min(1, this.boltCover / 0.8);
+    this.boltIntensity.value = intensity * (0.6 + 0.4 * strike.energy) * this.boltShowing;
     const second = strike.strokes[1];
     this.branchGain.value = second && age >= second.offset ? 0.12 : 1;
     const visibility = this.weather.local?.visibility ?? Infinity;
-    this.extinction.value = visibility > 0 ? KOSCHMIEDER / visibility : 0;
+    this.extinction.value = visibility > 0 ? (BOLT_PENETRATION * KOSCHMIEDER) / visibility : 0;
     this.horizon.value = eye.lengthSq() - this.radius * this.radius;
   }
 
   private sameStrike(a: Strike, b: Strike | null): boolean {
-    return b !== null && a.cell === b.cell && a.slot === b.slot && a.seed === b.seed;
+    return (
+      b !== null &&
+      a.cell === b.cell &&
+      a.slot === b.slot &&
+      a.seed === b.seed &&
+      // A forced strike has no cell of its own: its place tells it from another.
+      a.direction.distanceTo(b.direction) < 1e-9
+    );
   }
 
   /** Fills the mesh with a strike's bolt, turned from its own frame into world axes. */
@@ -510,6 +628,8 @@ export class Lightning {
     const height = top.length() - this.radius - ground;
     this.boltGround.copy(strike.direction).scale(this.radius + ground);
     this.boltHeight = height;
+    const cover = view?.ready ? view.sample(Channel.Cover, strike.direction, strike.time) : 0;
+    this.boltCover = Number.isFinite(cover) ? Math.min(1, Math.max(0, cover)) : 0;
     const bolt = buildBolt(strike.seed, height);
     const up = strike.direction;
     const east = new Vec3d(0, 1, 0).cross(up);
@@ -547,12 +667,24 @@ export class Lightning {
       : null;
   }
 
+  /**
+   * Draws the bolt's mesh once in the next frame, without light, so that the
+   * renderer compiles its material and the pipeline its variant with the
+   * overlay before the first bolt needs them. Done by itself in the first
+   * frame and ahead of strikes to the ground; call it after changing the
+   * pipeline's settings (its quality, bloom, grading), which make new variants.
+   */
+  warm(): void {
+    this.warming = true;
+  }
+
   /** Forgets the clock, so the next update plays no thunder for the time before it. */
   reset(): void {
     this.lastTime = NaN;
     this.shown = null;
     this.lastShown = -Infinity;
-    this.fastFrames = 0;
+    this.gameSpan = this.realSpan = RATE_PRIOR;
+    this.jumped = false;
   }
 
   dispose(): void {

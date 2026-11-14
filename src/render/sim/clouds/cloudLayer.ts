@@ -16,24 +16,28 @@
  *   is in (`upstream`), so heaps stay in their patch of coverage.
  * - Form: the bake also stores the cloud base and the development, the kind
  *   and depth of cloud (cloudForm.ts), from the weather's cloud base, cover,
- *   precipitation and storm field. Storm towers stand where a cell pattern of
+ *   precipitation and storm field; the cores of the detail's cloud systems
+ *   stand deeper than their edges. Storm towers stand where a cell pattern of
  *   about 45 km is strong inside a storm.
- * - Baking (decision 69): the field is evaluated into a texture by a compute
- *   pass (`bake`, coverageBake.ts). The volumetric clouds, the shadow and the
- *   strategic map all read that texture, one texel per sample.
+ * - Baking (decision 69): the field is evaluated into a half-float texture by
+ *   a compute pass (`bake`, coverageBake.ts). The volumetric clouds, the
+ *   shadow and the strategic map all read that texture, one texel per sample.
  * - Shadows: `shadow(p)` is the sun visibility at a planet-centered point. It
  *   follows the sun's ray to the level where the cloud above is widest and
- *   evaluates the cloud's density there as the march does (one baked texel,
- *   one read of the shape noise), so a cumulus and its shadow agree; the
- *   shadow deepens with the layer's thickness. `overcast(p)` is how closed and
- *   deep the cloud above is, from the same texel: PlanetLighting grays and
- *   dims the sky light by it. Neither costs a read while no cloud is near
- *   (`cloudy`, from the weather around the camera on the CPU).
+ *   thresholds the shape noise there by the local coverage as the march does
+ *   (one baked texel, one read of the noise), with a wider edge for a
+ *   penumbra, so a cumulus and its shadow lie in the same place; the shadow
+ *   deepens with the layer's thickness, and a closed deck's is all but
+ *   complete. `overcast(p)` is how closed and deep the cloud above is, from
+ *   the same texel: PlanetLighting grays and dims the sky light by it.
+ *   Neither costs a read while no cloud is near (`cloudy`, from the weather
+ *   around the camera on the CPU).
  * - The shell: a cube-sphere mesh, drawn transparent and camera-relative
- *   (rule 4), with the bake as flat cloud. The volumetric clouds replace it
- *   inside the simulation view; it fades in above them (`shell`), for the
- *   debug camera on its way to orbit, and stands in for them where the frame
- *   is drawn without the post-processing pipeline.
+ *   (rule 4), with the bake as flat cloud, as opaque as the volumetric clouds
+ *   are on average. Those replace it inside the simulation view; it fades in
+ *   above them between 30 and 50 km (`shell`), for the debug camera on its
+ *   way to orbit, and stands in for them where the frame is drawn without
+ *   the post-processing pipeline.
  */
 import {
   DoubleSide,
@@ -81,8 +85,8 @@ import { Vec3d } from '../../../core/vec3d';
 import {
   BASE_SCALE,
   cloudColumn,
+  DETAIL_SWING,
   coverageAt,
-  densityFrom,
   development,
   developmentOf,
   meanDensity,
@@ -129,8 +133,14 @@ export const VIEW_ANGLE = 0.38;
 /** Camera altitudes (m) between which the shell takes over from the volumetric clouds. */
 export const SHELL_FROM = 30_000;
 export const SHELL_FULL = 50_000;
-/** Extinction of the cloud as its shadow counts it (1/m, at full density). */
-const SHADOW_EXTINCTION = 0.004;
+/**
+ * Extinction of the cloud as its shadow counts it (1/m, at full density): of
+ * heaps, whose shadows keep some light and a soft edge, and of a closed deck.
+ */
+const HEAP_SHADOW = 0.0017;
+const DECK_SHADOW = 0.0036;
+/** The share of a cloud's noise range over which its shadow deepens (the cloud's own is EDGE). */
+const SHADOW_EDGE = 0.75;
 /** Distances from the camera (m) over which the shadow loses the noise's fine and coarse structure. */
 const SHADOW_SMOOTH: [number, number] = [20_000, 60_000];
 const SHADOW_MEAN: [number, number] = [60_000, 150_000];
@@ -172,6 +182,8 @@ export class CloudLayer implements WeatherField {
    * the shell then shows only above them, from SHELL_FROM up.
    */
   volumetric = false;
+  /** Draw the shell at all: off leaves the sky without cloud where the volumetric clouds are not drawn. */
+  shellEnabled = true;
   /** The shape noise's turn about the polar axis, as (cosine, sine). Set by `update`. */
   readonly turn = uniform(new Vector2(1, 0));
   /** Offsets of the shape and the detail noise, in tiles. Set by `update`. */
@@ -203,8 +215,10 @@ export class CloudLayer implements WeatherField {
     private readonly radius: number,
     private readonly lighting: PlanetLighting,
     private readonly weather: WeatherTexture,
+    /** Interior texels per face edge of the bake (default BAKE_RESOLUTION; tests bake smaller). */
+    bakeResolution?: number,
   ) {
-    this.baked = new CoverageBake({ texel: (d) => this.texel(d) });
+    this.baked = new CoverageBake({ texel: (d) => this.texel(d) }, bakeResolution);
     const arrays = buildCubeSphereArrays(48, radius + CLOUD_ALTITUDE);
     const g = new BufferGeometry();
     g.setAttribute('position', new BufferAttribute(arrays.positions, 3));
@@ -223,19 +237,25 @@ export class CloudLayer implements WeatherField {
   /** Cloud coverage 0..1 at a direction from the planet center (any length). */
   coverage(direction: V3): F {
     const dir = normalize(direction) as V3;
-    return this.coverageOf(dir, this.weather.sample(dir).cover);
+    return this.coverageOf(this.weather.sample(dir).cover, this.detail(dir));
   }
 
-  /** Coverage at a unit direction where the weather's cover fraction is `fraction`. */
-  private coverageOf(dir: V3, fraction: F): F {
-    const cover = fraction.add(this.coverageBias);
-    // Detail: two independent fields, each turned rigidly about the polar axis (no
-    // shear, so clouds never stretch): one eastward for the mid-latitude westerlies,
-    // one westward for the trades and polar easterlies, blended across band edges.
+  /**
+   * The detail field at a unit direction, spread over roughly 0..1: a point is
+   * cloudy where it is below the cover fraction.
+   */
+  private detail(dir: V3): F {
+    // Two independent fields, each turned rigidly about the polar axis (no shear, so
+    // clouds never stretch): one eastward for the mid-latitude westerlies, one westward
+    // for the trades and polar easterlies, blended across band edges.
     const east = this.field(dir, WESTERLY, vec3(0, 0, 0));
     const west = this.field(dir, EASTERLY, vec3(41.7, 19.3, 73.1));
-    // The detail value spread over roughly 0..1: cloudy where it is below the cover.
-    const q = clamp(mix(west, east, this.westerlies(dir)).sub(0.5).mul(2.2).add(0.5), 0.02, 0.98);
+    return clamp(mix(west, east, this.westerlies(dir)).sub(0.5).mul(2.2).add(0.5), 0.02, 0.98) as F;
+  }
+
+  /** Coverage where the weather's cover fraction is `fraction` and the detail field `q`. */
+  private coverageOf(fraction: F, q: F): F {
+    const cover = fraction.add(this.coverageBias);
     // Cover stretched by the blend half-width, so 0 is fully clear and 1 fully overcast.
     const stretched = cover.mul(1.2).sub(0.1);
     return smoothstep(q.sub(0.1), q.add(0.1), stretched).mul(this.enabled) as F;
@@ -301,15 +321,21 @@ export class CloudLayer implements WeatherField {
       const tower = float(0).toVar();
       // The cell pattern is evaluated only inside storms.
       If(storm.greaterThan(0.02), () => {
-        tower.assign(
-          clamp(storm.mul(1.25), 0, 1).mul(smoothstep(0.1, 0.38, this.towerCells(dir))),
-        );
+        tower.assign(clamp(storm.mul(1.25), 0, 1).mul(smoothstep(0.02, 0.3, this.towerCells(dir))));
       });
+      const q = this.detail(dir).toVar();
+      // Deeper cloud in the cores of the detail's systems than at their edges.
+      const local = w.cover.add(this.coverageBias).add(
+        float(0.5)
+          .sub(q)
+          .mul(2 * DETAIL_SWING),
+      );
       return vec4(
-        this.coverageOf(dir, w.cover),
-        w.precip,
+        this.coverageOf(w.cover, q as F),
+        // Capped as the 8-bit bake capped it: the map's hatching reads this channel.
+        clamp(w.precip, 0, 1),
         w.base.div(BASE_SCALE),
-        development(w.cover.add(this.coverageBias) as F, w.precip, tower as F),
+        development(local as F, w.precip, tower as F),
       );
     })() as Node<'vec4'>;
   }
@@ -369,15 +395,16 @@ export class CloudLayer implements WeatherField {
         // Far from the camera the march draws smoother cloud, and so does the shadow.
         const distance = length(q.sub(L.eye)).toVar();
         const noise = mix(n.x, n.y, smoothstep(SHADOW_SMOOTH[0], SHADOW_SMOOTH[1], distance));
+        // A penumbra: the shadow's edge is wider than the cloud's own.
         const heaps = mix(
-          densityFrom(c as F, noise as F),
+          smoothstep(c.oneMinus().sub(0.05), c.oneMinus().add(c.mul(SHADOW_EDGE)), noise),
           meanDensity(c as F),
           smoothstep(SHADOW_MEAN[0], SHADOW_MEAN[1], distance),
         );
         // A closed deck has cloud in every column: its depth varies, it does not open.
-        const deck = c.mul(noise.mul(0.3).add(0.35));
+        const deck = c.mul(noise.mul(0.45).add(0.55)).mul(DECK_SHADOW / HEAP_SHADOW);
         const density = mix(heaps, deck, column.deck);
-        const depth = density.mul(column.thickness).mul(SHADOW_EXTINCTION).mul(min(slant, 2.5));
+        const depth = density.mul(column.thickness).mul(HEAP_SHADOW).mul(min(slant, 2.5));
         const under = smoothstep(level.add(150), level.sub(150), height).toVar();
         const shade = float(1).sub(exp(depth.negate())).mul(this.shadowStrength).mul(under);
         // How closed and how deep: 0.4 under a deck of 1 km, 1 under a storm tower.
@@ -447,13 +474,17 @@ export class CloudLayer implements WeatherField {
     const up = normalize(p) as V3;
     // The field itself near the camera, the bake from altitude (a uniform branch).
     const field = Fn(() => {
-      const out = this.baked.sample(p).toVar();
+      // Coverage, precipitation, and the share of a covered area its cloud fills.
+      const column = this.column(p);
+      const out = vec3(column.cover, column.precip, column.fill).toVar();
       If(this.detailed.greaterThan(0.5), () => {
-        out.assign(vec2(this.coverage(p), this.weather.sample(p).precip));
+        out.assign(vec3(this.coverage(p), this.weather.sample(p).precip, out.z));
       });
       return out;
     })();
-    const cover = field.x.mul(this.enabled);
+    // Heaps cover a part of their patch: the shell is as opaque as the volumetric clouds it
+    // stands in for are on average.
+    const cover = field.x.mul(field.z).mul(this.enabled);
     const sunUp = dot(up, L.sunDirection);
     // Lit from above: brighter as the sun climbs; undersides of thick cloud are darker.
     const sunlight = L.sunlightAt(p).mul(clamp(sunUp.add(0.25), 0, 1).mul(0.7).add(0.15));
@@ -485,7 +516,10 @@ export class CloudLayer implements WeatherField {
     const bias = this.coverageBias.value;
     // Coverage is zero where the stretched cover stays under the detail field's lowest value.
     this.possible = on && (view.cover + bias) * 1.2 - 0.1 > 0.02 - 0.1;
-    const deepest = Math.max(developmentOf(view.cover + bias, view.precip), view.storm > 0.02 ? 1 : 0);
+    const deepest = Math.max(
+      developmentOf(view.cover + bias + DETAIL_SWING, view.precip),
+      view.storm > 0.02 ? 1 : 0,
+    );
     this.bottom = view.baseMin;
     this.top = view.baseMax + thicknessUpTo(deepest);
     this.cloudy.value = this.possible ? 1 : 0;
@@ -525,8 +559,9 @@ export class CloudLayer implements WeatherField {
     placePlanetCentered(this.mesh, eye);
     this.shell.value = this.volumetric ? smooth(SHELL_FROM, SHELL_FULL, altitude) : 1;
     this.below.value = altitude < shellAltitude ? 1 : 0;
-    this.detailed.value = altitude < DETAIL_ALTITUDE ? 1 : 0;
-    this.group.visible = on && this.shell.value > 0;
+    // Under the volumetric clouds the shell only shows while it fades in: from the bake.
+    this.detailed.value = altitude < DETAIL_ALTITUDE && !this.volumetric ? 1 : 0;
+    this.group.visible = on && this.shellEnabled && this.shell.value > 0;
   }
 
   /** Opacity of the volumetric clouds, 0..1: they fade out as the shell fades in. */
@@ -541,5 +576,5 @@ export class CloudLayer implements WeatherField {
 }
 
 function newExtent(): WeatherExtent {
-  return { cover: 0, precip: 0, baseMin: 0, baseMax: 0, fog: 0, dust: 0, storm: 0 };
+  return { cover: 0, precip: 0, baseMin: 0, baseMax: 0, fog: 0, dust: 0, storm: 0, ground: 0 };
 }

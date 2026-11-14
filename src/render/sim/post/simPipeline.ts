@@ -147,6 +147,11 @@ export interface VolumetricContext {
 export interface VolumetricSource {
   /** rgb: in-scattered radiance (scene units, before exposure); a: transmittance of the scene behind. */
   build(ctx: VolumetricContext): V4;
+  /**
+   * True while the source would return (0, 0, 0, 1) for every pixel (clear air): the
+   * pipeline then leaves its volumetric stage out of the frame (decision 141).
+   */
+  idle?: boolean;
 }
 
 export interface SimPipelineOptions {
@@ -183,6 +188,26 @@ const MSAA_SAMPLES = 4;
 const EDGE = 0.05;
 /** Relative depth difference at which a neighbor's weight in the low-resolution filter falls to 1/e. */
 const FILTER_DEPTH = 0.05;
+/**
+ * Relative depth difference up to which two low-resolution texels count as the same surface,
+ * for the filter and the upsample: ground receding toward the horizon differs by this much
+ * from one texel to the next, and weighting those apart left the march's sample pattern
+ * and the texel grid visible on clouds and fog in front of it (decision 141).
+ */
+const SAME_SURFACE = 0.15;
+/**
+ * Distance (m) from which a surface counts toward the sky for the same two: the air in front
+ * of ground 100 km away and in front of the sky above it is the same air, and treating the
+ * horizon as a silhouette drew it as a line across clouds in front of it (decision 141).
+ */
+const FAR_SURFACE = 15_000;
+/**
+ * Transmittance of the volumetric result from which the surface behind it counts in full for
+ * the same two: behind opaque cloud or fog a surface's depth changes nothing, and telling
+ * the horizon's ground from the sky above it there drew a line across the cloud in front of
+ * both (decision 141).
+ */
+const HIDDEN_SURFACE = 0.1;
 
 /**
  * Makes an overlay material add its color times its alpha to the image
@@ -289,6 +314,8 @@ export class SimPipeline {
   private bloomChain: Bloom | null = null;
   private readonly fullSize = uniform(new Vector2(1, 1));
   private readonly lowSize = uniform(new Vector2(1, 1));
+  /** Reversed depth of a surface FAR_SURFACE away: the floor of `apart`. */
+  private readonly farDepth = uniform(1e-30);
   /** Offsets of the noise patterns this frame (pixels). */
   private readonly jitterOffset = uniform(new Vector2());
   private readonly grainOffset = uniform(new Vector2());
@@ -381,9 +408,13 @@ export class SimPipeline {
     this.resize(Math.max(1, this.size.x), Math.max(1, this.size.y));
     camera.updateMatrixWorld();
     this.rays.update(camera);
+    // The reversed depth of a surface FAR_SURFACE away along the view axis.
+    this.farDepth.value =
+      (camera.near * Math.max(camera.far - FAR_SURFACE, 0)) /
+      (FAR_SURFACE * (camera.far - camera.near));
     this.updateUniforms();
 
-    let volumetric = this.volumetricsEnabled && this.source !== null;
+    let volumetric = this.volumetricsEnabled && this.source !== null && this.source.idle !== true;
     const overlay = this.overlay.children.some((c) => c.visible);
     const stats = this.stats;
     stats.passes = stats.fullResolutionPasses = 1;
@@ -536,6 +567,14 @@ export class SimPipeline {
     return abs(a.sub(b)).div(max(max(a, b), 1e-30)) as F;
   }
 
+  /**
+   * `mismatch` for the low-resolution filter and the upsample: surfaces beyond
+   * FAR_SURFACE differ less the farther both are, and the farthest are one with the sky.
+   */
+  private apart(a: F, b: F): F {
+    return abs(a.sub(b)).div(max(max(a, b), this.farDepth)) as F;
+  }
+
   /** The scene's reversed depth at a pixel: of one of its samples, with MSAA. */
   private depthAt(pixel: IV2, sample = 0): F {
     return fetch(this.depthTexture, pixel, sample).x as F;
@@ -645,16 +684,23 @@ export class SimPipeline {
       const low = ivec2(screenCoordinate.xy).toVar();
       const last = ivec2(this.lowSize).sub(1).toVar();
       const depth = fetch(lowDepth, low).x.toVar();
+      const through = fetch(lowRaw, low).a.toVar();
       const sum = vec4(0).toVar();
       const weight = float(0).toVar();
       for (let j = -1; j <= 1; j++) {
         for (let i = -1; i <= 1; i++) {
           const texel = clampTexel(low.add(ivec2(i, j)), last as IV2).toVar();
-          const m = SimPipeline.mismatch(fetch(lowDepth, texel).x as F, depth as F).div(
-            FILTER_DEPTH,
-          );
+          const raw = fetch(lowRaw, texel).toVar();
+          // Where both results are opaque, what lies behind them does not show: one surface.
+          const shown = smoothstep(0, HIDDEN_SURFACE, max(raw.a, through));
+          const m = max(
+            this.apart(fetch(lowDepth, texel).x as F, depth as F)
+              .mul(shown)
+              .sub(SAME_SURFACE),
+            0,
+          ).div(FILTER_DEPTH);
           const w = exp(m.mul(m).negate()).toVar();
-          sum.addAssign(fetch(lowRaw, texel).mul(w));
+          sum.addAssign(raw.mul(w));
           weight.addAssign(w);
         }
       }
@@ -676,9 +722,10 @@ export class SimPipeline {
     const base = floor(at).toVar();
     const f = at.sub(base).toVar();
     const corner = ivec2(base).toVar();
-    const mismatch = (d: F): F => SimPipeline.mismatch(d, depth);
+    const mismatch = (d: F): F => this.apart(d, depth);
     const sum = vec4(0).toVar();
     const weight = float(0).toVar();
+    const plain = vec4(0).toVar();
     const best = float(1e9).toVar();
     for (let j = 0; j < 2; j++) {
       for (let i = 0; i < 2; i++) {
@@ -686,14 +733,21 @@ export class SimPipeline {
         const m = mismatch(fetch(lowDepth, texel).x as F).toVar();
         const bilinear = (i ? f.x : f.x.oneMinus()).mul(j ? f.y : f.y.oneMinus());
         // The small floor lets a texel with no bilinear weight stand in when the others do not match.
-        const w = bilinear.add(0.02).div(m.mul(m).add(1e-4)).toVar();
-        sum.addAssign(fetch(lowColor, texel).mul(w));
+        const apart = max(m.sub(SAME_SURFACE), 0);
+        const w = bilinear.add(0.02).div(apart.mul(apart).add(1e-4)).toVar();
+        const color = fetch(lowColor, texel).toVar();
+        sum.addAssign(color.mul(w));
         weight.addAssign(w);
+        plain.addAssign(color.mul(bilinear));
         best.assign(min(best, m));
       }
     }
     const result = sum.div(weight).toVar();
-    If(best.greaterThan(MISMATCH), () => {
+    // Where the air in front of this pixel's surface is opaque, the surface does not show and
+    // its depth does not matter: the plain bilinear result, without an edge at the silhouette.
+    const shown = smoothstep(0, HIDDEN_SURFACE, result.a).toVar();
+    result.assign(mix(plain, result, shown));
+    If(best.greaterThan(MISMATCH).and(shown.greaterThan(0)), () => {
       // No neighbor lies on this pixel's side of a silhouette: take the closest depth nearby.
       const center = ivec2(floor(at.add(0.5))).toVar();
       const found = center.toVar();

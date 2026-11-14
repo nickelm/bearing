@@ -12,12 +12,14 @@
  *   in units of BASE_SCALE (cloudForm.ts), A = development (cloudForm.ts): the kind and depth
  *   of cloud. The volumetric march and the cloud shadow read all four with
  *   one read per sample (decision 141); the strategic map reads R and G.
+ *   Half floats (28 MB at 768 texels per face edge): the march thresholds
+ *   noise by these values, and bytes showed as steps.
  * - Refresh: a compute pass re-evaluates the field when the game clock has
  *   moved enough for the clouds to move a fraction of a texel, when the
  *   weather frames or the cloud settings change, and at most every
  *   MIN_INTERVAL_MS of real time.
  */
-import { StorageTexture } from 'three/webgpu';
+import { HalfFloatType, StorageTexture } from 'three/webgpu';
 import type { ComputeNode, Node, WebGPURenderer } from 'three/webgpu';
 import {
   float,
@@ -95,6 +97,8 @@ export class CoverageBake {
   ) {
     const m = (this.m = n + 2);
     this.texture = new StorageTexture(3 * m, 2 * m);
+    // Half floats: the march thresholds noise by these values, and 8-bit steps showed (decision 141).
+    this.texture.type = HalfFloatType;
     this.texture.generateMipmaps = false;
     const count = 6 * m * m;
     this.kernel = Fn(() => {

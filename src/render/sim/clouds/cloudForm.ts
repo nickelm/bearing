@@ -33,7 +33,7 @@ import { clamp, float, max, mix, smoothstep } from 'three/tsl';
 
 type F = Node<'float'>;
 
-/** Meters per unit of the bake's cloud-base channel: 40 m per 8-bit step. */
+/** Meters per unit of the bake's cloud-base channel (a half float: bases to within a meter). */
 export const BASE_SCALE = 10_200;
 /** Thickness of a rain layer (m): what a storm tower stands on. */
 export const RAIN_LAYER = 4000;
@@ -52,16 +52,27 @@ const smooth = (a: number, b: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 
-/** Development 0..0.75 from the weather's cover fraction and precipitation fraction (of 4 mm/h). */
+/** How far the cloud field's detail moves the cover a column's development is taken from, either way. */
+export const DETAIL_SWING = 0.12;
+
+/**
+ * Development 0..0.75 from a cover fraction and the precipitation as a
+ * fraction of 4 mm/h. The cover is the weather's plus the local swing of the
+ * cloud field's detail (up to DETAIL_SWING either way), so the cores of cloud
+ * systems stand deeper than their edges; past full cover a dry deck thickens
+ * a little more (to 0.54).
+ */
 export function developmentOf(cover: number, precip: number): number {
-  const dry = 0.5 * smooth(0.08, 0.92, cover);
+  const dry = 0.5 * smooth(0.08, 0.92, cover) + 0.04 * smooth(0.9, 1.2, cover);
   const wet = 0.5 + 0.25 * Math.sqrt(sat(precip));
   return dry + (Math.max(dry, wet) - dry) * smooth(0, 0.04, precip);
 }
 
 /** `developmentOf` in TSL, with a storm cell's strength 0..1 taking it to 1. */
 export function development(cover: F, precip: F, tower: F): F {
-  const dry = smoothstep(0.08, 0.92, cover).mul(0.5);
+  const dry = smoothstep(0.08, 0.92, cover)
+    .mul(0.5)
+    .add(smoothstep(0.9, 1.2, cover).mul(0.04));
   const wet = clamp(precip, 0, 1).sqrt().mul(0.25).add(0.5);
   const s = mix(dry, max(dry, wet), smoothstep(0, 0.04, precip));
   return mix(s, float(1), clamp(tower, 0, 1)) as F;
@@ -149,7 +160,7 @@ export function coverageAt(column: CloudColumn, h: F, towers = true): F {
     // A tower: the rain layer at its foot, a column where the cell is strong, and an anvil
     // that reaches out to the cell's rim.
     const foot = smoothstep(RAIN_LAYER + 600, RAIN_LAYER - 600, above);
-    const body = smoothstep(0.4, 0.7, column.tower).mul(
+    const body = smoothstep(0.3, 0.6, column.tower).mul(
       // A waist under the anvil.
       smoothstep(0.75, 0.45, y).mul(0.2).add(0.8),
     );

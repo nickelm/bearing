@@ -18,6 +18,9 @@
  * started is dropped, not queued: a storm heard a minute late is worse than
  * one not heard.
  *
+ * Everything goes through one master gain (`volume`, `muted`) and a limiter,
+ * so a near strike over a downpour does not clip.
+ *
  * The thunder's delay is real time: the sound of a strike 5 km away arrives
  * 14.6 s after the flash on the context's clock, which stops while the
  * context is suspended, so a paused game holds its thunder back.
@@ -74,6 +77,7 @@ function defaultContext(): AudioContext | null {
 export class WeatherAudio {
   private context: AudioContext | null = null;
   private master: GainNode | null = null;
+  private limiter: DynamicsCompressorNode | null = null;
   private noise: ThunderNoise | null = null;
   private ambience: Ambience | null = null;
   /** The context's end times and loudness of the thunders sounding or on their way. */
@@ -158,7 +162,21 @@ export class WeatherAudio {
       }
       const master = context.createGain();
       master.gain.value = this.mute ? 0 : this.level;
-      master.connect(context.destination);
+      // A near strike over a downpour sums to more than full scale: a limiter holds the peaks
+      // down, where the output would clip them.
+      if (typeof context.createDynamicsCompressor === 'function') {
+        const limiter = context.createDynamicsCompressor();
+        limiter.threshold.value = -8;
+        limiter.knee.value = 8;
+        limiter.ratio.value = 12;
+        limiter.attack.value = 0.003;
+        limiter.release.value = 0.25;
+        master.connect(limiter);
+        limiter.connect(context.destination);
+        this.limiter = limiter;
+      } else {
+        master.connect(context.destination);
+      }
       const length = Math.round(NOISE_SECONDS * context.sampleRate);
       const white = context.createBuffer(1, length, context.sampleRate);
       const brown = context.createBuffer(1, length, context.sampleRate);
@@ -226,6 +244,8 @@ export class WeatherAudio {
     this.ambience = null;
     this.master?.disconnect();
     this.master = null;
+    this.limiter?.disconnect();
+    this.limiter = null;
     if (this.context) void this.settle(this.context.close());
     this.context = null;
     this.noise = null;

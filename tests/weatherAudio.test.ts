@@ -77,6 +77,14 @@ class StubOscillator extends StubSource {
   readonly frequency = new StubParam();
 }
 
+class StubCompressor extends StubNode {
+  readonly threshold = new StubParam();
+  readonly knee = new StubParam();
+  readonly ratio = new StubParam();
+  readonly attack = new StubParam();
+  readonly release = new StubParam();
+}
+
 /** The parts of an AudioContext the weather's audio uses. */
 class StubContext {
   currentTime = 10;
@@ -87,6 +95,12 @@ class StubContext {
   readonly gains: StubGain[] = [];
   readonly filters: StubFilter[] = [];
   readonly oscillators: StubOscillator[] = [];
+  readonly compressors: StubCompressor[] = [];
+  createDynamicsCompressor() {
+    const c = new StubCompressor('compressor');
+    this.compressors.push(c);
+    return c;
+  }
   createGain() {
     const g = new StubGain('gain');
     this.gains.push(g);
@@ -315,9 +329,14 @@ describe('WeatherAudio', () => {
     const curve = level.gain.calls.find((c) => c.method === 'setValueCurveAtTime')!;
     expect(curve.args[1]).toBeCloseTo(arrival, 6);
     const farPeak = Math.max(...(curve.args[0] as Float32Array));
-    // It ends up in the master gain, which feeds the destination.
+    // It ends up in the master gain, which feeds the destination through the limiter.
     const master = level.outputs[0] as StubGain;
-    expect(master.outputs).toContain(context.destination);
+    expect(master).toBe(context.gains[0]);
+    const limiter = context.compressors[0]!;
+    expect(master.outputs).toEqual([limiter]);
+    expect(limiter.outputs).toEqual([context.destination]);
+    expect(limiter.threshold.value).toBeLessThan(0);
+    expect(limiter.ratio.value).toBeGreaterThan(4);
 
     // A near strike: a crack as well, at once almost, brighter and louder.
     audio.thunder({ distance: 500, energy: 1, ground: true, time: 101 });
@@ -374,6 +393,10 @@ describe('WeatherAudio', () => {
     expect(hiss!.gain.target).toBe(0);
     // Changes are eased, never set in a step.
     expect(roar!.gain.calls.every((c) => c.method === 'setTargetAtTime')).toBe(true);
+    // Steady weather schedules nothing more, however often it is reported.
+    const scheduled = roar!.gain.calls.length + wind!.gain.calls.length;
+    for (let i = 0; i < 100; i++) audio.update({ rain: 1, snow: 0, dust: 0, wind: 25 });
+    expect(roar!.gain.calls.length + wind!.gain.calls.length).toBe(scheduled);
     audio.update({ rain: 0, snow: 0, dust: 0, wind: 0 });
     for (const g of [patter!, roar!, wind!, hiss!]) expect(g.gain.target).toBe(0);
     audio.dispose();
@@ -405,6 +428,14 @@ describe('WeatherAudio', () => {
     audio.resume();
     expect(context.state).toBe('running');
     audio.dispose();
+
+    // A context without a compressor (an old browser): the master feeds the destination itself.
+    const plain = new StubContext();
+    (plain as { createDynamicsCompressor?: unknown }).createDynamicsCompressor = undefined;
+    const bare = new WeatherAudio({ createContext: () => plain as unknown as AudioContext });
+    expect(bare.start()).toBe(true);
+    expect(plain.gains[0]!.outputs).toEqual([plain.destination]);
+    bare.dispose();
 
     // Suspended before the first gesture: the context starts suspended.
     const later = new StubContext();

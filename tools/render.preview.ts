@@ -40,6 +40,17 @@
  *          LOW_SUN_EXPOSURE=x sets the exposure of lit surfaces over the sky's under a low sun
  *          (default 1.7), SKY_LEAN=x how far the sky's light leans toward the sun (0.5),
  *          DAYLIGHT=x the sun's illuminance by day (1.4),
+ *        weather and volumetrics (decision 141): WEATHER=<preset> shows a weather preset
+ *          (sim/weather/presets.ts: clear, fair, overcast, drizzle, rain, storm, snow, blizzard,
+ *          fog, duststorm) in place of the sim's, with the ground as wet as its rain makes it;
+ *          QUALITY=low|medium|high sets the volumetrics' steps and resolution, VOL=0 leaves
+ *          them out (the cloud shell shows instead), CLOUDS_3D=0 and AIR=0 leave out the clouds
+ *          or the fog, dust and rain shafts alone, CIRRUS=x sets the amount of cirrus (0..1);
+ *          PERF_VOL=n times the frame without the volumetrics and with them under each weather
+ *          of PERF_WEATHER (clear,fair,overcast,storm) at each quality, interleaved over n
+ *          rounds; FRAMES=n renders n more frames with the clocks running (FRAME_DT real seconds
+ *          each, TIME_RATE game seconds per real second) and prints how far each differs from
+ *          the one before (tools/clouds.preview.ts draws the volumetrics without a world),
  *        precipitation and lightning (decision 142): RAIN=x, SNOW=x, DUST=x (0..1) set the
  *          intensity at the camera whatever the weather (WEATHER=storm RAIN=1 is a skyfall);
  *          PRECIP=0 leaves the particles out, PRECIP_DENSITY=x scales their number;
@@ -1237,7 +1248,10 @@ it('renders preview views', async () => {
       const b = scene.lightning.bolt;
       console.log(
         `  lightning ${v.name}: flash ${scene.lightning.intensity.toFixed(2)}` +
-          (b ? `, bolt ${b.segments} segments, ${b.height.toFixed(0)} m` : ''),
+          (b
+            ? `, bolt ${b.segments} segments, ${b.height.toFixed(0)} m, ` +
+              `${(100 * scene.lightning.boltShowing).toFixed(0)}% showing past the cloud`
+            : ''),
       );
     }
     // PERF=n: time n more frames of the loaded view (CPU in scene.render, and until the GPU is done).
@@ -1451,16 +1465,25 @@ it('renders preview views', async () => {
         weatherAt(cloudTime, kind);
         scene.clouds.bake(head.renderer, (bakeClock += 1e9));
       };
-      const modes: [string, () => void][] = [
-        ['off', () => (show(kinds[0]!), (pipeline.volumetricsEnabled = false))],
-      ];
+      const levels = ['low', 'medium', 'high'] as const;
+      const modes: [string, () => void][] = [];
       for (const kind of kinds) {
-        for (const quality of ['low', 'medium', 'high'] as const) {
+        modes.push([
+          `${kind}/off`,
+          () => {
+            // Without the volumetrics and without the shell that would stand in for them.
+            show(kind);
+            pipeline.volumetricsEnabled = false;
+            scene.clouds.shellEnabled = false;
+          },
+        ]);
+        for (const quality of levels) {
           modes.push([
             `${kind}/${quality}`,
             () => {
               show(kind);
               pipeline.volumetricsEnabled = true;
+              scene.clouds.shellEnabled = true;
               scene.volumetrics.quality = quality;
             },
           ]);
@@ -1470,25 +1493,35 @@ it('renders preview views', async () => {
       for (let round = -1; round < volRounds; round++) {
         for (const [name, set] of modes) {
           set();
-          scene.render(0);
-          await gpu.finish();
+          // A new quality's shader is compiled and drawn a few frames before the source may
+          // rest in clear air; the weather's coverage is baked.
+          for (let k = 0; k < 3; k++) {
+            scene.render(0);
+            await gpu.finish();
+          }
           const q0 = performance.now();
           scene.render(0);
           await gpu.finish();
-          // Round −1 compiles each mode's shaders.
           if (round >= 0) (times[name] ??= []).push(performance.now() - q0);
         }
       }
       const median = (a: number[]) => [...a].sort((x, y) => x - y)[a.length >> 1]!;
-      const off = median(times.off!);
       console.log(
-        `  volumetrics ${v.name} (median of ${volRounds}, ms/frame): off ${off.toFixed(1)}; ` +
-          modes
-            .slice(1)
-            .map(([name]) => `${name} +${(median(times[name]!) - off).toFixed(1)}`)
-            .join(', '),
+        `  volumetrics ${v.name} (median of ${volRounds}, ms/frame): ` +
+          kinds
+            .map((kind) => {
+              const off = median(times[`${kind}/off`]!);
+              return (
+                `${kind}: off ${off.toFixed(1)}, ` +
+                levels
+                  .map((l) => `${l} ${(median(times[`${kind}/${l}`]!) - off).toFixed(1)}`)
+                  .join(', ')
+              );
+            })
+            .join('; '),
       );
       pipeline.volumetricsEnabled = saved.enabled;
+      scene.clouds.shellEnabled = true;
       scene.volumetrics.quality = saved.quality;
       pipeline.volumetricScale = saved.scale;
       weatherAt(cloudTime);

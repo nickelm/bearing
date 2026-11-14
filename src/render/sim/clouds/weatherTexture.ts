@@ -88,7 +88,7 @@ export interface WeatherSample {
 }
 
 function newExtent(): WeatherExtent {
-  return { cover: 0, precip: 0, baseMin: 0, baseMax: 0, fog: 0, dust: 0, storm: 0 };
+  return { cover: 0, precip: 0, baseMin: 0, baseMax: 0, fog: 0, dust: 0, storm: 0, ground: 0 };
 }
 
 /** Values for `fill` beyond cover and precipitation. */
@@ -118,6 +118,8 @@ export interface WeatherExtent {
   fog: number;
   dust: number;
   storm: number;
+  /** Highest mean ground above sea level (m); 0 without ground heights. */
+  ground: number;
 }
 
 export class WeatherTexture {
@@ -125,6 +127,8 @@ export class WeatherTexture {
   readonly texture: DataArrayTexture;
   /** Cloud base, fog, dust, and storm or snow, blended at the current time. */
   readonly fields: DataArrayTexture;
+  /** Mean ground height above sea level per sample, in km (R); see `setGround`. */
+  readonly terrain: DataArrayTexture;
   /** 0 shows the earlier frame, 1 the later. */
   readonly blend = uniform(0);
   /** Counts uploads of new frames, so baked fields know when the frames changed. */
@@ -157,6 +161,7 @@ export class WeatherTexture {
     this.m = n + 2;
     this.texture = this.arrayTexture();
     this.fields = this.arrayTexture();
+    this.terrain = this.arrayTexture();
     const count = 6 * this.m * this.m;
     this.fog = [new Float32Array(count), new Float32Array(count)];
     this.fillFields({});
@@ -166,6 +171,7 @@ export class WeatherTexture {
   dispose(): void {
     this.texture.dispose();
     this.fields.dispose();
+    this.terrain.dispose();
   }
 
   private arrayTexture(): DataArrayTexture {
@@ -190,6 +196,11 @@ export class WeatherTexture {
       throw new RangeError('Ground heights do not match the weather texture');
     }
     this.ground = ground;
+    const half = this.terrain.image.data as Uint16Array;
+    for (let s = 0; s < half.length / 4; s++) {
+      half[s * 4] = DataUtils.toHalfFloat((ground ? ground[s]! : 0) / KM);
+    }
+    this.terrain.needsUpdate = true;
     if (this.frames) this.blendFields(this.blend.value);
   }
 
@@ -251,11 +262,15 @@ export class WeatherTexture {
    * shader can sample there at any blend. About 4,000 dot products.
    */
   extent(dir: Readonly<Vec3d>, angle: number, out: WeatherExtent = newExtent()): WeatherExtent {
-    out.cover = out.precip = out.fog = out.dust = out.storm = 0;
+    out.cover = out.precip = out.fog = out.dust = out.storm = out.ground = 0;
     out.baseMin = Infinity;
     out.baseMax = -Infinity;
     if (!this.frames) {
       const f = this.filled;
+      if (this.ground)
+        for (let s = 0; s < this.ground.length; s++) {
+          if (this.ground[s]! > out.ground) out.ground = this.ground[s]!;
+        }
       out.cover = f.cover;
       out.precip = f.precip;
       out.baseMin = out.baseMax = f.base;
@@ -289,6 +304,7 @@ export class WeatherTexture {
       }
       const fog = Math.max(fogA[s]!, fogB[s]!);
       if (fog > out.fog) out.fog = fog;
+      if (ground && ground[s]! > out.ground) out.ground = ground[s]!;
     }
     if (out.baseMin > out.baseMax) out.baseMin = out.baseMax = 0;
     return out;
@@ -330,6 +346,17 @@ export class WeatherTexture {
       storm: max(f.w, 0) as F,
       snow: max(f.w.negate(), 0) as F,
     };
+  }
+
+  /**
+   * Mean ground height above sea level (m) at a direction (need not be
+   * normalized), from the heights `setGround` was given; 0 without them. One
+   * read; what fog and dust lie on (decision 141).
+   */
+  sampleGround(dir: V3): F {
+    const { face, uv } = cubeFaceUv(dir);
+    const st = uv.mul(this.n).add(1).div(this.m) as Node<'vec2'>;
+    return texture(this.terrain, vec2(st.x, st.y)).depth(face).level(int(0)).x.mul(KM) as F;
   }
 
   private fillFields(extra: WeatherFill): void {

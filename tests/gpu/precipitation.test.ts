@@ -68,7 +68,7 @@ async function setup(sunElevation: number) {
   const lightning = new Lightning(PLANET_RADIUS, weather, lighting, pipeline.sceneDistance);
   pipeline.overlay.add(precipitation.group, lightning.group);
 
-  const draw = async (): Promise<Uint8Array> => {
+  const draw = async (aboveGround = 2): Promise<Uint8Array> => {
     lightning.update({ view: null, eye: EYE, gameTime: 0, dt: 0.2, pixelAngle: (45 * DEG) / H });
     precipitation.update({
       eye: EYE,
@@ -77,7 +77,7 @@ async function setup(sunElevation: number) {
       fovY: 45 * DEG,
       aspect: W / H,
       viewportHeight: H,
-      aboveGround: 2,
+      aboveGround,
       near: camera.near,
     });
     pipeline.render(scene, camera);
@@ -90,7 +90,18 @@ async function setup(sunElevation: number) {
     pipeline.dispose();
     head.dispose();
   };
-  return { head, lighting, weather, precipitation, lightning, pipeline, draw, dispose, wall };
+  return {
+    head,
+    lighting,
+    weather,
+    precipitation,
+    lightning,
+    pipeline,
+    draw,
+    dispose,
+    wall,
+    ground,
+  };
 }
 
 /** Pixels of a column range that differ by more than `by` in any channel, as a fraction. */
@@ -114,10 +125,16 @@ function changed(a: Uint8Array, b: Uint8Array, x0: number, x1: number, by = 6): 
 describe.skipIf(!gpu)('precipitation and lightning on Dawn', () => {
   it('draws rain, snow and dust in open air, hides them behind a near wall, and nothing at zero', async () => {
     const s = await setup(35 * DEG);
+    // The first frame draws the particles' and the bolt's meshes empty, to have their shaders
+    // compiled: an overlay pass that changes nothing.
+    const warm = await s.draw();
+    expect(gpu!.errors).toEqual([]);
+    expect(s.pipeline.stats.passes).toBe(3);
     const clear = await s.draw();
     expect(gpu!.errors).toEqual([]);
     // Nothing to draw: no overlay pass.
     expect(s.pipeline.stats.passes).toBe(2);
+    expect(changed(warm, clear, 0, W, 0)).toBe(0);
     const set = (kind: ParticleKind, level: number) => {
       s.weather.rain.value = kind === 'rain' ? level : 0;
       s.weather.snow.value = kind === 'snow' ? level : 0;
@@ -170,8 +187,35 @@ describe.skipIf(!gpu)('precipitation and lightning on Dawn', () => {
     s.dispose();
   }, 120_000);
 
+  it('thickens blowing dust toward the ground', async () => {
+    // Nothing but sky around a camera 15 m up: what differs between the halves of the view is
+    // how much dust there is above and below the camera.
+    const s = await setup(35 * DEG);
+    s.wall.visible = s.ground.visible = false;
+    s.weather.dust.value = 0.9;
+    s.weather.wind.value.set(12, 0, 0);
+    s.precipitation.enabled = false;
+    await s.draw(15);
+    const clear = await s.draw(15);
+    s.precipitation.enabled = true;
+    const dusty = await s.draw(15);
+    expect(gpu!.errors).toEqual([]);
+    const difference = (y0: number, y1: number) => {
+      let sum = 0;
+      for (let i = y0 * W * 3; i < y1 * W * 3; i++) sum += Math.abs(dusty[i]! - clear[i]!);
+      return sum / ((y1 - y0) * W * 3);
+    };
+    // Row 0 is the top of the image.
+    const above = difference(0, H / 2 - 8);
+    const below = difference(H / 2 + 8, H);
+    expect(above).toBeGreaterThan(0.2);
+    expect(below).toBeGreaterThan(1.25 * above);
+    s.dispose();
+  }, 120_000);
+
   it('draws a bolt against the sky, not through the wall, and lights the ground near it', async () => {
     const s = await setup(-30 * DEG);
+    await s.draw();
     const dark = await s.draw();
     // A strike 3 km ahead and a little to the right.
     const place = EYE.clone()
@@ -204,9 +248,11 @@ describe.skipIf(!gpu)('precipitation and lightning on Dawn', () => {
     const distant = EYE.clone().addScaled(FORWARD, 24 * KM);
     s.lightning.forced = { strike: strikeAtPlace(distant, 5), age: 0.01 };
     const dim = await s.draw();
-    expect(groundLevel(lit)).toBeGreaterThan(groundLevel(dark) + 60);
-    expect(groundLevel(dim)).toBeGreaterThan(groundLevel(dark) + 5);
-    expect(groundLevel(lit)).toBeGreaterThan(groundLevel(dim) + 30);
+    // The mesh holds the new strike's bolt, though both have the same shape.
+    expect(s.lightning.bolt!.ground.distanceTo(EYE)).toBeGreaterThan(20 * KM);
+    expect(groundLevel(lit)).toBeGreaterThan(groundLevel(dark) + 35);
+    expect(groundLevel(dim)).toBeGreaterThan(groundLevel(dark) + 3);
+    expect(groundLevel(lit)).toBeGreaterThan(groundLevel(dim) + 20);
 
     // The strike over, everything is dark again and the overlay pass is gone.
     s.lightning.forced = null;

@@ -10,7 +10,8 @@
  *   env: W × H (640 × 360), CASES comma list of <kind>:<level>[:<wind m/s>[:<camera m/s>]]
  *        (default drizzle, rain, skyfall, snow, blizzard, dust and rain from a moving camera),
  *        SUN_EL sun elevation in degrees (25), DENSITY the quality factor (1),
- *        BOLT=<s> adds a strike 3 km ahead that many seconds after it began (BOLT_KM),
+ *        BOLT=<s> adds a strike 3 km ahead that many seconds after it began (BOLT_KM; BOLT_SEED
+ *        picks its shape),
  *        ROUNDS=n times each case against the empty overlay, interleaved over n rounds,
  *        OUT=dir (tools/out)
  *
@@ -37,8 +38,11 @@ import { PlanetLighting } from '../src/render/sim/lighting/planetLighting';
 import { SimPipeline } from '../src/render/sim/post/simPipeline';
 import { Lightning, strikeAtPlace } from '../src/render/sim/weather/lightning';
 import {
+  anchorWindow,
   LAYER_SIDES,
-  layerReach,
+  MAX_HALF_STREAK,
+  MAX_HALF_STREAK_ANGLE,
+  particleAnchor,
   particleLook,
   Precipitation,
 } from '../src/render/sim/weather/precipitation';
@@ -53,9 +57,9 @@ const DEFAULT_CASES =
   'rain:0.2,rain:0.55,rain:1:12,snow:0.33:2,snow:0.51:24,dust:0.92:22,rain:0.55:5:90';
 
 /**
- * Particle fragments shaded per screen pixel, estimated by sampling places
- * in each layer's cube as the vertex shader lays the particles out (without
- * the fades, so an upper bound).
+ * Particle fragments shaded per screen pixel, estimated by sampling
+ * particles as the vertex shader lays them out: an anchor in the view, a
+ * place in the cube around it. Without the fades, so an upper bound.
  */
 function overdraw(
   kind: ParticleKind,
@@ -66,9 +70,8 @@ function overdraw(
   fovY: number,
   aspect: number,
   height: number,
-): number {
+): { fragments: number; onScreen: number } {
   const look = particleLook(kind, level, wind);
-  const reach = layerReach(fovY, aspect);
   const pixel = fovY / height;
   const tanY = Math.tan(fovY / 2);
   const tanX = tanY * aspect;
@@ -79,33 +82,55 @@ function overdraw(
   };
   const samples = 20_000;
   let area = 0;
+  let shown = 0;
   LAYER_SIDES.forEach((side, k) => {
     const share = k === 2 ? 0.5 : 0.25;
     let sum = 0;
+    let visible = 0;
     for (let i = 0; i < samples; i++) {
-      // The cube is centered half a side ahead (−Z is forward).
-      const x = (next() - 0.5) * side;
-      const y = (next() - 0.5) * side;
-      const z = -next() * side;
+      const [ax, ay, az] = particleAnchor([next(), next(), next()], k, tanX, tanY);
+      const offset: [number, number, number] = [
+        (next() - 0.5) * side,
+        (next() - 0.5) * side,
+        (next() - 0.5) * side,
+      ];
+      // Right, up and ahead of the camera.
+      const x = ax + offset[0];
+      const y = ay + offset[1];
+      const z = az + offset[2];
       const d = Math.hypot(x, y, z);
-      if (d > side * reach || d < 0.5 || Math.abs(x) > -z * tanX || Math.abs(y) > -z * tanY) {
+      if (
+        anchorWindow(offset, side) < 0.004 ||
+        d < 0.5 ||
+        z <= 0 ||
+        Math.abs(x) > z * tanX ||
+        Math.abs(y) > z * tanY
+      ) {
         continue;
       }
+      visible++;
       const s = 0.75 + 0.5 * next();
-      // Velocity relative to the camera: wind along +X, fall along −Y, the camera along −Z.
-      const vx = wind * (look.carried + (1 - look.carried) * s);
+      // Velocity relative to the camera: wind to the right, fall downward, the camera ahead.
+      const vx = wind * (look.carried + look.strewn * s);
       const vy = -look.fallSpeed * s;
-      const vz = speed;
+      const vz = -speed;
       const along = (vx * x + vy * y + vz * z) / d;
       const across = Math.sqrt(Math.max(0, vx * vx + vy * vy + vz * vz - along * along));
       const size = look.sizeMin + (look.sizeMax - look.sizeMin) * next() ** 2;
       const radius = Math.max(size / 2, (pixel * d * 1.25) / 2);
-      const half = Math.min(1.6, (across * look.exposure) / 2) + radius;
+      const half =
+        Math.min(
+          MAX_HALF_STREAK,
+          look.stretch * radius,
+          MAX_HALF_STREAK_ANGLE * d,
+          (across * look.exposure) / 2,
+        ) + radius;
       sum += (4 * half * radius) / (d * d * pixel * pixel);
     }
     area += (sum / samples) * share * count;
+    shown += (visible / samples) * share;
   });
-  return area / (height * height * aspect);
+  return { fragments: area / (height * height * aspect), onScreen: shown };
 }
 
 it('renders precipitation on a plain scene', async () => {
@@ -206,7 +231,10 @@ it('renders precipitation on a plain scene', async () => {
     precipitation.velocityOverride = new Vec3d(0, 0, -speed);
     if (process.env.BOLT) {
       const place = eye.clone().addScaled(forward, Number(process.env.BOLT_KM ?? 3) * KM);
-      lightning.forced = { strike: strikeAtPlace(place, 7), age: Number(process.env.BOLT) };
+      lightning.forced = {
+        strike: strikeAtPlace(place, Number(process.env.BOLT_SEED ?? 7)),
+        age: Number(process.env.BOLT),
+      };
     }
     // Let the air move for a while, so that the picture is not the lattice's first state.
     for (let i = 0; i < 4; i++) frame(0.37);
@@ -238,7 +266,8 @@ it('renders precipitation on a plain scene', async () => {
       timing = `, ${median(times.without).toFixed(1)} ms without, ${median(times.with).toFixed(1)} ms with (median of ${rounds})`;
     }
     console.log(
-      `${name}: ${count} instances, about ${over.toFixed(3)} fragments per pixel${timing} → ${file}`,
+      `${name}: ${count} instances, ${(100 * over.onScreen).toFixed(0)}% on screen, ` +
+        `about ${over.fragments.toFixed(3)} fragments per pixel${timing} → ${file}`,
     );
   }
   if (gpu.errors.length > 0) throw new Error(`GPU errors: ${gpu.errors.join(' | ')}`);

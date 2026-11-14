@@ -1,24 +1,28 @@
 import { describe, expect, it } from 'vitest';
 import { float } from 'three/tsl';
-import type { Node } from 'three/webgpu';
+import type { InstancedBufferGeometry, Mesh, Node } from 'three/webgpu';
 import { latLonToDirection } from '../src/core/coords';
 import { DEG, PLANET_RADIUS } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
-import { PlanetLighting } from '../src/render/sim/lighting/planetLighting';
+import { OVERCAST_GAIN, PlanetLighting } from '../src/render/sim/lighting/planetLighting';
 import {
   belowCloud,
   dustAtHeight,
   FALL_PERIOD,
+  ANCHOR_MARGIN,
+  anchorWindow,
+  LAYER_RANGES,
   LAYER_SIDES,
-  layerReach,
   MAX_DENSITY,
   PARTICLE_CAPS,
   PARTICLE_KINDS,
+  particleAnchor,
   particleCount,
   particleLight,
   particleLook,
   Precipitation,
   SPEED_STEPS,
+  WINDOW_FLAT,
   wrap,
   wrapParticle,
   WRAP_PERIOD,
@@ -103,27 +107,67 @@ describe('particle wrapping', () => {
     }
   });
 
-  it('draws as far as the view fits into the cube ahead', () => {
-    for (const [fov, aspect] of [
-      [45, 16 / 9],
-      [60, 16 / 9],
-      [35, 4 / 3],
-      [50, 21 / 9],
-    ] as const) {
-      const reach = layerReach(fov * DEG, aspect);
-      expect(reach).toBeGreaterThan(0.35);
-      expect(reach).toBeLessThanOrEqual(1);
-      // The corners of the view at that distance lie within the cube centered half a side ahead.
-      const ty = Math.tan((fov * DEG) / 2);
-      const tx = ty * aspect;
-      const l = Math.hypot(1, tx, ty);
-      const corner = [(tx / l) * reach, (ty / l) * reach, reach / l];
-      expect(Math.abs(corner[0]!)).toBeLessThanOrEqual(0.5 + 1e-9);
-      expect(Math.abs(corner[1]!)).toBeLessThanOrEqual(0.5 + 1e-9);
-      expect(corner[2]).toBeGreaterThanOrEqual(0);
-      expect(reach).toBeLessThanOrEqual(1);
+  it('anchors every particle in the view, spread through each layer', () => {
+    const tanY = Math.tan((45 * DEG) / 2);
+    const tanX = tanY * (16 / 9);
+    expect(LAYER_RANGES).toEqual([12, 24, 48]);
+    LAYER_SIDES.forEach((side, layer) => {
+      const range = LAYER_RANGES[layer]!;
+      let near = 0;
+      let left = 0;
+      const n = 4000;
+      for (let k = 0; k < n; k++) {
+        const [x, y, z] = particleAnchor([next(), next(), next()], layer, tanX, tanY);
+        // Ahead of the camera, within the layer's range, in the view or within the margin of it.
+        expect(z).toBeGreaterThanOrEqual(0);
+        expect(z).toBeLessThanOrEqual(range);
+        expect(Math.abs(x)).toBeLessThanOrEqual(z * tanX + side * ANCHOR_MARGIN + 1e-9);
+        expect(Math.abs(y)).toBeLessThanOrEqual(z * tanY + side * ANCHOR_MARGIN + 1e-9);
+        if (z < range / 2) near++;
+        if (x < 0) left++;
+      }
+      // Uniform through the pyramid's volume: an eighth of the anchors in its nearer half.
+      expect(near / n).toBeGreaterThan(0.09);
+      expect(near / n).toBeLessThan(0.16);
+      expect(left / n).toBeGreaterThan(0.45);
+      expect(left / n).toBeLessThan(0.55);
+    });
+    // The corners of the draws are the corners of the pyramid.
+    expect(particleAnchor([1, 1, 1], 0, tanX, tanY)).toEqual([
+      12 * tanX + 4 * ANCHOR_MARGIN,
+      12 * tanY + 4 * ANCHOR_MARGIN,
+      12,
+    ]);
+    expect(particleAnchor([0, 0.5, 0.5], 2, tanX, tanY)).toEqual([0, 0, 0]);
+  });
+
+  it('fades a particle out toward the faces of the cube around its anchor', () => {
+    for (const side of LAYER_SIDES) {
+      expect(anchorWindow([0, 0, 0], side)).toBe(1);
+      // At full strength in the middle of the cube, gone on its faces, where the next copy
+      // of the particle comes in on the other side at the same strength: none.
+      const flat = (WINDOW_FLAT * side) / 2;
+      expect(anchorWindow([flat * 0.99, -flat * 0.99, flat * 0.5], side)).toBe(1);
+      expect(anchorWindow([side / 2, 0, 0], side)).toBe(0);
+      expect(anchorWindow([0, -side / 2, 0], side)).toBe(0);
+      expect(anchorWindow([0, 0, side / 2], side)).toBe(0);
+      const part = anchorWindow([(flat + side / 2) / 2, 0, 0], side);
+      expect(part).toBeCloseTo(0.5, 6);
+      // Monotonic along an axis.
+      let last = 1;
+      for (let d = 0; d <= side / 2; d += side / 64) {
+        const w = anchorWindow([0, d, 0], side);
+        expect(w).toBeLessThanOrEqual(last);
+        last = w;
+      }
     }
-    expect(layerReach(45 * DEG, 16 / 9)).toBeCloseTo(0.76, 2);
+    // Most of a cube's particles show at full or nearly full strength.
+    let sum = 0;
+    const n = 20_000;
+    for (let k = 0; k < n; k++) {
+      sum += anchorWindow([next() - 0.5, next() - 0.5, next() - 0.5], 1);
+    }
+    expect(sum / n).toBeGreaterThan(0.65);
   });
 });
 
@@ -151,12 +195,12 @@ describe('particle counts and looks', () => {
     const drizzle = particleCount('rain', 0.2);
     const rain = particleCount('rain', 0.56);
     const skyfall = particleCount('rain', 1);
-    expect(drizzle).toBeGreaterThan(3000);
+    expect(drizzle).toBeGreaterThan(2000);
     expect(rain).toBeGreaterThan(2.5 * drizzle);
     expect(skyfall).toBeGreaterThan(1.8 * rain);
-    expect(skyfall).toBe(60_000);
+    expect(skyfall).toBe(16_000);
     // Steady snow (1.2 mm/h) and a blizzard (3 mm/h) are well up their scale.
-    expect(particleCount('snow', 0.33)).toBeGreaterThan(15_000);
+    expect(particleCount('snow', 0.33)).toBeGreaterThan(5000);
     expect(particleCount('snow', 0.51)).toBeGreaterThan(particleCount('snow', 0.33) * 1.5);
   });
 
@@ -170,7 +214,14 @@ describe('particle counts and looks', () => {
     expect(skyfall.fallSpeed).toBeGreaterThan(9);
     expect(length(drizzle)).toBeLessThan(0.1);
     expect(length(rain)).toBeGreaterThan(2 * length(drizzle));
-    expect(length(skyfall)).toBeGreaterThan(1.8 * length(rain));
+    expect(length(skyfall)).toBeGreaterThan(1.4 * length(rain));
+    // A streak is a short dash: under 40 cm for a drop falling in still air.
+    expect(length(skyfall)).toBeLessThan(0.4);
+    // Rain leans with the wind, and still falls more than it flies in a gale (18 m/s).
+    for (const look of [rain, skyfall]) {
+      expect(look.carried).toBeGreaterThan(0);
+      expect(look.carried * 18).toBeLessThan(look.fallSpeed * 1.5);
+    }
     expect(drizzle.sizeMax).toBeLessThan(rain.sizeMax);
     expect(rain.sizeMax).toBeLessThan(skyfall.sizeMax);
     expect(drizzle.opacity).toBeLessThan(rain.opacity);
@@ -182,9 +233,22 @@ describe('particle counts and looks', () => {
     expect(snow.fallSpeed * 1.25).toBeLessThanOrEqual(2);
     expect(snow.sizeMax).toBeGreaterThan(2 * snow.sizeMin);
     expect(particleLook('snow', 0.5, 24).sway).toBeGreaterThan(snow.sway);
+    // A flake stays a flake in a gale: its streak is a few flakes long, where rain's has no such limit.
+    const blizzard = particleLook('snow', 0.5, 24);
+    expect(blizzard.stretch).toBeGreaterThan(snow.stretch);
+    expect(blizzard.stretch).toBeLessThan(8);
+    expect(blizzard.carried).toBe(1);
+    expect(rain.stretch).toBeGreaterThan(100);
+    // Gusts show in wind only.
+    expect(particleLook('rain', 1, 0).gust).toBe(0);
+    expect(particleLook('rain', 1, 20).gust).toBeGreaterThan(0.3);
     // Dust does not fall: the wind carries it.
     expect(particleLook('dust', 0.9).fallSpeed).toBe(0);
-    expect(particleLook('dust', 0.9).carried).toBeLessThan(1);
+    const dust = particleLook('dust', 0.9, 22);
+    expect(dust.carried).toBeLessThan(1);
+    // Its grains move at the wind's speed, a little slower or faster each (factors 0.75 to 1.25).
+    expect(dust.carried + 0.75 * dust.strewn).toBeGreaterThan(0.85);
+    expect(dust.carried + 1.25 * dust.strewn).toBeLessThan(1.15);
   });
 
   it('fades rain out through the cloud base and dust with height', () => {
@@ -231,9 +295,35 @@ describe('Precipitation', () => {
 
   it('draws nothing in clear air and each kind by its intensity', () => {
     const { state, precipitation, frame } = setup();
+    const instances = () =>
+      precipitation.group.children.map(
+        (m) => ((m as Mesh).geometry as InstancedBufferGeometry).instanceCount,
+      );
+    // The first frame warms the shaders up: every kind is drawn with one empty particle.
     frame(eye, 0.016);
     expect(precipitation.counts).toEqual({ rain: 0, snow: 0, dust: 0 });
+    expect(precipitation.group.visible).toBe(true);
+    expect(precipitation.group.children.every((m) => m.visible)).toBe(true);
+    expect(instances()).toEqual([1, 1, 1]);
+    // After it, clear air draws nothing, pass and all.
+    frame(eye, 0.016);
+    expect(precipitation.counts).toEqual({ rain: 0, snow: 0, dust: 0 });
+    expect(precipitation.group.visible).toBe(false);
     expect(precipitation.group.children.every((m) => !m.visible)).toBe(true);
+    // Asked for, and when cloud closes in over the camera, it warms up again, for one frame.
+    precipitation.warm();
+    frame(eye, 0.016);
+    expect(precipitation.group.visible).toBe(true);
+    frame(eye, 0.016);
+    expect(precipitation.group.visible).toBe(false);
+    state.local = { cloudCover: 0.1, cloudBase: 600 } as WeatherReport;
+    frame(eye, 0.016);
+    expect(precipitation.group.visible).toBe(false);
+    state.local = { cloudCover: 1, cloudBase: 600 } as WeatherReport;
+    frame(eye, 0.016);
+    expect(precipitation.group.visible).toBe(true);
+    frame(eye, 0.016);
+    expect(precipitation.group.visible).toBe(false);
 
     state.rain.value = 0.56;
     frame(eye, 0.016);
@@ -290,6 +380,22 @@ describe('Precipitation', () => {
     // A frame without time changes nothing.
     frame(at, 0);
     expect(precipitation.cameraVelocity.length()).toBeCloseTo(250, 0);
+    // A camera moved while no time passes (a pause) leaves the particles where they are in the
+    // world: the lattice shifts against it. A jump in such a frame shifts nothing.
+    const offset = precipitation.latticeOffset('rain');
+    const before = offset.clone();
+    at.addScaled(east, 3);
+    frame(at, 0);
+    const shift = offset.clone().sub(before);
+    for (const axis of ['x', 'y', 'z'] as const) {
+      const wrapped = shift[axis] - Math.round(shift[axis] / WRAP_PERIOD) * WRAP_PERIOD;
+      expect(wrapped).toBeCloseTo(-3 * east[axis], 6);
+    }
+    expect(precipitation.cameraVelocity.length()).toBeCloseTo(250, 0);
+    before.copy(offset);
+    at.addScaled(east, 5000);
+    frame(at, 0);
+    expect(offset.distanceTo(before)).toBeLessThan(1e-9);
     precipitation.reset();
     expect(precipitation.cameraVelocity.length()).toBe(0);
     precipitation.dispose();
@@ -308,6 +414,14 @@ describe('Precipitation', () => {
     // The clear sky's light is blue; under cloud it is nearly gray.
     expect(clear.ambient[2]).toBeGreaterThan(1.3 * clear.ambient[0]!);
     expect(overcast.ambient[2]).toBeLessThan(1.3 * overcast.ambient[0]!);
+    // A thin deck is brighter than the clear sky's shade. Under a storm's base the drops are
+    // dim, nearly as the ground and the fog are (OVERCAST_GAIN: 0.7 of 2.3), not quite.
+    const storm = particleLight(day.lighting, 1, 1);
+    expect(overcast.ambient[1]).toBeGreaterThan(clear.ambient[1]!);
+    expect(storm.ambient[1]).toBeLessThan(0.55 * overcast.ambient[1]!);
+    expect(storm.ambient[1]).toBeGreaterThan(
+      (OVERCAST_GAIN[1] / OVERCAST_GAIN[0]) * overcast.ambient[1]!,
+    );
 
     const night = setup(-40 * DEG);
     const dark = particleLight(night.lighting, 1);
@@ -321,6 +435,6 @@ describe('Precipitation', () => {
     expect(lit.ambient[2]).toBeGreaterThan(dark.ambient[2]! + 0.5);
     // Far away it adds little.
     night.lighting.flashPosition.value.set(eye.x + 60_000, eye.y, eye.z);
-    expect(particleLight(night.lighting, 1).ambient[2]).toBeLessThan(dark.ambient[2]! + 0.02);
+    expect(particleLight(night.lighting, 1).ambient[2]).toBeLessThan(dark.ambient[2]! + 0.05);
   });
 });

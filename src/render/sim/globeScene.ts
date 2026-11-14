@@ -342,6 +342,7 @@ export class GlobeScene {
       dt,
     );
     // Which marches run this frame and between which heights, the key light, the fog's drift.
+    this.volumetrics.groundScale = this.terrain.exaggerationUniform.value;
     this.volumetrics.update(o.eye, dt);
     // Lightning first: its flash lights the particles too.
     const fovY = (this.camera.fov * Math.PI) / 180;
@@ -355,6 +356,7 @@ export class GlobeScene {
     this.precipitation?.update({
       eye: o.eye,
       forward: o.forward,
+      up: o.up,
       dt,
       fovY,
       aspect: this.camera.aspect,
