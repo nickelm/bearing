@@ -8,14 +8,14 @@
  *
  * Env: VERBOSE=1 prints everything the page found; SHOT=<file.png> saves the start screen
  * as the session leaves it. Playwright is no dependency of the repo (as for
- * freeflight.screens.mjs): where it is installed elsewhere, point NODE_PATH at that
- * node_modules. The page generates the campaign world on the main thread, so a run takes
- * about half a minute.
+ * freeflight.screens.mjs): tools/browser/launch.mjs says where it is looked for. The page
+ * generates the campaign world on the main thread, so a run takes about half a minute.
+ *
+ * This page has no WebGPU and draws nothing; tools/browser.smoke.mjs runs the app itself.
  */
-import { createRequire } from 'node:module';
+import { loadPlaywright } from './browser/launch.mjs';
 
-const require = createRequire(import.meta.url);
-const { chromium } = require('playwright');
+const { chromium } = loadPlaywright();
 const base = process.argv[2] ?? 'http://localhost:5173';
 
 const browser = await chromium.launch();

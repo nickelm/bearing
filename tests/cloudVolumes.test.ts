@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { DataUtils } from 'three/webgpu';
 import { latLonToDirection } from '../src/core/coords';
 import { DEG, PLANET_RADIUS } from '../src/core/units';
-import { VIEW_ANGLE, viewAngle } from '../src/render/sim/clouds/cloudLayer';
+import { CloudLayer, VIEW_ANGLE, viewAngle } from '../src/render/sim/clouds/cloudLayer';
 import {
   developmentOf,
   DETAIL_SWING,
@@ -25,6 +25,7 @@ import {
 } from '../src/render/sim/clouds/noiseVolume';
 import { VOLUMETRIC_QUALITY } from '../src/render/sim/clouds/volumetrics';
 import { WeatherTexture } from '../src/render/sim/clouds/weatherTexture';
+import { PlanetLighting } from '../src/render/sim/lighting/planetLighting';
 import { WeatherView } from '../src/sim/weather/frame';
 import { WeatherGrid } from '../src/sim/weather/grid';
 import { presetFrame } from '../src/sim/weather/presets';
@@ -176,6 +177,107 @@ describe('weather extent', () => {
     const ground = new Float32Array(grid.count).fill(250);
     weather.setGround(ground);
     expect(weather.groundAt(dir)).toBeCloseTo(250, 6);
+  });
+});
+
+describe('the weather in view of the cloud layer', () => {
+  const stormWeather = (): WeatherTexture => {
+    const world = createSimWorld(syntheticConfig());
+    world.sim.advanceTo(7200);
+    const grid = new WeatherGrid();
+    const view = new WeatherView(grid);
+    for (const frame of world.weather.view().frames) {
+      if (frame) view.add(presetFrame('storm', frame, grid));
+    }
+    const weather = new WeatherTexture();
+    weather.setFrames(view);
+    return weather;
+  };
+  /** Counts the scans of the weather's samples a cloud layer asks for. */
+  const counted = (weather: WeatherTexture): { scans: number } => {
+    const count = { scans: 0 };
+    const extent = weather.extent.bind(weather);
+    weather.extent = (...args: Parameters<typeof extent>) => {
+      count.scans++;
+      return extent(...args);
+    };
+    return count;
+  };
+
+  it('is looked up again only once the camera has moved or the weather has changed', () => {
+    const weather = new WeatherTexture();
+    weather.fill(0);
+    const clouds = new CloudLayer(PLANET_RADIUS, new PlanetLighting(), weather, 8);
+    const count = counted(weather);
+    const dir = latLonToDirection(20 * DEG, 30 * DEG);
+    const east = latLonToDirection(20 * DEG, 120 * DEG);
+    const eyeAt = (meters: number, altitude: number) =>
+      dir
+        .clone()
+        .addScaled(east, meters / PLANET_RADIUS)
+        .normalize()
+        .scale(PLANET_RADIUS + altitude);
+    clouds.update(eyeAt(0, 1500));
+    expect(count.scans).toBe(2);
+    expect(clouds.possible).toBe(false);
+    // A still camera, a second of flight and a gentle climb read nothing.
+    clouds.update(eyeAt(0, 1500));
+    clouds.update(eyeAt(250, 1500));
+    clouds.update(eyeAt(250, 1540));
+    expect(count.scans).toBe(2);
+    // Two seconds of flight on, and after a climb of more than a fiftieth, it is read again.
+    clouds.update(eyeAt(700, 1540));
+    expect(count.scans).toBe(4);
+    clouds.update(eyeAt(700, 1700));
+    expect(count.scans).toBe(6);
+    // New weather shows in the next frame.
+    weather.fill(0.8, 0.3, { base: 900 });
+    clouds.update(eyeAt(700, 1700));
+    expect(count.scans).toBe(8);
+    expect(clouds.possible).toBe(true);
+    expect(clouds.bottom).toBe(900);
+    // So do new ground heights under the same weather.
+    weather.setGround(new Float32Array(new WeatherGrid().count).fill(250));
+    clouds.update(eyeAt(700, 1700));
+    expect(count.scans).toBe(10);
+    expect(clouds.extent.ground).toBe(250);
+    clouds.dispose();
+    weather.dispose();
+  });
+
+  it('holds everything a lookup at the camera itself would find, wherever the camera has moved since', () => {
+    const weather = stormWeather();
+    const clouds = new CloudLayer(PLANET_RADIUS, new PlanetLighting(), weather, 8);
+    const dir = latLonToDirection(-12 * DEG, 75 * DEG);
+    const north = latLonToDirection(78 * DEG, 75 * DEG);
+    let fresh = 0;
+    let last = '';
+    for (let k = 0; k < 400; k++) {
+      // A climbing flight at 250 m/s, sampled every half second.
+      const altitude = 200 + 12 * k;
+      const up = dir
+        .clone()
+        .addScaled(north, (125 * k) / PLANET_RADIUS)
+        .normalize();
+      clouds.update(up.clone().scale(PLANET_RADIUS + altitude));
+      const held = clouds.extent;
+      const here = weather.extent(up, viewAngle(altitude, PLANET_RADIUS));
+      expect(held.cover).toBeGreaterThanOrEqual(here.cover);
+      expect(held.precip).toBeGreaterThanOrEqual(here.precip);
+      expect(held.storm).toBeGreaterThanOrEqual(here.storm);
+      expect(held.fog).toBeGreaterThanOrEqual(here.fog);
+      expect(held.dust).toBeGreaterThanOrEqual(here.dust);
+      expect(held.ground).toBeGreaterThanOrEqual(here.ground);
+      expect(held.baseMin).toBeLessThanOrEqual(here.baseMin);
+      expect(held.baseMax).toBeGreaterThanOrEqual(here.baseMax);
+      const signature = JSON.stringify(held);
+      if (signature !== last) fresh++;
+      last = signature;
+    }
+    // 50 km of flight across weather samples 65 km apart: the bounds change a few times, not per frame.
+    expect(fresh).toBeLessThan(40);
+    clouds.dispose();
+    weather.dispose();
   });
 });
 

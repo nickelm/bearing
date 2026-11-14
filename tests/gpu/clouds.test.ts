@@ -136,4 +136,91 @@ describe.skipIf(!gpu)('cloud coverage (TSL on Dawn)', () => {
     expect(bakedStep / (pairs / 2)).toBeLessThan(trueStep / (pairs / 2) + 0.01);
     expect(worst).toBeLessThan(0.2);
   }, 120_000);
+
+  it('spreads a bake that is due to age alone over six frames, a face in each', async () => {
+    const weather = new WeatherTexture();
+    const clouds = new CloudLayer(PLANET_RADIUS, new PlanetLighting(), weather);
+    const head = await headlessRenderer(gpu!.device, 64, 64);
+    weather.fill(0.5, 0.25);
+    const baked = clouds.baked;
+
+    // Mean difference between the bake and the field per cube face, at random directions.
+    const r = rng(3, 'test/clouds-spread');
+    const count = 1536;
+    const dirs = new Float32Array(count * 4);
+    const d = new Vec3d();
+    for (let i = 0; i < count; i++) {
+      randomUnitVector(r, d);
+      dirs.set([d.x, d.y, d.z, 0], i * 4);
+    }
+    const input = instancedArray(dirs, 'vec4');
+    const output = instancedArray(count, 'vec4');
+    const kernel = Fn(() => {
+      const dir = input.element(instanceIndex).xyz;
+      output
+        .element(instanceIndex)
+        .assign(vec4(clouds.coverage(dir), clouds.baked.sample(dir).x, 0, 0));
+    })().compute(count);
+    const apart = async (): Promise<number[]> => {
+      await head.renderer.computeAsync(kernel);
+      const out = new Float32Array(await head.renderer.getArrayBufferAsync(output.value));
+      const sum = [0, 0, 0, 0, 0, 0];
+      const n = [0, 0, 0, 0, 0, 0];
+      for (let i = 0; i < count; i++) {
+        const f = directionToFace(new Vec3d(dirs[i * 4]!, dirs[i * 4 + 1]!, dirs[i * 4 + 2]!));
+        sum[f] += Math.abs(out[i * 4]! - out[i * 4 + 1]!);
+        n[f]++;
+      }
+      return sum.map((x, f) => x / n[f]!);
+    };
+
+    let now = 0;
+    let t = 5 * HOUR;
+    const frame = (step: number, key = 'a') => {
+      clouds.time.value = t += step;
+      return baked.update(head.renderer, t, key, (now += 40));
+    };
+    // The first bake is whole, and nothing follows while the field is fresh.
+    expect(frame(0)).toBe(true);
+    expect([baked.bakes, baked.faces]).toEqual([1, 6]);
+    for (const face of await apart()) expect(face).toBeLessThan(0.08);
+    for (let k = 0; k < 20; k++) expect(frame(0.4)).toBe(false);
+    expect(baked.faces).toBe(6);
+
+    // The field changes (denser cloud, under the same key) and ages past ten seconds: a face
+    // per frame. After three frames half of the cube shows the new field.
+    clouds.coverageBias.value = 0.35;
+    while (!frame(0.4)) expect(t - 5 * HOUR).toBeLessThan(10.5);
+    expect(t - 5 * HOUR).toBeGreaterThanOrEqual(10);
+    expect([baked.bakes, baked.faces]).toEqual([2, 7]);
+    expect(frame(1 / 30)).toBe(true);
+    expect(frame(1 / 30)).toBe(true);
+    const half = await apart();
+    for (const face of [0, 1, 2]) expect(half[face]).toBeLessThan(0.08);
+    for (const face of [3, 4, 5]) expect(half[face]).toBeGreaterThan(0.2);
+    for (let k = 4; k <= 6; k++) {
+      expect(frame(1 / 30)).toBe(true);
+      expect(baked.faces).toBe(6 + k);
+    }
+    expect(frame(1 / 30)).toBe(false);
+    expect(baked.bakes).toBe(2);
+    for (const face of await apart()) expect(face).toBeLessThan(0.08);
+
+    // New weather while a spread bake is under way: all six faces at once, with the new key.
+    while (!frame(0.4)) expect(baked.faces).toBe(12);
+    expect(baked.faces).toBe(13);
+    expect(frame(1 / 30, 'b')).toBe(true);
+    expect([baked.bakes, baked.faces]).toEqual([4, 19]);
+    expect(frame(1 / 30, 'b')).toBe(false);
+
+    // A clock that runs fast (twelve game seconds a frame) bakes at once as well.
+    now += 200;
+    expect(frame(12, 'b')).toBe(true);
+    expect([baked.bakes, baked.faces]).toEqual([5, 25]);
+    for (const face of await apart()) expect(face).toBeLessThan(0.08);
+    expect(gpu!.errors).toEqual([]);
+    clouds.dispose();
+    weather.dispose();
+    head.dispose();
+  }, 120_000);
 });

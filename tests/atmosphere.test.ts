@@ -28,6 +28,7 @@ import {
   transmittanceUv,
 } from '../src/render/sim/atmosphere/model';
 import type { AtmosphereLuts, Rgb } from '../src/render/sim/atmosphere/model';
+import { skyBakeHeightTolerance, skyBakeSunTolerance } from '../src/render/sim/atmosphere/skyView';
 import { DEG, EARTH_RADIUS, PLANET_RADIUS } from '../src/core/units';
 
 const a = earthLikeAtmosphere(PLANET_RADIUS);
@@ -302,6 +303,85 @@ describe('sky-view LUT mapping', () => {
     // A row next to the horizon spans a few hundredths of a degree, one at the zenith degrees.
     expect((rowAngle(middle - 1) - rowAngle(middle - 2)) / DEG).toBeLessThan(0.1);
     expect((rowAngle(1) - rowAngle(0)) / DEG).toBeGreaterThan(2);
+  });
+});
+
+describe('sky-view LUT bake tolerance', () => {
+  const luts = computeAtmosphereLuts(a);
+  const directions: [number, number, number][] = [];
+  for (const zenith of [5, 45, 80, 87, 89, 89.6, 90, 90.5, 92]) {
+    for (const azimuth of [0, 40, 90, 140, 180]) {
+      const z = zenith * DEG;
+      const az = azimuth * DEG;
+      directions.push([Math.sin(z) * Math.cos(az), Math.cos(z), Math.sin(z) * Math.sin(az)]);
+    }
+  }
+  const sunAt = (muS: number): [number, number, number] => [Math.sqrt(1 - muS * muS), muS, 0];
+  /** Largest relative difference of two skies over the directions, with a floor at 2% of the brightest. */
+  const apart = (was: Rgb[], is: Rgb[]): number => {
+    const top = Math.max(...is.flat());
+    let worst = 0;
+    is.forEach((now, i) => {
+      for (let c = 0; c < 3; c++) {
+        worst = Math.max(worst, Math.abs(now[c]! - was[i]![c]!) / Math.max(now[c]!, 0.02 * top));
+      }
+    });
+    return worst;
+  };
+
+  it('keeps a table baked for another sun within a fraction of an 8-bit step', () => {
+    for (const elevation of [70, 40, 20, 8, 5, 3, 1]) {
+      const muS = Math.sin(elevation * DEG);
+      const tolerance = skyBakeSunTolerance(muS);
+      for (const altitude of [30, 1500, 12_000]) {
+        const r = R + altitude;
+        const sky = (mu: number) =>
+          directions.map((d) => skyRadiance(a, luts, r, d, sunAt(mu), 96));
+        const now = sky(muS);
+        expect(apart(sky(muS + tolerance), now)).toBeLessThan(0.0025);
+        expect(apart(sky(muS - tolerance), now)).toBeLessThan(0.0025);
+      }
+    }
+  });
+
+  it('is as tight as before with the sun on or under the horizon, and ten times wider by day', () => {
+    for (const elevation of [0, -1, -3, -6, -12, -30]) {
+      expect(skyBakeSunTolerance(Math.sin(elevation * DEG))).toBe(2e-5);
+    }
+    // A flight at 250 m/s moves the cosine by at most 2.5e-4 a second: about a bake a second by day.
+    for (const elevation of [8, 15, 30]) {
+      expect(skyBakeSunTolerance(Math.sin(elevation * DEG))).toBeGreaterThan(1.5e-4);
+    }
+    for (let elevation = -90; elevation <= 90; elevation += 0.5) {
+      const tolerance = skyBakeSunTolerance(Math.sin(elevation * DEG));
+      expect(tolerance).toBeGreaterThanOrEqual(2e-5);
+      expect(tolerance).toBeLessThanOrEqual(2e-4);
+    }
+  });
+
+  it('keeps a table baked at another height within a fraction of an 8-bit step above the horizon', () => {
+    const muS = Math.sin(3 * DEG);
+    for (const altitude of [3, 30, 200, 1500, 5000, 20_000]) {
+      const climbed = altitude + skyBakeHeightTolerance(altitude);
+      const horizon = skyViewHorizon(a, R + climbed).horizon;
+      const seen = directions.filter((d) => Math.acos(d[1]) < horizon - 0.05 * DEG);
+      // The table of the old height, read at the row the new height's horizon gives a direction.
+      const was = seen.map((d) => {
+        const [u, v] = skyViewUv(a, R + climbed, d[1], Math.atan2(d[2], d[0]));
+        const { zenith, azimuth } = skyViewAngles(a, R + altitude, u, v);
+        const old: [number, number, number] = [
+          Math.sin(zenith) * Math.cos(azimuth),
+          Math.cos(zenith),
+          Math.sin(zenith) * Math.sin(azimuth),
+        ];
+        return skyRadiance(a, luts, R + altitude, old, sunAt(muS), 96);
+      });
+      const now = seen.map((d) => skyRadiance(a, luts, R + climbed, d, sunAt(muS), 96));
+      expect(apart(was, now)).toBeLessThan(0.0035);
+    }
+    // At 1,500 m a climb of 1.75 m, where it was 0.55 m.
+    expect(skyBakeHeightTolerance(1500)).toBeCloseTo(1.75, 9);
+    expect(skyBakeHeightTolerance(0)).toBe(0.25);
   });
 });
 

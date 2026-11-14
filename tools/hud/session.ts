@@ -234,13 +234,17 @@ async function main(): Promise<void> {
     const t1 = ff.gameTime;
     for (let i = 0; i < 100; i++) frame();
     const advanced = ff.gameTime - t1;
-    // Pause with the key, hold, resume with the button.
+    // Pause with the key, hold, resume with the key; pause again, resume with the button.
     key('Escape');
     const paused = ff.state;
     const t2 = ff.gameTime;
     const clock = globe.weatherState.clock.value;
     for (let i = 0; i < 10; i++) frame();
     const held = ff.gameTime === t2 && globe.weatherState.clock.value === clock;
+    key('Escape');
+    const resumedByKey = ff.state;
+    key('Escape');
+    const pausedAgain = ff.state;
     click(ff.pause.el, 'Resume');
     const resumed = ff.state;
     for (let i = 0; i < 10; i++) frame();
@@ -251,6 +255,10 @@ async function main(): Promise<void> {
     check(first.wetness === Math.min(1, +(2.5 * first.rain).toFixed(2)), `${preset}: wet at once`);
     check(Math.abs(advanced - 100 / 60) < 0.02, `${preset}: 100 frames fly 1.67 s`);
     check(paused === 'paused' && held && resumed === 'flying', `${preset}: pause holds the clocks`);
+    check(
+      resumedByKey === 'flying' && pausedAgain === 'paused',
+      `${preset}: Esc closes the pause menu and opens it again`,
+    );
     check(ff.state === 'menu' && view === 'strategic', `${preset}: back on the start screen`);
     check(ff.weatherView === null, `${preset}: no weather on the start screen`);
     check(m.crashed === null, `${preset}: no crash on the runway`);

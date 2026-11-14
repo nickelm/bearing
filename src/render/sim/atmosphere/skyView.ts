@@ -10,7 +10,9 @@
  * changes fastest (model.ts, `skyViewUv`). A compute pass marches each texel
  * (`SKY_VIEW_STEPS` samples, spaced as model.ts's `skyStepFraction`) whenever
  * the camera's height, the sun, the moon, the light or the air has changed
- * by more than a threshold too small to see. A sky pixel then costs two
+ * by more than a threshold too small to see (`skyBakeSunTolerance`,
+ * `skyBakeHeightTolerance`): about once a second in level flight by day, a
+ * few times a second in a climb or at dusk. A sky pixel then costs two
  * filtered texture reads instead of 32 march steps.
  *
  * - `base` holds Rayleigh single scattering with its phase function, plus
@@ -183,6 +185,35 @@ export function marchBlendAt(altitude: number): number {
   return smooth(MARCH_FROM, MARCH_FULL, altitude);
 }
 
+/**
+ * How far the cosine of the sun's zenith angle may move before the sky-view
+ * LUT is baked again. A flight at 250 m/s turns the camera's zenith by
+ * 2.5e-4 rad/s on this planet, so the tolerance sets how often the LUT is
+ * baked in flight: 2e-5 with the sun on or under the horizon, where the edge
+ * of the planet's shadow crosses the sky (a stale table is then off by up to
+ * 0.4% of the radiance in the worst direction); ten times that from 8° up,
+ * where the sky changes slowly; and less again toward the zenith, where the
+ * cosine hardly moves with the angle. With the sun up the stale table stays
+ * within 0.2% of the sky's radiance in every direction, half an 8-bit step
+ * (against model.ts's `skyRadiance`).
+ */
+export function skyBakeSunTolerance(muS: number): number {
+  const low = 2e-5 + 1.8e-4 * smooth(0, 0.14, muS);
+  return Math.max(2e-5, low * Math.sqrt(Math.max(0, 1 - muS * muS)));
+}
+
+/**
+ * How far the camera may climb or sink (m) before the sky-view LUT is baked
+ * again, at an altitude above sea level: a quarter of a meter on the ground,
+ * where the horizon's haze is thickest, plus a thousandth of the altitude.
+ * The lookup follows the horizon every frame, so the stale table is the sky
+ * of a slightly different height at the same angle above the horizon: within
+ * 0.3% of the radiance at any altitude.
+ */
+export function skyBakeHeightTolerance(altitude: number): number {
+  return 0.25 + 1e-3 * Math.max(0, altitude);
+}
+
 /** PCG hash of a 32-bit unsigned integer (as three's `hash`, kept as an integer). */
 function pcg(v: Node<'uint'>): Node<'uint'> {
   const state = v.mul(747796405).add(2891336453);
@@ -325,8 +356,8 @@ export class SkyView {
     const b = this.baked;
     const relative = (x: number, y: number) => Math.abs(x - y) > 2e-3 * Math.max(x, y);
     const stale =
-      !(Math.abs(r - b.r) <= 0.25 + 2e-4 * (b.r - P.groundRadius)) ||
-      Math.abs(muS - b.muS) > 2e-5 ||
+      !(Math.abs(r - b.r) <= skyBakeHeightTolerance(b.r - P.groundRadius)) ||
+      Math.abs(muS - b.muS) > skyBakeSunTolerance(b.muS) ||
       relative(sunLight, b.sunLight) ||
       relative(moonLight, b.moonLight) ||
       (moonLight > 0 && moonLocal.distanceToSquared(b.moon) > 1e-7) ||

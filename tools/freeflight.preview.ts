@@ -14,7 +14,9 @@
  * WEATHER (a preset of sim/weather/presets.ts, default fair: the app's default), WIND=0
  * (still air for the aircraft), QUALITY (low, medium, high: the volumetric quality),
  * GOVERNOR (0..2: the performance governor's step, as ui/atmosphereSettings.ts applies it),
- * POST=0 (draw without the pipeline), OUT (a suffix for the files' names, e.g. OUT=-storm
+ * POST=0 (draw without the pipeline), SETTLE (seconds the scene runs on before each shot, at
+ * ten frames a second: a shot is otherwise the first second after a camera cut), MSAA=4 (four samples per pixel, as the app draws; the
+ * default is one), OUT (a suffix for the files' names, e.g. OUT=-storm
  * writes freeflight-runway-storm.png and .json, which freeflight.screens.mjs takes as the
  * shot "runway-storm").
  *
@@ -99,7 +101,8 @@ it('renders Free Flight shots', async () => {
   const R = params.radius;
   const { world, global } = await previewWorld(gpu, params, 256, gres);
   const infra = new InfraScene(campaign.graph, campaign.infrastructure, R);
-  const head = await headlessRenderer(gpu.device, width, height);
+  // The app antialiases with four samples (`antialias: true`); the previews draw one unless asked.
+  const head = await headlessRenderer(gpu.device, width, height, Number(env('MSAA', '0')));
   const scene = new GlobeScene(head.renderer, { radius: R, grid: new CubeGrid(256), input: false });
   scene.resize(width, height);
   scene.globe.setWorld(world);
@@ -334,6 +337,8 @@ it('renders Free Flight shots', async () => {
     }
     // A last few frames for the camera's springs to settle.
     for (let f = 0; f < 30; f++) scene.render(1 / 60);
+    // The weather's own clock runs on from the cut: drifting fog and veils take seconds to arrive.
+    for (let f = 0; f < Number(env('SETTLE', '0')) * 10; f++) scene.render(0.1);
     scene.render(1 / 60);
     const rgb = await head.readRgb();
     const file = join(outDir, `freeflight-${shot.name}${env('OUT', '')}.png`);

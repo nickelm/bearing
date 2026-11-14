@@ -1063,6 +1063,19 @@ async function main(): Promise<void> {
       )
       .name('Free Flight (fly from an airbase)…');
   }
+  // Tools inspect and drive the app from the page (tools/browser.smoke.mjs): dev server, or ?dev.
+  if (import.meta.env.DEV || query.has('dev')) {
+    (window as unknown as { bearing: object }).bearing = {
+      globe,
+      strategic: strategicView,
+      renderScale,
+      governor,
+      audio,
+      sim,
+      atmosphere,
+      freeFlight,
+    };
+  }
   // Apply the View folder's starting values (once onResize exists): before this, the
   // scene kept its own defaults, buildings off, until a View control changed.
   guiCallbacks.viewChanged(viewParams);

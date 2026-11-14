@@ -330,6 +330,13 @@ export class SimPipeline {
   volumetricSupersample = true;
   /** Advance the jitter and the grain each frame; off for repeatable stills. */
   animateNoise = true;
+  /**
+   * Frames after which the volumetric stage's and the overlay's render targets
+   * are freed while those stages are not drawn (clear air, dry weather); they
+   * come back with the first frame that draws them. About ten seconds: a gap
+   * in the clouds or between two showers keeps them.
+   */
+  idleFrames = 600;
   readonly stats: PipelineStats = { passes: 0, fullResolutionPasses: 0, targets: 0 };
 
   private source: VolumetricSource | null = null;
@@ -348,6 +355,9 @@ export class SimPipeline {
   private lowRaw: RenderTarget | null = null;
   private lowColor: RenderTarget | null = null;
   private overlayTarget: RenderTarget | null = null;
+  /** Frames since the volumetric stage and the overlay were last drawn. */
+  private volumetricIdle = 0;
+  private overlayIdle = 0;
   private bloomChain: Bloom | null = null;
   private readonly fullSize = uniform(new Vector2(1, 1));
   private readonly lowSize = uniform(new Vector2(1, 1));
@@ -502,6 +512,7 @@ export class SimPipeline {
         stats.passes++;
         stats.targets++;
       }
+      this.releaseIdle(volumetric, overlay);
       const key = `${volumetric ? this.divisor : '-'}|${overlay ? 'o' : '-'}`;
       if (this.bloom) {
         const bloom = (this.bloomChain ??= this.createBloom());
@@ -550,6 +561,22 @@ export class SimPipeline {
     this.lowColor?.dispose();
     this.overlayTarget?.dispose();
     this.bloomChain?.release();
+  }
+
+  /**
+   * Frees the targets of a stage that has not been drawn for `idleFrames`
+   * frames: at 1080p the overlay's is 16 MB and the volumetric stage's three
+   * are 3 to 12 MB, which a clear, dry day does not need.
+   */
+  private releaseIdle(volumetric: boolean, overlay: boolean): void {
+    this.volumetricIdle = volumetric ? 0 : this.volumetricIdle + 1;
+    if (this.volumetricIdle === this.idleFrames) {
+      this.lowDepth?.dispose();
+      this.lowRaw?.dispose();
+      this.lowColor?.dispose();
+    }
+    this.overlayIdle = overlay ? 0 : this.overlayIdle + 1;
+    if (this.overlayIdle === this.idleFrames) this.overlayTarget?.dispose();
   }
 
   dispose(): void {
