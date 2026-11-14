@@ -152,19 +152,23 @@ export class FlightInput {
   constructor(el: HTMLElement) {
     this.rebuild();
     const onKey = (e: KeyboardEvent, down: boolean) => {
-      if (!this.enabled) return;
       const a = this.keyAction.get(e.code);
       if (!a) return;
       // The browser's own shortcuts (Ctrl+W closes the tab) cannot all be blocked;
       // the page asks before unloading while flying.
-      e.preventDefault();
-      if (down) {
-        if (this.held.has(e.code)) return;
-        this.held.add(e.code);
-        if (PRESS_ACTIONS.has(a)) this.onAction?.(a);
-      } else {
+      if (this.enabled) e.preventDefault();
+      if (!down) {
+        // A release counts even while a menu has the controls: the key that opened the pause
+        // menu is let go while it shows, and would otherwise stay held and swallow its next press.
         this.held.delete(e.code);
+        return;
       }
+      // While a menu or a card has the controls, only the pause key acts: it closes the menu
+      // it opened.
+      if (!this.enabled && a !== 'pause') return;
+      if (this.held.has(e.code)) return;
+      this.held.add(e.code);
+      if (PRESS_ACTIONS.has(a)) this.onAction?.(a);
     };
     const kd = (e: KeyboardEvent) => onKey(e, true);
     const ku = (e: KeyboardEvent) => onKey(e, false);

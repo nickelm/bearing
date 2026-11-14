@@ -14,10 +14,14 @@
  *   one read per sample (decision 141); the strategic map reads R and G.
  *   Half floats (13 MB at 512 texels per face edge): the march thresholds
  *   noise by these values, and bytes showed as steps.
- * - Refresh: a compute pass re-evaluates the field when the game clock has
- *   moved enough for the clouds to move a fraction of a texel, when the
- *   weather frames or the cloud settings change, and at most every
- *   MIN_INTERVAL_MS of real time.
+ * - Refresh: compute passes re-evaluate the field, one cube face each, when
+ *   the game clock has moved enough for the clouds to move a fraction of a
+ *   texel, when the weather frames or the cloud settings change, and at most
+ *   every MIN_INTERVAL_MS of real time. A texel costs sixteen octaves of
+ *   noise, so the six faces of a bake that is due only to the field's age go
+ *   out over six frames (`SPREAD_SPAN`): the clouds move a few meters
+ *   meanwhile, against texels of 3 km. New weather, new settings and a clock
+ *   that runs fast or jumps bake all six at once.
  */
 import { HalfFloatType, StorageTexture } from 'three/webgpu';
 import type { ComputeNode, Node, WebGPURenderer } from 'three/webgpu';
@@ -31,6 +35,8 @@ import {
   tan,
   texture,
   textureStore,
+  uint,
+  uniform,
   uvec2,
   vec2,
   vec3,
@@ -55,6 +61,13 @@ export const BAKE_RESOLUTION = 512;
 const MAX_AGE = 10;
 /** Real milliseconds between bakes at most, whatever the time rate. */
 const MIN_INTERVAL_MS = 100;
+/** Cube faces: the passes of one bake. */
+const FACES = 6;
+/**
+ * Game seconds the faces of one bake may lie apart, when they are baked a frame apart: the
+ * clouds move 36 m in that time, a hundredth of a texel.
+ */
+const SPREAD_SPAN = 3;
 
 export interface CoverageSource {
   /**
@@ -93,11 +106,18 @@ export class CoverageBake {
   readonly texture: StorageTexture;
   private readonly m: number;
   private readonly kernel: ComputeNode;
+  /** The cube face the kernel fills. */
+  private readonly face = uniform(0);
   private bakedAt = Number.NaN;
   private bakedKey = '';
   private lastBakeMs = -Infinity;
-  /** Bakes done so far (for statistics and tests). */
+  /** The next face of a bake that is spread over frames; FACES while none is under way. */
+  private next = FACES;
+  /** The game time of the last `update`. */
+  private seenAt = Number.NaN;
+  /** Bakes begun so far, and cube faces baked (for statistics and tests). */
   bakes = 0;
+  faces = 0;
 
   constructor(
     source: CoverageSource,
@@ -108,13 +128,12 @@ export class CoverageBake {
     // Half floats: the march thresholds noise by these values, and 8-bit steps showed (decision 141).
     this.texture.type = HalfFloatType;
     this.texture.generateMipmaps = false;
-    const count = 6 * m * m;
+    const count = m * m;
     this.kernel = Fn(() => {
       const i = instanceIndex;
-      const face = i.div(m * m);
-      const rest = i.sub(face.mul(m * m));
-      const y = rest.div(m);
-      const x = rest.sub(y.mul(m));
+      const face = uint(this.face);
+      const y = i.div(m);
+      const x = i.sub(y.mul(m));
       // Texel i of the bordered lattice is centered at u = (i − 0.5) / n.
       const u = float(x).sub(0.5).div(n);
       const v = float(y).sub(0.5).div(n);
@@ -134,19 +153,50 @@ export class CoverageBake {
    * field (weather frames, settings): a different key forces a bake.
    */
   update(renderer: WebGPURenderer, gameTime: number, key: string, nowMs: number): boolean {
-    const stale = key !== this.bakedKey || !(Math.abs(gameTime - this.bakedAt) < MAX_AGE);
-    if (!stale || nowMs - this.lastBakeMs < MIN_INTERVAL_MS) return false;
-    this.bake(renderer, gameTime, key, nowMs);
+    // Game seconds since the last call: how fast the clock runs per frame.
+    const step = Math.abs(gameTime - this.seenAt);
+    this.seenAt = gameTime;
+    const changed = key !== this.bakedKey;
+    if (this.next < FACES) {
+      // A bake is under way, a face per frame. If the weather has changed or the clock has
+      // run away meanwhile, its faces would not fit together: all of it again, at once.
+      if (changed || !(Math.abs(gameTime - this.bakedAt) < SPREAD_SPAN)) {
+        this.bake(renderer, gameTime, key, nowMs);
+      } else {
+        this.bakeFace(renderer, this.next++);
+      }
+      return true;
+    }
+    const age = Math.abs(gameTime - this.bakedAt);
+    if (!(changed || !(age < MAX_AGE)) || nowMs - this.lastBakeMs < MIN_INTERVAL_MS) return false;
+    // The field has only aged, and the clock runs slowly enough for six frames to be one
+    // moment: a face now and one in each of the next five frames.
+    if (!changed && age < 2 * MAX_AGE && step * FACES < SPREAD_SPAN) {
+      this.bakedAt = gameTime;
+      this.lastBakeMs = nowMs;
+      this.bakes++;
+      this.next = 0;
+      this.bakeFace(renderer, this.next++);
+    } else {
+      this.bake(renderer, gameTime, key, nowMs);
+    }
     return true;
   }
 
-  /** Bakes now, whatever the age. */
+  /** Bakes all six faces now, whatever the age. */
   bake(renderer: WebGPURenderer, gameTime: number, key: string, nowMs: number): void {
-    void renderer.compute(this.kernel);
+    for (let face = 0; face < FACES; face++) this.bakeFace(renderer, face);
+    this.next = FACES;
     this.bakedAt = gameTime;
     this.bakedKey = key;
     this.lastBakeMs = nowMs;
     this.bakes++;
+  }
+
+  private bakeFace(renderer: WebGPURenderer, face: number): void {
+    this.face.value = face;
+    void renderer.compute(this.kernel);
+    this.faces++;
   }
 
   /** Frees the texture (13 MB on the GPU at the default resolution) and the kernel. */

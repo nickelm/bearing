@@ -499,7 +499,7 @@ Simulation view (needs S1's `render/sim/` split):
   - [ ] Lamp light on particles at night; splashes on the runway
   - [ ] Snow may twinkle in a slow pan where flakes cross the edge of their cell: check in motion
 - [x] The atmosphere in the app and in Free Flight: per-frame wiring, GUI → Atmosphere, weather as a Free Flight option (start screen, pause menu, `&weather=`), a quality governor, a render scale that probes upward, wind and gusts in the shared flight model, weather audio (decision 143)
-  - [ ] Owner, in a browser with WebGPU (nothing ran in one): the frame loop, the switch between map and simulation view, the first frames after "Fly", GUI → Atmosphere
+  - [ ] Owner, on a machine with a GPU: frame rates by weather, the first frames after "Fly", GUI → Atmosphere (the frame loop, the menus and the switch between map and simulation view ran in Chromium on a software rasterizer, decision 144)
   - [ ] Owner: watch "Quality now" and the resolution on a steady view; either changing more often than once a minute is a governor or render-scale bug (thresholds come from simulated machines)
   - [ ] Owner: fly the wind and gusts in storm, blizzard and dust storm (only the scripted pilot has); retire the 8 m/s cap on the ground once the control laws hold a gale on the runway
   - [ ] The pause menu's volume slider gives no sound while paused (the audio is suspended)
@@ -522,12 +522,29 @@ Simulation view (needs S1's `render/sim/` split):
 - [x] Exposure tied to time of day (Part I, Post-Processing): a twilight gain on the sun's illuminance, a low-sun sky fill and a low-sun exposure for surfaces (decisions 139, 140); the `sunset` view's ground median went from luma 10 to 29
 - [ ] Night: settled land glows a uniform warm brown at 6 km with no distinct town lights (style audit, `night`); keep the rural glow to points and let towns read as clusters of lights
 - [x] Post-processing for the simulation view: bloom on emissives and glints, a grade per time-of-day band, faint film grain and dither, a low-resolution volumetric stage and an overlay scene (`render/sim/post/`, decision 138)
-  - [ ] Check the pipeline in a real browser: the validation guard, the canvas path, switching views (nothing ran in a browser, decision 135)
+  - [x] Check the pipeline in a real browser: the validation guard, the canvas path, switching views (Chromium on lavapipe, `tools/browser.smoke.mjs`, decision 144)
   - [ ] Revisit bloom strength and thresholds at 1080p once clouds and the new sky exist (tuned at 640×360)
   - [ ] Runway lights barely bloom at dusk: they are as bright as the sky then (`StructureLayer.lightBrightness`)
   - [ ] Optional pixelation pass (Part I, Post-Processing)
 - [ ] Pixelation option: nearest-neighbor upscale of the reduced render scale, with optional ordered dithering on sky gradients, default 75% on desktop (Part I; decision 69's render scale upscales smoothly)
 - [ ] Acceptance checks 1–5 (Part I) against the reference board; owner checkpoint
+  - [x] Rendered at 1408 × 792 with trees, live and fair weather, beside `main`'s (decision 144), and compared with the text of Part I; the reference screenshots are not in the cloud session, so the comparison with the board is the owner's
+  - [ ] Check 1 (`mixed`): cumulus seen from close above show horizontal terraces (stacked rings) at every volumetric quality, sharpest at high
+  - [ ] Check 4 (`dusk`): the cloud deck shows the march's 3 × 3 sample pattern and low-resolution blocks in its bright parts and along the far band; teal fringes where the twilight sky shows through gaps; with `WEATHER=fair` a small yellow dot with a streak under it sits in the deck right of center
+  - [ ] Cumulus seen from the side at medium quality carry a fine stipple that high does not have
+  - [ ] Checks 1 and 4 under the weather: `mixed` at 5 km sits inside the cumulus layer and `dusk` under a closed deck in live and fair weather; render them with `WEATHER=clear` as well, or move check 1 under the cloud base, so the landscape and the dusk gradient can be judged
+  - [ ] Check 2 (`conifer`): the town reads as a patch of large triangles in roof and wall colors with tiny houses on it, and no road shows at 500 m (predates the atmosphere work)
+  - [ ] Check 5 (`beach`): regular ripple moiré on the water under the sun glint; no sand strip at the shore (predates)
+  - [ ] Check 4: no parked aircraft on the apron (V3)
+- [x] The built app in headless Chromium with WebGPU (`tools/browser.smoke.mjs`, lavapipe through a shim); cost against `main`; sky LUT bakes 3 to 9 times less often in flight, the coverage bake spread over six frames, idle render targets freed; Esc closes the pause menu (decision 144)
+  - [ ] A message for a browser that offers only the software WebGPU adapter (Chromium's SwiftShader hangs in world generation and eats memory until the tab dies)
+  - [ ] With the wind on (the default), an unsteered takeoff roll leaves the runway: 1.6 m/s of crosswind puts the aircraft 24 m off the centerline at 212 kt (nosewheel hold or tire side force in the shared ground model)
+  - [ ] The governor steps down during the first flight's shader compiles and tile loads; hold it through the warm-up after a cut
+  - [ ] Snow near the camera: the aircraft 12 m ahead is veiled by about 22% at 1.1 km visibility and its brightness swings within seconds of the weather clock
+  - [ ] Measure in a browser on real GPUs: frame time by weather and quality, the coverage bake per face, main-thread time per pipeline pass (Node on Dawn: 0.1 ms per pass, 7 to 11 passes)
+  - [ ] The sky LUT still bakes about 5 times a second in a 10 m/s climb; if it shows on integrated GPUs, bound it to every other frame
+  - [ ] The shadow bake's tile-height fill allocates 40 to 80 KB per frame in bursts; its two work grids (4 MiB) could be freed between bakes
+  - [ ] Add the cost pass's modes (weather × quality matrix, per-subsystem flight profile) to `tools/render.preview.ts`
 
 ### V3. Models and bases
 
@@ -617,11 +634,11 @@ A sandbox outside the campaign: pick a seed and an airbase, take off in the F-21
 - [ ] Mouse aim as in Proposal 0002: a world-locked aim point that the camera follows, not the cursor's direction in the chase view (P1)
 - [ ] The Kestrel at the controlled-aircraft detail level (1,500–4,000 triangles) with navigation lights and a blinking beacon at night (V4)
 - [ ] Shadow without double darkening where triangles overlap (a stencil or a max-blend pass)
-- [ ] Weather in Free Flight: run the weather model without the war, so clouds and winds show (decision 134 flies in clear air)
+- [x] Weather in Free Flight: run the weather model without the war, so clouds and winds show (`StandaloneWeather`, decisions 137, 143)
 - [ ] Initial fuel option: with unlimited fuel the Kestrel always weighs 13.3 t and approaches at about 164 kt; a landing at 1,000 kg of fuel comes in near 145 kt
 - [ ] Nosewheel steering switch (castoring nosewheel without it), so differential braking alone can turn the aircraft
 - [ ] Key remapping in the UI (the table exists; there is no settings page), and gamepad buttons for gear, brakes and throttle detents
-- [ ] Browser check on a machine with a GPU: the cloud session's headless Chromium loses its WebGPU device in the world's GPU pass (decision 135), so the app was not flown end to end in a browser
+- [ ] Browser check on a machine with a GPU: run `node tools/browser.smoke.mjs` with `MODE=gpu` (never run; headless Chromium may need `HEADED=1` for the real adapter). In the cloud session the app flies end to end in Chromium on lavapipe (decision 144)
 - [ ] Departures and spins: the control laws hold the aircraft inside the α and g limits, and the model has no aerodynamic moment tables yet (decision 134)
 
 ## Piloting track (after the demo)

@@ -617,6 +617,69 @@ describe.skipIf(!gpu)('SimPipeline on Dawn', () => {
     head.dispose();
   }, 120_000);
 
+  it('frees the targets of the fog and the overlay while neither is drawn, and brings them back', async () => {
+    const head = await headlessRenderer(gpu!.device, W, H);
+    const { scene, camera } = wallScene();
+    const pipeline = barePipeline(head);
+    pipeline.idleFrames = 4;
+    const fog = heightFogTestSource({
+      eye: uniform(new Vector3(0, RADIUS + 200, 0)),
+      radius: RADIUS,
+      density: 2e-3,
+    });
+    pipeline.volumetrics = fog;
+    const material = new MeshBasicNodeMaterial({ transparent: true, depthTest: false });
+    material.colorNode = vec4(
+      vec3(0, 1, 0),
+      select(pipeline.sceneDistance.greaterThan(150), float(0.5), float(0)),
+    );
+    const sheet = new Mesh(new PlaneGeometry(2000, 2000), material);
+    sheet.position.set(0, 0, -150);
+    pipeline.overlay.add(sheet);
+    const memory = head.renderer.info.memory;
+    drawCounted(pipeline, head, scene, camera);
+    await gpu!.finish();
+    const both = await head.readRgb();
+    expect(pipeline.stats.passes).toBe(6);
+    const held = memory.texturesSize;
+    // The overlay's target is the frame's size in half floats; the fog's three are a ninth of it.
+    const overlayBytes = W * H * 8;
+    const fogBytes = 3 * Math.ceil(W / 3) * Math.ceil(H / 3) * 8;
+
+    // Clear air and nothing in the overlay: after `idleFrames` frames their targets are gone.
+    fog.idle = true;
+    sheet.visible = false;
+    for (let frame = 1; frame <= 4; frame++) {
+      drawCounted(pipeline, head, scene, camera);
+      expect(pipeline.stats.passes).toBe(2);
+      if (frame < 4) expect(memory.texturesSize).toBe(held);
+    }
+    expect(held - memory.texturesSize).toBe(overlayBytes + fogBytes);
+    for (let frame = 0; frame < 8; frame++) pipeline.render(scene, camera);
+    expect(held - memory.texturesSize).toBe(overlayBytes + fogBytes);
+
+    // Fog and rain return: the same picture, from targets made anew.
+    fog.idle = false;
+    sheet.visible = true;
+    drawCounted(pipeline, head, scene, camera);
+    await gpu!.finish();
+    const back = await head.readRgb();
+    expect(gpu!.errors).toEqual([]);
+    expect(memory.texturesSize).toBe(held);
+    let worst = 0;
+    for (let i = 0; i < both.length; i++) worst = Math.max(worst, Math.abs(both[i]! - back[i]!));
+    expect(worst).toBeLessThanOrEqual(1);
+
+    // One of the two at a time: a dry cloudy day keeps the fog's targets and frees the overlay's.
+    sheet.visible = false;
+    for (let frame = 0; frame < 6; frame++) pipeline.render(scene, camera);
+    await gpu!.finish();
+    expect(gpu!.errors).toEqual([]);
+    expect(held - memory.texturesSize).toBe(overlayBytes);
+    pipeline.dispose();
+    head.dispose();
+  }, 120_000);
+
   it('blooms a very bright spot and nothing else, grades and dithers', async () => {
     const head = await headlessRenderer(gpu!.device, W, H);
     head.renderer.toneMapping = AgXToneMapping;

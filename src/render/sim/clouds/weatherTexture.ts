@@ -202,6 +202,8 @@ export class WeatherTexture {
     }
     this.terrain.needsUpdate = true;
     if (this.frames) this.blendFields(this.blend.value);
+    // Whatever was derived from the old heights is stale, with or without frames.
+    else this.fieldVersion++;
   }
 
   /** Uploads the view's two frames (the later one doubles the earlier if missing). */
@@ -287,9 +289,10 @@ export class WeatherTexture {
     const d = grid.directions;
     const ground = this.ground;
     const [fogA, fogB] = this.fog;
+    const frames = a === b ? [a.data] : [a.data, b.data];
     for (let s = 0; s < count; s++) {
       if (d[s * 3]! * dir.x + d[s * 3 + 1]! * dir.y + d[s * 3 + 2]! * dir.z < cosine) continue;
-      for (const data of a === b ? [a.data] : [a.data, b.data]) {
+      for (const data of frames) {
         const cover = data[Channel.Cover * count + s]!;
         if (cover > out.cover) out.cover = cover;
         const precip = data[Channel.Precipitation * count + s]! / PRECIP_FULL;

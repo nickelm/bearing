@@ -8,15 +8,15 @@
  *
  * Env: SHOTS (comma list of shot names; a preview run with OUT=-storm wrote the
  * shots "runway-storm" and so on; default: the five of a plain run), OUT_DIR (where
- * the screenshots go; default docs/reports/screens).
+ * the screenshots go; default docs/reports/screens). Playwright is no dependency of the
+ * repo: tools/browser/launch.mjs says where it is looked for.
  */
 import { mkdirSync, readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { loadPlaywright } from './browser/launch.mjs';
 
-const require = createRequire(import.meta.url);
-const { chromium } = require('playwright');
+const { chromium } = loadPlaywright();
 const here = dirname(fileURLToPath(import.meta.url));
 const base = process.argv[2] ?? 'http://localhost:5173';
 const out = process.env.OUT_DIR ?? join(here, '..', 'docs', 'reports', 'screens');

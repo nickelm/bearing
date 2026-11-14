@@ -149,6 +149,14 @@ export function viewAngle(altitude: number, radius: number): number {
   const beyond = Math.sqrt(TOP_MOST * (2 * radius + TOP_MOST));
   return Math.min(VIEW_ANGLE, (horizon + beyond) / radius + 0.02);
 }
+/**
+ * How far the camera may move along the ground (m), and by what share of its
+ * altitude it may climb or sink, before the weather in view is looked up again
+ * (`CloudLayer.takeStock`). A weather sample stands for 65 km, and the lookup
+ * already reaches a sample and a half past the view.
+ */
+const STOCK_REACH = 400;
+const STOCK_CLIMB = 0.02;
 /** Camera altitudes (m) between which the shell takes over from the volumetric clouds. */
 export const SHELL_FROM = 30_000;
 export const SHELL_FULL = 50_000;
@@ -226,6 +234,11 @@ export class CloudLayer implements WeatherField {
   private readonly lights = new WeakMap<object, Node<'vec2'>>();
   private readonly local: WeatherExtent = newExtent();
   private readonly up = new Vec3d();
+  /** Where, how high and for which weather `extent` and `local` were last taken (`takeStock`). */
+  private readonly stockAt = new Vec3d();
+  private stockAltitude = Number.NaN;
+  private stockVersion = -1;
+  private stockFieldVersion = -1;
   /** The shape noise's turn (rad) and the game time it was advanced to. */
   private angle = 0;
   private angleTime = 0;
@@ -531,7 +544,8 @@ export class CloudLayer implements WeatherField {
     const on = this.enabled.value > 0;
 
     // The weather in view, and right around the camera.
-    const view = this.weather.extent(up, viewAngle(altitude, this.radius), this.extent);
+    this.takeStock(up, altitude);
+    const view = this.extent;
     const bias = this.coverageBias.value;
     // Coverage is zero where the stretched cover stays under the detail field's lowest value.
     this.possible = on && (view.cover + bias) * 1.2 - 0.1 > 0.02 - 0.1;
@@ -542,7 +556,7 @@ export class CloudLayer implements WeatherField {
     this.bottom = view.baseMin;
     this.top = view.baseMax + thicknessUpTo(deepest);
     this.cloudy.value = this.possible ? 1 : 0;
-    const near = this.weather.extent(up, 0, this.local);
+    const near = this.local;
     const widest =
       0.5 * (near.baseMin + near.baseMax) +
       Math.min(1500, 0.3 * thicknessOf(developmentOf(near.cover + bias, near.precip)));
@@ -581,6 +595,32 @@ export class CloudLayer implements WeatherField {
     // Under the volumetric clouds the shell only shows while it fades in: from the bake.
     this.detailed.value = altitude < DETAIL_ALTITUDE && !this.volumetric ? 1 : 0;
     this.group.visible = on && this.shellEnabled && this.shell.value > 0;
+  }
+
+  /**
+   * Fills `extent` and `local` from the weather texture: a scan of every
+   * weather sample, so it is done again only once the camera has moved
+   * `STOCK_REACH` along the ground or `STOCK_CLIMB` of its altitude, or the
+   * weather has changed. The angles are wider by those margins, so what is
+   * found holds for every camera position until then.
+   */
+  private takeStock(up: Readonly<Vec3d>, altitude: number): void {
+    const weather = this.weather;
+    const fresh =
+      weather.version === this.stockVersion &&
+      weather.fieldVersion === this.stockFieldVersion &&
+      up.distanceTo(this.stockAt) <= STOCK_REACH / this.radius &&
+      Math.abs(altitude - this.stockAltitude) <= STOCK_CLIMB * Math.max(0, this.stockAltitude) + 20;
+    if (fresh) return;
+    const reach = STOCK_REACH / this.radius;
+    // The view from the top of the altitude band: the widest of the band.
+    const highest = Math.max(0, altitude) * (1 + STOCK_CLIMB) + 20;
+    weather.extent(up, viewAngle(highest, this.radius) + reach, this.extent);
+    weather.extent(up, reach, this.local);
+    this.stockAt.copy(up);
+    this.stockAltitude = altitude;
+    this.stockVersion = weather.version;
+    this.stockFieldVersion = weather.fieldVersion;
   }
 
   /** Opacity of the volumetric clouds, 0..1: they fade out as the shell fades in. */
