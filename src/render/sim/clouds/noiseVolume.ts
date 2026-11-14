@@ -269,7 +269,7 @@ export function generateShapeNoise(size = SHAPE_SIZE, seed = 0x51ab): Uint16Arra
     const puffs = 0.7 * w4[i]! + 0.3 * w8[i]!;
     smooth[i] = 0.5 * perlin[i]! + 0.5 * puffs;
     // The finer cells bulge the outline: cauliflower.
-    shape[i] = 0.42 * perlin[i]! + 0.36 * w4[i]! + 0.15 * w8[i]! + 0.07 * w16[i]!;
+    shape[i] = 0.36 * perlin[i]! + 0.33 * w4[i]! + 0.21 * w8[i]! + 0.1 * w16[i]!;
     billows[i] = 0.55 * w8[i]! + 0.45 * w16[i]!;
   }
   equalize(shape);

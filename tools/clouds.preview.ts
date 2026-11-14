@@ -10,19 +10,25 @@
  *
  *   npx vitest run --disable-console-intercept --config vitest.tools.config.ts tools/clouds.preview.ts
  *   env: OUT (tools/out), W × H per view (512 × 288), VIEWS a list of the names below (all),
- *        ALT camera height in m and PITCH in degrees instead of the views' own,
+ *        ALT camera height in m, PITCH and TURN in degrees and SUN (the sun's elevation in
+ *        degrees) instead of the views' own,
  *        QUALITY low|medium|high (medium), SCALE the volumetric pass's divisor instead of the
  *        quality's, LAT and LON of the camera in degrees (40, 2), HOUR the weather's game hour (30),
- *        CIRRUS amount 0..1, AIR=0 without fog, dust and rain shafts, CLOUDS_3D=0 without clouds, BAKE interior texels per face of the coverage bake (768),
+ *        CIRRUS amount 0..1, AIR=0 without fog, dust and rain shafts, CLOUDS_3D=0 without clouds, BAKE interior texels per face of the coverage bake (512),
  *        FRAMES=n renders n more frames of each view with the clocks running (FRAME_DT real
  *        seconds each, default 1/30; TIME_RATE game seconds per real second, default 1) and
  *        prints how much each differs from the one before (noise, crawl, motion); STILL=1
  *        holds the clocks so only the march's noise is left,
  *        PERF=n times n interleaved rounds of every view without the volumetrics and with
- *        them at each quality, FLASH=x lights a discharge of that intensity 4 km ahead,
+ *        them at each quality, FLASH=x lights a discharge of that intensity FLASH_KM ahead (4),
+ *        FLASH_TURN degrees to the right (0) and FLASH_ALT m above sea level (3500),
  *        VOL=0 draws without the volumetrics (the shell), POST=0 without the pipeline,
  *        FILTER=0 without the pipeline's 3 × 3 filter (the march as it is),
- *        TUNING='{"multiple":0.4}' overrides numbers of the cloud's light (CLOUD_LIGHT).
+ *        COUNT=1 prints what the marches do per low-resolution pixel of each view (steps of
+ *        the cloud march, those shaded, steps of the air march, texture reads): the cost
+ *        that does not depend on the machine,
+ *        TUNING='{"multiple":0.4}' overrides numbers of the cloud's light (CLOUD_LIGHT),
+ *        TUNING_AIR='{"wispLight":0.5}' numbers of the look of fog, dust and rain (AIR_LOOK).
  *
  * Writes `clouds-<view>.png` per view and `clouds-sheet.png` with all of them.
  */
@@ -33,13 +39,19 @@ import {
   AgXToneMapping,
   BufferAttribute,
   BufferGeometry,
+  FloatType,
   Mesh,
   MeshBasicNodeMaterial,
+  NodeMaterial,
   PerspectiveCamera,
+  QuadMesh,
+  RenderTarget,
   Scene,
+  Vector3,
 } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import {
+  float,
   Fn,
   floor,
   fract,
@@ -48,7 +60,9 @@ import {
   normalize,
   positionLocal,
   positionWorld,
+  screenUV,
   sin,
+  uniform,
   varyingProperty,
   vec3,
   vec4,
@@ -58,7 +72,12 @@ import { celestialRotation, moonIlluminatedFraction } from '../src/core/moon';
 import { DEG, HOUR, KM, PLANET_RADIUS } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
 import { CloudLayer } from '../src/render/sim/clouds/cloudLayer';
-import { CLOUD_LIGHT, VOLUMETRIC_QUALITY, Volumetrics } from '../src/render/sim/clouds/volumetrics';
+import {
+  AIR_LOOK,
+  CLOUD_LIGHT,
+  VOLUMETRIC_QUALITY,
+  Volumetrics,
+} from '../src/render/sim/clouds/volumetrics';
 import type { VolumetricQuality } from '../src/render/sim/clouds/volumetrics';
 import { WeatherTexture } from '../src/render/sim/clouds/weatherTexture';
 import { PlanetLighting } from '../src/render/sim/lighting/planetLighting';
@@ -79,9 +98,10 @@ interface CloudView {
   name: string;
   /**
    * A weather preset; or 'dustwall', the dust storm with clear air west of a line 20 km east
-   * of the camera; or 'front', the thunderstorm east of that line and fair weather west of it.
+   * of the camera; or 'front', the thunderstorm east of that line and fair weather west of it;
+   * or 'hazy', fair weather in a haze of 9 km visibility (crepuscular rays).
    */
-  weather: Exclude<WeatherPreset, 'live'> | 'dustwall' | 'front';
+  weather: Exclude<WeatherPreset, 'live'> | 'dustwall' | 'front' | 'hazy';
   /** Camera height above sea level (m). */
   altitude: number;
   /** Where the camera looks: degrees above the horizon, and clockwise of the key light's azimuth. */
@@ -108,6 +128,9 @@ const VIEWS: CloudView[] = [
   { name: 'fair-golden', weather: 'fair', altitude: 30, pitch: 14, turn: 20, sun: 5 },
   { name: 'fair-sunset', weather: 'fair', altitude: 30, pitch: 12, turn: 10, sun: 0.5 },
   { name: 'fair-dusk', weather: 'fair', altitude: 2500, pitch: 4, turn: 25, sun: -3 },
+  // Haze under broken cloud, toward a low sun and across it: the shafts between the shadows.
+  { name: 'rays', weather: 'hazy', altitude: 30, pitch: 16, turn: 6, sun: 16 },
+  { name: 'rays-side', weather: 'hazy', altitude: 800, pitch: 2, turn: 70, sun: 12 },
   // Overcast: from below, and above the deck at sunset.
   { name: 'overcast-below', weather: 'overcast', altitude: 30, pitch: 12, turn: 90, sun: 40 },
   { name: 'overcast-above', weather: 'overcast', altitude: 11_000, pitch: -8, turn: 30, sun: 3 },
@@ -118,6 +141,18 @@ const VIEWS: CloudView[] = [
   { name: 'storm-golden', weather: 'storm', altitude: 6000, pitch: 3, turn: 110, sun: 6 },
   { name: 'storm-below', weather: 'storm', altitude: 30, pitch: 14, turn: 90, sun: 40 },
   { name: 'storm-above', weather: 'storm', altitude: 14_000, pitch: -10, turn: 70, sun: 25 },
+  // Under the storm at dusk and at night, and a night of drizzle: what a flash lights (FLASH).
+  { name: 'storm-dusk', weather: 'storm', altitude: 30, pitch: 10, turn: 60, sun: -2 },
+  { name: 'storm-night', weather: 'storm', altitude: 30, pitch: 10, turn: 60, sun: -30, moon: 30 },
+  {
+    name: 'drizzle-night',
+    weather: 'drizzle',
+    altitude: 30,
+    pitch: 10,
+    turn: 60,
+    sun: -30,
+    moon: 30,
+  },
   // A storm front from the fair side: towers and rain shafts, at golden hour and at noon.
   { name: 'front-golden', weather: 'front', altitude: 2500, pitch: 5, turn: 180, sun: 7 },
   { name: 'front-noon', weather: 'front', altitude: 300, pitch: 9, turn: 150, sun: 50 },
@@ -126,7 +161,7 @@ const VIEWS: CloudView[] = [
   { name: 'fog-dawn', weather: 'fog', altitude: 30, pitch: 4, turn: 12, sun: 4 },
   { name: 'fog-above', weather: 'fog', altitude: 1500, pitch: -12, turn: 60, sun: 8 },
   // Dust: from inside and from above its top.
-  { name: 'dust-inside', weather: 'duststorm', altitude: 30, pitch: 10, turn: 10, sun: 35 },
+  { name: 'dust-inside', weather: 'duststorm', altitude: 30, pitch: 22, turn: 10, sun: 35 },
   { name: 'dust-above', weather: 'duststorm', altitude: 4000, pitch: -10, turn: 80, sun: 35 },
   // Its wall from outside, in clear air: looking east at it, at noon and with a low sun behind the camera.
   { name: 'dust-wall', weather: 'dustwall', altitude: 300, pitch: 4, turn: 180, sun: 40 },
@@ -144,7 +179,7 @@ const VIEWS: CloudView[] = [
  */
 function groundPatch(eye: Vec3d, east: Vec3d, north: Vec3d, up: Vec3d): BufferGeometry {
   const rings = 56;
-  const spokes = 48;
+  const spokes = 96;
   const positions = new Float32Array((rings * spokes + 1) * 3);
   const foot = up.clone().scale(PLANET_RADIUS);
   positions.set([foot.x - eye.x, foot.y - eye.y, foot.z - eye.z], 0);
@@ -197,17 +232,21 @@ it('renders the volumetrics', async () => {
         return v;
       })
     : VIEWS;
-  // ALT (m above sea level) and PITCH (degrees) override every chosen view's own.
+  // ALT (m above sea level), PITCH, TURN and SUN (degrees) override every chosen view's own.
   for (let k = 0; k < views.length; k++) {
     views[k] = {
       ...views[k]!,
       ...(process.env.ALT ? { altitude: Number(process.env.ALT) } : {}),
       ...(process.env.PITCH ? { pitch: Number(process.env.PITCH) } : {}),
+      ...(process.env.TURN ? { turn: Number(process.env.TURN) } : {}),
+      ...(process.env.SUN ? { sun: Number(process.env.SUN) } : {}),
     };
   }
 
   // TUNING='{"multiple":0.4}' overrides numbers of the cloud's light.
   if (process.env.TUNING) Object.assign(CLOUD_LIGHT, JSON.parse(process.env.TUNING));
+  // TUNING_AIR='{"wispLight":0.5}' overrides numbers of the look of fog, dust and rain.
+  if (process.env.TUNING_AIR) Object.assign(AIR_LOOK, JSON.parse(process.env.TUNING_AIR));
   const head = await headlessRenderer(gpu.device, width, height);
   const renderer = head.renderer;
   renderer.toneMapping = AgXToneMapping;
@@ -230,9 +269,53 @@ it('renders the volumetrics', async () => {
   const pipeline = process.env.POST === '0' ? null : new SimPipeline(renderer);
   if (pipeline) {
     volumetrics.attach(pipeline);
+    volumetrics.skipWarmUp();
     if (process.env.SCALE) pipeline.volumetricScale = 1 / Number(process.env.SCALE);
     pipeline.volumetricsEnabled = process.env.VOL !== '0';
     pipeline.volumetricFilter = process.env.FILTER !== '0';
+  }
+
+  // COUNT=1: a second source that returns what the marches did, evaluated per low-resolution
+  // pixel along the camera's rays down to sea level.
+  const counter =
+    process.env.COUNT === '1'
+      ? new Volumetrics({ lighting, clouds, weather, state, count: true })
+      : null;
+  const countAxes = {
+    forward: uniform(new Vector3()),
+    right: uniform(new Vector3()),
+    top: uniform(new Vector3()),
+  };
+  let countQuad: QuadMesh | null = null;
+  let countTarget: RenderTarget | null = null;
+  if (counter) {
+    counter.quality = volumetrics.quality;
+    counter.cirrus.value = volumetrics.cirrus.value;
+    counter.airEnabled = volumetrics.airEnabled;
+    counter.cloudsEnabled = volumetrics.cloudsEnabled;
+    const divisor = process.env.SCALE
+      ? Number(process.env.SCALE)
+      : Math.round(1 / VOLUMETRIC_QUALITY[counter.quality].scale);
+    countTarget = new RenderTarget(Math.ceil(width / divisor), Math.ceil(height / divisor), {
+      type: FloatType,
+      depthBuffer: false,
+    });
+    const tan = Math.tan((25 * Math.PI) / 180);
+    const x = screenUV.x
+      .mul(2)
+      .sub(1)
+      .mul(tan * (width / height));
+    const y = float(1).sub(screenUV.y.mul(2)).mul(tan);
+    const material = new NodeMaterial();
+    material.fragmentNode = counter.source.build({
+      rayDirection: normalize(
+        countAxes.forward.add(countAxes.right.mul(x)).add(countAxes.top.mul(y)),
+      ) as V3,
+      sceneDistance: float(1e9) as Node<'float'>,
+      uv: screenUV as Node<'vec2'>,
+      jitter: float(0.5) as Node<'float'>,
+    });
+    countQuad = new QuadMesh(material);
   }
 
   const scene = new Scene();
@@ -305,6 +388,12 @@ it('renders the volumetrics', async () => {
   let bakeClock = 0;
   let gameTime = (hour + 0.5) * HOUR;
   const frameOf = (kind: CloudView['weather'], h: number): WeatherFrame => {
+    if (kind === 'hazy') {
+      const frame = presetFrame('fair', live(h), grid);
+      const n = grid.count;
+      frame.data.fill(9000, Channel.Visibility * n, (Channel.Visibility + 1) * n);
+      return frame;
+    }
     if (kind !== 'dustwall' && kind !== 'front') return presetFrame(kind, live(h), grid);
     const frame = presetFrame(kind === 'front' ? 'storm' : 'duststorm', live(h), grid);
     const west = presetFrame('fair', live(h), grid);
@@ -363,15 +452,26 @@ it('renders the volumetrics', async () => {
     state.update(view, eye, v.altitude, gameTime, dt);
     const flash = Number(process.env.FLASH ?? 0);
     if (flash > 0) {
+      // FLASH_KM ahead (4), FLASH_TURN degrees to the right of the view's center (0), FLASH_ALT m up (3500).
+      const side = forward.clone().cross(up).normalize();
+      const turn = Number(process.env.FLASH_TURN ?? 0) * DEG;
       const at = eye
         .clone()
-        .addScaled(forward, 4 * KM)
+        .addScaled(forward, Number(process.env.FLASH_KM ?? 4) * KM * Math.cos(turn))
+        .addScaled(side, Number(process.env.FLASH_KM ?? 4) * KM * Math.sin(turn))
         .normalize()
-        .scale(PLANET_RADIUS + 3500);
+        .scale(PLANET_RADIUS + Number(process.env.FLASH_ALT ?? 3500));
       state.flash.value = flash;
       state.flashPosition.value.set(at.x, at.y, at.z);
     }
     volumetrics.update(eye, dt);
+    if (counter) {
+      counter.update(eye, 0);
+      const right = forward.clone().cross(top).normalize();
+      countAxes.forward.value.set(forward.x, forward.y, forward.z);
+      countAxes.right.value.set(right.x, right.y, right.z);
+      countAxes.top.value.set(top.x, top.y, top.z);
+    }
     lighting.atmosphere.sky.setCelestial(
       lighting.sunElevation,
       lighting.night,
@@ -425,6 +525,33 @@ it('renders the volumetrics', async () => {
             `dust ${state.dust.value.toFixed(2)}, storm ${state.storm.value.toFixed(2)}`
           : ''),
     );
+    if (counter && countQuad && countTarget) {
+      renderer.setRenderTarget(countTarget);
+      countQuad.render(renderer);
+      renderer.setRenderTarget(null);
+      await gpu.finish();
+      const px = (await renderer.readRenderTargetPixelsAsync(
+        countTarget,
+        0,
+        0,
+        countTarget.width,
+        countTarget.height,
+      )) as Float32Array;
+      const n = px.length / 4;
+      const mean = [0, 0, 0, 0];
+      const most = [0, 0, 0, 0];
+      for (let i = 0; i < n; i++) {
+        for (let c = 0; c < 4; c++) {
+          mean[c]! += px[i * 4 + c]! / n;
+          if (px[i * 4 + c]! > most[c]!) most[c] = px[i * 4 + c]!;
+        }
+      }
+      console.log(
+        `  count ${v.name} (${counter.quality}, ${countTarget.width} × ${countTarget.height}): ` +
+          `cloud steps ${mean[0]!.toFixed(1)} (most ${most[0]}), shaded ${mean[1]!.toFixed(1)} (most ${most[1]}), ` +
+          `air steps ${mean[2]!.toFixed(1)} (most ${most[2]}), reads ${mean[3]!.toFixed(1)} (most ${most[3]})`,
+      );
+    }
     writeFileSync(join(outDir, `clouds-${v.name}.png`), encodePng(width, height, rgb));
     const cx = (k % columns) * width;
     const cy = Math.floor(k / columns) * height;

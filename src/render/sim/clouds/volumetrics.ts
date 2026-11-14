@@ -45,7 +45,11 @@
  *   long these terms reach deeper with less gain, mean brightness unchanged,
  *   so far cloud does not sparkle. Sky light comes from above and thins
  *   toward the base, which stays cool and gray; ground light comes from
- *   below. Lightning lights the cloud from inside (WeatherState.flash).
+ *   below; deep cloud keeps a gray floor of light, so a storm's core and base
+ *   are slate, not black, and deep inside a body the light follows the shape
+ *   noise, so the gray around a camera in cloud changes as it flies.
+ *   Lightning lights the cloud from inside (WeatherState.flash), less through
+ *   more cloud.
  * - Distance: every sample's light is faded into the sky's radiance in that
  *   direction by the air in front of it, so far cloud sinks into the haze at
  *   the horizon.
@@ -54,60 +58,76 @@
  *   reading, in patches), lit by the key light's color there: it catches the
  *   low sun above the horizon.
  *
- * Air near the ground (fog, haze, dust, rain shafts), one march of 10 to 20
- * steps from the camera, spaced quadratically, over the reach the air's
- * extinction at the camera allows. The weather is read at six points of the
- * ray and interpolated between them:
+ * Air near the ground (fog, haze, dust, rain shafts), one march of up to 10 to
+ * 20 steps from the camera, spaced quadratically, over the reach the air's
+ * extinction at the camera allows. It runs before the cloud march, which ends
+ * where the air has grown opaque: under rain and in fog most rays never reach
+ * the cloud. A ray that soon leaves the layer takes fewer steps, and haze
+ * without shafts half of them. The weather is read at the two ends of a short
+ * ray and at six points of a long one, and interpolated between them:
  * - Fog: the weather's fog extinction, full below a level 100 m over the mean
  *   ground of where it lies and thinning above it with a scale height that
  *   grows as the fog thins (120 m for dense fog, 600 m for haze), so fog
  *   pools in lowlands and hills stand out of it. The exponential profile is
- *   integrated analytically over each step. Banks: two layers of noise moving
- *   with the wind at different speeds lift and lower the fog's top and thin
- *   it between banks; close to the camera a third, of wisps tens of meters
- *   across, drifts on its own path even in still air. Haze (a visibility over
+ *   integrated analytically over each step. Structure: a layer of wide banks
+ *   lifts and lowers the fog's top; a finer layer and, near the camera, a
+ *   third are thin sheets (eight times wider than thick) that drift on paths
+ *   of their own, across the wind and each other. Thick fog shows its light,
+ *   not its density, and a ray crosses many round wisps before it ends: only
+ *   sheets, which a level ray stays in, show from inside, as bands that rise
+ *   and fall. The light follows them (`AIR_LOOK`). Haze (a visibility over
  *   8 km) has no such structure and reads no noise.
  * - Dust: an ochre layer up to 3 km deep where the weather's dust field is
- *   high, with a billowing top and a wall where the field begins, which takes
- *   the blue out of the light inside it, and a dull disk where the sun stands
- *   behind it.
- * - Rain and snow: under precipitating cloud (the bake's coverage, one read),
- *   veils from the base to the ground that lean with the wind; the weather's
- *   low visibility in rain is the rain's and ends where the cloud ends.
+ *   high, with a billowing top and a wall where the field begins, flat
+ *   billows that roll past the camera with the wind, the blue taken out of
+ *   the light inside it, and a dull disk where the sun stands behind it.
+ * - Rain and snow: under precipitating cloud (the bake's coverage, read every
+ *   400 m of the ray), veils from the base to the ground that lean with the
+ *   wind, and narrower curtains near the camera; the weather's low visibility
+ *   in rain is the rain's and ends where the cloud ends.
  * - Light: the key light through the air's own depth toward it, cut by the
  *   cloud shadow and the terrain shadow under open sky (crepuscular rays); a
  *   sharp forward lobe (the glow around a low sun in thin haze) and a wide
- *   one for the light the layer has scattered on; the sky's light, gray and
- *   dim under deep cloud as on the ground.
+ *   one for the light the layer has scattered on, which a thin layer has
+ *   little of; the sky's light, gray and dim under deep cloud as on the
+ *   ground. Lightning lights the air around the discharge, most where the eye
+ *   looks toward it, and never to white (`FLASH_AIR`).
  * - A cloud on the ray stands in the air as a sheet at its distance: the
- *   air's light from in front of it veils it, the rest shows through it.
+ *   air's light from in front of it veils it, the rest shows through it. The
+ *   share in front comes from where the air's light lies along the ray (the
+ *   mean and the spread of the logarithm of its distance).
  *
  * Sampling. Each march samples its steps at one of nine offsets, laid out in
- * a 3 × 3 tile over the low-resolution pixels, so that the pipeline's 3 × 3
- * filter averages one of each: nine times the samples, and the same ones in
- * every frame, so nothing flickers or crawls. (Interleaved gradient noise,
- * which the pipeline offers, left moiré against the march's regular steps.)
- * The steps are planned so that they change evenly from a ray that meets the
- * ground near the horizon to the one just above it.
+ * a 3 × 3 tile over the low-resolution pixels (`marchOffset`: a magic square),
+ * so that the pipeline's 3 × 3 filter averages one of each: nine times the
+ * samples, and the same ones in every frame, so nothing flickers or crawls.
+ * (Interleaved gradient noise, which the pipeline offers, left moiré against
+ * the march's regular steps.) The pipeline also sends each pixel's ray through
+ * one of nine places in its block, which antialiases the edges of clouds and
+ * fog banks. The steps are planned so that they change evenly from a ray that
+ * meets the ground near the horizon to the one just above it.
  *
  * Cost. Texture reads per low-resolution pixel at medium quality (40 cloud
- * steps at most, 3 light samples, 14 air steps, a third of the resolution):
+ * steps at most, 3 light samples, 14 air steps, a third of the resolution);
+ * `count` in the options makes the source return them, and
+ * tools/clouds.preview.ts (COUNT=1) prints them per view:
  * - Clear air: none, and the pipeline leaves the stage out (`idle`).
- * - Per pixel with cloud in view: 13 (the key light's color at two points,
- *   the sky ahead and its irradiance, the cirrus).
+ * - Per pixel with a march to run: 4 (the key light's color, the sky ahead
+ *   and its irradiance), 2 more for the cloud march's key light, 6 for the
+ *   cirrus where the ray crosses it.
  * - Per cloud step: 1 for the column; 1 more for the shape noise inside the
  *   column's layer; where there is density 1 for the detail (near the
  *   surface), 3 toward the light and 1 for the column beyond: 7 in all.
- *   Fair-weather cumulus from below: about 12 steps, 5 of them shaded, 60
- *   reads. An overcast or a storm from below or above: 8 to 10 shaded steps,
- *   70 to 90 reads.
- * - Air: 18 for the weather; per step up to 3 for fog (none in haze), 2 for
- *   rain, 1 for dust, and under open sky 2 for the cloud shadow and 1 for the
- *   terrain's: dense fog at dawn about 100, haze under an overcast 20, rain
- *   60.
+ * - Air: 8 for the weather and the key light (20 on rays over 12 km); per
+ *   step up to 3 for fog (none in haze), 2 or 3 for rain, 1 or 2 for dust,
+ *   and under open sky 2 for the cloud shadow and 1 for the terrain's.
+ * - Whole views, mean (and worst pixel): fair-weather cumulus 17 to 40 (140),
+ *   an overcast from below 75 (215), rain and storm from below 65 to 90
+ *   (260), fog 45 (85), dust from inside 40.
  * `quality` sets the steps, the light samples and the pipeline's volumetric
  * scale: low (28 steps, 2 light samples, 10 air steps, 1/4), medium (40, 3,
- * 14, 1/3), high (48, 4, 20, 1/2).
+ * 14, 1/3), high (48, 4, 20, 1/2). Each level has its own source and shader,
+ * kept once built, so changing level costs nothing the second time.
  */
 import { Vector3 } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
@@ -116,6 +136,7 @@ import {
   asin,
   atan,
   Break,
+  ceil,
   clamp,
   dot,
   exp,
@@ -135,7 +156,6 @@ import {
   smoothstep,
   sqrt,
   uniform,
-  vec2,
   vec3,
   vec4,
 } from 'three/tsl';
@@ -143,7 +163,7 @@ import { DEG } from '../../../core/units';
 import { Vec3d } from '../../../core/vec3d';
 import { AtmosphereNodes } from '../atmosphere/atmosphere';
 import { MOON_TINT, SKY_MARCH_STEPS_COARSE } from '../atmosphere/skyView';
-import { overcastSky } from '../lighting/planetLighting';
+import { OVERCAST_TINT, overcastSky } from '../lighting/planetLighting';
 import type { PlanetLighting } from '../lighting/planetLighting';
 import type { SimPipeline, VolumetricContext, VolumetricSource } from '../post/simPipeline';
 import type { WeatherState } from '../weather/weatherState';
@@ -275,14 +295,72 @@ export const CLOUD_LIGHT = {
   ground: 0.08,
   /** The sky's light at a cloud's base over that at its top. */
   skyBase: 0.15,
+  /** The least light anywhere in deep cloud (4 km and more), as a share of the sky's at its top. */
+  skyFloor: 0.12,
   /** How far the detail noise erodes a cloud's edge, 0..1. */
   erosion: 0.6,
   /** How far the creases between billows darken, 0..1. */
   crease: 0.6,
+  /** How far the light deep inside a cloud follows its shape noise, 0..1. */
+  inside: 0.45,
 };
-/** A lightning flash inside cloud: radiance at the discharge, and the distance at which it has halved (m). */
-const FLASH_LIGHT: [number, number, number] = [4, 4.6, 6];
+/**
+ * The look of fog, dust and rain: numbers it was tuned with. Those of the light are read
+ * when a shader is built, those of the motion every frame (tools/clouds.preview.ts,
+ * TUNING_AIR).
+ */
+export const AIR_LOOK = {
+  /**
+   * How far the fog's light follows its wisps, 0..1: of the banks' finer layer, and of the
+   * wisps near the camera. Thick fog shows its light, not its density (a ray ends within a
+   * few tens of meters either way), so without this a bank's inside is one even glow.
+   */
+  wispLight: 0.75,
+  curlLight: 0.9,
+  /** Half the range of the near wisps' noise over which their light goes from dim to bright. */
+  curlEdge: 0.1,
+  /** How far the light in rain and snow follows the veils, 0..1. */
+  veilLight: 0.55,
+  curtainLight: 0.7,
+  /** How far the light in dust follows the billows near the camera, 0..1. */
+  billowLight: 0.8,
+  /**
+   * How much thinner than wide the fog's finer layers are: fog lies in sheets. A level ray
+   * stays in one sheet for longer than it sees, so the sheets show as bands that rise and
+   * fall along the horizon; a round wisp of the same thickness is one of many on the ray.
+   */
+  strata: 8,
+  /** Speeds of the fog's own drift (m/s), on top of the wind: of the finer banks and of the wisps near the camera. */
+  driftFine: 1.6,
+  driftNear: 3,
+};
+
+/**
+ * A lightning flash inside cloud: its light at the discharge, the distance at which it has
+ * halved in clear air (m), and how fast the cloud between takes it (per unit of the optical
+ * depth the layer's mean density at the sample would give over the distance: smooth, so the
+ * glow shows the cloud's shapes and not its noise).
+ */
+const FLASH_LIGHT: [number, number, number] = [1.6, 1.85, 2.4];
 const FLASH_RADIUS = 2600;
+const FLASH_CLOUD_FADE = 0.15;
+/**
+ * The same flash in fog, rain and dust. `FLASH_AIR` is the most it adds to a pixel (the
+ * camera in thick air at the discharge): under white, so a strike overhead is a strong pulse
+ * that leaves the scene's shapes. The light falls with the square of the distance beyond
+ * FLASH_AIR_RADIUS (m) and by the air between (FLASH_AIR_FADE per unit of optical depth:
+ * scattered light gets further than a beam), so murk toward a strike glows and the rest of
+ * the frame stays dark. Thick air scatters the light on and glows wider: the light counts
+ * 1 + extinction · FLASH_AIR_SPREAD times, up to the most. With the bloom's threshold at
+ * night (0.3, post/grade.ts) in mind: a frame of fog above it blooms to white.
+ */
+const FLASH_AIR: [number, number, number] = [0.3, 0.34, 0.44];
+const FLASH_AIR_RADIUS = 1500;
+const FLASH_AIR_FADE = 0.12;
+const FLASH_AIR_SPREAD = 1400;
+/** Droplets scatter forward: the asymmetry of the flash's phase function, and the share that has no direction. */
+const FLASH_AIR_FORWARD = 0.6;
+const FLASH_AIR_EVEN = 0.35;
 
 /** Altitude of the cirrus sheet above sea level (m). */
 export const CIRRUS_ALTITUDE = 10_500;
@@ -295,6 +373,8 @@ const CIRRUS_DEPTH = 0.35;
  */
 const CIRRUS_LONG = (2 * Math.PI * 1_000_000) / 256;
 const CIRRUS_SHORT = 5_000;
+/** Sines of the latitudes between which the cirrus fades out toward a pole (60° and 72°). */
+const CIRRUS_POLAR: [number, number] = [0.866, 0.951];
 /** Sky light on cirrus, as a multiple of the sky's irradiance on level ground. */
 const CIRRUS_SKY = 2.5;
 
@@ -311,6 +391,12 @@ const FOG_TILE_FINE = 900;
 /** Edge of one tile of the wisps near the camera (m), and the step lengths (m) over which they fade out. */
 const FOG_TILE_NEAR = 170;
 const FOG_NEAR_STEPS: [number, number] = [60, 160];
+/**
+ * Distances (m) over which the fog's sheets fade into its mean: of the banks' finer layer
+ * and of the layer near the camera. Beyond, a sheet is thinner than a pixel and would shimmer.
+ */
+const FOG_SHEETS: [number, number] = [700, 2200];
+const FOG_NEAR_SHEETS: [number, number] = [90, 320];
 /** Height of a full dust storm over the fog floor (m). */
 const DUST_DEPTH = 2000;
 /** Extinction of rain shafts at 4 mm/h (1/m). */
@@ -321,6 +407,21 @@ const AIR_REACH = 9;
 const AIR_STEP_DEPTH = 1.2;
 /** Shortest reach of the air march (m). */
 const AIR_MIN_REACH = 1500;
+/** Sun elevation (rad) under which mountains cast shafts through haze worth the air march's full steps. */
+const TERRAIN_SHAFTS = 20 * DEG;
+/** Length of the air march's span (m) under which it takes fewer steps. */
+const AIR_SHORT = 3000;
+/**
+ * Width of the soft change from "behind the cloud" to "in front of it" for air whose light
+ * comes from one distance, as a standard deviation of the distance's logarithm.
+ */
+const AIR_SHEET = 0.14;
+/** Fewest steps of the air march on a ray that soon leaves the layer. */
+const AIR_FEWEST = 5;
+/** Length of the air march's span (m) up to which the weather is read at its two ends only. */
+const AIR_WEATHER_SPAN = 12_000;
+/** How far along a ray one reading of the cloud cover over the rain lasts (m). */
+const RAIN_COVER_EVERY = 400;
 /** Scattering colors of fog, dust, rain and snow. */
 const FOG_ALBEDO: [number, number, number] = [0.93, 0.95, 0.98];
 const DUST_ALBEDO: [number, number, number] = [0.9, 0.66, 0.38];
@@ -330,7 +431,17 @@ const SNOW_ALBEDO: [number, number, number] = [0.9, 0.92, 0.95];
 const DUST_FILTER: [number, number, number] = [0.03, 0.14, 0.34];
 /** Edge of one tile of the dust's billows (m), and of the rain veils' streaks. */
 const DUST_TILE = 9000;
+/**
+ * Edge of one tile of the dust's billows near the camera (m), how much flatter than wide
+ * they are, and the step lengths (m) over which they fade out.
+ */
+const DUST_TILE_NEAR = 1600;
+const DUST_FLAT = 5;
+const DUST_NEAR_STEPS: [number, number] = [200, 600];
 const RAIN_TILE = 2400;
+/** Edge of one tile of the narrower curtains near the camera (m), and the step lengths (m) over which they fade out. */
+const RAIN_TILE_NEAR = 320;
+const RAIN_NEAR_STEPS: [number, number] = [150, 400];
 /**
  * Where along the air march's span the weather is read, as shares of its steps (the distance
  * goes with the square): often enough that a long ray does not skip a weather sample's 65 km.
@@ -338,6 +449,8 @@ const RAIN_TILE = 2400;
 const AIR_WEATHER_AT = [0.03, 0.2, 0.4, 0.6, 0.8, 1];
 /** How fast the light scattered on inside fog thins with the optical depth above. */
 const AIR_DIFFUSE = 0.45;
+/** How fast that light comes up with the layer's vertical optical depth: none in thin haze. */
+const AIR_THICK = 1.5;
 /** Sky light on fog, dust and rain, as a multiple of the sky's irradiance on level ground. */
 const AIR_SKY = 3.2;
 /** Sun elevations (rad) between which the sun hands the key light to the moon. */
@@ -349,6 +462,22 @@ const smooth = (a: number, b: number, x: number) => {
   return t * t * (3 - 2 * t);
 };
 
+/**
+ * Where in its step a march samples, 0..1, for a low-resolution pixel (integer coordinates):
+ * one of nine offsets, (k + 0.5) / 9, laid out as a 3 × 3 magic square that repeats. Any
+ * 3 × 3 block of pixels holds each offset once, and every row and every column of three
+ * holds a low, a middle and a high one with the mean of all nine: where the pipeline's
+ * filter can only average along a silhouette (a horizon, a wall's edge), the mean offset
+ * is still the same.
+ */
+export function marchOffset(cell: Node<'vec2'>): F {
+  const x = mod(cell.x, 3);
+  const y = mod(cell.y, 3);
+  const high = mod(x.add(y.mul(2)).add(1), 3);
+  const low = mod(x.add(y).add(2), 3);
+  return high.mul(3).add(low).add(0.5).div(9) as F;
+}
+
 export interface VolumetricsOptions {
   lighting: PlanetLighting;
   clouds: CloudLayer;
@@ -357,7 +486,7 @@ export interface VolumetricsOptions {
   /**
    * For measuring: the source returns what it did instead of light. r: steps of the cloud
    * march, g: those that were shaded, b: steps of the air march that found fog, dust or
-   * rain; a: 1.
+   * rain; a: texture reads, all told.
    */
   count?: boolean;
 }
@@ -375,7 +504,11 @@ export interface VolumetricStats {
 }
 
 export class Volumetrics {
-  /** The source for `SimPipeline.volumetrics`; a new object whenever the quality changes. */
+  /**
+   * The source for `SimPipeline.volumetrics`: that of the quality being drawn. Each quality
+   * level has one object, made when the level is first used and kept, so that the pipeline
+   * keeps its shader too and a level chosen again is drawn without compiling anything.
+   */
   source: VolumetricSource;
   /** Amount of cirrus, 0..1. */
   readonly cirrus = uniform(0.5);
@@ -407,6 +540,8 @@ export class Volumetrics {
   private readonly dustOn = uniform(0);
   /** 1 while the key light is the sun above the horizon: the air march reads the shadows. */
   private readonly shafts = uniform(0);
+  /** Steps of the air march this frame: the quality's, or half of them in haze without shafts. */
+  private readonly airSteps = uniform(14);
   /** Opacity of everything, 0..1: fades out toward the shell above the simulation view. */
   private readonly fade = uniform(1);
   /** The cloud shell's lowest base and highest top above sea level (m). */
@@ -425,13 +560,21 @@ export class Volumetrics {
   private readonly fogShiftFine = uniform(new Vector3());
   private readonly dustShift = uniform(new Vector3());
   private readonly fogShiftNear = uniform(new Vector3());
+  private readonly rainShiftNear = uniform(new Vector3());
+  private readonly dustShiftNear = uniform(new Vector3());
   private readonly groundGain = uniform(1);
   /** How far rain veils lean per meter of height: the wind over the fall speed, world frame. */
   private readonly lean = uniform(new Vector3());
 
   private level: VolumetricQuality = 'medium';
-  /** Frames the current source has been updated for, up to WARM_FRAMES. */
-  private warm = 0;
+  /** The sources made so far, and the frames each has been updated for, up to WARM_FRAMES. */
+  private readonly sources: Partial<
+    Record<VolumetricQuality, { source: VolumetricSource; frames: number }>
+  > = {};
+  /** The level whose source the pipeline has: the chosen one, but for a frame of warming up. */
+  private shown: VolumetricQuality = 'medium';
+  /** Levels to draw for one frame each, so that their shaders are compiled (see `attach`). */
+  private readonly toWarm: VolumetricQuality[] = [];
   private pipeline: SimPipeline | null = null;
   /** The wind's path so far (m), for the fog banks. */
   private readonly path = new Vector3();
@@ -440,10 +583,15 @@ export class Volumetrics {
   private readonly up = new Vec3d();
 
   constructor(private readonly o: VolumetricsOptions) {
-    this.source = this.createSource();
+    this.source = this.sourceOf(this.level).source;
   }
 
-  /** Steps, light samples and resolution (see `VOLUMETRIC_QUALITY`). Changing it rebuilds the shader. */
+  /**
+   * Steps, light samples and resolution (see `VOLUMETRIC_QUALITY`). A level's shader is
+   * compiled the first time it is drawn (a hitch of that one frame) and kept: changing
+   * back and forth costs nothing after that, and `attach` has the level below the chosen
+   * one drawn once while the view loads, which is where a performance governor goes first.
+   */
   get quality(): VolumetricQuality {
     return this.level;
   }
@@ -451,21 +599,48 @@ export class Volumetrics {
   set quality(level: VolumetricQuality) {
     if (level === this.level) return;
     this.level = level;
-    this.source = this.createSource();
-    if (this.pipeline) this.attach(this.pipeline);
+    this.toWarm.length = 0;
+    this.show(level);
   }
 
-  /** Makes this the pipeline's volumetric source, at the quality's resolution. */
+  /**
+   * Makes this the pipeline's volumetric source, at the quality's resolution. In the second
+   * frame after this the next lower quality is drawn instead, once: its shaders are then
+   * compiled before anything asks for them.
+   */
   attach(pipeline: SimPipeline): void {
     this.pipeline = pipeline;
-    pipeline.volumetrics = this.source;
-    pipeline.volumetricScale = VOLUMETRIC_QUALITY[this.level].scale;
+    const levels = Object.keys(VOLUMETRIC_QUALITY) as VolumetricQuality[];
+    const lower = levels[levels.indexOf(this.level) - 1];
+    this.toWarm.length = 0;
+    if (lower && !this.sources[lower]) this.toWarm.push(lower);
+    this.show(this.level);
   }
 
-  private createSource(): VolumetricSource {
-    const level = VOLUMETRIC_QUALITY[this.level];
-    this.warm = 0;
-    return { build: (ctx) => this.build(ctx, level), idle: false };
+  /**
+   * Leaves the warming up of the lower quality out (previews and tests, whose second frame
+   * is the picture they keep).
+   */
+  skipWarmUp(): void {
+    this.toWarm.length = 0;
+    if (this.shown !== this.level) this.show(this.level);
+  }
+
+  private sourceOf(level: VolumetricQuality): { source: VolumetricSource; frames: number } {
+    const settings = VOLUMETRIC_QUALITY[level];
+    return (this.sources[level] ??= {
+      source: { build: (ctx) => this.build(ctx, settings), idle: false },
+      frames: 0,
+    });
+  }
+
+  /** Hands the pipeline the source of a level, at its resolution. */
+  private show(level: VolumetricQuality): void {
+    this.shown = level;
+    this.source = this.sourceOf(level).source;
+    if (!this.pipeline) return;
+    this.pipeline.volumetrics = this.source;
+    this.pipeline.volumetricScale = VOLUMETRIC_QUALITY[level].scale;
   }
 
   /**
@@ -475,6 +650,15 @@ export class Volumetrics {
    */
   update(eye: Readonly<Vec3d>, dt: number): void {
     const { clouds, lighting, state, weather } = this.o;
+    // A level waiting to be warmed up is drawn for this one frame, once the chosen level
+    // has been drawn; then the chosen one again.
+    if (this.pipeline) {
+      if (this.toWarm.length > 0 && this.sourceOf(this.level).frames > 0) {
+        this.show(this.toWarm.shift()!);
+      } else if (this.shown !== this.level) {
+        this.show(this.level);
+      }
+    }
     const distance = eye.length();
     const altitude = distance - lighting.radius;
     const fade = clouds.volumetricFade;
@@ -530,18 +714,30 @@ export class Volumetrics {
       this.keyLight.value.set(MOON_TINT[0] * e, MOON_TINT[1] * e, MOON_TINT[2] * e);
     }
     this.shafts.value = sunKey && el > -3 * DEG ? 1 : 0;
+    // Haze is even: only banks of fog, dust, rain veils and the shafts of shadows under
+    // broken cloud or behind mountains need the air march's full number of steps.
+    const structured =
+      view.fog > FOG_STRUCTURE ||
+      view.dust > 0.03 ||
+      raining ||
+      (this.shafts.value > 0 &&
+        (clouds.possible || (lighting.terrainShadow !== null && el < TERRAIN_SHAFTS)));
+    const airSteps = VOLUMETRIC_QUALITY[this.shown].airSteps;
+    this.airSteps.value = structured ? airSteps : Math.ceil(airSteps / 2);
 
     // Fog banks drift with the wind; the finer layer lags and slides across it, so banks curl.
     const wind = state.wind.value;
     const step = Math.max(0, dt);
     this.path.addScaledVector(wind, step);
-    this.pathFine.x += (0.55 * wind.x + 0.8 * up.z - 0.5 * up.y) * step;
-    this.pathFine.y += (0.55 * wind.y + 0.8 * up.x + 0.6 * up.z) * step;
-    this.pathFine.z += (0.55 * wind.z - 0.8 * up.x + 0.5 * up.y) * step;
+    const fine = AIR_LOOK.driftFine / 1.1;
+    this.pathFine.x += (0.55 * wind.x + fine * (0.8 * up.z - 0.5 * up.y)) * step;
+    this.pathFine.y += (0.55 * wind.y + fine * (0.8 * up.x + 0.6 * up.z)) * step;
+    this.pathFine.z += (0.55 * wind.z + fine * (-0.8 * up.x + 0.5 * up.y)) * step;
     // The wisps near the camera drift even in still air: across the wind, and upward.
-    this.pathNear.x += (0.8 * wind.x - 1.1 * up.z + 0.35 * up.x) * step;
-    this.pathNear.y += (0.8 * wind.y + 0.9 * up.z + 0.35 * up.y) * step;
-    this.pathNear.z += (0.8 * wind.z + 1.1 * up.x - 0.9 * up.y + 0.35 * up.z) * step;
+    const close = AIR_LOOK.driftNear / 1.5;
+    this.pathNear.x += (0.8 * wind.x + close * (-1.1 * up.z + 0.35 * up.x)) * step;
+    this.pathNear.y += (0.8 * wind.y + close * (0.9 * up.z + 0.35 * up.y)) * step;
+    this.pathNear.z += (0.8 * wind.z + close * (1.1 * up.x - 0.9 * up.y + 0.35 * up.z)) * step;
     const wrap = (v: number) => v - Math.floor(v);
     this.fogShiftNear.value.set(
       wrap(-this.pathNear.x / FOG_TILE_NEAR),
@@ -558,11 +754,23 @@ export class Volumetrics {
       wrap(-this.pathFine.y / FOG_TILE_FINE),
       wrap(-this.pathFine.z / FOG_TILE_FINE),
     );
+    // The rain's curtains come with the wind.
+    this.rainShiftNear.value.set(
+      wrap(-this.path.x / RAIN_TILE_NEAR),
+      wrap(-this.path.y / RAIN_TILE_NEAR),
+      wrap(-this.path.z / RAIN_TILE_NEAR),
+    );
     // Dust rolls with the wind, a little slower than the air.
     this.dustShift.value.set(
       wrap((-0.7 * this.path.x) / DUST_TILE),
       wrap((-0.7 * this.path.y) / DUST_TILE),
       wrap((-0.7 * this.path.z) / DUST_TILE),
+    );
+    // Its billows near the camera roll faster, and upward.
+    this.dustShiftNear.value.set(
+      wrap((-0.9 * this.path.x - 0.6 * this.pathNear.x) / DUST_TILE_NEAR),
+      wrap((-0.9 * this.path.y - 0.6 * this.pathNear.y) / DUST_TILE_NEAR),
+      wrap((-0.9 * this.path.z - 0.6 * this.pathNear.z) / DUST_TILE_NEAR),
     );
     // Rain falls at about 7 m/s and snow at 1.5: the veils lean by the wind over that.
     const fall = state.snow.value > state.rain.value ? 1.5 : 7;
@@ -579,8 +787,9 @@ export class Volumetrics {
     // With neither march to run the pipeline skips its volumetric passes altogether, once a
     // new source has been drawn: its shader is then compiled while the view loads, not when
     // the first cloud comes over the horizon.
-    this.warm = Math.min(this.warm + 1, WARM_FRAMES);
-    this.source.idle = this.warm >= WARM_FRAMES && !(cloudOn || airOn);
+    const drawn = this.sourceOf(this.shown);
+    drawn.frames = Math.min(drawn.frames + 1, WARM_FRAMES);
+    this.source.idle = drawn.frames >= WARM_FRAMES && !(cloudOn || airOn);
   }
 
   /** Forgets the wind's path (a new flight, a preview view): fog banks start from the same place. */
@@ -601,11 +810,7 @@ export class Volumetrics {
         // Where in its step each march samples: nine offsets in a 3 × 3 tile, so the pipeline's
         // 3 × 3 filter averages exactly one of each whatever the pixel, and nothing of the
         // pattern is left to see or to flicker (see the file comment).
-        const cell = floor(screenCoordinate.xy).toVar();
-        const offset = mod(mod(cell.x, 3).add(mod(cell.y, 3).mul(3)).mul(4), 9)
-          .add(0.5)
-          .div(9)
-          .toVar() as F;
+        const offset = marchOffset(floor(screenCoordinate.xy) as Node<'vec2'>).toVar() as F;
         const ro = L.eye as unknown as V3;
         const rd = ctx.rayDirection;
         const r0 = length(ro).toVar();
@@ -639,7 +844,9 @@ export class Volumetrics {
           .div(r0)
           .negate()
           .toVar();
-        const grazing = float(1).sub(smoothstep(0, GRAZING, horizon.sub(sine))).toVar() as F;
+        const grazing = float(1)
+          .sub(smoothstep(0, GRAZING, horizon.sub(sine)))
+          .toVar() as F;
         const key = this.keyDirection as unknown as V3;
         const cosKey = dot(rd, key).toVar() as F;
         const keyAt = (p: V3): V3 =>
@@ -673,37 +880,23 @@ export class Volumetrics {
           return light.mul(t).add(haze) as V3;
         };
 
-        // rgb: light scattered toward the camera; a: transmittance. The cloud's distance, and
-        // of the air its light's share from in front of the cloud and its transmittance there.
+        // rgb: light scattered toward the camera; a: transmittance. Of the air also where its
+        // light comes from (x: the mean of the distance's logarithm, y: the spread about it)
+        // and the distance at which it has grown opaque (z, m; 1e9 if it has not).
         const counts = this.o.count ? vec3(0).toVar() : null;
+        // Texture reads: the key light's colour, the sky ahead (2) and its irradiance are read
+        // for every pixel a march runs for.
+        const reads = this.o.count ? float(3).toVar() : null;
         const cloud = vec4(0, 0, 0, 1).toVar();
         const cloudDistance = float(1e9).toVar();
         const air = vec4(0, 0, 0, 1).toVar();
-        const airSplit = vec2(1, 1).toVar();
+        const airAt = vec3(0, 0, 1e9).toVar();
 
-        If(this.cloudOn.greaterThan(0.5), () => {
-          this.marchClouds({
-            counts,
-            grazing,
-            offset,
-            level,
-            ro,
-            rd,
-            r0: r0 as F,
-            h0: h0 as F,
-            end,
-            sphere,
-            cosKey,
-            keyAt,
-            skyLight,
-            throughAir,
-            out: cloud,
-            outDistance: cloudDistance,
-          });
-        });
+        // The air first: where it is opaque, the cloud behind it is not marched.
         If(this.airOn.greaterThan(0.5), () => {
           this.marchAir({
             counts,
+            reads,
             grazing,
             offset,
             level,
@@ -718,24 +911,57 @@ export class Volumetrics {
             skyLight,
             throughAir,
             out: air,
-            cloudDistance,
-            outSplit: airSplit,
+            outAt: airAt,
+          });
+        });
+        If(this.cloudOn.greaterThan(0.5), () => {
+          this.marchClouds({
+            counts,
+            reads,
+            grazing,
+            offset,
+            level,
+            ro,
+            rd,
+            r0: r0 as F,
+            h0: h0 as F,
+            end: min(end, airAt.z) as F,
+            sphere,
+            cosKey,
+            keyAt,
+            skyLight,
+            throughAir,
+            out: cloud,
+            outDistance: cloudDistance,
           });
         });
 
         // The cloud stands in the air as a sheet at its distance: the air in front of it
-        // veils it, the air behind shows through it.
+        // veils it, the air behind shows through it. The share of the air's light that lies
+        // in front: the air's light is spread about a mean in the logarithm of the distance,
+        // and the share changes softly from none to all as the cloud's distance passes it
+        // (from 0.7 to 1.3 times where all the air's light comes from one distance).
+        const front = smoothstep(
+          -2.2,
+          2.2,
+          cloudDistance
+            .log()
+            .sub(airAt.x)
+            .div(sqrt(airAt.y.mul(airAt.y).add(AIR_SHEET * AIR_SHEET))),
+        ).toVar();
+        // The air's opacity in front of the cloud is that share of all of it.
+        const throughFront = float(1).sub(front.mul(air.a.oneMinus()));
         const combined = vec4(
           air.rgb
-            .mul(airSplit.x)
-            .add(cloud.rgb.mul(airSplit.y))
-            .add(air.rgb.mul(airSplit.x.oneMinus()).mul(cloud.a)),
+            .mul(front)
+            .add(cloud.rgb.mul(throughFront))
+            .add(air.rgb.mul(front.oneMinus()).mul(cloud.a)),
           air.a.mul(cloud.a),
         ).toVar();
         // A march that stopped as opaque lets nothing through.
         combined.a.mulAssign(smoothstep(OPAQUE, OPAQUE_FADE, combined.a));
         result.assign(mix(vec4(0, 0, 0, 1), combined, this.fade));
-        if (counts) result.assign(vec4(counts, 1));
+        if (counts) result.assign(vec4(counts, reads!));
       });
       return result;
     })() as V4;
@@ -754,6 +980,7 @@ export class Volumetrics {
 
   private marchClouds(a: {
     counts: Node<'vec3'> | null;
+    reads: F | null;
     grazing: F;
     offset: F;
     level: QualityLevel;
@@ -806,6 +1033,7 @@ export class Volumetrics {
       const span = min(plan.sub(start), 80_000).toVar();
       const keyNear = a.keyAt(ro.add(rd.mul(start)) as V3).toVar();
       const keyFar = a.keyAt(ro.add(rd.mul(start.add(span))) as V3).toVar();
+      a.reads?.addAssign(2);
       const phase = Volumetrics.phase(
         a.cosKey,
         tune.phaseForward,
@@ -817,6 +1045,10 @@ export class Volumetrics {
         .toVar();
       // Thin edges darken when the light is behind the viewer.
       const powder = clamp(a.cosKey.negate().mul(0.5).add(0.5), 0, 1).mul(tune.powder).toVar();
+      // The sky's light without its color: what is left of it deep inside a cloud.
+      const skyGray = vec3(...OVERCAST_TINT)
+        .mul(dot(a.skyLight, vec3(0.2126, 0.7152, 0.0722)))
+        .toVar();
       const upstreamOrigin = clouds.upstream(ro).toVar();
       const upstreamRay = clouds.upstream(rd).toVar();
       const upstreamKey = clouds.upstream(key).toVar();
@@ -830,6 +1062,7 @@ export class Volumetrics {
           Break();
         });
         a.counts?.addAssign(vec3(1, 0, 0));
+        a.reads?.addAssign(1);
         // The step: a share of the distance, a fraction of that in cloud, and never less
         // than the rest of the ray needs.
         const left = float(steps).sub(float(i));
@@ -906,6 +1139,7 @@ export class Volumetrics {
               const density = meanDensity(c as F).toVar();
               const noise = float(0.5).toVar();
               If(mean.lessThan(1), () => {
+                a.reads?.addAssign(1);
                 const n = clouds.noise.sampleShape(clouds.shapeCoordinate(upstream as V3));
                 noise.assign(mix(float(0.5), mix(n.x, n.y, smoothed), this.structure));
                 // A deck's base is ragged: it hangs lowest where the noise is high and stands
@@ -931,6 +1165,7 @@ export class Volumetrics {
                     .sub(smoothstep(DETAIL_STEPS[0], DETAIL_STEPS[1], coarse))
                     .toVar();
                   If(detail.greaterThan(0), () => {
+                    a.reads?.addAssign(1);
                     const e = clouds.noise.sampleDetail(clouds.detailCoordinate(upstream as V3));
                     // Wisps under the cloud; above, the cells' rims are cut away and billows stay.
                     const rims = e.x.oneMinus();
@@ -972,6 +1207,7 @@ export class Volumetrics {
                   const muKey = dot(up, key).toVar();
                   const depth = float(0).toVar();
                   If(mean.lessThan(1), () => {
+                    a.reads?.addAssign(samples);
                     // The samples stand in the middle of intervals that grow with the distance,
                     // at the same distances for every pixel: offsets that differ between pixels
                     // leave a stipple the filter does not remove, and the soft density below
@@ -1005,6 +1241,7 @@ export class Volumetrics {
                   // apart: light passes between them, and what a field of them takes grows
                   // with the path over the free path between heaps, far less than their mean
                   // density would.
+                  a.reads?.addAssign(1);
                   const beyond = clouds.column(p.add(key.mul(reach + FAR_LIGHT * 0.5)) as V3);
                   const cFar = coverageAt(beyond, h.add(muKey.mul(reach + FAR_LIGHT * 0.5)) as F);
                   const tau = depth
@@ -1051,8 +1288,15 @@ export class Volumetrics {
                     .mul(held.fill)
                     .mul(thinned);
                   const under = max(above, 0).mul(cover).mul(held.fill);
-                  const fromSky = exp(over.mul(-0.5 * CLOUD_EXTINCTION * tune.skyAttenuation)).mul(
-                    y.mul(1 - tune.skyBase).add(tune.skyBase),
+                  const fromSky = exp(over.mul(-0.5 * CLOUD_EXTINCTION * tune.skyAttenuation))
+                    .mul(y.mul(1 - tune.skyBase).add(tune.skyBase))
+                    .toVar();
+                  // Deep cloud is never without light: what is scattered through it from all
+                  // sides reaches its darkest core and its base, which are slate gray, not
+                  // black. Gray light, where the sky's own has all but gone.
+                  const floor = smoothstep(1500, 5000, thickness).mul(tune.skyFloor).toVar();
+                  const ambient = floor.mul(
+                    float(1).sub(smoothstep(0, floor.mul(2).add(1e-4), fromSky)),
                   );
                   const fromGround = exp(under.mul(-0.5 * CLOUD_EXTINCTION * tune.skyAttenuation));
                   // The ground under the cloud is lit by what the whole column lets down.
@@ -1071,15 +1315,34 @@ export class Volumetrics {
                   const source = keyColor
                     .mul(lit)
                     .add(a.skyLight.mul(fromSky).mul(tune.sky))
+                    .add(skyGray.mul(ambient).mul(tune.sky))
                     .add(groundLight.mul(fromGround))
                     .toVar();
-                  If(this.stormOn.greaterThan(0.5), () => {
-                    // Lightning inside the cloud.
+                  // Deep inside a body the light follows the noise that shaped it: flying
+                  // through cloud, the gray around the camera brightens and darkens as its
+                  // heaps pass (their skin, which is what shows from outside, is left alone).
+                  source.mulAssign(
+                    mix(
+                      float(1),
+                      noise.mul(2 * tune.inside).add(1 - tune.inside),
+                      smoothstep(0.85, 1, density),
+                    ),
+                  );
+                  If(state.flash.greaterThan(0), () => {
+                    // Lightning inside the cloud: it glows around the discharge, and the
+                    // cloud between takes the light on its way.
                     const away = p.sub(state.flashPosition);
+                    const far = dot(away, away).toVar();
                     const flashReach = FLASH_RADIUS * FLASH_RADIUS;
                     source.addAssign(
                       vec3(...FLASH_LIGHT).mul(
-                        state.flash.mul(float(flashReach).div(dot(away, away).add(flashReach))),
+                        state.flash.mul(float(flashReach).div(far.add(flashReach))).mul(
+                          exp(
+                            meanDensity(c as F)
+                              .mul(sqrt(far))
+                              .mul(-FLASH_CLOUD_FADE * CLOUD_EXTINCTION),
+                          ),
+                        ),
                       ),
                     );
                   });
@@ -1119,6 +1382,8 @@ export class Volumetrics {
       .and(crossing.greaterThan(0))
       .and(crossing.lessThan(a.end));
     If(crosses.and(this.cirrus.greaterThan(0)), () => {
+      // Three of the noise, two of the weather, one of the key light.
+      a.reads?.addAssign(6);
       const p = ro.add(rd.mul(crossing)).toVar();
       const up = normalize(p).toVar();
       const upstream = clouds.upstream(p as V3).toVar();
@@ -1143,10 +1408,11 @@ export class Volumetrics {
       ).z;
       // More cirrus where the weather has more cloud; little under a cloudless sky.
       const cover = this.o.weather.sample(p as V3).cover;
-      // None over the poles, where the parallels the fibers follow close to a point.
-      const amount = this.cirrus
-        .mul(smoothstep(0.02, 0.45, cover).mul(0.7).add(0.3))
-        .mul(smoothstep(0.995, 0.97, abs(up.y)));
+      // None toward the poles: a tile of the fibers spans a fixed step of longitude, so they
+      // shorten with the cosine of the latitude, to half their length at 60° and to dashes
+      // beyond 72°.
+      const polar = smoothstep(CIRRUS_POLAR[1], CIRRUS_POLAR[0], abs(up.y));
+      const amount = this.cirrus.mul(smoothstep(0.02, 0.45, cover).mul(0.7).add(0.3));
       const field = fibers
         .mul(0.75)
         .add(bend.mul(0.25))
@@ -1156,7 +1422,7 @@ export class Volumetrics {
       // The sheet thins to nothing as the camera passes through it.
       const near = smoothstep(0, 500, abs(h0.sub(CIRRUS_ALTITUDE)));
       const slant = float(1).div(max(abs(dot(up, rd)), 0.22));
-      const depth = density.mul(CIRRUS_DEPTH).mul(slant).mul(near);
+      const depth = density.mul(CIRRUS_DEPTH).mul(slant).mul(near).mul(polar);
       const through = exp(depth.negate()).toVar();
       // Ice scatters forward: bright toward the sun, and lit from below once the sun is under it.
       const lit = a
@@ -1179,6 +1445,7 @@ export class Volumetrics {
 
   private marchAir(a: {
     counts: Node<'vec3'> | null;
+    reads: F | null;
     grazing: F;
     offset: F;
     level: QualityLevel;
@@ -1193,10 +1460,11 @@ export class Volumetrics {
     skyLight: V3;
     throughAir: (light: V3, opacity: F, distance: F) => V3;
     out: Node<'vec4'>;
-    /** Distance to the cloud on this ray (m); 1e9 without. */
-    cloudDistance: F;
-    /** x: the share of the air's light that comes from in front of the cloud; y: the air's transmittance there. */
-    outSplit: Node<'vec2'>;
+    /**
+     * x: the mean of ln(distance in m) over the air's light, y: its standard deviation,
+     * z: the distance at which the air has grown opaque (m; 1e9 if it has not).
+     */
+    outAt: Node<'vec3'>;
   }): void {
     const { clouds, lighting: L, state, weather } = this.o;
     const radius = L.radius;
@@ -1225,12 +1493,18 @@ export class Volumetrics {
     const scattered = vec3(0).toVar();
     const weight = float(0).toVar();
     const weighted = float(0).toVar();
-    const weightFront = float(0).toVar();
-    const throughFront = float(1).toVar();
+    // Sums of the logarithm of the distance and of its square, weighted like `weighted`.
+    const logged = float(0).toVar();
+    const loggedSquare = float(0).toVar();
+    // The end of the last step taken.
+    const reached = float(0).toVar();
+    // What a lightning flash lights of the air, as a share of FLASH_AIR per color.
+    const flashed = vec3(0).toVar();
 
     If(lid.disc.greaterThan(0).and(span.greaterThan(0)), () => {
       const keyNear = a.keyAt(ro.add(rd.mul(start)) as V3).toVar();
       const keyFar = a.keyAt(ro.add(rd.mul(start.add(min(span, 60_000)))) as V3).toVar();
+
       // A sharp forward lobe (the glow around a low sun in thin haze), a wide one for the
       // light the fog has scattered many times, and dust's.
       const phase = Volumetrics.phase(a.cosKey, 0.76, -0.1, 0.5, 9).toVar();
@@ -1239,32 +1513,66 @@ export class Volumetrics {
 
       // The weather changes over tens of kilometers: it is read at four points of the ray
       // and interpolated between them, not at every step.
-      const fields = AIR_WEATHER_AT.map((u) => {
+      const fieldsAt = (u: number) => {
         const at = ro.add(rd.mul(start.add(span.mul(u * u)))) as V3;
         const w = weather.sample(at);
         return {
-          a: vec4(w.fog, w.dust, w.precip, w.base).toVar(),
+          a: vec4(w.fog, w.dust, w.precip, w.base),
           // The level under which fog is full there: 100 m over the mean ground.
-          b: vec3(
-            w.cover,
-            w.snow,
-            weather.sampleGround(at).mul(this.groundGain).add(FOG_FLOOR),
-          ).toVar(),
+          b: vec3(w.cover, w.snow, weather.sampleGround(at).mul(this.groundGain).add(FOG_FLOOR)),
         };
+      };
+      const last = AIR_WEATHER_AT.length - 1;
+      const fields = AIR_WEATHER_AT.map(() => ({ a: vec4(0).toVar(), b: vec3(0).toVar() }));
+      for (const k of [0, last]) {
+        const f = fieldsAt(AIR_WEATHER_AT[k]!);
+        fields[k]!.a.assign(f.a);
+        fields[k]!.b.assign(f.b);
+      }
+      // The key light at two points; the weather (2) and the ground at each end.
+      a.reads?.addAssign(2 + 3 * 2);
+      // A short ray stays within one of the weather's samples (65 km): its ends are enough.
+      If(span.greaterThan(AIR_WEATHER_SPAN), () => {
+        a.reads?.addAssign(3 * (last - 1));
+        for (let k = 1; k < last; k++) {
+          const f = fieldsAt(AIR_WEATHER_AT[k]!);
+          fields[k]!.a.assign(f.a);
+          fields[k]!.b.assign(f.b);
+        }
+      }).Else(() => {
+        for (let k = 1; k < last; k++) {
+          const f =
+            (AIR_WEATHER_AT[k]! - AIR_WEATHER_AT[0]!) /
+            (AIR_WEATHER_AT[last]! - AIR_WEATHER_AT[0]!);
+          fields[k]!.a.assign(mix(fields[0]!.a, fields[last]!.a, f));
+          fields[k]!.b.assign(mix(fields[0]!.b, fields[last]!.b, f));
+        }
       });
 
+      // Fewer steps where the way through the layer is short (a ray up out of fog), so that
+      // the first step is as long as on a ray that stays in the layer; and half in haze,
+      // which has no structure to resolve (`airSteps`).
+      const count = clamp(
+        ceil(this.airSteps.mul(sqrt(span.div(min(reach, AIR_SHORT))))),
+        min(this.airSteps, AIR_FEWEST),
+        this.airSteps,
+      ).toVar();
+      // The cloud cover over the rain, read every RAIN_COVER_EVERY m of the ray.
+      const overhead = float(0).toVar();
+      const overheadAt = float(-1e9).toVar();
       Loop(steps, ({ i }) => {
-        If(transmittance.lessThan(OPAQUE), () => {
+        If(transmittance.lessThan(OPAQUE).or(float(i).greaterThanEqual(count)), () => {
           Break();
         });
         // Quadratic spacing: short steps near the camera.
-        const u0 = float(i).div(steps);
-        const u1 = float(i).add(1).div(steps);
+        const u0 = float(i).div(count);
+        const u1 = float(i).add(1).div(count);
         const ta = start.add(span.mul(u0).mul(u0)).toVar();
         If(ta.sub(start).greaterThanEqual(length0), () => {
           Break();
         });
         const dt = min(span.mul(u1.mul(u1).sub(u0.mul(u0))), start.add(length0).sub(ta)).toVar();
+        reached.assign(ta.add(dt));
         const ts = ta.add(dt.mul(a.offset)).toVar();
         const p = ro.add(rd.mul(ts)).toVar();
         const r = length(p).toVar();
@@ -1299,47 +1607,59 @@ export class Volumetrics {
           FOG_HEIGHT[1],
         ).toVar();
         const z = h.sub(level).toVar();
-        // Banks: two layers of wisps that move apart, read where the fog is. Far steps see
-        // their mean.
+        // Banks: a layer of wide heaps and one of thin sheets, moving apart, read where the
+        // fog is. Far steps see their mean; the sheets end where they would be thinner than
+        // a pixel.
         const near = float(1)
           .sub(smoothstep(500, 3500, dt))
           .toVar();
+        const sheets = near.mul(float(1).sub(smoothstep(FOG_SHEETS[0], FOG_SHEETS[1], ts))).toVar();
         const banks = float(0.5).toVar();
         const wisps = float(0.5).toVar();
-        If(
-          fog
-            .greaterThan(FOG_STRUCTURE)
-            .and(near.greaterThan(0))
-            .and(z.lessThan(scale.mul(5))),
-          () => {
-            const n1 = clouds.noise.sampleShape(p.div(FOG_TILE).add(this.fogShift) as V3);
-            const n2 = clouds.noise.sampleShape(p.div(FOG_TILE_FINE).add(this.fogShiftFine) as V3);
-            banks.assign(
-              mix(float(0.5), n1.z.mul(0.65).add(n2.z.mul(0.35)), near.mul(this.structure)),
+        // How far the air here is the rain's (0..1): where it is all rain, the fog's banks
+        // and sheets are not read, the veils take their place.
+        const falling = this.rainOn
+          .mul(smoothstep(baseW.add(150), baseW.sub(150), h))
+          .mul(smoothstep(0, 0.1, clamp(wv.z, 0, 8)))
+          .toVar();
+        const inFog = fog
+          .greaterThan(FOG_STRUCTURE)
+          .and(z.lessThan(scale.mul(5)))
+          .and(falling.lessThan(0.99));
+        If(inFog.and(near.greaterThan(0)), () => {
+          a.reads?.addAssign(1);
+          const n1 = clouds.noise.sampleShape(p.div(FOG_TILE).add(this.fogShift) as V3);
+          banks.assign(
+            mix(float(0.5), n1.z.mul(0.75).add(n1.w.mul(0.25)), near.mul(this.structure)),
+          );
+          If(sheets.greaterThan(0), () => {
+            a.reads?.addAssign(1);
+            const n2 = clouds.noise.sampleShape(
+              p
+                .add(up.mul(h.mul(AIR_LOOK.strata - 1)))
+                .div(FOG_TILE_FINE)
+                .add(this.fogShiftFine) as V3,
             );
-            wisps.assign(
-              mix(float(0.5), n2.z.mul(0.6).add(n1.w.mul(0.4)), near.mul(this.structure)),
-            );
-          },
-        );
-        // Close to the camera, wisps a few tens of meters across drift through the fog on
-        // their own path: what one sees move.
+            wisps.assign(mix(float(0.5), n2.z, sheets.mul(this.structure)));
+          });
+        });
+        // Close to the camera, thinner sheets drift through the fog on their own path: what
+        // one sees move.
         const close = float(1)
           .sub(smoothstep(FOG_NEAR_STEPS[0], FOG_NEAR_STEPS[1], dt))
+          .mul(float(1).sub(smoothstep(FOG_NEAR_SHEETS[0], FOG_NEAR_SHEETS[1], ts)))
           .toVar();
         const curl = float(0.5).toVar();
-        If(
-          fog
-            .greaterThan(FOG_STRUCTURE)
-            .and(close.greaterThan(0))
-            .and(z.lessThan(scale.mul(5))),
-          () => {
-            const n3 = clouds.noise.sampleDetail(p.div(FOG_TILE_NEAR).add(this.fogShiftNear) as V3);
-            curl.assign(
-              mix(float(0.5), n3.y.mul(0.7).add(n3.z.mul(0.3)), close.mul(this.structure)),
-            );
-          },
-        );
+        If(inFog.and(close.greaterThan(0)), () => {
+          a.reads?.addAssign(1);
+          const n3 = clouds.noise.sampleDetail(
+            p
+              .add(up.mul(h.mul(AIR_LOOK.strata - 1)))
+              .div(FOG_TILE_NEAR)
+              .add(this.fogShiftNear) as V3,
+          );
+          curl.assign(mix(float(0.5), n3.y.mul(0.7).add(n3.z.mul(0.3)), close.mul(this.structure)));
+        });
         // The banks' noise lifts and lowers the fog's top, and thins the fog between banks.
         const lift = banks.sub(0.5).mul(scale).mul(4);
         const za = z
@@ -1362,36 +1682,69 @@ export class Volumetrics {
         const total = max(abs(zb.sub(za)), 1e-3);
         const under = clamp(min(za, zb).negate().div(total), 0, 1);
         const column = mix(profile, float(1), under);
-        const thin = smoothstep(0.25, 0.75, wisps)
-          .mul(1.2)
-          .add(0.4)
-          .mul(smoothstep(0.3, 0.7, curl).mul(1.4).add(0.3));
+        const wispy = smoothstep(0.25, 0.75, wisps).toVar();
+        const curly = smoothstep(0.3, 0.7, curl).toVar();
+        const thin = wispy.mul(1.2).add(0.4).mul(curly.mul(1.4).add(0.3));
         const fogExtinction = fog.mul(column).mul(thin).toVar();
 
         // Rain and snow fill the air under their cloud, in veils that hang from the base
         // and lean with the wind.
         const rainExtinction = float(0).toVar();
+        // How far the air here is the rain's (0..1), and the light of its veils.
+        const rainy = float(0).toVar();
+        const veilLight = float(1).toVar();
         If(this.rainOn.greaterThan(0.5), () => {
           const precip = clamp(wv.z, 0, 8);
-          const falling = smoothstep(baseW.add(150), baseW.sub(150), h)
-            .mul(smoothstep(0, 0.1, precip))
-            .toVar();
           If(falling.greaterThan(0.001), () => {
+            a.reads?.addAssign(1);
             // It rains under the cloud that is there, not wherever the weather's coarse
-            // field says: the baked coverage has the cloud's edges (one read).
-            const overhead = clouds.column(p as V3).cover;
+            // field says: the baked coverage has the cloud's edges (one read, kept for a
+            // stretch of the ray: the edges are soft over kilometers).
+            If(ts.sub(overheadAt).greaterThan(RAIN_COVER_EVERY), () => {
+              a.reads?.addAssign(1);
+              overhead.assign(clouds.column(p as V3).cover);
+              overheadAt.assign(ts);
+            });
             // The same streak down a whole (leaning) column: the noise is read near the ground.
             const leaned = p.sub((this.lean as unknown as V3).mul(h)).sub(up.mul(h.mul(0.92)));
-            const veil = clouds.noise.sampleShape(leaned.div(RAIN_TILE).add(this.fogShift) as V3).z;
-            const streaks = mix(
-              float(1),
-              smoothstep(0.34, 0.68, veil).mul(1.7).add(0.25),
-              float(1)
-                .sub(smoothstep(1500, 8000, dt))
-                .mul(this.structure),
-            )
-              .mul(overhead)
+            const veil = smoothstep(
+              0.34,
+              0.68,
+              clouds.noise.sampleShape(leaned.div(RAIN_TILE).add(this.fogShift) as V3).z,
+            ).toVar();
+            const veiled = float(1)
+              .sub(smoothstep(1500, 8000, dt))
+              .mul(this.structure)
               .toVar();
+            const streaks = mix(float(1), veil.mul(1.7).add(0.25), veiled).mul(overhead).toVar();
+            // A veil catches the light as a wisp of fog does: curtains show inside the rain.
+            rainy.assign(falling);
+            veilLight.assign(
+              mix(float(1), veil.mul(2 * AIR_LOOK.veilLight).add(1 - AIR_LOOK.veilLight), veiled),
+            );
+            // Near the camera, narrower curtains a few tens of meters wide: from inside the
+            // rain the wide ones fill the view.
+            const narrow = float(1)
+              .sub(smoothstep(RAIN_NEAR_STEPS[0], RAIN_NEAR_STEPS[1], dt))
+              .mul(this.structure)
+              .toVar();
+            If(narrow.greaterThan(0), () => {
+              a.reads?.addAssign(1);
+              const curtain = smoothstep(
+                0.36,
+                0.64,
+                clouds.noise.sampleDetail(leaned.div(RAIN_TILE_NEAR).add(this.rainShiftNear) as V3)
+                  .y,
+              );
+              streaks.mulAssign(mix(float(1), curtain.add(0.5), narrow));
+              veilLight.mulAssign(
+                mix(
+                  float(1),
+                  curtain.mul(2 * AIR_LOOK.curtainLight).add(1 - AIR_LOOK.curtainLight),
+                  narrow,
+                ),
+              );
+            });
             // What lowers the visibility in rain is the rain: the weather's fog reaches up
             // to the base there, in the rain's streaks, and ends where the cloud ends.
             fogExtinction.assign(mix(fogExtinction, fog.mul(streaks), falling));
@@ -1402,7 +1755,10 @@ export class Volumetrics {
         // Dust: a wall where the field begins, a billowing top.
         const dustExtinctionNode = float(0).toVar();
         const dustTop = float(0).toVar();
+        // The light of the dust's billows near the camera.
+        const billowLight = float(1).toVar();
         If(this.dustOn.greaterThan(0.5).and(dust.greaterThan(0.02)), () => {
+          a.reads?.addAssign(1);
           const nd = clouds.noise.sampleShape(p.div(DUST_TILE).add(this.dustShift) as V3);
           const farDust = smoothstep(3000, 20_000, dt);
           // Great billows, and smaller ones on them.
@@ -1419,6 +1775,30 @@ export class Volumetrics {
               .mul(body)
               .mul(mix(nd.w, float(0.5), even).mul(0.5).add(0.75)),
           );
+          // Near the camera, billows some tens of meters across roll past with the wind:
+          // from inside the storm the great ones fill the view.
+          const rolling = float(1)
+            .sub(smoothstep(DUST_NEAR_STEPS[0], DUST_NEAR_STEPS[1], dt))
+            .mul(this.structure)
+            .toVar();
+          If(rolling.greaterThan(0).and(dustExtinctionNode.greaterThan(0)), () => {
+            a.reads?.addAssign(1);
+            const nb = clouds.noise.sampleShape(
+              p
+                .add(up.mul(h.mul(DUST_FLAT - 1)))
+                .div(DUST_TILE_NEAR)
+                .add(this.dustShiftNear) as V3,
+            );
+            const puff = smoothstep(0.38, 0.62, nb.w.mul(0.55).add(nb.z.mul(0.45))).toVar();
+            dustExtinctionNode.mulAssign(mix(float(1), puff.add(0.5), rolling));
+            billowLight.assign(
+              mix(
+                float(1),
+                puff.mul(2 * AIR_LOOK.billowLight).add(1 - AIR_LOOK.billowLight),
+                rolling,
+              ),
+            );
+          });
         });
 
         const extinction = fogExtinction.add(rainExtinction).add(dustExtinctionNode).toVar();
@@ -1445,6 +1825,8 @@ export class Volumetrics {
           // Under a closed deck there are no shafts to draw: the deck's own shade stands in.
           visible.assign(float(1).sub(smoothstep(0.55, 0.95, coverW).mul(0.94)));
           If(this.shafts.greaterThan(0.5).and(coverW.lessThan(0.9)), () => {
+            // The cloud shadow reads its column and the noise, the terrain's one texel.
+            a.reads?.addAssign((L.sunVisibility ? 2 : 0) + (L.terrainShadow ? 1 : 0));
             let v: F = float(1) as F;
             if (L.sunVisibility) v = v.mul(L.sunVisibility(p as V3)) as F;
             if (L.terrainShadow) v = v.mul(L.terrainShadow(p as V3)) as F;
@@ -1458,10 +1840,35 @@ export class Volumetrics {
           // scattered on: it thins with the depth above, glows wide around the sun, and
           // is brighter on a bank's top than between banks.
           const direct = exp(tau.negate()).mul(mix(phase, phaseDust, share));
+          // A thin layer has little to scatter the light on with: haze does not glow as a
+          // bank of fog does. The whole layer's vertical optical depth, about.
+          const layer = fog
+            .mul(scale.add(FOG_FLOOR))
+            .add(dustExtinctionNode.mul(DUST_DEPTH * 0.25))
+            .add(rainExtinction.mul(max(baseW.sub(level), 0)));
+          const thick = float(1).sub(exp(layer.mul(-AIR_THICK)));
           const diffuse = exp(above.mul(-AIR_DIFFUSE))
             .mul(phaseWide.mul(0.8).add(0.2))
             .mul(banks.mul(0.9).add(0.55))
-            .mul(curl.mul(0.9).add(0.55));
+            .mul(thick);
+          // A wisp catches the light: brighter where the fog is denser than around it.
+          const wispLight = AIR_LOOK.wispLight;
+          const curlLight = AIR_LOOK.curlLight;
+          const glow = mix(
+            float(1),
+            wispy
+              .mul(2 * wispLight)
+              .add(1 - wispLight)
+              .mul(
+                smoothstep(0.5 - AIR_LOOK.curlEdge, 0.5 + AIR_LOOK.curlEdge, curl)
+                  .mul(2 * curlLight)
+                  .add(1 - curlLight),
+              ),
+            fogExtinction.div(extinction).mul(rainy.oneMinus()),
+          )
+            .mul(mix(float(1), veilLight, rainy))
+            .mul(mix(float(1), billowLight, dustExtinctionNode.div(extinction)))
+            .toVar();
           const sky = overcastSky(a.skyLight.mul(AIR_SKY) as V3, overcast as F).mul(
             exp(above.mul(-0.12)),
           );
@@ -1475,7 +1882,8 @@ export class Volumetrics {
             .mul(fogExtinction)
             .add(mix(vec3(...RAIN_ALBEDO), vec3(...SNOW_ALBEDO), wc.y).mul(rainExtinction))
             .add(vec3(...DUST_ALBEDO).mul(dustExtinctionNode))
-            .div(extinction);
+            .div(extinction)
+            .toVar();
           const source = keyColor
             .mul(
               visible
@@ -1484,32 +1892,50 @@ export class Volumetrics {
             )
             .add(sky)
             .mul(filtered)
+            .mul(glow)
             .toVar();
-          If(this.stormOn.greaterThan(0.5), () => {
-            const away = p.sub(state.flashPosition);
-            const reachSq = 4 * FLASH_RADIUS * FLASH_RADIUS;
-            source.addAssign(
-              vec3(...FLASH_LIGHT).mul(
-                state.flash.mul(0.25).mul(float(reachSq).div(dot(away, away).add(reachSq))),
-              ),
-            );
-          });
           // No step counts for more than AIR_STEP_DEPTH of optical depth: a far layer's
           // surface is then drawn by several samples, not by the one that happens to enter it.
           const through = exp(min(extinction.mul(dt), AIR_STEP_DEPTH).negate()).toVar();
+          If(state.flash.greaterThan(0), () => {
+            // Lightning: see FLASH_AIR. Added after the loop, apart from the day's light.
+            const away = p.sub(state.flashPosition);
+            const far = dot(away, away).toVar();
+            const reachSq = FLASH_AIR_RADIUS * FLASH_AIR_RADIUS;
+            const range = sqrt(far).toVar();
+            // Brightest where the eye looks toward the discharge through the lit air.
+            const toward = dot(away, rd).negate().div(max(range, 1));
+            const forward = mix(
+              AtmosphereNodes.hgPhase(toward as F, FLASH_AIR_FORWARD).mul(4 * Math.PI),
+              float(1),
+              FLASH_AIR_EVEN,
+            );
+            const lit = min(
+              float(reachSq)
+                .div(far.add(reachSq))
+                .mul(exp(extinction.mul(range).mul(-FLASH_AIR_FADE)))
+                .mul(extinction.mul(FLASH_AIR_SPREAD).add(1))
+                .mul(forward),
+              1,
+            );
+            flashed.addAssign(albedo.mul(lit).mul(transmittance.mul(through.oneMinus())));
+          });
           const part = transmittance.mul(through.oneMinus()).toVar();
           scattered.addAssign(source.mul(albedo).mul(part));
           weight.addAssign(part);
           weighted.addAssign(part.mul(ts));
           transmittance.mulAssign(through);
-          // In front of the cloud or behind it, with a soft change around its distance.
-          const ahead = float(1)
-            .sub(smoothstep(a.cloudDistance.mul(0.7), a.cloudDistance.mul(1.3), ts))
-            .toVar();
-          weightFront.addAssign(part.mul(ahead));
-          throughFront.mulAssign(mix(float(1), through, ahead));
+          const ln = max(ts, 1).log().toVar();
+          logged.addAssign(part.mul(ln));
+          loggedSquare.addAssign(part.mul(ln).mul(ln));
         });
       });
+
+      scattered.addAssign(
+        vec3(...FLASH_AIR)
+          .mul(flashed)
+          .mul(state.flash),
+      );
 
       // The sun behind dust: a dull disk where the real one has gone.
       If(this.dustOn.greaterThan(0.5).and(this.shafts.greaterThan(0.5)), () => {
@@ -1536,11 +1962,8 @@ export class Volumetrics {
         transmittance,
       ),
     );
-    a.outSplit.assign(
-      vec2(
-        select(weight.greaterThan(1e-6), weightFront.div(max(weight, 1e-6)), float(1)),
-        throughFront,
-      ),
-    );
+    const mean = logged.div(max(weight, 1e-6)).toVar();
+    const spread = sqrt(max(loggedSquare.div(max(weight, 1e-6)).sub(mean.mul(mean)), 0));
+    a.outAt.assign(vec3(mean, spread, select(transmittance.lessThan(OPAQUE), reached, float(1e9))));
   }
 }

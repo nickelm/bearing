@@ -148,6 +148,11 @@ export class GlobeScene {
   useTiles = true;
   /** Whether the terrain has a world to draw (set by the app). */
   terrainReady = false;
+  /**
+   * True while the game clock stands still (set by the app): the weather's animation, the
+   * particles and the lightning hold, while the camera still moves.
+   */
+  paused = false;
   private detachInput: (() => void) | null = null;
   private mode: SimCameraMode = 'free';
   private readonly scratch = new Vec3d();
@@ -324,6 +329,8 @@ export class GlobeScene {
     this.camera.far = o.far;
     this.camera.updateProjectionMatrix();
 
+    // The effects' clock: real seconds, none while the game is paused.
+    const effectDt = this.paused ? 0 : dt;
     this.sunLight.position.set(this.sun.x, this.sun.y, this.sun.z);
     // The shell shows only where the pipeline does not draw the volumetric clouds.
     this.clouds.volumetric =
@@ -339,25 +346,25 @@ export class GlobeScene {
       o.eye,
       o.eye.length() - this.lighting.radius,
       this.gameTime,
-      dt,
+      effectDt,
     );
     // Which marches run this frame and between which heights, the key light, the fog's drift.
     this.volumetrics.groundScale = this.terrain.exaggerationUniform.value;
-    this.volumetrics.update(o.eye, dt);
+    this.volumetrics.update(o.eye, effectDt);
     // Lightning first: its flash lights the particles too.
     const fovY = (this.camera.fov * Math.PI) / 180;
     this.lightning.update({
       view: this.weatherView,
       eye: o.eye,
       gameTime: this.gameTime,
-      dt,
+      dt: effectDt,
       pixelAngle: fovY / this.viewportHeight,
     });
     this.precipitation?.update({
       eye: o.eye,
       forward: o.forward,
       up: o.up,
-      dt,
+      dt: effectDt,
       fovY,
       aspect: this.camera.aspect,
       viewportHeight: this.viewportHeight,
@@ -446,6 +453,20 @@ export class GlobeScene {
     this.renderer.render(this.scene, this.camera);
   }
 
+  /**
+   * After a camera cut or a jump of the game clock (a new flight, another station, a seek):
+   * the effects that remember the last frame start over. The ground takes its wetness from
+   * the weather at the new place, fog banks and particles forget the old camera, no thunder
+   * plays for the time skipped, and the mountain shadows fade in again.
+   */
+  resetAtmosphere(): void {
+    this.weatherState.reset();
+    this.volumetrics.reset();
+    this.precipitation?.reset();
+    this.lightning.reset();
+    this.shadows.reset();
+  }
+
   dispose(): void {
     this.inputEnabled = false;
     this.globe.dispose();
@@ -453,6 +474,7 @@ export class GlobeScene {
     this.forest.dispose();
     this.structures.dispose();
     this.clouds.dispose();
+    this.weather.dispose();
     this.shadows.dispose();
     this.strategic.dispose();
     this.lighting.atmosphere.dispose();

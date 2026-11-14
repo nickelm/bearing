@@ -12,7 +12,7 @@
  *   in units of BASE_SCALE (cloudForm.ts), A = development (cloudForm.ts): the kind and depth
  *   of cloud. The volumetric march and the cloud shadow read all four with
  *   one read per sample (decision 141); the strategic map reads R and G.
- *   Half floats (28 MB at 768 texels per face edge): the march thresholds
+ *   Half floats (13 MB at 512 texels per face edge): the march thresholds
  *   noise by these values, and bytes showed as steps.
  * - Refresh: a compute pass re-evaluates the field when the game clock has
  *   moved enough for the clouds to move a fraction of a texel, when the
@@ -41,10 +41,18 @@ import { cubeFaceUv } from '../../common/climateTexture';
 type F = Node<'float'>;
 type V3 = Node<'vec3'>;
 
-/** Interior texels per face edge: about 2 km at R = 1,000 km. */
-export const BAKE_RESOLUTION = 768;
-/** Game seconds the field may age before it is baked again (clouds move about 12 m/s: 0.2 texel). */
-const MAX_AGE = 30;
+/**
+ * Interior texels per face edge: about 3 km at R = 1,000 km. The field's finest octave of
+ * any weight is 4 km, and the clouds' shapes come from the noise volumes: at 768 the
+ * picture was the same, for 2.25 times the memory and the bake's time (decision 141).
+ */
+export const BAKE_RESOLUTION = 512;
+/**
+ * Game seconds the field may age before it is baked again. Clouds move about 12 m/s, and
+ * the noise that shapes them moves every frame: with the coverage 30 s behind (360 m), cloud
+ * edges jumped at each bake.
+ */
+const MAX_AGE = 10;
 /** Real milliseconds between bakes at most, whatever the time rate. */
 const MIN_INTERVAL_MS = 100;
 
@@ -139,6 +147,12 @@ export class CoverageBake {
     this.bakedKey = key;
     this.lastBakeMs = nowMs;
     this.bakes++;
+  }
+
+  /** Frees the texture (13 MB on the GPU at the default resolution) and the kernel. */
+  dispose(): void {
+    this.texture.dispose();
+    this.kernel.dispose();
   }
 
   /** Baked (coverage, precipitation) at a direction (any length); usable in any shader stage. */

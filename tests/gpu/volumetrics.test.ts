@@ -21,6 +21,7 @@ import {
 } from '../../src/render/sim/clouds/volumetrics';
 import { WeatherTexture } from '../../src/render/sim/clouds/weatherTexture';
 import { PlanetLighting } from '../../src/render/sim/lighting/planetLighting';
+import { SimPipeline } from '../../src/render/sim/post/simPipeline';
 import { WeatherState } from '../../src/render/sim/weather/weatherState';
 import { testGpu } from './device';
 import { headlessRenderer } from './renderer';
@@ -30,6 +31,10 @@ const gpu = await testGpu();
 /** Width and height of the target the source is evaluated into: whole 3 × 3 tiles of its sample offsets. */
 const W = 64;
 const H = 6;
+
+/** Texture reads per pixel at medium quality: the most any pixel may take, and the most a fan of rays may on average. */
+const READS_MOST = 300;
+const READS_MEAN = 110;
 
 /** A cloud layer, its weather and a volumetric source, with the frame's updates and a way to evaluate rays. */
 function rig(renderer: WebGPURenderer, count = false) {
@@ -63,6 +68,7 @@ function rig(renderer: WebGPURenderer, count = false) {
     weather,
     clouds,
     volumetrics,
+    state,
     up,
     east,
     north,
@@ -269,6 +275,117 @@ describe.skipIf(!gpu)('volumetrics (TSL on Dawn)', () => {
     expect(gpu!.errors).toEqual([]);
   }, 300_000);
 
+  it('lights the murk toward a lightning strike, and never to white', async () => {
+    const head = await headlessRenderer(gpu!.device, 64, 64);
+    const r = rig(head.renderer);
+    // Night under a storm: rain and its low visibility, no sun and no moon.
+    const sun = r.up.clone().scale(-1);
+    r.weather.fill(1, 2, { base: 600, storm: 0.9, fog: 4e-3 });
+    const eye = r.frame(30, sun).clone();
+    const luminance = (pixels: Float32Array) =>
+      0.2126 * tileMean(pixels, 0) + 0.7152 * tileMean(pixels, 1) + 0.0722 * tileMean(pixels, 2);
+    const level = (direction: Vec3d) => direction.clone().addScaled(r.up, 0.1).normalize();
+    const east = level(r.east);
+    const west = level(r.east.clone().scale(-1));
+    const north = level(r.north);
+    const dark = luminance(await r.march(east));
+    expect(dark).toBeLessThan(0.02);
+    const strikeAt = (distance: number) => {
+      const at = eye.clone().addScaled(r.east, distance).addScaled(r.up, 500);
+      r.state.flash.value = 1;
+      r.state.flashPosition.value.set(at.x, at.y, at.z);
+    };
+
+    // 4 km away: a glow toward the strike over a frame that stays dark.
+    strikeAt(4000);
+    const toward = luminance(await r.march(east)) - dark;
+    const across = luminance(await r.march(north)) - dark;
+    const away = luminance(await r.march(west)) - dark;
+    expect(toward).toBeGreaterThan(0.03);
+    expect(toward).toBeGreaterThan(2.5 * across);
+    expect(across).toBeGreaterThan(away);
+    expect(across).toBeLessThan(0.06);
+
+    // Overhead: a strong pulse all around, under white (and under the night's bloom
+    // threshold of 0.3, which would spread it over the frame).
+    strikeAt(300);
+    for (const direction of [east, north, west, r.up]) {
+      const lit = luminance(await r.march(direction));
+      expect(lit).toBeGreaterThan(0.12);
+      expect(lit).toBeLessThan(0.36);
+    }
+
+    // No flash, no light: the term costs nothing between strikes.
+    r.state.flash.value = 0;
+    expect(luminance(await r.march(east))).toBeCloseTo(dark, 6);
+    r.dispose();
+    head.dispose();
+    expect(gpu!.errors).toEqual([]);
+  }, 180_000);
+
+  it('keeps one source per quality level, and warms the level below once', async () => {
+    const head = await headlessRenderer(gpu!.device, 64, 64);
+    const r = rig(head.renderer);
+    const sun = r.up.clone().addScaled(r.east, 1).normalize();
+    r.weather.fill(0.45, 0, { base: 1300 });
+    const pipeline = new SimPipeline(head.renderer);
+    const v = r.volumetrics;
+    const medium = v.source;
+    v.attach(pipeline);
+    expect(pipeline.volumetrics).toBe(medium);
+    expect(pipeline.volumetricScale).toBeCloseTo(1 / 3, 6);
+    // The first frame is the chosen level's, the second the lower one's (its shaders are
+    // compiled while the view loads), then the chosen one's again.
+    r.frame(30, sun);
+    expect(pipeline.volumetrics).toBe(medium);
+    r.frame(30, sun);
+    const low = v.source;
+    expect(low).not.toBe(medium);
+    expect(pipeline.volumetrics).toBe(low);
+    expect(pipeline.volumetricScale).toBeCloseTo(1 / 4, 6);
+    expect(low.idle).toBe(false);
+    expect(v.quality).toBe('medium');
+    for (let frame = 0; frame < 3; frame++) {
+      r.frame(30, sun);
+      expect(pipeline.volumetrics).toBe(medium);
+      expect(pipeline.volumetricScale).toBeCloseTo(1 / 3, 6);
+    }
+    // Chosen later, a level is the same object as before: the pipeline keeps its shader.
+    v.quality = 'low';
+    expect(v.source).toBe(low);
+    expect(pipeline.volumetrics).toBe(low);
+    expect(pipeline.volumetricScale).toBeCloseTo(1 / 4, 6);
+    v.quality = 'high';
+    const high = v.source;
+    expect(pipeline.volumetricScale).toBeCloseTo(1 / 2, 6);
+    v.quality = 'medium';
+    expect(v.source).toBe(medium);
+    v.quality = 'high';
+    expect(v.source).toBe(high);
+    // In clear air a level drawn for three frames rests, whichever it is.
+    r.weather.fill(0);
+    for (let frame = 0; frame < 4; frame++) r.frame(30, sun);
+    expect(v.source.idle).toBe(true);
+    v.quality = 'medium';
+    r.frame(30, sun);
+    expect(v.source.idle).toBe(true);
+
+    // A second attach with the warm-up skipped (previews): the chosen level from the start.
+    const other = rig(head.renderer);
+    other.volumetrics.attach(pipeline);
+    other.volumetrics.skipWarmUp();
+    const chosen = other.volumetrics.source;
+    for (let frame = 0; frame < 3; frame++) {
+      other.frame(30, sun);
+      expect(pipeline.volumetrics).toBe(chosen);
+    }
+    other.dispose();
+    pipeline.dispose();
+    r.dispose();
+    head.dispose();
+    expect(gpu!.errors).toEqual([]);
+  }, 180_000);
+
   it('stays within its budget of steps', async () => {
     const head = await headlessRenderer(gpu!.device, 64, 64);
     const r = rig(head.renderer, true);
@@ -300,12 +417,12 @@ describe.skipIf(!gpu)('volumetrics (TSL on Dawn)', () => {
       set();
       for (const altitude of [30, 1700, 6000]) {
         r.frame(altitude, sun);
-        const sum = [0, 0, 0];
-        const most = [0, 0, 0];
+        const sum = [0, 0, 0, 0];
+        const most = [0, 0, 0, 0];
         for (const ray of rays) {
           // A ray into the ground ends there.
           const pixels = await r.march(ray, ray.dot(r.up) < 0 ? altitude / -ray.dot(r.up) : 1e9);
-          for (let c = 0; c < 3; c++) {
+          for (let c = 0; c < 4; c++) {
             const mean = tileMean(pixels, c);
             sum[c]! += mean / rays.length;
             for (let i = 0; i < W * H; i++) most[c] = Math.max(most[c]!, pixels[i * 4 + c]!);
@@ -313,12 +430,17 @@ describe.skipIf(!gpu)('volumetrics (TSL on Dawn)', () => {
         }
         console.log(
           `steps per pixel, ${name} from ${altitude} m: cloud ${sum[0]!.toFixed(1)} (most ${most[0]}), ` +
-            `shaded ${sum[1]!.toFixed(1)} (most ${most[1]}), air ${sum[2]!.toFixed(1)} (most ${most[2]})`,
+            `shaded ${sum[1]!.toFixed(1)} (most ${most[1]}), air ${sum[2]!.toFixed(1)} (most ${most[2]}), ` +
+            `texture reads ${sum[3]!.toFixed(1)} (most ${most[3]})`,
         );
         // The caps hold for every pixel, and the means stay well under them.
         expect(most[0]!).toBeLessThanOrEqual(level.cloudSteps);
         expect(most[2]!).toBeLessThanOrEqual(level.airSteps);
         expect(sum[1]!).toBeLessThan(16);
+        // Texture reads, the cost that does not depend on the machine: the worst pixel and
+        // the mean over the fan.
+        expect(most[3]!).toBeLessThanOrEqual(READS_MOST);
+        expect(sum[3]!).toBeLessThan(READS_MEAN);
         if (name === 'clear') expect(sum[0]! + sum[2]!).toBe(0);
         if (name === 'fog') expect(sum[0]!).toBe(0);
       }

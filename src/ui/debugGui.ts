@@ -4,6 +4,8 @@
  */
 import { RENDER_SCALES } from '../render/common/renderScale';
 import type { RenderScaleSetting } from '../render/common/renderScale';
+import { WEATHER_PRESETS } from '../sim/weather/presets';
+import type { WeatherPreset } from '../sim/weather/presets';
 import GUI from 'lil-gui';
 
 export interface WorldGuiParams {
@@ -162,6 +164,50 @@ export interface LightingGuiParams {
   clouds: boolean;
   /** Cloud coverage bias (positive is cloudier). */
   cloudCover: number;
+}
+
+/**
+ * Atmosphere folder: post-processing, volumetric clouds and air, the weather shown,
+ * particles, lightning, shadows, snow sparkle, haze and sound (decisions 137–143).
+ * The starting values come from the scene (ui/atmosphereSettings.ts).
+ */
+export interface AtmosphereGuiParams {
+  /** Draw through the post-processing pipeline; off draws directly, without volumetrics or particles. */
+  post: boolean;
+  bloom: boolean;
+  /** Time-of-day color grade. */
+  grade: boolean;
+  grain: boolean;
+  /**
+   * Hold the frame rate by lowering the volumetric quality, then the particles
+   * (render/common/qualityGovernor.ts). Choosing a quality or a density by hand turns it off.
+   */
+  autoQuality: boolean;
+  /** Volumetric quality: march steps, light samples and resolution. */
+  quality: 'low' | 'medium' | 'high';
+  /** Raymarched clouds; fog, dust, haze and rain veils. */
+  volumetricClouds: boolean;
+  volumetricAir: boolean;
+  /** High cirrus amount 0..1. */
+  cirrus: number;
+  /** The weather shown: `live` is the simulation's own, the others presets of it. */
+  weather: WeatherPreset;
+  /** Rain, snow and dust particles near the camera, and how many (1 = as tuned). */
+  particles: boolean;
+  particleDensity: number;
+  lightning: boolean;
+  /** Mountain shadows, and their penumbra relative to the sun's disk. */
+  shadows: boolean;
+  shadowSoftness: number;
+  /** Glints on sunlit snow (0 = none). */
+  sparkle: number;
+  /** Clear-air haze in front of nearby ground (1 = all of the in-scattered light). */
+  haze: number;
+  /** Master volume 0..1 of rain, wind and thunder; mute. */
+  volume: number;
+  mute: boolean;
+  /** What the automatic quality has set (read-only). */
+  status: string;
 }
 
 /** Campaign folder: the cast summary (read-only) and overlay toggles. */
@@ -561,6 +607,54 @@ export class DebugGui {
     f.add(light, 'cloudCover', -0.5, 0.5, 0.01)
       .name('Cloud cover')
       .onChange(() => changed(light));
+  }
+
+  /**
+   * Adds the Atmosphere folder (see `AtmosphereGuiParams`). `changed` applies the values;
+   * `weatherChanged` shows another weather.
+   */
+  addAtmosphereControls(
+    a: AtmosphereGuiParams,
+    changed: (a: AtmosphereGuiParams) => void,
+    weatherChanged: (preset: WeatherPreset) => void,
+  ): void {
+    const f = this.folderBeforeStatus('Atmosphere');
+    const apply = () => changed(a);
+    f.add(a, 'weather', [...WEATHER_PRESETS])
+      .name('Weather')
+      .listen()
+      .onChange((preset: WeatherPreset) => weatherChanged(preset));
+    f.add(a, 'autoQuality').name('Automatic quality (hold FPS)').listen().onChange(apply);
+    f.add(a, 'status').name('Quality now').disable().listen();
+    // A choice made by hand stands: it turns the automatic off.
+    const manual = () => {
+      a.autoQuality = false;
+      apply();
+    };
+    const v = f.addFolder('Clouds, fog and dust (volumetric)');
+    v.add(a, 'quality', ['low', 'medium', 'high']).name('Quality').onChange(manual);
+    v.add(a, 'volumetricClouds').name('Clouds').onChange(apply);
+    v.add(a, 'volumetricAir').name('Fog, dust, rain veils').onChange(apply);
+    v.add(a, 'cirrus', 0, 1, 0.05).name('Cirrus').onChange(apply);
+    v.add(a, 'haze', 0, 1, 0.01).name('Clear-air haze').onChange(apply);
+    const w = f.addFolder('Rain, snow, lightning');
+    w.add(a, 'particles').name('Particles').onChange(apply);
+    w.add(a, 'particleDensity', 0.25, 2, 0.05).name('Particle density').onChange(manual);
+    w.add(a, 'lightning').name('Lightning').onChange(apply);
+    const s = f.addFolder('Shadows and snow');
+    s.add(a, 'shadows').name('Mountain shadows').onChange(apply);
+    s.add(a, 'shadowSoftness', 0, 4, 0.05).name('Shadow softness').onChange(apply);
+    s.add(a, 'sparkle', 0, 3, 0.05).name('Snow sparkle').onChange(apply);
+    const p = f.addFolder('Post-processing');
+    p.add(a, 'post').name('Post-processing').onChange(apply);
+    p.add(a, 'bloom').name('Bloom').onChange(apply);
+    p.add(a, 'grade').name('Time-of-day grade').onChange(apply);
+    p.add(a, 'grain').name('Film grain').onChange(apply);
+    const sound = f.addFolder('Sound');
+    sound.add(a, 'volume', 0, 1, 0.05).name('Volume').listen().onChange(apply);
+    sound.add(a, 'mute').name('Mute').listen().onChange(apply);
+    // The panel is long: the groups open on demand.
+    for (const group of [v, w, s, p, sound]) group.close();
   }
 
   /**

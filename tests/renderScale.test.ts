@@ -44,6 +44,30 @@ describe('RenderScaleController', () => {
     expect(changes.length).toBeLessThanOrEqual(4);
   });
 
+  it('keeps its scale through the one long frame after a hidden tab', () => {
+    const c = new RenderScaleController(1000 / 30);
+    expect(run(c, () => 16.7, 5)).toBe(1);
+    // A minute away: the next frame's time is the minute.
+    let now = 5000 + 60_000;
+    expect(c.record(60_000, now)).toBeNull();
+    for (let i = 0; i < 300; i++) {
+      now += 16.7;
+      expect(c.record(16.7, now)).toBeNull();
+    }
+    expect(c.scale).toBe(1);
+    // The same in the middle of a struggle: the scale it had found stays.
+    const d = new RenderScaleController(1000 / 30);
+    const found = run(d, (s) => 120 * s * s + 2, 20);
+    now = 20_000 + 60_000;
+    d.record(60_000, now);
+    for (let i = 0; i < 120; i++) {
+      const ms = 120 * d.scale * d.scale + 2;
+      now += ms;
+      d.record(ms, now);
+    }
+    expect(Math.abs(d.scale - found)).toBeLessThanOrEqual(0.051);
+  });
+
   it('never leaves its range', () => {
     const c = new RenderScaleController(1000 / 30, 0.35, 1);
     expect(run(c, () => 1000, 30)).toBe(0.35);

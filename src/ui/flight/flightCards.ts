@@ -8,6 +8,7 @@ import { FOOT, KNOT } from '../../core/units';
 import type { Touchdown } from '../../sim/flight/outcomes';
 import { ACTION_LABELS, FLIGHT_BINDINGS } from './flightInput';
 import type { FlightAction } from './flightInput';
+import { weatherSelect } from './freeFlightMenu';
 import type { FreeFlightOptions, SpawnKind } from './freeFlightMenu';
 
 function card(className = ''): HTMLDivElement {
@@ -34,12 +35,20 @@ export interface PauseEvents {
   optionsChanged(o: FreeFlightOptions): void;
 }
 
+/** The weather's sound as the pause menu sets it (ui/audio/weatherAudio.ts has this shape). */
+export interface SoundSettings {
+  /** Master volume 0..1. */
+  volume: number;
+  muted: boolean;
+}
+
 export class PauseMenu {
   readonly el = card();
 
   constructor(
     private readonly options: FreeFlightOptions,
     events: PauseEvents,
+    sound: SoundSettings | null = null,
   ) {
     const h = document.createElement('h1');
     h.textContent = 'Paused';
@@ -55,13 +64,44 @@ export class PauseMenu {
     const opts = document.createElement('div');
     opts.innerHTML = `<h2>Options</h2>
       <label><input type="checkbox" class="ff-fuel"> Unlimited fuel</label><br>
+      <label class="ff-weather-row">Weather </label><br>
+      <label><input type="checkbox" class="ff-wind"> Wind and turbulence</label><br>
       <label>Time of day <input type="range" class="ff-tod" min="0" max="24" step="0.25"> <span class="ff-tod-label"></span></label>
-      <div class="ff-note">Time of day applies on the next restart.</div>`;
+      <div class="ff-note">The weather changes at once; the time of day applies on the next restart.</div>
+      <div class="ff-sound"><h2>Sound</h2>
+      <label>Volume <input type="range" class="ff-volume" min="0" max="1" step="0.05"></label>
+      <label><input type="checkbox" class="ff-mute"> Mute</label></div>`;
     const fuel = opts.querySelector('.ff-fuel') as HTMLInputElement;
     const tod = opts.querySelector('.ff-tod') as HTMLInputElement;
     const todLabel = opts.querySelector('.ff-tod-label') as HTMLSpanElement;
+    const weather = weatherSelect(this.options.weather, (preset) => {
+      this.options.weather = preset;
+      events.optionsChanged(this.options);
+    });
+    (opts.querySelector('.ff-weather-row') as HTMLLabelElement).append(weather);
+    const wind = opts.querySelector('.ff-wind') as HTMLInputElement;
+    wind.addEventListener('change', () => {
+      this.options.wind = wind.checked;
+      events.optionsChanged(this.options);
+    });
+    const soundBox = opts.querySelector('.ff-sound') as HTMLDivElement;
+    const volume = opts.querySelector('.ff-volume') as HTMLInputElement;
+    const mute = opts.querySelector('.ff-mute') as HTMLInputElement;
+    soundBox.hidden = sound === null;
+    volume.addEventListener('input', () => {
+      if (sound) sound.volume = Number(volume.value);
+    });
+    mute.addEventListener('change', () => {
+      if (sound) sound.muted = mute.checked;
+    });
     const sync = () => {
       fuel.checked = this.options.unlimitedFuel;
+      weather.value = this.options.weather;
+      wind.checked = this.options.wind;
+      if (sound) {
+        volume.value = String(sound.volume);
+        mute.checked = sound.muted;
+      }
       tod.value = String(this.options.timeOfDay);
       const hh = Math.floor(this.options.timeOfDay);
       const mm = Math.round((this.options.timeOfDay - hh) * 60);

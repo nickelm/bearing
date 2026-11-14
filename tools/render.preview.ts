@@ -677,6 +677,8 @@ it('renders preview views', async () => {
     // sets their steps and resolution, VOL=0 leaves them out (the cloud shell shows instead),
     // CIRRUS=x sets the amount of cirrus (0..1), CLOUDS_3D=0 and AIR=0 leave out the clouds
     // or the fog, dust and rain shafts alone.
+    // The picture kept is drawn at the quality asked for: no frame at the lower one to warm it up.
+    scene.volumetrics.skipWarmUp();
     if (process.env.QUALITY) scene.volumetrics.quality = process.env.QUALITY as VolumetricQuality;
     if (process.env.VOL === '0') pipeline.volumetricsEnabled = false;
     if (process.env.CIRRUS) scene.volumetrics.cirrus.value = Number(process.env.CIRRUS);

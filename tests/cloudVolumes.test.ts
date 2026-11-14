@@ -7,7 +7,8 @@
 import { describe, expect, it } from 'vitest';
 import { DataUtils } from 'three/webgpu';
 import { latLonToDirection } from '../src/core/coords';
-import { DEG } from '../src/core/units';
+import { DEG, PLANET_RADIUS } from '../src/core/units';
+import { VIEW_ANGLE, viewAngle } from '../src/render/sim/clouds/cloudLayer';
 import {
   developmentOf,
   DETAIL_SWING,
@@ -175,6 +176,27 @@ describe('weather extent', () => {
     const ground = new Float32Array(grid.count).fill(250);
     weather.setGround(ground);
     expect(weather.groundAt(dir)).toBeCloseTo(250, 6);
+  });
+});
+
+describe('view angle', () => {
+  it('reaches the horizon and the cloud tops beyond it, and no further than from 20 km', () => {
+    const radius = PLANET_RADIUS;
+    let last = 0;
+    for (const altitude of [0, 30, 500, 1500, 5000, 10_000, 20_000, 60_000]) {
+      const angle = viewAngle(altitude, radius);
+      // A cloud top 12 km up is in view while the line to it clears the planet: the horizon's
+      // distance and the top's own, as an angle at the center.
+      const horizon = Math.acos(radius / (radius + altitude));
+      const top = Math.acos(radius / (radius + 12_000));
+      if (altitude <= 20_000) expect(angle).toBeGreaterThanOrEqual(horizon + top);
+      expect(angle).toBeLessThanOrEqual(VIEW_ANGLE);
+      expect(angle).toBeGreaterThanOrEqual(last);
+      last = angle;
+    }
+    // From the ground, half the angle from 20 km: a quarter of the weather to search.
+    expect(viewAngle(30, radius)).toBeLessThan(0.5 * viewAngle(20_000, radius));
+    expect(viewAngle(60_000, radius)).toBe(VIEW_ANGLE);
   });
 });
 

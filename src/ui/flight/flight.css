@@ -53,6 +53,12 @@
   padding: 3px 8px;
 }
 
+/* The opened list is the browser's own: give its lines the panel's colors. */
+.ff-panel select option {
+  color: #f2f2f2;
+  background: #1c2024;
+}
+
 .ff-panel button {
   cursor: pointer;
 }
@@ -151,9 +157,21 @@
   align-items: center;
 }
 
-.ff-menu input[type='range'] {
+.ff-menu input[type='range'],
+.ff-card input[type='range'] {
   width: 10rem;
   accent-color: #ffb347;
+}
+
+.ff-panel input[type='checkbox'],
+.ff-panel input[type='radio'] {
+  accent-color: #ffb347;
+}
+
+.ff-card label {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
 }
 
 /* Centered cards: pause menu, summary, help. */

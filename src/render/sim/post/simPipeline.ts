@@ -17,8 +17,10 @@
  * 2. **Volumetrics** (only while a source is set and enabled), at 1/2, 1/3 or
  *    1/4 of the resolution: a depth pass picks, per low-resolution pixel, the
  *    nearest or the farthest depth of its block in a checkerboard, and the
- *    volumetric pass evaluates the source along the block's central ray up to
- *    that distance (viewRays.ts). Alternating nearest and farthest gives the
+ *    volumetric pass evaluates the source along a ray through the block up to
+ *    that distance (viewRays.ts), or rather along one of nine rays through
+ *    the block, so that the filter's 3 × 3 average antialiases edges in the
+ *    air. Alternating nearest and farthest gives the
  *    upsample a sample of each side of a silhouette among its neighbors. A
  *    third pass averages the result over 3 × 3 low-resolution texels of
  *    similar depth, which removes the march's jitter: interleaved gradient
@@ -137,7 +139,7 @@ export interface VolumetricContext {
   rayDirection: V3;
   /** Distance along the ray to the opaque surface (m); ≥ 1e7 for sky. */
   sceneDistance: F;
-  /** Screen uv 0..1 of the low-res pixel. */
+  /** Screen uv 0..1 of the ray: a place in the low-res pixel's block. */
   uv: V2;
   /** Per-pixel, per-frame dither 0..1 (interleaved gradient noise). */
   jitter: F;
@@ -178,6 +180,8 @@ export interface PipelineStats {
 /** The renderer's exposure (`renderer.toneMappingExposure`), which the app's exposure control sets. */
 const exposure = toneMappingExposure as unknown as F;
 
+/** Shaders of the volumetric march kept at most: one per source and resolution drawn. */
+const MARCH_SHADERS = 8;
 /** Frames watched for GPU errors after the frame's shaders have changed. */
 const GUARD_FRAMES = 3;
 /** Relative depth difference above which the upsample looks further for a matching texel. */
@@ -188,6 +192,8 @@ const MSAA_SAMPLES = 4;
 const EDGE = 0.05;
 /** Relative depth difference at which a neighbor's weight in the low-resolution filter falls to 1/e. */
 const FILTER_DEPTH = 0.05;
+/** Weight of the filter's 3 × 3 texels (of 9) under which it takes the 16 around them as well. */
+const FILTER_SPARSE = 6.5;
 /**
  * Relative depth difference up to which two low-resolution texels count as the same surface,
  * for the filter and the upsample: ground receding toward the horizon differs by this much
@@ -205,7 +211,8 @@ const FAR_SURFACE = 15_000;
  * Transmittance of the volumetric result from which the surface behind it counts in full for
  * the same two: behind opaque cloud or fog a surface's depth changes nothing, and telling
  * the horizon's ground from the sky above it there drew a line across the cloud in front of
- * both (decision 141).
+ * both (decision 141). The rule is for a pair: both results must be opaque. A wall whose
+ * air lets it through stays apart from the opaque sky beside it (no halo).
  */
 const HIDDEN_SURFACE = 0.1;
 
@@ -294,12 +301,20 @@ export class SimPipeline {
   volumetricsEnabled = true;
   /** Average the marched result over 3 × 3 low-resolution texels before the upsample. */
   volumetricFilter = true;
+  /**
+   * Send each low-resolution pixel's ray through one of nine places in its block instead of
+   * the center (see `volumetricNode`). Read when the volumetric shader is built.
+   */
+  volumetricSupersample = true;
   /** Advance the jitter and the grain each frame; off for repeatable stills. */
   animateNoise = true;
   readonly stats: PipelineStats = { passes: 0, fullResolutionPasses: 0, targets: 0 };
 
   private source: VolumetricSource | null = null;
-  private sourceVersion = 0;
+  /** A number per source object seen, and the current source's: they name its march's shader. */
+  private readonly sourceIds = new WeakMap<VolumetricSource, number>();
+  private sourceCount = 0;
+  private sourceId = 0;
   /** What the source threw while its shader was built, until `render` has dealt with it. */
   private sourceError: unknown = null;
   private divisor = 3;
@@ -324,10 +339,10 @@ export class SimPipeline {
   private readonly gradeSaturation = uniform(1);
   private readonly gradeGamma = uniform(1);
   private readonly grade: GradeBand = gradeAt(0.6, 0);
-  private depthSelect: QuadMesh | null = null;
-  private volumetric: QuadMesh | null = null;
+  /** The depth selection's quad by divisor, and the march's by divisor and source. */
+  private readonly depthSelects = new Map<number, QuadMesh>();
+  private readonly marches = new Map<string, QuadMesh>();
   private filter: QuadMesh | null = null;
-  private lowKey = '';
   private readonly finals = new Map<string, QuadMesh>();
   private readonly size = new Vector2();
   private width = 0;
@@ -374,11 +389,16 @@ export class SimPipeline {
   set volumetrics(source: VolumetricSource | null) {
     if (source === this.source) return;
     this.source = source;
-    this.sourceVersion++;
-    // Shaders built around the old source are never drawn again.
-    for (const q of this.finals.values()) disposeQuad(q);
-    this.finals.clear();
-    this.bloomChain?.reset();
+    if (!source) return;
+    // The march's shader is kept per source (`marches`): a source that comes back, such as
+    // a quality level chosen again, is drawn without compiling anything. The final pass
+    // and the bloom read the source's result, not the source: their shaders stay.
+    let id = this.sourceIds.get(source);
+    if (id === undefined) {
+      id = ++this.sourceCount;
+      this.sourceIds.set(source, id);
+    }
+    this.sourceId = id;
   }
 
   /**
@@ -431,7 +451,7 @@ export class SimPipeline {
       renderer.render(scene, camera);
 
       // The scene's own shaders are not this pipeline's to judge: the scope starts after them.
-      const variant = `${volumetric ? `${this.divisor}v${this.sourceVersion}` : '-'}${overlay}${this.variantKey()}`;
+      const variant = `${volumetric ? `${this.divisor}s${this.sourceId}` : '-'}${overlay}${this.variantKey()}`;
       if (variant !== this.guardKey) {
         this.guardKey = variant;
         this.guardFrames = GUARD_FRAMES;
@@ -460,7 +480,7 @@ export class SimPipeline {
         stats.passes++;
         stats.targets++;
       }
-      const key = `${volumetric ? `${this.divisor}v${this.sourceVersion}` : '-'}|${overlay ? 'o' : '-'}`;
+      const key = `${volumetric ? this.divisor : '-'}|${overlay ? 'o' : '-'}`;
       if (this.bloom) {
         const bloom = (this.bloomChain ??= this.createBloom());
         bloom.threshold.value = this.grade.bloom * this.bloomThresholdScale;
@@ -513,8 +533,10 @@ export class SimPipeline {
   dispose(): void {
     this.release();
     this.bloomChain?.dispose();
-    disposeQuad(this.depthSelect);
-    disposeQuad(this.volumetric);
+    for (const q of this.depthSelects.values()) disposeQuad(q);
+    this.depthSelects.clear();
+    for (const q of this.marches.values()) disposeQuad(q);
+    this.marches.clear();
     disposeQuad(this.filter);
     for (const q of this.finals.values()) disposeQuad(q);
     this.finals.clear();
@@ -594,17 +616,26 @@ export class SimPipeline {
       this.lowColor.texture.name = 'sim volumetrics';
       this.resizeLow();
     }
-    const key = `${this.divisor}v${this.sourceVersion}`;
-    if (key !== this.lowKey) {
-      this.lowKey = key;
-      disposeQuad(this.depthSelect);
-      disposeQuad(this.volumetric);
+    let depthSelect = this.depthSelects.get(this.divisor);
+    if (!depthSelect) {
       const select = quadMaterial('sim depth select');
       select.fragmentNode = this.depthSelectNode();
-      this.depthSelect = new QuadMesh(select);
-      const march = quadMaterial('sim volumetrics');
-      march.fragmentNode = this.volumetricNode(this.source!);
-      this.volumetric = new QuadMesh(march);
+      depthSelect = new QuadMesh(select);
+      this.depthSelects.set(this.divisor, depthSelect);
+    }
+    const key = `${this.divisor}s${this.sourceId}`;
+    let march = this.marches.get(key);
+    if (!march) {
+      // The least recently built goes when there are too many (sources that never return).
+      if (this.marches.size >= MARCH_SHADERS) {
+        const oldest = this.marches.keys().next().value as string;
+        disposeQuad(this.marches.get(oldest) ?? null);
+        this.marches.delete(oldest);
+      }
+      const material = quadMaterial('sim volumetrics');
+      material.fragmentNode = this.volumetricNode(this.source!);
+      march = new QuadMesh(material);
+      this.marches.set(key, march);
     }
     if (!this.filter) {
       const filter = quadMaterial('sim volumetric filter');
@@ -612,9 +643,14 @@ export class SimPipeline {
       this.filter = new QuadMesh(filter);
     }
     renderer.setRenderTarget(this.lowDepth);
-    this.depthSelect!.render(renderer);
+    depthSelect.render(renderer);
     renderer.setRenderTarget(this.volumetricFilter ? this.lowRaw : this.lowColor);
-    this.volumetric!.render(renderer);
+    march.render(renderer);
+    // A source that could not be built is not kept.
+    if (this.sourceError !== null) {
+      disposeQuad(march);
+      this.marches.delete(key);
+    }
     if (this.volumetricFilter) {
       renderer.setRenderTarget(this.lowColor);
       this.filter.render(renderer);
@@ -650,8 +686,18 @@ export class SimPipeline {
     return Fn(() => {
       const low = ivec2(screenCoordinate.xy).toVar();
       const depth = fetch(this.lowDepth!.texture, low).x.toVar();
-      // The center of the block, in the frame's uv.
-      const uv = vec2(low).add(0.5).mul(s).div(this.fullSize).toVar();
+      // Where in its block the ray passes, in the frame's uv: one of nine places, a third of
+      // the block apart, laid out so that every 3 × 3 low-resolution pixels (and every row
+      // and column of three) hold each of the three places across and each of the three
+      // down once. The filter's average over 3 × 3 then has nine rays per block's area, and
+      // a hard edge in the air (a fog bank's top against the sky, a cloud's outline) comes
+      // out a third of a block wide, not as steps a whole block high.
+      const place = this.volumetricSupersample
+        ? vec2(low.x.add(low.y).mod(int(3)), low.x.add(low.y.mul(2)).mod(int(3)))
+            .sub(1)
+            .div(3)
+        : vec2(0, 0);
+      const uv = vec2(low).add(0.5).add(place).mul(s).div(this.fullSize).toVar();
       const ray = this.rays.ray(uv as V2).toVar();
       const stretch = length(ray).toVar();
       const ctx: VolumetricContext = {
@@ -685,25 +731,43 @@ export class SimPipeline {
       const last = ivec2(this.lowSize).sub(1).toVar();
       const depth = fetch(lowDepth, low).x.toVar();
       const through = fetch(lowRaw, low).a.toVar();
+      // At the frame's edge the block moves inward: clamped texels would count some of the
+      // march's nine sample offsets twice and others not at all.
+      const inner = (max as unknown as (a: Node, b: Node) => IV2)(
+        clampTexel(low, last.sub(1) as IV2),
+        ivec2(1, 1),
+      );
+      const center = clampTexel(inner, last as IV2).toVar();
       const sum = vec4(0).toVar();
       const weight = float(0).toVar();
+      const tap = (i: number, j: number) => {
+        const texel = clampTexel(center.add(ivec2(i, j)), last as IV2).toVar();
+        const raw = fetch(lowRaw, texel).toVar();
+        // Where both results are opaque, what lies behind them does not show: one surface.
+        const shown = smoothstep(0, HIDDEN_SURFACE, max(raw.a, through));
+        const m = max(
+          this.apart(fetch(lowDepth, texel).x as F, depth as F)
+            .mul(shown)
+            .sub(SAME_SURFACE),
+          0,
+        ).div(FILTER_DEPTH);
+        const w = exp(m.mul(m).negate()).toVar();
+        sum.addAssign(raw.mul(w));
+        weight.addAssign(w);
+      };
       for (let j = -1; j <= 1; j++) {
-        for (let i = -1; i <= 1; i++) {
-          const texel = clampTexel(low.add(ivec2(i, j)), last as IV2).toVar();
-          const raw = fetch(lowRaw, texel).toVar();
-          // Where both results are opaque, what lies behind them does not show: one surface.
-          const shown = smoothstep(0, HIDDEN_SURFACE, max(raw.a, through));
-          const m = max(
-            this.apart(fetch(lowDepth, texel).x as F, depth as F)
-              .mul(shown)
-              .sub(SAME_SURFACE),
-            0,
-          ).div(FILTER_DEPTH);
-          const w = exp(m.mul(m).negate()).toVar();
-          sum.addAssign(raw.mul(w));
-          weight.addAssign(w);
-        }
+        for (let i = -1; i <= 1; i++) tap(i, j);
       }
+      // Beside a silhouette few of the nine are on this texel's side, and what is left of
+      // the march's sample pattern would show as dots along the edge: there the ring around
+      // the block joins in (16 more texels, for the few texels that need them).
+      If(weight.lessThan(FILTER_SPARSE), () => {
+        for (let j = -2; j <= 2; j++) {
+          for (let i = -2; i <= 2; i++) {
+            if (Math.max(Math.abs(i), Math.abs(j)) === 2) tap(i, j);
+          }
+        }
+      });
       return sum.div(weight);
     })() as V4;
   }
@@ -725,29 +789,25 @@ export class SimPipeline {
     const mismatch = (d: F): F => this.apart(d, depth);
     const sum = vec4(0).toVar();
     const weight = float(0).toVar();
-    const plain = vec4(0).toVar();
     const best = float(1e9).toVar();
+    const taps: { m: F; bilinear: F; color: V4 }[] = [];
     for (let j = 0; j < 2; j++) {
       for (let i = 0; i < 2; i++) {
         const texel = clampTexel(corner.add(ivec2(i, j)), last as IV2).toVar();
-        const m = mismatch(fetch(lowDepth, texel).x as F).toVar();
-        const bilinear = (i ? f.x : f.x.oneMinus()).mul(j ? f.y : f.y.oneMinus());
+        const m = mismatch(fetch(lowDepth, texel).x as F).toVar() as F;
+        const bilinear = (i ? f.x : f.x.oneMinus()).mul(j ? f.y : f.y.oneMinus()).toVar() as F;
         // The small floor lets a texel with no bilinear weight stand in when the others do not match.
         const apart = max(m.sub(SAME_SURFACE), 0);
         const w = bilinear.add(0.02).div(apart.mul(apart).add(1e-4)).toVar();
-        const color = fetch(lowColor, texel).toVar();
+        const color = fetch(lowColor, texel).toVar() as V4;
         sum.addAssign(color.mul(w));
         weight.addAssign(w);
-        plain.addAssign(color.mul(bilinear));
         best.assign(min(best, m));
+        taps.push({ m, bilinear, color });
       }
     }
     const result = sum.div(weight).toVar();
-    // Where the air in front of this pixel's surface is opaque, the surface does not show and
-    // its depth does not matter: the plain bilinear result, without an edge at the silhouette.
-    const shown = smoothstep(0, HIDDEN_SURFACE, result.a).toVar();
-    result.assign(mix(plain, result, shown));
-    If(best.greaterThan(MISMATCH).and(shown.greaterThan(0)), () => {
+    If(best.greaterThan(MISMATCH), () => {
       // No neighbor lies on this pixel's side of a silhouette: take the closest depth nearby.
       const center = ivec2(floor(at.add(0.5))).toVar();
       const found = center.toVar();
@@ -764,6 +824,23 @@ export class SimPipeline {
       If(best.lessThan(MISMATCH), () => {
         result.assign(fetch(lowColor, found));
       });
+    }).ElseIf(result.a.lessThan(HIDDEN_SURFACE), () => {
+      // The air in front of this pixel's surface is all but opaque (`result` is that of the
+      // texels at its depth). A neighbor whose air is opaque too shows the same thing,
+      // whatever lies behind either: it counts as the same surface, so the horizon draws no
+      // line across cloud or fog in front of it. A neighbor whose air lets its surface
+      // through (a wall in front of fogged sky) stays apart: no halo.
+      const own = result.a.toVar();
+      const merged = vec4(0).toVar();
+      const mergedWeight = float(0).toVar();
+      for (const tap of taps) {
+        const shown = smoothstep(0, HIDDEN_SURFACE, max(tap.color.a, own));
+        const apart = max(tap.m.mul(shown).sub(SAME_SURFACE), 0);
+        const w = tap.bilinear.add(0.02).div(apart.mul(apart).add(1e-4)).toVar();
+        merged.addAssign(tap.color.mul(w));
+        mergedWeight.addAssign(w);
+      }
+      result.assign(merged.div(mergedWeight));
     });
     return result as V4;
   }

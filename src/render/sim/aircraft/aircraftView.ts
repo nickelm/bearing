@@ -37,7 +37,7 @@ import { buildAnimatedModel } from '../../common/models/builder';
 import type { AnimatedPiece, BuiltModel } from '../../common/models/builder';
 import type { ModelSpec } from '../../common/models/spec';
 import { INK_LINEAR, modelGeometry } from '../../common/models/threeModel';
-import type { PlanetLighting } from '../lighting/planetLighting';
+import type { PlanetLighting, Vec3Node } from '../lighting/planetLighting';
 
 type V3 = ReturnType<typeof vec3>;
 
@@ -149,7 +149,11 @@ export class AircraftView {
       side: DoubleSide,
     });
     sm.colorNode = vec3(0, 0, 0);
-    sm.opacityNode = float(0.32);
+    // The shadow is the sun's: it fades under cloud and inside a mountain's shadow.
+    const onGround = positionWorld.add(lighting.eye) as Vec3Node;
+    const cloud = lighting.sunVisibility?.(onGround) ?? float(1);
+    const terrain = lighting.terrainShadow?.(onGround) ?? float(1);
+    sm.opacityNode = float(0.32).mul(cloud).mul(terrain);
     sm.polygonOffset = true;
     sm.polygonOffsetFactor = -2;
     sm.polygonOffsetUnits = -2;

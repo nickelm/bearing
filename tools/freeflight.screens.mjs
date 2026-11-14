@@ -5,6 +5,10 @@
  * then, with the dev server up (npm run dev):
  *
  *   node tools/freeflight.screens.mjs [http://localhost:5173]
+ *
+ * Env: SHOTS (comma list of shot names; a preview run with OUT=-storm wrote the
+ * shots "runway-storm" and so on; default: the five of a plain run), OUT_DIR (where
+ * the screenshots go; default docs/reports/screens).
  */
 import { mkdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -15,9 +19,11 @@ const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 const here = dirname(fileURLToPath(import.meta.url));
 const base = process.argv[2] ?? 'http://localhost:5173';
-const out = join(here, '..', 'docs', 'reports', 'screens');
+const out = process.env.OUT_DIR ?? join(here, '..', 'docs', 'reports', 'screens');
 mkdirSync(out, { recursive: true });
-const shots = ['runway', 'rotation', 'climb', 'approach', 'touchdown'];
+const shots = process.env.SHOTS
+  ? process.env.SHOTS.split(',').filter(Boolean)
+  : ['runway', 'rotation', 'climb', 'approach', 'touchdown'];
 
 const browser = await chromium.launch();
 for (const shot of shots) {

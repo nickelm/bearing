@@ -130,6 +130,21 @@ const DETAIL_DRIFT = [2.2, 3.1, 1.4] as const;
  * of 1,000 km.
  */
 export const VIEW_ANGLE = 0.38;
+/** The highest a cloud top stands above sea level (m): what can show beyond the horizon. */
+const TOP_MOST = 12_000;
+
+/**
+ * Angle around the camera whose weather can be in view from an altitude (m, rad): the
+ * horizon, cloud tops beyond it and one weather sample's margin; VIEW_ANGLE at most. From
+ * near the ground it is half of that from 20 km, so a quarter of the area is searched for
+ * cloud, and the marches rest sooner and between tighter bounds.
+ */
+export function viewAngle(altitude: number, radius: number): number {
+  const h = Math.max(altitude, 0);
+  const horizon = Math.sqrt(h * (2 * radius + h));
+  const beyond = Math.sqrt(TOP_MOST * (2 * radius + TOP_MOST));
+  return Math.min(VIEW_ANGLE, (horizon + beyond) / radius + 0.02);
+}
 /** Camera altitudes (m) between which the shell takes over from the volumetric clouds. */
 export const SHELL_FROM = 30_000;
 export const SHELL_FULL = 50_000;
@@ -512,7 +527,7 @@ export class CloudLayer implements WeatherField {
     const on = this.enabled.value > 0;
 
     // The weather in view, and right around the camera.
-    const view = this.weather.extent(up, VIEW_ANGLE, this.extent);
+    const view = this.weather.extent(up, viewAngle(altitude, this.radius), this.extent);
     const bias = this.coverageBias.value;
     // Coverage is zero where the stretched cover stays under the detail field's lowest value.
     this.possible = on && (view.cover + bias) * 1.2 - 0.1 > 0.02 - 0.1;
@@ -572,6 +587,8 @@ export class CloudLayer implements WeatherField {
   dispose(): void {
     this.mesh.geometry.dispose();
     (this.mesh.material as MeshBasicNodeMaterial).dispose();
+    // The noise volumes are shared between cloud layers (`cloudNoise`) and stay.
+    this.baked.dispose();
   }
 }
 

@@ -10,20 +10,28 @@
  *   npx vitest run --config vitest.tools.config.ts tools/freeflight.preview.ts
  *
  * Env: SEED (default 1), GRES (global grid, default 1024), W, H, BASE (airbase id),
- * SHOTS (comma list of runway,rotation,climb,approach,touchdown), TOD (hours, 17).
+ * SHOTS (comma list of runway,rotation,climb,approach,touchdown), TOD (hours, 17),
+ * WEATHER (a preset of sim/weather/presets.ts, default fair: the app's default), WIND=0
+ * (still air for the aircraft), QUALITY (low, medium, high: the volumetric quality),
+ * GOVERNOR (0..2: the performance governor's step, as ui/atmosphereSettings.ts applies it),
+ * POST=0 (draw without the pipeline), OUT (a suffix for the files' names, e.g. OUT=-storm
+ * writes freeflight-runway-storm.png and .json, which freeflight.screens.mjs takes as the
+ * shot "runway-storm").
+ *
+ * The weather, the flight's start time, the wind on the aircraft and the atmosphere's
+ * settings go through the modules the app uses (freeflight/flightWeather.ts, clock.ts,
+ * sim/flight/wind.ts, ui/atmosphereSettings.ts), so a shot is what Free Flight shows.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { it } from 'vitest';
-import {
-  defaultCampaignStart,
-  seasonPhase,
-  sunDirection,
-  withLocalTime,
-} from '../src/core/calendar';
+import { defaultCampaignStart, seasonPhase, sunDirection } from '../src/core/calendar';
 import { CubeGrid } from '../src/core/cubeGrid';
-import { DAY, DEG, HOUR } from '../src/core/units';
+import { moonAge } from '../src/core/moon';
+import { DEG } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
+import { flightStartTime, freeFlightDay } from '../src/freeflight/clock';
+import { FlightWeather } from '../src/freeflight/flightWeather';
 import { AirfieldGround, runwaysOf } from '../src/freeflight/ground';
 import { buildHudFrame, landingAid } from '../src/freeflight/hudFrame';
 import { modelSpec } from '../src/render/common/models/library';
@@ -44,7 +52,15 @@ import { fromRunway, runwayEnds, runwayFrame } from '../src/sim/flight/runway';
 import type { Runway } from '../src/sim/flight/runway';
 import { spawnOnRunway } from '../src/sim/flight/spawn';
 import { TestPilot } from '../src/sim/flight/testPilot';
+import { airVelocity } from '../src/sim/flight/wind';
+import { buildWeatherClimate } from '../src/sim/weather/climate';
+import { WeatherGrid } from '../src/sim/weather/grid';
+import { WEATHER_PRESETS } from '../src/sim/weather/presets';
+import type { WeatherPreset } from '../src/sim/weather/presets';
+import { applyAtmosphere, governorStatus, readAtmosphere } from '../src/ui/atmosphereSettings';
 import { touchdownLines } from '../src/ui/flight/flightCards';
+import { DEFAULT_OPTIONS } from '../src/ui/flight/freeFlightMenu';
+import { weatherLine } from '../src/ui/weatherLine';
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
 import { TileSynthesizer } from '../src/worldgen/gpu/tileSynth';
 import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
@@ -116,6 +132,28 @@ it('renders Free Flight shots', async () => {
   scene.setInfrastructure(infra);
   scene.structures.enabled = true;
   scene.terrainReady = true;
+  // As main.ts wires a world: mountain shadows, the lightning's seed, the ground under the weather.
+  scene.shadows.setHeights(global.height, global.n);
+  scene.lightning.seed = String(campaign.seed);
+  const climate = buildWeatherClimate(
+    { ...world.maps, resolution: world.info.resolution, reliefScale: world.info.reliefScale },
+    new WeatherGrid(),
+    R,
+  );
+  scene.weather.setGround(climate.ground.slice());
+  if (process.env.POST === '0') scene.postEnabled = false;
+  // The atmosphere's settings as the app applies them, with the governor's step if asked for.
+  const settings = readAtmosphere(scene, { volume: 0, muted: true }, DEFAULT_OPTIONS.weather);
+  if (process.env.QUALITY) {
+    settings.quality = process.env.QUALITY as typeof settings.quality;
+    settings.autoQuality = process.env.GOVERNOR !== undefined;
+  }
+  const governorLevel = Number(env('GOVERNOR', '0'));
+  applyAtmosphere(settings, scene, { volume: 0, muted: true }, governorLevel);
+  console.log(
+    `Atmosphere: ${governorStatus(settings, governorLevel)}, volumetrics ${scene.volumetrics.quality}, ` +
+      `particles ×${scene.precipitation?.density ?? 0}, post ${scene.postEnabled && scene.pipeline ? 'on' : 'off'}`,
+  );
 
   // Runways and the ground, as the app builds them.
   const sampler = globalMapSampler(global.height, global.n);
@@ -148,7 +186,9 @@ it('renders Free Flight shots', async () => {
     runways[0]!;
   const end = runwayEnds(runway)[0];
   console.log(
-    `Base ${runway.id}: ${runway.name}, runway ${end.designator}, elevation ${runway.elevation.toFixed(0)} m`,
+    `Base ${runway.id}: ${runway.name}, runway ${end.designator}, elevation ${runway.elevation.toFixed(0)} m, ` +
+      `latitude ${(Math.asin(runway.center.clone().normalize().y) / DEG).toFixed(1)}°, ` +
+      `longitude ${(Math.atan2(runway.center.x, runway.center.z) / DEG).toFixed(1)}°`,
   );
 
   const spec = modelSpec('alliance-fighter');
@@ -179,17 +219,64 @@ it('renders Free Flight shots', async () => {
   const main = new Vec3d(...world.info.mainContinent);
   const calendar = defaultCampaignStart(main, params);
   const lon = Math.atan2(runway.center.x, runway.center.z);
-  let gameTime = withLocalTime(DAY, lon, Number(env('TOD', '17')) * HOUR, params, calendar);
+  // The flight's start as the app sets it: the chosen local time on Free Flight's day.
+  let gameTime = flightStartTime(lon, Number(env('TOD', '17')), params, calendar);
+  scene.planetOrbit = params;
+  scene.calendar = calendar;
+  // The weather: the world's model on this thread, shown as the preset (flightWeather.ts).
+  const preset = env('WEATHER', DEFAULT_OPTIONS.weather) as WeatherPreset;
+  if (!WEATHER_PRESETS.includes(preset)) {
+    throw new RangeError(`WEATHER must be one of ${WEATHER_PRESETS.join(', ')}`);
+  }
+  const weather = new FlightWeather(scene.weather, preset);
+  weather.setWorld({
+    seed: String(campaign.seed),
+    radius: R,
+    orbit: params,
+    calendar,
+    climate,
+  });
+  weather.finish(gameTime);
+  const temperatureShift = weather.temperatureShift(runway.center, gameTime);
+  scene.terrain.land.temperatureOffset.value = temperatureShift;
+  const windOn = process.env.WIND !== '0';
+  // The sun's elevation through Free Flight's day at this base, to choose TOD by.
+  {
+    const up = runway.center.clone().normalize();
+    const sun = new Vec3d();
+    const row: string[] = [];
+    for (let h = 0; h < 24; h += 1.5) {
+      sunDirection(flightStartTime(lon, h, params, calendar), params, calendar, sun);
+      row.push(`${h}h ${(Math.asin(sun.dot(up)) / DEG).toFixed(0)}°`);
+    }
+    console.log(`Sun by local time: ${row.join(', ')}`);
+  }
+  console.log(
+    `Day ${freeFlightDay(params, calendar)} (moon ${moonAge(gameTime, params, calendar).toFixed(1)} days old), ` +
+      `weather ${preset}: ${weatherLine(weather.view, runway.center, gameTime)}; ` +
+      `land temperature shift ${temperatureShift.toFixed(1)} °C`,
+  );
   const outDir = join(import.meta.dirname, 'out');
   mkdirSync(outDir, { recursive: true });
   const messages: { t: number; lines: string[] }[] = [];
 
   for (const shot of SHOTS) {
-    // Fly to the shot's moment.
+    // Fly to the shot's moment, in the weather's wind and gusts as the app's aircraft does.
     for (let i = 0; i < 1200 / FLIGHT_STEP; i++) {
       const h = pilot.coords(m).h;
       if (shot.when(pilot, m, h) || m.crashed) break;
+      if (i % 120 === 0) weather.update(gameTime, Infinity);
       pilot.fly(m, ctl, FLIGHT_STEP);
+      if (windOn) {
+        airVelocity(
+          weather.view,
+          m.pos,
+          R,
+          gameTime,
+          Math.max(0, m.telemetry.radarAltitude),
+          m.wind,
+        );
+      }
       m.step(ctl, ground);
       gameTime += FLIGHT_STEP;
       for (const e of monitor.update(m, FLIGHT_STEP)) {
@@ -219,7 +306,11 @@ it('renders Free Flight shots', async () => {
     sunDirection(gameTime, params, calendar, scene.sun);
     view.sun.copy(scene.sun);
     scene.terrain.land.seasonPhase.value = seasonPhase(gameTime, params, calendar);
-    scene.clouds.enabled.value = 0;
+    // The frame's clock and weather, as main.ts sets them; each shot is a camera cut.
+    scene.gameTime = gameTime;
+    scene.clouds.time.value = gameTime;
+    scene.weatherView = weather.finish(gameTime);
+    scene.resetAtmosphere();
     const ch = scene.chase.target;
     ch.pos.copy(m.pos);
     m.bodyAxis(0, ch.forward);
@@ -245,7 +336,7 @@ it('renders Free Flight shots', async () => {
     for (let f = 0; f < 30; f++) scene.render(1 / 60);
     scene.render(1 / 60);
     const rgb = await head.readRgb();
-    const file = join(outDir, `freeflight-${shot.name}.png`);
+    const file = join(outDir, `freeflight-${shot.name}${env('OUT', '')}.png`);
     writeFileSync(file, encodePng(width, height, rgb));
     const frame = buildHudFrame(m, ctl, {
       aid: landingAid(m, runways, scene.chase.eye),
@@ -254,7 +345,7 @@ it('renders Free Flight shots', async () => {
       timing: null,
     });
     writeFileSync(
-      join(outDir, `freeflight-${shot.name}.json`),
+      join(outDir, `freeflight-${shot.name}${env('OUT', '')}.json`),
       JSON.stringify({
         width,
         height,
@@ -265,8 +356,16 @@ it('renders Free Flight shots', async () => {
         projection: Array.from(scene.camera.projectionMatrix.elements),
       }),
     );
+    const state = scene.weatherState;
+    const drawn = scene.precipitation?.counts;
     console.log(
-      `${shot.name}: ${(t.cas / 0.514444).toFixed(0)} KIAS, ${pilot.coords(m).h.toFixed(0)} m, pitch ${(t.pitch / DEG).toFixed(1)}°, ${scene.terrain.stats.drawn} tiles, ${((performance.now() - t0) / 1000).toFixed(0)} s → ${file}`,
+      `${shot.name}: ${(t.cas / 0.514444).toFixed(0)} KIAS, ${pilot.coords(m).h.toFixed(0)} m, pitch ${(t.pitch / DEG).toFixed(1)}°, ${scene.terrain.stats.drawn} tiles, ${((performance.now() - t0) / 1000).toFixed(0)} s → ${file}\n` +
+        `  sun ${(scene.lighting.sunElevation / DEG).toFixed(1)}°, wind on the aircraft ${m.wind.length().toFixed(1)} m/s, ` +
+        `rain ${state.rain.value.toFixed(2)} snow ${state.snow.value.toFixed(2)} dust ${state.dust.value.toFixed(2)} ` +
+        `storm ${state.storm.value.toFixed(2)} fog ${(state.fog.value * 1000).toFixed(2)}/km wetness ${state.wetness.value.toFixed(2)}, ` +
+        `particles ${drawn ? `${drawn.rain}/${drawn.snow}/${drawn.dust}` : 'none'}, ` +
+        `volumetrics clouds ${scene.volumetrics.stats.clouds} air ${scene.volumetrics.stats.air}, ` +
+        `shadow strength ${scene.shadows.strength.value.toFixed(2)}, pipeline passes ${scene.pipeline?.stats.passes ?? 0}`,
     );
   }
   if (gpu.errors.length) throw new Error(`GPU errors: ${gpu.errors.join(' | ')}`);
