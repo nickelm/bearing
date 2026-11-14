@@ -18,6 +18,8 @@ import { rng } from '../core/rng';
 
 /** How far the display clock may run ahead of the last snapshot (real seconds). */
 const MAX_EXTRAPOLATION = 0.1;
+/** How close a snapshot's time must be to a seek's target to count as its answer (game s). */
+const SEEK_TOLERANCE = 1e-3;
 
 export interface FlaggedNotice {
   events: { time: GameTime; label: string }[];
@@ -32,6 +34,8 @@ export class SimClient {
   private receivedAt = 0;
   private lastDisplay = 0;
   private expectedPong = -1;
+  /** The time of a seek the worker has not answered yet. */
+  private seekTarget: GameTime | null = null;
   /** Weather frames bracketing the sim clock. */
   readonly weather = new WeatherView(new WeatherGrid());
   /** Game seconds per real second, as last reported by the worker. */
@@ -48,6 +52,12 @@ export class SimClient {
   onWeather: (() => void) | null = null;
   /** Called when the mission list changes. */
   onMissions: (() => void) | null = null;
+  /**
+   * Called when the worker has answered the latest `seek`: the display time jumped when the
+   * seek was sent, and only now does `weather` hold the frames of the new time (`onWeather`
+   * has run for them).
+   */
+  onSeeked: (() => void) | null = null;
   onFlagged: ((n: FlaggedNotice) => void) | null = null;
   onStatus: ((status: string) => void) | null = null;
 
@@ -77,6 +87,7 @@ export class SimClient {
     campaign: CampaignInput | null = null,
   ): void {
     this.session++;
+    this.seekTarget = null;
     this.weather.clear();
     this.missions = [];
     this.onMissions?.();
@@ -99,6 +110,7 @@ export class SimClient {
   seek(time: GameTime): void {
     this.lastDisplay = Math.max(0, time);
     this.snapshotTime = this.lastDisplay;
+    this.seekTarget = this.lastDisplay;
     this.receivedAt = performance.now();
     this.send({ type: 'seek', time: Math.max(0, time) });
   }
@@ -153,6 +165,16 @@ export class SimClient {
     if (msg.hash !== undefined) this.hash = msg.hash;
     for (const f of msg.weather) this.weather.add(f);
     if (msg.weather.length > 0) this.onWeather?.();
+    // A seek is answered by a snapshot with a hash at the seek's time (a rate change has a
+    // hash too, at the time the sim had then).
+    if (
+      this.seekTarget !== null &&
+      msg.hash !== undefined &&
+      Math.abs(this.snapshotTime - this.seekTarget) <= SEEK_TOLERANCE
+    ) {
+      this.seekTarget = null;
+      this.onSeeked?.();
+    }
     if (msg.flagged.length > 0) this.onFlagged?.({ events: msg.flagged, slowed: msg.slowed });
     if (msg.missions) {
       this.missions = msg.missions;

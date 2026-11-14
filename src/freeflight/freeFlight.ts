@@ -5,11 +5,16 @@
  * frame clock, feeds the chase camera, the animated model and the HUD, watches
  * the outcomes and runs the session (pause, restart, summary, refuel at another
  * base). No war simulation runs in this mode.
+ *
+ * The weather is the mode's own (flightWeather.ts): the world's weather model
+ * on the main thread, shown as the preset chosen on the start screen. The
+ * flown aircraft feels its wind and gusts (sim/flight/wind.ts), the scene
+ * draws it, and a flight starts at the chosen time of day on the night of the
+ * first full moon (clock.ts).
  */
 import type { PerspectiveCamera } from 'three/webgpu';
-import { withLocalTime } from '../core/calendar';
 import type { CampaignCalendar, OrbitParams } from '../core/calendar';
-import { DEG, HOUR } from '../core/units';
+import { DEG } from '../core/units';
 import { Quatd } from '../core/quat';
 import { Vec3d } from '../core/vec3d';
 import type { GlobeScene } from '../render/sim/globeScene';
@@ -30,6 +35,10 @@ import { runwayEnds } from '../sim/flight/runway';
 import type { Runway } from '../sim/flight/runway';
 import { spawnInAir, spawnOnRunway } from '../sim/flight/spawn';
 import { TestPilot } from '../sim/flight/testPilot';
+import { airVelocity } from '../sim/flight/wind';
+import type { WeatherView } from '../sim/weather/frame';
+import type { WeatherConfig } from '../sim/weather/model';
+import type { WeatherPreset } from '../sim/weather/presets';
 import type { StrategicWorld } from '../worldgen/campaignWorld';
 import {
   HelpOverlay,
@@ -38,13 +47,21 @@ import {
   sinkText,
   touchdownLines,
 } from '../ui/flight/flightCards';
+import type { SoundSettings } from '../ui/flight/flightCards';
 import { FlightInput } from '../ui/flight/flightInput';
 import type { FlightAction } from '../ui/flight/flightInput';
 import { DEFAULT_OPTIONS, FreeFlightMenu } from '../ui/flight/freeFlightMenu';
 import type { BaseEntry, FreeFlightOptions, SpawnKind } from '../ui/flight/freeFlightMenu';
 import { Hud, matrixProjector } from '../ui/flight/hud';
+import { flightStartTime } from './clock';
+import { writeFreeFlightParams } from './url';
+import type { FreeFlightUrl } from './url';
+import { FlightWeather } from './flightWeather';
 import { buildHudFrame, landingAid } from './hudFrame';
 import { AirfieldGround, runwaysOf } from './ground';
+
+export { parseFreeFlightUrl } from './url';
+export type { FreeFlightUrl } from './url';
 
 export interface FreeFlightDeps {
   canvas: HTMLCanvasElement;
@@ -61,32 +78,10 @@ export interface FreeFlightDeps {
   exit(): void;
   /** The world generation's progress, for the start screen. */
   status(): string;
-}
-
-/** Options from the URL: `?mode=freeflight&seed=…&base=…&tod=…&spawn=runway|air&fuel=unlimited|limited&autopilot`. */
-export interface FreeFlightUrl {
-  seed: string;
-  base: number | null;
-  options: Partial<FreeFlightOptions>;
-  autopilot: boolean;
-}
-
-export function parseFreeFlightUrl(q: URLSearchParams, seed: string): FreeFlightUrl {
-  const options: Partial<FreeFlightOptions> = {};
-  const tod = Number(q.get('tod'));
-  if (q.has('tod') && Number.isFinite(tod)) options.timeOfDay = Math.min(24, Math.max(0, tod));
-  const spawn = q.get('spawn');
-  if (spawn === 'air' || spawn === 'runway') options.spawn = spawn;
-  const fuel = q.get('fuel');
-  if (fuel === 'limited') options.unlimitedFuel = false;
-  if (fuel === 'unlimited') options.unlimitedFuel = true;
-  const base = q.has('base') ? Number(q.get('base')) : NaN;
-  return {
-    seed,
-    base: Number.isInteger(base) ? base : null,
-    options,
-    autopilot: q.has('autopilot'),
-  };
+  /** The weather's sound, for the pause menu's volume and mute (none: no sound controls). */
+  sound?: SoundSettings;
+  /** Another weather was chosen on the start screen or in the pause menu. */
+  weatherChanged?(preset: WeatherPreset): void;
 }
 
 type State = 'menu' | 'flying' | 'paused' | 'summary';
@@ -130,6 +125,13 @@ export class FreeFlight {
   private readonly spec = modelSpec(AIRCRAFT);
   private readonly flightSpec = parseFlightSpec(this.spec.flight, AIRCRAFT);
   private readonly pose: AircraftPose;
+  /** The mode's weather: the world's model, shown as the chosen preset. */
+  private readonly weather: FlightWeather;
+  /**
+   * How far the chosen weather moved the air temperature at the base (°C): the app adds it to
+   * the land's, so snow lies where it snows (flightWeather.ts).
+   */
+  temperatureShift = 0;
   private readonly unload = (e: BeforeUnloadEvent) => {
     if (this.state === 'flying') e.preventDefault();
   };
@@ -141,6 +143,7 @@ export class FreeFlight {
     this.options = { ...DEFAULT_OPTIONS, ...url.options };
     this.pendingBase = url.base;
     this.autopilot = url.autopilot;
+    this.weather = new FlightWeather(deps.globe.weather, this.options.weather);
     this.menu = new FreeFlightMenu(
       {
         seed: (s) => {
@@ -153,20 +156,26 @@ export class FreeFlight {
           this.start(id, o.spawn);
         },
         exit: () => this.deps.exit(),
+        weather: (preset) => this.setWeather(preset),
       },
       this.options,
     );
     this.menu.setSeed(url.seed);
-    this.pause = new PauseMenu(this.options, {
-      resume: () => this.setPaused(false),
-      restart: (spawn) => this.start(this.baseId!, spawn),
-      changeBase: () => this.toMenu(),
-      exit: () => this.deps.exit(),
-      optionsChanged: (o) => {
-        if (this.model) this.model.unlimitedFuel = o.unlimitedFuel;
-        this.writeUrl();
+    this.pause = new PauseMenu(
+      this.options,
+      {
+        resume: () => this.setPaused(false),
+        restart: (spawn) => this.start(this.baseId!, spawn),
+        changeBase: () => this.toMenu(),
+        exit: () => this.deps.exit(),
+        optionsChanged: (o) => {
+          if (this.model) this.model.unlimitedFuel = o.unlimitedFuel;
+          if (o.weather !== this.weather.preset) this.setWeather(o.weather);
+          this.writeUrl();
+        },
       },
-    });
+      deps.sound ?? null,
+    );
     this.summary = new SummaryCard({
       restart: () => this.start(this.baseId!, this.options.spawn),
       continueFrom: (id) => this.start(id, 'runway'),
@@ -288,6 +297,43 @@ export class FreeFlight {
     }
   }
 
+  /**
+   * The world's weather model (its climate, seed and calendar), or null while a new world
+   * generates: Free Flight runs it itself, without the sim (decision 134).
+   */
+  setClimate(config: WeatherConfig | null): void {
+    this.weather.setWorld(config);
+    this.temperatureShift = 0;
+  }
+
+  /** The weather the scene shows and the aircraft flies in, or null before it exists. */
+  get weatherView(): WeatherView | null {
+    return this.weather.view;
+  }
+
+  /** The chosen weather preset. */
+  get weatherPreset(): WeatherPreset {
+    return this.weather.preset;
+  }
+
+  /**
+   * Chooses another weather. In flight it applies at once: the sky, the ground's wetness and
+   * snow and the wind change to it.
+   */
+  setWeather(preset: WeatherPreset): void {
+    this.options.weather = preset;
+    this.menu.setWeather(preset);
+    if (preset === this.weather.preset) return;
+    this.weather.preset = preset;
+    if (this.state !== 'menu' && this.model) {
+      this.weather.finish(this.gameTime);
+      this.temperatureShift = this.weather.temperatureShift(this.model.pos, this.gameTime);
+      this.deps.globe.resetAtmosphere();
+    }
+    this.writeUrl(this.state === 'menu' ? this.menu.selection : this.baseId);
+    this.deps.weatherChanged?.(preset);
+  }
+
   private runway(id: number): Runway | undefined {
     return this.runways.find((r) => r.id === id);
   }
@@ -305,11 +351,7 @@ export class FreeFlight {
   /** Writes the mode's state into the URL, so a reload returns to it. */
   private writeUrl(base: number | null = this.baseId): void {
     const url = new URL(location.href);
-    url.searchParams.set('mode', 'freeflight');
-    if (base !== null) url.searchParams.set('base', String(base));
-    url.searchParams.set('tod', String(this.options.timeOfDay));
-    url.searchParams.set('spawn', this.options.spawn);
-    url.searchParams.set('fuel', this.options.unlimitedFuel ? 'unlimited' : 'limited');
+    writeFreeFlightParams(url.searchParams, this.options, base);
     history.replaceState(null, '', url);
   }
 
@@ -333,15 +375,12 @@ export class FreeFlight {
     this.input.mode = 'keyboard';
     this.director.reset();
     this.pilot = this.autopilot && spawn === 'runway' ? new TestPilot(r, end, R) : null;
-    // The sun: the chosen local time at the base, on the campaign calendar's start day.
-    const lon = Math.atan2(r.center.x, r.center.z);
-    this.gameTime = withLocalTime(
-      this.deps.orbit.solarDay,
-      lon,
-      this.options.timeOfDay * HOUR,
-      this.deps.orbit,
-      this.deps.calendar(),
-    );
+    // The sun and the moon: the chosen local time at the base, on Free Flight's day (clock.ts).
+    this.gameTime = this.startTime(r);
+    // The weather at that hour, complete before the first frame, and what it does to the ground.
+    this.weather.preset = this.options.weather;
+    this.weather.finish(this.gameTime);
+    this.temperatureShift = this.weather.temperatureShift(r.center, this.gameTime);
     this.acc = 0;
     this.flightTime = 0;
     this.distance = 0;
@@ -360,6 +399,8 @@ export class FreeFlight {
     g.chase.reset();
     this.syncPose();
     this.updateChase();
+    // A new place and time: wetness from this weather's rain, no thunder for the time skipped.
+    g.resetAtmosphere();
     this.deps.setView('simulation');
     this.menu.visible = false;
     this.summary.visible = false;
@@ -381,6 +422,7 @@ export class FreeFlight {
 
   private toMenu(): void {
     this.state = 'menu';
+    this.weather.hide();
     this.input.enabled = false;
     this.summary.visible = false;
     this.pause.visible = false;
@@ -390,6 +432,8 @@ export class FreeFlight {
       this.view.group.visible = false;
       this.view.shadowMesh.visible = false;
     }
+    // What the pause menu changed (wind, fuel, time of day) shows on the start screen too.
+    this.menu.setOptions(this.options);
     this.menu.visible = true;
     if (this.baseId !== null) {
       this.menu.select(this.baseId);
@@ -481,10 +525,23 @@ export class FreeFlight {
     this.frameMs = frameMs;
     if (this.state === 'menu') {
       this.menu.setStatus(this.deps.status());
+      // Ahead of the flight: the weather at the hour it would start, a few milliseconds a frame.
+      // The map shows none of it: it is for choosing a base.
+      const base = this.menu.selection;
+      const p = base !== null ? this.basePoints.get(base) : undefined;
+      this.weather.prepare(
+        flightStartTime(
+          p ? Math.atan2(p.x, p.z) : 0,
+          this.menu.options.timeOfDay,
+          this.deps.orbit,
+          this.deps.calendar(),
+        ),
+      );
       return;
     }
     const m = this.model;
     if (!m || !this.ground || !this.monitor) return;
+    this.weather.update(this.gameTime);
     const chase = this.deps.globe.chase;
     // Mouse aim flies only in the air; on the wheels the keys steer and rotate.
     this.input.directOnGround = m.onGround;
@@ -508,6 +565,7 @@ export class FreeFlight {
         else if (this.input.mode === 'mouse-aim' && this.state === 'flying' && !m.onGround)
           this.mouseAim(m, ctl);
         const p0 = m.pos.clone();
+        this.setWind(m);
         m.step(ctl, this.ground);
         this.distance += p0.distanceTo(m.pos);
         if (!m.crashed) this.flightTime += FLIGHT_STEP;
@@ -533,6 +591,28 @@ export class FreeFlight {
       const cam = this.deps.globe.camera;
       this.view.radPerPixel = (cam.fov * DEG) / Math.max(1, window.innerHeight);
     }
+  }
+
+  /** The game time at which a flight from runway `r` starts with the chosen time of day. */
+  private startTime(r: Runway): number {
+    const lon = Math.atan2(r.center.x, r.center.z);
+    return flightStartTime(lon, this.options.timeOfDay, this.deps.orbit, this.deps.calendar());
+  }
+
+  /** The air's velocity at the aircraft from the weather, before a step of the model. */
+  private setWind(m: FlightModel): void {
+    if (!this.options.wind) {
+      m.wind.set(0, 0, 0);
+      return;
+    }
+    airVelocity(
+      this.weather.view,
+      m.pos,
+      this.deps.radius,
+      this.gameTime,
+      Math.max(0, m.telemetry.radarAltitude),
+      m.wind,
+    );
   }
 
   private mouseAim(m: FlightModel, ctl: FlightControls): void {
@@ -648,6 +728,7 @@ export class FreeFlight {
     while (t < seconds && !(stop?.(this.pilot?.phase ?? null) ?? false)) {
       if (this.pilot) this.pilot.fly(m, this.input.controls, FLIGHT_STEP);
       const p0 = m.pos.clone();
+      this.setWind(m);
       m.step(this.input.controls, this.ground);
       this.distance += p0.distanceTo(m.pos);
       if (!m.crashed) this.flightTime += FLIGHT_STEP;

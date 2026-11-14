@@ -15,7 +15,8 @@
  *   from CD0(Mach) with its transonic rise, induced and separated-flow drag and
  *   increments for gear, flaps and speedbrake, side force from sideslip, and
  *   ground effect within a span of the ground; the air from the standard
- *   atmosphere.
+ *   atmosphere. The air may move: airspeed, angle of attack and sideslip are
+ *   taken relative to `wind` (still air unless the owner sets it; wind.ts).
  * - **Moments.** The control laws (controlLaws.ts) within their authority,
  *   damping and weathercock stability, gyroscopic coupling, and the wheels.
  * - **Ground.** Three wheels as spring-dampers along the local vertical. Each
@@ -136,6 +137,11 @@ export class FlightModel {
   readonly q = new Quatd();
   /** Body rates p, q, r (rad/s). */
   readonly omega = new Vec3d();
+  /**
+   * Velocity of the air at the aircraft (world frame, m/s), set by the owner
+   * before a step (wind.ts gives it from the weather). Still air by default.
+   */
+  readonly wind = new Vec3d();
   /** Engine core 0 (idle) .. 1 (military), and afterburner 0..1. */
   power = 0;
   afterburner = 0;
@@ -170,6 +176,7 @@ export class FlightModel {
     d: new Vec3d(),
     f: new Vec3d(),
     l: new Vec3d(),
+    w: new Vec3d(),
   };
 
   constructor(spec: FlightSpec, radius: number) {
@@ -319,7 +326,7 @@ export class FlightModel {
     this.afterburner += (abTarget - this.afterburner) * Math.min(1, dt / eng.afterburner);
 
     // ---- Air data ----
-    const vb = this.q.unrotate(this.vel, sc.vb);
+    const vb = this.q.unrotate(sc.w.copy(this.vel).sub(this.wind), sc.vb);
     const tas = vb.length();
     const mach = tas / air.speedOfSound;
     const qbar = 0.5 * air.density * tas * tas;
@@ -329,7 +336,17 @@ export class FlightModel {
       alpha = Math.atan2(vb.z, vb.x);
       beta = Math.asin(clamp(vb.y / tas, -1, 1));
     }
-    const cas = calibratedAirspeed(tas, air);
+    // What the air-data probes sense. They face forward: on the wheels with the air coming
+    // from behind (a tailwind while standing or rolling slowly, wind.ts) they read no airspeed
+    // and no angles, and the laws and the HUD get none, while the forces below use the real
+    // flow. In the air the laws keep the real angles: in a tail slide it is the angle-of-attack
+    // limiter that turns the nose back into the flow. Air slower than the 0.5 m/s under which
+    // there are no angles anyway is sensed as it is: an aircraft settling on its wheels in
+    // still air rocks back by micrometers per second.
+    const ahead = vb.x > 0 || !this.onGround || tas <= 0.5;
+    const cas = ahead ? calibratedAirspeed(tas, air) : 0;
+    const sensedAlpha = ahead ? alpha : 0;
+    const sensedBeta = ahead ? beta : 0;
 
     // ---- Aerodynamic forces (body axes) ----
     const a = spec.aero;
@@ -436,13 +453,13 @@ export class FlightModel {
     const lawIn: LawInput = {
       tas,
       cas,
-      alpha,
-      beta,
+      alpha: sensedAlpha,
+      beta: sensedBeta,
       qbar,
       p: this.omega.x,
       q: this.omega.y,
       r: this.omega.z,
-      load: tas > 0.5 ? load : 1,
+      load: tas > 0.5 && ahead ? load : 1,
       gravityLift: (gb.x * liftX + gb.z * liftZ) / m,
       accelY: sfy + gb.y / m,
       g,
@@ -497,16 +514,17 @@ export class FlightModel {
     this.time += dt;
 
     // ---- Telemetry ----
-    tel.alpha = alpha;
-    tel.beta = beta;
+    tel.alpha = sensedAlpha;
+    tel.beta = sensedBeta;
     tel.tas = tas;
     tel.cas = cas;
-    tel.mach = mach;
+    // Sensed, like the airspeed: no Mach number beside an airspeed of zero in a tailwind.
+    tel.mach = ahead ? mach : 0;
     tel.qbar = qbar;
     tel.cl = cl;
     tel.cd = cd;
     tel.thrust = thrust;
-    tel.load = tas > 0.5 ? load : 1;
+    tel.load = tas > 0.5 && ahead ? load : 1;
     tel.normalLoad = -sfz / g;
     tel.altitude = altitude;
     tel.wow = wow;

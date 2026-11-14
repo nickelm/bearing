@@ -22,7 +22,8 @@ Guidance for Claude Code sessions in this repository. `docs/design.md` is the so
 | Flight-model figures     | `npx vitest run --config vitest.tools.config.ts tools/flight.preview.ts` |
 | Sky sheets, shadow bake  | `tools/sky.preview.ts` (sky-only contact sheets; `PERF=n`, `VIBRANCE`), `tools/shadow.preview.ts` (height sources and bake cost; `ROUNDS`), both with the vitest tools config |
 | Clouds, fog, rain        | `tools/clouds.preview.ts` (the volumetrics over a plain ground, 0.1–0.3 s per view; `VIEWS`, `QUALITY`, `COUNT=1` for steps and texture reads, `PERF=n`), `tools/precip.preview.ts` (particles and a bolt; `BOLT`), both with the vitest tools config |
-| Free Flight renders      | `tools/freeflight.preview.ts` (env: `SEED`, `GRES`, `TOD`, `SHOTS`), then `node tools/freeflight.screens.mjs` with `npm run dev` up → `docs/reports/screens/` |
+| Free Flight renders      | `tools/freeflight.preview.ts` (env: `SEED`, `GRES`, `TOD`, `SHOTS`, `WEATHER`, `WIND`, `QUALITY`, `GOVERNOR`, `POST`, `OUT`), then `node tools/freeflight.screens.mjs` with `npm run dev` up (`SHOTS`, `OUT_DIR`) → `docs/reports/screens/` |
+| Free Flight session      | `node tools/freeflight.session.mjs` with `npm run dev` up: the real `FreeFlight` class in headless Chromium without WebGPU, through every weather preset, pause, restart and a crash (needs Playwright on `NODE_PATH`) |
 
 ## Directory map
 
@@ -56,12 +57,13 @@ src/sim/            headless simulation; runs in a worker: event queue + fixed t
                     tasker (until the ATO), later the intelligence picture and the ATO
   flight/           flight model, control laws, ground model, runways, outcomes, flight director and a
                     scripted test pilot, shared by AI and player (Free Flight, decision 134; P1 extends it;
-                    the sensor model comes with P3)
+                    the sensor model comes with P3); wind and gusts from the weather (wind.ts, decision 143)
 src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Both scenes stay resident;
                     the app renders the active one (GUI → View → View). Until V1, sim/'s GlobeScene
                     still draws orbit to ground.
   common/           shared by both views: camera-relative placement, orbit camera, cell-grid debug
-                    globe, palette, climate and habitability textures, render scale, cube-sphere
+                    globe, palette, climate and habitability textures, render scale and the quality
+                    governor of the atmospheric effects (decision 143), cube-sphere
                     geometry, WebGPU checks, terrain/ (tile quadtree, tile meshes, tile cache, budget, prefetch, grading),
                     water/ (river segment tables and river shading), models/ (model spec format,
                     procedural builder, palettes and schemes, specs/*.json; decision 106);
@@ -85,16 +87,19 @@ src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Bo
     infra/          settlements and infrastructure (decision 104): urban fill texture, building
                     glyph placement, the model of roads, railways, bridges and site symbols
                     (overlays/airModel.ts draws flights, trails, routes and carrier groups; decision 132)
-src/ui/             lil-gui debug panel, overlays, time controls; flight/ (Free Flight's start screen, input
+src/ui/             lil-gui debug panel (atmosphereSettings.ts maps its Atmosphere folder to the scene),
+                    overlays, time controls, the time bar's weather line; flight/ (Free Flight's start screen, input
                     bindings, HUD, pause menu and cards; decisions 134, 135); audio/ (synthesized thunder,
                     rain and wind, no files; decision 142)
 src/freeflight/     the Free Flight mode's glue on the main thread: world and runways, ground query, clock,
-                    session flow (?mode=freeflight; decision 134)
+                    session flow (?mode=freeflight; decision 134), its weather (a StandaloneWeather feed and
+                    presets) and URL options (decision 143)
 src/viewer/         the model viewer page (viewer.html, a second Vite page; decision 106)
 src/workers/        worker entry points and message protocols
 src/main.ts         app entry: WebGPU checks, renderer, scene, GUI
 tests/              Vitest unit tests (node); tests/gpu/ runs WGSL kernels on a real GPU via Dawn
-tools/              offline previews (npm run maps; terrain/bench *.preview.ts), output in tools/out/
+tools/              offline previews (npm run maps; terrain/bench *.preview.ts), output in tools/out/;
+                    hud/ (pages that draw Free Flight's HUD, cards and session without WebGPU)
 TODO.md             task list by milestone (F, S, C, V, I tracks, then P after the demo; design.md, Milestones)
 ```
 

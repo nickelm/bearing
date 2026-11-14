@@ -28,6 +28,7 @@ import type { ObserverStation } from './render/sim/camera/observerStations';
 import { VIEW_MODES } from './render/common/globeMesh';
 import type { ViewMode } from './render/common/globeMesh';
 import { runComputeSmokeTest } from './render/common/computeSmokeTest';
+import { QualityGovernor } from './render/common/qualityGovernor';
 import { RenderScaleController } from './render/common/renderScale';
 import {
   describeAdapter,
@@ -60,6 +61,7 @@ import type { World } from './worldgen/pipeline';
 import type { GlobalWorld } from './worldgen/globalPipeline';
 import { GPU_SELF_TESTS, runSelfTest } from './worldgen/gpu/selfTests';
 import type {
+  AtmosphereGuiParams,
   CampaignGuiParams,
   DebugGuiCallbacks,
   LightingGuiParams,
@@ -79,7 +81,19 @@ import { SimClient } from './workers/simClient';
 import { campaignInput } from './sim/command/campaignInput';
 import { SnapshotField } from './workers/protocol';
 import { buildWeatherClimate } from './sim/weather/climate';
+import { WeatherView } from './sim/weather/frame';
 import { WeatherGrid } from './sim/weather/grid';
+import { applyPreset } from './sim/weather/presets';
+import type { WeatherPreset } from './sim/weather/presets';
+import {
+  applyAtmosphere,
+  GOVERNOR_STEPS,
+  governorStatus,
+  readAtmosphere,
+} from './ui/atmosphereSettings';
+import { WeatherAudio } from './ui/audio/weatherAudio';
+import { DEFAULT_OPTIONS } from './ui/flight/freeFlightMenu';
+import { weatherLine } from './ui/weatherLine';
 import { TimeControls } from './ui/timeControls';
 import { hasTouch, TouchControls } from './ui/touchControls';
 import { GenerationCancelled, WorldgenClient } from './workers/worldgenClient';
@@ -123,7 +137,7 @@ async function main(): Promise<void> {
 
   // URL parameters: ?seed=<integer or text>&res=<tectonic cells per face edge>&gres=<global grid>
   const query = new URLSearchParams(location.search);
-  // Free Flight (decision 134): ?mode=freeflight&seed=…&base=…, a sandbox without the war.
+  // Free Flight (decision 134): ?mode=freeflight&seed=…&base=…&weather=…, a sandbox without the war.
   const freeFlightMode = query.get('mode') === 'freeflight';
   const queryRes = Number(query.get('res'));
   const queryGres = Number(query.get('gres'));
@@ -187,25 +201,65 @@ async function main(): Promise<void> {
    * its campaign the air war (C2).
    */
   const startSim = (world: World, strategic: StrategicWorld, radius: number) => {
-    // Free Flight runs no war simulation (decision 134).
-    if (freeFlightMode) return;
     const climate = buildWeatherClimate(
       { ...world.maps, resolution: world.info.resolution, reliefScale: world.info.reliefScale },
       weatherGrid,
       radius,
     );
+    // Cloud bases, fog and dust stand on the mean ground of each weather sample (decision 141):
+    // a copy, because the sim takes the climate's buffers with it.
+    globe.weather.setGround(climate.ground.slice());
+    // Lightning strikes are drawn from the world's seed (decision 142).
+    globe.lightning.seed = String(strategic.seed);
+    if (freeFlight) {
+      // Free Flight runs no war simulation (decision 134): the weather model alone, on this thread.
+      freeFlight.setClimate({
+        seed: String(strategic.seed),
+        radius,
+        orbit: orbitParams,
+        calendar,
+        climate,
+      });
+      return;
+    }
     const campaign = campaignInput(
       strategic.graph,
       strategic.campaign.cast,
       strategic.infrastructure,
     );
+    presetWeather.clear();
     sim.init(String(strategic.seed), radius, orbitParams, calendar, climate, campaign);
   };
-  sim.onWeather = () => globe.weather.setFrames(sim.weather);
+  /**
+   * The weather on screen in the campaign: the sim's own, or a preset of it chosen in the
+   * debug panel (GUI → Atmosphere → Weather). The preset is applied to every frame the sim
+   * sends, so it holds as the hours pass. Free Flight shows its own (freeflight/flightWeather.ts).
+   */
+  let weatherPreset: WeatherPreset = 'live';
+  const presetWeather = new WeatherView(weatherGrid);
+  const shownWeather = (): WeatherView | null =>
+    freeFlight ? freeFlight.weatherView : weatherPreset === 'live' ? sim.weather : presetWeather;
+  const showWeather = () => {
+    if (freeFlight) return;
+    if (weatherPreset !== 'live') applyPreset(weatherPreset, sim.weather, presetWeather);
+    const view = shownWeather();
+    if (view?.ready) globe.weather.setFrames(view);
+  };
+  sim.onWeather = showWeather;
   sim.onMissions = () => strategicView.setMissions(sim.missions);
 
   let grid = new CubeGrid(worldParams.resolution);
   const globe = new GlobeScene(renderer, { radius: DEFAULT_PLANET_PARAMS.radius, grid });
+  // The moon and the stars are placed from the orbit and the campaign's calendar (decision 140).
+  globe.planetOrbit = orbitParams;
+  globe.calendar = calendar;
+  // The weather's sound (decision 142): rain, wind and thunder. It starts on the first key or
+  // pointer event and falls silent over the map, which has no weather sound.
+  const audio = new WeatherAudio();
+  audio.attach();
+  globe.lightning.onThunder = (e) => {
+    if (activeView === 'simulation') audio.thunder(e);
+  };
   globe.globe.setFaceSeed(worldParams.seed);
   globe.globe.setExaggeration(viewParams.exaggeration);
   globe.terrain.setExaggeration(viewParams.exaggeration);
@@ -248,6 +302,16 @@ async function main(): Promise<void> {
     // The observer stays at its station (it is entered through the station, decision 72).
     const from = activeOrbit();
     activeView = view;
+    if (view === 'strategic') {
+      // The simulation view's render targets are not kept while the map shows (decision 138).
+      globe.pipeline?.release();
+    } else {
+      // Back in the simulation view after any length of game time: the effects start over.
+      globe.resetAtmosphere();
+      // Its first frames allocate targets and compile shaders: they do not count for the scale,
+      // and what the scale learned over the map says nothing here.
+      renderScale.reset(performance.now());
+    }
     // The selection panel belongs to the map.
     if (view !== 'strategic') strategicView.airSelected = null;
     const to = activeView === 'strategic' ? strategicView.orbit : globe.orbit;
@@ -272,8 +336,12 @@ async function main(): Promise<void> {
     if (globe.cameraMode === 'chase') return;
     const station = stations.find((x) => x.label === viewParams.station) ?? stations[0] ?? null;
     const observer = station !== null && (viewParams.simCamera === 'observer' || !devCamera);
-    if (observer && globe.observer.station?.key !== station.key) globe.observer.setStation(station);
-    globe.cameraMode = observer ? 'observer' : 'free';
+    const mode = observer ? 'observer' : 'free';
+    const moved = observer && globe.observer.station?.key !== station.key;
+    if (moved) globe.observer.setStation(station);
+    // A camera cut: wetness, fog banks, particles and shadows start over at the new place.
+    if (moved || mode !== globe.cameraMode) globe.resetAtmosphere();
+    globe.cameraMode = mode;
   };
 
   const campaignParams: CampaignGuiParams = {
@@ -382,8 +450,10 @@ async function main(): Promise<void> {
       strategicView.setWorld(world);
       globe.climate.setWorld(world);
       calendar = defaultCampaignStart(new Vec3d(...world.info.mainContinent), orbitParams);
+      globe.calendar = calendar;
       gameTime = 0;
       globe.weather.fill(0);
+      globe.resetAtmosphere();
     };
     const showGlobal = (
       world: World,
@@ -423,6 +493,8 @@ async function main(): Promise<void> {
         // Airfields graded flat into the terrain (V3).
         grading,
       });
+      // Mountain shadows are baked from the global heights (decision 139).
+      globe.shadows.setHeights(global.height, global.n);
       freeFlight?.setTerrain({
         infra,
         grading,
@@ -684,14 +756,24 @@ async function main(): Promise<void> {
       stop: () => scanner.cancel(),
     },
   );
+  /**
+   * Jumps the game clock: the effects that remember the last frame start over. The sun and
+   * the display time jump at once; the weather of the new time comes with the worker's answer,
+   * and the ground takes its wetness from it then (until then the view holds the old frames).
+   */
+  const seek = (time: number) => {
+    sim.seek(time);
+    globe.resetAtmosphere();
+  };
+  sim.onSeeked = () => globe.weatherState.reset();
   gui.addTimeControls(timeParams, daysPerYear(orbitParams), {
     dayChanged: (d) => {
       const lon = activeOrbit().lon;
       const days = d - localDayOfYear(gameTime, lon, orbitParams, calendar);
-      sim.seek(gameTime + days * orbitParams.solarDay);
+      seek(gameTime + days * orbitParams.solarDay);
     },
     hoursChanged: (h) => {
-      sim.seek(withLocalTime(gameTime, activeOrbit().lon, h * HOUR, orbitParams, calendar));
+      seek(withLocalTime(gameTime, activeOrbit().lon, h * HOUR, orbitParams, calendar));
     },
     autoSlowdownChanged: (enabled) => sim.setAutoSlowdown(enabled),
     alarm: (hours) => {
@@ -810,7 +892,7 @@ async function main(): Promise<void> {
     lighting.nightLight.value = l.nightLight;
     globe.terrain.water.waveStrength.value = l.waves;
     globe.terrain.water.foamStrength.value = l.foam;
-    globe.terrain.land.temperatureOffset.value = l.temperatureShift;
+    // The temperature shift is applied each frame, with the weather preset's (see the loop).
     globe.terrain.land.detail.value = l.detail;
     globe.terrain.land.facets.value = l.facets ? 1 : 0;
     globe.terrain.land.farmland.value = l.farmland ? 1 : 0;
@@ -820,6 +902,78 @@ async function main(): Promise<void> {
     globe.terrain.roadStyle.lights.value = l.nightLights;
     globe.clouds.enabled.value = l.clouds ? 1 : 0;
     globe.clouds.coverageBias.value = l.cloudCover;
+  });
+
+  // Atmosphere (decisions 137–143): the panel starts from the scene's own values.
+  const flightUrl = freeFlightMode ? parseFreeFlightUrl(query, worldParams.seed) : null;
+  const atmosphere: AtmosphereGuiParams = readAtmosphere(
+    globe,
+    audio,
+    flightUrl ? (flightUrl.options.weather ?? DEFAULT_OPTIONS.weather) : weatherPreset,
+  );
+  // The governor lowers the volumetric quality and the particles on a machine that struggles.
+  const governor = new QualityGovernor(GOVERNOR_STEPS);
+  let governed = atmosphere.autoQuality;
+  const applyAtmosphereSettings = () => {
+    const now = performance.now();
+    if (atmosphere.autoQuality && !governed) governor.reset(now);
+    governed = atmosphere.autoQuality;
+    // New shader variants compile in the next frames: they do not count for the render scale,
+    // and the scale finds its place anew under the changed load.
+    if (applyAtmosphere(atmosphere, globe, audio, governor.level)) renderScale.reset(now);
+    atmosphere.status = governorStatus(atmosphere, governor.level);
+  };
+  applyAtmosphereSettings();
+  /** Land temperature shift of the campaign's weather preset at the camera (°C). */
+  let presetTemperatureShift = 0;
+  gui.addAtmosphereControls(atmosphere, applyAtmosphereSettings, (preset) => {
+    if (freeFlight) {
+      freeFlight.setWeather(preset);
+      return;
+    }
+    weatherPreset = preset;
+    showWeather();
+    // The ground's wetness and the fog start from the new weather.
+    globe.resetAtmosphere();
+  });
+  /** The sound as the pause menu sets it, kept in step with the panel. */
+  const sound = {
+    get volume() {
+      return atmosphere.volume;
+    },
+    set volume(v: number) {
+      atmosphere.volume = v;
+      audio.volume = v;
+    },
+    get muted() {
+      return atmosphere.mute;
+    },
+    set muted(on: boolean) {
+      atmosphere.mute = on;
+      audio.muted = on;
+    },
+  };
+  // Sound stops while the game is paused or the tab is hidden (thunder on its way waits).
+  // Not before it has started: the context must first run from the key or click that creates
+  // it, or a browser that asks for a gesture (Safari) never lets it sound; the campaign
+  // starts paused.
+  let audioHeld = false;
+  const holdAudio = () => {
+    if (!audio.started) return;
+    const hold = document.hidden || globe.paused;
+    if (hold === audioHeld) return;
+    audioHeld = hold;
+    if (hold) audio.suspend();
+    else audio.resume();
+  };
+  document.addEventListener('visibilitychange', () => {
+    holdAudio();
+    // The time away is no evidence of a struggle or of headroom: the governor starts over.
+    governor.hold(performance.now());
+  });
+  // Leaving the page for good closes the audio; a page kept for back and forward keeps it.
+  window.addEventListener('pagehide', (e) => {
+    if (!e.persisted) audio.dispose();
   });
 
   // World-generation compute shares three's device (decision 22).
@@ -878,14 +1032,16 @@ async function main(): Promise<void> {
         },
         exit: () => {
           const u = new URL(location.href);
-          for (const k of ['mode', 'base', 'tod', 'spawn', 'fuel', 'autopilot'])
+          for (const k of ['mode', 'base', 'tod', 'weather', 'wind', 'spawn', 'fuel', 'autopilot'])
             u.searchParams.delete(k);
           location.href = u.toString();
         },
         status: () =>
           `World ${worldParams.seed}: ${gui.status.generation}${globe.terrainReady ? '' : ' (the terrain must finish before you fly)'}`,
+        sound,
+        weatherChanged: (preset) => (atmosphere.weather = preset),
       },
-      parseFreeFlightUrl(query, worldParams.seed),
+      flightUrl!,
     );
     // The debug GUI stays out of the way unless asked for (?dev).
     if (!query.has('dev')) gui.gui.hide();
@@ -924,10 +1080,33 @@ async function main(): Promise<void> {
       const scale = renderScale.record(frameMs, now);
       if (scale !== null) applyRenderScale(scale, now);
     }
+    // The atmosphere's quality follows the machine, while the simulation view has terrain to draw.
+    if (atmosphere.autoQuality && activeView === 'simulation' && globe.terrainReady) {
+      const level = governor.record({
+        frameMs,
+        nowMs: now,
+        targetMs: renderScale.targetMs,
+        scale: renderScale.scale,
+        minScale: renderScale.minScale,
+        maxScale: renderScale.maxScale,
+        adaptive: viewParams.renderScale === 'auto',
+      });
+      if (level !== null) {
+        applyAtmosphereSettings();
+        // The load has changed: the render scale finds its place anew.
+        renderScale.reset(now);
+      }
+    } else {
+      governor.hold(now);
+    }
     const dt = Math.min(frameMs, 100) / 1000;
     freeFlight?.frame(Math.min(frameMs, 250) / 1000, frameMs);
     gameTime =
       freeFlight && freeFlight.state !== 'menu' ? freeFlight.gameTime : sim.displayTime(now);
+    globe.gameTime = gameTime;
+    // A standing clock holds the weather's motion, the particles and the sound.
+    globe.paused = freeFlight ? freeFlight.state === 'paused' : sim.rate === 0;
+    holdAudio();
     sunDirection(gameTime, orbitParams, calendar, globe.sun);
     globe.terrain.land.seasonPhase.value = seasonPhase(gameTime, orbitParams, calendar);
     // The map shares the sun and the season (decision 87).
@@ -936,12 +1115,29 @@ async function main(): Promise<void> {
     strategicView.setAirTime(gameTime);
     if (activeView === 'strategic') airPanel.update(sim.missions, gameTime, now);
     globe.clouds.time.value = gameTime;
-    globe.weather.update(sim.weather, gameTime);
+    // The weather the scene reads at the camera; Free Flight feeds the texture itself.
+    const weather = shownWeather();
+    if (!freeFlight && weather?.ready) globe.weather.update(weather, gameTime);
+    globe.weatherView = weather?.ready ? weather : null;
+    // Snow lies where a weather preset makes it snow: the land takes the preset's temperature shift.
+    globe.terrain.land.temperatureOffset.value =
+      lightParams.temperatureShift +
+      (freeFlight ? freeFlight.temperatureShift : presetTemperatureShift);
     touchControls.visible =
       touchDevice && activeView === 'simulation' && globe.cameraMode === 'observer';
     if (activeView === 'strategic') strategicView.render(dt);
     else globe.render(dt);
     if (freeFlight && activeView === 'simulation') freeFlight.drawHud(globe.camera);
+    // Rain, wind and dust where the camera is; silence over the map.
+    const listening = activeView === 'simulation';
+    const falling = globe.precipitation?.levels;
+    const state = globe.weatherState;
+    audio.update({
+      rain: listening ? (falling?.rain ?? state.rain.value) : 0,
+      snow: listening ? (falling?.snow ?? state.snow.value) : 0,
+      dust: listening ? (falling?.dust ?? state.dust.value) : 0,
+      wind: listening ? state.wind.value.length() : 0,
+    });
 
     const lon = activeOrbit().lon;
     timeParams.day = localDayOfYear(gameTime, lon, orbitParams, calendar);
@@ -949,16 +1145,24 @@ async function main(): Promise<void> {
     timeParams.date = formatLocalDate(gameTime, lon, orbitParams, calendar);
     if (now - lastClockText > 200) {
       lastClockText = now;
-      latLonToDirection(activeOrbit().lat, activeOrbit().lon, here);
-      const weather = describeWeather(sim, here, gameTime);
-      timeParams.weather = weather;
+      // Where the view's camera is; the chase camera flies with the aircraft.
+      if (activeView === 'simulation' && globe.cameraMode === 'chase')
+        here.copy(globe.chase.eye).normalize();
+      else latLonToDirection(activeOrbit().lat, activeOrbit().lon, here);
+      const line = weatherLine(weather, here, gameTime);
+      timeParams.weather = line;
       timeParams.sim = describeSim(sim);
+      presetTemperatureShift =
+        weatherPreset !== 'live' && presetWeather.ready && sim.weather.ready
+          ? presetWeather.report(here, gameTime).temperature -
+            sim.weather.report(here, gameTime).temperature
+          : 0;
       if (!freeFlightMode)
         timeControls.update({
           rate: sim.rate,
           local: `${timeParams.date} local`,
           campaign: `T+${campaignClock(gameTime, orbitParams.solarDay)}`,
-          weather,
+          weather: line,
         });
     }
 
@@ -1005,28 +1209,6 @@ function campaignClock(t: number, day: number): string {
   const hh = Math.floor(rest / HOUR);
   const mm = Math.floor((rest % HOUR) / 60);
   return `${d} d ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
-}
-
-/** Weather at a direction for the time bar: cover, ceiling, visibility, wind, temperature. */
-function describeWeather(sim: SimClient, dir: Vec3d, t: number): string {
-  if (!sim.weather.ready) return 'weather —';
-  const r = sim.weather.report(dir, t);
-  const w = sim.weather.wind(dir, 10, t);
-  const from = ((Math.atan2(-w.east, -w.north) / DEG + 360) % 360).toFixed(0).padStart(3, '0');
-  const speed = Math.hypot(w.east, w.north);
-  const ceiling = Number.isFinite(r.ceiling)
-    ? `ceiling ${Math.round(r.ceiling / 10) * 10} m`
-    : 'no ceiling';
-  const mmh = r.precipitation * HOUR * 1000;
-  const precip = mmh >= 0.1 ? `, ${r.snow > 0.5 ? 'snow' : 'rain'} ${mmh.toFixed(1)} mm/h` : '';
-  const vis =
-    r.visibility >= 10_000
-      ? `${Math.round(r.visibility / 1000)} km`
-      : `${(r.visibility / 1000).toFixed(1)} km`;
-  return (
-    `cloud ${Math.round(r.cloudCover * 100)}%, ${ceiling}, vis ${vis}, ` +
-    `wind ${from}° ${speed.toFixed(0)} m/s, ${r.temperature.toFixed(0)} °C${precip}`
-  );
 }
 
 /** Sim status for the GUI: rate, events and ticks run, pending events, weather systems. */

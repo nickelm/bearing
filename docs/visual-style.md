@@ -274,6 +274,7 @@ Targets for a mid-range laptop in a desktop browser at 1080p:
 - Under 500 draw calls per frame, through instancing and merged cluster meshes.
 - Under 2 million triangles per frame in the densest view (low altitude over forest near a base).
 - Up to about 50,000 individual tree instances within 1.5 km.
+- Atmospheric effects scale with the machine: the volumetric stage marches a quarter, a third (default) or a half of the resolution, and a governor steps its quality and then the particle count down before the frame rate falls under the target, and back up when there is headroom (decision 143). Clear weather costs nothing.
 
 ## What to Avoid
 

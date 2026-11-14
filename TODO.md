@@ -498,16 +498,26 @@ Simulation view (needs S1's `render/sim/` split):
   - [ ] An option that softens repeated strokes: a strike can flash the whole frame up to four times in 0.3 s (photosensitivity)
   - [ ] Lamp light on particles at night; splashes on the runway
   - [ ] Snow may twinkle in a slow pan where flakes cross the edge of their cell: check in motion
+- [x] The atmosphere in the app and in Free Flight: per-frame wiring, GUI → Atmosphere, weather as a Free Flight option (start screen, pause menu, `&weather=`), a quality governor, a render scale that probes upward, wind and gusts in the shared flight model, weather audio (decision 143)
+  - [ ] Owner, in a browser with WebGPU (nothing ran in one): the frame loop, the switch between map and simulation view, the first frames after "Fly", GUI → Atmosphere
+  - [ ] Owner: watch "Quality now" and the resolution on a steady view; either changing more often than once a minute is a governor or render-scale bug (thresholds come from simulated machines)
+  - [ ] Owner: fly the wind and gusts in storm, blizzard and dust storm (only the scripted pilot has); retire the 8 m/s cap on the ground once the control laws hold a gale on the runway
+  - [ ] The pause menu's volume slider gives no sound while paused (the audio is suspended)
+  - [ ] A campaign weather override also shows on the strategic map; a preset's temperature shift is taken at the camera
+  - [ ] Dust does not dim the aircraft's ground shadow
+  - [ ] The start screen's weather options are long descriptions; shorten them to labels
 - [x] Cast shadows from terrain: a height-field shadow baked around the camera, three nested grids, soft edges; deeper sky fill, a low-sun exposure for surfaces, snow sparkle and wet ground (`render/sim/lighting/terrainShadow.ts`, decision 139)
-  - [ ] Wire the app: `globe.shadows.setHeights(global.height, global.n)` next to `globe.terrain.setWorld(...)` in `main.ts` and in Free Flight; until then only the previews show shadows
+  - [x] Wire the app: `globe.shadows.setHeights` with the terrain's world in `main.ts` and in Free Flight (decision 143)
   - [ ] Shadows cast by trees, buildings and aircraft (Part I: the aircraft's shadow on the ground is a height cue)
   - [ ] Cross-fade when finer tile heights arrive under the near grid (the field is replaced at once today)
   - [ ] Conifer forest in a mountain's shadow at a 3° sun is close to black (luma 9–14): a shadow lift in the golden and dusk grade bands
-  - [ ] GUI controls: `shadows.enabled`, `land.sparkle`, `lighting.skyLean`, `lighting.lowSunExposure`
+  - [x] GUI controls: mountain shadows, shadow softness and snow sparkle (GUI → Atmosphere → Shadows and snow, decision 143)
+  - [ ] GUI controls for `lighting.skyLean` and `lighting.lowSunExposure`
 - [x] Sky: a sky-view LUT with multiple scattering, sun disk with halo, moon with phases and moonlight, stars, clear-air haze that keeps the ground's palette, twilight gain and sunset vibrance (`render/sim/atmosphere/skyView.ts`, `core/moon.ts`, decision 140)
-  - [ ] Wire the app: `globe.gameTime`, `globe.planetOrbit`, `globe.calendar` and `globe.weatherView` in `main.ts` and in Free Flight; until then the moon stays at its game-time-0 place and the stars do not turn
+  - [x] Wire the app: `globe.gameTime`, `globe.planetOrbit`, `globe.calendar` and `globe.weatherView` in `main.ts` and in Free Flight (decision 143)
   - [ ] Moon glint on water; clouds shading moonlight
-  - [ ] GUI sliders for `atmosphere.haze` and `lighting.sunsetVibrance`, a toggle for `twilightAdaptation`
+  - [x] GUI slider for `atmosphere.haze` (GUI → Atmosphere → Clouds, fog and dust, decision 143)
+  - [ ] GUI slider for `lighting.sunsetVibrance`, a toggle for `twilightAdaptation`
   - [ ] Point the `sunset` preview view at a real sunset (its sun is at −6.7°)
 - [x] Exposure tied to time of day (Part I, Post-Processing): a twilight gain on the sun's illuminance, a low-sun sky fill and a low-sun exposure for surfaces (decisions 139, 140); the `sunset` view's ground median went from luma 10 to 29
 - [ ] Night: settled land glows a uniform warm brown at 6 km with no distinct town lights (style audit, `night`); keep the rural glow to points and let towns read as clusters of lights
