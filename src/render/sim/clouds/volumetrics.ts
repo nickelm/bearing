@@ -112,18 +112,19 @@
  * `count` in the options makes the source return them, and
  * tools/clouds.preview.ts (COUNT=1) prints them per view:
  * - Clear air: none, and the pipeline leaves the stage out (`idle`).
- * - Per pixel with a march to run: 4 (the key light's color, the sky ahead
- *   and its irradiance), 2 more for the cloud march's key light, 6 for the
- *   cirrus where the ray crosses it.
+ * - Per pixel with a march to run: 3 (the sky ahead, in two textures, and
+ *   its irradiance); 2 for the cloud march's key light at the ends of its
+ *   segment, 6 for the cirrus where the ray crosses it.
  * - Per cloud step: 1 for the column; 1 more for the shape noise inside the
  *   column's layer; where there is density 1 for the detail (near the
  *   surface), 3 toward the light and 1 for the column beyond: 7 in all.
  * - Air: 8 for the weather and the key light (20 on rays over 12 km); per
  *   step up to 3 for fog (none in haze), 2 or 3 for rain, 1 or 2 for dust,
  *   and under open sky 2 for the cloud shadow and 1 for the terrain's.
- * - Whole views, mean (and worst pixel): fair-weather cumulus 17 to 40 (140),
- *   an overcast from below 75 (215), rain and storm from below 65 to 90
- *   (260), fog 45 (85), dust from inside 40.
+ * - Whole views, mean (and worst pixel): fair-weather cumulus 30 to 47 (142),
+ *   an overcast from below 78 (216), rain and storm from below 46 to 78
+ *   (235), a storm front with rain in view 91 to 112 (247), fog 35 to 43
+ *   (85), dust from inside 40 (43).
  * `quality` sets the steps, the light samples and the pipeline's volumetric
  * scale: low (28 steps, 2 light samples, 10 air steps, 1/4), medium (40, 3,
  * 14, 1/3), high (48, 4, 20, 1/2). Each level has its own source and shader,
@@ -136,7 +137,6 @@ import {
   asin,
   atan,
   Break,
-  ceil,
   clamp,
   dot,
   exp,
@@ -259,9 +259,9 @@ const HEAP_FREE_PATH = 5000;
 const FAR_LIGHT = 5000;
 
 /**
- * The cloud's light: numbers the look was tuned with. Read when a shader is
- * built (a change of `quality` rebuilds it), so previews can try values
- * (tools/clouds.preview.ts, TUNING).
+ * The cloud's light: numbers the look was tuned with. Read when a quality
+ * level's shader is first built (it is kept after that), so previews can try
+ * values before their first frame (tools/clouds.preview.ts, TUNING).
  */
 export const CLOUD_LIGHT = {
   /** The phase function's lobes: forward and backward asymmetry, and the backward lobe's share. */
@@ -306,8 +306,8 @@ export const CLOUD_LIGHT = {
 };
 /**
  * The look of fog, dust and rain: numbers it was tuned with. Those of the light are read
- * when a shader is built, those of the motion every frame (tools/clouds.preview.ts,
- * TUNING_AIR).
+ * when a quality level's shader is first built, those of the motion every frame
+ * (tools/clouds.preview.ts, TUNING_AIR).
  */
 export const AIR_LOOK = {
   /**
@@ -884,8 +884,8 @@ export class Volumetrics {
         // light comes from (x: the mean of the distance's logarithm, y: the spread about it)
         // and the distance at which it has grown opaque (z, m; 1e9 if it has not).
         const counts = this.o.count ? vec3(0).toVar() : null;
-        // Texture reads: the key light's colour, the sky ahead (2) and its irradiance are read
-        // for every pixel a march runs for.
+        // Texture reads: the sky ahead (2) and its irradiance are read for every pixel a march
+        // runs for.
         const reads = this.o.count ? float(3).toVar() : null;
         const cloud = vec4(0, 0, 0, 1).toVar();
         const cloudDistance = float(1e9).toVar();
@@ -1511,8 +1511,9 @@ export class Volumetrics {
       const phaseWide = Volumetrics.phase(a.cosKey, 0.6, 0, 0, 8).toVar();
       const phaseDust = Volumetrics.phase(a.cosKey, 0.55, -0.1, 0.5, 5).toVar();
 
-      // The weather changes over tens of kilometers: it is read at four points of the ray
-      // and interpolated between them, not at every step.
+      // The weather changes over tens of kilometers: it is read at the two ends of the ray,
+      // on a long ray at four points between as well (AIR_WEATHER_AT), and interpolated, not
+      // read at every step.
       const fieldsAt = (u: number) => {
         const at = ro.add(rd.mul(start.add(span.mul(u * u)))) as V3;
         const w = weather.sample(at);
@@ -1551,9 +1552,14 @@ export class Volumetrics {
 
       // Fewer steps where the way through the layer is short (a ray up out of fog), so that
       // the first step is as long as on a ray that stays in the layer; and half in haze,
-      // which has no structure to resolve (`airSteps`).
+      // which has no structure to resolve (`airSteps`). Not a whole number: the steps are
+      // 1 / count of the way each (in u) and the last one is cut at the end, so the samples
+      // move evenly as the way grows. With a whole number of steps, rays that end on the
+      // ground a little nearer or further (the depth selection's checkerboard, a pixel's
+      // place in its block) took six steps or seven, and rows of dots showed in fog over
+      // the ground where the number changed.
       const count = clamp(
-        ceil(this.airSteps.mul(sqrt(span.div(min(reach, AIR_SHORT))))),
+        this.airSteps.mul(sqrt(span.div(min(reach, AIR_SHORT)))),
         min(this.airSteps, AIR_FEWEST),
         this.airSteps,
       ).toVar();
@@ -1579,7 +1585,7 @@ export class Volumetrics {
         const up = p.div(r).toVar();
         const h = r.sub(radius).toVar();
         const mu = dot(up, rd).toVar();
-        // Piecewise linear between the four readings, by the step's place on the ray.
+        // Piecewise linear between the readings, by the step's place on the ray.
         const u = u0.add(u1).mul(0.5).toVar();
         let wa: Node<'vec4'> = fields[0]!.a;
         let wb: Node<'vec3'> = fields[0]!.b;

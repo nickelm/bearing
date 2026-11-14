@@ -21,11 +21,20 @@
  *   The measured time then sits on the target whatever the margin, never under
  *   70% of it, and the scale would stay wherever a slow spell left it. So
  *   while the frame time is on target the controller tries one step up every
- *   PROBE_MS. A probe that pushes the frame time over the target is taken
- *   back at once, and that scale is tried again after PROBE_RETRY_MS, twice
- *   as long after each further failure (up to PROBE_RETRY_MOST_MS). Probing
- *   also holds the frame time at the target where it would otherwise rest
- *   anywhere up to 10% over it.
+ *   PROBE_MS. A scale fails if a probe to it pushes the frame time over the
+ *   target (it is taken back at once), or if the scale was slightly too much:
+ *   it had to come down by a little (the smoothed frame time at most SLOW
+ *   targets) and the lower scale then stood for PROBE_MS, as when a probe
+ *   passed in the trough of a load that wanders. A slow spell, which costs
+ *   far more and takes several steps, says nothing about the scale. A scale
+ *   that failed is tried again after PROBE_RETRY_MS, twice as long after each
+ *   further failure (up to PROBE_RETRY_MOST_MS), and each scale above it
+ *   waits as long. So a machine that holds the target at one scale and not at
+ *   the next pays for a failed probe (about a second of slower frames and two
+ *   resizes) after 1, 3, 7 and 15 minutes and then every ten, and a wandering
+ *   load is not chased. A failed scale is forgotten once it has held for the
+ *   retry time, or once clear headroom has carried the scale well past it:
+ *   the load has gone.
  */
 
 export const RENDER_SCALES = ['auto', '100%', '75%', '50%', '35%'] as const;
@@ -46,14 +55,18 @@ const STEP = 0.05;
 /** On target for this long (ms), the controller tries one step up. */
 const PROBE_MS = 2000;
 /** Wait before a scale that failed is tried again (ms): at first, and at most. */
-const PROBE_RETRY_MS = 30_000;
-const PROBE_RETRY_MOST_MS = 300_000;
+const PROBE_RETRY_MS = 60_000;
+const PROBE_RETRY_MOST_MS = 600_000;
 /** A probe holds if the mean frame time stays under this share of the target. */
 const ON_TARGET = 1.03;
 /** Frames a probe is judged over; their slowest one is left out (a hitch). */
 const PROBE_FRAMES = 16;
 /** A probe fails early at this many frames over SLOW targets. */
 const PROBE_SLOW_FRAMES = 4;
+/**
+ * Frame time, in targets, up to which a scale is slightly too much. A step down from a
+ * smoothed frame time under it marks the scale as failed; over it, something else is slow.
+ */
 const SLOW = 1.25;
 
 export class RenderScaleController {
@@ -70,7 +83,10 @@ export class RenderScaleController {
     longest: number;
     slow: number;
   } | null = null;
-  /** The lowest scale a probe failed at since the load last changed. */
+  /** The scale a small step down has just left: it has failed if the lower one stands. */
+  private suspect: number | null = null;
+  /** The scale that last failed, and the scale from which probes wait for the retry time. */
+  private failedAt = Infinity;
   private ceiling = Infinity;
   private retryMs = PROBE_RETRY_MS;
 
@@ -103,12 +119,7 @@ export class RenderScaleController {
       const mean = (probe.sum - probe.longest) / Math.max(1, probe.count - 1);
       if (probe.slow >= PROBE_SLOW_FRAMES || (judged && mean > this.targetMs * ON_TARGET)) {
         // Over the target: back to the scale that held, and this one waits.
-        if (this.scale >= this.ceiling - STEP / 2) {
-          this.retryMs = Math.min(PROBE_RETRY_MOST_MS, this.retryMs * 2);
-        } else {
-          this.ceiling = this.scale;
-          this.retryMs = PROBE_RETRY_MS;
-        }
+        this.failed(this.scale);
         this.probe = null;
         this.scale = probe.from;
         this.restart(nowMs);
@@ -118,6 +129,11 @@ export class RenderScaleController {
       this.probe = null;
     }
     const since = nowMs - this.changedAt;
+    if (this.suspect !== null && since >= PROBE_MS) {
+      // One small step down was enough: the scale above was slightly too much.
+      this.failed(this.suspect);
+      this.suspect = null;
+    }
     let next = this.scale;
     let probing = false;
     if (this.average > this.targetMs * 1.1 && since >= HOLD_DOWN_MS) {
@@ -137,11 +153,23 @@ export class RenderScaleController {
     // Keep the steps exact (0.05 is no binary fraction).
     next = Math.round(next * 100) / 100;
     if (next === this.scale) return null;
+    const suspect = this.suspect;
+    this.suspect = null;
     if (probing) {
+      // The scale that once failed has held for the retry time: the load has gone.
+      if (this.scale >= this.ceiling - STEP / 2) this.forget();
       this.probe = { from: this.scale, count: 0, sum: 0, longest: 0, slow: 0 };
-    } else if (next > this.scale && next >= this.ceiling - STEP / 2) {
-      // Clear headroom at a scale that once failed: the load has gone.
+    } else if (next < this.scale) {
+      // Down by a little: this scale has failed, if the lower one then stands. The first of
+      // several steps down counts (a load that rises slowly), a slow spell's steps do not.
+      if (this.average <= this.targetMs * SLOW) this.suspect = suspect ?? this.scale;
+    } else if (next >= this.failedAt + 2 * STEP - STEP / 2) {
+      // Clear headroom has carried the scale well past the one that failed: the load has gone.
       this.forget();
+    } else if (next >= this.ceiling - STEP / 2) {
+      // Clear headroom at a scale that once failed: the load is lighter for now. What lies
+      // above still waits, or a load that comes and goes would be chased.
+      this.ceiling = next + STEP;
     }
     this.scale = next;
     this.restart(nowMs);
@@ -156,6 +184,7 @@ export class RenderScaleController {
     const next = Math.min(this.maxScale, Math.max(this.minScale, scale));
     if (next !== this.scale) {
       this.probe = null;
+      this.suspect = null;
       this.forget();
     }
     this.scale = next;
@@ -168,11 +197,24 @@ export class RenderScaleController {
    */
   reset(nowMs: number): void {
     this.probe = null;
+    this.suspect = null;
     this.forget();
     this.restart(nowMs);
   }
 
+  /** `scale` was too much: it waits, longer each time it fails again. */
+  private failed(scale: number): void {
+    if (scale >= this.ceiling - STEP / 2) {
+      this.retryMs = Math.min(PROBE_RETRY_MOST_MS, this.retryMs * 2);
+    } else {
+      this.failedAt = scale;
+      this.ceiling = scale;
+      this.retryMs = PROBE_RETRY_MS;
+    }
+  }
+
   private forget(): void {
+    this.failedAt = Infinity;
     this.ceiling = Infinity;
     this.retryMs = PROBE_RETRY_MS;
   }

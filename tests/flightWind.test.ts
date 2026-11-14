@@ -80,6 +80,31 @@ describe('wind on the flight model', () => {
     expect(fly(true)).toEqual(fly(false));
   });
 
+  it('senses the still air as it is while settling on the wheels', () => {
+    // On the runway in still air the aircraft rocks on its struts, backward too by micrometers
+    // per second. That is no reversed flow: the probes are not blanked, and a flight from the
+    // runway is the same to the bit as before there was wind.
+    const runway = testRunway();
+    const ground = flatGround(runway);
+    const m = kestrel();
+    spawnOnRunway(m, runway, runwayEnds(runway)[0]);
+    const ctl = neutralControls();
+    ctl.parkingBrake = true;
+    const vb = new Vec3d();
+    let backward = 0;
+    for (let i = 0; i < 5 / FLIGHT_STEP; i++) {
+      m.step(ctl, ground);
+      m.q.unrotate(m.vel, vb);
+      // (Under 0.1 mm/s the airspeed formula rounds to zero.)
+      if (vb.x < 0 && m.telemetry.tas > 1e-4) {
+        backward++;
+        expect(m.telemetry.tas).toBeLessThan(0.5);
+        expect(m.telemetry.cas).toBeGreaterThan(0);
+      }
+    }
+    expect(backward).toBeGreaterThan(10);
+  });
+
   it('comes out of a tail slide in still air within seconds', () => {
     // Straight up at 120 m/s with the engine at idle and the stick let go: the aircraft stops,
     // slides back on its tail, and the angle-of-attack limiter turns the nose into the flow.
@@ -185,6 +210,7 @@ describe('wind on the flight model', () => {
     expect(tail.moved).toBeLessThan(0.05);
     expect(tail.m.telemetry.tas).toBeCloseTo(20, 0);
     expect(tail.m.telemetry.cas).toBe(0);
+    expect(tail.m.telemetry.mach).toBe(0);
     expect(tail.m.telemetry.alpha).toBe(0);
     expect(tail.m.telemetry.beta).toBe(0);
     expect(tail.m.telemetry.load).toBe(1);

@@ -7,7 +7,10 @@
  *   node tools/freeflight.session.mjs [http://localhost:5173]
  *
  * Env: VERBOSE=1 prints everything the page found; SHOT=<file.png> saves the start screen
- * as the session leaves it.
+ * as the session leaves it. Playwright is no dependency of the repo (as for
+ * freeflight.screens.mjs): where it is installed elsewhere, point NODE_PATH at that
+ * node_modules. The page generates the campaign world on the main thread, so a run takes
+ * about half a minute.
  */
 import { createRequire } from 'node:module';
 

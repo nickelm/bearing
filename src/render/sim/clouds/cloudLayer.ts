@@ -32,6 +32,10 @@
  *   the same texel: PlanetLighting grays and dims the sky light by it.
  *   Neither costs a read while no cloud is near (`cloudy`, from the weather
  *   around the camera on the CPU).
+ * - Extent: the weather within `viewAngle` of the camera (the horizon and the
+ *   cloud tops beyond it: half as far from the ground as from 20 km) says
+ *   whether cloud can be in view and between which heights (`possible`,
+ *   `bottom`, `top`, `extent`): the bounds of the volumetric marches.
  * - The shell: a cube-sphere mesh, drawn transparent and camera-relative
  *   (rule 4), with the bake as flat cloud, as opaque as the volumetric clouds
  *   are on average. Those replace it inside the simulation view; it fades in

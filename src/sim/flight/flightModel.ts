@@ -340,8 +340,10 @@ export class FlightModel {
     // from behind (a tailwind while standing or rolling slowly, wind.ts) they read no airspeed
     // and no angles, and the laws and the HUD get none, while the forces below use the real
     // flow. In the air the laws keep the real angles: in a tail slide it is the angle-of-attack
-    // limiter that turns the nose back into the flow.
-    const ahead = vb.x > 0 || !this.onGround;
+    // limiter that turns the nose back into the flow. Air slower than the 0.5 m/s under which
+    // there are no angles anyway is sensed as it is: an aircraft settling on its wheels in
+    // still air rocks back by micrometers per second.
+    const ahead = vb.x > 0 || !this.onGround || tas <= 0.5;
     const cas = ahead ? calibratedAirspeed(tas, air) : 0;
     const sensedAlpha = ahead ? alpha : 0;
     const sensedBeta = ahead ? beta : 0;
@@ -516,7 +518,8 @@ export class FlightModel {
     tel.beta = sensedBeta;
     tel.tas = tas;
     tel.cas = cas;
-    tel.mach = mach;
+    // Sensed, like the airspeed: no Mach number beside an airspeed of zero in a tailwind.
+    tel.mach = ahead ? mach : 0;
     tel.qbar = qbar;
     tel.cl = cl;
     tel.cd = cd;

@@ -464,7 +464,13 @@ describe.skipIf(!gpu)('SimPipeline on Dawn', () => {
       byte <= 10 ? byte / 255 / 12.92 : Math.pow((byte / 255 + 0.055) / 1.055, 2.4);
     const red = (rgb: Uint8Array, x: number, y: number) => linear(rgb[(y * w + x) * 3]!);
     const isGround = (rgb: Uint8Array, x: number, y: number) => red(rgb, x, y) > 0.05;
-    const cases = [
+    const cases: {
+      altitude: number;
+      reach: number;
+      roll: number;
+      beside: number;
+      rows?: number;
+    }[] = [
       // From 10 km the ground's edge is hundreds of kilometers away: it and the sky above it
       // are one surface to the filter, in level flight and in a banked turn.
       { altitude: 10_000, reach: 300_000, roll: 0, beside: 0 },
@@ -472,8 +478,16 @@ describe.skipIf(!gpu)('SimPipeline on Dawn', () => {
       // From 1,500 m the horizon is 55 km away and stays a silhouette, as a ridge does: the
       // texels next to it average the part of the pattern on their side (out of 5 × 5
       // there). `beside` is the most that may leave.
-      { altitude: 1500, reach: 55_000, roll: 0, beside: 0.08 },
+      { altitude: 1500, reach: 55_000, roll: 0, beside: 0.02 },
       { altitude: 1500, reach: 55_000, roll: 0.5, beside: 0.15 },
+      // From 20 m (a tower, an aircraft on the runway) the ground's depth changes by a third
+      // and more from one row of texels to the next under the horizon, and within each
+      // block: the filter takes a block's own range of depths off the difference, and where
+      // rows still stand apart a texel averages its own row. Two rows of texels keep an
+      // eighth of the pattern in level flight; in a bank the rows cross the pattern at an
+      // angle and a strip along the horizon keeps up to all of it (`rows`, `beside`).
+      { altitude: 20, reach: 55_000, roll: 0, beside: 0.25, rows: 0.08 },
+      { altitude: 20, reach: 55_000, roll: 0.5, beside: 0.45, rows: 0.2 },
     ];
     for (const view of cases) {
       ground.scale.setScalar(view.reach);
@@ -497,6 +511,8 @@ describe.skipIf(!gpu)('SimPipeline on Dawn', () => {
         const margin = Math.round(2 / scale);
         let worst = 0;
         let worstBeside = 0;
+        // Pixels that keep more than a ninth of the pattern.
+        let over = 0;
         let groundPixels = 0;
         for (let y = 0; y < h; y++) {
           for (let x = 0; x < w; x++) {
@@ -517,14 +533,17 @@ describe.skipIf(!gpu)('SimPipeline on Dawn', () => {
                 if (isGround(clear, xx, yy) !== on) beside = true;
               }
             }
+            if (error > 0.05) over++;
             if (beside) worstBeside = Math.max(worstBeside, error);
             else worst = Math.max(worst, error);
           }
         }
         expect(groundPixels).toBeGreaterThan(w * h * 0.4);
         expect(groundPixels).toBeLessThan(w * h * 0.85);
-        expect(worst).toBeLessThan(0.03);
+        expect(worst).toBeLessThan(view.rows ?? 0.03);
         expect(worstBeside).toBeLessThanOrEqual(view.beside);
+        // Whatever is left is left in few pixels.
+        expect(over / (w * h)).toBeLessThan(0.03);
       }
     }
     // All but opaque air hides the silhouette behind it: the banked horizon of the last view

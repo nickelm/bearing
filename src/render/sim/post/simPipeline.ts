@@ -14,17 +14,29 @@
  *    the final pass reads all of them (`airAt`). (The direct path's depth
  *    buffer is 24-bit fixed point; the float depth here is what a reversed
  *    depth buffer is meant to have.)
- * 2. **Volumetrics** (only while a source is set and enabled), at 1/2, 1/3 or
- *    1/4 of the resolution: a depth pass picks, per low-resolution pixel, the
- *    nearest or the farthest depth of its block in a checkerboard, and the
- *    volumetric pass evaluates the source along a ray through the block up to
- *    that distance (viewRays.ts), or rather along one of nine rays through
- *    the block, so that the filter's 3 × 3 average antialiases edges in the
- *    air. Alternating nearest and farthest gives the
- *    upsample a sample of each side of a silhouette among its neighbors. A
- *    third pass averages the result over 3 × 3 low-resolution texels of
- *    similar depth, which removes the march's jitter: interleaved gradient
- *    noise is built to even out over exactly that box.
+ * 2. **Volumetrics** (only while a source is set, enabled and not `idle`), at
+ *    1/2, 1/3 or 1/4 of the resolution: a depth pass picks, per low-resolution
+ *    pixel, the nearest or the farthest depth of its block in a checkerboard
+ *    (and keeps the other one beside it), and the volumetric pass evaluates
+ *    the source along a ray through the block up to that distance
+ *    (viewRays.ts), or rather along one of nine rays through the block, so
+ *    that the filter's 3 × 3 average antialiases edges in the air.
+ *    Alternating nearest and farthest gives the upsample a sample of each
+ *    side of a silhouette among its neighbors. A third pass averages the
+ *    result over 3 × 3 low-resolution texels of the same surface, which
+ *    removes the pattern of a march that samples at one of nine offsets in a
+ *    3 × 3 tile (decision 141), and interleaved gradient noise, which is
+ *    built to even out over exactly that box. "The same surface" (see
+ *    SAME_SURFACE, FAR_SURFACE, HIDDEN_SURFACE and FILTER_RANGE): depths
+ *    within 15%, or further apart by no more than the depths within either
+ *    block (ground that recedes under a low camera); anything beyond 15 km
+ *    and the sky; and whatever lies behind air that is opaque in both
+ *    texels. Where fewer than the nine match (beside a silhouette, on rows
+ *    of ground that stand apart) the 16 texels around them join in, counted
+ *    by their place in the 3 × 3 tile so that no place counts twice.
+ *    The shaders of the march are kept per source and resolution
+ *    (`MARCH_SHADERS`): a source that is set again, such as a quality level
+ *    chosen a second time, compiles nothing.
  * 3. **Overlay** (only while `overlay` has a visible child): the overlay
  *    scene drawn with the same camera into its own target, cleared to
  *    transparent, so it accumulates premultiplied color and coverage.
@@ -42,9 +54,11 @@
  *
  * Depth-aware upsample: each pixel weights the four low-resolution texels
  * around it by their bilinear weight over the squared relative difference of
- * their depth to its own, so texels on the other side of a silhouette count
- * for almost nothing. If none of the four is within 10%, the 3 × 3 block of
- * low-resolution texels is searched for the closest depth. With MSAA, a
+ * their depth to its own (beyond what counts as the same surface), so texels
+ * on the other side of a silhouette count for almost nothing. If none of the
+ * four is within 10%, the 3 × 3 block of low-resolution texels is searched
+ * for the closest depth. Where the air in front of the pixel is all but
+ * opaque, neighbors whose air is opaque too count whatever their depth. With MSAA, a
  * pixel whose samples lie on two surfaces takes the result for each, mixed
  * by the samples' share, so that fog and cloud do not undo the antialiasing
  * of silhouettes.
@@ -70,7 +84,7 @@ import {
   NoToneMapping,
   OneFactor,
   QuadMesh,
-  RedFormat,
+  RGFormat,
   RenderTarget,
   Scene,
   SrcAlphaFactor,
@@ -192,8 +206,16 @@ const MSAA_SAMPLES = 4;
 const EDGE = 0.05;
 /** Relative depth difference at which a neighbor's weight in the low-resolution filter falls to 1/e. */
 const FILTER_DEPTH = 0.05;
-/** Weight of the filter's 3 × 3 texels (of 9) under which it takes the 16 around them as well. */
-const FILTER_SPARSE = 6.5;
+/**
+ * Weight of the filter's 3 × 3 texels (of 9) under which it takes the 16 around them as well:
+ * any texel whose nine do not all match.
+ */
+const FILTER_SPARSE = 8.5;
+/**
+ * The most of the depth range within a block (relative, as `apart`) that the filter takes off
+ * the difference between two blocks: more is a silhouette inside the block.
+ */
+const FILTER_RANGE = 0.25;
 /**
  * Relative depth difference up to which two low-resolution texels count as the same surface,
  * for the filter and the upsample: ground receding toward the horizon differs by this much
@@ -608,7 +630,7 @@ export class SimPipeline {
     const renderer = this.renderer;
     if (!this.lowDepth || !this.lowRaw || !this.lowColor) {
       const nearest = { depthBuffer: false, minFilter: NearestFilter, magFilter: NearestFilter };
-      this.lowDepth = new RenderTarget(1, 1, { type: FloatType, format: RedFormat, ...nearest });
+      this.lowDepth = new RenderTarget(1, 1, { type: FloatType, format: RGFormat, ...nearest });
       this.lowDepth.texture.name = 'sim low depth';
       this.lowRaw = new RenderTarget(1, 1, { type: HalfFloatType, ...nearest });
       this.lowRaw.texture.name = 'sim volumetrics, marched';
@@ -659,8 +681,10 @@ export class SimPipeline {
 
   /**
    * Per low-resolution pixel, the nearest depth of its block of pixels on the
-   * white squares of a checkerboard and the farthest on the black ones. Every
-   * pixel of the block is read: a tree a pixel wide must not slip through.
+   * white squares of a checkerboard and the farthest on the black ones (r),
+   * and the other of the two (g), from which the filter knows how far the
+   * depths within the block are apart. Every pixel of the block is read: a
+   * tree a pixel wide must not slip through.
    */
   private depthSelectNode(): V4 {
     const s = this.divisor;
@@ -677,7 +701,7 @@ export class SimPipeline {
         }
       }
       const white = low.x.add(low.y).bitAnd(1).equal(0);
-      return vec4(select(white, nearest, farthest), 0, 0, 1);
+      return vec4(select(white, nearest, farthest), select(white, farthest, nearest), 0, 1);
     })() as V4;
   }
 
@@ -719,9 +743,10 @@ export class SimPipeline {
 
   /**
    * The marched result averaged over the 3 × 3 low-resolution texels around
-   * each, weighted by how close their depths are: the box over which
-   * interleaved gradient noise evens out, so the jitter of the march does not
-   * reach the screen as a pattern.
+   * each, weighted by how close their depths are: the box over which a
+   * march's nine sample offsets (and interleaved gradient noise) even out,
+   * so they do not reach the screen as a pattern. Where the nine do not all
+   * match, over the 5 × 5 around it (see the file comment).
    */
   private filterNode(): V4 {
     const lowDepth = this.lowDepth!.texture;
@@ -729,44 +754,85 @@ export class SimPipeline {
     return Fn(() => {
       const low = ivec2(screenCoordinate.xy).toVar();
       const last = ivec2(this.lowSize).sub(1).toVar();
-      const depth = fetch(lowDepth, low).x.toVar();
+      const own = fetch(lowDepth, low).toVar();
+      const depth = own.x;
+      // How far the depths within this texel's block are apart.
+      const range = this.apart(own.x as F, own.y as F).toVar();
       const through = fetch(lowRaw, low).a.toVar();
-      // At the frame's edge the block moves inward: clamped texels would count some of the
-      // march's nine sample offsets twice and others not at all.
+      // At the frame's edge the window moves inward, far enough for the ring below: clamped
+      // texels would count some of the march's nine sample offsets twice and others not at
+      // all. (The outermost texels are then outside their own 3 × 3, and inside the ring.)
       const inner = (max as unknown as (a: Node, b: Node) => IV2)(
-        clampTexel(low, last.sub(1) as IV2),
-        ivec2(1, 1),
+        clampTexel(low, last.sub(2) as IV2),
+        ivec2(2, 2),
       );
       const center = clampTexel(inner, last as IV2).toVar();
       const sum = vec4(0).toVar();
       const weight = float(0).toVar();
+      const taps: { i: number; j: number; raw: V4; w: F }[] = [];
       const tap = (i: number, j: number) => {
         const texel = clampTexel(center.add(ivec2(i, j)), last as IV2).toVar();
-        const raw = fetch(lowRaw, texel).toVar();
+        const raw = fetch(lowRaw, texel).toVar() as V4;
         // Where both results are opaque, what lies behind them does not show: one surface.
         const shown = smoothstep(0, HIDDEN_SURFACE, max(raw.a, through));
+        // On a surface that recedes, the nearest depth of one block and the farthest of the
+        // next (the depth selection's checkerboard) are as far apart as the depths within
+        // either block: that much is no difference between them.
+        const there = fetch(lowDepth, texel).toVar();
+        const slack = min(min(this.apart(there.x as F, there.y as F), range), FILTER_RANGE);
         const m = max(
-          this.apart(fetch(lowDepth, texel).x as F, depth as F)
+          this.apart(there.x as F, depth as F)
             .mul(shown)
+            .sub(slack)
             .sub(SAME_SURFACE),
           0,
         ).div(FILTER_DEPTH);
-        const w = exp(m.mul(m).negate()).toVar();
-        sum.addAssign(raw.mul(w));
-        weight.addAssign(w);
+        const w = exp(m.mul(m).negate()).toVar() as F;
+        taps.push({ i, j, raw, w });
+        return { raw, w };
       };
       for (let j = -1; j <= 1; j++) {
-        for (let i = -1; i <= 1; i++) tap(i, j);
+        for (let i = -1; i <= 1; i++) {
+          const { raw, w } = tap(i, j);
+          sum.addAssign(raw.mul(w));
+          weight.addAssign(w);
+        }
       }
-      // Beside a silhouette few of the nine are on this texel's side, and what is left of
-      // the march's sample pattern would show as dots along the edge: there the ring around
-      // the block joins in (16 more texels, for the few texels that need them).
+      // Beside a silhouette, and on ground that recedes under a low camera (each row of
+      // texels a surface of its own, and the depth selection's checkerboard two), few of
+      // the nine are on this texel's side, and what is left of the march's sample pattern
+      // would show as dots along the edge or the rows. There the ring around the block joins
+      // in: 16 more texels, for the texels that need them. The 25 are counted by their place
+      // in the pattern (the nine classes of a texel's coordinates modulo 3: one to four
+      // texels each), and no place counts for more than one texel however many of its
+      // texels match: a row of five then holds each of its three places once, and half a
+      // block on one side of a silhouette all nine, as the whole 3 × 3 does.
       If(weight.lessThan(FILTER_SPARSE), () => {
         for (let j = -2; j <= 2; j++) {
           for (let i = -2; i <= 2; i++) {
             if (Math.max(Math.abs(i), Math.abs(j)) === 2) tap(i, j);
           }
         }
+        const classed = vec4(0).toVar();
+        const classes = float(0).toVar();
+        const place = (k: number) => ((k % 3) + 3) % 3;
+        for (let b = 0; b < 3; b++) {
+          for (let a = 0; a < 3; a++) {
+            const members = taps.filter((t) => place(t.i) === a && place(t.j) === b);
+            let total: V4 = vec4(0) as V4;
+            let matched: F = float(0) as F;
+            for (const t of members) {
+              total = total.add(t.raw.mul(t.w)) as V4;
+              matched = matched.add(t.w) as F;
+            }
+            const share = matched.toVar();
+            const counted = min(share, 1).toVar();
+            classed.addAssign(total.mul(counted.div(max(share, 1e-6))));
+            classes.addAssign(counted);
+          }
+        }
+        sum.assign(classed);
+        weight.assign(classes);
       });
       return sum.div(weight);
     })() as V4;
