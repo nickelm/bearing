@@ -8,13 +8,18 @@
  *   n interior texels plus a one-texel border evaluated at its own direction
  *   across the seam, as in the weather texture (decision 68), so bilinear
  *   filtering stays continuous across face edges.
- *   R = coverage, G = precipitation fraction.
+ *   R = coverage, G = precipitation fraction, B = cloud base above sea level
+ *   in units of BASE_SCALE (cloudForm.ts), A = development (cloudForm.ts): the kind and depth
+ *   of cloud. The volumetric march and the cloud shadow read all four with
+ *   one read per sample (decision 141); the strategic map reads R and G.
+ *   Half floats (13 MB at 512 texels per face edge): the march thresholds
+ *   noise by these values, and bytes showed as steps.
  * - Refresh: a compute pass re-evaluates the field when the game clock has
  *   moved enough for the clouds to move a fraction of a texel, when the
  *   weather frames or the cloud settings change, and at most every
  *   MIN_INTERVAL_MS of real time.
  */
-import { StorageTexture } from 'three/webgpu';
+import { HalfFloatType, StorageTexture } from 'three/webgpu';
 import type { ComputeNode, Node, WebGPURenderer } from 'three/webgpu';
 import {
   float,
@@ -29,7 +34,6 @@ import {
   uvec2,
   vec2,
   vec3,
-  vec4,
 } from 'three/tsl';
 import { CUBE_FACES } from '../../../core/coords';
 import { cubeFaceUv } from '../../common/climateTexture';
@@ -37,18 +41,27 @@ import { cubeFaceUv } from '../../common/climateTexture';
 type F = Node<'float'>;
 type V3 = Node<'vec3'>;
 
-/** Interior texels per face edge: about 2 km at R = 1,000 km. */
-export const BAKE_RESOLUTION = 768;
-/** Game seconds the field may age before it is baked again (clouds move about 12 m/s: 0.2 texel). */
-const MAX_AGE = 30;
+/**
+ * Interior texels per face edge: about 3 km at R = 1,000 km. The field's finest octave of
+ * any weight is 4 km, and the clouds' shapes come from the noise volumes: at 768 the
+ * picture was the same, for 2.25 times the memory and the bake's time (decision 141).
+ */
+export const BAKE_RESOLUTION = 512;
+/**
+ * Game seconds the field may age before it is baked again. Clouds move about 12 m/s, and
+ * the noise that shapes them moves every frame: with the coverage 30 s behind (360 m), cloud
+ * edges jumped at each bake.
+ */
+const MAX_AGE = 10;
 /** Real milliseconds between bakes at most, whatever the time rate. */
 const MIN_INTERVAL_MS = 100;
 
 export interface CoverageSource {
-  /** Coverage 0..1 at a direction (any length). */
-  coverage(direction: V3): F;
-  /** Precipitation fraction 0..1 at a direction. */
-  precipitation(direction: V3): F;
+  /**
+   * What a texel stores at a direction (unit length): coverage 0..1,
+   * precipitation fraction 0..1, cloud base in units of BASE_SCALE, development.
+   */
+  texel(direction: V3): Node<'vec4'>;
 }
 
 /** Direction of cube-face coordinates (u, v), in TSL; mirrors `cubeFaceUvToDirection`. */
@@ -92,6 +105,8 @@ export class CoverageBake {
   ) {
     const m = (this.m = n + 2);
     this.texture = new StorageTexture(3 * m, 2 * m);
+    // Half floats: the march thresholds noise by these values, and 8-bit steps showed (decision 141).
+    this.texture.type = HalfFloatType;
     this.texture.generateMipmaps = false;
     const count = 6 * m * m;
     this.kernel = Fn(() => {
@@ -109,7 +124,7 @@ export class CoverageBake {
       textureStore(
         this.texture,
         uvec2(col.mul(m).add(x), row.mul(m).add(y)),
-        vec4(source.coverage(dir), source.precipitation(dir), 0, 1),
+        source.texel(dir),
       ).toWriteOnly();
     })().compute(count);
   }
@@ -134,6 +149,12 @@ export class CoverageBake {
     this.bakes++;
   }
 
+  /** Frees the texture (13 MB on the GPU at the default resolution) and the kernel. */
+  dispose(): void {
+    this.texture.dispose();
+    this.kernel.dispose();
+  }
+
   /** Baked (coverage, precipitation) at a direction (any length); usable in any shader stage. */
   sample(direction: V3): Node<'vec2'> {
     const { face, uv } = cubeFaceUv(direction);
@@ -142,5 +163,18 @@ export class CoverageBake {
     const cell = vec2(face.mod(3).toFloat(), face.div(3).toFloat());
     const atlas = cell.add(st).div(vec2(3, 2));
     return texture(this.texture, atlas).level(int(0)).xy as Node<'vec2'>;
+  }
+
+  /**
+   * All four baked channels at a direction (any length): coverage,
+   * precipitation, cloud base in units of BASE_SCALE, development. One read.
+   */
+  sampleAll(direction: V3): Node<'vec4'> {
+    const { face, uv } = cubeFaceUv(direction);
+    const m = this.m;
+    const st = uv.mul(this.n).add(1).div(m);
+    const cell = vec2(face.mod(3).toFloat(), face.div(3).toFloat());
+    const atlas = cell.add(st).div(vec2(3, 2));
+    return texture(this.texture, atlas).level(int(0)) as unknown as Node<'vec4'>;
   }
 }

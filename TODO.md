@@ -299,7 +299,7 @@ Civilian geography (settlements, roads, bridges) joins the strategic graph befor
 - [x] Tools: `tools/weather.preview.ts` draws cloud, precipitation, isobars and 850 hPa winds and prints statistics
 - [x] Checkpoint 7: owner review of the time bar, auto-slowdown and clouds from live weather in the browser (signed off 2026-11-11; the GPU cloud test now runs on lavapipe and caught clear skies that were not clear, decision 69)
 - [x] Storm and dust channels (rain from drizzle to 55 mm/h in storm cores), weather presets, the standalone weather for Free Flight, and the `WeatherState` uniforms the effects share (decision 137)
-- Carried to V2: weather fields not yet used in the renderer (fog and visibility, rain and snow on the ground, live winds for wave direction)
+- Carried to V2: live winds for wave direction (fog, visibility, rain, snow, dust and storms reached the renderer with decisions 141 and 142)
 
 ### C2. Air tasking and mission search (old M7, without models and the chase camera)
 
@@ -436,7 +436,7 @@ Simulation view (needs S1's `render/sim/` split):
   - [ ] Field edges: hedgerows or darker field margins, if the patchwork needs more structure (not in Part I yet)
   - [ ] Farmland follows the 4 km habitability grid and the biome; S4's urban extents and roads could shape it further (fields along roads, none inside town extents)
 - [x] Simulation preview views: re-aim Part I checks 1–5 (5 km mixed landscape, 500 m conifer edge with a road, mountains at low sun, airbase at dusk, coast with glint) at or below 20 km in `tools/render.preview.ts`; retire views between 20 and 100 km (`oblique`, `roads`, `coast`) or move them to the strategic set (carried from old M5) (decision 128: `mixed`, `conifer`, `range`, `dusk`, `beach`; `VIEWS=checks`; targets in `tools/checkViews.ts`)
-  - [ ] Check 1 (`mixed`): at 5 km the view looks down onto a cloud layer, which ends in a hard straight edge across the frame; with `CLOUDS=0` the landscape reads. Find the cloud edge (near fade, or the layer's intersection with the view)
+  - [x] Check 1 (`mixed`): at 5 km the view looked down onto a cloud layer that ended in a hard straight edge across the frame (the flat shell seen edge-on); the volumetric clouds replace the shell inside 20 km (decision 141)
   - [ ] Check 1: the river at the town is hard to find at 5 km; rivers should be the most visible terrain feature from altitude (Part I)
   - [ ] Check 2 (`conifer`): the town's built-up patch reads as large triangles of roof and wall colors under the buildings; the road is faint at 500 m
   - [ ] Check 4 (`dusk`): no parked aircraft yet (aircraft meshes in the simulation view, V4)
@@ -478,11 +478,26 @@ Simulation view (needs S1's `render/sim/` split):
 - [x] Checkpoint 4: owner review of terrain shading, seasons, forests, rivers and clouds
   - [x] No river channels carved into lake beds
   - [x] Clouds moved by prevailing winds without stretching, and regularly clear everywhere (decisions 58, 59)
-- [ ] Weather in the renderer (from C1): fog and visibility, rain and snow on the ground, live winds for wave direction
+- [x] Weather in the renderer (from C1): fog and visibility, rain and snow in the air and wet ground, dust storms, lightning (decisions 139, 141, 142)
+  - [ ] Live winds for wave direction on the sea
+  - [ ] Snow accumulating on the ground from snowfall (ground snow follows climate and season; a preset shifts the temperature)
 - [ ] Tree kit from model specs ([docs/visual-style.md](docs/visual-style.md) Part I, Vegetation): conifer, broadleaf, birch/poplar, palm, acacia, shrub, dead/burnt, each within the guide's triangle budget and sturdy proportions (canopy width ≥ ½ height, trunk ≥ ⅒); per-instance scale 0.8–1.3, yaw, tilt under 4°, and a value-first shade shift within the biome's canopy shades; types assigned by biome; clustered placement with a sharp forest edge and a scattered fringe of trees and shrubs. Replaces the old M3 clump trees (needs V3's model builder)
 - [ ] Tree LOD, following the guide's bands: instanced trees casting shadows to 1.5 km, merged cluster meshes (10–30 trees each, no shadows) to 5 km, terrain forest shade beyond, with the 5 km seam hidden by haze and matched colors (decision 45: ~6.6 M triangles over dense forest at the default 5 km range; decision 131's culling and distance thinning bring the densest view to 1.3 M tree triangles meanwhile; budget under 2 M per frame and about 50,000 instances within 1.5 km)
 - [ ] Denser forests: closer clump spacing in closed-canopy biomes, paid for by the tree LOD (owner request at checkpoint 4)
-- [ ] Sky, haze and clouds tuned for 0–20 km only (Part I): drop orbit-only work such as the limb glow from the simulation view
+- [ ] Sky, haze and clouds tuned for 0–20 km only (Part I): drop orbit-only work such as the limb glow from the simulation view (the sky and the clouds are done, decisions 140 and 141; the old cloud shell and sky march remain for the debug camera above 30–50 km)
+- [x] Volumetric clouds, cirrus, fog, dust and rain veils: one march at low resolution in the pipeline's volumetric stage, shaped by the weather; cloud shadows and gray sky light under cloud; three quality levels (`render/sim/clouds/volumetrics.ts`, `cloudForm.ts`, `noiseVolume.ts`, decision 141)
+  - [ ] Time it on a real GPU (timestamp queries, I1): only lavapipe ratios and counted texture reads exist; the estimate for an integrated laptop GPU at 1080p is 4–8 ms at medium
+  - [ ] Snow and blizzard scenes are a dim uniform gray at midday: brighter air under snow cloud, and snow-covered ground lighting the cloud base
+  - [ ] A thin strip along the horizon keeps some of the march's sample pattern from a low camera in a steep bank (pinned by a test in `tests/gpu/simPipeline.test.ts`)
+  - [ ] Faint horizontal streaks in night rain at high brightness (the rain's cloud-cover read is held for 400 m of the ray)
+  - [ ] Clouds receive no mountain shadows and do not shade moonlight; cloud bases ignore terrain exaggeration
+  - [ ] Fog pools by 65 km weather cells: fill single valleys from the terrain's height under the camera
+  - [ ] Single cumulus still read as smooth pebbles at medium quality; more lobes per cloud without noise in the sky
+- [x] Rain, snow and dust particles near the camera, lightning from a seeded schedule with a bolt and a flash, synthesized thunder, rain and wind (`render/sim/weather/precipitation.ts`, `lightning.ts`, `ui/audio/`, decision 142)
+  - [ ] Owner: listen to the audio (thunder, rain, wind, blowing sand); its gains are first guesses and nobody has heard it
+  - [ ] An option that softens repeated strokes: a strike can flash the whole frame up to four times in 0.3 s (photosensitivity)
+  - [ ] Lamp light on particles at night; splashes on the runway
+  - [ ] Snow may twinkle in a slow pan where flakes cross the edge of their cell: check in motion
 - [x] Cast shadows from terrain: a height-field shadow baked around the camera, three nested grids, soft edges; deeper sky fill, a low-sun exposure for surfaces, snow sparkle and wet ground (`render/sim/lighting/terrainShadow.ts`, decision 139)
   - [ ] Wire the app: `globe.shadows.setHeights(global.height, global.n)` next to `globe.terrain.setWorld(...)` in `main.ts` and in Free Flight; until then only the previews show shadows
   - [ ] Shadows cast by trees, buildings and aircraft (Part I: the aircraft's shadow on the ground is a height cue)

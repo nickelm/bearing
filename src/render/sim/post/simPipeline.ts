@@ -14,15 +14,29 @@
  *    the final pass reads all of them (`airAt`). (The direct path's depth
  *    buffer is 24-bit fixed point; the float depth here is what a reversed
  *    depth buffer is meant to have.)
- * 2. **Volumetrics** (only while a source is set and enabled), at 1/2, 1/3 or
- *    1/4 of the resolution: a depth pass picks, per low-resolution pixel, the
- *    nearest or the farthest depth of its block in a checkerboard, and the
- *    volumetric pass evaluates the source along the block's central ray up to
- *    that distance (viewRays.ts). Alternating nearest and farthest gives the
- *    upsample a sample of each side of a silhouette among its neighbors. A
- *    third pass averages the result over 3 × 3 low-resolution texels of
- *    similar depth, which removes the march's jitter: interleaved gradient
- *    noise is built to even out over exactly that box.
+ * 2. **Volumetrics** (only while a source is set, enabled and not `idle`), at
+ *    1/2, 1/3 or 1/4 of the resolution: a depth pass picks, per low-resolution
+ *    pixel, the nearest or the farthest depth of its block in a checkerboard
+ *    (and keeps the other one beside it), and the volumetric pass evaluates
+ *    the source along a ray through the block up to that distance
+ *    (viewRays.ts), or rather along one of nine rays through the block, so
+ *    that the filter's 3 × 3 average antialiases edges in the air.
+ *    Alternating nearest and farthest gives the upsample a sample of each
+ *    side of a silhouette among its neighbors. A third pass averages the
+ *    result over 3 × 3 low-resolution texels of the same surface, which
+ *    removes the pattern of a march that samples at one of nine offsets in a
+ *    3 × 3 tile (decision 141), and interleaved gradient noise, which is
+ *    built to even out over exactly that box. "The same surface" (see
+ *    SAME_SURFACE, FAR_SURFACE, HIDDEN_SURFACE and FILTER_RANGE): depths
+ *    within 15%, or further apart by no more than the depths within either
+ *    block (ground that recedes under a low camera); anything beyond 15 km
+ *    and the sky; and whatever lies behind air that is opaque in both
+ *    texels. Where fewer than the nine match (beside a silhouette, on rows
+ *    of ground that stand apart) the 16 texels around them join in, counted
+ *    by their place in the 3 × 3 tile so that no place counts twice.
+ *    The shaders of the march are kept per source and resolution
+ *    (`MARCH_SHADERS`): a source that is set again, such as a quality level
+ *    chosen a second time, compiles nothing.
  * 3. **Overlay** (only while `overlay` has a visible child): the overlay
  *    scene drawn with the same camera into its own target, cleared to
  *    transparent, so it accumulates premultiplied color and coverage.
@@ -40,9 +54,11 @@
  *
  * Depth-aware upsample: each pixel weights the four low-resolution texels
  * around it by their bilinear weight over the squared relative difference of
- * their depth to its own, so texels on the other side of a silhouette count
- * for almost nothing. If none of the four is within 10%, the 3 × 3 block of
- * low-resolution texels is searched for the closest depth. With MSAA, a
+ * their depth to its own (beyond what counts as the same surface), so texels
+ * on the other side of a silhouette count for almost nothing. If none of the
+ * four is within 10%, the 3 × 3 block of low-resolution texels is searched
+ * for the closest depth. Where the air in front of the pixel is all but
+ * opaque, neighbors whose air is opaque too count whatever their depth. With MSAA, a
  * pixel whose samples lie on two surfaces takes the result for each, mixed
  * by the samples' share, so that fog and cloud do not undo the antialiasing
  * of silhouettes.
@@ -68,7 +84,7 @@ import {
   NoToneMapping,
   OneFactor,
   QuadMesh,
-  RedFormat,
+  RGFormat,
   RenderTarget,
   Scene,
   SrcAlphaFactor,
@@ -137,7 +153,7 @@ export interface VolumetricContext {
   rayDirection: V3;
   /** Distance along the ray to the opaque surface (m); ≥ 1e7 for sky. */
   sceneDistance: F;
-  /** Screen uv 0..1 of the low-res pixel. */
+  /** Screen uv 0..1 of the ray: a place in the low-res pixel's block. */
   uv: V2;
   /** Per-pixel, per-frame dither 0..1 (interleaved gradient noise). */
   jitter: F;
@@ -147,6 +163,11 @@ export interface VolumetricContext {
 export interface VolumetricSource {
   /** rgb: in-scattered radiance (scene units, before exposure); a: transmittance of the scene behind. */
   build(ctx: VolumetricContext): V4;
+  /**
+   * True while the source would return (0, 0, 0, 1) for every pixel (clear air): the
+   * pipeline then leaves its volumetric stage out of the frame (decision 141).
+   */
+  idle?: boolean;
 }
 
 export interface SimPipelineOptions {
@@ -173,6 +194,8 @@ export interface PipelineStats {
 /** The renderer's exposure (`renderer.toneMappingExposure`), which the app's exposure control sets. */
 const exposure = toneMappingExposure as unknown as F;
 
+/** Shaders of the volumetric march kept at most: one per source and resolution drawn. */
+const MARCH_SHADERS = 8;
 /** Frames watched for GPU errors after the frame's shaders have changed. */
 const GUARD_FRAMES = 3;
 /** Relative depth difference above which the upsample looks further for a matching texel. */
@@ -183,6 +206,37 @@ const MSAA_SAMPLES = 4;
 const EDGE = 0.05;
 /** Relative depth difference at which a neighbor's weight in the low-resolution filter falls to 1/e. */
 const FILTER_DEPTH = 0.05;
+/**
+ * Weight of the filter's 3 × 3 texels (of 9) under which it takes the 16 around them as well:
+ * any texel whose nine do not all match.
+ */
+const FILTER_SPARSE = 8.5;
+/**
+ * The most of the depth range within a block (relative, as `apart`) that the filter takes off
+ * the difference between two blocks: more is a silhouette inside the block.
+ */
+const FILTER_RANGE = 0.25;
+/**
+ * Relative depth difference up to which two low-resolution texels count as the same surface,
+ * for the filter and the upsample: ground receding toward the horizon differs by this much
+ * from one texel to the next, and weighting those apart left the march's sample pattern
+ * and the texel grid visible on clouds and fog in front of it (decision 141).
+ */
+const SAME_SURFACE = 0.15;
+/**
+ * Distance (m) from which a surface counts toward the sky for the same two: the air in front
+ * of ground 100 km away and in front of the sky above it is the same air, and treating the
+ * horizon as a silhouette drew it as a line across clouds in front of it (decision 141).
+ */
+const FAR_SURFACE = 15_000;
+/**
+ * Transmittance of the volumetric result from which the surface behind it counts in full for
+ * the same two: behind opaque cloud or fog a surface's depth changes nothing, and telling
+ * the horizon's ground from the sky above it there drew a line across the cloud in front of
+ * both (decision 141). The rule is for a pair: both results must be opaque. A wall whose
+ * air lets it through stays apart from the opaque sky beside it (no halo).
+ */
+const HIDDEN_SURFACE = 0.1;
 
 /**
  * Makes an overlay material add its color times its alpha to the image
@@ -269,12 +323,20 @@ export class SimPipeline {
   volumetricsEnabled = true;
   /** Average the marched result over 3 × 3 low-resolution texels before the upsample. */
   volumetricFilter = true;
+  /**
+   * Send each low-resolution pixel's ray through one of nine places in its block instead of
+   * the center (see `volumetricNode`). Read when the volumetric shader is built.
+   */
+  volumetricSupersample = true;
   /** Advance the jitter and the grain each frame; off for repeatable stills. */
   animateNoise = true;
   readonly stats: PipelineStats = { passes: 0, fullResolutionPasses: 0, targets: 0 };
 
   private source: VolumetricSource | null = null;
-  private sourceVersion = 0;
+  /** A number per source object seen, and the current source's: they name its march's shader. */
+  private readonly sourceIds = new WeakMap<VolumetricSource, number>();
+  private sourceCount = 0;
+  private sourceId = 0;
   /** What the source threw while its shader was built, until `render` has dealt with it. */
   private sourceError: unknown = null;
   private divisor = 3;
@@ -289,6 +351,8 @@ export class SimPipeline {
   private bloomChain: Bloom | null = null;
   private readonly fullSize = uniform(new Vector2(1, 1));
   private readonly lowSize = uniform(new Vector2(1, 1));
+  /** Reversed depth of a surface FAR_SURFACE away: the floor of `apart`. */
+  private readonly farDepth = uniform(1e-30);
   /** Offsets of the noise patterns this frame (pixels). */
   private readonly jitterOffset = uniform(new Vector2());
   private readonly grainOffset = uniform(new Vector2());
@@ -297,10 +361,10 @@ export class SimPipeline {
   private readonly gradeSaturation = uniform(1);
   private readonly gradeGamma = uniform(1);
   private readonly grade: GradeBand = gradeAt(0.6, 0);
-  private depthSelect: QuadMesh | null = null;
-  private volumetric: QuadMesh | null = null;
+  /** The depth selection's quad by divisor, and the march's by divisor and source. */
+  private readonly depthSelects = new Map<number, QuadMesh>();
+  private readonly marches = new Map<string, QuadMesh>();
   private filter: QuadMesh | null = null;
-  private lowKey = '';
   private readonly finals = new Map<string, QuadMesh>();
   private readonly size = new Vector2();
   private width = 0;
@@ -347,11 +411,16 @@ export class SimPipeline {
   set volumetrics(source: VolumetricSource | null) {
     if (source === this.source) return;
     this.source = source;
-    this.sourceVersion++;
-    // Shaders built around the old source are never drawn again.
-    for (const q of this.finals.values()) disposeQuad(q);
-    this.finals.clear();
-    this.bloomChain?.reset();
+    if (!source) return;
+    // The march's shader is kept per source (`marches`): a source that comes back, such as
+    // a quality level chosen again, is drawn without compiling anything. The final pass
+    // and the bloom read the source's result, not the source: their shaders stay.
+    let id = this.sourceIds.get(source);
+    if (id === undefined) {
+      id = ++this.sourceCount;
+      this.sourceIds.set(source, id);
+    }
+    this.sourceId = id;
   }
 
   /**
@@ -381,9 +450,13 @@ export class SimPipeline {
     this.resize(Math.max(1, this.size.x), Math.max(1, this.size.y));
     camera.updateMatrixWorld();
     this.rays.update(camera);
+    // The reversed depth of a surface FAR_SURFACE away along the view axis.
+    this.farDepth.value =
+      (camera.near * Math.max(camera.far - FAR_SURFACE, 0)) /
+      (FAR_SURFACE * (camera.far - camera.near));
     this.updateUniforms();
 
-    let volumetric = this.volumetricsEnabled && this.source !== null;
+    let volumetric = this.volumetricsEnabled && this.source !== null && this.source.idle !== true;
     const overlay = this.overlay.children.some((c) => c.visible);
     const stats = this.stats;
     stats.passes = stats.fullResolutionPasses = 1;
@@ -400,7 +473,7 @@ export class SimPipeline {
       renderer.render(scene, camera);
 
       // The scene's own shaders are not this pipeline's to judge: the scope starts after them.
-      const variant = `${volumetric ? `${this.divisor}v${this.sourceVersion}` : '-'}${overlay}${this.variantKey()}`;
+      const variant = `${volumetric ? `${this.divisor}s${this.sourceId}` : '-'}${overlay}${this.variantKey()}`;
       if (variant !== this.guardKey) {
         this.guardKey = variant;
         this.guardFrames = GUARD_FRAMES;
@@ -429,7 +502,7 @@ export class SimPipeline {
         stats.passes++;
         stats.targets++;
       }
-      const key = `${volumetric ? `${this.divisor}v${this.sourceVersion}` : '-'}|${overlay ? 'o' : '-'}`;
+      const key = `${volumetric ? this.divisor : '-'}|${overlay ? 'o' : '-'}`;
       if (this.bloom) {
         const bloom = (this.bloomChain ??= this.createBloom());
         bloom.threshold.value = this.grade.bloom * this.bloomThresholdScale;
@@ -482,8 +555,10 @@ export class SimPipeline {
   dispose(): void {
     this.release();
     this.bloomChain?.dispose();
-    disposeQuad(this.depthSelect);
-    disposeQuad(this.volumetric);
+    for (const q of this.depthSelects.values()) disposeQuad(q);
+    this.depthSelects.clear();
+    for (const q of this.marches.values()) disposeQuad(q);
+    this.marches.clear();
     disposeQuad(this.filter);
     for (const q of this.finals.values()) disposeQuad(q);
     this.finals.clear();
@@ -536,6 +611,14 @@ export class SimPipeline {
     return abs(a.sub(b)).div(max(max(a, b), 1e-30)) as F;
   }
 
+  /**
+   * `mismatch` for the low-resolution filter and the upsample: surfaces beyond
+   * FAR_SURFACE differ less the farther both are, and the farthest are one with the sky.
+   */
+  private apart(a: F, b: F): F {
+    return abs(a.sub(b)).div(max(max(a, b), this.farDepth)) as F;
+  }
+
   /** The scene's reversed depth at a pixel: of one of its samples, with MSAA. */
   private depthAt(pixel: IV2, sample = 0): F {
     return fetch(this.depthTexture, pixel, sample).x as F;
@@ -547,7 +630,7 @@ export class SimPipeline {
     const renderer = this.renderer;
     if (!this.lowDepth || !this.lowRaw || !this.lowColor) {
       const nearest = { depthBuffer: false, minFilter: NearestFilter, magFilter: NearestFilter };
-      this.lowDepth = new RenderTarget(1, 1, { type: FloatType, format: RedFormat, ...nearest });
+      this.lowDepth = new RenderTarget(1, 1, { type: FloatType, format: RGFormat, ...nearest });
       this.lowDepth.texture.name = 'sim low depth';
       this.lowRaw = new RenderTarget(1, 1, { type: HalfFloatType, ...nearest });
       this.lowRaw.texture.name = 'sim volumetrics, marched';
@@ -555,17 +638,26 @@ export class SimPipeline {
       this.lowColor.texture.name = 'sim volumetrics';
       this.resizeLow();
     }
-    const key = `${this.divisor}v${this.sourceVersion}`;
-    if (key !== this.lowKey) {
-      this.lowKey = key;
-      disposeQuad(this.depthSelect);
-      disposeQuad(this.volumetric);
+    let depthSelect = this.depthSelects.get(this.divisor);
+    if (!depthSelect) {
       const select = quadMaterial('sim depth select');
       select.fragmentNode = this.depthSelectNode();
-      this.depthSelect = new QuadMesh(select);
-      const march = quadMaterial('sim volumetrics');
-      march.fragmentNode = this.volumetricNode(this.source!);
-      this.volumetric = new QuadMesh(march);
+      depthSelect = new QuadMesh(select);
+      this.depthSelects.set(this.divisor, depthSelect);
+    }
+    const key = `${this.divisor}s${this.sourceId}`;
+    let march = this.marches.get(key);
+    if (!march) {
+      // The least recently built goes when there are too many (sources that never return).
+      if (this.marches.size >= MARCH_SHADERS) {
+        const oldest = this.marches.keys().next().value as string;
+        disposeQuad(this.marches.get(oldest) ?? null);
+        this.marches.delete(oldest);
+      }
+      const material = quadMaterial('sim volumetrics');
+      material.fragmentNode = this.volumetricNode(this.source!);
+      march = new QuadMesh(material);
+      this.marches.set(key, march);
     }
     if (!this.filter) {
       const filter = quadMaterial('sim volumetric filter');
@@ -573,9 +665,14 @@ export class SimPipeline {
       this.filter = new QuadMesh(filter);
     }
     renderer.setRenderTarget(this.lowDepth);
-    this.depthSelect!.render(renderer);
+    depthSelect.render(renderer);
     renderer.setRenderTarget(this.volumetricFilter ? this.lowRaw : this.lowColor);
-    this.volumetric!.render(renderer);
+    march.render(renderer);
+    // A source that could not be built is not kept.
+    if (this.sourceError !== null) {
+      disposeQuad(march);
+      this.marches.delete(key);
+    }
     if (this.volumetricFilter) {
       renderer.setRenderTarget(this.lowColor);
       this.filter.render(renderer);
@@ -584,8 +681,10 @@ export class SimPipeline {
 
   /**
    * Per low-resolution pixel, the nearest depth of its block of pixels on the
-   * white squares of a checkerboard and the farthest on the black ones. Every
-   * pixel of the block is read: a tree a pixel wide must not slip through.
+   * white squares of a checkerboard and the farthest on the black ones (r),
+   * and the other of the two (g), from which the filter knows how far the
+   * depths within the block are apart. Every pixel of the block is read: a
+   * tree a pixel wide must not slip through.
    */
   private depthSelectNode(): V4 {
     const s = this.divisor;
@@ -602,7 +701,7 @@ export class SimPipeline {
         }
       }
       const white = low.x.add(low.y).bitAnd(1).equal(0);
-      return vec4(select(white, nearest, farthest), 0, 0, 1);
+      return vec4(select(white, nearest, farthest), select(white, farthest, nearest), 0, 1);
     })() as V4;
   }
 
@@ -611,8 +710,18 @@ export class SimPipeline {
     return Fn(() => {
       const low = ivec2(screenCoordinate.xy).toVar();
       const depth = fetch(this.lowDepth!.texture, low).x.toVar();
-      // The center of the block, in the frame's uv.
-      const uv = vec2(low).add(0.5).mul(s).div(this.fullSize).toVar();
+      // Where in its block the ray passes, in the frame's uv: one of nine places, a third of
+      // the block apart, laid out so that every 3 × 3 low-resolution pixels (and every row
+      // and column of three) hold each of the three places across and each of the three
+      // down once. The filter's average over 3 × 3 then has nine rays per block's area, and
+      // a hard edge in the air (a fog bank's top against the sky, a cloud's outline) comes
+      // out a third of a block wide, not as steps a whole block high.
+      const place = this.volumetricSupersample
+        ? vec2(low.x.add(low.y).mod(int(3)), low.x.add(low.y.mul(2)).mod(int(3)))
+            .sub(1)
+            .div(3)
+        : vec2(0, 0);
+      const uv = vec2(low).add(0.5).add(place).mul(s).div(this.fullSize).toVar();
       const ray = this.rays.ray(uv as V2).toVar();
       const stretch = length(ray).toVar();
       const ctx: VolumetricContext = {
@@ -634,9 +743,10 @@ export class SimPipeline {
 
   /**
    * The marched result averaged over the 3 × 3 low-resolution texels around
-   * each, weighted by how close their depths are: the box over which
-   * interleaved gradient noise evens out, so the jitter of the march does not
-   * reach the screen as a pattern.
+   * each, weighted by how close their depths are: the box over which a
+   * march's nine sample offsets (and interleaved gradient noise) even out,
+   * so they do not reach the screen as a pattern. Where the nine do not all
+   * match, over the 5 × 5 around it (see the file comment).
    */
   private filterNode(): V4 {
     const lowDepth = this.lowDepth!.texture;
@@ -644,20 +754,86 @@ export class SimPipeline {
     return Fn(() => {
       const low = ivec2(screenCoordinate.xy).toVar();
       const last = ivec2(this.lowSize).sub(1).toVar();
-      const depth = fetch(lowDepth, low).x.toVar();
+      const own = fetch(lowDepth, low).toVar();
+      const depth = own.x;
+      // How far the depths within this texel's block are apart.
+      const range = this.apart(own.x as F, own.y as F).toVar();
+      const through = fetch(lowRaw, low).a.toVar();
+      // At the frame's edge the window moves inward, far enough for the ring below: clamped
+      // texels would count some of the march's nine sample offsets twice and others not at
+      // all. (The outermost texels are then outside their own 3 × 3, and inside the ring.)
+      const inner = (max as unknown as (a: Node, b: Node) => IV2)(
+        clampTexel(low, last.sub(2) as IV2),
+        ivec2(2, 2),
+      );
+      const center = clampTexel(inner, last as IV2).toVar();
       const sum = vec4(0).toVar();
       const weight = float(0).toVar();
+      const taps: { i: number; j: number; raw: V4; w: F }[] = [];
+      const tap = (i: number, j: number) => {
+        const texel = clampTexel(center.add(ivec2(i, j)), last as IV2).toVar();
+        const raw = fetch(lowRaw, texel).toVar() as V4;
+        // Where both results are opaque, what lies behind them does not show: one surface.
+        const shown = smoothstep(0, HIDDEN_SURFACE, max(raw.a, through));
+        // On a surface that recedes, the nearest depth of one block and the farthest of the
+        // next (the depth selection's checkerboard) are as far apart as the depths within
+        // either block: that much is no difference between them.
+        const there = fetch(lowDepth, texel).toVar();
+        const slack = min(min(this.apart(there.x as F, there.y as F), range), FILTER_RANGE);
+        const m = max(
+          this.apart(there.x as F, depth as F)
+            .mul(shown)
+            .sub(slack)
+            .sub(SAME_SURFACE),
+          0,
+        ).div(FILTER_DEPTH);
+        const w = exp(m.mul(m).negate()).toVar() as F;
+        taps.push({ i, j, raw, w });
+        return { raw, w };
+      };
       for (let j = -1; j <= 1; j++) {
         for (let i = -1; i <= 1; i++) {
-          const texel = clampTexel(low.add(ivec2(i, j)), last as IV2).toVar();
-          const m = SimPipeline.mismatch(fetch(lowDepth, texel).x as F, depth as F).div(
-            FILTER_DEPTH,
-          );
-          const w = exp(m.mul(m).negate()).toVar();
-          sum.addAssign(fetch(lowRaw, texel).mul(w));
+          const { raw, w } = tap(i, j);
+          sum.addAssign(raw.mul(w));
           weight.addAssign(w);
         }
       }
+      // Beside a silhouette, and on ground that recedes under a low camera (each row of
+      // texels a surface of its own, and the depth selection's checkerboard two), few of
+      // the nine are on this texel's side, and what is left of the march's sample pattern
+      // would show as dots along the edge or the rows. There the ring around the block joins
+      // in: 16 more texels, for the texels that need them. The 25 are counted by their place
+      // in the pattern (the nine classes of a texel's coordinates modulo 3: one to four
+      // texels each), and no place counts for more than one texel however many of its
+      // texels match: a row of five then holds each of its three places once, and half a
+      // block on one side of a silhouette all nine, as the whole 3 × 3 does.
+      If(weight.lessThan(FILTER_SPARSE), () => {
+        for (let j = -2; j <= 2; j++) {
+          for (let i = -2; i <= 2; i++) {
+            if (Math.max(Math.abs(i), Math.abs(j)) === 2) tap(i, j);
+          }
+        }
+        const classed = vec4(0).toVar();
+        const classes = float(0).toVar();
+        const place = (k: number) => ((k % 3) + 3) % 3;
+        for (let b = 0; b < 3; b++) {
+          for (let a = 0; a < 3; a++) {
+            const members = taps.filter((t) => place(t.i) === a && place(t.j) === b);
+            let total: V4 = vec4(0) as V4;
+            let matched: F = float(0) as F;
+            for (const t of members) {
+              total = total.add(t.raw.mul(t.w)) as V4;
+              matched = matched.add(t.w) as F;
+            }
+            const share = matched.toVar();
+            const counted = min(share, 1).toVar();
+            classed.addAssign(total.mul(counted.div(max(share, 1e-6))));
+            classes.addAssign(counted);
+          }
+        }
+        sum.assign(classed);
+        weight.assign(classes);
+      });
       return sum.div(weight);
     })() as V4;
   }
@@ -676,20 +852,24 @@ export class SimPipeline {
     const base = floor(at).toVar();
     const f = at.sub(base).toVar();
     const corner = ivec2(base).toVar();
-    const mismatch = (d: F): F => SimPipeline.mismatch(d, depth);
+    const mismatch = (d: F): F => this.apart(d, depth);
     const sum = vec4(0).toVar();
     const weight = float(0).toVar();
     const best = float(1e9).toVar();
+    const taps: { m: F; bilinear: F; color: V4 }[] = [];
     for (let j = 0; j < 2; j++) {
       for (let i = 0; i < 2; i++) {
         const texel = clampTexel(corner.add(ivec2(i, j)), last as IV2).toVar();
-        const m = mismatch(fetch(lowDepth, texel).x as F).toVar();
-        const bilinear = (i ? f.x : f.x.oneMinus()).mul(j ? f.y : f.y.oneMinus());
+        const m = mismatch(fetch(lowDepth, texel).x as F).toVar() as F;
+        const bilinear = (i ? f.x : f.x.oneMinus()).mul(j ? f.y : f.y.oneMinus()).toVar() as F;
         // The small floor lets a texel with no bilinear weight stand in when the others do not match.
-        const w = bilinear.add(0.02).div(m.mul(m).add(1e-4)).toVar();
-        sum.addAssign(fetch(lowColor, texel).mul(w));
+        const apart = max(m.sub(SAME_SURFACE), 0);
+        const w = bilinear.add(0.02).div(apart.mul(apart).add(1e-4)).toVar();
+        const color = fetch(lowColor, texel).toVar() as V4;
+        sum.addAssign(color.mul(w));
         weight.addAssign(w);
         best.assign(min(best, m));
+        taps.push({ m, bilinear, color });
       }
     }
     const result = sum.div(weight).toVar();
@@ -710,6 +890,23 @@ export class SimPipeline {
       If(best.lessThan(MISMATCH), () => {
         result.assign(fetch(lowColor, found));
       });
+    }).ElseIf(result.a.lessThan(HIDDEN_SURFACE), () => {
+      // The air in front of this pixel's surface is all but opaque (`result` is that of the
+      // texels at its depth). A neighbor whose air is opaque too shows the same thing,
+      // whatever lies behind either: it counts as the same surface, so the horizon draws no
+      // line across cloud or fog in front of it. A neighbor whose air lets its surface
+      // through (a wall in front of fogged sky) stays apart: no halo.
+      const own = result.a.toVar();
+      const merged = vec4(0).toVar();
+      const mergedWeight = float(0).toVar();
+      for (const tap of taps) {
+        const shown = smoothstep(0, HIDDEN_SURFACE, max(tap.color.a, own));
+        const apart = max(tap.m.mul(shown).sub(SAME_SURFACE), 0);
+        const w = tap.bilinear.add(0.02).div(apart.mul(apart).add(1e-4)).toVar();
+        merged.addAssign(tap.color.mul(w));
+        mergedWeight.addAssign(w);
+      }
+      result.assign(merged.div(mergedWeight));
     });
     return result as V4;
   }

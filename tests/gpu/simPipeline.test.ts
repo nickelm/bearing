@@ -19,7 +19,8 @@ import {
   Vector3,
 } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
-import { float, select, uniform, vec3, vec4, wgslFn } from 'three/tsl';
+import { float, floor, screenCoordinate, select, uniform, vec3, vec4, wgslFn } from 'three/tsl';
+import { marchOffset } from '../../src/render/sim/clouds/volumetrics';
 import { heightFogTestSource } from '../../src/render/sim/post/heightFog';
 import { CubeGrid } from '../../src/core/cubeGrid';
 import { DEG } from '../../src/core/units';
@@ -434,6 +435,132 @@ describe.skipIf(!gpu)('SimPipeline on Dawn', () => {
       expect(flat.max).toBeLessThan(0.62);
       expect(Math.max(...a.map((v, i) => Math.abs(v - b[i]!)))).toBeLessThan(0.11);
       expect(gpu!.errors).toEqual([]);
+    }
+    pipeline.dispose();
+    head.dispose();
+  }, 120_000);
+
+  it('averages the sample pattern of a march out over receding ground and across the horizon', async () => {
+    // The other half of the upsample's contract (the first is "without a halo" above): cloud
+    // and fog in front of ground that recedes to the horizon must not show the march's
+    // 3 × 3 sample pattern, although the ground's depth differs from texel to texel and the
+    // sky's from the ground's. The march's offset itself is the image, as half-transparent
+    // air in front of everything.
+    const w = 384;
+    const h = 192;
+    const head = await headlessRenderer(gpu!.device, w, h);
+    const scene = new Scene();
+    scene.backgroundNode = vec3(0.02, 0.05, 0.2);
+    const material = new MeshBasicNodeMaterial({ side: DoubleSide });
+    material.colorNode = vec3(0.1, 0.3, 0.1);
+    const ground = new Mesh(new PlaneGeometry(2, 2), material);
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
+    // A narrow view: a low-resolution texel spans about a quarter of a degree, as in the app.
+    const camera = new PerspectiveCamera(15, w / h, 1, 500_000);
+    camera.updateProjectionMatrix();
+    const pipeline = barePipeline(head);
+    const linear = (byte: number) =>
+      byte <= 10 ? byte / 255 / 12.92 : Math.pow((byte / 255 + 0.055) / 1.055, 2.4);
+    const red = (rgb: Uint8Array, x: number, y: number) => linear(rgb[(y * w + x) * 3]!);
+    const isGround = (rgb: Uint8Array, x: number, y: number) => red(rgb, x, y) > 0.05;
+    const cases: {
+      altitude: number;
+      reach: number;
+      roll: number;
+      beside: number;
+      rows?: number;
+    }[] = [
+      // From 10 km the ground's edge is hundreds of kilometers away: it and the sky above it
+      // are one surface to the filter, in level flight and in a banked turn.
+      { altitude: 10_000, reach: 300_000, roll: 0, beside: 0 },
+      { altitude: 10_000, reach: 300_000, roll: 0.5, beside: 0 },
+      // From 1,500 m the horizon is 55 km away and stays a silhouette, as a ridge does: the
+      // texels next to it average the part of the pattern on their side (out of 5 × 5
+      // there). `beside` is the most that may leave.
+      { altitude: 1500, reach: 55_000, roll: 0, beside: 0.02 },
+      { altitude: 1500, reach: 55_000, roll: 0.5, beside: 0.15 },
+      // From 20 m (a tower, an aircraft on the runway) the ground's depth changes by a third
+      // and more from one row of texels to the next under the horizon, and within each
+      // block: the filter takes a block's own range of depths off the difference, and where
+      // rows still stand apart a texel averages its own row. Two rows of texels keep an
+      // eighth of the pattern in level flight; in a bank the rows cross the pattern at an
+      // angle and a strip along the horizon keeps up to all of it (`rows`, `beside`).
+      { altitude: 20, reach: 55_000, roll: 0, beside: 0.25, rows: 0.08 },
+      { altitude: 20, reach: 55_000, roll: 0.5, beside: 0.45, rows: 0.2 },
+    ];
+    for (const view of cases) {
+      ground.scale.setScalar(view.reach);
+      ground.position.y = -view.altitude;
+      camera.rotation.set(-4 * DEG, 0, view.roll, 'YXZ');
+      pipeline.volumetrics = null;
+      pipeline.render(scene, camera);
+      await gpu!.finish();
+      const clear = await head.readRgb();
+      pipeline.volumetrics = {
+        build: () => vec4(vec3(marchOffset(floor(screenCoordinate.xy) as Node<'vec2'>)), 0.5),
+      };
+      for (const scale of [1 / 3, 1 / 2, 1 / 4]) {
+        pipeline.volumetricScale = scale;
+        pipeline.render(scene, camera);
+        await gpu!.finish();
+        const air = await head.readRgb();
+        expect(gpu!.errors).toEqual([]);
+        // Every pixel is its surface behind the air's mean: the nine offsets average to 0.5.
+        // (As marched they spread over ±0.44.)
+        const margin = Math.round(2 / scale);
+        let worst = 0;
+        let worstBeside = 0;
+        // Pixels that keep more than a ninth of the pattern.
+        let over = 0;
+        let groundPixels = 0;
+        for (let y = 0; y < h; y++) {
+          for (let x = 0; x < w; x++) {
+            const on = isGround(clear, x, y);
+            if (on) groundPixels++;
+            const error = Math.abs(red(air, x, y) - (0.5 * red(clear, x, y) + 0.5));
+            // Beside the silhouette: within two low-resolution texels of the other surface.
+            let beside = false;
+            if (view.beside > 0) {
+              for (const [i, j] of [
+                [-1, -1],
+                [1, -1],
+                [-1, 1],
+                [1, 1],
+              ] as const) {
+                const xx = Math.min(w - 1, Math.max(0, x + i * margin));
+                const yy = Math.min(h - 1, Math.max(0, y + j * margin));
+                if (isGround(clear, xx, yy) !== on) beside = true;
+              }
+            }
+            if (error > 0.05) over++;
+            if (beside) worstBeside = Math.max(worstBeside, error);
+            else worst = Math.max(worst, error);
+          }
+        }
+        expect(groundPixels).toBeGreaterThan(w * h * 0.4);
+        expect(groundPixels).toBeLessThan(w * h * 0.85);
+        expect(worst).toBeLessThan(view.rows ?? 0.03);
+        expect(worstBeside).toBeLessThanOrEqual(view.beside);
+        // Whatever is left is left in few pixels.
+        expect(over / (w * h)).toBeLessThan(0.03);
+      }
+    }
+    // All but opaque air hides the silhouette behind it: the banked horizon of the last view
+    // leaves nothing of the pattern, at the horizon either.
+    pipeline.volumetrics = {
+      build: () => vec4(vec3(marchOffset(floor(screenCoordinate.xy) as Node<'vec2'>)), 0.02),
+    };
+    for (const scale of [1 / 3, 1 / 2, 1 / 4]) {
+      pipeline.volumetricScale = scale;
+      pipeline.render(scene, camera);
+      await gpu!.finish();
+      const air = await head.readRgb();
+      let worst = 0;
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) worst = Math.max(worst, Math.abs(red(air, x, y) - 0.5));
+      }
+      expect(worst).toBeLessThan(0.03);
     }
     pipeline.dispose();
     head.dispose();

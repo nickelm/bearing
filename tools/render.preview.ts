@@ -40,6 +40,26 @@
  *          LOW_SUN_EXPOSURE=x sets the exposure of lit surfaces over the sky's under a low sun
  *          (default 1.7), SKY_LEAN=x how far the sky's light leans toward the sun (0.5),
  *          DAYLIGHT=x the sun's illuminance by day (1.4),
+ *        weather and volumetrics (decision 141): WEATHER=<preset> shows a weather preset
+ *          (sim/weather/presets.ts: clear, fair, overcast, drizzle, rain, storm, snow, blizzard,
+ *          fog, duststorm) in place of the sim's, with the ground as wet as its rain makes it;
+ *          QUALITY=low|medium|high sets the volumetrics' steps and resolution, VOL=0 leaves
+ *          them out (the cloud shell shows instead), CLOUDS_3D=0 and AIR=0 leave out the clouds
+ *          or the fog, dust and rain shafts alone, CIRRUS=x sets the amount of cirrus (0..1);
+ *          PERF_VOL=n times the frame without the volumetrics and with them under each weather
+ *          of PERF_WEATHER (clear,fair,overcast,storm) at each quality, interleaved over n
+ *          rounds; FRAMES=n renders n more frames with the clocks running (FRAME_DT real seconds
+ *          each, TIME_RATE game seconds per real second) and prints how far each differs from
+ *          the one before (tools/clouds.preview.ts draws the volumetrics without a world),
+ *        precipitation and lightning (decision 142): RAIN=x, SNOW=x, DUST=x (0..1) set the
+ *          intensity at the camera whatever the weather (WEATHER=storm RAIN=1 is a skyfall);
+ *          PRECIP=0 leaves the particles out, PRECIP_DENSITY=x scales their number;
+ *          LIGHTNING=<s> shows a strike to the ground that many seconds after it began,
+ *          LIGHTNING_KM (4) ahead and LIGHTNING_SIDE degrees (0) off the view's heading, with
+ *          the shape LIGHTNING_SEED picks; LIGHTNING=0 leaves the lightning out;
+ *          CAM_VEL=<forward>[,<right>[,<up>]] (m/s) gives the camera a velocity for the
+ *          particles' streaks; PERF_PRECIP=n times the frame without and with the particles,
+ *          interleaved over n rounds (tools/precip.preview.ts times them on a plain scene),
  *        SCENE=strategic draws the strategic view (StrategicScene, decisions 74, 93) instead,
  *          from STRATEGIC_PREVIEW_VIEWS (globe, night, theater, region, floor, cities, capital, front, winter,
  *          and sharp at 1920 × 1080; front centers on the first front line), with clouds, tile counts and frame times per view;
@@ -76,6 +96,7 @@ import { DAY, DEG, HOUR, KM } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
 import { FARMABLE_BIOMES } from '../src/render/common/palette';
 import { GlobeScene } from '../src/render/sim/globeScene';
+import { strikeAtPlace } from '../src/render/sim/weather/lightning';
 import { buildFontAtlas, FONT_IDS } from '../src/render/strategic/labels/fontAtlas';
 import type { FontId } from '../src/render/strategic/labels/fontAtlas';
 import { LABEL_FONT_FILES } from '../src/render/strategic/labels/fontFiles';
@@ -90,6 +111,7 @@ import { RiverIndex } from '../src/worldgen/riverIndex';
 import { testGpu } from '../tests/gpu/device';
 import { headlessRenderer } from '../tests/gpu/renderer';
 import { heightFogTestSource } from '../src/render/sim/post/heightFog';
+import type { VolumetricQuality } from '../src/render/sim/clouds/volumetrics';
 import { encodePng } from './png';
 import { previewWorld } from './previewWorld';
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
@@ -99,6 +121,9 @@ import { observerStations } from '../src/render/sim/camera/observerStations';
 import { airfieldGrading } from '../src/render/sim/infra/airfieldGrading';
 import { buildWeatherClimate } from '../src/sim/weather/climate';
 import { WeatherGrid } from '../src/sim/weather/grid';
+import { WeatherView } from '../src/sim/weather/frame';
+import { applyPreset, WEATHER_PRESETS } from '../src/sim/weather/presets';
+import type { WeatherPreset } from '../src/sim/weather/presets';
 import { createSimWorld } from '../src/sim/world';
 import { campaignInput } from '../src/sim/command/campaignInput';
 import { findCheckTargets } from './checkViews';
@@ -648,6 +673,17 @@ it('renders preview views', async () => {
     pipeline.bloom = process.env.BLOOM !== '0';
     pipeline.grain = pipeline.dither = process.env.GRAIN !== '0';
     pipeline.grading = process.env.GRADE_TOD !== '0';
+    // The volumetric clouds, fog, dust and rain shafts (decision 141): QUALITY=low|medium|high
+    // sets their steps and resolution, VOL=0 leaves them out (the cloud shell shows instead),
+    // CIRRUS=x sets the amount of cirrus (0..1), CLOUDS_3D=0 and AIR=0 leave out the clouds
+    // or the fog, dust and rain shafts alone.
+    // The picture kept is drawn at the quality asked for: no frame at the lower one to warm it up.
+    scene.volumetrics.skipWarmUp();
+    if (process.env.QUALITY) scene.volumetrics.quality = process.env.QUALITY as VolumetricQuality;
+    if (process.env.VOL === '0') pipeline.volumetricsEnabled = false;
+    if (process.env.CIRRUS) scene.volumetrics.cirrus.value = Number(process.env.CIRRUS);
+    if (process.env.CLOUDS_3D === '0') scene.volumetrics.cloudsEnabled = false;
+    if (process.env.AIR === '0') scene.volumetrics.airEnabled = false;
     if (process.env.VOLSCALE) pipeline.volumetricScale = Number(process.env.VOLSCALE);
     if (process.env.VOLTEST === '1') {
       pipeline.volumetrics = heightFogTestSource({
@@ -724,6 +760,27 @@ it('renders preview views', async () => {
       state.wetness.value = Number(process.env.WET);
     };
   }
+  // Precipitation and lightning (decision 142). RAIN=x, SNOW=x, DUST=x (0..1) set the
+  // intensity at the camera whatever the weather; PRECIP=0 leaves the particles out and
+  // PRECIP_DENSITY=x scales their number; LIGHTNING=0 leaves the lightning out.
+  scene.lightning.seed = params.seed;
+  if (process.env.LIGHTNING === '0') scene.lightning.enabled = false;
+  if (scene.precipitation) {
+    scene.precipitation.enabled = process.env.PRECIP !== '0';
+    if (process.env.PRECIP_DENSITY) {
+      scene.precipitation.density = Number(process.env.PRECIP_DENSITY);
+    }
+  }
+  if (process.env.RAIN || process.env.SNOW || process.env.DUST) {
+    const state = scene.weatherState;
+    const update = state.update.bind(state);
+    state.update = (...a: Parameters<typeof update>) => {
+      update(...a);
+      if (process.env.RAIN) state.rain.value = Number(process.env.RAIN);
+      if (process.env.SNOW) state.snow.value = Number(process.env.SNOW);
+      if (process.env.DUST) state.dust.value = Number(process.env.DUST);
+    };
+  }
 
   const main = new Vec3d(...world.info.mainContinent);
   const lat0 = Math.asin(main.y);
@@ -743,12 +800,29 @@ it('renders preview views', async () => {
     climate,
   };
   let simWorld = createSimWorld(weatherConfig);
-  const weatherAt = (t: number) => {
+  /** A clock for forced coverage bakes, past the bake's minimum interval each time. */
+  let bakeClock = 0;
+  // WEATHER=<preset> (sim/weather/presets.ts) shows that weather in place of the sim's.
+  const preset = (process.env.WEATHER ?? 'live') as WeatherPreset;
+  if (!WEATHER_PRESETS.includes(preset)) {
+    throw new RangeError(`WEATHER must be one of ${WEATHER_PRESETS.join(', ')}`);
+  }
+  const presetView = new WeatherView(new WeatherGrid());
+  // Cloud bases stand on the mean ground of each weather sample.
+  scene.weather.setGround(climate.ground);
+  const weatherAt = (t: number, shown: WeatherPreset = preset) => {
     if (t < simWorld.sim.time) simWorld = createSimWorld(weatherConfig);
     simWorld.sim.advanceTo(t);
-    const view = simWorld.weather.view();
+    let view = simWorld.weather.view();
+    if (shown !== 'live') {
+      applyPreset(shown, view, presetView);
+      view = presetView;
+    }
     scene.weather.setFrames(view);
     scene.weather.update(view, t);
+    // The weather at the camera (WeatherState); the wetness starts from this weather's rain.
+    scene.weatherView = view;
+    scene.weatherState.reset();
   };
 
   // Targets: the deepest lake away from the ice caps, and dense forest near the main continent.
@@ -1073,6 +1147,7 @@ it('renders preview views', async () => {
     const cloudTime = t + Number(process.env.HOURS ?? 0) * HOUR;
     scene.clouds.time.value = cloudTime;
     weatherAt(cloudTime);
+    scene.volumetrics.reset();
     scene.clouds.enabled.value = process.env.CLOUDS === '0' ? 0 : 1;
     // RIVERS=x sets how strongly sub-pixel rivers are drawn (0 = their true pixel fraction).
     if (process.env.RIVERS) scene.terrain.riverStyle.legibility.value = Number(process.env.RIVERS);
@@ -1126,7 +1201,61 @@ it('renders preview views', async () => {
       scene.shadows.exaggeration = exaggeration;
       scene.shadows.bake(head.renderer, new Vec3d(e.x, e.y, e.z), scene.sun);
     }
+    {
+      // LIGHTNING=<s> shows a strike to the ground that many seconds after it began, ahead of
+      // the camera at LIGHTNING_KM (default 4) and LIGHTNING_SIDE degrees off the view's
+      // heading (default 0); LIGHTNING_SEED picks its shape. CAM_VEL=<forward>[,<right>[,<up>]]
+      // (m/s) gives the camera a velocity for the particles' streaks.
+      const e = scene.lighting.eye.value;
+      const eye = new Vec3d(e.x, e.y, e.z);
+      const up = eye.clone().normalize();
+      // The camera looks along −Z of its world matrix.
+      const m = scene.camera.matrixWorld.elements;
+      const forward = new Vec3d(-m[8]!, -m[9]!, -m[10]!).normalize();
+      const level = forward.clone().addScaled(up, -forward.dot(up)).normalize();
+      const right = level.clone().cross(up);
+      const age = Number(process.env.LIGHTNING ?? 0);
+      if (age > 0) {
+        const side = Number(process.env.LIGHTNING_SIDE ?? 0) * DEG;
+        const range = Number(process.env.LIGHTNING_KM ?? 4) * KM;
+        const place = eye
+          .clone()
+          .addScaled(level, range * Math.cos(side))
+          .addScaled(right, range * Math.sin(side));
+        scene.lightning.forced = {
+          strike: strikeAtPlace(place, Number(process.env.LIGHTNING_SEED ?? 7)),
+          age,
+        };
+      }
+      if (process.env.CAM_VEL && scene.precipitation) {
+        const [f = 0, r = 0, u = 0] = process.env.CAM_VEL.split(',').map(Number);
+        scene.precipitation.velocityOverride = new Vec3d()
+          .addScaled(forward, f)
+          .addScaled(right, r)
+          .addScaled(up, u);
+      }
+    }
     scene.render(0);
+    if (scene.precipitation) {
+      const p = scene.precipitation;
+      const kinds = (['rain', 'snow', 'dust'] as const).filter((k) => p.counts[k] > 0);
+      if (kinds.length > 0) {
+        console.log(
+          `  particles ${v.name}: ` +
+            kinds.map((k) => `${k} ${p.levels[k].toFixed(2)} → ${p.counts[k]}`).join(', '),
+        );
+      }
+    }
+    if (scene.lightning.current) {
+      const b = scene.lightning.bolt;
+      console.log(
+        `  lightning ${v.name}: flash ${scene.lightning.intensity.toFixed(2)}` +
+          (b
+            ? `, bolt ${b.segments} segments, ${b.height.toFixed(0)} m, ` +
+              `${(100 * scene.lightning.boltShowing).toFixed(0)}% showing past the cloud`
+            : ''),
+      );
+    }
     // PERF=n: time n more frames of the loaded view (CPU in scene.render, and until the GPU is done).
     // FLICKER=n: n frames at 30 fps with the view turning slowly (as when dragging),
     // logging terrain statistics and the lower half's brightness per frame.
@@ -1269,6 +1398,7 @@ it('renders preview views', async () => {
         dither: pipeline.dither,
         volumetrics: pipeline.volumetricsEnabled,
       };
+      const source = pipeline.volumetrics;
       pipeline.volumetrics ??= heightFogTestSource({
         eye: scene.lighting.eye,
         radius: params.radius,
@@ -1315,9 +1445,125 @@ it('renders preview views', async () => {
       scene.postEnabled = saved.post;
       stages(true);
       pipeline.volumetricsEnabled = saved.volumetrics;
-      if (process.env.VOLTEST !== '1') pipeline.volumetrics = null;
+      pipeline.volumetrics = source;
       scene.render(0);
       await gpu.finish();
+    }
+    // PERF_VOL=n: n rounds of the frame without the volumetrics and with them under each
+    // weather of PERF_WEATHER (default clear,fair,overcast,storm) at each quality, interleaved
+    // like PERF_POST. Prints the median ms per frame and what each adds over the frame without.
+    const volRounds = Number(process.env.PERF_VOL ?? 0);
+    if (volRounds > 0 && scene.pipeline) {
+      const pipeline = scene.pipeline;
+      const saved = {
+        enabled: pipeline.volumetricsEnabled,
+        quality: scene.volumetrics.quality,
+        scale: pipeline.volumetricScale,
+      };
+      const kinds = (process.env.PERF_WEATHER ?? 'clear,fair,overcast,storm').split(
+        ',',
+      ) as WeatherPreset[];
+      const show = (kind: WeatherPreset) => {
+        weatherAt(cloudTime, kind);
+        scene.clouds.bake(head.renderer, (bakeClock += 1e9));
+      };
+      const levels = ['low', 'medium', 'high'] as const;
+      const modes: [string, () => void][] = [];
+      for (const kind of kinds) {
+        modes.push([
+          `${kind}/off`,
+          () => {
+            // Without the volumetrics and without the shell that would stand in for them.
+            show(kind);
+            pipeline.volumetricsEnabled = false;
+            scene.clouds.shellEnabled = false;
+          },
+        ]);
+        for (const quality of levels) {
+          modes.push([
+            `${kind}/${quality}`,
+            () => {
+              show(kind);
+              pipeline.volumetricsEnabled = true;
+              scene.clouds.shellEnabled = true;
+              scene.volumetrics.quality = quality;
+            },
+          ]);
+        }
+      }
+      const times: Record<string, number[]> = {};
+      for (let round = -1; round < volRounds; round++) {
+        for (const [name, set] of modes) {
+          set();
+          // A new quality's shader is compiled and drawn a few frames before the source may
+          // rest in clear air; the weather's coverage is baked.
+          for (let k = 0; k < 3; k++) {
+            scene.render(0);
+            await gpu.finish();
+          }
+          const q0 = performance.now();
+          scene.render(0);
+          await gpu.finish();
+          if (round >= 0) (times[name] ??= []).push(performance.now() - q0);
+        }
+      }
+      const median = (a: number[]) => [...a].sort((x, y) => x - y)[a.length >> 1]!;
+      console.log(
+        `  volumetrics ${v.name} (median of ${volRounds}, ms/frame): ` +
+          kinds
+            .map((kind) => {
+              const off = median(times[`${kind}/off`]!);
+              return (
+                `${kind}: off ${off.toFixed(1)}, ` +
+                levels
+                  .map((l) => `${l} ${(median(times[`${kind}/${l}`]!) - off).toFixed(1)}`)
+                  .join(', ')
+              );
+            })
+            .join('; '),
+      );
+      pipeline.volumetricsEnabled = saved.enabled;
+      scene.clouds.shellEnabled = true;
+      scene.volumetrics.quality = saved.quality;
+      pipeline.volumetricScale = saved.scale;
+      weatherAt(cloudTime);
+      scene.clouds.bake(head.renderer, (bakeClock += 1e9));
+      scene.render(0);
+      await gpu.finish();
+    }
+    // PERF_PRECIP=n: n rounds of the frame without the particles and with them, interleaved
+    // like PERF_POST (the overlay pass exists only with them); prints the median ms per frame.
+    const precipRounds = Number(process.env.PERF_PRECIP ?? 0);
+    if (precipRounds > 0 && scene.precipitation) {
+      const p = scene.precipitation;
+      const modes: [string, () => void][] = [
+        ['without', () => (p.enabled = false)],
+        ['with', () => (p.enabled = true)],
+      ];
+      const times: Record<string, number[]> = {};
+      for (let round = -1; round < precipRounds; round++) {
+        for (const [name, set] of modes) {
+          set();
+          scene.render(0);
+          await gpu.finish();
+          const q0 = performance.now();
+          scene.render(0);
+          await gpu.finish();
+          // Round −1 compiles each mode's shaders.
+          if (round >= 0) (times[name] ??= []).push(performance.now() - q0);
+        }
+      }
+      const median = (a: number[]) => [...a].sort((x, y) => x - y)[a.length >> 1]!;
+      console.log(
+        `  precipitation ${v.name}: ` +
+          modes
+            .map(
+              ([name]) =>
+                `${name} ${median(times[name]!).toFixed(1)} (least ${Math.min(...times[name]!).toFixed(1)})`,
+            )
+            .join(', ') +
+          ` ms/frame (median of ${precipRounds}); instances rain ${p.counts.rain}, snow ${p.counts.snow}, dust ${p.counts.dust}`,
+      );
     }
     // PERF_SHADOW=n: n rounds of the frame without the mountain shadows' lookup and the snow's
     // glints, with the lookup, and with both, interleaved like PERF_POST. Nothing is baked
@@ -1362,6 +1608,41 @@ it('renders preview views', async () => {
     const smooth = process.env.FACETS === '0' ? '-smooth' : '';
     const file = join(outDir, `render-${seed}-${v.name}${ungraded}${smooth}.png`);
     writeFileSync(file, encodePng(width, height, rgb));
+    // FRAMES=n: n more frames with the clocks running (FRAME_DT real seconds each, default
+    // 1/30; TIME_RATE game seconds per real second, default 1), each written as
+    // render-<seed>-<view>-f<k>.png and compared with the one before: the mean and the largest
+    // difference per channel, to judge the volumetrics' noise, crawl and motion.
+    const sequence = Number(process.env.FRAMES ?? 0);
+    if (sequence > 0) {
+      const frameDt = Number(process.env.FRAME_DT ?? 1 / 30);
+      const rate = Number(process.env.TIME_RATE ?? 1);
+      let before = rgb;
+      for (let k = 1; k <= sequence; k++) {
+        scene.gameTime += frameDt * rate;
+        scene.clouds.time.value += frameDt * rate;
+        scene.render(frameDt);
+        await gpu.finish();
+        const now = await head.readRgb();
+        let sum = 0;
+        let worst = 0;
+        let over = 0;
+        for (let i = 0; i < now.length; i++) {
+          const d = Math.abs(now[i]! - before[i]!);
+          sum += d;
+          if (d > worst) worst = d;
+          if (d > 6) over++;
+        }
+        console.log(
+          `  frame ${k}: mean difference ${(sum / now.length).toFixed(2)}, largest ${worst}, ` +
+            `${((100 * over) / now.length).toFixed(2)}% of values over 6`,
+        );
+        writeFileSync(
+          join(outDir, `render-${seed}-${v.name}-f${k}.png`),
+          encodePng(width, height, now),
+        );
+        before = now;
+      }
+    }
     const s = scene.terrain.stats;
     if (process.env.DEBUG) {
       let withRivers = 0;

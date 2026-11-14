@@ -43,7 +43,7 @@
  */
 import { Vector3 } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
-import { dot, max, mix, normalize, select, uniform, vec3 } from 'three/tsl';
+import { clamp, dot, max, mix, normalize, select, uniform, vec3 } from 'three/tsl';
 import { moonlightFraction } from '../../../core/moon';
 import { DEG, KM, PLANET_RADIUS } from '../../../core/units';
 import type { Vec3d } from '../../../core/vec3d';
@@ -157,6 +157,28 @@ export const SUNSET_VIBRANCE = 1.9;
 /** How far a surface's color fades to its luminance under the night's light, 0..1. */
 export const NIGHT_DESATURATION = 0.75;
 
+/** The tint of the light under a closed cloud deck: a slightly cool gray. */
+export const OVERCAST_TINT = [0.96, 0.99, 1.05] as const;
+/**
+ * The light under cloud over the clear sky's, by luminance: under a thin
+ * closed deck (overcast 0.4 and less) and under the deepest storm (overcast 1).
+ * A deck scatters the sun's light down as well as the sky's, so thin overcast
+ * is brighter than a clear sky's shade; under a storm little arrives.
+ */
+export const OVERCAST_GAIN: readonly [number, number] = [2.3, 0.35];
+
+/**
+ * The sky's light on a surface under cloud. `overcast` is how closed and deep
+ * the cloud above is, 0..1 (CloudLayer.overcast): the light loses its blue
+ * (fully from 0.3 up, a closed deck of any depth) and is scaled by
+ * `OVERCAST_GAIN`. No texture read.
+ */
+export function overcastSky(sky: Vec3Node, overcast: Node<'float'>): Vec3Node {
+  const gray = vec3(...OVERCAST_TINT).mul(dot(sky, vec3(...LUMA)));
+  const gain = mix(OVERCAST_GAIN[0], OVERCAST_GAIN[1], clamp(overcast.sub(0.4).div(0.6), 0, 1));
+  return mix(sky, gray.mul(gain), clamp(overcast.div(0.3), 0, 1)) as Vec3Node;
+}
+
 export class PlanetLighting {
   /** Unit vector toward the sun, world frame. */
   readonly sunDirection = uniform(new Vector3(1, 0, 0));
@@ -224,6 +246,14 @@ export class PlanetLighting {
    * a full moon lit nothing, and the only light on the ground was the settlements' glow).
    */
   fullMoon = 0.12;
+  /**
+   * Lightning (weather/lightning.ts): the light of the discharge under way on a surface under
+   * it, in display units, and where it is, planet-centered (m). Zero between flashes.
+   */
+  readonly flashLight = uniform(new Vector3());
+  readonly flashPosition = uniform(new Vector3());
+  /** Distance at which the flash's light has fallen to half (m). */
+  readonly flashReach = uniform(8 * KM);
   /** The sun's elevation at the camera (rad) and how far night has fallen there (0..1), as of `update`. */
   sunElevation = Math.PI / 2;
   night = 0;
@@ -239,6 +269,12 @@ export class PlanetLighting {
    * the terrain (lighting/terrainShadow.ts). Set before materials are built.
    */
   terrainShadow: ((p: Vec3Node) => Node<'float'>) | null = null;
+  /**
+   * Optional measure of how closed and deep the cloud over a planet-centered
+   * point is, 0..1 (CloudLayer.overcast): the sky's light on surfaces turns
+   * gray and dim by it (`overcastSky`). Set before materials are built.
+   */
+  overcast: ((p: Vec3Node) => Node<'float'>) | null = null;
 
   constructor(readonly radius = PLANET_RADIUS) {
     this.atmosphere = new AtmosphereNodes(
@@ -334,6 +370,17 @@ export class PlanetLighting {
       .add(this.moonSkyAt(up)) as Vec3Node;
   }
 
+  /**
+   * A lightning flash's light at a planet-centered point: `flashLight`, falling off with the
+   * distance from the discharge. It comes from above and from all around the channel, so
+   * surfaces take it like sky light. No texture read.
+   */
+  flashAt(p: Vec3Node): Vec3Node {
+    const d = p.sub(this.flashPosition);
+    const reach = this.flashReach.mul(this.flashReach);
+    return this.flashLight.mul(reach.div(reach.add(dot(d, d)))) as Vec3Node;
+  }
+
   /** Planet-centered position of a camera-relative world position. */
   planetPosition(relative: Vec3Node): Vec3Node {
     return relative.add(this.eye) as Vec3Node;
@@ -383,15 +430,18 @@ export class PlanetLighting {
   at(relative: Vec3Node): LightAt {
     const p = this.planetPosition(relative);
     const up = normalize(p) as Vec3Node;
-    const sky = this.atmosphere
+    let sky = this.atmosphere
       .skyIrradiance(dot(up, this.sunDirection))
       .mul(this.sunIlluminance.mul(this.skyFill).mul(this.surfaceGain)) as Vec3Node;
+    // Under cloud the sky's light is the cloud base's: gray, and dimmer the deeper the cloud.
+    if (this.overcast) sky = overcastSky(sky, this.overcast(p));
     return {
       p,
       up,
       // Surfaces are exposed above the sky under a low sun (`surfaceExposure`).
       sunlight: this.sunlightAt(p).mul(this.surfaceGain).toVar() as Vec3Node,
-      sky: sky.toVar() as Vec3Node,
+      // A lightning flash lights surfaces as a brief, bright sky.
+      sky: sky.add(this.flashAt(p)).toVar() as Vec3Node,
       moonlight: this.moonlightAt(p).toVar() as Vec3Node,
       moonSky: this.moonSkyAt(up).toVar() as Vec3Node,
     };

@@ -31,12 +31,15 @@ import { ObserverCamera } from './camera/observerCamera';
 import { ChaseCamera } from './camera/chaseCamera';
 import { ClimateTexture } from '../common/climateTexture';
 import { CloudLayer } from './clouds/cloudLayer';
+import { Volumetrics } from './clouds/volumetrics';
 import { WeatherTexture } from './clouds/weatherTexture';
 import { ForestLayer } from './forest/forestLayer';
 import { GlobeMesh } from '../common/globeMesh';
 import { PlanetLighting } from './lighting/planetLighting';
 import { TerrainShadow } from './lighting/terrainShadow';
 import { WeatherState } from './weather/weatherState';
+import { Lightning } from './weather/lightning';
+import { Precipitation } from './weather/precipitation';
 import { TerrainRenderer } from './terrain/terrainRenderer';
 import { MotionEstimate } from '../common/terrain/prefetch';
 import { OrbitCamera, attachOrbitInput } from '../common/orbitCamera';
@@ -100,8 +103,13 @@ export class GlobeScene {
   readonly forest: ForestLayer;
   /** Buildings of towns, airbases and industry near the camera (decision 65). */
   readonly structures: StructureLayer;
-  /** Cloud shell and cloud shadows (decisions 55, 68). */
+  /** Cloud coverage, cloud shadows and the shell far above the view (decisions 55, 68, 141). */
   readonly clouds: CloudLayer;
+  /**
+   * Raymarched clouds, fog, dust and rain shafts (clouds/volumetrics.ts), drawn by the
+   * pipeline; `volumetrics.quality` sets their cost. Without a pipeline the shell stands in.
+   */
+  readonly volumetrics: Volumetrics;
   /** Strategic graph and cast overlay (milestone 4). */
   readonly strategic: StrategicOverlay;
   /** Unit vector toward the sun, world frame. Set by the app from the ephemeris. */
@@ -125,10 +133,26 @@ export class GlobeScene {
   pipeline: SimPipeline | null = null;
   /** Draw through the pipeline; false draws the scene directly, with the renderer's tone curve only. */
   postEnabled = true;
+  /**
+   * Rain, snow and dust near the camera (weather/precipitation.ts), drawn in the pipeline's
+   * overlay; null without a pipeline. `precipitation.enabled` switches the particles.
+   */
+  precipitation: Precipitation | null = null;
+  /**
+   * Lightning: flashes, the bolt and thunder (weather/lightning.ts). The app sets its `seed`
+   * (the world's) and `onThunder`; `lightning.enabled` switches it. Without a pipeline it
+   * still flashes and thunders, without a bolt.
+   */
+  readonly lightning: Lightning;
   /** Draw the tiled terrain when available (otherwise the M1 grid mesh). */
   useTiles = true;
   /** Whether the terrain has a world to draw (set by the app). */
   terrainReady = false;
+  /**
+   * True while the game clock stands still (set by the app): the weather's animation, the
+   * particles and the lightning hold, while the camera still moves.
+   */
+  paused = false;
   private detachInput: (() => void) | null = null;
   private mode: SimCameraMode = 'free';
   private readonly scratch = new Vec3d();
@@ -149,6 +173,7 @@ export class GlobeScene {
     // Clouds first: their shadow hook must be in place before lit materials are built.
     this.clouds = new CloudLayer(options.radius, this.lighting, this.weather);
     this.lighting.sunVisibility = (p) => this.clouds.shadow(p);
+    this.lighting.overcast = (p) => this.clouds.overcast(p);
     // Likewise the terrain's shadow; its bake reads the terrain's tiles.
     this.shadows = new TerrainShadow(this.lighting.sunDirection, options.radius);
     this.lighting.terrainShadow = (p) => this.shadows.visibility(p);
@@ -178,6 +203,29 @@ export class GlobeScene {
       this.pipeline = new SimPipeline(renderer);
     } catch (error) {
       console.warn('Post-processing is unavailable; the simulation view draws directly.', error);
+    }
+    this.volumetrics = new Volumetrics({
+      lighting: this.lighting,
+      clouds: this.clouds,
+      weather: this.weather,
+      state: this.weatherState,
+    });
+    if (this.pipeline) this.volumetrics.attach(this.pipeline);
+    this.lightning = new Lightning(
+      options.radius,
+      this.weatherState,
+      this.lighting,
+      this.pipeline?.sceneDistance ?? null,
+    );
+    this.lightning.groundAt = (d) =>
+      this.useTiles && this.terrainReady ? this.terrain.displayHeightAt(d) : null;
+    if (this.pipeline) {
+      this.precipitation = new Precipitation(
+        this.weatherState,
+        this.lighting,
+        this.pipeline.sceneDistance,
+      );
+      this.pipeline.overlay.add(this.precipitation.group, this.lightning.group);
     }
 
     this.inputEnabled = options.input !== false;
@@ -281,7 +329,15 @@ export class GlobeScene {
     this.camera.far = o.far;
     this.camera.updateProjectionMatrix();
 
+    // The effects' clock: real seconds, none while the game is paused.
+    const effectDt = this.paused ? 0 : dt;
     this.sunLight.position.set(this.sun.x, this.sun.y, this.sun.z);
+    // The shell shows only where the pipeline does not draw the volumetric clouds.
+    this.clouds.volumetric =
+      this.postEnabled &&
+      this.pipeline !== null &&
+      this.pipeline.volumetricsEnabled &&
+      this.pipeline.volumetrics === this.volumetrics.source;
     this.clouds.update(o.eye);
     moonDirection(this.gameTime, this.planetOrbit, this.calendar, this.moon);
     this.lighting.update(o.eye, this.sun, this.moon);
@@ -290,8 +346,31 @@ export class GlobeScene {
       o.eye,
       o.eye.length() - this.lighting.radius,
       this.gameTime,
-      dt,
+      effectDt,
     );
+    // Which marches run this frame and between which heights, the key light, the fog's drift.
+    this.volumetrics.groundScale = this.terrain.exaggerationUniform.value;
+    this.volumetrics.update(o.eye, effectDt);
+    // Lightning first: its flash lights the particles too.
+    const fovY = (this.camera.fov * Math.PI) / 180;
+    this.lightning.update({
+      view: this.weatherView,
+      eye: o.eye,
+      gameTime: this.gameTime,
+      dt: effectDt,
+      pixelAngle: fovY / this.viewportHeight,
+    });
+    this.precipitation?.update({
+      eye: o.eye,
+      forward: o.forward,
+      up: o.up,
+      dt: effectDt,
+      fovY,
+      aspect: this.camera.aspect,
+      viewportHeight: this.viewportHeight,
+      aboveGround,
+      near: o.near,
+    });
     this.lighting.atmosphere.sky.setCelestial(
       this.lighting.sunElevation,
       this.lighting.night,
@@ -374,6 +453,20 @@ export class GlobeScene {
     this.renderer.render(this.scene, this.camera);
   }
 
+  /**
+   * After a camera cut or a jump of the game clock (a new flight, another station, a seek):
+   * the effects that remember the last frame start over. The ground takes its wetness from
+   * the weather at the new place, fog banks and particles forget the old camera, no thunder
+   * plays for the time skipped, and the mountain shadows fade in again.
+   */
+  resetAtmosphere(): void {
+    this.weatherState.reset();
+    this.volumetrics.reset();
+    this.precipitation?.reset();
+    this.lightning.reset();
+    this.shadows.reset();
+  }
+
   dispose(): void {
     this.inputEnabled = false;
     this.globe.dispose();
@@ -381,9 +474,12 @@ export class GlobeScene {
     this.forest.dispose();
     this.structures.dispose();
     this.clouds.dispose();
+    this.weather.dispose();
     this.shadows.dispose();
     this.strategic.dispose();
     this.lighting.atmosphere.dispose();
+    this.precipitation?.dispose();
+    this.lightning.dispose();
     this.pipeline?.dispose();
   }
 }
