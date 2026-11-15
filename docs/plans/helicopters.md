@@ -1,6 +1,6 @@
 # Plan: Helicopters (track H)
 
-_Drafted 2026-11-15 for [proposal 0004](../proposals/0004-helicopter-flight.md) (decision 149). The tasks are in `TODO.md` under the helicopter track; later decisions record what each milestone changes._
+_Drafted 2026-11-15 for [proposal 0004](../proposals/0004-helicopter-flight.md) (decision 149); the owner's answers are decision 151. The tasks are in `TODO.md` under the helicopter track; later decisions record what each milestone changes._
 
 ## Goal
 
@@ -23,7 +23,7 @@ Rotor-disc helicopters in the one flight-model family that AI and player share (
 | Particles                                         | Rain, snow and dust particles with wind                                                                                                                    | `render/sim/weather/` (decision 142)                           |
 | Air war types                                     | Four helicopters: AH-70 Lancer (AH-64A), CH-60 Mule (CH-47D), Ve-28 Shershen (Mi-24V), Ve-36 Bizon (Mi-26); no models                                      | `sim/air/aircraft.ts`                                          |
 | Missions                                          | Helicopter CAS and sling-load resupply, flown analytically at 30 m                                                                                         | `sim/air/mission.ts`, `missionRoute.ts`                        |
-| Canopy height field                               | Accepted (decision 148), not built; needed for tree strikes and battle positions                                                                           | `TODO.md`, V2                                                  |
+| Canopy height field                               | Built for rendering (decision 150); line of sight and tree strikes not yet; needed for both                                                                | `worldgen/canopy.ts`                                           |
 | Helipads, landing zones, rooftop and deck contact | None                                                                                                                                                       | –                                                              |
 
 Two gaps shape the plan. The Little Bird and Black Hawk analogues that H1 names are not in the air war's type table, and adding a type to the order of battle changes every world's cast. And `FlightModel` is a fixed-wing class that the camera, HUD frame, outcomes and director all read directly.
@@ -113,8 +113,8 @@ Fixed and turreted weapons on P4's guns, rockets and missiles; the turret follow
 
 ## Dependencies
 
-- H1 reads "follows P1" as needing P1's framework: the shared airframe and director interfaces (step 0 builds them) and the input and gamepad plumbing. Free Flight already has a first version of both. P1's campaign tasks (promotion, jump-in, handback, the flight cap) are needed only by H5. This reading lets H1 start before P1 closes; the owner confirms it.
-- H3's tree strikes and H5's battle positions need the canopy height field of decision 148.
+- H1 reads "follows P1" as needing P1's framework: the shared airframe and director interfaces (step 0 builds them) and the input and gamepad plumbing. Free Flight already has a first version of both. P1's campaign tasks (promotion, jump-in, handback, the flight cap) are needed only by H5. This reading lets H1 start before P1 closes; the owner confirmed it (decision 151).
+- H3's tree strikes and H5's battle positions need the canopy height field (decisions 148, 150) to reach the simulation: line of sight and tree strikes are its step 7.
 - H3's ship landings need a ship in the simulation view; H5's weapons need P4; H5's jump-in needs P1's take control and hand back.
 
 ## Risks
@@ -125,8 +125,9 @@ Fixed and turreted weapons on P4's guns, rockets and missiles; the turret follow
 - **Pointer lock.** Escape releases it and the browser shows a banner; the pause menu must take over cleanly.
 - **The refactor.** Step 0 touches the Kestrel's code path; the lockstep test guards it.
 
-## Open questions, with recommendations
+## Open questions, answered (decision 151)
 
 - **Wind.** No new weather work is needed: the weather model already supplies local wind and gusts, and the forces are air-relative, so tail rotor authority and weathervaning follow. H1 should fly in wind from the start, with the surface-layer profile above in place of the jet's ground cap.
-- **Engine start.** Not in H1–H4: every spawn is hot, rotor turning. Rotor speed is a state from H1, so a short, skippable start (engines, rotor to 100%) for missions from a forward arming and refueling point costs little in H5. It is flavor; the core loop favors joining in progress.
-- **Door gunners.** AI-only in H5. A player door-gun seat is crew station mode (P5) with a different weapon, so it is cheap once both exist, but it needs ground entities to shoot at; add it after entity promotion.
+- **Engine start.** Hot starts only: every spawn has the rotor turning, and there is no start sequence.
+- **Door gunners.** AI-only in H5. In the end the player can take any crew position while the AI does everything else, which generalizes crew station mode (P5): build the crew so that every seat has an AI and the player's input can replace any one of them.
+- **New types.** Out of the campaign for now. Their roles when they enter it: the Little Bird for close air support and small-unit warfare (dropping troops), the Cobra as a marine attack helicopter, the Black Hawk, Huey and Mi-8 as transports, perhaps with fire support (still open).

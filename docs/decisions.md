@@ -2421,3 +2421,17 @@ The proposal's open questions on engine start and door gunners stay open; the pl
 - **Not done:** hedgerows by climate, tree rows along roads, gallery woods and lone landmark trees (step 5); the quality governor's tree steps; GPU time on real hardware; the shell's edge is notched where its ramp crosses mesh triangles (hidden by edge trees within 1.2 km, a few pixels beyond); a stand map mode in `npm run maps`; line of sight and tree strikes (step 7).
 
 **Reason:** The owner accepted proposal 0003. Sharing one field between the shell, the trees and later the simulation is what makes the cover on screen the cover in the game; culling per tree, not per part, is what keeps closed-canopy density within Part I's triangle budget.
+
+### 151. Owner's answers on proposal 0004: H1 starts now, hot starts, AI door gunners, and any crew position in the end
+
+**Date:** 2026-11-15
+**Decision:** The owner answers the questions decision 149 left open.
+
+- **H1 may start before P1 closes.** It needs only P1's framework (the shared airframe and director interfaces, which H1's first task builds, and the input plumbing); P1's campaign tasks block only H5.
+- **New types stay out of the campaign for now,** as the plan proposed; they get roles when they enter it. The owner's roles: the Little Bird analogue for close air support and small-unit warfare (dropping troops); the Cobra analogue as a marine attack helicopter for close air support; the Black Hawk, Huey and Mi-8 analogues as troop and cargo transports, possibly with a fire-support role (an open question for H5).
+- **Hot starts only.** Helicopters spawn with the rotor turning; there is no engine start sequence.
+- **Door gunners are AI-only** in H5. In the end the player can take any crew position, pilot, gunner, door gunner or systems operator, while the AI fills the others. This generalizes the crew station mode of decision 94 from two-seat jets and attack helicopters to every seat.
+
+`docs/design.md` (*Factions and Sides*, *Open Questions*), proposal 0004's open questions, the plan and `TODO.md` change with this decision.
+
+**Reason:** The owner's answers. One AI that can fill any seat already exists for crew station mode, so letting the player choose the seat costs a seat switch and a view per position rather than a new mechanism.

@@ -1,6 +1,6 @@
 # Proposal 0004: Helicopter Flight Model and Controls
 
-*Drafted 2026-11-15. Status: accepted 2026-11-15 (decision 149). Affects `docs/design.md`, `docs/visual-style.md`, `docs/proposals/0002-third-person-flight.md`, `TODO.md`, and `CLAUDE.md`. The implementation plan is [docs/plans/helicopters.md](../plans/helicopters.md).*
+*Drafted 2026-11-15. Status: accepted 2026-11-15 (decision 149); open questions answered (decision 151). Affects `docs/design.md`, `docs/visual-style.md`, `docs/proposals/0002-third-person-flight.md`, `TODO.md`, and `CLAUDE.md`. The implementation plan is [docs/plans/helicopters.md](../plans/helicopters.md).*
 
 ## Decision
 
@@ -208,3 +208,5 @@ Dependencies: H1 depends on P1 and the Free Flight mode. H5 depends on P4.
 - **Wind.** Wind matters greatly for helicopters (tail rotor authority, landing direction, sling load swing). Should the weather model supply local wind before H1, or can H1 start in calm air?
 - **Engine start.** Should helicopters ever spawn cold, with a short start sequence, for missions launched from a forward arming and refueling point?
 - **Door gunners.** AI-only, or can the player switch to a door gun seat in transport helicopters?
+
+**Owner's answers (decision 151).** Wind: the weather model already supplies it (decision 143), so H1 flies in wind. Engine start: hot starts only, no start sequence. Door gunners: AI-only for now; in the end the player can take any crew position while the AI does everything else. H1 may start before P1 closes, and the new types stay out of the campaign until they get their roles: the Little Bird for close air support and small-unit warfare, the Cobra as a marine attack helicopter, the Black Hawk, Huey and Mi-8 as transports, perhaps with fire support.

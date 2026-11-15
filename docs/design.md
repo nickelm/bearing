@@ -207,7 +207,7 @@ The Alliance and the Pact use fictional aircraft and vehicles with their own nam
 | Heavy helicopter | CH-47 | Mi-26 |
 | Reconnaissance | RF-4 | MiG-25R |
 
-Two-seat aircraft keep their crews, represented by displays and callouts instead of seats. In the F-111, A-6, and Su-24 analogues, an AI weapon systems officer or bombardier/navigator runs the radar and targeting sensor, manages terrain-following, and calls out threats, waypoints, and releases. In **crew station mode** the player hands the flying to the AI pilot and operates the radar, targeting sensor, and weapons themselves, still in the chase view with the targeting display enlarged. Attack helicopters split pilot and gunner the same way, and gunner mode enlarges the gunner sight display.
+Two-seat aircraft keep their crews, represented by displays and callouts instead of seats. In the F-111, A-6, and Su-24 analogues, an AI weapon systems officer or bombardier/navigator runs the radar and targeting sensor, manages terrain-following, and calls out threats, waypoints, and releases. In **crew station mode** the player hands the flying to the AI pilot and operates the radar, targeting sensor, and weapons themselves, still in the chase view with the targeting display enlarged. Attack helicopters split pilot and gunner the same way, and gunner mode enlarges the gunner sight display. In the end the player can take any crew position, pilot, gunner, door gunner or systems operator, while the AI fills the others (decision 151); transport helicopters' door gunners start AI-only.
 
 The table contains two deliberate asymmetries. The A-6 analogue flies only from Alliance carriers, so it appears wherever the cast contains carrier groups. The F-117 analogue is a rare late-war asset with a small fleet, flying single-ship night strikes against the most heavily defended targets. The Pact has no counterpart and relies on mass and SEAD instead. Stealth requires a radar cross-section per aircraft type in the air defense model, which every aircraft gets anyway.
 
@@ -369,7 +369,7 @@ The roadmap splits into a foundation and three tracks that can advance in parall
 
 ### Dependencies and Order
 
-S1 and V1 both depend on F2. S3 depends on S2 for named corridors. V3 depends on S4 for settlement and base data. C2 depends on C1 and S4. V4 depends on C2 and V2. P1 depends on V4. P2 depends on P1. P3 depends on P2 and S4. P4 and P5 depend on P3. H1 depends on P1's framework (the shared airframe and director interfaces, input) and Free Flight; H5 depends on P4 and on P1's take control and hand back.
+S1 and V1 both depend on F2. S3 depends on S2 for named corridors. V3 depends on S4 for settlement and base data. C2 depends on C1 and S4. V4 depends on C2 and V2. P1 depends on V4. P2 depends on P1. P3 depends on P2 and S4. P4 and P5 depend on P3. H1 depends on P1's framework (the shared airframe and director interfaces, input) and Free Flight, and may start before P1 closes (decision 151); H5 depends on P4 and on P1's take control and hand back.
 
 Suggested order: F1, F2, S1, V1, S2, V2, S3, C1, S4, V3, C2, V4, C3, I1. Alternating between the map and the flight view keeps both looking good as the project grows, and each milestone produces something visible.
 
@@ -406,8 +406,7 @@ When the roadmap was adopted (revision 7), F1, F2, C1, and most of S3 and S4 wer
 - **HUD color.** Green for both factions, or green for the Alliance and a different hue for the Pact, as a subtle cue for the side being flown?
 - **Voice.** Text-only messages at first, or early voice callouts with synthesized speech?
 - **Clean mode.** Should a mode exist that hides all overlays for screenshots and spectating?
-- **Helicopter engine start.** Should helicopters ever spawn cold, with a short start sequence, for missions from a forward arming and refueling point? (Proposal 0004; the plan recommends hot starts through H4.)
-- **Door gunners.** AI-only, or can the player take a door gun seat in transport helicopters? (Proposal 0004; the plan recommends AI-only in H5.)
+- **Transport helicopters' fire support.** Should the Black Hawk, Huey and Mi-8 analogues also fly fire support (door guns, rocket pods), or only carry troops and cargo? (Decision 151.)
 
 ## Later (Out of Scope)
 

@@ -767,7 +767,7 @@ AI crewmate and callouts, crew station mode, targeting sensor display, airdrop t
 
 Rotor-disc helicopters with fly-by-mouse, mouse aim and direct control over one flight director, and three assist presets ([docs/proposals/0004-helicopter-flight.md](docs/proposals/0004-helicopter-flight.md)); the plan is [docs/plans/helicopters.md](docs/plans/helicopters.md). Free Flight is the test bed for H1–H4. H1 depends on P1's framework (the shared airframe and director interfaces, which H1's first task builds, and the input plumbing) and on Free Flight; H5 depends on P4 and on P1's take control and hand back. All H milestones touch rendering or UI, so they close only after the Part I acceptance checks.
 
-- [ ] Owner: confirm the plan's readings (H1 may start before P1 closes; new types stay out of the campaign until a task adds them; power from physics calibrated to the spec's curve) and answer the open questions on engine start and door gunners
+- [x] Owner: confirm the plan's readings and answer the open questions (decision 151): H1 starts now; new types stay out of the campaign for now; hot starts only; door gunners AI-only, and in the end any crew position with the AI in the others
 
 ### H1. Rotor model and fly-by-mouse
 
@@ -845,9 +845,9 @@ Fixed and turreted weapons, gunner mode from proposal 0002, AI nap-of-the-earth 
 - [ ] Fixed guns and rocket pods with mouse aim; turreted guns following free look
 - [ ] Attack helicopter gunner mode with an enlarged gunner sight display (moved from P5)
 - [ ] AI behaviors with protection on: nap-of-the-earth routes with radar-altitude hold on the real terrain, battle positions with line of sight through the canopy height field, pop-up attacks, landing zone approaches, sling-load deliveries
-- [ ] Door gunners operated by the AI
+- [ ] Door gunners operated by the AI (decision 151); the crew built so that every seat has an AI and the player can later take any one
 - [ ] Campaign: helicopter missions' jump-in window over their ground phases, handback on the ground (with P1's take control and hand back)
-- [ ] New helicopter types and mission types (troop insertion, scout) in the order of battle, with their own decision, since they change every world's cast
+- [ ] New helicopter types and mission types in the order of battle, with their own decision, since they change every world's cast. Roles (decision 151): Little Bird for close air support and small-unit warfare (troop drops), Cobra as a marine attack helicopter (close air support), Black Hawk, Huey and Mi-8 as troop and cargo transports; whether the transports also fly fire support is open
 - [ ] Checkpoint: owner flies a CAS sortie with pop-up attacks and a troop insertion in the campaign
 
 ## Known issues
