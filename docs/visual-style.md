@@ -78,25 +78,35 @@ Trees are the defining element of the landscape and deserve the most care. They 
 | Shrub | All | Single low faceted blob | 12–24 |
 | Dead / burnt | Battle damage, tundra | Trunk with two or three angular branches | 12–30 |
 
+The kit is built from model specs of class `tree` (decision 147): fir (tiered cones), pine (umbrella crown), oak (three lumpy masses), broadleaf, birch, poplar, acacia, shrub and dead tree, 20–70 triangles each. Crowns are jittered icospheres, lumpy and faceted, and carry two or three of the canopy shades below, so value varies within a tree as well as between trees. A palm follows with the coast work.
+
 ### Proportions and Variation
 
 - **Sturdy proportions.** Canopy width at least half the tree's height; trunk width at least a tenth. No thin branches.
 - **Variation per instance.** Random scale (0.8 to 1.3), yaw, a small tilt (under 4°), and a hue and value shift within the biome's canopy shades. Shift value more than hue: dark and light greens side by side read better than green and yellow.
-- **Placement.** Trees grow in clusters with clear forest edges, as in references 2 and 5. Forest boundaries follow the density map with a sharp threshold, and a thin band of scattered trees and shrubs softens the edge.
+- **Placement.** Trees grow in clusters with clear forest edges, as in references 2 and 5. Forest boundaries follow the density map with a sharp threshold, and a thin band of scattered trees and shrubs softens the edge. Inside a forest, crowns stand on a jittered lattice at the spacing of their crowns (about 7 m for conifers, 7.5 m for broadleaf), so the canopy closes (decision 148).
+- **Stands.** A forest is a mosaic of stands 100–400 m across, each with a composition, a height and a shade, so stand boundaries are steps in the canopy skyline and patches from above. Conifers take cold and north-facing slopes and the ground toward the tree line, broadleaf warm valleys, birch edges, clearings and riverbanks.
+- **Lines and singles.** Hedgerows on field boundaries, rows of poplars or birches along some roads, woods along rivers and streams, and a lone large tree every few square kilometers of open land: what a low-flying pilot navigates by and hides behind. Hedgerows follow a region's climate, not its biome: maritime climates (a small seasonal range, wet all year) on rolling farmland are hedged like bocage, continental plains with large seasonal ranges are open fields with sparse shelterbelts along the field grid, and a regional term over a few hundred kilometers lets regions of similar climate differ (decision 148).
+- **Shades.** Near trees keep the canopy shades of the palette (owner, decision 148); contrast comes from stands and species rather than brighter greens.
 
 ### Level of Detail
 
-| Distance from camera | Representation |
-|---|---|
-| 0–1.5 km | Individual instanced meshes, casting shadows |
-| 1.5–5 km | Merged cluster meshes (groups of 10 to 30 trees as one mesh), no shadows |
-| Beyond 5 km | Terrain color only, darkened under forest, with a slight canopy height offset in the shading |
+A forest is a volume with a canopy height H: zero in the open, the stand's height inside a forest, with the edge on the forest density contour. The simulation's line of sight and tree strikes read the same H (decision 148). Three layers draw it:
 
-The transition at 5 km must be hidden by haze and by matching the cluster colors to the terrain's forest shade.
+| Layer | Representation | Range (laptop default) |
+|---|---|---|
+| Near trees | Instanced tree kit: crowns only inside stands, whole trees on edges and in the open | 0–700 m |
+| Edge trees | Whole trees along forest edges, hedgerows and tree rows; one coarser LOD past 500 m | 0–1.5 km |
+| Canopy shell | The terrain tile mesh drawn again, lifted by H, faceted, in the stand's darkest canopy shade | 0–12 km |
 
-Until merged cluster meshes exist, instanced clumps thin with distance beyond 1.5 km instead, a clump kept with probability (1.5 km / distance)², at least a quarter, so the canopy shading shows through more and more toward 5 km (decision 131).
+- **Understory.** Near the camera the shell sinks to about 60% of H and fills the gaps between instanced crowns, so no ground shows through a closed stand; toward the near band's edge it rises to H as the near trees shrink into it.
+- **Edges.** The shell ends where the cover falls below one half; within 1.5 km edge trees stand on the contour in front of its ramp.
+- **Ranges scale with the machine** (quality tiers below); the shell does not, so a slower machine sees fewer individual trees but keeps every tree line.
+- **Shadows.** Trees cast none for now; baked occlusion in the crowns and the dark understory carry the depth cue (decision 148).
 
-Beyond 5 km, forests are dark canopy masses in the terrain shading with a sharp edge on the forest density contour (decision 71). The strategic view draws no individual trees at all (Part II).
+Beyond the shell's range, forests are dark canopy masses in the terrain shading with a sharp edge on the forest density contour (decision 71). The strategic view draws no individual trees at all (Part II).
+
+Until the layers exist, the clumps of decision 45 thin with distance beyond 1.5 km, a clump kept with probability (1.5 km / distance)², at least a quarter (decision 131).
 
 ## Water
 
@@ -277,7 +287,7 @@ Targets for a mid-range laptop in a desktop browser at 1080p:
 - 60 fps at the default 75% internal resolution.
 - Under 500 draw calls per frame, through instancing and merged cluster meshes.
 - Under 2 million triangles per frame in the densest view (low altitude over forest near a base).
-- Up to about 50,000 individual tree instances within 1.5 km.
+- Trees: near and edge radii by quality tier, stepped by the quality governor after the atmospheric effects: tablet 400 m and 1 km, laptop 700 m and 1.5 km, desktop 1.2 km and 2.5 km; about 0.5–0.8 M triangles for trees and canopy shell over dense forest at the laptop tier (decision 148). At least 30 fps on a laptop over forest at treetop height, and on a tablet at its tier.
 - Atmospheric effects scale with the machine: the volumetric stage marches a quarter, a third (default) or a half of the resolution, and a governor steps its quality and then the particle count down before the frame rate falls under the target, and back up when there is headroom (decision 143). In clear weather the volumetric stage and the particle overlay leave the frame; the pipeline's bloom and grade remain (decision 144).
 
 ## What to Avoid
@@ -295,7 +305,7 @@ Targets for a mid-range laptop in a desktop browser at 1080p:
 Before a visual milestone with simulation-view work closes, capture these views and compare them with the reference board. The former orbit check moved to Part II.
 
 1. 5 km altitude over a mixed landscape of forest, farmland, a river, and a town.
-2. 500 m altitude over conifer forest with a forest edge and a road.
+2. 500 m altitude over conifer forest with a forest edge and a road, and 30 m above a forest edge with a hedgerow, looking along the tree line (decision 148).
 3. A mountain range at low sun, with faceted rock faces and layered haze.
 4. An airbase at dusk with lit runway and parked aircraft.
 5. Coastline with shallow water, a beach, and sun glint.

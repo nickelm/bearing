@@ -1,6 +1,6 @@
 # Proposal 0003: Forests for Low Flight
 
-*Drafted 2026-11-15 from the owner's brief. Status: draft for owner review. Would affect `docs/design.md` (Line of sight, the flight model's ground model), `docs/visual-style.md` Part I (Vegetation, Performance Budgets, Acceptance Checks), and `TODO.md` (V2's tree kit and tree LOD).*
+*Drafted 2026-11-15 from the owner's brief. Status: accepted 2026-11-15 (decision 148). Would affect `docs/design.md` (Line of sight, the flight model's ground model), `docs/visual-style.md` Part I (Vegetation, Performance Budgets, Acceptance Checks), and `TODO.md` (V2's tree kit and tree LOD).*
 
 ## The Brief
 
@@ -124,3 +124,10 @@ Part I's *Level of Detail* table becomes the three layers of section 2, with ran
 2. **Tree shadows.** Defer them as proposed, or is a short-range shadow map (about 300 m) worth its cost for the hover-beside-a-tree-line view?
 3. **Hedgerows.** How much of the farmland should be hedged? Bocage-like country makes a strong helicopter theater, but it changes the look of every farmed region.
 4. **Edge porosity.** Is 20–30 m of see-through beyond a forest edge the right gameplay, or should edges be fully opaque?
+
+## The Owner's Answers (2026-11-15)
+
+1. **Shades.** Keep the shades of the previews, Part I's canopy shades; the owner evaluates them in the game later.
+2. **Tree shadows.** Deferred, as proposed.
+3. **Hedgerows.** By region, as in Normandy against the Midwest. Biomes cannot separate those two (both are temperate broadleaf or grassland), but climate can: Normandy's months span about 12 K, the Midwest's about 29 K. Hedgerow density therefore follows the climate texture's seasonal half-range (dense below about 6–8 K, none above about 11 K) and its moisture, on farmland, more on rolling ground than on flat plains, times a regional term over a few hundred kilometers so that similar climates still differ. Continental plains get sparse shelterbelts along the field grid instead. Dry-summer climates may later take stone walls and tree rows.
+4. **Edge porosity.** For aircraft, dense forest obscures completely: any sight line from or to an aircraft is blocked by a closed forest up to its canopy top, edges included. Ground units' sight at forest edges is left to the ground entities.

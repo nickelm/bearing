@@ -2340,3 +2340,24 @@ Plausibility, checked by `tests/flightModel.test.ts` and printed by `tools/fligh
 The forest layer still draws the clumps of decision 45; the kit replaces them with the proposal's near trees, after the owner's review.
 
 **Reason:** The brief asks for faceted, slightly cartoonish trees that fit the faceted terrain. Specs keep the trees reviewable as text and within budget, and the CPU previews let the look be judged before the forest layer changes.
+
+### 148. Forests for low flight: a canopy height field, a canopy shell, near and edge trees (proposal 0003 accepted)
+
+**Date:** 2026-11-15
+**Decision:** The owner accepts proposal 0003. A forest is a volume with a canopy height H(p) = cover × stand height: zero in the open, the stand's height inside a forest, with the edge on the forest density contour of decision 71 (threshold 0.42). The renderer and the simulation read the same H.
+
+- **Three layers** (Part I, *Level of Detail*): near trees from the kit of decision 147 (crowns only inside stands, whole trees on edges and in the open; laptop 0–700 m), edge trees along forest edges, hedgerows and tree rows (0–1.5 km), and a canopy shell, the terrain tile mesh drawn again and lifted by H (0–12 km), which sinks to about 60% of H near the camera as the understory between crowns. Beyond the shell, the terrain's flat canopy shading of decision 71 remains.
+- **Stands, lines and singles** give low-altitude orientation: stands 100–400 m across with a composition, height and shade; species by place; hedgerows, tree rows along roads, woods along rivers and lone trees, all from the world seed.
+- **Owner's answers.**
+  - Shades: Part I's canopy shades as in the previews; the owner judges them in the game later.
+  - Tree shadows: deferred; occlusion baked into the crowns and the dark understory carry the depth cue. Part I's "casting shadows" in the 0–1.5 km band is gone.
+  - Hedgerows: by region. Biomes cannot tell Normandy from the Midwest; climate can (an annual range of about 12 K against about 29 K). Hedgerow density follows the climate texture's seasonal half-range and moisture on farmland, more on rolling ground, times a regional term over a few hundred kilometers; continental plains get sparse shelterbelts along the field grid.
+  - Line of sight: for any sight line from or to an aircraft, a closed forest is opaque up to its canopy top, edges included. Ground units' sight at forest edges is settled with the ground entities.
+- **Simulation.** The ground model treats H as an obstacle: rotor or airframe below the canopy top inside a closed stand strikes the trees.
+- **Budgets.** Near and edge radii by quality tier (tablet 400 m and 1 km, laptop 700 m and 1.5 km, desktop 1.2 km and 2.5 km), stepped by the quality governor after the atmospheric effects; about 0.5–0.8 M triangles for trees and shell over dense forest at the laptop tier, estimated, not measured. The shell does not scale, so every machine keeps its tree lines.
+- **Check 2** gains a view 30 m above a forest edge with a hedgerow, looking along the tree line.
+- **Kit fix (owner review).** The birch's crown seemed to float over its thin, pale trunk, which touched it only at the crown's lowest point; the crown now sits lower on a thicker trunk that reaches 11 m into it.
+
+`docs/design.md` (line of sight, flight model, simulation view), Part I (*Vegetation*, *Performance Budgets*, check 2) and TODO (the old tree LOD and denser-forest tasks become the proposal's steps) change with this decision.
+
+**Reason:** An attack helicopter's tactics depend on what a tree line hides, at the range where pop-up attacks happen. Flat canopy paint gives no cover and thinned clumps make distant forest translucent; one height field drawn as a cheap shell gives cover at every range, and sharing it with the simulation makes the cover on screen the cover the AI respects.
