@@ -426,7 +426,18 @@ export class TerrainRenderer {
         builtCover,
       );
       // Falls (decision 126): river water on steep facets is white water.
-      const falls = river.mul(smoothstep(0.3, 0.75, facetSteep)).mul(this.land.enabled);
+      // Standing water (a lake or the sea) takes no falls or white water: rivers run on
+      // through lakes to their outlets, and their reaches there carry the inflow's
+      // gradient, which drew churning foam on lakes (decision 155).
+      const standing = max(
+        clamp(lakeDepth.div(0.5), 0, 1),
+        clamp(rawHeight.negate().div(0.5), 0, 1),
+      );
+      const running = float(1).sub(standing).toVar();
+      const falls = river
+        .mul(smoothstep(0.3, 0.75, facetSteep))
+        .mul(this.land.enabled)
+        .mul(running);
       const foam = L.shadeDiffuse(vec3(0.82, 0.86, 0.88), normal, positionWorld, at);
       const surfaceWater = this.water.shade({
         albedo: landAlbedo as unknown as typeof normal,
@@ -476,7 +487,9 @@ export class TerrainRenderer {
         .add(periodicValueNoise(churnAt, 4).mul(0.4))
         .mul(0.5)
         .add(0.5);
-      const white = clamp(riverCover.z.mul(churn.mul(2.2).sub(0.5)), 0, 1).mul(this.land.enabled);
+      const white = clamp(riverCover.z.mul(churn.mul(2.2).sub(0.5)), 0, 1)
+        .mul(this.land.enabled)
+        .mul(running);
       const surface = mix(banked, foam, max(falls, white));
       const withRoads = mix(surface, roadRadiance, paved.x.mul(dry));
       // Settlement lights on the night side (sodium orange), plus a glow along paved roads.

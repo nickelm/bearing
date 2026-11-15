@@ -591,6 +591,7 @@ Simulation view (needs S1's `render/sim/` split):
   - [ ] The strategic map's wetland mask (decision 81) could take the tiles' marsh rule on the global grid
   - [ ] Sea state from the surface wind once the weather reports it near the ground (the shader takes only the wind's direction, read at the camera's height, and the storm channel)
 - [x] River banks and bars (sand, gravel), a darker bank line, white water on fast reaches, foam on lake shores (decision 147)
+- [x] A blob of surf in the middle of a lake (lake shore distance over shoals) and white water on lakes (decision 155)
 - [x] Holes in the sea when flying low, down to the skirts: the horizon margin shrank the tiles' bounding caps (decision 152)
   - [ ] Skirts copy their edge vertex's water attributes, so any hole (a tile still loading) shows them as walls of water; shade skirts as dark ground or seabed
   - [ ] Owner: white water and lake foam in motion in the browser; the GUI's "River white water" and "River banks"

@@ -516,10 +516,20 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
         const lU = (depth(sx + 1, sy) - depth(sx - 1, sy)) / (2 * du);
         const lV = (depth(sx, sy + 1) - depth(sx, sy - 1)) / (2 * dv);
         const lake = depth(sx, sy) / Math.max(Math.hypot(lU, lV), 1e-6);
+        // Only near an actual shore: dry ground within two samples. Depth over its
+        // gradient is no distance over a shoal in the middle of a lake, where it drew
+        // a patch of surf (decision 155).
+        let shoreNear = false;
+        for (let oy = -2; oy <= 2 && !shoreNear; oy++)
+          for (let ox = -2; ox <= 2; ox++)
+            if (depth(sx + ox, sy + oy) <= 0) {
+              shoreNear = true;
+              break;
+            }
         // Marsh pools (marsh ground off the global lake's cells) keep the sea's distance.
         const m = materialAt(sources.data, dox + sx * dscale, doy + sy * dscale);
         const pool = (m & 0xff) === TileCover.Marsh && ((m >>> 16) & 1) === 0;
-        if (!pool && Math.abs(lake) < Math.abs(shore[v]!)) {
+        if (!pool && shoreNear && Math.abs(lake) < Math.abs(shore[v]!)) {
           shore[v] = Math.max(-SHORE_CLAMP, Math.min(SHORE_CLAMP, lake));
         }
       }

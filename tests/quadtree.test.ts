@@ -326,7 +326,12 @@ describe('horizon range', () => {
         exaggeration: 1,
         maxHeight: 9000,
       };
-      const sel = selectTiles(view, () => true, DEFAULT_LOD, () => [0, 0]);
+      const sel = selectTiles(
+        view,
+        () => true,
+        DEFAULT_LOD,
+        () => [0, 0],
+      );
       expect(sel.draw.length).toBeGreaterThan(0);
       // A drawn tile lies under the camera.
       const under = sel.draw.some((d) => tileAngularDistance(tileQuad(d.tile), up) === 0);
@@ -334,4 +339,3 @@ describe('horizon range', () => {
     }
   });
 });
-
