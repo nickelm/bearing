@@ -421,6 +421,73 @@ async function main(): Promise<void> {
   click(ff.pause.el, 'Change airbase');
   frame();
 
+  // Helicopters (track H1): each from the ground beside the runway, W to climb, the hover, the
+  // HUD, the mouse and pedals, pause and resume; then the Kestrel again.
+  const hold = (code: string, frames: number) => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { code, key: code, bubbles: true }));
+    for (let i = 0; i < frames; i++) frame();
+    window.dispatchEvent(new KeyboardEvent('keyup', { code, key: code, bubbles: true }));
+  };
+  const aircraft = q<HTMLSelectElement>(menuEl, 'select.ff-aircraft');
+  const helicopters: Record<string, unknown> = {};
+  result.helicopters = helicopters;
+  for (const choice of ['scout', 'utility']) {
+    aircraft.value = choice;
+    aircraft.dispatchEvent(new Event('change', { bubbles: true }));
+    click(menuEl, 'Fly');
+    for (let i = 0; i < 10; i++) frame();
+    const h = ff.flight.helo;
+    check(h !== null && ff.flight.model === null, `${choice}: a helicopter flies`);
+    if (!h) continue;
+    const onGround = h.onGround;
+    hold('KeyW', 240);
+    const climbed = h.telemetry.radarAltitude;
+    for (let i = 0; i < 300; i++) frame();
+    const hovering = h.telemetry.radarAltitude;
+    for (let i = 0; i < 20; i++) {
+      ff.heloInput.nudge(0, -8);
+      frame();
+    }
+    for (let i = 0; i < 240; i++) frame();
+    const forward = h.telemetry.groundSpeed;
+    hold('KeyE', 60);
+    key('Escape');
+    const paused = ff.state;
+    key('Escape');
+    const resumed = ff.state;
+    for (let i = 0; i < 20; i++) frame();
+    helicopters[choice] = {
+      onGround,
+      climbed: +climbed.toFixed(1),
+      hovering: +hovering.toFixed(1),
+      forward: +forward.toFixed(1),
+      rpm: +h.telemetry.rotorSpeed.toFixed(3),
+      crashed: h.crashed,
+      paused,
+      resumed,
+      url: location.search,
+    };
+    check(onGround && !h.crashed, `${choice}: starts on the ground, no crash`);
+    check(climbed > 3 && hovering > 3, `${choice}: W climbs and the altitude holds`);
+    check(forward > 3, `${choice}: the mouse flies it forward`);
+    check(paused === 'paused' && resumed === 'flying', `${choice}: pause and resume`);
+    check(location.search.includes(`aircraft=${choice}`), `${choice}: in the URL`);
+    key('Escape');
+    click(ff.pause.el, 'Change airbase');
+    frame();
+  }
+  aircraft.value = 'kestrel';
+  aircraft.dispatchEvent(new Event('change', { bubbles: true }));
+  click(menuEl, 'Fly');
+  for (let i = 0; i < 20; i++) frame();
+  check(
+    ff.flight.model !== null && ff.flight.helo === null && ff.state === 'flying',
+    'the Kestrel after the helicopters',
+  );
+  key('Escape');
+  click(ff.pause.el, 'Change airbase');
+  frame();
+
   const end = listeners();
   result.listenersAtEnd = end;
   result.listenerGrowth = Object.fromEntries(

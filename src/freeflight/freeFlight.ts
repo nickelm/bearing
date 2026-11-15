@@ -552,6 +552,7 @@ export class FreeFlight {
   }
 
   private heloAction(a: HeloAction): void {
+    if (!this.helo) return;
     switch (a) {
       case 'pause':
         if (this.help.visible) this.help.visible = false;
@@ -657,6 +658,9 @@ export class FreeFlight {
   }
 
   private action(a: FlightAction): void {
+    // Both inputs hear Escape (a disabled one passes it on to close a menu): the jet's
+    // actions count only while no helicopter is the flown aircraft, or Escape toggles twice.
+    if (this.helo) return;
     const c = this.input.controls;
     switch (a) {
       case 'pause':
