@@ -433,7 +433,9 @@ export function selectTiles(
     const top = Math.min(b.top, view.maxHeight);
     const horizon = eyeAngle + peakHorizonAngle(top, view.radius) + extra;
     // The bounding cap is cheap and rejects most tiles; the exact distance settles the rest.
-    if (capBeyondHorizon(view.eye, b.capCenter, b.capAngle - extra, view.radius, top)) return true;
+    // The margin widens the cap (it was subtracted, which culled tiles inside the horizon
+    // wherever the horizon is shorter than the margin: low over the sea, decision 152).
+    if (capBeyondHorizon(view.eye, b.capCenter, b.capAngle + extra, view.radius, top)) return true;
     return tileAngularDistance(b.quad, nadir) > horizon;
   };
   const visible = (b: Bounds) =>

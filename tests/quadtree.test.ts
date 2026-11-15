@@ -307,4 +307,31 @@ describe('horizon range', () => {
     expect(Math.max(...nearest)).toBeLessThanOrEqual(horizonRange(v));
     expect(s.draw.length).toBeGreaterThan(0);
   });
+
+  it('keeps the sea under a camera a few meters above it (decision 152)', () => {
+    // Flat sea tiles have bounds at sea level, so the camera's horizon is all that is
+    // seen: about 2.4 km from 3 m. The horizon margin once shrank the bounding caps and
+    // culled the tile under the camera, opening a hole down to the skirts.
+    const up = new Vec3d(0.3, 0.55, 0.78).normalize();
+    const north = new Vec3d(0, 1, 0).addScaled(up, -up.y).normalize();
+    for (const h of [2, 3, 10, 40, 300]) {
+      const view: LodView = {
+        eye: up.clone().scale(R + h),
+        forward: north,
+        up,
+        fovY: 60 * DEG,
+        aspect: 16 / 9,
+        viewportHeight: 1080,
+        radius: R,
+        exaggeration: 1,
+        maxHeight: 9000,
+      };
+      const sel = selectTiles(view, () => true, DEFAULT_LOD, () => [0, 0]);
+      expect(sel.draw.length).toBeGreaterThan(0);
+      // A drawn tile lies under the camera.
+      const under = sel.draw.some((d) => tileAngularDistance(tileQuad(d.tile), up) === 0);
+      expect(under).toBe(true);
+    }
+  });
 });
+

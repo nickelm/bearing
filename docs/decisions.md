@@ -2435,3 +2435,12 @@ The proposal's open questions on engine start and door gunners stay open; the pl
 `docs/design.md` (*Factions and Sides*, *Open Questions*), proposal 0004's open questions, the plan and `TODO.md` change with this decision.
 
 **Reason:** The owner's answers. One AI that can fill any seat already exists for crew station mode, so letting the player choose the seat costs a seat switch and a view per position rather than a new mechanism.
+
+### 152. The horizon margin widens the tiles' bounding caps; it had culled the sea under a low camera
+
+**Date:** 2026-11-15
+**Decision:** The tile selection's horizon test (decision 116) asks its cheap bounding-cap test first, with the horizon margin as `extra`. It passed the cap's angle minus the margin, which shrinks the cap, instead of plus it. Wherever the camera's horizon is shorter than the margin, tiles inside the horizon were culled, the one under the camera included. Over land, terrain height lengthens the horizon and hid the error. Over the sea, flat tiles have bounds at sea level, so from a few meters up the horizon is about 2.4 km against a margin of about 14 km (a tenth of the horizon range, which counts the planet's tallest peaks). The owner saw holes in the sea at a distance when flying low, and with the camera lowest the whole sea vanished, leaving the neighboring tiles' skirts standing as walls shaded like water down toward the planet's center. The cap is now widened by the margin.
+
+**How it was checked.** With the camera 3 m above open sea (`VIEWS=tower`, `OBS_HEIGHT=3`), the preview selected 0 tiles before and draws the sea to the horizon after (7 tiles). A test selects tiles with flat sea-level bounds from 2 to 300 m up and requires a drawn tile under the camera; it fails with the old sign.
+
+**Reason:** A culling test may only remove what cannot be seen; a margin exists to keep more, never less.
