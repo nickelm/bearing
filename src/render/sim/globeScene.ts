@@ -18,6 +18,7 @@ import {
   Group,
   PerspectiveCamera,
   Scene,
+  Vector2,
 } from 'three/webgpu';
 import type { WebGPURenderer } from 'three/webgpu';
 import { placePlanetCentered } from '../common/cameraRelative';
@@ -65,6 +66,15 @@ export interface GlobeSceneOptions {
   grid: CubeGrid;
   /** Attach mouse and keyboard input to the canvas (default true; off for headless renders). */
   input?: boolean;
+}
+
+/**
+ * The time the ground has had to get wet or to dry in a frame (s): the frame's game seconds
+ * where the game clock runs faster than real time, else the frame's real seconds (`effectDt`,
+ * 0 while paused). A clock that stands still or was set back counts as real time.
+ */
+export function wetnessStep(effectDt: number, gameStep: number): number {
+  return effectDt > 0 && gameStep > effectDt ? gameStep : effectDt;
 }
 
 export class GlobeScene {
@@ -148,6 +158,13 @@ export class GlobeScene {
   useTiles = true;
   /** Whether the terrain has a world to draw (set by the app). */
   terrainReady = false;
+  /** The game time of the last frame's weather update, for the ground's wetness. */
+  private wetAt = Number.NaN;
+  /**
+   * Called on every cut (`resetAtmosphere`): the app holds what it measures from the next
+   * frames, which load tiles and compile shaders, and stops sounds that were on their way.
+   */
+  onCut: (() => void) | null = null;
   /**
    * True while the game clock stands still (set by the app): the weather's animation, the
    * particles and the lightning hold, while the camera still moves.
@@ -158,7 +175,9 @@ export class GlobeScene {
   private readonly scratch = new Vec3d();
   /** The camera's velocity, for the terrain's look-ahead (decision 119). */
   private readonly motion = new MotionEstimate();
+  /** The viewport's height in CSS pixels: what the terrain's LOD and the input count in. */
   private viewportHeight = 1;
+  private readonly bufferSize = new Vector2();
   private readonly sunLight = new DirectionalLight(0xffffff, 2.5);
 
   constructor(
@@ -341,24 +360,34 @@ export class GlobeScene {
     this.clouds.update(o.eye);
     moonDirection(this.gameTime, this.planetOrbit, this.calendar, this.moon);
     this.lighting.update(o.eye, this.sun, this.moon);
+    // The ground gets wet and dries in game time: under time acceleration a shower's wet
+    // ground would otherwise last for hours of game time (3 real minutes at 60×). Never
+    // slower than real time, so a view whose game clock stands still settles (previews).
+    const wetDt = wetnessStep(effectDt, this.gameTime - this.wetAt);
+    this.wetAt = this.gameTime;
     this.weatherState.update(
       this.weatherView,
       o.eye,
       o.eye.length() - this.lighting.radius,
       this.gameTime,
       effectDt,
+      wetDt,
     );
     // Which marches run this frame and between which heights, the key light, the fog's drift.
     this.volumetrics.groundScale = this.terrain.exaggerationUniform.value;
     this.volumetrics.update(o.eye, effectDt);
-    // Lightning first: its flash lights the particles too.
+    // Lightning first: its flash lights the particles too. Particles and the bolt have a least
+    // width in pixels of the drawing buffer, which the render scale and the display's pixel
+    // ratio make finer or coarser than CSS pixels; in CSS pixels a skyfall thinned to dots at
+    // a low render scale.
     const fovY = (this.camera.fov * Math.PI) / 180;
+    const bufferHeight = Math.max(1, this.renderer.getDrawingBufferSize(this.bufferSize).y);
     this.lightning.update({
       view: this.weatherView,
       eye: o.eye,
       gameTime: this.gameTime,
       dt: effectDt,
-      pixelAngle: fovY / this.viewportHeight,
+      pixelAngle: fovY / bufferHeight,
     });
     this.precipitation?.update({
       eye: o.eye,
@@ -367,7 +396,7 @@ export class GlobeScene {
       dt: effectDt,
       fovY,
       aspect: this.camera.aspect,
-      viewportHeight: this.viewportHeight,
+      viewportHeight: bufferHeight,
       aboveGround,
       near: o.near,
     });
@@ -465,6 +494,7 @@ export class GlobeScene {
     this.precipitation?.reset();
     this.lightning.reset();
     this.shadows.reset();
+    this.onCut?.();
   }
 
   dispose(): void {

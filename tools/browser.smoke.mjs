@@ -68,6 +68,8 @@ const seed = env('SEED', '1983');
 const parts = env('ONLY', 'flight,takeoff,campaign').split(',');
 const scale = env('SCALE', '100%');
 const slow = Number(env('SLOW', mode === 'gpu' ? '1' : '8'));
+// The app does not start on a software adapter unasked (webgpuSupport.ts): these modes ask.
+const software = mode === 'gpu' ? '' : '&software';
 const flashSeconds = Number(env('FLASH', '20'));
 const verbose = env('VERBOSE', '') === '1';
 mkdirSync(out, { recursive: true });
@@ -140,6 +142,23 @@ const seconds = (s) => s * 1000 * slow;
 /** Waits until `predicate` (a function in the page) holds. */
 const until = (predicate, timeoutSeconds, arg) =>
   page.waitForFunction(predicate, arg, { timeout: seconds(timeoutSeconds), polling: 250 });
+/**
+ * Opens the app. In `gpu` mode a browser that hands out its software adapter gets the app's
+ * notice, which waits for "Start anyway": say so (HEADED=1 often gets the real adapter)
+ * instead of running into a timeout.
+ */
+const open = async (query) => {
+  await page.goto(`${app}?${query}&dev${software}`, { timeout: seconds(60) });
+  await until(
+    () => window.bearing !== undefined || document.getElementById('fatal')?.hidden === false,
+    60,
+  );
+  const stopped = await page.evaluate(() => {
+    const fatal = document.getElementById('fatal');
+    return fatal && !fatal.hidden ? (fatal.querySelector('h1')?.textContent ?? 'an error') : null;
+  });
+  if (stopped) throw new Error(`the app did not start: "${stopped}" (MODE=${mode})`);
+};
 /** Lets the app draw `count` more frames. */
 const frames = async (count) => {
   const from = await page.evaluate(() => window.__probe.frames);
@@ -186,7 +205,7 @@ const fixScale = async () => {
 
 /** Free Flight, from the start screen through the scenes. */
 async function flight() {
-  await page.goto(`${app}?mode=freeflight&seed=${seed}&dev`, { timeout: seconds(60) });
+  await open(`mode=freeflight&seed=${seed}`);
   // The start screen: the bases are listed once the coarse pass is done, "Fly" is enabled
   // once the terrain is (the global pass, or the cached world).
   await until(() => document.querySelectorAll('.ff-bases tbody tr').length > 0, 240);
@@ -290,10 +309,10 @@ async function storm() {
   }
 }
 
-/** A takeoff with the keyboard, on a clear day without wind. */
+/** A takeoff with the keyboard, on a clear day in its wind, without touching the pedals. */
 async function takeoff() {
   if (!(await page.evaluate(() => Boolean(window.bearing?.freeFlight)))) {
-    await page.goto(`${app}?mode=freeflight&seed=${seed}&dev`, { timeout: seconds(60) });
+    await open(`mode=freeflight&seed=${seed}`);
     await until(() => document.querySelectorAll('.ff-bases tbody tr').length > 0, 240);
     await page.evaluate(() => document.querySelector('.ff-bases tbody tr').click());
     await until(() => !document.querySelector('.ff-fly').disabled, 900);
@@ -305,11 +324,11 @@ async function takeoff() {
   await until(() => window.bearing.freeFlight.state === 'paused', 30);
   await choose(page, '.ff-card .ff-weather', 'clear');
   await choose(page, '.ff-card .ff-tod', 10);
-  // In still air: this is about the keys and the frame loop. With the wind on, even the
-  // light crosswind of a clear day turns an aircraft that nobody steers off the runway.
+  // With the wind on, as a player starts: the laws hold the track of the roll against the
+  // crosswind while the pedals are free (controlLaws.ts, trackHold).
   await page.evaluate(() => {
     const wind = document.querySelector('.ff-card .ff-wind');
-    if (wind.checked) wind.click();
+    if (!wind.checked) wind.click();
   });
   await button(page, 'Restart on the runway');
   await until(() => window.bearing.freeFlight.state === 'flying', 30);
@@ -351,6 +370,13 @@ async function takeoff() {
   );
   // Rotate at 150 knots and hold the stick until the wheels leave the ground.
   await until(() => window.bearing.freeFlight.flight.model.telemetry.cas > 77, 120).catch(() => {});
+  const surfaces = await page.evaluate(() =>
+    window.bearing.freeFlight.flight.model.wheels.filter((w) => w.load > 0).map((w) => w.surface),
+  );
+  check(
+    surfaces.length > 0 && surfaces.every((x) => x === 'runway'),
+    `takeoff: left the runway on the roll (wheels on ${surfaces.join(', ')})`,
+  );
   await page.keyboard.down('KeyS');
   await until(() => {
     const m = window.bearing.freeFlight.flight.model;
@@ -372,7 +398,7 @@ async function takeoff() {
 
 /** The campaign: the simulation view, a weather override, the map and back, the time controls. */
 async function campaign() {
-  await page.goto(`${app}?seed=${seed}&dev`, { timeout: seconds(60) });
+  await open(`seed=${seed}`);
   await until(() => window.bearing?.globe.terrainReady === true, 900);
   await page.evaluate(() => window.__probe.countThunder());
   await fixScale();

@@ -23,7 +23,8 @@
  *        them at each quality, FLASH=x lights a discharge of that intensity FLASH_KM ahead (4),
  *        FLASH_TURN degrees to the right (0) and FLASH_ALT m above sea level (3500),
  *        VOL=0 draws without the volumetrics (the shell), POST=0 without the pipeline,
- *        FILTER=0 without the pipeline's 3 × 3 filter (the march as it is),
+ *        FILTER=0 without the pipeline's 3 × 3 filter (the march as it is), GRAIN=0 without
+ *        the pipeline's grain and dither (to measure what pattern the march leaves),
  *        COUNT=1 prints what the marches do per low-resolution pixel of each view (steps of
  *        the cloud march, those shaded, steps of the air march, texture reads): the cost
  *        that does not depend on the machine,
@@ -273,6 +274,8 @@ it('renders the volumetrics', async () => {
     if (process.env.SCALE) pipeline.volumetricScale = 1 / Number(process.env.SCALE);
     pipeline.volumetricsEnabled = process.env.VOL !== '0';
     pipeline.volumetricFilter = process.env.FILTER !== '0';
+    // GRAIN=0: without grain and dither, to measure what pattern the march itself leaves.
+    if (process.env.GRAIN === '0') pipeline.grain = pipeline.dither = false;
   }
 
   // COUNT=1: a second source that returns what the marches did, evaluated per low-resolution

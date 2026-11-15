@@ -293,7 +293,16 @@ export class WaterShading {
         const lifted = normalize(
           mirrored.add(i.up.mul(max(float(0.03).sub(dot(mirrored, i.up)), 0))),
         ) as V3;
-        const sky = L.atmosphere.skyRadiance(lifted, SKY_MARCH_STEPS_COARSE).mul(fresnel);
+        let reflected = L.atmosphere.skyRadiance(lifted, SKY_MARCH_STEPS_COARSE) as V3;
+        if (L.overcast) {
+          // Under a closed deck the water mirrors the cloud's underside, not the clear sky
+          // behind it: the gray light the deck sends down (`at.sky` without the gains that
+          // belong to surfaces), from the column `at` has read. Blue water lay under a gray
+          // or pink deck before.
+          const deck = at.sky.div(max(L.skyFill.mul(L.surfaceGain), 1e-3));
+          reflected = mix(reflected, deck, clamp(L.overcast(at.p).div(0.3), 0, 1)) as V3;
+        }
+        const sky = reflected.mul(fresnel);
         // Coastal foam.
         const shoreDistance = max(i.shore, 0);
         const band = this.foamWidth;

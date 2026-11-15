@@ -7,13 +7,20 @@ import { describe, expect, it } from 'vitest';
 import { latLonToDirection } from '../src/core/coords';
 import { DEG, HOUR, KNOT } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
-import { neutralControls } from '../src/sim/flight/controlLaws';
+import { MIL_DETENT, neutralControls, newLawState, trackHold } from '../src/sim/flight/controlLaws';
+import type { LawInput } from '../src/sim/flight/controlLaws';
 import { FlightDirector } from '../src/sim/flight/flightDirector';
 import { FLIGHT_STEP } from '../src/sim/flight/flightModel';
 import type { FlightModel } from '../src/sim/flight/flightModel';
 import { FlightMonitor } from '../src/sim/flight/outcomes';
 import type { Touchdown } from '../src/sim/flight/outcomes';
-import { headingVector, runwayEnds, runwayFrame, toRunway } from '../src/sim/flight/runway';
+import {
+  headingOf,
+  headingVector,
+  runwayEnds,
+  runwayFrame,
+  toRunway,
+} from '../src/sim/flight/runway';
 import { spawnInAir, spawnOnRunway } from '../src/sim/flight/spawn';
 import { TestPilot } from '../src/sim/flight/testPilot';
 import {
@@ -270,6 +277,241 @@ describe('wind on the flight model', () => {
     expect(crab).toBeLessThan(0);
     expect(crab).toBeCloseTo(-Math.asin(25 / m.telemetry.tas), 1);
     expect(Math.abs(m.telemetry.beta)).toBeLessThan(1 * DEG);
+  });
+});
+
+describe('crosswind on the wheels: the track hold', () => {
+  const wrap = (a: number) => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
+
+  /**
+   * A takeoff roll from brake release to 160 kt with the pedals let go, in a wind from
+   * `side` (+1: from the left) of `cross` m/s straight across the runway. Returns the
+   * farthest it came from the centerline (m) and its heading against the runway's then.
+   */
+  function roll(
+    cross: number,
+    throttle: number,
+    wind?: (m: FlightModel, t: number) => void,
+    heading = testRunway().heading,
+  ) {
+    const runway = { ...testRunway(), heading };
+    const ground = flatGround(runway);
+    const m = kestrel();
+    const end = runwayEnds(runway)[0];
+    spawnOnRunway(m, runway, end);
+    const frame = runwayFrame(runway);
+    const up = m.pos.clone().normalize();
+    const steady = headingVector(up, end.heading + Math.PI / 2).scale(cross);
+    const ctl = neutralControls();
+    ctl.throttle = throttle;
+    let off = 0;
+    let t = 0;
+    while (m.telemetry.cas < 160 * KNOT) {
+      if (wind) wind(m, t);
+      else m.wind.copy(steady);
+      m.step(ctl, ground);
+      t += FLIGHT_STEP;
+      off = Math.max(off, Math.abs(toRunway(runway, frame, m.pos, RADIUS).across));
+      if (m.crashed || t > 40) throw new Error(`no 160 kt: ${m.crashed ?? 'too slow'}`);
+    }
+    return { off, yaw: wrap(m.telemetry.heading - end.heading), wow: m.telemetry.wow };
+  }
+
+  it('holds the centerline to 160 kt with the pedals let go', () => {
+    // Without the hold the nose weathercocked into the wind at half a degree a second and
+    // the aircraft followed it: 20 m off the centerline in 5 m/s, 33 m in 8 m/s.
+    for (const throttle of [1, MIL_DETENT]) {
+      for (const side of [1, -1]) {
+        const five = roll(5 * side, throttle);
+        expect(five.off, `5 m/s, side ${side}, throttle ${throttle}`).toBeLessThan(3);
+        expect(five.wow).toBeGreaterThan(0.9);
+        // The ground wind's cap.
+        const eight = roll(GROUND_WIND_LIMIT * side, throttle);
+        expect(eight.off, `8 m/s, side ${side}, throttle ${throttle}`).toBeLessThan(8);
+        // It crabs a degree into the wind to hold the track against the side force.
+        expect(Math.abs(eight.yaw)).toBeLessThan(2.5 * DEG);
+        expect(Math.sign(eight.yaw)).toBe(-side);
+      }
+    }
+    // Still air: straight, as before.
+    expect(roll(0, 1).off).toBeLessThan(0.5);
+  });
+
+  it('holds the runway in the gusts of a thunderstorm, across the wind', () => {
+    for (const heading of [20 * DEG, 110 * DEG, 200 * DEG]) {
+      const weather = new StandaloneWeather(syntheticConfig(), 'storm');
+      let strongest = 0;
+      const gusty = (m: FlightModel, t: number) => {
+        const height = Math.max(0, m.telemetry.radarAltitude);
+        airVelocity(weather.view(30 * HOUR + t), m.pos, RADIUS, 30 * HOUR + t, height, m.wind);
+        strongest = Math.max(strongest, m.wind.length());
+      };
+      const r = roll(0, 1, gusty, heading);
+      expect(strongest).toBeGreaterThan(GROUND_WIND_LIMIT * 0.8);
+      expect(r.off, `runway ${heading / DEG}°`).toBeLessThan(8);
+    }
+  });
+
+  it('lets the pedals turn the aircraft, and holds the new track when they are let go', () => {
+    const runway = testRunway();
+    const ground = flatGround(runway);
+    const end = runwayEnds(runway)[0];
+    const track = (m: FlightModel) => headingOf(m.pos.clone().normalize(), m.vel);
+    for (const fast of [false, true]) {
+      const m = kestrel();
+      spawnOnRunway(m, runway, end);
+      const ctl = neutralControls();
+      const run = (seconds: number) => {
+        for (let i = 0; i < seconds / FLIGHT_STEP; i++) m.step(ctl, ground);
+      };
+      // Taxi at about 8 m/s, or roll at about 100 kt.
+      ctl.throttle = fast ? 1 : 0.35;
+      while (m.telemetry.groundSpeed < (fast ? 100 * KNOT : 8)) run(0.1);
+      if (!fast) ctl.throttle = 0.12;
+      const before = m.telemetry.heading;
+      ctl.yaw = fast ? 0.5 : 0.6;
+      run(2);
+      const turned = wrap(m.telemetry.heading - before);
+      // The nosewheel at taxi speed; the rudder's yaw-rate command at speed (1.5°/s here).
+      expect(turned, fast ? 'fast' : 'taxi').toBeGreaterThan((fast ? 2 : 15) * DEG);
+      expect(m.telemetry.laws.steer).toBe(0);
+      expect(m.lawState.holdTime).toBe(0);
+      ctl.yaw = 0;
+      if (fast) ctl.throttle = 0;
+      // The turn runs out (the nose goes on for a few degrees at taxi speed), then the
+      // hold takes the track.
+      run(2.5);
+      expect(m.lawState.holdTime).toBeGreaterThan(0);
+      const held = track(m);
+      let off = 0;
+      for (let i = 0; i < 5 / FLIGHT_STEP; i++) {
+        m.step(ctl, ground);
+        off = Math.max(off, Math.abs(wrap(track(m) - held)));
+      }
+      expect(m.crashed).toBeNull();
+      expect(off, fast ? 'fast' : 'taxi').toBeLessThan(0.5 * DEG);
+      expect(Math.abs(m.telemetry.bank)).toBeLessThan(3 * DEG);
+    }
+  });
+
+  it('keeps the track of a crabbed touchdown instead of following the nose', () => {
+    // Rolling at 65 m/s along the runway with the nose 5° off it, as after a landing in a
+    // crosswind with the pedals free. Without the hold the track swung to the nose: 52 m off
+    // the centerline after 12 s, and 85 m with the wind still blowing.
+    const runway = testRunway();
+    const ground = flatGround(runway);
+    const frame = runwayFrame(runway);
+    const end = runwayEnds(runway)[0];
+    for (const [crab, cross] of [
+      [5, 0],
+      [5, 6],
+      [-5, -6],
+    ] as const) {
+      const m = kestrel();
+      spawnOnRunway(m, runway, end);
+      const ctl = neutralControls();
+      ctl.parkingBrake = true;
+      for (let i = 0; i < 2 / FLIGHT_STEP; i++) m.step(ctl, ground);
+      ctl.parkingBrake = false;
+      ctl.throttle = 0;
+      const up = m.pos.clone().normalize();
+      const vel = headingVector(up, end.heading).scale(65);
+      m.place(m.pos.clone(), vel, end.heading - crab * DEG, m.telemetry.pitch);
+      // The pedals were free on the approach.
+      m.lawState.pedalsFree = 1;
+      m.lawState.airborne = 0;
+      const wind = headingVector(up, end.heading + Math.PI / 2).scale(cross);
+      let off = 0;
+      for (let i = 0; i < 12 / FLIGHT_STEP; i++) {
+        m.wind.copy(wind);
+        m.step(ctl, ground);
+        off = Math.max(off, Math.abs(toRunway(runway, frame, m.pos, RADIUS).across));
+      }
+      const label = `crab ${crab}°, wind ${cross} m/s`;
+      expect(m.crashed, label).toBeNull();
+      expect(off, label).toBeLessThan(8);
+      const track = headingOf(m.pos.clone().normalize(), m.vel);
+      expect(Math.abs(wrap(track - end.heading)), label).toBeLessThan(0.5 * DEG);
+    }
+  });
+
+  it('never acts for the scripted pilot, who keeps the pedals in on the wheels', () => {
+    // So the pilot's circuit in still air is the committed model's to the bit (compared in
+    // lockstep when the hold was added): the hold is the only change, and it gives nothing.
+    const runway = testRunway();
+    const ground = flatGround(runway);
+    const m = kestrel();
+    const end = runwayEnds(runway)[0];
+    spawnOnRunway(m, runway, end);
+    const ctl = neutralControls();
+    const pilot = new TestPilot(runway, end, RADIUS);
+    let freeOnWheels = 0;
+    for (let i = 0; i < 900 / FLIGHT_STEP && !m.crashed && pilot.phase !== 'stopped'; i++) {
+      pilot.fly(m, ctl, FLIGHT_STEP);
+      if (ctl.yaw === 0 && m.telemetry.wow > 0.5 && m.telemetry.groundSpeed > 2) freeOnWheels++;
+      m.step(ctl, ground);
+      expect(m.telemetry.laws.steer).toBe(0);
+      // The hold may have taken a track (at the touchdown, for a step) but has not acted.
+      expect(m.lawState.holdTime).toBeLessThan(0.25);
+    }
+    expect(m.crashed).toBeNull();
+    expect(pilot.phase).toBe('stopped');
+    expect(freeOnWheels).toBeLessThan(10);
+  }, 60_000);
+
+  it('acts only while the aircraft rolls on its wheels with the pedals let go', () => {
+    const input = (over: Partial<LawInput>): LawInput =>
+      ({ wow: 1, forward: 40, drift: 0, r: 0, dt: 1 / 480, ...over }) as LawInput;
+    const settle = (state: ReturnType<typeof newLawState>, s: LawInput, seconds = 1) => {
+      let e = 0;
+      for (let i = 0; i < seconds * 480; i++) e = trackHold(0, s, state);
+      return e;
+    };
+    // A pedal in, standing, or in the air: nothing, however long.
+    const state = newLawState();
+    for (let i = 0; i < 480; i++) expect(trackHold(0.01, input({ r: 0.1 }), state)).toBe(0);
+    expect(state.pedalsFree).toBe(0);
+    expect(settle(newLawState(), input({ forward: 1.5, r: 0.1 }))).toBe(0);
+    expect(settle(newLawState(), input({ wow: 0.3, r: 0.1 }))).toBe(0);
+    // Pedals let go while rolling: the track is taken after a quarter of a second, and the
+    // hold acts a quarter of a second later.
+    let n = 0;
+    while (trackHold(0, input({ r: 0.01 }), state) === 0) n++;
+    expect(n / 480).toBeGreaterThan(0.45);
+    expect(n / 480).toBeLessThan(0.55);
+    // By then the heading has turned for a quarter of a second at 0.01 rad/s: the error is
+    // that turn, against it.
+    expect(trackHold(0, input({ r: 0 }), state)).toBeCloseTo(-0.01 * 0.25, 4);
+    // A drift of the track counts like a turn of the nose.
+    expect(trackHold(0, input({ drift: 0.01 }), state)).toBeCloseTo(-0.01 * 0.25 - 0.01, 4);
+    // No more than three degrees are answered.
+    expect(trackHold(0, input({ drift: 0.5 }), state)).toBeCloseTo(-3 * DEG, 9);
+    // Let go in a turn: it waits for the yaw rate to run out (here it does after 1.2 s), so
+    // the aircraft does not spring back; a turn that does not end is taken after 2 s.
+    const turning = newLawState();
+    trackHold(0.5, input({ r: 0.1 }), turning);
+    for (let i = 0; i < 1.2 * 480; i++) expect(trackHold(0, input({ r: 0.1 }), turning)).toBe(0);
+    expect(turning.holdTime).toBe(0);
+    trackHold(0, input({ r: 0.01 }), turning);
+    expect(turning.holdTime).toBeGreaterThan(0);
+    const spinning = newLawState();
+    trackHold(0.5, input({ r: 0.1 }), spinning);
+    let waited = 0;
+    while (spinning.holdTime === 0) {
+      trackHold(0, input({ r: 0.1 }), spinning);
+      waited++;
+    }
+    expect(waited / 480).toBeGreaterThan(1.95);
+    expect(waited / 480).toBeLessThan(2.05);
+    // A pedal ends it, and the wait starts over.
+    expect(trackHold(-0.2, input({}), state)).toBe(0);
+    expect(trackHold(0, input({ drift: 0.5 }), state)).toBe(0);
+    // Free pedals before the wheels touch: the track of the touchdown, drift and all.
+    const landing = newLawState();
+    settle(landing, input({ wow: 0, drift: 0 }));
+    expect(trackHold(0, input({ drift: 0.08 }), landing)).toBe(0);
+    expect(landing.holdDrift).toBe(0.08);
+    expect(settle(landing, input({ drift: 0.03, r: 0 }), 0.5)).toBeCloseTo(0.05, 9);
   });
 });
 

@@ -9,14 +9,21 @@
  *     audio.update({ rain, snow, dust, wind });
  *     // on pause and resume, and from the menu:
  *     audio.suspend(); audio.resume(); audio.volume = 0.6; audio.muted = true;
+ *     audio.audition();                       // the volume slider, heard while paused
+ *     // on a cut (another view, weather, flight or time):
+ *     audio.cancelThunder();
  *
  * A browser lets an AudioContext sound only after a user gesture, so nothing
- * is created before `start()` is called from one (`attach` listens for the
- * first key or pointer event and calls it). Until then, and wherever there
- * is no AudioContext at all (Node: tests and previews), every method does
- * nothing and nothing throws. Thunder that would arrive before the audio has
- * started is dropped, not queued: a storm heard a minute late is worse than
- * one not heard.
+ * is created before `start()` is called from one (`attach` listens for keys,
+ * pointers and clicks and calls it). Which event counts as a gesture differs:
+ * a key or a mouse button going down does, a finger only when it lifts. So
+ * `attach` keeps listening until the context has run, and the first gesture
+ * that can start it does so even while the audio is suspended (it is
+ * suspended again at once): a context that has run once may be resumed later
+ * from the frame loop. Until then, and wherever there is no AudioContext at
+ * all (Node: tests and previews), every method does nothing and nothing
+ * throws. Thunder that would arrive before the audio has started is dropped,
+ * not queued: a storm heard a minute late is worse than one not heard.
  *
  * Everything goes through one master gain (`volume`, `muted`) and a limiter,
  * so a near strike over a downpour does not clip.
@@ -34,6 +41,11 @@ import type { ThunderNoise, ThunderStrike } from './thunder';
 export const MAX_THUNDERS = 6;
 /** Length of the noise loops (s). */
 const NOISE_SECONDS = 4;
+/** How long a suspended context runs for an audition (s), and the least time between tones (s). */
+const AUDITION_SECONDS = 1.2;
+const AUDITION_GAP = 0.12;
+/** Time constant with which cancelled thunder fades (s). */
+const CANCEL_FADE = 0.08;
 
 export interface WeatherAudioOptions {
   /** Creates the context (tests pass a stub); default: the browser's AudioContext, if there is one. */
@@ -80,12 +92,17 @@ export class WeatherAudio {
   private limiter: DynamicsCompressorNode | null = null;
   private noise: ThunderNoise | null = null;
   private ambience: Ambience | null = null;
-  /** The context's end times and loudness of the thunders sounding or on their way. */
-  private thunders: { end: number; gain: number }[] = [];
+  /** The thunders sounding or on their way: end time (context), loudness, and their own gain. */
+  private thunders: { end: number; gain: number; bus: GainNode }[] = [];
   private level: number;
   private mute = false;
   private paused = false;
   private failed = false;
+  /** Whether the context has been running at some time: it may then be resumed without a gesture. */
+  private ran = false;
+  /** Context time until which an audition keeps a suspended context running, and of its last tone. */
+  private auditionUntil = -Infinity;
+  private auditionTone = -Infinity;
   private readonly createContext: () => AudioContext | null;
 
   constructor(options: WeatherAudioOptions = {}) {
@@ -124,20 +141,22 @@ export class WeatherAudio {
   }
 
   /**
-   * Starts the audio on the first key or pointer event on `target` (default:
-   * the window). Returns a function that stops listening. Does nothing where
-   * there is no window.
+   * Starts the audio on a key, pointer or click event on `target` (default:
+   * the window), and listens until the context runs: a finger going down is
+   * no gesture to a browser, the same finger lifting is. Returns a function
+   * that stops listening. Does nothing where there is no window.
    */
   attach(target?: EventTarget): () => void {
     const t = target ?? (typeof window !== 'undefined' ? window : null);
     if (!t) return () => {};
-    const events = ['pointerdown', 'keydown', 'touchstart'];
+    const events = ['keydown', 'pointerdown', 'pointerup', 'touchend', 'click'];
     const detach = () => {
       for (const e of events) t.removeEventListener(e, onGesture);
     };
     const onGesture = () => {
-      // A context that could not start is not tried again on every key.
-      if (this.start() || this.failed) detach();
+      this.start();
+      // Done once the context has run. One that could not be made is not tried again.
+      if (this.failed || this.ran || this.context?.state === 'running') detach();
     };
     for (const e of events) t.addEventListener(e, onGesture, { passive: true });
     return detach;
@@ -149,8 +168,10 @@ export class WeatherAudio {
    */
   start(): boolean {
     if (this.context) {
-      if (!this.paused && this.context.state === 'suspended')
-        void this.settle(this.context.resume());
+      // Suspended on purpose it stays so, unless it has never run: then this gesture may be
+      // the one that can start it at all.
+      if (this.context.state === 'suspended' && (!this.paused || !this.ran)) this.run(this.context);
+      else if (this.context.state === 'running') this.ran = true;
       return true;
     }
     if (this.failed) return false;
@@ -186,8 +207,9 @@ export class WeatherAudio {
       this.ambience = new Ambience(context, master, this.noise);
       this.context = context;
       this.master = master;
-      if (this.paused) void this.settle(context.suspend());
-      else if (context.state === 'suspended') void this.settle(context.resume());
+      if (context.state === 'suspended') this.run(context);
+      else if (this.paused) void this.settle(context.suspend());
+      else this.ran = true;
       return true;
     } catch (error) {
       console.warn('Audio is unavailable.', error);
@@ -195,6 +217,20 @@ export class WeatherAudio {
       this.context = null;
       return false;
     }
+  }
+
+  /**
+   * Resumes the context from a gesture. Once it runs it has run; if the audio is suspended
+   * meanwhile (the game is paused, or was when the gesture came), it is suspended again.
+   */
+  private run(context: AudioContext): void {
+    void this.settle(context.resume()).then(() => {
+      if (this.context !== context || context.state !== 'running') return;
+      this.ran = true;
+      if (this.paused && context.currentTime >= this.auditionUntil) {
+        void this.settle(context.suspend());
+      }
+    });
   }
 
   /** A promise from the context, with its rejection swallowed (a closed or blocked context). */
@@ -205,12 +241,16 @@ export class WeatherAudio {
   /** Pauses all sound, thunder on its way included (the game is paused). */
   suspend(): void {
     this.paused = true;
-    if (this.context?.state === 'running') void this.settle(this.context.suspend());
+    if (this.context?.state === 'running') {
+      this.ran = true;
+      void this.settle(this.context.suspend());
+    }
   }
 
   /** Carries on after `suspend`. */
   resume(): void {
     this.paused = false;
+    this.auditionUntil = -Infinity;
     if (this.context?.state === 'suspended') void this.settle(this.context.resume());
   }
 
@@ -231,11 +271,70 @@ export class WeatherAudio {
       return;
     }
     try {
-      const end = playThunder(context, this.master, this.noise, sound, now + sound.delay);
-      this.thunders.push({ end, gain: sound.gain });
+      // Its own gain, so that it can be taken back while it is on its way.
+      const bus = context.createGain();
+      bus.gain.value = 1;
+      bus.connect(this.master);
+      const end = playThunder(context, bus, this.noise, sound, now + sound.delay);
+      this.thunders.push({ end, gain: sound.gain, bus });
     } catch (error) {
       console.warn('Thunder could not be played.', error);
     }
+  }
+
+  /**
+   * Silences the thunder that sounds or is on its way: after a cut (the map, another
+   * weather, a new flight, a jump of the clock) the strikes it belongs to are gone, and a
+   * strike 25 km away would still roll in over a minute later.
+   */
+  cancelThunder(): void {
+    const context = this.context;
+    if (!context) return;
+    for (const t of this.thunders) {
+      t.bus.gain.setTargetAtTime(0, context.currentTime, CANCEL_FADE);
+    }
+    this.thunders = [];
+  }
+
+  /**
+   * Lets the present volume be heard: a short soft tone, and, while the audio is suspended
+   * (the pause menu's volume slider), the ambience for a moment.
+   */
+  audition(): void {
+    const context = this.context;
+    if (!context || !this.master) return;
+    const now = context.currentTime;
+    try {
+      if (now - this.auditionTone >= AUDITION_GAP) {
+        this.auditionTone = now;
+        const tone = context.createOscillator();
+        tone.type = 'sine';
+        tone.frequency.value = 660;
+        const shape = context.createGain();
+        shape.gain.value = 0;
+        shape.gain.setValueAtTime(0, now);
+        shape.gain.linearRampToValueAtTime(0.2, now + 0.008);
+        shape.gain.setTargetAtTime(0, now + 0.03, 0.05);
+        tone.connect(shape);
+        shape.connect(this.master);
+        tone.start(now);
+        tone.stop(now + 0.4);
+      }
+    } catch (error) {
+      console.warn('The volume could not be played.', error);
+    }
+    if (!this.paused) return;
+    this.auditionUntil = now + AUDITION_SECONDS;
+    if (context.state === 'suspended') void this.settle(context.resume());
+    setTimeout(
+      () => {
+        // Still paused, and no later audition has taken over: silence again.
+        if (this.context !== context || !this.paused) return;
+        if (context.currentTime < this.auditionUntil - 0.05) return;
+        if (context.state === 'running') void this.settle(context.suspend());
+      },
+      AUDITION_SECONDS * 1000 + 30,
+    );
   }
 
   /** Stops everything and closes the context. */
@@ -250,5 +349,6 @@ export class WeatherAudio {
     this.context = null;
     this.noise = null;
     this.thunders = [];
+    this.ran = false;
   }
 }

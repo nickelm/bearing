@@ -5,10 +5,15 @@
  * controller watches the frame time and scales the canvas's backing store
  * (relative to the device pixel ratio) so frames stay near the target.
  *
- * - Frame times are smoothed (exponential average), so tile-building spikes
- *   do not trigger changes. A single frame counts as at most HITCH targets:
- *   the first frame after a hidden tab or a stall of the page lasts seconds
- *   and says nothing about the resolution.
+ * - Frame times are smoothed (exponential average). A single frame counts as
+ *   at most HITCH targets: the first frame after a hidden tab or a stall of
+ *   the page lasts seconds and says nothing about the resolution.
+ * - One long frame (a tile build, a shader compile, a collected heap) says
+ *   nothing about it either, and still lifts the average over the target for
+ *   some ten frames. So the scale steps down only when SLOW_FRAMES of the last
+ *   RECENT frames were slow. Where the display holds the frame time on the
+ *   target, each such frame used to cost a step, which the probes won back
+ *   only a minute later: the scale sank to its floor on a fast machine.
  * - Shading cost scales with the pixel count, the square of the scale, so a
  *   slow frame steps the scale by √(target / measured), at most 40% at once.
  * - Raising the scale needs a clear margin (frames under 70% of the target)
@@ -50,6 +55,9 @@ const SETTLE_FRAMES = 10;
  * this slow on every frame still steps down by the most a step allows.
  */
 const HITCH = 4;
+/** The scale steps down only if this many of the last RECENT frames were over the target. */
+const SLOW_FRAMES = 3;
+const RECENT = 12;
 /** One step of the scale. */
 const STEP = 0.05;
 /** On target for this long (ms), the controller tries one step up. */
@@ -67,7 +75,7 @@ const PROBE_SLOW_FRAMES = 4;
  * Frame time, in targets, up to which a scale is slightly too much. A step down from a
  * smoothed frame time under it marks the scale as failed; over it, something else is slow.
  */
-const SLOW = 1.25;
+const SLOW = 1.3;
 
 export class RenderScaleController {
   /** Current scale relative to the device pixel ratio. */
@@ -75,6 +83,8 @@ export class RenderScaleController {
   private average = 0;
   private frames = 0;
   private changedAt = -Infinity;
+  /** The last RECENT frames, one bit each, the newest lowest: set where the frame was slow. */
+  private recent = 0;
   /** The probe being judged: the scale before it, and the frames since. */
   private probe: {
     from: number;
@@ -109,6 +119,7 @@ export class RenderScaleController {
     const ms = Math.min(frameMs, HITCH * this.targetMs);
     this.average =
       this.frames === SETTLE_FRAMES + 1 ? ms : this.average + (ms - this.average) * SMOOTHING;
+    this.recent = ((this.recent << 1) | (ms > this.targetMs * 1.1 ? 1 : 0)) & ((1 << RECENT) - 1);
     const probe = this.probe;
     if (probe !== null) {
       probe.count++;
@@ -136,7 +147,11 @@ export class RenderScaleController {
     }
     let next = this.scale;
     let probing = false;
-    if (this.average > this.targetMs * 1.1 && since >= HOLD_DOWN_MS) {
+    if (
+      this.average > this.targetMs * 1.1 &&
+      since >= HOLD_DOWN_MS &&
+      bitCount(this.recent) >= SLOW_FRAMES
+    ) {
       const factor = Math.min(0.95, Math.max(0.6, Math.sqrt(this.targetMs / this.average)));
       next = this.scale * factor;
     } else if (this.average < this.targetMs * 0.7 && since >= HOLD_UP_MS) {
@@ -222,5 +237,13 @@ export class RenderScaleController {
   private restart(nowMs: number): void {
     this.frames = 0;
     this.changedAt = nowMs;
+    this.recent = 0;
   }
+}
+
+/** The number of set bits in the low 16 bits of `x`. */
+function bitCount(x: number): number {
+  let n = 0;
+  for (let v = x & 0xffff; v !== 0; v &= v - 1) n++;
+  return n;
 }

@@ -20,8 +20,10 @@
  *   every MIN_INTERVAL_MS of real time. A texel costs sixteen octaves of
  *   noise, so the six faces of a bake that is due only to the field's age go
  *   out over six frames (`SPREAD_SPAN`): the clouds move a few meters
- *   meanwhile, against texels of 3 km. New weather, new settings and a clock
- *   that runs fast or jumps bake all six at once.
+ *   meanwhile, against texels of 3 km. An input that drifts (the weather
+ *   texture's fields, blended anew every 28 game seconds) makes the field due
+ *   in the same way. New weather, new settings and a clock that runs fast or
+ *   jumps bake all six at once.
  */
 import { HalfFloatType, StorageTexture } from 'three/webgpu';
 import type { ComputeNode, Node, WebGPURenderer } from 'three/webgpu';
@@ -110,6 +112,7 @@ export class CoverageBake {
   private readonly face = uniform(0);
   private bakedAt = Number.NaN;
   private bakedKey = '';
+  private bakedDrift = 0;
   private lastBakeMs = -Infinity;
   /** The next face of a bake that is spread over frames; FACES while none is under way. */
   private next = FACES;
@@ -150,45 +153,59 @@ export class CoverageBake {
 
   /**
    * Bakes again if the field is stale. `key` names every other input of the
-   * field (weather frames, settings): a different key forces a bake.
+   * field (weather frames, settings): a different key forces a bake of all six
+   * faces at once. `drift` counts the small steps of an input that moves with
+   * the clock: a different count makes the field due like its age does, a
+   * face per frame while the clock runs slowly.
    */
-  update(renderer: WebGPURenderer, gameTime: number, key: string, nowMs: number): boolean {
+  update(
+    renderer: WebGPURenderer,
+    gameTime: number,
+    key: string,
+    nowMs: number,
+    drift = 0,
+  ): boolean {
     // Game seconds since the last call: how fast the clock runs per frame.
     const step = Math.abs(gameTime - this.seenAt);
     this.seenAt = gameTime;
     const changed = key !== this.bakedKey;
+    const due = drift !== this.bakedDrift;
     if (this.next < FACES) {
       // A bake is under way, a face per frame. If the weather has changed or the clock has
       // run away meanwhile, its faces would not fit together: all of it again, at once.
       if (changed || !(Math.abs(gameTime - this.bakedAt) < SPREAD_SPAN)) {
-        this.bake(renderer, gameTime, key, nowMs);
+        this.bake(renderer, gameTime, key, nowMs, drift);
       } else {
         this.bakeFace(renderer, this.next++);
       }
       return true;
     }
     const age = Math.abs(gameTime - this.bakedAt);
-    if (!(changed || !(age < MAX_AGE)) || nowMs - this.lastBakeMs < MIN_INTERVAL_MS) return false;
-    // The field has only aged, and the clock runs slowly enough for six frames to be one
-    // moment: a face now and one in each of the next five frames.
+    if (!(changed || due || !(age < MAX_AGE)) || nowMs - this.lastBakeMs < MIN_INTERVAL_MS) {
+      return false;
+    }
+    // The field has only aged or drifted, and the clock runs slowly enough for six frames to
+    // be one moment: a face now and one in each of the next five frames.
     if (!changed && age < 2 * MAX_AGE && step * FACES < SPREAD_SPAN) {
       this.bakedAt = gameTime;
+      this.bakedDrift = drift;
       this.lastBakeMs = nowMs;
       this.bakes++;
       this.next = 0;
       this.bakeFace(renderer, this.next++);
     } else {
-      this.bake(renderer, gameTime, key, nowMs);
+      this.bake(renderer, gameTime, key, nowMs, drift);
     }
     return true;
   }
 
   /** Bakes all six faces now, whatever the age. */
-  bake(renderer: WebGPURenderer, gameTime: number, key: string, nowMs: number): void {
+  bake(renderer: WebGPURenderer, gameTime: number, key: string, nowMs: number, drift = 0): void {
     for (let face = 0; face < FACES; face++) this.bakeFace(renderer, face);
     this.next = FACES;
     this.bakedAt = gameTime;
     this.bakedKey = key;
+    this.bakedDrift = drift;
     this.lastBakeMs = nowMs;
     this.bakes++;
   }

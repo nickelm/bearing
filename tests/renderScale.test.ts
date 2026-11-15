@@ -116,13 +116,71 @@ describe('RenderScaleController', () => {
         (18 * s * s + 2) * (now >= 20_000 && now < 26_000 ? 4 : 1);
       for (const refresh of [60, 30]) {
         const c = new RenderScaleController(TARGET);
-        const { changes } = watch(c, spell, 120, refresh);
+        const { changes } = watch(c, spell, 240, refresh);
         expect(Math.min(...changes.map((x) => x.scale)), `${refresh} Hz`).toBeLessThan(0.75);
         expect(c.scale, `${refresh} Hz`).toBe(1);
-        // Back at full scale within half a minute of the spell's end: its steps down, the
-        // first of them small, did not count against the scales they left.
-        expect(changes[changes.length - 1]!.at, `${refresh} Hz`).toBeLessThan(56_000);
+        // Back at full scale within half a minute of the spell's end: its steps down did not
+        // count against the scales they left. Under the 30 FPS cap a probe falls into the
+        // spell and fails: the scale it tried waits its minute and must then hold for another.
+        expect(changes[changes.length - 1]!.at, `${refresh} Hz`).toBeLessThan(
+          refresh === 60 ? 56_000 : 26_000 + 150_000,
+        );
       }
+    });
+
+    it('keeps its scale through single long frames, however the display paces them', () => {
+      // A machine with time to spare whose display holds every frame on the target: Target
+      // FPS 60 at 60 Hz, and a page capped at 30 frames per second. One frame of 2 to 4 targets
+      // (a tile build, a shader compile, a collected heap) every 20 to 90 s. Each one used to
+      // cost a step that came back only a minute later, down to the floor within minutes.
+      const cases = [
+        { fps: 60, refresh: 60, full: 6 },
+        { fps: 60, refresh: 60, full: 14 },
+        { fps: 30, refresh: 30, full: 12 },
+        { fps: 30, refresh: 30, full: 25 },
+        { fps: 30, refresh: 60, full: 28 },
+      ];
+      for (const { fps, refresh, full } of cases) {
+        const target = 1000 / fps;
+        for (const targets of [2, 2.5, 3, 3.5, 4, 12]) {
+          for (const every of [20, 45, 90]) {
+            const c = new RenderScaleController(target);
+            let last = 0;
+            const cost = (s: number, now: number) => {
+              if (now - last < every * 1000) return (full - 2) * s * s + 2;
+              last = now;
+              return targets * target - 1;
+            };
+            const { changes } = watch(c, cost, 1800, refresh);
+            const label = `${fps} FPS at ${refresh} Hz, ${full} ms, ${targets} targets / ${every} s`;
+            expect(changes, label).toEqual([]);
+            expect(c.scale, label).toBe(1);
+          }
+        }
+      }
+    });
+
+    it('keeps its scale through two long frames in a row, and gives way to a burst', () => {
+      const target = 1000 / 60;
+      const burst = (n: number) => {
+        const c = new RenderScaleController(target);
+        // Every 30 s, n frames of 40 ms in a row on a 60 Hz display (shown as 50 ms).
+        let since = 0;
+        let left = 0;
+        const cost = (_s: number, now: number) => {
+          if (now - since >= 30_000) {
+            since = now;
+            left = n;
+          }
+          return left-- > 0 ? 40 : 6;
+        };
+        return watch(c, cost, 600, 60).changes;
+      };
+      expect(burst(2)).toEqual([]);
+      // Six in a row are a tenth of a second of real load: the scale answers, and comes back.
+      const six = burst(6);
+      expect(six.length).toBeGreaterThan(0);
+      expect(Math.min(...six.map((x) => x.scale))).toBeGreaterThanOrEqual(0.6);
     });
 
     it('tries a scale it cannot hold ever more rarely: the worst case of a steady machine', () => {

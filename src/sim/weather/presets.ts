@@ -224,13 +224,26 @@ export const PRESET_TABLE: Record<Exclude<WeatherPreset, 'live'>, PresetSpec> = 
   },
 };
 
-/** One line per preset for menus. */
+/** One line per preset: its name, a colon and what it is like. */
 export const PRESET_LABELS: Record<WeatherPreset, string> = {
-  live: "Live: the world's own weather",
+  live: "Live weather: the world's own, as the campaign has it",
   ...(Object.fromEntries(
     Object.entries(PRESET_TABLE).map(([name, spec]) => [name, spec.label]),
   ) as Record<Exclude<WeatherPreset, 'live'>, string>),
 };
+
+/** The preset's short name for a menu line: "Thunderstorm", "Dust storm", "Live weather". */
+export function presetName(preset: WeatherPreset): string {
+  const label = PRESET_LABELS[preset];
+  return label.slice(0, label.indexOf(':'));
+}
+
+/** What the preset is like, as a line beside the menu: "30 mm/h cores, lightning, gale". */
+export function presetDescription(preset: WeatherPreset): string {
+  const label = PRESET_LABELS[preset];
+  const text = label.slice(label.indexOf(':') + 1).trim();
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
 
 /**
  * The preset's spatial variation at a unit direction and frame hour, −1..1:

@@ -617,11 +617,21 @@ export class TerrainShadow {
   private readonly workB = fieldTexture();
   private atlas: DataTexture | null = null;
   private atlasN = 0;
-  /** The anchor face's frame, for lookups and kernels. */
+  /** The anchor face's frame, for the kernels: the face the grids are baked on. */
   private readonly faceNormal = uniform(new Vector3(1, 0, 0));
   private readonly faceU = uniform(new Vector3(0, 0, -1));
   private readonly faceV = uniform(new Vector3(0, 1, 0));
   private face: CubeFace | null = null;
+  /**
+   * The frame of the face the published fields lie on, for lookups. It follows the anchor
+   * face when the first grid baked on the new face is published (the coarse one): until
+   * then the lookups read the old face's fields, so the shadows do not go out for the
+   * second it takes (they did, all at once, at every crossing).
+   */
+  private readonly shownNormal = uniform(new Vector3(1, 0, 0));
+  private readonly shownU = uniform(new Vector3(0, 0, -1));
+  private readonly shownV = uniform(new Vector3(0, 1, 0));
+  private shownFace: CubeFace | null = null;
   /** Penumbra angle (rad): the sun's size times the softness, plus the bake's lag. */
   private readonly penumbra = uniform(SUN_DIAMETER);
   /** The kernels' inputs for the pass being run. */
@@ -736,7 +746,7 @@ export class TerrainShadow {
         const up = p.div(r).toVar();
         const h = r.sub(this.radius).toVar();
         const sinElevation = max(dot(up, this.sunDirection), 0).toVar();
-        const f = this.faceUv(up as V3);
+        const f = this.faceUv(up as V3, true);
         const faceUvVar = f.uv.toVar();
         const facing = f.facing.toVar();
         const shade = (l: number, uv: V2): F => {
@@ -782,7 +792,7 @@ export class TerrainShadow {
    */
   field(l: number, p: V3): V4 {
     const level = this.levels[l]!;
-    const f = this.faceUv(normalize(p) as V3);
+    const f = this.faceUv(normalize(p) as V3, true);
     const w = this.window(level, f.uv, f.facing);
     return vec4(texture(level.result, w.uv).level(int(0)).xyz, w.weight) as V4;
   }
@@ -795,6 +805,16 @@ export class TerrainShadow {
   /** The cube face whose lattice the grids use (null before the first update). */
   get anchor(): CubeFace | null {
     return this.face;
+  }
+
+  /** The cube face the lookups read their fields on: the anchor, or the one before it until a grid of the anchor's is published. */
+  get shownAnchor(): CubeFace | null {
+    return this.shownFace;
+  }
+
+  /** How far a grid counts in lookups, 0..1: 0 before its first bake, fading in after it. */
+  shown(l: number): number {
+    return this.levels[l]!.valid.value;
   }
 
   /**
@@ -821,14 +841,13 @@ export class TerrainShadow {
         shadowFollow(this.sunSpeed, (this.frameSeconds * this.gridPasses()) / MAX_PASSES)
       : 0;
     if (wanted === 0 || (!this.enabled && ++this.offFrames > OFF_FRAMES)) {
-      // Out of range, or switched off for a while: the fields would be stale on return.
-      if (this.levels.some((level) => level.baked) || this.busy) {
-        this.job = null;
-        this.queue = [];
-        for (const level of this.levels) {
-          level.baked = null;
-          level.valid.value = 0;
-        }
+      // Out of range, or switched off for a while: the fields would be stale on return
+      // (those of a face the camera has left as well, which `baked` no longer names).
+      this.job = null;
+      this.queue = [];
+      for (const level of this.levels) {
+        level.baked = null;
+        level.valid.value = 0;
       }
       this.strength.value = 0;
       return;
@@ -919,7 +938,8 @@ export class TerrainShadow {
   private follow(up: Readonly<Vec3d>): void {
     const face = anchorFace(up, this.face);
     if (face !== this.face) {
-      // Another lattice: every field starts over.
+      // Another lattice: every field is baked anew, the coarse one first. What is published
+      // stays in the lookups meanwhile, on the face it was baked on (`shownFace`).
       this.face = face;
       const f = CUBE_FACES[face]!;
       this.faceNormal.value.set(f.normal.x, f.normal.y, f.normal.z);
@@ -929,7 +949,6 @@ export class TerrainShadow {
       this.queue = [];
       for (const level of this.levels) {
         level.baked = null;
-        level.valid.value = 0;
         level.filled = null;
       }
     }
@@ -1067,7 +1086,20 @@ export class TerrainShadow {
           signature: job.signature,
           atMs: nowMs,
         };
-        if (jumped) level.valid.value = 1e-3;
+        if (this.shownFace !== this.face) {
+          // The first grid of another face: the lookups move to that face with it. The grid
+          // takes the place of the old face's without a fade (the same shadows, from the
+          // other lattice); the other grids still hold the old face's fields and leave the
+          // lookups until they are baked, finer shadows fading in over the coarse ones.
+          this.shownFace = this.face;
+          this.shownNormal.value.copy(this.faceNormal.value);
+          this.shownU.value.copy(this.faceU.value);
+          this.shownV.value.copy(this.faceV.value);
+          for (const other of this.levels) if (other !== level) other.valid.value = 0;
+          if (level.valid.value === 0) level.valid.value = 1e-3;
+        } else if (jumped) {
+          level.valid.value = 1e-3;
+        }
         this.stats.bakes++;
         this.job = null;
         if (this.queue.length === 0) this.stats.jobFrames = this.jobFrames;
@@ -1225,12 +1257,15 @@ export class TerrainShadow {
     }
   }
 
-  /** Extended face coordinates of a direction on the anchor face, and how squarely it faces it. */
-  private faceUv(d: V3): { uv: V2; facing: F } {
-    const facing = dot(d, this.faceNormal);
+  /**
+   * Extended face coordinates of a direction, and how squarely it faces the face: on the
+   * anchor face for the kernels, on the face of the published fields (`shown`) for lookups.
+   */
+  private faceUv(d: V3, shown = false): { uv: V2; facing: F } {
+    const facing = dot(d, shown ? this.shownNormal : this.faceNormal);
     const safe = max(facing, 1e-3);
-    const a = dot(d, this.faceU).div(safe);
-    const b = dot(d, this.faceV).div(safe);
+    const a = dot(d, shown ? this.shownU : this.faceU).div(safe);
+    const b = dot(d, shown ? this.shownV : this.faceV).div(safe);
     return {
       uv: vec2(atan(a), atan(b))
         .div(Math.PI / 2)

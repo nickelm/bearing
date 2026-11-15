@@ -67,6 +67,13 @@ function barePipeline(head: HeadlessRenderer): SimPipeline {
   return pipeline;
 }
 
+/** The largest difference between two pictures' bytes. */
+function worstDifference(a: Uint8Array, b: Uint8Array): number {
+  let worst = 0;
+  for (let i = 0; i < a.length; i++) worst = Math.max(worst, Math.abs(a[i]! - b[i]!));
+  return worst;
+}
+
 /**
  * Draws a frame and checks the pipeline's pass count against the render calls the renderer
  * really made (a hidden intermediate target and output pass would show here).
@@ -676,6 +683,44 @@ describe.skipIf(!gpu)('SimPipeline on Dawn', () => {
     await gpu!.finish();
     expect(gpu!.errors).toEqual([]);
     expect(held - memory.texturesSize).toBe(overlayBytes);
+    pipeline.dispose();
+    head.dispose();
+  }, 120_000);
+
+  it("frees three's own frame target on the way back from a view that drew directly", async () => {
+    // Four samples, as the app draws: three's target is then color, resolve and depth.
+    const head = await headlessRenderer(gpu!.device, W, H, 4);
+    head.renderer.toneMapping = AgXToneMapping;
+    const { scene, camera } = wallScene();
+    const pipeline = barePipeline(head);
+    const memory = head.renderer.info.memory;
+    pipeline.render(scene, camera);
+    pipeline.render(scene, camera);
+    await gpu!.finish();
+    const first = memory.texturesSize;
+    const before = await head.readRgb();
+
+    // To the map, as main.ts switches: this pipeline released, the other view drawn directly.
+    pipeline.release();
+    head.renderer.render(scene, camera);
+    head.renderer.render(scene, camera);
+    await gpu!.finish();
+    const direct = await head.readRgb();
+
+    // And back: no more than the first time (three's target stayed allocated beside the
+    // pipeline's: 24 MiB by this count at 1080p, about 110 MB with its four samples).
+    for (let frame = 0; frame < 3; frame++) pipeline.render(scene, camera);
+    await gpu!.finish();
+    expect(memory.texturesSize).toBe(first);
+    const after = await head.readRgb();
+    expect(worstDifference(before, after)).toBeLessThanOrEqual(1);
+
+    // The direct path draws again after that, the same picture as before.
+    pipeline.release();
+    head.renderer.render(scene, camera);
+    await gpu!.finish();
+    expect(worstDifference(direct, await head.readRgb())).toBeLessThanOrEqual(1);
+    expect(gpu!.errors).toEqual([]);
     pipeline.dispose();
     head.dispose();
   }, 120_000);

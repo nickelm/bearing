@@ -24,8 +24,10 @@
  *   model): braked or sideways it sticks until the friction limit and then
  *   slides, so a braked aircraft rests without creeping. Unbraked wheels roll
  *   with rolling resistance; differential braking; nosewheel steering fades
- *   with speed. Hard points on the airframe (nose, tail, wingtips, belly, fin)
- *   touching the ground crash the aircraft, as does a wheel on water.
+ *   with speed, and with the pedals let go it holds the ground track with the
+ *   rudder (controlLaws.ts, `trackHold`). Hard points on the airframe (nose,
+ *   tail, wingtips, belly, fin) touching the ground crash the aircraft, as does
+ *   a wheel on water.
  */
 import { Quatd } from '../../core/quat';
 import { Vec3d } from '../../core/vec3d';
@@ -271,6 +273,7 @@ export class FlightModel {
     this.stick.pitch = 0;
     this.stick.roll = 0;
     Object.assign(this.lawState, newLawState());
+    this.telemetry.laws.steer = 0;
     for (const w of this.wheels) {
       w.anchor = null;
       w.load = 0;
@@ -422,7 +425,10 @@ export class FlightModel {
       tas <= gs.steerFade
         ? gs.steerHigh + (gs.steerLow - gs.steerHigh) * (1 - tas / gs.steerFade)
         : gs.steerHigh * Math.max(0, 1 - (tas - gs.steerFade) / (gs.steerOff - gs.steerFade));
-    const steerAngle = clamp(ctl.yaw, -1, 1) * steerGain;
+    // Plus what the laws' track hold asked for in the last substep (nothing with a pedal in).
+    const holdSteer = tel.laws.steer;
+    const pedalSteer = clamp(ctl.yaw, -1, 1) * steerGain;
+    const steerAngle = holdSteer !== 0 ? pedalSteer + holdSteer : pedalSteer;
     // Wheels and hard points only near the ground (one query otherwise).
     const low = altitude - groundUnder < 40;
     for (const w of this.wheels) {
@@ -450,6 +456,9 @@ export class FlightModel {
     const load = (sfx * liftX + sfz * liftZ) / g;
 
     // ---- Control laws ----
+    // The ground track against the nose, for the track hold on the wheels.
+    const vg = this.q.unrotate(this.vel, sc.w);
+    const forward = vg.x;
     const lawIn: LawInput = {
       tas,
       cas,
@@ -471,6 +480,8 @@ export class FlightModel {
       bank: tel.bank,
       pitch: tel.pitch,
       radarAltitude: tel.radarAltitude,
+      forward,
+      drift: forward > 2 ? Math.atan2(vg.y, forward) : 0,
     };
     tel.lawInput = lawIn;
     // Stick prefilter (as in the F-16's FCS): shapes the command's onset.

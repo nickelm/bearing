@@ -71,12 +71,13 @@
  *   pools in lowlands and hills stand out of it. The exponential profile is
  *   integrated analytically over each step. Structure: a layer of wide banks
  *   lifts and lowers the fog's top; a finer layer and, near the camera, a
- *   third are thin sheets (eight times wider than thick) that drift on paths
- *   of their own, across the wind and each other. Thick fog shows its light,
- *   not its density, and a ray crosses many round wisps before it ends: only
- *   sheets, which a level ray stays in, show from inside, as bands that rise
- *   and fall. The light follows them (`AIR_LOOK`). Haze (a visibility over
- *   8 km) has no such structure and reads no noise.
+ *   third are wisps twice as wide as thick that drift on paths of their own,
+ *   across the wind and each other. Thick fog shows its light, not its
+ *   density: the light follows the wisps (`AIR_LOOK`), which from inside
+ *   gives a soft glow with slow, wide structure. (Sheets eight times wider
+ *   than thick, tried first, drew a level view through fog as a frame of
+ *   horizontal streaks.) Haze (a visibility over 8 km) has no such
+ *   structure and reads no noise.
  * - Dust: an ochre layer up to 3 km deep where the weather's dust field is
  *   high, with a billowing top and a wall where the field begins, flat
  *   billows that roll past the camera with the wind, the blue taken out of
@@ -239,9 +240,15 @@ const OPAQUE_FADE = 0.05;
  * steps as the ray above the horizon does.
  */
 const GRAZING = 0.06;
-/** Step lengths (m) over which the shape noise gives way to its smooth channel, and that to the mean density. */
-const SMOOTH_STEPS: [number, number] = [700, 2500];
-const MEAN_STEPS: [number, number] = [1500, 4000];
+/**
+ * Step lengths (m) over which the shape noise gives way to its smooth channel, and that to the
+ * mean density. The fine octaves have cells of 500 m and the smooth channel heaps of 1 to
+ * 2 km: steps longer than a part of those catch a heap or its lit side by chance, one ray in
+ * nine, and the filter's 3 × 3 box drew each such ray as a block (far cloud bands, a deck
+ * from above).
+ */
+const SMOOTH_STEPS: [number, number] = [200, 900];
+const MEAN_STEPS: [number, number] = [1200, 3500];
 /** Step lengths (m) over which the detail noise fades out. */
 const DETAIL_STEPS: [number, number] = [200, 700];
 /** How far toward the light the samples of a step reach (m), by their number. */
@@ -251,8 +258,13 @@ const LIGHT_REACH: Record<2 | 3 | 4, number> = { 2: 1000, 3: 1200, 4: 1300 };
  * noise range before the cloud's edge to full LIGHT_EDGE[1] of the range further in.
  */
 const LIGHT_EDGE: [number, number] = [0.15, 0.9];
-/** Step lengths (m) over which the cloud's light changes from its sharp form to its deep one. */
-const LIGHT_STEPS: [number, number] = [60, 250];
+/**
+ * Step lengths (m) over which the cloud's light changes from its sharp form to its deep one.
+ * In its sharp form the light falls to 1/e within about 36 m of cloud, and the shortest step
+ * is 45 m: the change begins below that, or a sample's light depends on its place in the
+ * step and the nine offsets differ several times over (a stipple on near cumulus).
+ */
+const LIGHT_STEPS: [number, number] = [10, 90];
 /** The free path of light between the heaps of a cumulus field (m). */
 const HEAP_FREE_PATH = 5000;
 /** The stretch beyond the light samples that one more reading of the cloud's column stands for (m). */
@@ -325,11 +337,11 @@ export const AIR_LOOK = {
   /** How far the light in dust follows the billows near the camera, 0..1. */
   billowLight: 0.8,
   /**
-   * How much thinner than wide the fog's finer layers are: fog lies in sheets. A level ray
-   * stays in one sheet for longer than it sees, so the sheets show as bands that rise and
-   * fall along the horizon; a round wisp of the same thickness is one of many on the ray.
+   * How much thinner than wide the fog's finer layers are: fog settles in layers, a little.
+   * At 8 a level ray stayed in one sheet for longer than it saw, and the view from inside
+   * fog was horizontal streaks from edge to edge; at 2 the wisps read as soft, wide shapes.
    */
-  strata: 8,
+  strata: 2,
   /** Speeds of the fog's own drift (m/s), on top of the wind: of the finer banks and of the wisps near the camera. */
   driftFine: 1.6,
   driftNear: 3,
@@ -377,6 +389,8 @@ const CIRRUS_SHORT = 5_000;
 const CIRRUS_POLAR: [number, number] = [0.866, 0.951];
 /** Sky light on cirrus, as a multiple of the sky's irradiance on level ground. */
 const CIRRUS_SKY = 2.5;
+/** The most cloud cover in view from which the cirrus is fully in (see `cirrusIn`). */
+const CIRRUS_IN = 0.1;
 
 /** Height above the mean ground up to which fog has its full density (m). */
 export const FOG_FLOOR = 100;
@@ -397,6 +411,15 @@ const FOG_NEAR_STEPS: [number, number] = [60, 160];
  */
 const FOG_SHEETS: [number, number] = [700, 2200];
 const FOG_NEAR_SHEETS: [number, number] = [90, 320];
+/**
+ * Distances from the camera (m) over which the fine structure of fog, rain, snow and dust
+ * comes in (wisps, veils, curtains, rolling billows; the wide banks are not held back). The
+ * air in front of the camera has the weather's own extinction and an even light: what is a
+ * few meters away, the flown aircraft first of all, is veiled by what the visibility says,
+ * steadily. With the structure at full strength from the camera on, 12 m of snow at 1.1 km
+ * visibility hid between 0.6% and 8% and its light changed 150-fold as the curtains passed.
+ */
+const NEAR_EVEN: [number, number] = [15, 120];
 /** Height of a full dust storm over the fog floor (m). */
 const DUST_DEPTH = 2000;
 /** Extinction of rain shafts at 4 mm/h (1/m). */
@@ -512,6 +535,12 @@ export class Volumetrics {
   source: VolumetricSource;
   /** Amount of cirrus, 0..1. */
   readonly cirrus = uniform(0.5);
+  /**
+   * How far the cirrus is in, 0..1, by the most cloud cover in view (set by `update`). The
+   * sheet is drawn with the cloud march, which runs from the first weather sample with cloud
+   * in it: the cirrus comes in over the cover from there to CIRRUS_IN, not at once.
+   */
+  private readonly cirrusIn = uniform(1);
   /**
    * How much of the noise shows in clouds, fog, dust and rain, 0..1. At 0 they are as smooth
    * as the weather's fields: decks are slabs, fog is even, heaps are gone (tests measure the
@@ -667,6 +696,7 @@ export class Volumetrics {
 
     const cloudOn = this.cloudsEnabled && clouds.possible && fade > 0;
     this.cloudOn.value = cloudOn ? 1 : 0;
+    this.cirrusIn.value = smooth(clouds.coverLeast, CIRRUS_IN, view.cover + clouds.coverageBias.value);
     this.bottom.value = clouds.bottom;
     this.top.value = Math.max(clouds.top, clouds.bottom + 100);
     this.stormOn.value = view.storm > 0.02 ? 1 : 0;
@@ -855,7 +885,7 @@ export class Volumetrics {
         const skyLight = L.atmosphere
           .skyIrradiance(dot(up0, L.sunDirection) as F)
           .mul(L.sunIlluminance)
-          .add(L.moonSkyAt(up0 as V3).div(L.skyLight))
+          .add(L.moonSkyIrradiance(up0 as V3))
           .add(vec3(0.55, 0.65, 1.0).mul(L.nightLight).mul(0.4))
           .toVar() as V3;
         // The haze in front of clouds and fog takes the sky's color just above the horizon
@@ -1113,8 +1143,13 @@ export class Volumetrics {
         })
           .ElseIf(above.lessThan(0), () => {
             // Under this column's base: to where the ray reaches it (on a sphere, exactly).
+            // The distance is the sample's, so the step starts that far beyond the sample's
+            // own place in it: the next sample then lies its offset into the layer, and the
+            // nine offsets stay spread over a step. From the step's start they all landed on
+            // the base itself, in shells a step apart that the filter could not even out
+            // (terraces on a cloud seen from close above).
             const to = r.mul(sqrt(mu.mul(mu).add(above.negate().mul(2).div(r))).sub(mu));
-            advance.assign(clamp(to.add(1), step, max(step.mul(12), 4000)));
+            advance.assign(clamp(ts.sub(t).add(to).add(1), step, max(step.mul(12), 4000)));
           })
           .ElseIf(above.greaterThan(thickness), () => {
             // Over its top: down to it if the ray dips that far, otherwise on.
@@ -1125,7 +1160,7 @@ export class Volumetrics {
               r.mul(mu.negate().sub(sqrt(max(disc, 0)))).add(1),
               float(1e9),
             );
-            advance.assign(clamp(to, step, max(step.mul(8), 1200)));
+            advance.assign(clamp(ts.sub(t).add(to), step, max(step.mul(8), 1200)));
           })
           .Else(() => {
             const c = coverageAt(held, h as F).toVar();
@@ -1422,7 +1457,12 @@ export class Volumetrics {
       // The sheet thins to nothing as the camera passes through it.
       const near = smoothstep(0, 500, abs(h0.sub(CIRRUS_ALTITUDE)));
       const slant = float(1).div(max(abs(dot(up, rd)), 0.22));
-      const depth = density.mul(CIRRUS_DEPTH).mul(slant).mul(near).mul(polar);
+      const depth = density
+        .mul(CIRRUS_DEPTH)
+        .mul(slant)
+        .mul(near)
+        .mul(polar)
+        .mul(this.cirrusIn);
       const through = exp(depth.negate()).toVar();
       // Ice scatters forward: bright toward the sun, and lit from below once the sun is under it.
       const lit = a
@@ -1619,7 +1659,12 @@ export class Volumetrics {
         const near = float(1)
           .sub(smoothstep(500, 3500, dt))
           .toVar();
-        const sheets = near.mul(float(1).sub(smoothstep(FOG_SHEETS[0], FOG_SHEETS[1], ts))).toVar();
+        // The fine structure comes in over the first tens of meters (NEAR_EVEN).
+        const beyond = smoothstep(NEAR_EVEN[0], NEAR_EVEN[1], ts).toVar();
+        const sheets = near
+          .mul(float(1).sub(smoothstep(FOG_SHEETS[0], FOG_SHEETS[1], ts)))
+          .mul(beyond)
+          .toVar();
         const banks = float(0.5).toVar();
         const wisps = float(0.5).toVar();
         // How far the air here is the rain's (0..1): where it is all rain, the fog's banks
@@ -1654,6 +1699,7 @@ export class Volumetrics {
         const close = float(1)
           .sub(smoothstep(FOG_NEAR_STEPS[0], FOG_NEAR_STEPS[1], dt))
           .mul(float(1).sub(smoothstep(FOG_NEAR_SHEETS[0], FOG_NEAR_SHEETS[1], ts)))
+          .mul(beyond)
           .toVar();
         const curl = float(0.5).toVar();
         If(inFog.and(close.greaterThan(0)), () => {
@@ -1721,6 +1767,7 @@ export class Volumetrics {
             const veiled = float(1)
               .sub(smoothstep(1500, 8000, dt))
               .mul(this.structure)
+              .mul(beyond)
               .toVar();
             const streaks = mix(float(1), veil.mul(1.7).add(0.25), veiled).mul(overhead).toVar();
             // A veil catches the light as a wisp of fog does: curtains show inside the rain.
@@ -1733,6 +1780,7 @@ export class Volumetrics {
             const narrow = float(1)
               .sub(smoothstep(RAIN_NEAR_STEPS[0], RAIN_NEAR_STEPS[1], dt))
               .mul(this.structure)
+              .mul(beyond)
               .toVar();
             If(narrow.greaterThan(0), () => {
               a.reads?.addAssign(1);
@@ -1786,6 +1834,7 @@ export class Volumetrics {
           const rolling = float(1)
             .sub(smoothstep(DUST_NEAR_STEPS[0], DUST_NEAR_STEPS[1], dt))
             .mul(this.structure)
+            .mul(beyond)
             .toVar();
           If(rolling.greaterThan(0).and(dustExtinctionNode.greaterThan(0)), () => {
             a.reads?.addAssign(1);

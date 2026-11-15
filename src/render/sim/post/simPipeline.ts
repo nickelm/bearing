@@ -358,6 +358,8 @@ export class SimPipeline {
   /** Frames since the volumetric stage and the overlay were last drawn. */
   private volumetricIdle = 0;
   private overlayIdle = 0;
+  /** Set by `release`: another view has drawn directly since, and three holds its frame target. */
+  private directDrawn = false;
   private bloomChain: Bloom | null = null;
   private readonly fullSize = uniform(new Vector2(1, 1));
   private readonly lowSize = uniform(new Vector2(1, 1));
@@ -456,6 +458,11 @@ export class SimPipeline {
   render(scene: Scene, camera: PerspectiveCamera): void {
     if (this.failure) throw this.failure;
     const renderer = this.renderer;
+    // Back from a view that drew directly (`release` was called for it): its target goes.
+    if (this.directDrawn) {
+      this.releaseDirectTarget();
+      this.directDrawn = false;
+    }
     renderer.getDrawingBufferSize(this.size);
     this.resize(Math.max(1, this.size.x), Math.max(1, this.size.y));
     camera.updateMatrixWorld();
@@ -561,6 +568,23 @@ export class SimPipeline {
     this.lowColor?.dispose();
     this.overlayTarget?.dispose();
     this.bloomChain?.release();
+    this.directDrawn = true;
+  }
+
+  /**
+   * Frees the frame target three keeps for drawing straight to the canvas (the strategic
+   * view, a scene drawn without this pipeline): half-float color with the renderer's
+   * samples, its resolve and a depth buffer, about 110 MB at 1080p with four samples. Three
+   * frees or resizes it only when it is next used, so after a visit to the map it stayed
+   * allocated beside this pipeline's targets for the rest of the session. It comes back on
+   * the next direct render, as this pipeline's targets do after `release`.
+   */
+  private releaseDirectTarget(): void {
+    // Three has no public way to it (r187: Renderer._frameBufferTargets, by canvas target).
+    const targets = (
+      this.renderer as unknown as { _frameBufferTargets?: Map<unknown, { dispose(): void }> }
+    )._frameBufferTargets;
+    targets?.forEach((target) => target.dispose());
   }
 
   /**

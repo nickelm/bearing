@@ -216,6 +216,9 @@ export class WeatherState {
    * Fills the camera values from a view (null = clear) and advances clock and
    * wetness by dt real seconds. `cameraDir` is the camera's direction from the
    * planet center (any length), `altitude` its height above sea level (m).
+   * `wetDt` is the time the ground has had to get wet or to dry, where that is
+   * not dt: the game seconds of the frame while the game clock runs fast, so
+   * that the ground dries in minutes of game time at any rate.
    */
   update(
     view: WeatherView | null,
@@ -223,10 +226,12 @@ export class WeatherState {
     altitude: Meters,
     gameTime: GameTime,
     dt: Seconds,
+    wetDt: Seconds = dt,
   ): void {
     // A missing or negative dt (a first frame, a clock set back) is no time at all.
-    const step = dt > 0 ? dt : 0;
-    this.clock.value = (this.clock.value + step) % CLOCK_WRAP;
+    const clockStep = dt > 0 ? dt : 0;
+    const step = wetDt > 0 ? wetDt : 0;
+    this.clock.value = (this.clock.value + clockStep) % CLOCK_WRAP;
     if (!view || !view.ready) {
       this.local = null;
       this.rain.value = 0;

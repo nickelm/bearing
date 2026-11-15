@@ -34,6 +34,15 @@
  *   lower setting but not the higher one tries again ever more rarely.
  * - Frames right after a change are ignored (SETTLE): changing a setting
  *   compiles shaders, and that frame says nothing about the setting.
+ * - **Single long frames do not count.** A tile build or a collected heap
+ *   lifts the smoothed frame time off the target for most of a second. A break
+ *   in the headroom or on the target shorter than GRACE therefore keeps the
+ *   up-dwell running and does not make a step up regretted; before, one such
+ *   frame a minute kept a machine at its lowest step for good.
+ * - **Warm-up.** After a cut (a new world, entering the view, a new flight)
+ *   the first frames compile shaders and load tiles. `warmUp()` leaves frames
+ *   uncounted for WARM_UP, and beyond it for as long as the view still loads,
+ *   up to WARM_UP_MOST.
  *
  * The class knows no renderer and no clock of its own: the caller passes
  * each frame's time and the time now, so tests run it on made-up frames.
@@ -65,6 +74,11 @@ export const PATIENCE = 6;
  * climb (renderScale.ts raises it under 0.7): a low scale is then on its way up.
  */
 export const SCALE_RISES = 0.7;
+/** A break in the headroom or on the target shorter than this is a hitch, not a load (ms). */
+export const GRACE = 2000;
+/** Time after a cut in which frames are not counted, and the most while the view loads (ms). */
+export const WARM_UP = 5000;
+export const WARM_UP_MOST = 60_000;
 /** Weight of a new frame in the smoothed frame time. */
 const SMOOTHING = 0.05;
 /** A frame longer than this many targets is a hitch, counted as this many. */
@@ -84,6 +98,34 @@ export interface GovernorFrame {
   maxScale: number;
   /** Whether the render scale adapts to the frame time (false: the user fixed it). */
   adaptive: boolean;
+  /** Whether the view still loads what it shows (tiles pending); extends a warm-up. */
+  loading?: boolean;
+}
+
+/** Since when a condition has held, forgiving breaks shorter than GRACE. */
+class Dwell {
+  since: number | null = null;
+  private lostAt: number | null = null;
+
+  update(holds: boolean, nowMs: number): void {
+    if (holds) {
+      this.since ??= nowMs;
+      this.lostAt = null;
+    } else if (this.since !== null) {
+      this.lostAt ??= nowMs;
+      if (nowMs - this.lostAt >= GRACE) this.clear();
+    }
+  }
+
+  /** Whether it has held for `ms`, breaks under GRACE aside, and holds now. */
+  lasted(ms: number, nowMs: number): boolean {
+    return this.since !== null && this.lostAt === null && nowMs - this.since >= ms;
+  }
+
+  clear(): void {
+    this.since = null;
+    this.lostAt = null;
+  }
 }
 
 export class QualityGovernor {
@@ -99,10 +141,12 @@ export class QualityGovernor {
   /** When the last step up was taken and from which level, while it is on probation. */
   private raised: { at: number; from: number } | null = null;
   private strugglingSince: number | null = null;
-  private headroomSince: number | null = null;
-  private onTargetSince: number | null = null;
+  private readonly headroom = new Dwell();
+  private readonly onTarget = new Dwell();
   /** The render scale of the last counted frame. */
   private lastScale = 0;
+  /** When the warm-up after a cut began, while it lasts. */
+  private warmSince: number | null = null;
 
   constructor(
     /** How many steps down there are. */
@@ -118,6 +162,11 @@ export class QualityGovernor {
 
   /** Records a frame; returns the new level when it changed, else null. */
   record(f: GovernorFrame): number | null {
+    if (this.warmSince !== null) {
+      const age = f.nowMs - this.warmSince;
+      if (age < WARM_UP || (f.loading === true && age < WARM_UP_MOST)) return null;
+      this.warmSince = null;
+    }
     if (f.nowMs < this.ignoreUntil) return null;
     const ms = Math.min(f.frameMs, HITCH * f.targetMs);
     this.average = this.average === 0 ? ms : this.average + (ms - this.average) * SMOOTHING;
@@ -139,11 +188,11 @@ export class QualityGovernor {
     const rising = f.adaptive && f.scale > this.lastScale + edge;
     this.lastScale = f.scale;
     this.strugglingSince = struggling && !rising ? (this.strugglingSince ?? f.nowMs) : null;
-    this.headroomSince = headroom ? (this.headroomSince ?? f.nowMs) : null;
-    this.onTargetSince = onTarget ? (this.onTargetSince ?? f.nowMs) : null;
+    this.headroom.update(headroom, f.nowMs);
+    this.onTarget.update(onTarget, f.nowMs);
     const sinceChange = f.nowMs - this.changedAt;
-    // The last step up cost the full resolution: it is taken back.
-    const regret = this.raised !== null && !onTarget;
+    // The last step up cost the full resolution, for longer than a hitch: it is taken back.
+    const regret = this.raised !== null && this.onTarget.since === null;
     if (
       this.level < this.steps &&
       sinceChange >= MIN_DWELL &&
@@ -160,8 +209,8 @@ export class QualityGovernor {
     if (
       this.level > 0 &&
       sinceChange >= MIN_DWELL &&
-      ((this.headroomSince !== null && f.nowMs - this.headroomSince >= this.upDwell) ||
-        (this.onTargetSince !== null && f.nowMs - this.onTargetSince >= this.upDwell * PATIENCE))
+      (this.headroom.lasted(this.upDwell, f.nowMs) ||
+        this.onTarget.lasted(this.upDwell * PATIENCE, f.nowMs))
     ) {
       this.raised = { at: f.nowMs, from: this.level };
       return this.change(this.level - 1, f.nowMs);
@@ -176,9 +225,24 @@ export class QualityGovernor {
   hold(nowMs: number): void {
     this.average = 0;
     this.strugglingSince = null;
-    this.headroomSince = null;
-    this.onTargetSince = null;
+    this.headroom.clear();
+    this.onTarget.clear();
     this.ignoreUntil = nowMs + SETTLE;
+  }
+
+  /**
+   * A cut: the next frames compile shaders and load tiles and say nothing about the machine.
+   * Like `hold`, for WARM_UP and then for as long as frames come with `loading`, up to
+   * WARM_UP_MOST after the cut.
+   */
+  warmUp(nowMs: number): void {
+    this.hold(nowMs);
+    this.warmSince = nowMs;
+  }
+
+  /** Whether a warm-up is on (it ends with the first frame counted after it). */
+  get warming(): boolean {
+    return this.warmSince !== null;
   }
 
   /** Back to full quality with nothing remembered (the automatic was switched on again). */
@@ -188,8 +252,8 @@ export class QualityGovernor {
     this.raised = null;
     this.average = 0;
     this.strugglingSince = null;
-    this.headroomSince = null;
-    this.onTargetSince = null;
+    this.headroom.clear();
+    this.onTarget.clear();
     this.changedAt = nowMs;
     this.ignoreUntil = nowMs + SETTLE;
   }
@@ -200,8 +264,8 @@ export class QualityGovernor {
     this.ignoreUntil = nowMs + SETTLE;
     this.average = 0;
     this.strugglingSince = null;
-    this.headroomSince = null;
-    this.onTargetSince = null;
+    this.headroom.clear();
+    this.onTarget.clear();
     return level;
   }
 }

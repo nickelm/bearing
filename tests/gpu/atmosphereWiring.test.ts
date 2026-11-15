@@ -68,6 +68,20 @@ describe.skipIf(!gpu)('the atmosphere as the app wires it', () => {
     expect(state.clock.value).toBeCloseTo(clock + 1 / 60, 5);
     expect(particles.latticeOffset('rain').distanceTo(lattice)).toBeGreaterThan(0.01);
 
+    // The particles' least width is in pixels of the drawing buffer: at half the render scale
+    // (or half the display's pixel ratio) a pixel spans twice the angle. The scene's own
+    // size stays in CSS pixels, as main.ts passes it.
+    const fovY = scene.camera.fov * DEG;
+    expect(particles.pixel).toBeCloseTo(fovY / head.height, 9);
+    head.renderer.setPixelRatio(0.5);
+    scene.resize(head.width, head.height);
+    await frame(1 / 60);
+    expect(particles.pixel).toBeCloseTo(fovY / (head.height / 2), 9);
+    head.renderer.setPixelRatio(1);
+    scene.resize(head.width, head.height);
+    await frame(1 / 60);
+    expect(particles.pixel).toBeCloseTo(fovY / head.height, 9);
+
     // Paused: both hold, while frames are still drawn.
     scene.paused = true;
     const heldClock = state.clock.value;
