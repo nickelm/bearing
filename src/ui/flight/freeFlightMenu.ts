@@ -6,7 +6,7 @@
  */
 import './flight.css';
 import { FOOT } from '../../core/units';
-import { PRESET_LABELS, WEATHER_PRESETS } from '../../sim/weather/presets';
+import { presetDescription, presetName, WEATHER_PRESETS } from '../../sim/weather/presets';
 import type { WeatherPreset } from '../../sim/weather/presets';
 
 export type SpawnKind = 'runway' | 'air';
@@ -30,26 +30,46 @@ export const DEFAULT_OPTIONS: FreeFlightOptions = {
   wind: true,
 };
 
-/** A `<select>` of the weather presets with their menu lines; `onChange` gets the choice. */
+/** The weather option of a card: the list of presets by name, and what the chosen one is like. */
+export interface WeatherChoice {
+  readonly select: HTMLSelectElement;
+  /** A line of secondary text for the chosen preset; the card places it. */
+  readonly note: HTMLSpanElement;
+  /** Shows another preset as chosen (without calling `onChange`). */
+  show(preset: WeatherPreset): void;
+}
+
+/** A `<select>` of the weather presets by name with a note; `onChange` gets the choice. */
 export function weatherSelect(
   value: WeatherPreset,
   onChange: (preset: WeatherPreset) => void,
-): HTMLSelectElement {
+): WeatherChoice {
   const select = document.createElement('select');
   select.className = 'ff-weather';
   for (const preset of WEATHER_PRESETS) {
     const option = document.createElement('option');
     option.value = preset;
-    option.textContent = PRESET_LABELS[preset];
+    option.textContent = presetName(preset);
+    option.title = presetDescription(preset);
     select.append(option);
   }
-  select.value = value;
+  const note = document.createElement('span');
+  note.className = 'ff-note ff-weather-note';
+  const show = (preset: WeatherPreset) => {
+    select.value = preset;
+    note.textContent = presetDescription(preset);
+  };
+  show(value);
+  select.addEventListener(
+    'change',
+    () => (note.textContent = presetDescription(select.value as WeatherPreset)),
+  );
   select.addEventListener('change', () => onChange(select.value as WeatherPreset));
   // Keys in the list choose a preset; they do not move the map. Escape still closes the card.
   select.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') e.stopPropagation();
   });
-  return select;
+  return { select, note, show };
 }
 
 export interface BaseEntry {
@@ -95,7 +115,7 @@ export class FreeFlightMenu {
   private readonly flyButton: HTMLButtonElement;
   private readonly chosen: HTMLDivElement;
   private readonly todLabel: HTMLSpanElement;
-  private readonly weatherList: HTMLSelectElement;
+  private readonly weatherList: WeatherChoice;
   /** Shows `options` in the controls. */
   private readonly sync: () => void;
 
@@ -128,6 +148,7 @@ export class FreeFlightMenu {
         <label class="ff-weather-row">Weather </label>
         <label title="The aircraft feels the weather's wind and gusts"><input type="checkbox" class="ff-wind"> Wind and turbulence</label>
       </div>
+      <div class="ff-row ff-weather-about"></div>
       <div class="ff-row">
         <label><input type="checkbox" class="ff-fuel"> Unlimited fuel</label>
       </div>
@@ -156,7 +177,8 @@ export class FreeFlightMenu {
       this.options.weather = preset;
       this.events.weather?.(preset);
     });
-    q<HTMLLabelElement>('.ff-weather-row').append(this.weatherList);
+    q<HTMLLabelElement>('.ff-weather-row').append(this.weatherList.select);
+    q<HTMLDivElement>('.ff-weather-about').append(this.weatherList.note);
     const wind = q<HTMLInputElement>('.ff-wind');
     wind.addEventListener('change', () => (this.options.wind = wind.checked));
     const fuel = q<HTMLInputElement>('.ff-fuel');
@@ -170,7 +192,7 @@ export class FreeFlightMenu {
     this.sync = () => {
       tod.value = String(this.options.timeOfDay);
       this.todLabel.textContent = hourText(this.options.timeOfDay);
-      this.weatherList.value = this.options.weather;
+      this.weatherList.show(this.options.weather);
       wind.checked = this.options.wind;
       fuel.checked = this.options.unlimitedFuel;
       for (const r of spawns) r.checked = r.value === this.options.spawn;
@@ -207,7 +229,7 @@ export class FreeFlightMenu {
   /** Shows another weather as chosen (it was changed elsewhere). */
   setWeather(preset: WeatherPreset): void {
     this.options.weather = preset;
-    this.weatherList.value = preset;
+    this.weatherList.show(preset);
   }
 
   /**

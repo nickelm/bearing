@@ -168,9 +168,13 @@ const HEAP_SHADOW = 0.0017;
 const DECK_SHADOW = 0.0036;
 /** The share of a cloud's noise range over which its shadow deepens (the cloud's own is EDGE). */
 const SHADOW_EDGE = 0.75;
-/** Distances from the camera (m) over which the shadow loses the noise's fine and coarse structure. */
-const SHADOW_SMOOTH: [number, number] = [20_000, 60_000];
-const SHADOW_MEAN: [number, number] = [60_000, 150_000];
+/**
+ * Distances from the camera (m) over which the shadow loses the noise's fine and coarse
+ * structure: where the march's steps do (volumetrics.ts, SMOOTH_STEPS and MEAN_STEPS over its
+ * step growth at medium quality).
+ */
+const SHADOW_SMOOTH: [number, number] = [8_000, 35_000];
+const SHADOW_MEAN: [number, number] = [46_000, 135_000];
 
 const smooth = (a: number, b: number, x: number) => {
   const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -218,6 +222,11 @@ export class CloudLayer implements WeatherField {
   readonly detailDrift = uniform(new Vector3());
   /** The most the weather holds within view of the camera, as of `update`. */
   readonly extent: WeatherExtent = newExtent();
+  /**
+   * The cloud cover (with the bias) above which the bake draws any cloud: the stretched
+   * cover, 1.2 × cover − 0.1, then passes the detail field's lowest value.
+   */
+  readonly coverLeast = 0.02 / 1.2;
   /** Whether any cloud can be in view, and the lowest base and highest top it can have (m above sea level). */
   possible = false;
   bottom = 0;
@@ -480,12 +489,13 @@ export class CloudLayer implements WeatherField {
   bake(renderer: WebGPURenderer, nowMs: number): boolean {
     const key = [
       this.weather.version,
-      this.weather.fieldVersion,
       this.enabled.value,
       this.coverageBias.value,
       this.windScale.value,
     ].join('|');
-    return this.baked.update(renderer, this.time.value, key, nowMs);
+    // The weather's fields are blended anew every 28 game seconds, by a 128th of the hour's
+    // change: that makes the bake due, a face per frame, not all six at once (decision 144).
+    return this.baked.update(renderer, this.time.value, key, nowMs, this.weather.fieldVersion);
   }
 
   private material(): MeshBasicNodeMaterial {
@@ -548,7 +558,7 @@ export class CloudLayer implements WeatherField {
     const view = this.extent;
     const bias = this.coverageBias.value;
     // Coverage is zero where the stretched cover stays under the detail field's lowest value.
-    this.possible = on && (view.cover + bias) * 1.2 - 0.1 > 0.02 - 0.1;
+    this.possible = on && view.cover + bias > this.coverLeast;
     const deepest = Math.max(
       developmentOf(view.cover + bias + DETAIL_SWING, view.precip),
       view.storm > 0.02 ? 1 : 0,

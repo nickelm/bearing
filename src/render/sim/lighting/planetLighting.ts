@@ -346,15 +346,24 @@ export class PlanetLighting {
     ) as Vec3Node;
   }
 
-  /** The moonlit sky's irradiance on level ground where the radial direction is `up` (zero by day). */
-  moonSkyAt(up: Vec3Node): Vec3Node {
+  /**
+   * The moonlit sky's irradiance on level ground where the radial direction is `up` (zero by
+   * day), as the sky gives it: without `skyLight`, which is the surfaces' share of it. For
+   * clouds and fog, which take the sky's light by their own measure.
+   */
+  moonSkyIrradiance(up: Vec3Node): Vec3Node {
     return select(
       this.moonIlluminance.greaterThan(0),
       this.atmosphere
         .skyIrradiance(dot(up, this.moonDirection))
-        .mul(vec3(...MOON_TINT).mul(this.moonIlluminance.mul(this.skyLight))),
+        .mul(vec3(...MOON_TINT).mul(this.moonIlluminance)),
       vec3(0),
     ) as Vec3Node;
+  }
+
+  /** The moonlit sky's light on a surface on level ground where the radial direction is `up` (zero by day). */
+  moonSkyAt(up: Vec3Node): Vec3Node {
+    return this.moonSkyIrradiance(up).mul(this.skyLight) as Vec3Node;
   }
 
   /**

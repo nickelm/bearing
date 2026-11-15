@@ -527,7 +527,10 @@ export interface PrecipitationFrame {
   up?: Readonly<Vec3d>;
   /** Real seconds since the last frame. */
   dt: Seconds;
-  /** Vertical field of view (rad), aspect ratio and the viewport's height (pixels). */
+  /**
+   * Vertical field of view (rad), aspect ratio and the viewport's height in pixels of the
+   * drawing buffer (not CSS pixels: the particles' least width is in pixels that are drawn).
+   */
   fovY: number;
   aspect: number;
   viewportHeight: number;
@@ -948,6 +951,11 @@ export class Precipitation {
    */
   warm(): void {
     this.warming = true;
+  }
+
+  /** The angle of one drawing-buffer pixel (rad) as of the last update, for tests. */
+  get pixel(): number {
+    return this.pixelAngle.value;
   }
 
   /**

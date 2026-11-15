@@ -67,6 +67,13 @@ function barePipeline(head: HeadlessRenderer): SimPipeline {
   return pipeline;
 }
 
+/** The largest difference between two pictures' bytes. */
+function worstDifference(a: Uint8Array, b: Uint8Array): number {
+  let worst = 0;
+  for (let i = 0; i < a.length; i++) worst = Math.max(worst, Math.abs(a[i]! - b[i]!));
+  return worst;
+}
+
 /**
  * Draws a frame and checks the pipeline's pass count against the render calls the renderer
  * really made (a hidden intermediate target and output pass would show here).
@@ -440,6 +447,74 @@ describe.skipIf(!gpu)('SimPipeline on Dawn', () => {
     head.dispose();
   }, 120_000);
 
+  it('upsamples a gradient in the air without a ripple at the low-resolution texel', async () => {
+    const w = 64;
+    const h = 48;
+    const head = await headlessRenderer(gpu!.device, w, h);
+    const scene = new Scene();
+    scene.backgroundNode = vec3(0);
+    const camera = new PerspectiveCamera(45, w / h, 1, 500_000);
+    camera.updateProjectionMatrix();
+    const pipeline = barePipeline(head);
+    // Light in the air that rises across the frame, and a little down it so that each row
+    // rounds to bytes at other places.
+    pipeline.volumetrics = {
+      build: (ctx) => vec4(vec3(ctx.uv.x.mul(0.8).add(ctx.uv.y.mul(0.1)).add(0.05)), 1),
+    };
+    const linear = (byte: number) =>
+      byte <= 10 ? byte / 255 / 12.92 : Math.pow((byte / 255 + 0.055) / 1.055, 2.4);
+    /**
+     * What is left of each row after its straight line, averaged by the pixel's place in
+     * its low-resolution texel (`period` pixels wide), and the line's rise across the frame.
+     */
+    const ripple = async (scale: number, period: number) => {
+      pipeline.volumetricScale = scale;
+      pipeline.render(scene, camera);
+      await gpu!.finish();
+      const rgb = await head.readRgb();
+      const byPhase = new Array<number>(period).fill(0);
+      let rows = 0;
+      let rise = 0;
+      for (let y = 8; y < h - 8; y++) {
+        const xs: number[] = [];
+        const vs: number[] = [];
+        // (Away from the frame's edge, where the filter's window moves inward.)
+        for (let x = 16; x < 16 + 12 * period && x < w - 16; x++) {
+          xs.push(x);
+          vs.push(linear(rgb[(y * w + x) * 3]!));
+        }
+        const mx = xs.reduce((a, b) => a + b, 0) / xs.length;
+        const mv = vs.reduce((a, b) => a + b, 0) / vs.length;
+        const k =
+          xs.reduce((a, x, i) => a + (x - mx) * (vs[i]! - mv), 0) /
+          xs.reduce((a, x) => a + (x - mx) ** 2, 0);
+        xs.forEach(
+          (x, i) => (byPhase[x % period]! += ((vs[i]! - mv - k * (x - mx)) * period) / xs.length),
+        );
+        rise += k * w;
+        rows++;
+      }
+      return { byPhase: byPhase.map((v) => v / rows), rise: rise / rows };
+    };
+    // Marched at every pixel there is nothing to upsample: what the measure itself leaves.
+    // Then the three resolutions: bilinear between texels that all lie at one depth, so no
+    // place in the texel is lighter or darker than the line. (A floor under the weights left
+    // 0.0005, 0.001 and 0.0014 here: a lattice over every gradient in cloud, at the texel's period.)
+    for (const [scale, period] of [
+      [1, 4],
+      [1 / 2, 2],
+      [1 / 3, 3],
+      [1 / 4, 4],
+    ] as const) {
+      const r = await ripple(scale, period);
+      expect(r.rise).toBeCloseTo(0.8, 2);
+      for (const v of r.byPhase) expect(Math.abs(v)).toBeLessThan(2.5e-4);
+    }
+    expect(gpu!.errors).toEqual([]);
+    pipeline.dispose();
+    head.dispose();
+  }, 60_000);
+
   it('averages the sample pattern of a march out over receding ground and across the horizon', async () => {
     // The other half of the upsample's contract (the first is "without a halo" above): cloud
     // and fog in front of ground that recedes to the horizon must not show the march's
@@ -676,6 +751,44 @@ describe.skipIf(!gpu)('SimPipeline on Dawn', () => {
     await gpu!.finish();
     expect(gpu!.errors).toEqual([]);
     expect(held - memory.texturesSize).toBe(overlayBytes);
+    pipeline.dispose();
+    head.dispose();
+  }, 120_000);
+
+  it("frees three's own frame target on the way back from a view that drew directly", async () => {
+    // Four samples, as the app draws: three's target is then color, resolve and depth.
+    const head = await headlessRenderer(gpu!.device, W, H, 4);
+    head.renderer.toneMapping = AgXToneMapping;
+    const { scene, camera } = wallScene();
+    const pipeline = barePipeline(head);
+    const memory = head.renderer.info.memory;
+    pipeline.render(scene, camera);
+    pipeline.render(scene, camera);
+    await gpu!.finish();
+    const first = memory.texturesSize;
+    const before = await head.readRgb();
+
+    // To the map, as main.ts switches: this pipeline released, the other view drawn directly.
+    pipeline.release();
+    head.renderer.render(scene, camera);
+    head.renderer.render(scene, camera);
+    await gpu!.finish();
+    const direct = await head.readRgb();
+
+    // And back: no more than the first time (three's target stayed allocated beside the
+    // pipeline's: 24 MiB by this count at 1080p, about 110 MB with its four samples).
+    for (let frame = 0; frame < 3; frame++) pipeline.render(scene, camera);
+    await gpu!.finish();
+    expect(memory.texturesSize).toBe(first);
+    const after = await head.readRgb();
+    expect(worstDifference(before, after)).toBeLessThanOrEqual(1);
+
+    // The direct path draws again after that, the same picture as before.
+    pipeline.release();
+    head.renderer.render(scene, camera);
+    await gpu!.finish();
+    expect(worstDifference(direct, await head.readRgb())).toBeLessThanOrEqual(1);
+    expect(gpu!.errors).toEqual([]);
     pipeline.dispose();
     head.dispose();
   }, 120_000);

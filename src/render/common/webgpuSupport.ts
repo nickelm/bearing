@@ -5,6 +5,12 @@
  * Note: three's WebGPURenderer silently falls back to a WebGL 2 backend when
  * WebGPU is unavailable, logging only a console warning. We therefore check
  * twice: before creating the renderer, and again after `renderer.init()`.
+ *
+ * A browser may also hand out a software adapter (Chromium's SwiftShader, where
+ * hardware acceleration is off or the GPU is blocklisted). The tile
+ * synthesizer's compute never finishes on it and the browser's GPU process
+ * grows until the tab dies, so the app does not start on one unasked: it says
+ * why and offers "Start anyway" (`software` in the URL skips the notice).
  */
 import type { WebGPURenderer } from 'three/webgpu';
 
@@ -66,7 +72,27 @@ export async function requestRendererDevice(
 export function describeAdapter(adapter: GPUAdapter): string {
   const i = adapter.info;
   const name = [i.vendor, i.architecture, i.description].filter(Boolean).join(' ');
-  return `${name || 'unknown GPU'}${i.isFallbackAdapter ? ' (software fallback)' : ''}`;
+  return `${name || 'unknown GPU'}${isSoftwareAdapter(adapter) ? ' (software fallback)' : ''}`;
+}
+
+/** Whether an adapter is the browser's software fallback, by either place browsers say so. */
+export function isSoftwareAdapter(adapter: {
+  readonly info?: { readonly isFallbackAdapter?: boolean };
+  readonly isFallbackAdapter?: boolean;
+}): boolean {
+  return adapter.info?.isFallbackAdapter === true || adapter.isFallbackAdapter === true;
+}
+
+/**
+ * Whether to stop before starting on this adapter and show the software-adapter notice:
+ * for a software adapter, unless the URL carries `software` (tools that run the app on
+ * lavapipe, and a reload after "Start anyway").
+ */
+export function softwareAdapterNotice(
+  adapter: Parameters<typeof isSoftwareAdapter>[0],
+  query: URLSearchParams,
+): boolean {
+  return isSoftwareAdapter(adapter) && !query.has('software');
 }
 
 /** The raw GPUDevice behind three's WebGPU backend. Call after init(). */
@@ -111,4 +137,38 @@ export function showWebGpuRequired(reason: string): void {
        hardware acceleration enabled. You can check support at
        <a href="https://webgpureport.org" target="_blank" rel="noopener">webgpureport.org</a>.</p>`;
   el.querySelector('.reason')!.textContent = `Details: ${reason}`;
+}
+
+/**
+ * Says that the browser offers only a software adapter and what to do about it. Resolves
+ * when the user chooses "Start anyway"; the URL then carries `software`, so a reload does not
+ * ask again.
+ */
+export function showSoftwareAdapterNotice(adapter: string): Promise<void> {
+  const el = fatalElement();
+  el.innerHTML = `
+    <h1>Bearing needs a hardware GPU</h1>
+    <p>This browser offers WebGPU only through a software adapter: a program that
+       stands in for the graphics card and computes every pixel on the processor.
+       Bearing generates its planet with GPU compute shaders. On a software adapter
+       that does not finish, and the tab uses up the computer's memory until the
+       browser closes it.</p>
+    <p class="reason"></p>
+    <p>To use the graphics card, switch on hardware acceleration (graphics
+       acceleration) in the browser's settings and restart it, and update the
+       graphics driver. In Chrome or Edge, <code>chrome://gpu</code> shows under
+       "Graphics Feature Status" whether WebGPU is hardware accelerated, and under
+       "Problems Detected" why not.</p>
+    <p><button type="button" class="start-anyway">Start anyway</button></p>`;
+  el.querySelector('.reason')!.textContent = `Adapter: ${adapter}`;
+  return new Promise((resolve) => {
+    el.querySelector('button')!.addEventListener('click', () => {
+      el.hidden = true;
+      el.innerHTML = '';
+      const url = new URL(location.href);
+      url.searchParams.set('software', '');
+      history.replaceState(null, '', url);
+      resolve();
+    });
+  });
 }

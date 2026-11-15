@@ -14,6 +14,8 @@ import {
   applyPreset,
   GALE,
   PRESET_LABELS,
+  presetDescription,
+  presetName,
   PRESET_TABLE,
   PRESET_WIND_GAIN,
   presetFrame,
@@ -66,7 +68,25 @@ describe('weather presets', () => {
       'fog',
       'duststorm',
     ]);
+    // Menus list the presets by short names and show the rest of the line beside the list.
+    expect(WEATHER_PRESETS.map(presetName)).toEqual([
+      'Live weather',
+      'Clear',
+      'Fair',
+      'Overcast',
+      'Drizzle',
+      'Rain',
+      'Thunderstorm',
+      'Snow',
+      'Blizzard',
+      'Fog',
+      'Dust storm',
+    ]);
+    expect(presetDescription('storm')).toBe('30 mm/h cores, lightning, gale');
+    expect(presetDescription('clear')).toBe('No cloud, visibility 60 km');
     for (const preset of WEATHER_PRESETS) {
+      expect(presetDescription(preset).length).toBeGreaterThan(8);
+      expect(presetDescription(preset).length).toBeLessThan(50);
       expect(PRESET_LABELS[preset].length).toBeGreaterThan(8);
       expect(PRESET_LABELS[preset]).not.toContain('\n');
       if (preset !== 'live') expect(PRESET_TABLE[preset].label).toBe(PRESET_LABELS[preset]);

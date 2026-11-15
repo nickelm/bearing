@@ -64,7 +64,7 @@ export class PauseMenu {
     const opts = document.createElement('div');
     opts.innerHTML = `<h2>Options</h2>
       <label><input type="checkbox" class="ff-fuel"> Unlimited fuel</label><br>
-      <label class="ff-weather-row">Weather </label><br>
+      <label class="ff-weather-row">Weather </label> <span class="ff-weather-about"></span><br>
       <label><input type="checkbox" class="ff-wind"> Wind and turbulence</label><br>
       <label>Time of day <input type="range" class="ff-tod" min="0" max="24" step="0.25"> <span class="ff-tod-label"></span></label>
       <div class="ff-note">The weather changes at once; the time of day applies on the next restart.</div>
@@ -78,7 +78,8 @@ export class PauseMenu {
       this.options.weather = preset;
       events.optionsChanged(this.options);
     });
-    (opts.querySelector('.ff-weather-row') as HTMLLabelElement).append(weather);
+    (opts.querySelector('.ff-weather-row') as HTMLLabelElement).append(weather.select);
+    (opts.querySelector('.ff-weather-about') as HTMLSpanElement).append(weather.note);
     const wind = opts.querySelector('.ff-wind') as HTMLInputElement;
     wind.addEventListener('change', () => {
       this.options.wind = wind.checked;
@@ -96,7 +97,7 @@ export class PauseMenu {
     });
     const sync = () => {
       fuel.checked = this.options.unlimitedFuel;
-      weather.value = this.options.weather;
+      weather.show(this.options.weather);
       wind.checked = this.options.wind;
       if (sound) {
         volume.value = String(sound.volume);

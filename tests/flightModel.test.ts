@@ -12,7 +12,12 @@ import {
   SEA_LEVEL_SPEED_OF_SOUND,
   standardAtmosphere,
 } from '../src/sim/flight/atmosphere';
-import { MIL_DETENT, neutralControls, pitchCommand } from '../src/sim/flight/controlLaws';
+import {
+  MIL_DETENT,
+  neutralControls,
+  newLawState,
+  pitchCommand,
+} from '../src/sim/flight/controlLaws';
 import type { FlightControls } from '../src/sim/flight/controlLaws';
 import { FlightDirector } from '../src/sim/flight/flightDirector';
 import { FLIGHT_STEP } from '../src/sim/flight/flightModel';
@@ -786,7 +791,7 @@ describe('second adversarial round (decision 136)', () => {
     spawnOnRunway(m, runway, end);
     run(m, neutralControls(), 1);
     const law = { ...m.telemetry.lawInput!, pitch: 6 * DEG, wow: 1 };
-    const state = { pitchI: 0, airborne: 0, landed: true };
+    const state = { ...newLawState(), landed: true };
     let last = -Infinity;
     for (let i = 0; i <= 200; i++) {
       const q = pitchCommand(m.spec, -1 + i / 100, law, state).q;

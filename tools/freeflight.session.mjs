@@ -40,6 +40,12 @@ for (const [preset, r] of Object.entries(result.perPreset ?? {})) {
       `land ${r.temperatureShift} °C`,
   );
 }
+for (const [preset, r] of Object.entries(result.rolls ?? {})) {
+  console.log(
+    `${preset.padEnd(10)} takeoff roll with free pedals: ${r.knots} kt after ${r.seconds} s in ` +
+      `${r.wind} m/s of wind, wheels on ${r.surfaces.join(', ')}${r.crashed ? `, ${r.crashed}` : ''}`,
+  );
+}
 problems.push(
   ...result.errors.map((e) => `error: ${e}`),
   ...result.failures.map((f) => `failed: ${f}`),

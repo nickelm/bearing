@@ -45,7 +45,9 @@
  *          fog, duststorm) in place of the sim's, with the ground as wet as its rain makes it;
  *          QUALITY=low|medium|high sets the volumetrics' steps and resolution, VOL=0 leaves
  *          them out (the cloud shell shows instead), CLOUDS_3D=0 and AIR=0 leave out the clouds
- *          or the fog, dust and rain shafts alone, CIRRUS=x sets the amount of cirrus (0..1);
+ *          or the fog, dust and rain shafts alone, CIRRUS=x sets the amount of cirrus (0..1),
+ *          TUNING='{"erosion":0}' and TUNING_AIR='{"strata":4}' override numbers of the
+ *          cloud's light and of the look of fog, dust and rain (CLOUD_LIGHT, AIR_LOOK);
  *          PERF_VOL=n times the frame without the volumetrics and with them under each weather
  *          of PERF_WEATHER (clear,fair,overcast,storm) at each quality, interleaved over n
  *          rounds; FRAMES=n renders n more frames with the clocks running (FRAME_DT real seconds
@@ -111,6 +113,7 @@ import { RiverIndex } from '../src/worldgen/riverIndex';
 import { testGpu } from '../tests/gpu/device';
 import { headlessRenderer } from '../tests/gpu/renderer';
 import { heightFogTestSource } from '../src/render/sim/post/heightFog';
+import { AIR_LOOK, CLOUD_LIGHT } from '../src/render/sim/clouds/volumetrics';
 import type { VolumetricQuality } from '../src/render/sim/clouds/volumetrics';
 import { encodePng } from './png';
 import { previewWorld } from './previewWorld';
@@ -655,6 +658,11 @@ it('renders preview views', async () => {
     });
     return;
   }
+  // TUNING='{"erosion":0}' overrides numbers of the cloud's light and TUNING_AIR='{"strata":4}'
+  // numbers of the look of fog, dust and rain, as in tools/clouds.preview.ts: before the
+  // volumetric shaders are built.
+  if (process.env.TUNING) Object.assign(CLOUD_LIGHT, JSON.parse(process.env.TUNING));
+  if (process.env.TUNING_AIR) Object.assign(AIR_LOOK, JSON.parse(process.env.TUNING_AIR));
   // The app antialiases with four samples (`antialias: true`); the previews draw one unless asked.
   const head = await headlessRenderer(gpu.device, width, height, Number(process.env.MSAA ?? 0));
   const scene = new GlobeScene(head.renderer, {
@@ -1660,6 +1668,17 @@ it('renders preview views', async () => {
     if (scene.forest.stats.instances) {
       console.log(
         `  trees: ${scene.forest.stats.tiles} tiles, ${scene.forest.stats.instances} clumps`,
+      );
+    }
+    {
+      // What the volumetric marches ran over, and the camera's height: for reproducing a view
+      // in tools/clouds.preview.ts.
+      const vs = scene.volumetrics.stats;
+      const eyeHeight = scene.lighting.eye.value.length() - params.radius;
+      console.log(
+        `  volumetrics: camera ${eyeHeight.toFixed(0)} m; ` +
+          (vs.clouds ? `clouds ${vs.bottom.toFixed(0)}–${vs.top.toFixed(0)} m` : 'no clouds') +
+          (vs.air ? `, air to ${vs.airTop.toFixed(0)} m` : ', air off'),
       );
     }
     console.log(

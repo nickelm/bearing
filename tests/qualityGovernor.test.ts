@@ -5,6 +5,8 @@ import {
   QualityGovernor,
   UP_DWELL,
   UP_DWELL_MOST,
+  WARM_UP,
+  WARM_UP_MOST,
 } from '../src/render/common/qualityGovernor';
 import { RenderScaleController } from '../src/render/common/renderScale';
 
@@ -14,15 +16,23 @@ const TARGET = 1000 / 30;
  * A machine: frames cost `cost(scale, level)` ms, the render scale adapts as in
  * the app (unless `fixed`), and the governor sees every frame. With `refresh`
  * (Hz) the display shows whole refresh periods, as a real one does: a frame is
- * measured as the next multiple of the period. Returns the times and levels of
- * the governor's changes.
+ * measured as the next multiple of the period. `target` is the frame time to
+ * hold (the scale must be built for the same), and `loading` says when the
+ * view still loads, as the app tells the governor. Returns the times and
+ * levels of the governor's changes.
  */
 function run(
   g: QualityGovernor,
   scale: RenderScaleController,
   cost: (scale: number, level: number, now: number) => number,
   seconds: number,
-  options: { fixed?: boolean; from?: number; refresh?: number } = {},
+  options: {
+    fixed?: boolean;
+    from?: number;
+    refresh?: number;
+    target?: number;
+    loading?: (now: number) => boolean;
+  } = {},
 ): { at: number; level: number }[] {
   const changes: { at: number; level: number }[] = [];
   let now = options.from ?? 0;
@@ -33,15 +43,19 @@ function run(
     const ms = period > 0 ? Math.max(1, Math.ceil(work / period - 1e-9)) * period : work;
     now += ms;
     if (!options.fixed) scale.record(ms, now);
+    const warming = g.warming;
     const level = g.record({
       frameMs: ms,
       nowMs: now,
-      targetMs: TARGET,
+      targetMs: options.target ?? TARGET,
       scale: scale.scale,
       minScale: scale.minScale,
       maxScale: scale.maxScale,
       adaptive: !options.fixed,
+      loading: options.loading?.(now) ?? false,
     });
+    // As the app does when a warm-up ends: what the scale learned while loading is dropped.
+    if (warming && !g.warming) scale.reset(now);
     if (level !== null) {
       changes.push({ at: now, level });
       // As the app does: the change's own slow frames do not count for the render scale,
@@ -326,6 +340,175 @@ describe('QualityGovernor', () => {
         expect(Math.abs(changes[i]!.level - changes[i - 1]!.level)).toBe(1);
       }
       expect(scale.scale).toBeGreaterThanOrEqual(0.8);
+    });
+  });
+
+  describe('with single long frames', () => {
+    // 60% of the frame is terrain and 40% effects, by the pixel, as above; now and then one
+    // frame is long (a tile build, a shader compile, a collected heap).
+    const withHitches = (full: number, hitchMs: number, every: number) => {
+      let last = 0;
+      return (s: number, level: number, now: number) => {
+        if (now - last < every * 1000)
+          return (full - 2) * (0.6 + 0.4 * [1, 0.7, 0.6][level]!) * s * s + 2;
+        last = now;
+        return hitchMs;
+      };
+    };
+
+    it('keeps full quality and resolution where the display holds the frame time on the target', () => {
+      // Target FPS 60 at 60 Hz, and a page capped at 30 frames per second: the measured frame
+      // time is the target, whatever the margin. One frame of 2 to 3.5 targets every 20 to 50 s
+      // took the scale to its floor and the governor to its last step within minutes, for good.
+      const cases = [
+        { fps: 60, refresh: 60, full: 6 },
+        { fps: 60, refresh: 60, full: 14 },
+        { fps: 30, refresh: 30, full: 12 },
+        { fps: 30, refresh: 30, full: 25 },
+      ];
+      for (const { fps, refresh, full } of cases) {
+        const target = 1000 / fps;
+        for (const targets of [2, 2.5, 3, 3.5]) {
+          for (const every of [20, 35, 50]) {
+            const g = new QualityGovernor();
+            const scale = new RenderScaleController(target);
+            const cost = withHitches(full, targets * target - 1, every);
+            const changes = run(g, scale, cost, 1800, { refresh, target });
+            const label = `${fps} FPS at ${refresh} Hz, ${full} ms, ${targets} targets / ${every} s`;
+            expect(changes, label).toEqual([]);
+            expect(g.level, label).toBe(0);
+            expect(scale.scale, label).toBe(1);
+          }
+        }
+      }
+    });
+
+    it('comes back from its last step through them', () => {
+      // 60 Hz, 30 FPS wanted, a machine that needs 22 or 28 ms at full quality: shown as 33 ms,
+      // so only patience brings the steps back, and one long frame a minute used to break it.
+      for (const full of [22, 28]) {
+        for (const [hitchMs, every] of [
+          [70, 30],
+          [90, 45],
+          [150, 45],
+          [400, 55],
+        ] as const) {
+          const g = new QualityGovernor();
+          g.level = 2;
+          const scale = new RenderScaleController(TARGET);
+          const changes = run(g, scale, withHitches(full, hitchMs, every), 600, { refresh: 60 });
+          const label = `${full} ms, ${hitchMs} ms / ${every} s`;
+          expect(
+            changes.map((c) => c.level),
+            label,
+          ).toEqual([1, 0]);
+          // Two waits of PATIENCE up-dwells, as without the long frames.
+          expect(changes[1]!.at, label).toBeLessThan(2 * PATIENCE * UP_DWELL + 15_000);
+          expect(scale.scale, label).toBe(1);
+        }
+      }
+    });
+
+    it('keeps a step up that a long frame follows, and takes back one that does not hold', () => {
+      const g = new QualityGovernor();
+      g.level = 1;
+      const scale = new RenderScaleController(TARGET);
+      // On target without headroom to see (30 ms, shown as 33 ms at 60 Hz): a step up after the
+      // patience, then a 120 ms frame eight and twenty seconds into its probation.
+      let up = Infinity;
+      const cost = (_s: number, level: number, now: number) => {
+        if (level === 0 && up === Infinity) up = now;
+        const since = now - up;
+        return (since >= 8000 && since < 8030) || (since >= 20_000 && since < 20_030) ? 120 : 30;
+      };
+      expect(run(g, scale, cost, 240, { refresh: 60 }).map((c) => c.level)).toEqual([0]);
+      expect(up).toBeLessThan(240_000 - 40_000);
+      // The same step up on a machine that cannot hold it at a fixed scale: back after MIN_DWELL.
+      const h = new QualityGovernor();
+      h.level = 1;
+      const back = run(
+        h,
+        new RenderScaleController(TARGET),
+        (_s, level) => (level === 0 ? 45 : 16.7),
+        60,
+        {
+          fixed: true,
+        },
+      );
+      expect(back.slice(0, 2).map((c) => c.level)).toEqual([0, 1]);
+      expect(back[1]!.at - back[0]!.at).toBeLessThan(MIN_DWELL + 3000);
+    });
+  });
+
+  describe('warm-up after a cut', () => {
+    // A machine that is fast once it has loaded: `full` ms a frame at full quality. For the
+    // first 20 s tiles build and shaders compile: every frame costs four times as much, and
+    // twice a second one takes 300 ms. The view reports that it loads for those 20 s.
+    const loads = (full: number) => (s: number, level: number, now: number) => {
+      const steady = (full - 2) * (0.6 + 0.4 * [1, 0.7, 0.6][level]!) * s * s + 2;
+      if (now >= 20_000) return steady;
+      return now % 500 < 34 ? 300 : steady * 4;
+    };
+    const loading = (now: number) => now < 20_000;
+
+    it('steps down during loading without it', () => {
+      // 60 ms at full scale while loading: over the target wherever the scale goes.
+      const g = new QualityGovernor();
+      const changes = run(g, new RenderScaleController(TARGET), loads(16), 20, { refresh: 60 });
+      expect(changes.length).toBeGreaterThan(0);
+    });
+
+    it('counts no frame while the view loads, and none in the first seconds', () => {
+      for (const full of [12, 16, 24]) {
+        const g = new QualityGovernor();
+        const scale = new RenderScaleController(TARGET);
+        g.warmUp(0);
+        expect(g.warming).toBe(true);
+        const changes = run(g, scale, loads(full), 300, { refresh: 60, loading });
+        expect(changes, `${full} ms`).toEqual([]);
+        expect(g.warming).toBe(false);
+        expect(scale.scale, `${full} ms`).toBe(1);
+      }
+      // A cut with nothing to load: WARM_UP of frames that do not count, then as ever.
+      const g = new QualityGovernor();
+      g.warmUp(0);
+      const slow = run(g, new RenderScaleController(TARGET), () => 60, 30, { fixed: true });
+      expect(slow[0]!.at).toBeGreaterThanOrEqual(WARM_UP + 4000);
+      expect(slow[0]!.at).toBeLessThan(WARM_UP + 4000 + 1500);
+    });
+
+    it('lets the render scale fall while loading and brings it back within half a minute', () => {
+      for (const refresh of [60, 30, 0]) {
+        for (const full of [12, 24]) {
+          const g = new QualityGovernor();
+          const scale = new RenderScaleController(TARGET);
+          g.warmUp(0);
+          let lowest = 1;
+          let backAt = -1;
+          const cost = (s: number, level: number, now: number) => {
+            lowest = Math.min(lowest, scale.scale);
+            if (now > 20_000 && backAt < 0 && scale.scale === 1) backAt = now;
+            return loads(full)(s, level, now);
+          };
+          run(g, scale, cost, 120, { refresh, loading });
+          const label = `${full} ms at ${refresh} Hz`;
+          expect(lowest, label).toBeLessThan(0.75);
+          expect(backAt, label).toBeGreaterThan(20_000);
+          expect(backAt - 20_000, label).toBeLessThan(30_000);
+          expect(g.level, label).toBe(0);
+        }
+      }
+    });
+
+    it('ends after WARM_UP_MOST even if the view never stops loading', () => {
+      const g = new QualityGovernor();
+      g.warmUp(0);
+      const changes = run(g, new RenderScaleController(TARGET), () => 60, 120, {
+        fixed: true,
+        loading: () => true,
+      });
+      expect(changes[0]!.at).toBeGreaterThanOrEqual(WARM_UP_MOST + 4000);
+      expect(changes[0]!.at).toBeLessThan(WARM_UP_MOST + 4000 + 1500);
     });
   });
 

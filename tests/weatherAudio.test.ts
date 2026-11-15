@@ -329,8 +329,11 @@ describe('WeatherAudio', () => {
     const curve = level.gain.calls.find((c) => c.method === 'setValueCurveAtTime')!;
     expect(curve.args[1]).toBeCloseTo(arrival, 6);
     const farPeak = Math.max(...(curve.args[0] as Float32Array));
-    // It ends up in the master gain, which feeds the destination through the limiter.
-    const master = level.outputs[0] as StubGain;
+    // It ends up, through a gain of its own, in the master gain, which feeds the destination
+    // through the limiter.
+    const bus = level.outputs[0] as StubGain;
+    expect(bus.gain.value).toBe(1);
+    const master = bus.outputs[0] as StubGain;
     expect(master).toBe(context.gains[0]);
     const limiter = context.compressors[0]!;
     expect(master.outputs).toEqual([limiter]);
@@ -373,6 +376,245 @@ describe('WeatherAudio', () => {
     audio.thunder({ distance: 8 * KM, energy: 0.5, time: 60 });
     expect(context.sources.length).toBe(before + MAX_THUNDERS + 2);
     audio.dispose();
+  });
+
+  it('takes back the thunder that is on its way', () => {
+    const { audio, context } = started();
+    const before = context.sources.length;
+    // A strike 22 km away: its thunder is due 64 s from now. Then the view is cut.
+    audio.thunder({ distance: 22 * KM, energy: 1, time: 1 });
+    audio.thunder({ distance: 9 * KM, energy: 1, time: 2 });
+    const buses = [before, before + 1].map((i) => {
+      const lowpass = context.sources[i]!.outputs[0] as StubFilter;
+      return (lowpass.outputs[0] as StubGain).outputs[0] as StubGain;
+    });
+    expect(context.sources[before]!.started![0]).toBeGreaterThan(context.currentTime + 60);
+    for (const bus of buses) expect(bus.gain.calls).toEqual([]);
+    audio.cancelThunder();
+    for (const bus of buses) {
+      const fade = bus.gain.calls[bus.gain.calls.length - 1]!;
+      expect(fade.method).toBe('setTargetAtTime');
+      expect(fade.args[0]).toBe(0);
+      expect(fade.args[1]).toBe(context.currentTime);
+      expect(fade.args[2]).toBeLessThan(0.2);
+    }
+    // Thunder after the cut sounds as ever, and the cancelled ones no longer count.
+    for (let k = 0; k < MAX_THUNDERS; k++)
+      audio.thunder({ distance: 8 * KM, energy: 0.5, time: k });
+    expect(context.sources.length).toBe(before + 2 + MAX_THUNDERS);
+    const fresh = context.sources[before + 2]!.outputs[0] as StubFilter;
+    expect(((fresh.outputs[0] as StubGain).outputs[0] as StubGain).gain.calls).toEqual([]);
+    audio.cancelThunder();
+    audio.dispose();
+    // Without a context: nothing, and nothing throws.
+    new WeatherAudio().cancelThunder();
+  });
+
+  it('keeps listening until the context runs: a finger going down is no gesture', async () => {
+    // A browser that starts audio only inside a user activation: a key or a mouse button
+    // going down, a finger lifting (pointerup, touchend, click), not a finger going down.
+    const context = new StubContext();
+    let activation = false;
+    context.resume = () => {
+      if (activation) context.state = 'running';
+      return Promise.resolve();
+    };
+    const audio = new WeatherAudio({ createContext: () => context as unknown as AudioContext });
+    const target = new EventTarget();
+    const removed: string[] = [];
+    const remove = target.removeEventListener.bind(target);
+    target.removeEventListener = (type: string, ...rest: [EventListener]) => {
+      removed.push(type);
+      remove(type, ...rest);
+    };
+    audio.attach(target);
+    // The finger touches: the context is made, cannot run yet, and the listeners stay.
+    target.dispatchEvent(new Event('pointerdown'));
+    await Promise.resolve();
+    expect(audio.started).toBe(true);
+    expect(context.state).toBe('suspended');
+    expect(removed).toEqual([]);
+    // It lifts: that is the gesture.
+    activation = true;
+    target.dispatchEvent(new Event('pointerup'));
+    expect(context.state).toBe('running');
+    expect(removed).toContain('pointerup');
+    expect(removed).toContain('touchend');
+    expect(removed).toContain('click');
+    expect(removed).toContain('keydown');
+    audio.dispose();
+  });
+
+  it('starts from the first gesture even while paused, and is silent again at once', async () => {
+    // The campaign starts paused. A context that has never run cannot be resumed later from
+    // the frame loop in a browser that asks for a gesture: the gesture runs it once.
+    const context = new StubContext();
+    const audio = new WeatherAudio({ createContext: () => context as unknown as AudioContext });
+    const target = new EventTarget();
+    audio.attach(target);
+    audio.suspend();
+    let resumed = 0;
+    const resume = context.resume.bind(context);
+    context.resume = () => {
+      resumed++;
+      return resume();
+    };
+    target.dispatchEvent(new Event('click'));
+    expect(resumed).toBe(1);
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(context.state).toBe('suspended');
+    // Having run, it is not started again by gestures while paused, and resumes when asked.
+    target.dispatchEvent(new Event('keydown'));
+    audio.start();
+    expect(resumed).toBe(1);
+    expect(context.state).toBe('suspended');
+    audio.resume();
+    expect(context.state).toBe('running');
+    audio.dispose();
+  });
+
+  it('starts from a lifting finger also after the frame loop has paused it', async () => {
+    // A touch device with the campaign paused, as it starts: the finger going down makes the
+    // context, which cannot run yet; the next frame finds the game paused and suspends the
+    // audio; then the finger lifts. That gesture must run the context once, paused or not, or
+    // no later resume from the frame loop can start it.
+    const context = new StubContext();
+    let gesture = false;
+    let hasRun = false;
+    context.resume = () => {
+      // Outside a gesture a browser resumes only a context that has run before.
+      if (gesture || hasRun) {
+        context.state = 'running';
+        hasRun = true;
+      }
+      return Promise.resolve();
+    };
+    const audio = new WeatherAudio({ createContext: () => context as unknown as AudioContext });
+    const target = new EventTarget();
+    audio.attach(target);
+    target.dispatchEvent(new Event('pointerdown'));
+    expect(audio.started).toBe(true);
+    expect(context.state).toBe('suspended');
+    audio.suspend();
+    gesture = true;
+    target.dispatchEvent(new Event('pointerup'));
+    gesture = false;
+    expect(hasRun).toBe(true);
+    // Paused still: silent again at once.
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(context.state).toBe('suspended');
+    // The game runs on: the frame loop resumes the audio, outside any gesture.
+    audio.resume();
+    expect(context.state).toBe('running');
+    audio.dispose();
+  });
+
+  it('lets the volume be heard, also while paused', async () => {
+    vi.useFakeTimers();
+    try {
+      const { audio, context } = started();
+      const master = context.gains[0]!;
+      audio.volume = 0.3;
+      // Running: a short tone through the master gain, and no more than one at a time.
+      audio.audition();
+      audio.audition();
+      expect(context.oscillators.filter((o) => o.frequency.value === 660).length).toBe(1);
+      const tone = context.oscillators.find((o) => o.frequency.value === 660)!;
+      expect(tone.started![0]).toBe(context.currentTime);
+      expect(tone.stopped).toBeLessThan(context.currentTime + 1);
+      const shape = tone.outputs[0] as StubGain;
+      expect(shape.outputs).toEqual([master]);
+      expect(master.gain.target).toBeCloseTo(0.3, 6);
+      expect(context.state).toBe('running');
+      // Paused: the context runs for a moment, so the tone and the rain are heard at the new
+      // volume, and is suspended again.
+      audio.suspend();
+      expect(context.state).toBe('suspended');
+      context.currentTime += 1;
+      audio.volume = 0.6;
+      audio.audition();
+      expect(context.state).toBe('running');
+      expect(context.oscillators.filter((o) => o.frequency.value === 660).length).toBe(2);
+      // The slider moves on: the moment is counted from the last move.
+      context.currentTime += 0.8;
+      vi.advanceTimersByTime(800);
+      audio.audition();
+      context.currentTime += 0.8;
+      vi.advanceTimersByTime(800);
+      expect(context.state).toBe('running');
+      context.currentTime += 0.5;
+      vi.advanceTimersByTime(500);
+      expect(context.state).toBe('suspended');
+      // Resumed in the middle of it: the timer leaves the running context alone.
+      audio.audition();
+      audio.resume();
+      context.currentTime += 2;
+      vi.advanceTimersByTime(2000);
+      expect(context.state).toBe('running');
+      audio.dispose();
+      new WeatherAudio().audition();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('ends the moment of sound while paused also where the context is slow to start', async () => {
+    // The moment is counted on the context's clock, and that clock stands until the context
+    // runs. A context that took a third of a second to resume (a wireless output, a sleeping
+    // audio device) was found short of its time when the timer came, and then ran on through
+    // the whole pause: rain, wind and the thunder on its way under the pause menu.
+    vi.useFakeTimers();
+    try {
+      const { audio, context } = started();
+      audio.suspend();
+      expect(context.state).toBe('suspended');
+      context.resume = () =>
+        new Promise<void>((resolve) => {
+          setTimeout(() => {
+            context.state = 'running';
+            resolve();
+          }, 300);
+        });
+      /** Lets `seconds` pass on the wall clock, and on the context's while it runs. */
+      const pass = async (seconds: number) => {
+        for (let t = 0; t < seconds - 1e-9; t += 0.05) {
+          await vi.advanceTimersByTimeAsync(50);
+          if (context.state === 'running') context.currentTime += 0.05;
+        }
+      };
+      audio.audition();
+      await pass(0.4);
+      expect(context.state).toBe('running');
+      // Heard for about a second from when it started, then silent again, and it stays so.
+      await pass(0.7);
+      expect(context.state).toBe('running');
+      await pass(0.6);
+      expect(context.state).toBe('suspended');
+      await pass(5);
+      expect(context.state).toBe('suspended');
+      // A move of the slider near the end of the moment still extends it.
+      audio.audition();
+      await pass(1.5);
+      audio.audition();
+      await pass(0.6);
+      expect(context.state).toBe('running');
+      await pass(1.2);
+      expect(context.state).toBe('suspended');
+      // Unpaused meanwhile: the timer leaves the running context alone.
+      audio.audition();
+      await pass(0.5);
+      audio.resume();
+      await pass(3);
+      expect(context.state).toBe('running');
+      audio.dispose();
+      await pass(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('follows the weather with the ambience', () => {

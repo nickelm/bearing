@@ -74,6 +74,7 @@ async function main(): Promise<void> {
   const { WebGPURenderer } = await import('three/webgpu');
   const { defaultCampaignStart, sunDirection } = await import('../../src/core/calendar');
   const { CubeGrid } = await import('../../src/core/cubeGrid');
+  const { KNOT } = await import('../../src/core/units');
   const { Vec3d } = await import('../../src/core/vec3d');
   const { FreeFlight, parseFreeFlightUrl } = await import('../../src/freeflight/freeFlight');
   const { GlobeScene } = await import('../../src/render/sim/globeScene');
@@ -288,6 +289,37 @@ async function main(): Promise<void> {
   check(firstOf('snow').snow > 0.2 && firstOf('blizzard').snow > firstOf('snow').snow, 'snow');
   check(firstOf('fog').visibility < 1000, 'fog: under a kilometer');
   check(firstOf('duststorm').dust > 0.5, 'dust storm: dust');
+
+  // A takeoff roll in the wind with the pedals let go: the laws hold the track (controlLaws.ts,
+  // trackHold), so the aircraft is on the pavement at 160 kt in a light wind and in a gale.
+  const rolls: Record<string, unknown> = {};
+  for (const preset of ['clear', 'storm', 'blizzard'] as const) {
+    choose(menuEl, preset);
+    click(menuEl, 'Fly');
+    frame();
+    const m = ff.flight.model!;
+    const c = ff.input.controls;
+    c.parkingBrake = false;
+    c.throttle = 1;
+    const seconds = ff.advance(40, () => m.crashed !== null || m.telemetry.cas > 160 * KNOT);
+    const surfaces = m.wheels.filter((w) => w.load > 0).map((w) => w.surface);
+    rolls[preset] = {
+      seconds: +seconds.toFixed(1),
+      knots: Math.round(m.telemetry.cas / KNOT),
+      wind: +m.wind.length().toFixed(1),
+      surfaces,
+      crashed: m.crashed,
+    };
+    check(
+      m.crashed === null && surfaces.length === 3 && surfaces.every((x) => x === 'runway'),
+      `${preset}: on the runway at 160 kt with the pedals free`,
+    );
+    key('Escape');
+    click(ff.pause.el, 'Change airbase');
+    frame();
+  }
+  result.rolls = rolls;
+  log(`takeoff rolls with free pedals: ${JSON.stringify(rolls)}`);
 
   // The pause menu: weather at once, wind, sound; restart; the start screen shows the same.
   choose(menuEl, 'fair');

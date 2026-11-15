@@ -37,7 +37,9 @@ import {
   requestRendererDevice,
   rendererDevice,
   showFatalError,
+  showSoftwareAdapterNotice,
   showWebGpuRequired,
+  softwareAdapterNotice,
 } from './render/common/webgpuSupport';
 import {
   DEFAULT_GLOBAL_RESOLUTION,
@@ -101,6 +103,27 @@ import { fetchLabelFonts } from './render/strategic/labels/fonts';
 import { FreeFlight, parseFreeFlightUrl } from './freeflight/freeFlight';
 import { buildFontAtlas } from './render/strategic/labels/fontAtlas';
 
+/** What tools read from the page as `window.bearing`: on the dev server or with `?dev` only. */
+export interface BearingHandle {
+  readonly globe: GlobeScene;
+  readonly strategic: StrategicScene;
+  readonly renderScale: RenderScaleController;
+  readonly governor: QualityGovernor;
+  readonly audio: WeatherAudio;
+  readonly sim: SimClient;
+  readonly atmosphere: AtmosphereGuiParams;
+  /** The Free Flight mode, when the URL asked for it. */
+  readonly freeFlight: FreeFlight | null;
+}
+
+declare global {
+  interface Window {
+    bearing?: BearingHandle;
+    /** Free Flight alone, for the tools that drive it (dev server, or `?autopilot`). */
+    freeFlight?: FreeFlight;
+  }
+}
+
 async function main(): Promise<void> {
   // First, so the deployed version shows even if WebGPU is missing.
   new BuildStamp(__BUILD_COMMIT__, __BUILD_TIME__);
@@ -108,6 +131,12 @@ async function main(): Promise<void> {
   if ('problem' in probe) {
     showWebGpuRequired(probe.problem);
     return;
+  }
+  // A software adapter cannot generate the world (the tab hangs and eats memory): the app
+  // does not start on one unasked.
+  if (softwareAdapterNotice(probe.adapter, new URLSearchParams(location.search))) {
+    console.warn(`WebGPU software adapter: ${describeAdapter(probe.adapter)}`);
+    await showSoftwareAdapterNotice(describeAdapter(probe.adapter));
   }
 
   const container = document.getElementById('app')!;
@@ -305,6 +334,8 @@ async function main(): Promise<void> {
     if (view === 'strategic') {
       // The simulation view's render targets are not kept while the map shows (decision 138).
       globe.pipeline?.release();
+      // No thunder rolls in over the map from strikes the view was showing.
+      audio.cancelThunder();
     } else {
       // Back in the simulation view after any length of game time: the effects start over.
       globe.resetAtmosphere();
@@ -504,6 +535,8 @@ async function main(): Promise<void> {
       });
       globe.setInfrastructure(infra);
       globe.terrainReady = true;
+      // The first frames of a world load its tiles: the governor does not count them.
+      governor.warmUp(performance.now());
       // Observer stations at every airbase and port; ports face the sea (decision 112).
       stations = observerStations(
         strategic.infrastructure,
@@ -924,6 +957,13 @@ async function main(): Promise<void> {
     atmosphere.status = governorStatus(atmosphere, governor.level);
   };
   applyAtmosphereSettings();
+  // A cut (a new flight, a station, entering the view, a seek, other weather): the next frames
+  // compile shaders and load tiles, and say nothing about the machine.
+  // Thunder on its way belongs to strikes that are gone with the cut.
+  globe.onCut = () => {
+    governor.warmUp(performance.now());
+    audio.cancelThunder();
+  };
   /** Land temperature shift of the campaign's weather preset at the camera (°C). */
   let presetTemperatureShift = 0;
   gui.addAtmosphereControls(atmosphere, applyAtmosphereSettings, (preset) => {
@@ -944,6 +984,8 @@ async function main(): Promise<void> {
     set volume(v: number) {
       atmosphere.volume = v;
       audio.volume = v;
+      // The pause menu's slider: heard while the game stands.
+      audio.audition();
     },
     get muted() {
       return atmosphere.mute;
@@ -954,9 +996,9 @@ async function main(): Promise<void> {
     },
   };
   // Sound stops while the game is paused or the tab is hidden (thunder on its way waits).
-  // Not before it has started: the context must first run from the key or click that creates
-  // it, or a browser that asks for a gesture (Safari) never lets it sound; the campaign
-  // starts paused.
+  // The campaign starts paused: the audio still runs its context once from the first gesture
+  // that can start it (a key, a click, a finger lifting), so that resuming it from this loop
+  // works later in a browser that asks for a gesture (weatherAudio.ts).
   let audioHeld = false;
   const holdAudio = () => {
     if (!audio.started) return;
@@ -1046,8 +1088,7 @@ async function main(): Promise<void> {
     // The debug GUI stays out of the way unless asked for (?dev).
     if (!query.has('dev')) gui.gui.hide();
     // Tools and screenshots drive the mode from the page (dev server, or ?autopilot).
-    if (import.meta.env.DEV || query.has('autopilot'))
-      (window as unknown as { freeFlight: FreeFlight }).freeFlight = freeFlight;
+    if (import.meta.env.DEV || query.has('autopilot')) window.freeFlight = freeFlight;
   } else {
     gui.gui
       .add(
@@ -1064,8 +1105,10 @@ async function main(): Promise<void> {
       .name('Free Flight (fly from an airbase)…');
   }
   // Tools inspect and drive the app from the page (tools/browser.smoke.mjs): dev server, or ?dev.
+  // Every entry lives as long as the page; worlds come and go inside the scenes and the sim,
+  // so the handle keeps no world alive that they have let go.
   if (import.meta.env.DEV || query.has('dev')) {
-    (window as unknown as { bearing: object }).bearing = {
+    window.bearing = {
       globe,
       strategic: strategicView,
       renderScale,
@@ -1095,6 +1138,7 @@ async function main(): Promise<void> {
     }
     // The atmosphere's quality follows the machine, while the simulation view has terrain to draw.
     if (atmosphere.autoQuality && activeView === 'simulation' && globe.terrainReady) {
+      const warming = governor.warming;
       const level = governor.record({
         frameMs,
         nowMs: now,
@@ -1103,7 +1147,11 @@ async function main(): Promise<void> {
         minScale: renderScale.minScale,
         maxScale: renderScale.maxScale,
         adaptive: viewParams.renderScale === 'auto',
+        loading: globe.terrain.stats.pending > 0,
       });
+      // The warm-up after a cut is over: the render scale may have fallen while tiles loaded
+      // and shaders compiled, and what its probes learned then says nothing now.
+      if (warming && !governor.warming) renderScale.reset(now);
       if (level !== null) {
         applyAtmosphereSettings();
         // The load has changed: the render scale finds its place anew.

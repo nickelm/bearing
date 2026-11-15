@@ -172,7 +172,7 @@ export interface LightningFrame {
   gameTime: GameTime;
   /** Real seconds since the last frame. */
   dt: Seconds;
-  /** Angle of one pixel (rad): vertical field of view over the viewport's height. */
+  /** Angle of one pixel of the drawing buffer (rad): vertical field of view over its height. */
   pixelAngle: number;
 }
 

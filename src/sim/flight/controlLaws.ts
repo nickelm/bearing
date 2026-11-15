@@ -17,7 +17,10 @@
  *   aircraft to keep the sideslip at zero (turn coordination). On the ground the
  *   rudder acts open loop at taxi speeds, where the nosewheel steers; from about
  *   30 m/s the pedals command a gentle yaw rate (3°/s at full pedal), closed loop,
- *   so a pedal held on the takeoff roll does not ground-loop the jet.
+ *   so a pedal held on the takeoff roll does not ground-loop the jet. With the
+ *   pedals let go on the wheels the laws hold the ground track (`trackHold`): the
+ *   nosewheel and, at speed, the rudder work against a crosswind's weathercock
+ *   moment and side force, as neutral stick holds the attitude in pitch.
  *
  * The rate loops ask for the moment that drives the body rates toward their
  * commands in a fraction of a second; the aircraft model adds damping, weathercock
@@ -106,6 +109,10 @@ export interface LawInput {
   pitch: number;
   /** Height of the wheels above the ground (m): the path hold gives way in the flare. */
   radarAltitude: number;
+  /** Speed over the ground along the nose (m/s), for the track hold on the wheels. */
+  forward: number;
+  /** Angle of the ground track right of the nose (rad); 0 while `forward` is under 2 m/s. */
+  drift: number;
 }
 
 export interface LawOutput {
@@ -117,6 +124,8 @@ export interface LawOutput {
   elevator: number;
   aileron: number;
   rudder: number;
+  /** Nosewheel angle the track hold asks for, on top of the pedals' (rad, + right). */
+  steer: number;
   /** Commands, for the HUD's debug panel. */
   loadCommand: number;
   pitchRateCommand: number;
@@ -152,15 +161,101 @@ export interface LawState {
   airborne: number;
   /** True from a touchdown after flight until the wheels leave the ground again. */
   landed: boolean;
+  /** Seconds since the pedals were let go, up to TRACK_SETTLE_MOST (0 with a pedal in). */
+  pedalsFree: number;
+  /** True after a pedal was in while rolling: the hold waits for the yaw rate to run out. */
+  holdSettles: boolean;
+  /** Seconds the track hold has had its track, up to TRACK_DELAY (0: it has none). */
+  holdTime: number;
+  /** The heading turned since the track hold took its track (rad, + right). */
+  holdTurned: number;
+  /** The drift when the track hold took its track (rad). */
+  holdDrift: number;
 }
 
 export function newLawState(): LawState {
-  return { pitchI: 0, airborne: 0, landed: false };
+  return {
+    pitchI: 0,
+    airborne: 0,
+    landed: false,
+    pedalsFree: 0,
+    holdSettles: false,
+    holdTime: 0,
+    holdTurned: 0,
+    holdDrift: 0,
+  };
 }
 
 const DEG_ = Math.PI / 180;
 /** Yaw rate (rad/s) full pedal commands on the runway above taxi speed. */
 const GROUND_YAW_RATE = 3 * DEG_;
+
+/**
+ * The track hold on the wheels: with the pedals let go, the rudder and the nosewheel keep the
+ * aircraft rolling the way it rolls.
+ *
+ * - It takes the ground track once the pedals have been free for TRACK_DELAY seconds and the
+ *   aircraft rolls on its wheels faster than TRACK_MIN_SPEED (below it the tires' grip holds
+ *   the aircraft and the track has no direction). With the pedals free before that, this is
+ *   the track of the touchdown or of the brake release.
+ * - After a pedal was in while rolling it waits until the yaw rate of that command has run
+ *   out (under TRACK_SETTLED, or TRACK_SETTLE_MOST seconds): the aircraft goes on where the
+ *   turn ends, and does not spring back to where the pedal was let go.
+ * - It acts TRACK_DELAY seconds after it has taken the track.
+ */
+const TRACK_DELAY = 0.25;
+const TRACK_MIN_SPEED = 2;
+const TRACK_SETTLED = 1 * DEG_;
+const TRACK_SETTLE_MOST = 2;
+/** The largest track error the hold answers (rad): a slide or a ground loop is not held back. */
+const TRACK_LIMIT = 3 * DEG_;
+/** Rudder: yaw acceleration per radian of track error (1/s²), from the speed the rate loop closes. */
+const TRACK_RUDDER = 8;
+/**
+ * Nosewheel: steering per radian of track error and per rad/s of yaw rate (s), and its limit
+ * (rad). The limit is half the pedals' steering at speed: a nose tire at 1.5° pushes with a
+ * thirtieth of the aircraft's weight.
+ */
+const TRACK_STEER = 2;
+const TRACK_STEER_DAMPING = 1;
+const TRACK_STEER_LIMIT = 1.5 * DEG_;
+
+/**
+ * The track hold's error (rad, + the track must turn right) and its bookkeeping for one
+ * substep. Zero unless the aircraft rolls on its wheels with the pedals let go.
+ */
+export function trackHold(pedal: number, s: Readonly<LawInput>, state: LawState): number {
+  const rolling = s.wow > 0.5 && s.forward > TRACK_MIN_SPEED;
+  if (pedal !== 0) {
+    state.pedalsFree = 0;
+    state.holdTime = 0;
+    state.holdSettles = rolling;
+    return 0;
+  }
+  if (state.pedalsFree < TRACK_SETTLE_MOST) state.pedalsFree += s.dt;
+  if (!rolling) {
+    state.holdTime = 0;
+    state.holdSettles = false;
+    return 0;
+  }
+  if (state.holdTime === 0) {
+    if (state.pedalsFree < TRACK_DELAY) return 0;
+    const turning = Math.abs(s.r) > TRACK_SETTLED && state.pedalsFree < TRACK_SETTLE_MOST;
+    if (state.holdSettles && turning) return 0;
+    state.holdSettles = false;
+    state.holdTurned = 0;
+    state.holdDrift = s.drift;
+  } else {
+    state.holdTurned += s.r * s.dt;
+  }
+  if (state.holdTime < TRACK_DELAY) {
+    state.holdTime += s.dt;
+    return 0;
+  }
+  // The track is the heading plus the drift: how far it has turned since the hold took it.
+  const turned = state.holdTurned + (s.drift - state.holdDrift);
+  return clamp(-turned, -TRACK_LIMIT, TRACK_LIMIT);
+}
 
 /** Largest pitch rate (rad/s) the rate law's load-factor hold adds or takes away. */
 const HOLD_LIMIT = 4 * (Math.PI / 180);
@@ -352,6 +447,17 @@ export function controlLaws(
   const groundYaw =
     pedal * authZ * (1 - closed) + closed * izz * kr * (pedal * GROUND_YAW_RATE - s.r);
   let mz = groundYaw * s.wow;
+  // Pedals let go on the wheels: the rudder and the nosewheel hold the ground track.
+  const track = state ? trackHold(pedal, s, state) : 0;
+  out.steer = 0;
+  if (track !== 0) {
+    mz += s.wow * closed * izz * TRACK_RUDDER * track;
+    out.steer = clamp(
+      TRACK_STEER * track - TRACK_STEER_DAMPING * s.r,
+      -TRACK_STEER_LIMIT,
+      TRACK_STEER_LIMIT,
+    );
+  }
   if (flying) {
     const betaCmd = -clamp(ctl.yaw, -1, 1) * c.maxSideslip;
     const ca = Math.max(0.3, Math.cos(s.alpha));
@@ -383,6 +489,7 @@ export function emptyLawOutput(): LawOutput {
     elevator: 0,
     aileron: 0,
     rudder: 0,
+    steer: 0,
     loadCommand: 1,
     pitchRateCommand: 0,
     blend: 0,

@@ -175,6 +175,15 @@ describe.skipIf(!gpu)('volumetrics (TSL on Dawn)', () => {
     expect(lit).toBeGreaterThan(0.01);
     expect(lit).toBeLessThan(10);
 
+    // The panel's "Sky light" at zero takes the sky's light off surfaces; the cloud's own
+    // stays finite (it divided by that number, and every marched pixel came out black).
+    r.lighting.skyLight.value = 0;
+    r.frame(1400, sun);
+    const unlit = await r.march(r.north, 315);
+    for (let i = 0; i < W * H * 4; i++) expect(Number.isFinite(unlit[i]!)).toBe(true);
+    expect(tileMean(unlit, 0)).toBeCloseTo(lit, 5);
+    r.lighting.skyLight.value = 2;
+
     // Even fog under its level: 500 m at an extinction of 0.002 / m, within 1%.
     r.weather.fill(0, 0, { fog: 0.002 });
     r.frame(30, sun);
@@ -322,6 +331,151 @@ describe.skipIf(!gpu)('volumetrics (TSL on Dawn)', () => {
     head.dispose();
     expect(gpu!.errors).toEqual([]);
   }, 180_000);
+
+  it('brings the cirrus in with the cloud cover in view, not at once', async () => {
+    const head = await headlessRenderer(gpu!.device, 64, 64);
+    const r = rig(head.renderer);
+    r.volumetrics.cirrus.value = 0.5;
+    const sun = r.up.clone().addScaled(r.east, 1).normalize();
+    // The densest cirrus over rays all around the sky from 1,200 m, by the most cover in view.
+    const densest = async (cover: number): Promise<number> => {
+      r.weather.fill(cover, 0, { base: 1500 });
+      r.frame(1200, sun);
+      if (!r.volumetrics.stats.clouds) return 0;
+      let most = 0;
+      for (let turn = 0; turn < 360; turn += 20) {
+        for (const elevation of [15, 35, 60]) {
+          const dir = r.north
+            .clone()
+            .scale(Math.cos(turn * DEG) * Math.cos(elevation * DEG))
+            .addScaled(r.east, Math.sin(turn * DEG) * Math.cos(elevation * DEG))
+            .addScaled(r.up, Math.sin(elevation * DEG));
+          most = Math.max(most, 1 - tileMean(await r.march(dir), 3));
+        }
+      }
+      return most;
+    };
+    // No cloud in view: the march is off, and so is the sheet.
+    expect(await densest(0.016)).toBe(0);
+    // The first weather sample with cloud turns the march on: the sheet was at once as dense
+    // as under a quarter cover (patches 44% opaque across a sky that was empty a frame ago).
+    const first = await densest(0.018);
+    const some = await densest(0.05);
+    const full = await densest(0.12);
+    console.log(
+      `  densest cirrus by cover in view: 0.018 → ${first.toFixed(3)}, 0.05 → ${some.toFixed(3)}, 0.12 → ${full.toFixed(3)}`,
+    );
+    expect(first).toBeLessThan(0.02);
+    expect(some).toBeGreaterThan(first);
+    expect(some).toBeLessThan(full);
+    expect(full).toBeGreaterThan(0.1);
+    r.dispose();
+    head.dispose();
+    expect(gpu!.errors).toEqual([]);
+  }, 300_000);
+
+  it('keeps its nine sample offsets apart where the march skips down to a cloud top', async () => {
+    const head = await headlessRenderer(gpu!.device, 64, 64);
+    const r = rig(head.renderer);
+    const sun = r.up
+      .clone()
+      .scale(Math.sin(60 * DEG))
+      .addScaled(r.east, Math.cos(60 * DEG));
+    // Scattered heaps of 750 to 1,250 m under a shell that ends at the highest of them: a
+    // ray from above passes through clear air first and skips down to the top of the column
+    // it then meets, within the range in which the march's steps are at their shortest.
+    r.weather.fill(0.45, 0, { base: 1300 });
+    r.frame(3100, sun);
+    expect(r.volumetrics.stats.clouds).toBe(true);
+    // The depth of the first sample in the cloud is the sample's offset times the step, so
+    // the lit skin (bright within a few tens of meters) is caught at nine depths and the
+    // nine pixels of a tile differ. When every offset landed on the column's top, the nine
+    // were equal, in shells a step apart: terraces on cumulus seen from close above.
+    const spreads: number[] = [];
+    for (let turn = 0; turn < 360; turn += 15) {
+      for (const dip of [30, 40, 50, 60]) {
+        const level = r.north
+          .clone()
+          .scale(Math.cos(turn * DEG))
+          .addScaled(r.east, Math.sin(turn * DEG));
+        const dir = level.scale(Math.cos(dip * DEG)).addScaled(r.up, -Math.sin(dip * DEG));
+        const pixels = await r.march(dir);
+        // Rays that end in cloud.
+        if (tileMean(pixels, 3) > 0.7) continue;
+        const lit: number[] = [];
+        for (let y = 0; y < 3; y++) {
+          for (let x = 0; x < 3; x++) lit.push(pixels[(y * W + x) * 4 + 1]!);
+        }
+        spreads.push((Math.max(...lit) - Math.min(...lit)) / tileMean(pixels, 1));
+      }
+    }
+    spreads.sort((a, b) => a - b);
+    console.log(
+      `  light of the nine offsets, (most − least) / mean, over ${spreads.length} rays: ` +
+        spreads.map((s) => s.toFixed(3)).join(' '),
+    );
+    // With the offsets on one shell: 0.019 to 0.078, median 0.044 (what is left comes from
+    // the steps' slow growth). Spread over a step: 0.059 to 0.127, median 0.078.
+    expect(spreads.length).toBeGreaterThanOrEqual(6);
+    expect(spreads[0]!).toBeGreaterThan(0.045);
+    expect(spreads[Math.floor(spreads.length / 2)]!).toBeGreaterThan(0.06);
+    r.dispose();
+    head.dispose();
+    expect(gpu!.errors).toEqual([]);
+  }, 180_000);
+
+  it('veils a surface near the camera by what the visibility says, in snow, rain and a blizzard', async () => {
+    const head = await headlessRenderer(gpu!.device, 64, 64);
+    const r = rig(head.renderer);
+    const sun = r.up.clone().addScaled(r.east, 0.4).normalize();
+    // Under the cloud that precipitates: visibility (m), precipitation as a share of 4 mm/h,
+    // the share of snow, the cloud base (m).
+    const cases: [string, number, number, number, number][] = [
+      ['snow', 1100, 0.3, 1, 500],
+      ['rain', 3000, 1, 0, 500],
+      ['blizzard', 300, 0.75, 1, 250],
+    ];
+    for (const [name, visibility, precip, snow, base] of cases) {
+      const fog = 3.912 / visibility;
+      r.weather.fill(1, precip, { fog, snow, base });
+      // The veils and curtains drift past the camera with the wind: the same air at places
+      // along 600 m of it. A surface 12 m ahead (the flown aircraft from the chase camera),
+      // and one 400 m away.
+      const near: number[] = [];
+      const light: number[] = [];
+      const far: number[] = [];
+      for (let x = 0; x <= 600; x += 40) {
+        r.frame(150, sun, x, 0.37 * x);
+        expect(r.volumetrics.stats.air).toBe(true);
+        const close = await r.march(r.north, 12);
+        near.push(1 - tileMean(close, 3));
+        light.push(tileMean(close, 1));
+        far.push(-Math.log(tileMean(await r.march(r.north, 400), 3)));
+      }
+      const expected = 1 - Math.exp(-fog * 12);
+      const spread = (a: number[]) => Math.max(...a) / Math.min(...a);
+      console.log(
+        `${name}: 12 m of air at ${visibility} m should hide ${(100 * expected).toFixed(1)}%; ` +
+          `hides ${(100 * Math.min(...near)).toFixed(1)}–${(100 * Math.max(...near)).toFixed(1)}%, ` +
+          `its light ×${spread(light).toFixed(2)} along the wind; over 400 m the optical depth ×${spread(far).toFixed(2)}`,
+      );
+      // What the visibility says, plus the rain's own share (a third more at most), at every
+      // place: before, the curtains took it from a seventh to twice that as they passed.
+      for (const veil of near) {
+        expect(veil).toBeGreaterThan(0.9 * expected);
+        expect(veil).toBeLessThan(1.4 * expected);
+      }
+      expect(spread(near)).toBeLessThan(1.1);
+      // And its light is even: it changed 150-fold, which showed as the aircraft's brightness
+      // swinging within seconds.
+      expect(spread(light)).toBeLessThan(1.15);
+      // The veils are still there further out.
+      expect(spread(far)).toBeGreaterThan(1.15);
+    }
+    r.dispose();
+    head.dispose();
+    expect(gpu!.errors).toEqual([]);
+  }, 300_000);
 
   it('keeps one source per quality level, and warms the level below once', async () => {
     const head = await headlessRenderer(gpu!.device, 64, 64);
