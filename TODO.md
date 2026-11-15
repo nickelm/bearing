@@ -806,6 +806,7 @@ The thrust-disc model, the speed-scheduled controls, the Assisted preset, the ho
   - [x] Aircraft choice (start screen, `&aircraft=kestrel|scout|utility`), spawn beside the runway's middle or hovering at 150 m, the helicopter's own session path (decision 159)
   - [ ] Helipads on the aprons, a landing zone marker
   - [ ] Mouse sensitivity and inversion in the pause menu
+  - [ ] Owner: fly both helicopters with a real mouse (the camera's steep look down in a high hover, the mouse's sensitivity, the ease to a stop below 20 kt) and judge the feel
   - [x] The outcomes monitor's runway rules (touched down away from a runway, ran off the runway or the paved field) by kind: a helicopter may land and hover-taxi anywhere; its own hazards (slope, rollover, rotor strike) come with H3 and H4
 - [ ] Maneuver tests: 60 s hover in ground effect within 1 m with hover hold; a 360° pedal turn within the type's time; a nap-of-the-earth course at 30 m radar altitude over synthetic ridges without contact
   - [x] Hover hold (0.13 m in 60 s), pedal turns, rest on the gear, takeoff, circuit and landing (`tests/rotorcraft.test.ts`)
@@ -833,6 +834,7 @@ Mouse aim, direct control with flight stick support, all assists and presets, an
 Skids and wheels, slope and confined-area landings, dynamic rollover, sling loads with the hook camera, hoisting, fast-roping.
 
 - [ ] Skids as sliding contact points and wheels with castoring tail wheel or steered nose wheel; slope limits by type; ground taxi for wheeled types
+  - [ ] Running landings on wheels at speed: the utility rolled over after a 50 kt touchdown (no attitude control on the wheels; decision 159)
   - [ ] The ground's normal in `GroundQuery` and `contact.ts`: today the strut acts along the local vertical and friction in the horizontal plane (the Kestrel's level pads), so nothing slides down a slope; the Kestrel must stay bit-identical where the normal is vertical
 - [ ] Dynamic rollover from the contact physics, with a warning under protection; test of a slope takeoff that rolls over with protection off
 - [ ] Slope and confined-area landings; tests of a slope landing at the type limit and a rejected one beyond it
@@ -851,7 +853,7 @@ Vortex ring state, mast bumping, retreating blade stall, autorotation, tail roto
 - [ ] Vortex ring state from the descent branch of the inflow, with deterministic thrust fluctuation; recovery by forward or lateral cyclic; test of entry and recovery
 - [ ] Mast bumping in teetering types at low load factor; envelope protection's load-factor floor; test that a Cobra pushover bumps with protection off and is prevented with it on
 - [ ] Retreating blade stall as a soft never-exceed speed with roll-off and vibration; protection's speed limit
-- [ ] Engine failure and autorotation: rotor speed free, the flare's energy; test of an autorotation from 300 m to a landing under the type's crash sink rate
+- [ ] Engine failure and autorotation (the collective's low stops let a full-down autorotation overspeed the rotor to 126–150% today; the Assisted preset holds it near 103% with a collective floor): rotor speed free, the flare's energy; test of an autorotation from 300 m to a landing under the type's crash sink rate
 - [ ] Tail rotor loss and the controlled crash
 - [ ] HUD hazard cues for each hazard and for dynamic rollover; rotor RPM prominent in autorotation
 - [ ] Damage effects: engine smoke, the spinning fuselage, the slowing rotor with blades returning

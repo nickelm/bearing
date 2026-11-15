@@ -105,7 +105,8 @@ export function buildHeloHudFrame(
     boresight: [bx.x, bx.y, bx.z],
     warnings: [],
     aid: opts.aid,
-    mode: modes.join(' · ').toLowerCase(),
+    // The status column lists the modes; this line names the control mode.
+    mode: 'fly-by-mouse',
     aim: null,
     hover,
     debug: opts.timing
