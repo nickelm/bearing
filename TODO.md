@@ -502,10 +502,19 @@ Simulation view (needs S1's `render/sim/` split):
   - [ ] Owner, on a machine with a GPU: frame rates by weather, the first frames after "Fly", GUI → Atmosphere (the frame loop, the menus and the switch between map and simulation view ran in Chromium on a software rasterizer, decision 144)
   - [ ] Owner: watch "Quality now" and the resolution on a steady view; either changing more often than once a minute is a governor or render-scale bug (thresholds come from simulated machines)
   - [ ] Owner: fly the wind and gusts in storm, blizzard and dust storm (only the scripted pilot has); retire the 8 m/s cap on the ground once the control laws hold a gale on the runway
-  - [ ] The pause menu's volume slider gives no sound while paused (the audio is suspended)
+  - [ ] Owner: fly a crosswind takeoff and landing by hand with the track hold (decision 145). A crabbed touchdown ends 4 to 8 m off the centerline (an integral term if that is too much); at 30 m/s a tapped pedal turn gives back 15 to 25% on release, because the hold takes the track at release and the nose returns to it
+  - [ ] `controlLaws.ts` and `flightModel.ts` each carry the track hold's 2 m/s threshold as a literal: export `TRACK_MIN_SPEED`
+  - [ ] Render scale and governor on a page capped at 30 FPS with a 100 ms frame about once a second: the scale bounces and the governor ends near its second step, though fewer pixels help nothing there. The governor should not read a low scale as a struggle while the median frame time is on target
+  - [ ] Target FPS 60 on a page capped at 30: scale 0.35 and the governor's second step within minutes. Use the trial of decision 145: a step down that does not shorten the median is taken back
+  - [ ] Render scale: a probe that fails inside a slow spell delays the climb back by up to two minutes; treat a failure within about 10 s of a large step down as provisional
+  - [ ] Cuts closer than about 10 s apart keep the governor from acting: check that no future caller of `resetAtmosphere()` is periodic
+  - [ ] Audio: try the first-touch start on iOS and iPadOS Safari and on Chrome for Android; listen to the volume tone and to a cut during a storm
+  - [ ] The debug panel's volume control gives no sound while paused
+  - [ ] Model viewer: decide whether a software adapter needs a notice there (it generates no world)
+  - [x] The pause menu's volume slider gives no sound while paused: it plays a short tone and lets the ambience run for 1.2 s (decision 145)
   - [ ] A campaign weather override also shows on the strategic map; a preset's temperature shift is taken at the camera
   - [ ] Dust does not dim the aircraft's ground shadow
-  - [ ] The start screen's weather options are long descriptions; shorten them to labels
+  - [x] The start screen's weather options are long descriptions; shorten them to labels (short names with the description beside the list, decision 145)
 - [x] Cast shadows from terrain: a height-field shadow baked around the camera, three nested grids, soft edges; deeper sky fill, a low-sun exposure for surfaces, snow sparkle and wet ground (`render/sim/lighting/terrainShadow.ts`, decision 139)
   - [x] Wire the app: `globe.shadows.setHeights` with the terrain's world in `main.ts` and in Free Flight (decision 143)
   - [ ] Shadows cast by trees, buildings and aircraft (Part I: the aircraft's shadow on the ground is a height cue)
@@ -529,22 +538,36 @@ Simulation view (needs S1's `render/sim/` split):
 - [ ] Pixelation option: nearest-neighbor upscale of the reduced render scale, with optional ordered dithering on sky gradients, default 75% on desktop (Part I; decision 69's render scale upscales smoothly)
 - [ ] Acceptance checks 1–5 (Part I) against the reference board; owner checkpoint
   - [x] Rendered at 1408 × 792 with trees, live and fair weather, beside `main`'s (decision 144), and compared with the text of Part I; the reference screenshots are not in the cloud session, so the comparison with the board is the owner's
-  - [ ] Check 1 (`mixed`): cumulus seen from close above show horizontal terraces (stacked rings) at every volumetric quality, sharpest at high
-  - [ ] Check 4 (`dusk`): the cloud deck shows the march's 3 × 3 sample pattern and low-resolution blocks in its bright parts and along the far band; teal fringes where the twilight sky shows through gaps; with `WEATHER=fair` a small yellow dot with a streak under it sits in the deck right of center
-  - [ ] Cumulus seen from the side at medium quality carry a fine stipple that high does not have
-  - [ ] Checks 1 and 4 under the weather: `mixed` at 5 km sits inside the cumulus layer and `dusk` under a closed deck in live and fair weather; render them with `WEATHER=clear` as well, or move check 1 under the cloud base, so the landscape and the dusk gradient can be judged
+  - [x] Check 1 (`mixed`): cumulus terraces from close above (the march's skip to a column's top put all nine sample offsets on the top; decision 145)
+  - [x] Check 4 (`dusk`): a grid of columns in the cloud deck (the upsample's weight floor rippled every gradient at the texel period; decision 145). The teal fringes in the gaps are the neutral twilight sky against the orange deck: measured, no pixel has green above red
+  - [ ] Check 4 (`dusk`): the far cloud band still shows low-resolution blocks (3-pixel texels at medium), and texel rows are 0.06 levels darker than the rows between them (0.5 in the brightest cloud; below the grain): try a smoother upsampling kernel and count its reads
+  - [ ] Check 4 with `WEATHER=fair`: a faint yellow dot with a streak under it at (805, 120) of 1408 × 792: the twilight sky through a thin spot in the deck; find why the deck has a pinhole there
+  - [ ] Check 4 with `WEATHER=clear`: the gradient is a more saturated orange than the guide's `#F6B07A`, with a dark blue-violet band at the horizon
+  - [ ] Cumulus seen from the side at medium quality carry a fine stipple that high does not have (reduced only slightly by the softer light steps of decision 145)
+  - [ ] Cumulus seen from above at a high sun are nearly uniform white (check 1): more shading in the creases without bringing back the stipple
+  - [ ] The deep form of the cloud's light now starts at the shortest step (`LIGHT_STEPS` [10, 90]): a deck from below is 1.6 times brighter in linear terms than before decision 145; owner's eye at the checkpoint
+  - [ ] Under an overcast the sea is nearly flat: an even gray sky gives the ripples no gradient to mirror. Try the overcast sky's gradient (zenith three times the horizon), no extra reads
+  - [ ] From 20 km straight down a closed deck lets 14% of the ground through at medium and 24% at low (a march of the same density in even steps: 5%)
+  - [ ] Mountain shadows fading in after a cut lighten for a moment when the near grid is published (the coarse grid's share is dropped while the middle one still fades)
+  - [ ] `tests/gpu/volumetrics.test.ts`: set the camera's own fog, rain and snow in the rig's `WeatherState`, as the app does
+  - [ ] `SimPipeline` frees three's frame target through the private `_frameBufferTargets` (r187): check at the next three upgrade
+  - [x] Checks 1 and 4 under the weather: rendered in live, fair and clear weather (decision 145)
+  - [ ] Check 1 (`mixed`) at 5 km sits inside the cumulus layer and check 4 (`dusk`) under a closed deck in live and fair weather: move check 1 under the cloud base, or make `WEATHER=clear` the checks' default, so the landscape and the dusk gradient can be judged
+  - [ ] Check 1 in clear weather: the river is a thin pale line, the town a lilac patch without visible buildings, forest edges are stair-stepped and lowland facets hardly show (predates the atmosphere work)
+  - [ ] Check 3 (`range`): forest slopes in mountain shadow are near black (see the shadow lift under "Cast shadows from terrain")
   - [ ] Check 2 (`conifer`): the town reads as a patch of large triangles in roof and wall colors with tiny houses on it, and no road shows at 500 m (predates the atmosphere work)
   - [ ] Check 5 (`beach`): regular ripple moiré on the water under the sun glint; no sand strip at the shore (predates)
   - [ ] Check 4: no parked aircraft on the apron (V3)
 - [x] The built app in headless Chromium with WebGPU (`tools/browser.smoke.mjs`, lavapipe through a shim); cost against `main`; sky LUT bakes 3 to 9 times less often in flight, the coverage bake spread over six frames, idle render targets freed; Esc closes the pause menu (decision 144)
-  - [ ] A message for a browser that offers only the software WebGPU adapter (Chromium's SwiftShader hangs in world generation and eats memory until the tab dies)
-  - [ ] With the wind on (the default), an unsteered takeoff roll leaves the runway: 1.6 m/s of crosswind puts the aircraft 24 m off the centerline at 212 kt (nosewheel hold or tire side force in the shared ground model)
-  - [ ] The governor steps down during the first flight's shader compiles and tile loads; hold it through the warm-up after a cut
-  - [ ] Snow near the camera: the aircraft 12 m ahead is veiled by about 22% at 1.1 km visibility and its brightness swings within seconds of the weather clock
+  - [x] A notice for a browser that offers only a software WebGPU adapter, with "Start anyway" (`software` in the URL skips it; decision 145)
+  - [x] With the wind on (the default), an unsteered takeoff roll left the runway: the shared control laws now hold the ground track with free pedals (`trackHold`, decision 145); the smoke test takes off in the day's wind
+  - [x] The governor stepped down during the first flight's shader compiles and tile loads: it counts no frame for 5 s after a cut and while tiles are pending (decision 145)
+  - [x] Snow near the camera: the aircraft 12 m ahead was veiled by about 22% at 1.1 km visibility; within 15 m the air now has the weather's own extinction (4.3%; decision 145)
   - [ ] Measure in a browser on real GPUs: frame time by weather and quality, the coverage bake per face, main-thread time per pipeline pass (Node on Dawn: 0.1 ms per pass, 7 to 11 passes)
   - [ ] The sky LUT still bakes about 5 times a second in a 10 m/s climb; if it shows on integrated GPUs, bound it to every other frame
   - [ ] The shadow bake's tile-height fill allocates 40 to 80 KB per frame in bursts; its two work grids (4 MiB) could be freed between bakes
   - [ ] Add the cost pass's modes (weather × quality matrix, per-subsystem flight profile) to `tools/render.preview.ts`
+- [x] Adversarial review of decisions 137–144 and of its own fixes: the render scale no longer ratchets on single long frames, the track hold, the march's skip, fog strata, near veils, cirrus, water under cloud, shadows across a cube-face crossing, the upsample's ripple (decision 145)
 
 ### V3. Models and bases
 
