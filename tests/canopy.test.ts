@@ -6,7 +6,13 @@ import {
   canopyLump,
   canopySeed,
   cellHash,
+  CONIFER_T,
+  coniferShare,
+  EDGE_RISE,
+  EDGE_TREES,
+  edgeRise,
   LUMP,
+  pineShare,
   STAND_CELL,
   STAND_HEIGHTS,
   standAt,
@@ -103,12 +109,24 @@ describe('canopy height field', () => {
     expect(hi - lo).toBeGreaterThan(0.5);
   });
 
-  it('is zero in the open and the lumpy stand height in closed forest', () => {
+  it('is zero in the open, lower at the edge and the lumpy stand height inside', () => {
     const [x, y, z] = line(1, 1)[0]!;
     expect(canopyHeight(x, y, z, CANOPY_THRESHOLD - 0.01, 10, seed)).toBe(0);
-    const h = canopyHeight(x, y, z, CANOPY_THRESHOLD, 10, seed);
     const s = standAt(x, y, z, 0, 0, seed);
-    expect(h).toBeGreaterThanOrEqual(s.height * (1 - LUMP) - 1e-9);
-    expect(h).toBeLessThanOrEqual(s.height * (1 + LUMP) + 1e-9);
+    const edge = canopyHeight(x, y, z, CANOPY_THRESHOLD, 10, seed);
+    const inside = canopyHeight(x, y, z, CANOPY_THRESHOLD + EDGE_RISE, 10, seed);
+    expect(edge).toBeCloseTo(inside * EDGE_TREES, 9);
+    expect(inside).toBeGreaterThanOrEqual(s.height * (1 - LUMP) - 1e-9);
+    expect(inside).toBeLessThanOrEqual(s.height * (1 + LUMP) + 1e-9);
+    expect(edgeRise(CANOPY_THRESHOLD)).toBe(0);
+    expect(edgeRise(CANOPY_THRESHOLD + EDGE_RISE)).toBe(1);
+  });
+
+  it('makes the cold all conifer, all firs, and lets pines into warmer conifer forest (decision 151)', () => {
+    expect(coniferShare(CONIFER_T[1])).toBe(1);
+    expect(coniferShare(0)).toBe(1);
+    expect(coniferShare(CONIFER_T[0])).toBe(0);
+    expect(pineShare(2)).toBe(0);
+    expect(pineShare(10)).toBeCloseTo(0.4, 9);
   });
 });

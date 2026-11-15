@@ -56,6 +56,7 @@ import {
   vec3,
 } from 'three/tsl';
 import { LAPSE_RATE } from '../../../worldgen/climate';
+import { CONIFER_T } from '../../../worldgen/canopy';
 import { earthElevationNode } from '../../common/seasons';
 import { WAVE_PERIOD } from '../water/waterShading';
 import { WARMEST_PHASE } from '../../common/seasons';
@@ -549,7 +550,7 @@ export class LandShading {
       const meanT = i.climate.x.sub(
         earthElevationNode(i.height, i.climate.w, this.reliefScale).mul(LAPSE_RATE),
       );
-      const conifer = smoothstep(9, 3, meanT);
+      const conifer = smoothstep(CONIFER_T[0], CONIFER_T[1], meanT);
       const tropical = smoothstep(18, 24, meanT);
       const shade = mix(
         mix(this.broadleafCanopy, this.coniferCanopy, conifer),

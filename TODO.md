@@ -495,7 +495,9 @@ Simulation view (needs S1's `render/sim/` split):
   - [ ] Measure on the owner's laptop and tablet; near and edge radii as quality-governor steps (tablet 400 m and 1 km, desktop 1 km and 2 km); aerial perspective per instance or from a froxel volume if the per-vertex march dominates; GPU culling with indirect draws if the CPU re-sort costs show
   - [ ] Owner: fly Free Flight low over forest (seed 1983 near −45.5, −28.0 has a river through dense forest) and judge the look, the stands and the frame rate
   - [ ] Line of sight from H (opaque for any sight line from or to an aircraft) and tree strikes in the ground model (with P3 and P1)
-  - [ ] Seasons per species: birch yellow, oak brown, conifers green
+  - [x] Seasons per species: fall colors (birch yellow, oak orange to red), brown, then bare winter models; the shell turns with its stands; tropical forest evergreen (decision 153)
+  - [x] Owner's first flight (decision 153): the shell's edge rises from the ground (no skirt over the trunks), the fringe takes after its forest (no acacias before broadleaf), rarer and taller young stands, conifers below 6 °C and all firs in the cold
+  - [ ] Owner: the tablet's frame rate over forest; judge fall colors and winter woods in the browser (the campaign view with time accelerated into the fall; previews: `TEMP_OFFSET`)
 - [ ] Sky, haze and clouds tuned for 0–20 km only (Part I): drop orbit-only work such as the limb glow from the simulation view (the sky and the clouds are done, decisions 140 and 141; the old cloud shell and sky march remain for the debug camera above 30–50 km)
 - [x] Volumetric clouds, cirrus, fog, dust and rain veils: one march at low resolution in the pipeline's volumetric stage, shaped by the weather; cloud shadows and gray sky light under cloud; three quality levels (`render/sim/clouds/volumetrics.ts`, `cloudForm.ts`, `noiseVolume.ts`, decision 141)
   - [ ] Time it on a real GPU (timestamp queries, I1): only lavapipe ratios and counted texture reads exist; the estimate for an integrated laptop GPU at 1080p is 4–8 ms at medium

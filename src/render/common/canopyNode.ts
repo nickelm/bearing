@@ -11,6 +11,7 @@
 import type { Node } from 'three/webgpu';
 import { Fn, float, floor, ivec3, select, smoothstep, uint, vec3, vec4 } from 'three/tsl';
 import {
+  CONIFER_T,
   LUMP,
   LUMP_CELL,
   SEED_LUMP,
@@ -134,7 +135,7 @@ export function standTopNode(stand: V4, p: V3, seed: U): F {
 /** Conifer and tropical shares at an annual mean temperature (°C), as `coniferShare`, `tropicalShare`. */
 export function sharesNode(meanT: F): { conifer: F; tropical: F } {
   return {
-    conifer: smoothstep(9, 3, meanT) as F,
+    conifer: smoothstep(CONIFER_T[0], CONIFER_T[1], meanT) as F,
     tropical: smoothstep(18, 24, meanT) as F,
   };
 }

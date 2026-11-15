@@ -95,7 +95,7 @@ import { FaceSampler, tileGridCoordinate } from './faceShading';
 import { facetNormal } from './facets';
 import { LandShading, periodicValueNoise } from './landShading';
 import { CANOPY_THRESHOLD, canopySeed } from '../../../worldgen/canopy';
-import { CanopyStyle, canopyShellMaterial, LIFT_BELOW } from '../forest/canopyShell';
+import { CanopyStyle, canopyShellMaterial } from '../forest/canopyShell';
 import { DEFAULT_LOD, selectTiles } from '../../common/terrain/quadtree';
 import {
   aheadView,
@@ -697,7 +697,7 @@ export class TerrainRenderer {
     // Forested tiles get a canopy shell: the same geometry under the shell material.
     let forestMax = 0;
     for (let v = 0; v < m.forest.length; v++) forestMax = Math.max(forestMax, m.forest[v]!);
-    if (this.mode === 'biome' && forestMax >= CANOPY_THRESHOLD - LIFT_BELOW) {
+    if (this.mode === 'biome' && forestMax >= CANOPY_THRESHOLD) {
       const shell = new Mesh(g, this.shellMaterial);
       shell.frustumCulled = false;
       shell.userData = mesh.userData;

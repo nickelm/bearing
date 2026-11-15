@@ -37,6 +37,7 @@ import {
 } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import {
+  abs,
   attribute,
   clamp,
   cos,
@@ -44,13 +45,14 @@ import {
   dot,
   float,
   Fn,
+  fract,
   max,
   mix,
   modelWorldMatrix,
   normalize,
   positionWorld,
   sin,
-  smoothstep,
+  step,
   uniform,
   varyingProperty,
   vec3,
@@ -78,6 +80,9 @@ import {
   CANOPY_THRESHOLD,
   canopySeed,
   coniferShare,
+  EDGE_TREES,
+  edgeRise,
+  pineShare,
   standAt,
   standTop,
   tropicalShare,
@@ -93,8 +98,11 @@ import type { PlanetLighting } from '../lighting/planetLighting';
 import type { LandShading } from '../terrain/landShading';
 import type { TerrainRenderer } from '../terrain/terrainRenderer';
 import { lakeSampler, mapSample, surfaceSampler } from '../../common/terrain/tileMesh';
+import { WARMEST_PHASE } from '../../common/seasons';
+import { foliage, LEAFLESS_JITTER, LEAFLESS_T } from './foliage';
 import type { MeshOptions } from '../../common/terrain/tileMesh';
 
+type F = Node<'float'>;
 type V3 = Node<'vec3'>;
 
 /** Level of the tiles trees are placed per (about 1.5 km on the campaign planet)... */
@@ -124,13 +132,31 @@ export const TREE_KINDS = [
 ] as const;
 export type TreeKind = (typeof TREE_KINDS)[number];
 export type TreeVariant = 'whole' | 'crown';
-/** Kinds whose crowns brown and drop their leaves in winter. */
+/** Kinds whose crowns turn in the fall and drop their leaves in winter, with their bare models. */
 const DECIDUOUS = new Set<TreeKind>(['tree-oak', 'tree-broadleaf', 'tree-birch', 'tree-poplar']);
+const BARE: Partial<Record<TreeKind, string>> = {
+  'tree-oak': 'tree-bare',
+  'tree-broadleaf': 'tree-bare',
+  'tree-birch': 'tree-birch-bare',
+  'tree-poplar': 'tree-bare',
+};
+/** Fall hue by kind (0 yellow, 0.5 orange, 1 red): base and spread across trees. */
+const FALL_HUE: Partial<Record<TreeKind, [number, number]>> = {
+  'tree-birch': [0.05, 0.1],
+  'tree-poplar': [0.08, 0.15],
+  'tree-oak': [0.7, 0.6],
+  'tree-broadleaf': [0.5, 1],
+};
 /** Groups that make up a trunk, dropped from crown-only trees. */
 const TRUNK_GROUPS = new Set(['trunk', 'wood']);
 
-/** Floats per instance: base xyz, up xyz, raw height, scale, angle, shade. */
-export const INSTANCE_FLOATS = 10;
+/**
+ * Floats per placed tree: base xyz, up xyz, raw height, scale, angle, shade
+ * (the GPU_FLOATS uploaded per instance), then the annual mean temperature at
+ * the tree (°C) and the seasonal half-range (K), for the leafless swap.
+ */
+export const INSTANCE_FLOATS = 12;
+export const GPU_FLOATS = 10;
 
 /** A part of a tile: column `i`, row `j` of TREE_SPLIT². */
 export interface TreePart {
@@ -258,6 +284,12 @@ export function* treePlacer(
     if (ctx.clear?.(d)) return null;
     return h;
   };
+  let meanT = 0;
+  /** Climate at the current site: sets the annual mean `meanT` (°C) there. */
+  const climateHere = (h: number) => {
+    ctx.climate(d, climate);
+    meanT = climate[0]! - earthElevation(h, climate[3]!, opts.reliefScale) * LAPSE_RATE;
+  };
   const push = (
     kind: TreeKind,
     variant: TreeVariant,
@@ -280,8 +312,21 @@ export function* treePlacer(
       scale,
       angle,
       shade,
+      meanT,
+      climate[1]!,
     );
   };
+  /** A tree of a stand: its kind by the stand and the temperature, its top at `top` m. */
+  const standTree = (stand: { conifer: number }, tropical: number, pick: number): TreeKind =>
+    stand.conifer
+      ? pick < pineShare(meanT)
+        ? 'tree-pine'
+        : 'tree-fir'
+      : pick < 0.45 || tropical > 0.5
+        ? 'tree-broadleaf'
+        : pick < 0.8
+          ? 'tree-oak'
+          : 'tree-birch';
 
   // Closed forest: a crown lattice, each tree at its stand's canopy top.
   const step = CROWN_SPACING / sampleM;
@@ -298,23 +343,19 @@ export function* treePlacer(
       const sx = x0 + (a + 0.15 + 0.7 * jx) * step;
       const sy = y0 + (b + 0.15 + 0.7 * jy) * step;
       if (sx >= x0 + span || sy >= y0 + span) continue;
-      if (density(sx, sy) < CANOPY_THRESHOLD) continue;
+      const f = density(sx, sy);
+      if (f < CANOPY_THRESHOLD) continue;
       const h = site(sx, sy);
       if (h === null) continue;
-      ctx.climate(d, climate);
-      const meanT = climate[0]! - earthElevation(h, climate[3]!, opts.reliefScale) * LAPSE_RATE;
+      climateHere(h);
       const tropical = tropicalShare(meanT);
       const stand = standAt(d.x * R, d.y * R, d.z * R, coniferShare(meanT), tropical, cSeed);
-      const top = standTop(stand, d.x * R, d.y * R, d.z * R, cSeed) * (0.92 + 0.14 * size01);
-      const kind: TreeKind = stand.conifer
-        ? pick < 0.7
-          ? 'tree-fir'
-          : 'tree-pine'
-        : pick < 0.45 || tropical > 0.5
-          ? 'tree-broadleaf'
-          : pick < 0.8
-            ? 'tree-oak'
-            : 'tree-birch';
+      // Trees at the edge stand lower, growing to the stand's height inside (decision 153).
+      const top =
+        standTop(stand, d.x * R, d.y * R, d.z * R, cSeed) *
+        (EDGE_TREES + (1 - EDGE_TREES) * edgeRise(f)) *
+        (0.85 + 0.25 * size01);
+      const kind = standTree(stand, tropical, pick);
       const interior =
         density(sx + reach, sy) >= CANOPY_THRESHOLD &&
         density(sx - reach, sy) >= CANOPY_THRESHOLD &&
@@ -326,7 +367,8 @@ export function* treePlacer(
         h,
         top / modelHeight(kind),
         angle,
-        stand.shade * tone,
+        // Tropical trees keep their leaves: a negative shade marks them evergreen.
+        stand.shade * tone * (tropical > 0.5 ? -1 : 1),
       );
     }
     yield;
@@ -354,15 +396,28 @@ export function* treePlacer(
       if (keep >= 0.5 * fringe + 0.35 * f * (1 - fringe)) continue;
       const h = site(sx, sy);
       if (h === null) continue;
-      ctx.climate(d, climate);
-      const meanT = climate[0]! - earthElevation(h, climate[3]!, opts.reliefScale) * LAPSE_RATE;
+      climateHere(h);
       const moisture = climate[2]!;
+      const conifers = coniferShare(meanT);
+      if (fringe > 0.25 && pick >= 0.3) {
+        // The fringe takes after the forest beside it: the stand's kinds, lower (decision 153).
+        const tropical = tropicalShare(meanT);
+        const stand = standAt(d.x * R, d.y * R, d.z * R, conifers, tropical, cSeed);
+        const kind = standTree(stand, tropical, (pick - 0.3) / 0.7);
+        const top = stand.height * EDGE_TREES * (0.75 + (0.35 * (scale - 0.8)) / 0.45);
+        const evergreen = tropical > 0.5 ? -1 : 1;
+        push(kind, 'whole', h, top / modelHeight(kind), angle, stand.shade * tone * evergreen);
+        continue;
+      }
       let kind: TreeKind;
       if (pick < 0.4) kind = 'tree-shrub';
-      else if (meanT > 18 && moisture < 0.45) kind = pick < 0.9 ? 'tree-acacia' : 'tree-dead';
-      else if (coniferShare(meanT) > 0.5) kind = pick < 0.75 ? 'tree-fir' : 'tree-birch';
+      else if (meanT > 18 && moisture < 0.45)
+        kind = pick < 0.95 || f > 0.15 ? 'tree-acacia' : 'tree-dead';
+      // The cold is all conifer: firs and shrubs, no birch (decision 153).
+      else if (conifers > 0.9) kind = 'tree-fir';
+      else if (conifers > 0.5) kind = pick < 0.75 ? 'tree-fir' : 'tree-birch';
       else kind = pick < 0.6 ? 'tree-birch' : pick < 0.85 ? 'tree-broadleaf' : 'tree-oak';
-      push(kind, 'whole', h, scale, angle, tone);
+      push(kind, 'whole', h, scale, angle, tone * (tropicalShare(meanT) > 0.5 ? -1 : 1));
     }
     yield;
   }
@@ -403,11 +458,11 @@ export function treeGeometry(
   return { position, normal, color };
 }
 
-/** One instance list of a part and the near and far meshes its trees are compacted into. */
+/** One instance list of a part and the meshes its trees are compacted into. */
 interface TreeList {
   data: Float32Array;
   range: 'near' | 'edge';
-  /** [near mesh, far mesh]; either may be absent where the kind has no geometry. */
+  /** [near, far, leafless]; any may be absent (no geometry, or an evergreen kind). */
   meshes: (Mesh | null)[];
 }
 
@@ -459,13 +514,17 @@ export class ForestLayer {
   private readonly center = new Vec3d();
   private lastWorld: unknown = null;
   private clearings: ((d: Readonly<Vec3d>) => boolean) | undefined;
+  /** The season the parts were last compacted for: phase (years) and temperature offset. */
+  private compactedSeason = [NaN, NaN];
 
   constructor(
     private readonly terrain: TerrainRenderer,
     lighting: PlanetLighting,
     private readonly climate: ClimateTexture,
-    land: LandShading,
+    private readonly land: LandShading,
   ) {
+    for (const id of new Set(Object.values(BARE)))
+      this.geometries.set(id, treeGeometry(buildModel(MODEL_SPECS[id]!), 'whole'));
     for (const kind of TREE_KINDS) {
       const model = buildModel(MODEL_SPECS[kind]!);
       // The far model where the kit has one (`<kind>-lod`), else the same.
@@ -496,6 +555,8 @@ export class ForestLayer {
     // Crowns inside stands use the near range, whole trees the edge range.
     const range = perMesh('range', 1000);
     const deciduous = perMesh('deciduous', 0);
+    const fallBase = perMesh('fallBase', 0.5);
+    const fallSpread = perMesh('fallSpread', 1);
 
     // Tree frame: up, and two tangents rotated by the instance angle.
     const t0 = normalize(cross(up, vec3(0.0001, 1, 0.0002)));
@@ -527,15 +588,16 @@ export class ForestLayer {
 
     const n0 = attribute('normal', 'vec3');
     const normal = normalize(ax.mul(n0.x).add(up.mul(n0.y)).add(az.mul(n0.z))) as V3;
-    const color = attribute('color', 'vec3').mul(params.w);
-    // Season (decision 43): deciduous crowns brown, then go bare; snow settles on crowns.
+    // A negative shade marks an evergreen tree of a deciduous kind (tropical forest).
+    const color = attribute('color', 'vec3').mul(abs(params.w));
+    const turns = deciduous.mul(step(0, params.w));
+    // Seasons (decisions 43, 153): deciduous crowns turn yellow, orange or red by kind and
+    // tree, then brown; leafless trees are drawn with their bare models. Snow settles on crowns.
     const crown = clamp(color.y.sub(color.x).mul(20), 0, 1);
     const sample = climate.sample(up as V3);
     const t = land.surfaceTemperature(sample, params.x, up as V3);
-    const autumn = smoothstep(10, 3, t).mul(crown).mul(deciduous);
-    const bare = smoothstep(2, -2, t).mul(crown).mul(deciduous);
-    let albedo: V3 = mix(color, land.autumnColor, autumn.mul(0.85)) as V3;
-    albedo = mix(albedo, vec3(0.06, 0.05, 0.04), bare.mul(0.8)) as V3;
+    const hue = fallBase.add(fract(params.z.mul(7.31)).sub(0.5).mul(fallSpread));
+    let albedo: V3 = mix(color, foliage(color as V3, t, hue as F), crown.mul(turns)) as V3;
     // Snow where the ground has it (cold and wet enough, decided as on the ground), on
     // upward-facing crowns.
     const snow = land
@@ -668,6 +730,16 @@ export class ForestLayer {
     const ex = this.terrain.exaggerationUniform.value;
     const shownReach = Math.max(this.nearRange.value, this.edgeRange.value);
     const stale: { tile: TreeTile; nearest: number }[] = [];
+    // A day of season, or a temperature change, re-sorts every part (leafless trees).
+    const phase = this.land.seasonPhase.value;
+    const tempOffset = this.land.temperatureOffset.value;
+    if (
+      !(Math.abs(phase - this.compactedSeason[0]!) < 1 / 365) ||
+      tempOffset !== this.compactedSeason[1]
+    ) {
+      this.compactedSeason = [phase, tempOffset];
+      for (const tile of this.tiles.values()) tile.compactedAt = null;
+    }
     for (const [s, tile] of this.tiles) {
       tile.seen = false;
       if (wanted.has(s)) {
@@ -719,6 +791,8 @@ export class ForestLayer {
     const ey0 = eye.y - tile.origin.y;
     const ez0 = eye.z - tile.origin.z;
     const lodAt2 = this.lodDistance.value ** 2;
+    const seasonal = Math.cos((this.land.seasonPhase.value - WARMEST_PHASE) * 2 * Math.PI);
+    const offset = this.land.temperatureOffset.value;
     for (const list of tile.lists) {
       // Trees a step beyond the range stay, so the shader's fade never runs out of them
       // before the next compaction.
@@ -727,10 +801,11 @@ export class ForestLayer {
       const r2 = r * r;
       const d = list.data;
       const n = d.length / INSTANCE_FLOATS;
-      const counts = [0, 0];
+      const counts = [0, 0, 0];
       const near = list.meshes[0] ?? null;
       const far = list.meshes[1] ?? near;
-      const targets = [near, far];
+      const bare = list.meshes[2] ?? null;
+      const targets = [near, far, bare];
       for (let i = 0; i < n; i++) {
         const o = i * INSTANCE_FLOATS;
         const h = Math.max(d[o + 6]!, 0) * ex;
@@ -739,16 +814,28 @@ export class ForestLayer {
         const dz = d[o + 2]! + d[o + 5]! * h - ez0;
         const dist2 = dx * dx + dy * dy + dz * dz;
         if (dist2 > r2) continue;
-        const lod = dist2 < lodAt2 || !list.meshes[1] ? 0 : 1;
-        const mesh = targets[lod];
+        let slot: number = dist2 < lodAt2 || !list.meshes[1] ? 0 : 1;
+        // Leafless in winter (decision 153): each tree below its own threshold, the
+        // surface temperature the shaders compute, takes its bare model.
+        if (bare && d[o + 9]! > 0) {
+          const hemisphere = Math.max(-1, Math.min(1, d[o + 4]! * 20));
+          const t = d[o + 10]! + d[o + 11]! * seasonal * hemisphere + offset;
+          const angle = d[o + 8]!;
+          const jitter = ((angle * 3.17) % 1) - 0.5;
+          if (t < LEAFLESS_T + 2 * LEAFLESS_JITTER * jitter) slot = 2;
+        }
+        const mesh = targets[slot];
         if (!mesh) continue;
         const g = mesh.geometry as InstancedBufferGeometry;
-        const k = mesh === near ? counts[0]!++ : counts[1]!++;
+        const k = counts[slot === 1 && far === near ? 0 : slot]!++;
         (g.getAttribute('iBase').array as Float32Array).set(d.subarray(o, o + 3), k * 3);
         (g.getAttribute('iUp').array as Float32Array).set(d.subarray(o + 3, o + 6), k * 3);
-        (g.getAttribute('iParams').array as Float32Array).set(d.subarray(o + 6, o + 10), k * 4);
+        (g.getAttribute('iParams').array as Float32Array).set(
+          d.subarray(o + 6, o + GPU_FLOATS),
+          k * 4,
+        );
       }
-      for (const [j, mesh] of [near, far].entries()) {
+      for (const [j, mesh] of [near, far, bare].entries()) {
         if (!mesh || (j === 1 && mesh === near)) continue;
         const g = mesh.geometry as InstancedBufferGeometry;
         const count = counts[j]!;
@@ -777,8 +864,9 @@ export class ForestLayer {
       if (count === 0) continue;
       const [kind, variant] = key.split('/') as [TreeKind, TreeVariant];
       const pair: (Mesh | null)[] = [];
-      for (const lod of [0, 1]) {
-        const geo = this.geometries.get(`${key}/${lod}`);
+      const bareId = BARE[kind];
+      for (const lod of [0, 1, 2]) {
+        const geo = this.geometries.get(lod === 2 ? (bareId ?? '') : `${key}/${lod}`);
         if (!geo || geo.position.length === 0) {
           pair.push(null);
           continue;
@@ -796,7 +884,10 @@ export class ForestLayer {
         mesh.userData.variant = variant;
         mesh.userData.lod = lod;
         mesh.userData.range = variant === 'crown' ? this.nearRange.value : this.edgeRange.value;
-        mesh.userData.deciduous = DECIDUOUS.has(kind) ? 1 : 0;
+        mesh.userData.deciduous = DECIDUOUS.has(kind) && lod < 2 ? 1 : 0;
+        const fall = FALL_HUE[kind] ?? [0.5, 1];
+        mesh.userData.fallBase = fall[0];
+        mesh.userData.fallSpread = fall[1];
         mesh.userData.triangles = geo.position.length / 9;
         mesh.frustumCulled = false;
         mesh.visible = false;

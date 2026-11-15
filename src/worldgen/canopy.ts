@@ -9,7 +9,8 @@
  *
  * - **Cover.** Closed canopy where the forest density (decision 44) reaches
  *   the canopy threshold, 0.42, the contour the terrain's canopy shading
- *   follows (decision 71).
+ *   follows (decision 71). The trees at the edge stand lower, growing to the
+ *   stand's height over EDGE_RISE of density (decision 153).
  * - **Stands.** A forest is a mosaic of stands: cells of a 3D Voronoi diagram
  *   over points on the sea-level sphere, sites jittered in a lattice of
  *   `STAND_CELL` m, so the sphere cuts them into irregular polygons 100–400 m
@@ -33,8 +34,8 @@ export const STAND_CELL = 220;
 export const LUMP_CELL = 45;
 export const LUMP = 0.12;
 /** Share of young stands, and their height relative to a mature stand of their kind. */
-export const YOUNG_SHARE = 0.15;
-export const YOUNG_HEIGHT = 0.55;
+export const YOUNG_SHARE = 0.1;
+export const YOUNG_HEIGHT = 0.75;
 /** Mature stand heights (m): [lowest, spread] by kind. */
 export const STAND_HEIGHTS = {
   conifer: [18, 8],
@@ -95,7 +96,34 @@ const smooth = (e0: number, e1: number, x: number) => {
 
 /** Conifer share of stands at an annual mean temperature (°C), as the terrain's canopy shading. */
 export function coniferShare(meanT: number): number {
-  return smooth(9, 3, meanT);
+  return smooth(CONIFER_T[0], CONIFER_T[1], meanT);
+}
+
+/**
+ * Annual mean temperatures (°C) between which stands turn from broadleaf to
+ * conifer: all conifer in the cold (owner, decision 153). The terrain's canopy
+ * shading uses the same pair.
+ */
+export const CONIFER_T = [11, 6] as const;
+
+/**
+ * Share of pines among a conifer stand's trees: none in the cold, where stands
+ * are all pointed firs, up to 40% in warm conifer forest (decision 153).
+ */
+export function pineShare(meanT: number): number {
+  return 0.4 * smooth(4, 9, meanT);
+}
+
+/**
+ * How far the canopy has risen at a forest density (decision 153): 0 on the
+ * edge's contour, 1 a little inside it. The canopy shell rises from the ground
+ * at the edge by this; trees there stand at EDGE_TREES of the stand's height
+ * and grow to full height inside.
+ */
+export const EDGE_RISE = 0.12;
+export const EDGE_TREES = 0.55;
+export function edgeRise(forest: number): number {
+  return smooth(CANOPY_THRESHOLD, CANOPY_THRESHOLD + EDGE_RISE, forest);
 }
 
 /** Tropical share at an annual mean temperature (°C). */
@@ -199,5 +227,5 @@ export function canopyHeight(
 ): number {
   if (forest < CANOPY_THRESHOLD) return 0;
   const stand = standAt(x, y, z, coniferShare(meanT), tropicalShare(meanT), seed);
-  return standTop(stand, x, y, z, seed);
+  return standTop(stand, x, y, z, seed) * (EDGE_TREES + (1 - EDGE_TREES) * edgeRise(forest));
 }

@@ -368,6 +368,22 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     detail: true,
   },
   {
+    // 55 m over the farmland view's lowland among broadleaf woods (decision 153): woods'
+    // edges, their fringe and the seasons (TEMP_OFFSET turns them to fall and winter).
+    name: 'woodland',
+    dLat: 0,
+    dLon: 0,
+    altitude: 0,
+    tilt: 0,
+    heading: 0,
+    localTime: 15,
+    target: 'farmland',
+    observerBack: 600,
+    eyeHeight: 55,
+    pitch: -10 * DEG,
+    detail: true,
+  },
+  {
     // 100 m over dense forest (decision 148): stands, crowns and the shell's skyline.
     name: 'canopy',
     dLat: 0,
@@ -1073,7 +1089,9 @@ it('renders preview views', async () => {
       altitude: process.env.ALT ? Number(process.env.ALT) : listed.altitude,
       tilt: process.env.TILT ? Number(process.env.TILT) * DEG : listed.tilt,
     };
-    const target = view.target ? targets[view.target] : null;
+    // TARGET=<name> moves a targeted view to another target (decision 153).
+    const targetName = (process.env.TARGET as typeof view.target | undefined) ?? view.target;
+    const target = view.target && targetName ? targets[targetName] : null;
     // Midwinter: about 150 days after the campaign's mid-August start in the main
     // continent's hemisphere, mid-July of the next year in the other.
     const v =

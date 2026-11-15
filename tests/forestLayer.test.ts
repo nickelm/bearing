@@ -127,7 +127,7 @@ describe('tree placement (decision 148)', () => {
   it("grows the stand's kind: conifers in the cold, broadleaf in the warmth, acacia in dry heat", () => {
     const cold = placeTrees(t, data(k7, 1), opts, 1, climateOf(-5));
     expect(count(cold, 'tree-fir') + count(cold, 'tree-pine')).toBe(count(cold));
-    const warm = placeTrees(t, data(k7, 1), opts, 1, climateOf(14));
+    const warm = placeTrees(t, data(k7, 1), opts, 1, climateOf(18));
     expect(count(warm, 'tree-fir') + count(warm, 'tree-pine')).toBe(0);
     expect(count(warm, 'tree-oak')).toBeGreaterThan(0);
     expect(count(warm, 'tree-birch')).toBeGreaterThan(0);
@@ -144,10 +144,10 @@ describe('tree placement (decision 148)', () => {
       const R = opts.radius;
       const s = standAt(fir[i + 3]! * R, fir[i + 4]! * R, fir[i + 5]! * R, 1, 0, seed);
       const top = fir[i + 7]! * height;
-      expect(top).toBeGreaterThanOrEqual(s.height * (1 - LUMP) * 0.92 - 1e-3);
-      expect(top).toBeLessThanOrEqual(s.height * (1 + LUMP) * 1.06 + 1e-3);
+      expect(top).toBeGreaterThanOrEqual(s.height * (1 - LUMP) * 0.85 - 1e-3);
+      expect(top).toBeLessThanOrEqual(s.height * (1 + LUMP) * 1.1 + 1e-3);
       expect(top).toBeGreaterThanOrEqual(
-        STAND_HEIGHTS.conifer[0] * YOUNG_HEIGHT * (1 - LUMP) * 0.92 - 1e-3,
+        STAND_HEIGHTS.conifer[0] * YOUNG_HEIGHT * (1 - LUMP) * 0.85 - 1e-3,
       );
     }
     expect(CANOPY_THRESHOLD).toBe(0.42);
@@ -162,5 +162,21 @@ describe('tree placement (decision 148)', () => {
     expect(crown.position.length).toBeGreaterThan(0);
     for (let i = 0; i < whole.color.length; i++)
       expect(whole.color[i]).toBeLessThanOrEqual(oak.color[i]! + 1e-6);
+  });
+  it('fringes a forest with its own kinds, and keeps the cold free of birch (decision 151)', () => {
+    // Forest in the low rows, fringe density beyond: warm and dry enough for acacia in the open.
+    const edged = data(k7, (_x, y) => (y < 8 ? 1 : 0.35));
+    const warm = placeTrees(t, edged, opts, 1, climateOf(24, 0.3));
+    expect(count(warm, 'tree-acacia')).toBe(0);
+    expect(count(warm, 'tree-broadleaf') + count(warm, 'tree-oak')).toBeGreaterThan(0);
+    const cold = placeTrees(
+      t,
+      data(k7, (_x, y) => (y < 8 ? 1 : 0.3)),
+      opts,
+      1,
+      climateOf(-2),
+    );
+    expect(count(cold, 'tree-birch') + count(cold, 'tree-pine')).toBe(0);
+    expect(count(cold, 'tree-fir')).toBeGreaterThan(0);
   });
 });
