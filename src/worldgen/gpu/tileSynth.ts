@@ -196,6 +196,9 @@ export const TILE_SYNTH_TUNING = {
   marshRise: 3.5,
   marshPatch: 6000,
   marshPool: 380,
+  /** River bars (decision 146): out to this many half-widths beyond the bank, up to this rise above the water (m). */
+  barWidths: 1.2,
+  barRise: 1.6,
   /** Lake outlines (decision 130): warp in global cells; aridity over which lakes become salt pans. */
   lakeWarp: 0.9,
   playaArid: [0.45, 0.65] as [number, number],
@@ -988,6 +991,21 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
         let stands = smoothstep(0.0, 0.35, noise3(d * (R / 400.0) + vec3f(2.0, 6.0, 1.0), 0u));
         forest = mix(forest * 0.2, 0.65 * stands, salt * smoothstep(0.2, 0.45, warmCoast));
       }
+    }
+  }
+  // River banks (decision 146): ground just outside a channel and within about a
+  // meter and a half of its water is a bar, sand on lowland rivers and gravel on steep
+  // or glacial ones, in patches that alternate along and across the river (point
+  // bars, shoals). Not in marshes, under lakes or in towns' ground (none here yet).
+  if (h > 0.0 && riverSurf > NO_LAKE * 0.5 && h >= lakeOut && biomeOut != ${TileCover.Marsh}u) {
+    let barWidth = max(${f(t.barWidths)} * riverHalf, 1.5 * sampleSpacing);
+    let beyond = riverDist - riverHalf;
+    let rise = h - riverSurf;
+    let bars = smoothstep(-0.1, 0.25, noise3(d * (R / max(8.0 * riverHalf, 300.0)) + vec3f(1.7, 3.3, 9.1), 512u));
+    if (beyond > -0.5 * sampleSpacing && beyond < barWidth && rise < ${f(t.barRise)} && bars > 0.5) {
+      let steep = smoothstep(0.015, 0.04, globalSlope) + smoothstep(0.45, 0.85, masks.y);
+      biomeOut = select(${TileCover.Beach}u, ${TileCover.Gravel}u, steep > 0.5);
+      forest = 0.0;
     }
   }
   // Sand on the beaches of gentle coves (decision 146); bare rock on islets and stacks.

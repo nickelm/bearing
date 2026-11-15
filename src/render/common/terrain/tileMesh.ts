@@ -131,6 +131,12 @@ export interface MeshOptions {
   detail: Noise3;
   /** Flat pads graded into the surface (airfields); none when absent. */
   grading?: SurfaceGrading | null;
+  /**
+   * `shore` also measures lake shores (decision 146): where a lake is nearer than
+   * the sea, the distance to its shoreline, positive on the lake. Marsh pools (marsh
+   * off the global lake's cells) keep the sea's distance. Off for the strategic map, whose coastal lines read `shore`.
+   */
+  lakeShore?: boolean;
 }
 
 /** Shared index buffer: grid triangles split along (i, j)–(i+1, j+1), plus skirts. */
@@ -287,10 +293,11 @@ const OPEN_GROUND: Partial<Record<number, Rgb>> = {
   [Biome.TropicalRainforest]: hexRgb(0x6e8b3d),
 };
 
-/** Ground covers only tiles produce (decision 146): sand from Part I's palette, marsh olive. */
+/** Ground covers only tiles produce (decision 146): sand from Part I's palette, marsh olive, gravel gray. */
 const TILE_COVER_COLORS: Partial<Record<number, Rgb>> = {
   [TileCover.Beach]: [0.788, 0.706, 0.541],
   [TileCover.Marsh]: [0.42, 0.478, 0.306],
+  [TileCover.Gravel]: [0.6, 0.57, 0.52],
 };
 
 function hexRgb(h: number): Rgb {
@@ -501,6 +508,21 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
       const rV = (raw(sx, sy + 1) - raw(sx, sy - 1)) / (2 * dv);
       const g = Math.hypot(rU, rV);
       shore[v] = Math.max(-SHORE_CLAMP, Math.min(SHORE_CLAMP, -raw(sx, sy) / Math.max(g, 1e-6)));
+      if (opts.lakeShore && dataLake(sx, sy) > NO_LAKE / 2) {
+        const depth = (x: number, y: number) => {
+          const l = dataLake(x, y);
+          return l > NO_LAKE / 2 ? l - raw(x, y) : -LAKE_DRY;
+        };
+        const lU = (depth(sx + 1, sy) - depth(sx - 1, sy)) / (2 * du);
+        const lV = (depth(sx, sy + 1) - depth(sx, sy - 1)) / (2 * dv);
+        const lake = depth(sx, sy) / Math.max(Math.hypot(lU, lV), 1e-6);
+        // Marsh pools (marsh ground off the global lake's cells) keep the sea's distance.
+        const m = materialAt(sources.data, dox + sx * dscale, doy + sy * dscale);
+        const pool = (m & 0xff) === TileCover.Marsh && ((m >>> 16) & 1) === 0;
+        if (!pool && Math.abs(lake) < Math.abs(shore[v]!)) {
+          shore[v] = Math.max(-SHORE_CLAMP, Math.min(SHORE_CLAMP, lake));
+        }
+      }
       const edge = i === 0 || j === 0 || i === TILE_SEGMENTS || j === TILE_SEGMENTS;
       const fx = dox + sx * dscale;
       const fy = doy + sy * dscale;

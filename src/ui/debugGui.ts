@@ -155,6 +155,9 @@ export interface LightingGuiParams {
   farmland: boolean;
   /** How readable sub-pixel rivers are (0 = physically faint). */
   riverLegibility: number;
+  /** White water on fast reaches and the dark river bank (decision 146). */
+  riverWhiteWater: boolean;
+  riverBanks: boolean;
   /** Roads and airfield pavement drawn on the terrain. */
   roads: boolean;
   /** How readable sub-pixel roads are. */
@@ -591,6 +594,12 @@ export class DebugGui {
       .onChange(() => changed(light));
     f.add(light, 'riverLegibility', 0, 1, 0.05)
       .name('River legibility')
+      .onChange(() => changed(light));
+    f.add(light, 'riverWhiteWater')
+      .name('River white water')
+      .onChange(() => changed(light));
+    f.add(light, 'riverBanks')
+      .name('River banks')
       .onChange(() => changed(light));
     f.add(light, 'roads')
       .name('Roads and airfields')

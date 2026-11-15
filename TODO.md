@@ -585,6 +585,10 @@ Simulation view (needs S1's `render/sim/` split):
   - [ ] Beach and marsh edges step with the 48 m samples (per-sample covers); a smoother edge would need the cover as a field the shader thresholds
   - [ ] The strategic map's wetland mask (decision 81) could take the tiles' marsh rule on the global grid
   - [ ] Sea state from the surface wind once the weather reports it near the ground (the shader takes only the wind's direction, read at the camera's height, and the storm channel)
+- [x] River banks and bars (sand, gravel), a darker bank line, white water on fast reaches, foam on lake shores (decision 147)
+  - [ ] Owner: white water and lake foam in motion in the browser; the GUI's "River white water" and "River banks"
+  - [ ] Point bars on the inside of bends: store each bend's side in the river index (the meander code knows it)
+  - [ ] Lake foam is about one mesh vertex wide at level 7; a finer shore distance (per fragment from the lake depth) would sharpen it
 
 ### V3. Models and bases
 

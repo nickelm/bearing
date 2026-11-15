@@ -31,8 +31,8 @@ import {
   dFdy,
   dot,
   float,
-  fwidth,
   Fn,
+  fwidth,
   If,
   length,
   max,
@@ -46,6 +46,7 @@ import {
   smoothstep,
   sqrt,
   step,
+  time,
   uniform,
   varyingProperty,
   vec3,
@@ -92,7 +93,7 @@ import {
 } from '../infra/roadShading';
 import { FaceSampler, tileGridCoordinate } from './faceShading';
 import { facetNormal } from './facets';
-import { LandShading } from './landShading';
+import { LandShading, periodicValueNoise } from './landShading';
 import { DEFAULT_LOD, selectTiles } from '../../common/terrain/quadtree';
 import {
   aheadView,
@@ -437,7 +438,18 @@ export class TerrainRenderer {
         mix(asphalt, painted, concreteShare) as unknown as typeof normal,
       );
       const roadRadiance = L.shadeDiffuse(roadAlbedo, normal, positionWorld, at);
-      const surface = mix(surfaceWater, foam, falls);
+      // The dark, wet bank (Part I), then falls and the white water of fast reaches (decision 146).
+      const banked = mix(surfaceWater, surfaceWater.mul(0.72), riverCover.w.mul(dry));
+      // White water churns: periodic noise on the wrapped coordinates, its third axis
+      // running with time, so foam boils in place rather than tiling with the segments.
+      const churnAt = wrapped.add(vec3(0, 0, time.mul(1.6)));
+      const churn = periodicValueNoise(churnAt, 8)
+        .mul(0.6)
+        .add(periodicValueNoise(churnAt, 4).mul(0.4))
+        .mul(0.5)
+        .add(0.5);
+      const white = clamp(riverCover.z.mul(churn.mul(2.2).sub(0.5)), 0, 1).mul(this.land.enabled);
+      const surface = mix(banked, foam, max(falls, white));
       const withRoads = mix(surface, roadRadiance, paved.x.mul(dry));
       // Settlement lights on the night side (sodium orange), plus a glow along paved roads.
       // By day, at sea and with lights off, none of it runs.
@@ -533,7 +545,9 @@ export class TerrainRenderer {
       this.water.reliefScale.value = world.reliefScale;
       this.land.reliefScale.value = world.reliefScale;
     }
-    this.rivers = world?.rivers ? new RiverTables(world.rivers, world.radius) : null;
+    this.rivers = world?.rivers
+      ? new RiverTables(world.rivers, world.radius, { encodeGradient: true })
+      : null;
     this.roads = world?.infra
       ? new RiverTables(world.infra, world.radius, { coarseMinWidth: 0, coarseCap: 300 })
       : null;
@@ -602,6 +616,7 @@ export class TerrainRenderer {
       reliefScale: w.reliefScale,
       mode: this.mode,
       detail: this.detail,
+      lakeShore: true,
       grading: w.grading ?? null,
     });
     const g = new BufferGeometry();

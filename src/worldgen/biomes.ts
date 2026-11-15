@@ -40,6 +40,8 @@ export const TileCover = {
   Beach: 32,
   /** Reeds, sedge and pools at the water table: floodplains, lake shores, low coasts. */
   Marsh: 33,
+  /** Gravel and cobbles on the banks of steep or glacial rivers. */
+  Gravel: 34,
 } as const;
 
 export const BIOME_NAMES: readonly string[] = [

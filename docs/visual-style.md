@@ -57,6 +57,7 @@ Across all five, edges show slight stair-stepping and the image has faint grain,
 - **Coasts.** Headlands of coasts with relief end in cliffs, with rocks and stacks offshore; the coves between them hold sand beaches (`#C9B48A`) over a pale, shallow shelf. Glaciated coasts keep their bare-rock skerries, and islets raised from the sea are bare rock (decision 146).
 - **Wetlands.** Flat, wet ground at a river's, a lake's or the sea's level is olive marsh (`#6B7A4E`) with dark pools drawn as water; warm, low coasts grow mangroves (decision 146).
 - **Rivers run downhill.** A river's water surface never rises downstream, through canyons, confluences and falls alike (decision 146).
+- **River banks and white water.** Bars of sand on lowland rivers and gravel on steep or glacial ones lie along the water, and a narrow darker band marks the bank where a river is drawn at its true width. Fast reaches foam along their banks and, on the steepest, across the channel; lakes have a faint foam line at the shore (decision 147).
 - **Farmland.** Near settlements and on flat lowland, a Voronoi field pattern assigns each cell a crop color (wheat, green crop, fallow, pasture). Field cells are a few hundred meters across with slight color variation. Fields lie where the strategic map puts its farmland (settled land in farmable biomes, decision 80), on flat lowland; each face takes the field at its center, so field edges follow facets, and distant fields draw toward their mean color (decision 127).
 - **Rivers.** Rivers render as bright ribbons that mirror the sky color, with a narrow darker bank. They should be the most visible terrain feature from altitude, since they matter tactically.
 - **Roads.** Thin, muted gray-brown lines from vector data, visible below about 3 km altitude.
@@ -192,6 +193,7 @@ Starting values; final values get tuned in the model viewer and on the globe.
 | Shallow water | `#2F6B73` |
 | Beach and sand | `#C9B48A`, `#B9A276` |
 | Wetland | `#6B7A4E` (marsh), dark pools |
+| River gravel | `#999185` |
 | Grassland | `#7A8C4A`, `#6B7C40`, `#8A9A55` |
 | Farmland | `#C8A85A` (wheat), `#6E8B3D` (green crop), `#8A6A45` (fallow), `#7F944F` (pasture) |
 | Temperate forest | `#2F4A2A`, `#3B5A33`, `#466B3B` |

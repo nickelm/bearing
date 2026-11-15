@@ -258,6 +258,8 @@ export class WaterShading {
   readonly foamWidth = uniform(90);
   /** Foam amount multiplier (0 = none). */
   readonly foamStrength = uniform(1);
+  /** Lake shore foam relative to the sea's (decision 146). */
+  readonly lakeFoam = uniform(0.7);
   readonly waves = waveSet();
   readonly swell = swellSet();
   /** Surface wind direction (world, unit, or zero in calm air): the gusts' streaks run along it (decision 146). */
@@ -463,7 +465,10 @@ export class WaterShading {
         const sky = reflected.mul(fresnel);
         // Coastal foam.
         const shoreDistance = max(i.shore, 0);
-        const band = this.foamWidth;
+        // Lakes get a narrower, fainter band than the sea (decision 146): shorter waves.
+        // The mesh's coast distance measures their shores (tileMesh `lakeShore`).
+        const onLake = lake.mul(float(1).sub(sea));
+        const band = this.foamWidth.mul(mix(float(1), float(0.6), onLake));
         const inBand = float(1).sub(smoothstep(0, max(band, footprint.mul(1.5)), shoreDistance));
         const surf = cos(shoreDistance.div(14).add(time.mul(0.8)))
           .mul(0.5)
@@ -479,7 +484,7 @@ export class WaterShading {
           .mul(mix(float(0.3), pattern, detail))
           .mul(clamp(band.div(footprint), 0, 1))
           .mul(this.foamStrength)
-          .mul(sea);
+          .mul(max(sea, onLake.mul(this.lakeFoam)));
         // Whitecaps (decision 146): where the sea runs high, the crests of the shorter
         // waves break; once those waves are below a few pixels the caps average out.
         const capped = smoothstep(1.25, 1.9, this.seaState.mul(rough));

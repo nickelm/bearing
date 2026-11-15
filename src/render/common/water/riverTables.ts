@@ -56,6 +56,13 @@ export interface SegmentTableOptions {
    */
   coarseLevel?: number;
   coarseMerge?: number;
+  /**
+   * Rivers in the simulation view (decision 146): each endpoint's direction is
+   * scaled by 1 + the reach's gradient (m/m, from the river index's water surface,
+   * at most 0.5), so the shader can find fast water without another buffer; it
+   * normalizes the endpoints. Off for roads and the strategic map.
+   */
+  encodeGradient?: boolean;
   coarseMargin?: number;
   /** Build the fine lists (default true); the strategic map draws no level-7 tiles. */
   fineLists?: boolean;
@@ -92,6 +99,18 @@ export class RiverTables {
 
     // Coarse chords: runs of up to COARSE_MERGE consecutive, connected segments.
     const chords: number[] = [];
+    const chordGradient: number[] = [];
+    const segGradient = (k: number) => {
+      if (F < 12) return 0;
+      const o = k * F;
+      const dot =
+        fineSrc[o]! * fineSrc[o + 3]! +
+        fineSrc[o + 1]! * fineSrc[o + 4]! +
+        fineSrc[o + 2]! * fineSrc[o + 5]!;
+      const len = Math.acos(Math.min(1, dot)) * radius;
+      const drop = fineSrc[o + 8]! - fineSrc[o + 9]!;
+      return drop < 1e8 && len > 1 ? Math.min(0.5, Math.max(0, drop) / len) : 0;
+    };
     for (let s = 0; s < n;) {
       let e = s;
       let width = Math.max(fineSrc[s * F + 6]!, fineSrc[s * F + 7]!);
@@ -118,6 +137,9 @@ export class RiverTables {
         width,
         width,
       );
+      let g = 0;
+      for (let k = s; k <= e; k++) g = Math.max(g, segGradient(k));
+      chordGradient.push(g);
       s = e + 1;
     }
     const chordCount = chords.length / 8;
@@ -127,10 +149,21 @@ export class RiverTables {
     src.set(chords, n * 8);
     const total = n + chordCount;
     this.segments = new Float32Array(Math.max(1, total) * 8);
+    // Gradient per fine segment from its water surface (12-field river segments only),
+    // and per chord the steepest of the segments it merges.
+    const gradient = new Float64Array(total);
+    if (options.encodeGradient) {
+      for (let k = 0; k < n; k++) gradient[k] = segGradient(k);
+      for (let c = 0; c < chordCount; c++) gradient[n + c] = chordGradient[c]!;
+    }
     for (let s = 0; s < total; s++) {
       const o = s * 8;
-      this.segments.set([src[o]!, src[o + 1]!, src[o + 2]!, src[o + 6]! / 2], o);
-      this.segments.set([src[o + 3]!, src[o + 4]!, src[o + 5]!, src[o + 7]! / 2], o + 4);
+      const k = 1 + gradient[s]!;
+      this.segments.set([src[o]! * k, src[o + 1]! * k, src[o + 2]! * k, src[o + 6]! / 2], o);
+      this.segments.set(
+        [src[o + 3]! * k, src[o + 4]! * k, src[o + 5]! * k, src[o + 7]! / 2],
+        o + 4,
+      );
     }
 
     const fine = new Map<string, number[]>();

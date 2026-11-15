@@ -156,7 +156,7 @@ function hash3(p: V3): F {
  * Value noise in [-1, 1], periodic with `period` lattice cells along each axis,
  * so it tiles with WAVE_PERIOD when `period · cell = WAVE_PERIOD`.
  */
-function periodicValueNoise(p: V3, cell: number): F {
+export function periodicValueNoise(p: V3, cell: number): F {
   const period = WAVE_PERIOD / cell;
   const q = p.div(cell);
   const i = floor(q);

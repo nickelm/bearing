@@ -65,4 +65,25 @@ describe('river tables', () => {
     });
     expect(minor.rangeFor(here(2)).count).toBe(0);
   });
+
+  it("encodes each reach's gradient in its endpoints' length for the simulation view (decision 146)", () => {
+    const rivers = straightRiver(30);
+    rivers.cells = Int32Array.from([0, 1, 2, 3, 4, 5, 6, 7]);
+    // About 8.7 km falling 130 m: a 1.5% gradient.
+    const height = Float32Array.from([200, 181, 162, 144, 125, 107, 88, 70]);
+    const index = new RiverIndex(rivers, { height, radius: PLANET_RADIUS });
+    const plain = new RiverTables(index, PLANET_RADIUS);
+    const coded = new RiverTables(index, PLANET_RADIUS, { encodeGradient: true });
+    const len = (t: RiverTables, s: number) =>
+      Math.hypot(t.segments[s * 8]!, t.segments[s * 8 + 1]!, t.segments[s * 8 + 2]!);
+    expect(len(plain, 2)).toBeCloseTo(1, 6);
+    const g = len(coded, 2) - 1;
+    expect(g).toBeGreaterThan(0.01);
+    expect(g).toBeLessThan(0.025);
+    // Directions are unchanged once normalized; half-widths too.
+    for (let k = 0; k < 3; k++) {
+      expect(coded.segments[16 + k]! / len(coded, 2)).toBeCloseTo(plain.segments[16 + k]!, 6);
+    }
+    expect(coded.segments[19]).toBeCloseTo(plain.segments[19]!, 6);
+  });
 });

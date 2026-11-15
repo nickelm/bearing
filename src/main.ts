@@ -910,6 +910,8 @@ async function main(): Promise<void> {
     facets: globe.terrain.land.facets.value > 0,
     farmland: globe.terrain.land.farmland.value > 0,
     riverLegibility: globe.terrain.riverStyle.legibility.value,
+    riverWhiteWater: true,
+    riverBanks: true,
     roads: true,
     roadLegibility: globe.terrain.roadStyle.legibility.value,
     nightLights: globe.terrain.roadStyle.lights.value,
@@ -931,6 +933,8 @@ async function main(): Promise<void> {
     globe.terrain.land.facets.value = l.facets ? 1 : 0;
     globe.terrain.land.farmland.value = l.farmland ? 1 : 0;
     globe.terrain.riverStyle.legibility.value = l.riverLegibility;
+    globe.terrain.riverStyle.whiteWater.value = l.riverWhiteWater ? 1 : 0;
+    globe.terrain.riverStyle.bank.value = l.riverBanks ? 1 : 0;
     globe.terrain.roadStyle.enabled.value = l.roads ? 1 : 0;
     globe.terrain.roadStyle.legibility.value = l.roadLegibility;
     globe.terrain.roadStyle.lights.value = l.nightLights;
