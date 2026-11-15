@@ -44,6 +44,8 @@ const NOTES: Record<ScenarioName, string> = {
   'belly-ditching': 'A glide with the gear up into the water: the fuselage, not a wheel, finds it.',
   excursion:
     'Military power with a pedal held from 6 s in a crosswind: off the side of the runway.',
+  'fuel-out':
+    'Limited fuel: a takeoff in afterburner on 120 kg burns the tank dry and the engine flames out.',
   'stand-gale':
     'Parked with the brake set at military power, then a side wind rising from 15 to 60 m/s.',
 };

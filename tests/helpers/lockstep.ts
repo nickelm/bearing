@@ -308,7 +308,8 @@ export type ScenarioName =
   | 'free-pedal-roll'
   | 'belly-ditching'
   | 'excursion'
-  | 'stand-gale';
+  | 'stand-gale'
+  | 'fuel-out';
 
 export const SCENARIOS: readonly ScenarioName[] = [
   'circuit',
@@ -326,6 +327,7 @@ export const SCENARIOS: readonly ScenarioName[] = [
   'belly-ditching',
   'excursion',
   'stand-gale',
+  'fuel-out',
 ];
 
 export function runScenario(name: ScenarioName, lib: LockstepLib = LIB, hook?: StepHook): Digest {
@@ -675,6 +677,28 @@ export function runScenario(name: ScenarioName, lib: LockstepLib = LIB, hook?: S
             ctl.parkingBrake = true;
             ctl.throttle = t < 10 ? MIL_DETENT : 0;
             m.wind.copy(side).scale(t < 10 ? 0 : Math.min(60, 15 + 2 * (t - 10)));
+          },
+        },
+        hook,
+      );
+    }
+    case 'fuel-out': {
+      // Limited fuel: a takeoff in afterburner on 120 kg burns the tank dry, the engine
+      // flames out, and the aircraft glides with a falling mass.
+      lib.spawnOnRunway(m, runway, end);
+      m.unlimitedFuel = false;
+      m.fuel = 120;
+      return record(
+        lib,
+        {
+          m,
+          ground: flat,
+          runways: [runway],
+          seconds: 60,
+          control: (i, ctl) => {
+            ctl.throttle = 1;
+            ctl.pitch = m.telemetry.cas > 150 * KNOT && m.telemetry.pitch < 0.17 ? 0.5 : 0;
+            ctl.gearDown = i * FLIGHT_STEP < 20;
           },
         },
         hook,

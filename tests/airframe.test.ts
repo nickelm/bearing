@@ -193,7 +193,17 @@ describe('ground contact', () => {
 
   it('writes nothing on water, and releases the point in the air', () => {
     const { b, w, up } = resting(0.1);
+    // A loaded wheel first, so "nothing written" is not the same as "cleared".
+    wheelForce(b, w, STRUT, TIRE, 0, plain(), up, new Vec3d(), new Vec3d());
+    expect(w.load).toBeGreaterThan(0);
+    const before = {
+      load: w.load,
+      compression: w.compression,
+      anchor: w.anchor!.clone(),
+      surface: w.surface,
+    };
     const fw = new Vec3d();
+    const mb = new Vec3d();
     expect(
       wheelForce(
         b,
@@ -204,21 +214,26 @@ describe('ground contact', () => {
         plain(() => true),
         up,
         fw,
-        new Vec3d(),
+        mb,
       ),
     ).toBe(ON_WATER);
-    expect(w.load).toBe(0);
-    expect(w.anchor).toBeNull();
+    expect(w.load).toBe(before.load);
+    expect(w.compression).toBe(before.compression);
+    expect(w.anchor!.equals(before.anchor)).toBe(true);
+    expect(w.surface).toBe(before.surface);
     expect(fw.length()).toBe(0);
-    wheelForce(b, w, STRUT, TIRE, 0, plain(), up, new Vec3d(), new Vec3d());
-    expect(w.anchor).not.toBeNull();
+    expect(mb.length()).toBe(0);
+    // In the air: release clears load, anchor and surface and keeps the compression.
     release(w);
     expect(w.anchor).toBeNull();
     expect(w.load).toBe(0);
+    expect(w.surface).toBeNull();
+    expect(w.compression).toBe(before.compression);
     const high = resting(-0.5);
     expect(
       wheelForce(high.b, high.w, STRUT, TIRE, 0, plain(), high.up, new Vec3d(), new Vec3d()),
     ).toBe(0);
+    expect(high.w.compression).toBe(0);
   });
 
   it('holds a braked wheel with friction up to its cap, then lets it slide', () => {

@@ -11,10 +11,17 @@
  *   micrometer and the steps, crash and event kinds exactly. Node 22 and Node 24
  *   part by at most 4·10⁻⁹ m over the 519 s circuit.
  *
- * A change meant to alter the Kestrel's flight re-records the fixture with
- * `LOCKSTEP_RECORD=1 npx vitest run tests/flightLockstep.test.ts`, once per
- * Node version (`PATH=/opt/node24/bin:$PATH node node_modules/vitest/vitest.mjs
- * run …` in a cloud session), and says so in its decision.
+ * A change meant to alter the Kestrel's flight re-records the fixture and
+ * says so in its decision:
+ *
+ * 1. `LOCKSTEP_RECORD=reset npx vitest run tests/flightLockstep.test.ts` under
+ *    one Node version starts the fixture over: runs and that version's hashes.
+ * 2. `LOCKSTEP_RECORD=1 …` under each other version adds its hashes, and fails
+ *    if its runs disagree with the stored ones (so two versions cannot be
+ *    recorded from different code). In a cloud session Node 24 runs as
+ *    `PATH=/opt/node24/bin:$PATH node node_modules/vitest/vitest.mjs run …`.
+ *
+ * `LOCKSTEP_RECORD=1` also records a new scenario's run where none is stored.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -29,7 +36,8 @@ interface Fixture {
 }
 
 const FIXTURE = new URL('./fixtures/flight-lockstep.json', import.meta.url);
-const RECORD = process.env.LOCKSTEP_RECORD === '1';
+const RECORD_MODE = process.env.LOCKSTEP_RECORD;
+const RECORD = RECORD_MODE === '1' || RECORD_MODE === 'reset';
 const V8 = process.versions.v8.split('.')[0]!;
 
 /** Most difference allowed between versions, per sample quantity: position and velocity, attitude, rates, time. */
@@ -64,16 +72,29 @@ function difference(
 const kinds = (events: readonly string[]) => events.map((e) => e.split(' ')[0]);
 
 describe('the Kestrel in lockstep with its recorded flight', () => {
-  const fixture = load();
+  const fixture: Fixture = RECORD_MODE === 'reset' ? { hashes: {}, runs: {} } : load();
+  /** Scenarios recorded without a failed check; the fixture is written only if all were. */
+  const recorded = new Set<string>();
 
   for (const name of SCENARIOS) {
     it(`flies "${name}" as recorded`, () => {
       // Through JSON, as the fixture holds it.
       const now = JSON.parse(JSON.stringify(runScenario(name))) as Digest;
       if (RECORD) {
-        (fixture.hashes[V8] ??= {})[name] = now.hash;
         const { hash: _hash, ...run } = now;
-        fixture.runs[name] ??= run;
+        const stored = fixture.runs[name];
+        if (stored) {
+          // Another version's record of the same code: it must agree with this run.
+          expect(run.steps, 'steps differ from the stored run: record with reset first').toBe(
+            stored.steps,
+          );
+          expect(kinds(run.events)).toEqual(kinds(stored.events));
+          expect(difference(run.samples, stored.samples, TOLERANCE)).toBeNull();
+        } else {
+          fixture.runs[name] = run;
+        }
+        (fixture.hashes[V8] ??= {})[name] = now.hash;
+        recorded.add(name);
         return;
       }
       const ref = fixture.runs[name];
@@ -111,6 +132,9 @@ describe('the Kestrel in lockstep with its recorded flight', () => {
 
   if (RECORD) {
     it('writes the fixture', () => {
+      expect([...recorded].sort(), 'a scenario failed: the fixture is left as it was').toEqual(
+        [...SCENARIOS].sort(),
+      );
       writeFileSync(FIXTURE, JSON.stringify(fixture, null, 1) + '\n');
     });
   }
