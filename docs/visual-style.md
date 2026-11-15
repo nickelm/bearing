@@ -110,7 +110,7 @@ Until the layers exist, the clumps of decision 45 thin with distance beyond 1.5 
 
 ## Water
 
-- **Ocean.** Calm, deep-colored water with faint, large facets from a low-frequency normal pattern (reference 1). Color shifts from deep blue-green offshore to teal in shallows, with a pale foam line at the coast. From altitude the sea must not read as one repeating texture: gusts and calms that do not repeat break its glint into patches and streaks along the wind, a long swell runs at sea, broad patches shift its color slightly, and storms raise whitecaps (decision 146).
+- **Ocean.** Calm, deep-colored water with faint, large facets from a low-frequency normal pattern (reference 1). Color shifts from deep blue-green offshore to teal in shallows, with a pale foam line at the coast. From altitude the sea must not read as one repeating texture: gusts and calms that do not repeat break its glint into patches and streaks along the wind, while the sun's sparkle off resolved waves stays in low views, a long swell runs at sea, broad patches shift its color slightly, and storms raise whitecaps (decision 146).
 - **Reflections.** Fresnel blend toward the sky color, plus a stretched sun glint that forms a soft column at low sun angles. Rivers drawn wider than a pixel for legibility reflect only their true width, so distant rivers do not glitter. Planar or screen-space reflections are a later option; the sky blend carries most of the effect.
 - **Rivers and lakes.** Same material, calmer, with stronger sky reflection.
 

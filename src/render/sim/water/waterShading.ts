@@ -30,7 +30,7 @@
  * The sea from altitude (decision 146): the wave field's period would show as a
  * repeating tile, so gusts and calms from noise on the planet-centered position
  * (which does not repeat) scale the wind waves, drawn out along the wind into
- * streaks; waves run with the weather's wind; a long swell runs at sea; broad
+ * streaks; a long swell runs at sea; broad
  * patches shift the open water's color; storms raise whitecaps.
  *
  * Coastal foam (decision 39): distance to the shore comes per vertex
@@ -260,7 +260,7 @@ export class WaterShading {
   readonly foamStrength = uniform(1);
   readonly waves = waveSet();
   readonly swell = swellSet();
-  /** Surface wind direction (world, unit, or zero in calm air): waves run with it (decision 146). */
+  /** Surface wind direction (world, unit, or zero in calm air): the gusts' streaks run along it (decision 146). */
   readonly windDirection = uniform(new Vector3(0, 0, 0));
   /** Sea state: multiplies wind waves (1 = moderate breeze); whitecaps from about 1.3. */
   readonly seaState = uniform(1);
@@ -346,8 +346,9 @@ export class WaterShading {
         // The wave field tiles every WAVE_PERIOD; from altitude that showed as a
         // repeating pattern on a uniform sea. Gusts and calms that do not repeat set
         // the local strength of the wind waves (decision 146): rough patches, calm
-        // slicks that mirror the sky, and streaks drawn out along the wind. Waves
-        // running with the wind are stronger than those across it.
+        // slicks that mirror the sky, and streaks drawn out along the wind. The waves
+        // themselves keep every direction: weighting them by the wind took the waves that
+        // send the sun's sparkle to the camera when the wind blew across its line.
         const wind = this.windDirection;
         const windT = wind.sub(i.up.mul(dot(wind, i.up)));
         const windLen = length(windT);
@@ -366,23 +367,27 @@ export class WaterShading {
           rough = clamp(gust.mul(1.1).add(1), 0.2, 1.9) as F;
         }
         const strength = this.waveStrength.mul(this.seaState).mul(rough);
+        // The camera's height above the water plane: 2 px hand-over below 1.5 km, 4 px above 6 km.
+        const cameraHeight = dot(i.relative.negate(), i.up);
+        const handLo = mix(float(2), float(4), smoothstep(1500, 6000, cameraHeight));
         let grad: V3 = vec3(0);
         let unresolved: F = float(0);
         // Crests of the shorter waves, for breaking up the foam.
         let crest: F = float(0);
-        const wave = (w: Wave, s0: F, alongWind: boolean) => {
+        const wave = (w: Wave, s: F) => {
           const k = (2 * Math.PI) / WAVE_PERIOD;
           const kv = vec3(w.n[0] * k, w.n[1] * k, w.n[2] * k);
           const omega = Math.sqrt(GRAVITY * ((2 * Math.PI) / w.wavelength));
-          // Waves under about a dozen pixels hand over to the roughness: from altitude a
-          // few long waves resolved alone interfere into a regular plaid (decision 146).
-          const resolved = smoothstep(4, 12, footprint.reciprocal().mul(w.wavelength));
+          // Waves hand over to the roughness below a few pixels, as before, near the
+          // water: the resolved short waves make the sparkle of a low view. From high
+          // above, a few long waves resolved alone interfere into a regular plaid, so
+          // there they hand over below about a dozen pixels (decision 146).
+          const resolved = smoothstep(
+            handLo,
+            handLo.mul(3),
+            footprint.reciprocal().mul(w.wavelength),
+          );
           const dir = vec3(w.n[0], w.n[1], w.n[2]).div(Math.hypot(...w.n));
-          // Directional spreading: full along the wind, a third across it.
-          const spread = alongWind
-            ? mix(float(1), dot(dir, windDir).abs().mul(0.95).add(0.35), hasWind)
-            : float(1);
-          const s = s0.mul(spread);
           const phase = dot(kv, i.wavePosition).sub(time.mul(omega)).add(w.phase);
           grad = grad.add(dir.mul(cos(phase).mul(s).mul(resolved))) as V3;
           // Slope variance s²/2 of the part too short to resolve moves into the roughness.
@@ -390,7 +395,7 @@ export class WaterShading {
           return cos(phase).mul(resolved) as F;
         };
         for (const [index, w] of this.waves.entries()) {
-          const c = wave(w, strength.mul(w.slope) as F, true);
+          const c = wave(w, strength.mul(w.slope) as F);
           if (index >= this.waves.length / 2) crest = crest.add(c) as F;
         }
         // Swell at sea only, fading in water shallower than a few tens of meters.
@@ -398,7 +403,7 @@ export class WaterShading {
           .mul(sea)
           .mul(smoothstep(3, 40, i.height.negate()))
           .mul(this.waveStrength);
-        for (const w of this.swell) wave(w, swellAt.mul(w.slope) as F, false);
+        for (const w of this.swell) wave(w, swellAt.mul(w.slope) as F);
         const tangentGrad = grad.sub(i.up.mul(dot(grad, i.up)));
         const waveNormal = normalize(i.up.sub(tangentGrad)) as V3;
         // Beckmann–GGX correspondence: α² ≈ 2σ².
