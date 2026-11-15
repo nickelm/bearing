@@ -1086,7 +1086,17 @@ async function main(): Promise<void> {
         },
         exit: () => {
           const u = new URL(location.href);
-          for (const k of ['mode', 'base', 'tod', 'weather', 'wind', 'spawn', 'fuel', 'autopilot'])
+          for (const k of [
+            'mode',
+            'base',
+            'tod',
+            'weather',
+            'wind',
+            'spawn',
+            'fuel',
+            'aircraft',
+            'autopilot',
+          ])
             u.searchParams.delete(k);
           location.href = u.toString();
         },

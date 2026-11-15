@@ -61,6 +61,7 @@ export function buildHeloHudFrame(
   if (!opts.locked) modes.push('CLICK TO FLY');
   const hazards: string[] = [];
   if (tel.rotorSpeed < 0.95) hazards.push('LOW RPM');
+  if (tel.rotorSpeed > 1.07) hazards.push('HIGH RPM');
   if (tel.torque > 1) hazards.push('TORQUE');
   const hover = hoverSymbols({
     pos: m.pos,

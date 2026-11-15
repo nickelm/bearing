@@ -209,7 +209,8 @@ export class FreeFlight {
         changeBase: () => this.toMenu(),
         exit: () => this.deps.exit(),
         optionsChanged: (o) => {
-          if (this.model) this.model.unlimitedFuel = o.unlimitedFuel;
+          const flown = this.helo ?? this.model;
+          if (flown) flown.unlimitedFuel = o.unlimitedFuel;
           if (o.weather !== this.weather.preset) this.setWeather(o.weather);
           this.writeUrl();
         },
@@ -368,9 +369,10 @@ export class FreeFlight {
     this.menu.setWeather(preset);
     if (preset === this.weather.preset) return;
     this.weather.preset = preset;
-    if (this.state !== 'menu' && this.model) {
+    const flown = this.helo ?? this.model;
+    if (this.state !== 'menu' && flown) {
       this.weather.finish(this.gameTime);
-      this.temperatureShift = this.weather.temperatureShift(this.model.pos, this.gameTime);
+      this.temperatureShift = this.weather.temperatureShift(flown.pos, this.gameTime);
       this.deps.globe.resetAtmosphere();
     }
     this.writeUrl(this.state === 'menu' ? this.menu.selection : this.baseId);
@@ -883,7 +885,8 @@ export class FreeFlight {
         break;
       }
       case 'stopped':
-        if (e.landing && !m.crashed) this.showSummary(null);
+        // A helicopter lands and lifts off again where it is: no summary card.
+        if (e.landing && !m.crashed && !this.helo) this.showSummary(null);
         break;
       case 'crash':
         this.hud.message([`CRASH: ${e.reason}`], 10, true);

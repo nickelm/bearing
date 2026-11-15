@@ -83,6 +83,12 @@ const HOLD_SPEED = 1.5;
 const HOLD_REST = 0.5;
 /** Most pitch target away from the trim attitude (rad) at which hover hold engages by itself. */
 const HOLD_PITCH = 0.05;
+/** Pitch target within this of the trim (rad) counts as a level nose for the ease to a stop. */
+const LEVEL_PITCH = 0.07;
+/** Most roll rate of the bank command (rad/s). */
+const ROLL_RATE = 0.6;
+/** Most load factor the collective asks for (g). */
+const MAX_LOAD = 1.6;
 
 export class HeloLaws {
   /** Attitude and heading targets (rad), the altitude to hold (m above sea level) or null. */
@@ -99,6 +105,15 @@ export class HeloLaws {
   collective = 0;
   /** The torque limiter held the collective back last step. */
   limited = false;
+  /** The bank command after its rate limit (rad). */
+  private bankShaped = 0;
+  /** Nose-up the power protection has added (rad). */
+  private protectPitch = 0;
+  /** Seconds the cyclic has been let go at speed, for the wings-level heading hold. */
+  private levelRest = 0;
+  /** Seconds since the mouse last moved the pitch. */
+  private pitchRest = 0;
+  private cruiseHeading = 0;
   private trimFwd = 0;
   private trimRight = 0;
   private yawTrim = 0;
@@ -139,6 +154,7 @@ export class HeloLaws {
     this.collective = grounded ? 0 : invertMonotone((x) => m.thrustFor(x), m.mass * G, 0, 1);
     this.trimFwd = this.trimRight = this.yawTrim = 0;
     this.velIFwd = this.velIRight = 0;
+    this.bankShaped = t.bank;
     this.trimPitch = m.spec.main.shaftTilt;
     this.trimBank = 0;
     this.rest = 0;
@@ -164,7 +180,10 @@ export class HeloLaws {
     const vr = m.vel.dot(right);
     const vs = m.vel.dot(up);
     const gs = Math.hypot(vf, vr);
-    const w = smoothstep(spec.controls.hoverSpeed, spec.controls.turnSpeed, gs);
+    // The turn regime by forward speed over the ground: rearward and sideways flight stay in
+    // the hover's regime with its heading hold (a blend on speed in any direction let the fin
+    // swap the tail when flying backward), and so does a hover into a strong wind.
+    const w = smoothstep(spec.controls.hoverSpeed, spec.controls.turnSpeed, Math.max(0, vf));
     const onGround = tel.wow > 0.3;
 
     // ---- Pilot's targets ----
@@ -174,10 +193,12 @@ export class HeloLaws {
       if (this.hoverHold) this.engageHold(m);
     }
     if (this.hoverHold && (Math.abs(cmd.mousePitch) > 1e-5 || Math.abs(cmd.lateral) > 0.05)) {
-      // The pilot takes the cyclic: carry on from the attitude the hold flew.
+      // The pilot takes the cyclic: carry on from the hold's trim, not from the attitude of
+      // the moment (a transient there became a steady drift).
       this.hoverHold = false;
-      this.pitchTarget = tel.pitch;
+      this.pitchTarget = this.trimPitch - this.velIFwd;
     }
+    this.pitchRest = Math.abs(cmd.mousePitch) > 1e-5 ? 0 : this.pitchRest + dt;
     if (this.landed && onGround) this.pitchTarget = this.trimPitch;
     this.pitchTarget += cmd.mousePitch;
     this.headingTarget = wrap(this.headingTarget + cmd.mouseTurn * (1 - w));
@@ -238,11 +259,31 @@ export class HeloLaws {
       const holdBank = this.trimBank + ar / G + this.velIRight;
       if (this.hoverHold) {
         pitchCmd = holdPitch;
-        this.pitchTarget = tel.pitch;
+        this.pitchTarget = this.trimPitch - this.velIFwd;
         bankCmd = holdBank;
       } else {
         bankCmd = (1 - w) * holdBank + w * this.bankTarget;
+        // Below the hover speed with the mouse let go (Assisted), ease to a stop: a fraction of a
+        // degree of pitch is the difference between a hover and 20 kt, too fine to set by hand.
+        // Only with the nose about level: a nose pushed down or pulled up asks for speed.
+        const level = Math.abs(this.pitchTarget - this.trimPitch) < LEVEL_PITCH;
+        if (a.autoHoverHold && this.pitchRest > 1 && level && !onGround) {
+          const stop = this.trimPitch - clamp(HOLD_VEL * -vf, -1.5, 1.5) / G;
+          pitchCmd = (1 - w) * stop + w * this.pitchTarget;
+          this.pitchTarget += (pitchCmd - this.pitchTarget) * Math.min(1, dt / 0.5);
+        }
       }
+    }
+    // At speed with the wings level and the cyclic let go, hold the heading by banking a
+    // little, as an autopilot does: the trim's small bank and sideslip otherwise turn the
+    // aircraft slowly in what should be straight flight.
+    const turning = Math.abs(cmd.mouseTurn) > 1e-5 || Math.abs(cmd.lateral) > 0.05;
+    this.levelRest =
+      turning || Math.abs(this.bankTarget) > 2 * (Math.PI / 180) ? 0 : this.levelRest + dt;
+    if (w > 0.5 && this.levelRest > 1 && a.autoTrim) {
+      bankCmd += w * clamp(1.5 * wrap(this.cruiseHeading - psi), -0.17, 0.17);
+    } else {
+      this.cruiseHeading = psi;
     }
     if (a.protection === 'on') {
       // Speed protection: past 85% of the never-exceed speed the nose comes up (a retreating
@@ -251,12 +292,26 @@ export class HeloLaws {
       if (over > 0) {
         pitchCmd += (1.5 * over) / spec.limits.vne;
       }
-      // Power protection: on the torque limit and losing the altitude it holds, ease the nose up.
-      if (this.limited && this.altitudeTarget !== null && this.altitudeTarget - tel.altitude > 5)
+      // Power protection: on the torque limit in forward flight and losing the altitude it
+      // holds, ease the nose up, by at most 10° in all.
+      if (
+        this.limited &&
+        w > 0.5 &&
+        this.altitudeTarget !== null &&
+        this.altitudeTarget - tel.altitude > 5 &&
+        this.protectPitch < 0.17
+      ) {
         this.pitchTarget += 0.03 * dt;
+        this.protectPitch += 0.03 * dt;
+      }
+      if (!this.limited) this.protectPitch = Math.max(0, this.protectPitch - 0.01 * dt);
     }
     if (a.maxPitch !== null) pitchCmd = clamp(pitchCmd, -a.maxPitch, a.maxPitch);
     if (a.maxBank !== null) bankCmd = clamp(bankCmd, -a.maxBank, a.maxBank);
+    // Command shaping: the bank moves at most ROLL_RATE, so a quick roll-in does not overshoot.
+    this.bankShaped += clamp(wrap(bankCmd - this.bankShaped), -ROLL_RATE * dt, ROLL_RATE * dt);
+    if (onGround) this.bankShaped = tel.bank;
+    bankCmd = this.bankShaped;
 
     // ---- Cyclic: attitude → angular acceleration → moment → disc tilt ----
     const [ixx, iyy] = spec.inertia;
@@ -281,8 +336,11 @@ export class HeloLaws {
     // The disc lags the body's rates by the flapping time constant (the rotor's own damping):
     // command that lag away, so the loop's damping is the one designed.
     const tau = 16 / (spec.main.lock * Math.max(1, m.rotorOmega));
-    const tiltF = (-iyy * aq) / cp - tau * m.omega.y;
-    const tiltR = (ixx * ap) / cp + tau * m.omega.x;
+    // ... and command net of the rotor's own steady flapping in forward flight (blowback, the
+    // coning's tilt to the advancing side): more collective in a turn tilts the disc further
+    // toward the advancing side, and without this a right turn rolled on past its bank.
+    const tiltF = (-iyy * aq) / cp - tau * m.omega.y - m.flapForward;
+    const tiltR = (ixx * ap) / cp + tau * m.omega.x - m.flapRight;
     out.cyclicLon = clamp((air * tiltF) / spec.main.cyclic[0], -1, 1);
     out.cyclicLat = clamp((air * tiltR) / spec.main.cyclic[1], -1, 1);
 
@@ -295,7 +353,7 @@ export class HeloLaws {
       clamp(YAW_GAIN * wrap(this.headingTarget - psi), -rmax, rmax) + cmd.pedals * rmax;
     const v = Math.max(tel.tas, 10);
     const rTurn = a.turnCoordination
-      ? (G * Math.tan(clamp(tel.bank, -1.2, 1.2))) / v + 2 * tel.beta + cmd.pedals * rmax * 0.5
+      ? (G * Math.tan(clamp(tel.bank, -1.2, 1.2))) / v + cmd.pedals * rmax * 0.5
       : cmd.pedals * rmax * 0.5;
     const rDes = (1 - w) * rHover + w * rTurn;
     const izz = spec.inertia[2];
@@ -309,7 +367,9 @@ export class HeloLaws {
       // An integrator on the yaw rate's error takes up what the feedforward misses (fin, inflow).
       if (!this.landed) {
         const cap = 0.3 * Math.abs(q) + 0.05 * izz;
-        this.yawTrim = clamp(this.yawTrim + izz * (rDes - m.omega.z) * dt, -cap, cap);
+        // At speed the pedals also null the sideslip: a ball in the middle.
+        const beta = a.turnCoordination ? w * tel.beta : 0;
+        this.yawTrim = clamp(this.yawTrim + izz * (rDes - m.omega.z + 0.8 * beta) * dt, -cap, cap);
       }
       const want = (mzWant + this.yawTrim - react) / arm;
       out.pedals = invertMonotone((p) => m.tailThrustFor(p), want, -1, 1);
@@ -324,7 +384,10 @@ export class HeloLaws {
         vsCmd = cmd.collective * spec.controls.maxClimbRate;
         this.altitudeTarget = null;
       } else {
-        if (this.altitudeTarget === null && !onGround) this.altitudeTarget = tel.altitude;
+        // The altitude to hold: where a climb or descent at this rate stops at 2 m/s², so
+        // letting go of W in a full climb does not overshoot and sink back.
+        if (this.altitudeTarget === null && !onGround)
+          this.altitudeTarget = tel.altitude + (vs * Math.abs(vs)) / (2 * 2);
         vsCmd =
           this.altitudeTarget === null
             ? 0
@@ -346,7 +409,9 @@ export class HeloLaws {
           const az = clamp(CLIMB_GAIN * (vsCmd - vs), -3, 3);
           const n = m.discNormal(sc.n);
           const nUp = Math.max(0.3, m.q.rotate(n, new Vec3d()).dot(up));
-          const want = (m.mass * (G + az)) / nUp;
+          // No more than 1.6 g of thrust: a level 45° turn needs 1.41 g. Past it the altitude
+          // gives way (unbounded, a steep bank asked for over 3 g and the roll ran away).
+          const want = Math.min((m.mass * (G + az)) / nUp, MAX_LOAD * m.mass * G);
           let c = invertMonotone((x) => m.thrustFor(x), want, 0, 1);
           // The torque limiter keeps the torque under the transmission's limit and the power
           // within what the engine gives, and backs the collective off if the rotor droops: a
@@ -355,13 +420,21 @@ export class HeloLaws {
             const atLimit = tel.power >= 0.99 * tel.powerAvailable;
             const over = Math.max(
               tel.torque - 1,
-              atLimit ? 0.97 - tel.rotorSpeed : 0,
+              atLimit ? 0.97 - tel.rotorSpeed : -1,
               0.93 - tel.rotorSpeed,
             );
             this.limited = over > -0.02 && c > this.collective;
             if (over > 0) c = Math.min(c, this.collective - 2 * over * dt);
+            // Overspeed: in a flare or a quick stop the rotor speeds up and the engine cannot
+            // brake it; past 103% a floor on the collective loads it (altitude gives way).
+            const fast = tel.rotorSpeed - 1.03;
+            if (fast > 0) c = Math.max(c, this.collective + 10 * fast * dt);
           }
-          this.collective += clamp(c - this.collective, -0.8 * dt, 0.6 * dt);
+          this.collective = clamp(
+            this.collective + clamp(c - this.collective, -0.8 * dt, 0.6 * dt),
+            0,
+            1,
+          );
         }
       }
     } else {

@@ -255,19 +255,25 @@ describe('flown through the Assisted preset', () => {
       spawn(m, null);
       const laws = lawsFor(m, true);
       const monitor = new FlightMonitor([runway], RADIUS);
+      let leveled = false;
       const events = fly(
         m,
         laws,
-        150,
+        180,
         (t, c) => {
           const ra = m.telemetry.radarAltitude;
           // Up to 30 m, nose down to about 60 kt, a turn, back, slow to a hover, down.
-          c.collective = t < 12 && ra < 30 ? 1 : t > 90 ? -1 : 0;
+          // Down once slow (the Assisted preset eases to a hover below 20 kt).
+          c.collective = t < 12 && ra < 30 ? 1 : t > 90 && m.telemetry.groundSpeed < 4 ? -1 : 0;
           if (t > 12 && t < 13) c.mousePitch = -10 * DEG * FLIGHT_STEP;
           if (t > 30 && t < 31) c.mouseTurn = 25 * DEG * FLIGHT_STEP;
           if (t > 42 && t < 43) c.mouseTurn = -25 * DEG * FLIGHT_STEP;
           if (t > 55 && t < 56) c.mousePitch = 18 * DEG * FLIGHT_STEP;
-          if (t > 75 && t < 76) c.mousePitch = -8 * DEG * FLIGHT_STEP;
+          // Level the nose once slow, as a pilot does: the hover then settles by itself.
+          if (t > 56 && !leveled && m.telemetry.groundSpeed < 8) {
+            leveled = true;
+            c.mousePitch = m.spec.main.shaftTilt - laws.pitchTarget;
+          }
         },
         undefined,
         monitor,
@@ -277,6 +283,134 @@ describe('flown through the Assisted preset', () => {
       expect(events).toContain('touchdown');
       expect(monitor.lastTouchdown!.sinkRate).toBeLessThan(1.5);
       expect(m.onGround).toBe(true);
+    }
+  }, 60_000);
+
+  /** Hover at `height` m, then fly at `pitch` (rad of mouse) until `knots`. */
+  function cruise(
+    make: () => RotorcraftModel,
+    knots: number,
+  ): { m: RotorcraftModel; laws: HeloLaws } {
+    const m = make();
+    spawn(m, 150);
+    const laws = lawsFor(m, false);
+    let pushed = false;
+    fly(m, laws, 120, (_t, c) => {
+      if (!pushed) {
+        c.mousePitch = -8 * DEG;
+        pushed = true;
+      }
+      // Ease back to hold the speed once reached.
+      const kt = m.telemetry.groundSpeed / KNOT;
+      if (kt > knots && laws.pitchTarget < 0) c.mousePitch = 0.2 * DEG * FLIGHT_STEP * 60;
+    });
+    return { m, laws };
+  }
+
+  it('holds a 45° turn at cruise without running away (review of decision 159)', () => {
+    for (const make of [scout, utility]) {
+      const { m, laws } = cruise(make, 90);
+      expect(m.telemetry.groundSpeed / KNOT).toBeGreaterThan(70);
+      const alt = m.telemetry.altitude;
+      let worstBank = 0;
+      let lost = 0;
+      fly(
+        m,
+        laws,
+        25,
+        (t, c) => (c.mouseTurn = t < 1 ? 45 * DEG * FLIGHT_STEP : 0),
+        (t) => {
+          if (t > 4) worstBank = Math.max(worstBank, Math.abs(m.telemetry.bank / DEG - 45));
+          lost = Math.max(lost, alt - m.telemetry.altitude);
+        },
+      );
+      expect(m.crashed).toBeNull();
+      expect(worstBank).toBeLessThan(6);
+      expect(lost).toBeLessThan(12);
+    }
+  }, 60_000);
+
+  it('flies straight at cruise with the controls let go', () => {
+    for (const make of [scout, utility]) {
+      const { m, laws } = cruise(make, 90);
+      const h0 = m.telemetry.heading;
+      fly(m, laws, 120, () => {});
+      const turned = Math.atan2(
+        Math.sin(m.telemetry.heading - h0),
+        Math.cos(m.telemetry.heading - h0),
+      );
+      expect(Math.abs(turned / DEG)).toBeLessThan(3);
+    }
+  }, 60_000);
+
+  it('flies backward at 20 kt without swapping its tail', () => {
+    for (const make of [scout, utility]) {
+      const m = make();
+      spawn(m, 60);
+      const laws = lawsFor(m, false);
+      const h0 = m.telemetry.heading;
+      let worst = 0;
+      fly(
+        m,
+        laws,
+        40,
+        (t, c) => (c.mousePitch = t < 1 ? 12 * DEG * FLIGHT_STEP : 0),
+        () => {
+          const d = Math.atan2(
+            Math.sin(m.telemetry.heading - h0),
+            Math.cos(m.telemetry.heading - h0),
+          );
+          worst = Math.max(worst, Math.abs(d / DEG));
+        },
+      );
+      expect(m.crashed).toBeNull();
+      expect(worst).toBeLessThan(20);
+    }
+  }, 60_000);
+
+  it('starts hovering in the air without a sag or a drooping rotor', () => {
+    for (const make of [scout, utility]) {
+      const m = make();
+      spawn(m, 150);
+      const laws = lawsFor(m, false);
+      const h0 = m.telemetry.radarAltitude;
+      let lowest = h0;
+      let rpm = 1;
+      fly(
+        m,
+        laws,
+        10,
+        () => {},
+        () => {
+          lowest = Math.min(lowest, m.telemetry.radarAltitude);
+          rpm = Math.min(rpm, m.telemetry.rotorSpeed);
+        },
+      );
+      expect(h0 - lowest).toBeLessThan(1);
+      expect(rpm).toBeGreaterThan(0.97);
+    }
+  });
+
+  it('keeps the rotor out of overspeed in a quick stop, with the collective in its range', () => {
+    for (const make of [scout, utility]) {
+      const { m, laws } = cruise(make, 90);
+      let rpm = 0;
+      let lo = 1;
+      let hi = 0;
+      fly(
+        m,
+        laws,
+        20,
+        (t, c) => (c.mousePitch = t < 1 ? 25 * DEG * FLIGHT_STEP : 0),
+        () => {
+          rpm = Math.max(rpm, m.telemetry.rotorSpeed);
+          lo = Math.min(lo, laws.collective);
+          hi = Math.max(hi, laws.collective);
+        },
+      );
+      expect(rpm).toBeLessThan(1.12);
+      expect(lo).toBeGreaterThanOrEqual(0);
+      expect(hi).toBeLessThanOrEqual(1);
     }
   }, 60_000);
 

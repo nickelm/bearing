@@ -156,6 +156,12 @@ export class RotorcraftModel implements Airframe<RotorControls, RotorTelemetry> 
   tiltRight = 0;
   /** Engine output (W). */
   enginePower = 0;
+  /**
+   * The disc's steady tilt in forward flight on top of the cyclic (rad, + forward, + right):
+   * blowback and the coning's tilt to the advancing side. The control layer subtracts it.
+   */
+  flapForward = 0;
+  flapRight = 0;
   /** The main rotor's azimuth (rad), for the view. */
   azimuth = 0;
   tailAzimuth = 0;
@@ -298,9 +304,8 @@ export class RotorcraftModel implements Airframe<RotorControls, RotorTelemetry> 
     this.rotorOmega = this.spec.main.speed;
     this.tiltForward = 0;
     this.tiltRight = 0;
-    this.inflow = 0.05;
     this.tailInflow = 0.05;
-    this.enginePower = 0;
+    this.primeHover();
     for (const s of this.supports) {
       s.anchor = null;
       s.load = 0;
@@ -308,6 +313,28 @@ export class RotorcraftModel implements Airframe<RotorControls, RotorTelemetry> 
       s.surface = null;
       s.steer = 0;
     }
+  }
+
+  /**
+   * The hover's state at the present place: the air there, the inflow of a hover at this
+   * weight and the engine giving its power, so a hot start in the air does not sag while
+   * the engine spools and the control layer's first trim reads real numbers.
+   */
+  private primeHover(): void {
+    const M = this.spec.main;
+    const tel = this.telemetry;
+    const air = standardAtmosphere(this.pos.length() - this.radius, tel.air);
+    const tip = M.speed * M.radius;
+    const scale = air.density * this.main.area * tip * tip;
+    const ct = (this.mass * gravityAt(this.radius, this.pos.length())) / scale;
+    const lambda = Math.sqrt(Math.max(1e-6, ct) / 2);
+    this.inflow = lambda;
+    tel.mu = 0;
+    tel.lambda = lambda;
+    tel.thrust = ct * scale;
+    const cp = powerCoefficient(ct, lambda, 0, M.kappa, profilePower(this.main.sigma, M.cd0, 0));
+    // The tail rotor takes about a tenth more.
+    this.enginePower = 1.1 * cp * scale * tip;
   }
 
   crash(reason: string): void {
@@ -491,6 +518,8 @@ export class RotorcraftModel implements Airframe<RotorControls, RotorTelemetry> 
       bx += ff.side * ax;
       by += ff.side * ay;
     }
+    this.flapForward = bx;
+    this.flapRight = by;
     const tau = 16 / (M.lock * Om);
     const lon = clamp(ctl.cyclicLon, -1, 1) * M.cyclic[0] + bx;
     const lat = clamp(ctl.cyclicLat, -1, 1) * M.cyclic[1] + by;

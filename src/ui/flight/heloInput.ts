@@ -199,11 +199,15 @@ export class HeloInput {
     c.pedals = this.enabled ? axis('pedalLeft', 'pedalRight') : 0;
     c.brake = this.enabled && this.isHeld('brakes') ? 1 : 0;
     const k = this.sensitivity;
-    // Mouse forward (up the desk, movementY < 0) pushes the nose down, as a cyclic does.
-    c.mousePitch = this.enabled ? (this.invertPitch ? -1 : 1) * this.mouse.y * k : 0;
-    c.mouseTurn = this.enabled ? this.mouse.x * k : 0;
+    // Mouse forward (up the desk, movementY < 0) pushes the nose down, as a cyclic does. The
+    // movement and the H press add up until a physics step takes them (consumed): above
+    // 120 Hz some frames run no step, and overwriting lost what moved in them.
+    if (this.enabled) {
+      c.mousePitch += (this.invertPitch ? -1 : 1) * this.mouse.y * k;
+      c.mouseTurn += this.mouse.x * k;
+      c.toggleHover ||= this.hoverToggle;
+    }
     this.mouse.x = this.mouse.y = 0;
-    c.toggleHover = this.hoverToggle;
     this.hoverToggle = false;
   }
 
