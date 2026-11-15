@@ -125,7 +125,7 @@ export class FlightMonitor {
         out.push({ kind: 'touchdown', touchdown: td });
         // A helicopter lands anywhere; its own limits on slopes and rollover come with H3.
         const runwayRules = model.kind === 'fixed-wing';
-        if (td.sinkRate > CRASH_LANDING) {
+        if (td.sinkRate > (model.crashSink ?? CRASH_LANDING)) {
           model.crash(`Crashed on landing: sink rate ${td.sinkRate.toFixed(1)} m/s`);
         } else if (runwayRules && loaded.some((w) => w.surface === 'land')) {
           model.crash('Touched down away from a runway');

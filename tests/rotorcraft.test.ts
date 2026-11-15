@@ -13,7 +13,7 @@ import { runwayEnds, runwayFrame, runwayPoint } from '../src/sim/flight/runway';
 import { assistsFor, PRESETS } from '../src/sim/flight/rotor/assists';
 import { HeloLaws, invertMonotone, neutralCommand } from '../src/sim/flight/rotor/heloLaws';
 import type { HeloCommand } from '../src/sim/flight/rotor/heloLaws';
-import { glauertInflow, groundEffect, thrustCoefficient } from '../src/sim/flight/rotor/rotorAero';
+import { groundEffect } from '../src/sim/flight/rotor/rotorAero';
 import { neutralRotorControls } from '../src/sim/flight/rotor/rotorcraftModel';
 import type { RotorcraftModel } from '../src/sim/flight/rotor/rotorcraftModel';
 import { parseRotorcraftSpec, solidity } from '../src/sim/flight/rotor/rotorSpec';
@@ -116,24 +116,39 @@ describe('thrust disc', () => {
   });
 
   it('gains translational lift between 15 and 25 kt', () => {
-    // Glauert's induced inflow at the hover thrust: it has fallen by a fifth by 25 kt and by
-    // less than a tenth at 10 kt.
-    for (const spec of [scoutSpec(), utilitySpec()]) {
-      const m = spec.main;
-      const tip = m.speed * m.radius;
-      const sigma = solidity(m);
-      const ct =
-        (12_000 / (1.225 * Math.PI * m.radius ** 2 * tip * tip)) * (spec === undefined ? 1 : 1);
-      const hoverCt = thrustCoefficient(sigma, m.liftSlope, 0.15, m.twist, 0, 0.05, m.tipLoss);
-      const c = Math.max(ct, hoverCt * 0.5);
-      const inflow = (v: number) => {
-        let li = Math.sqrt(c / 2);
-        for (let i = 0; i < 200; i++) li = glauertInflow(c, (v * KNOT) / tip, li, 0);
-        return li;
+    // The real model at the hover's collective, held in place while the air moves past it:
+    // the induced inflow per unit of thrust has fallen by under a tenth at 10 kt and by over
+    // a fifth at 25 kt (momentum theory: about 0.7 there), and the thrust has risen.
+    for (const make of [scout, utility]) {
+      const m = make();
+      spawn(m, 300);
+      const laws = lawsFor(m, false);
+      fly(m, laws, 15, () => {});
+      const collective = laws.collective;
+      const p0 = m.pos.clone();
+      const q0 = m.q.clone();
+      const fwd = m.bodyAxis(0);
+      const at = (knots: number) => {
+        const ctl = neutralRotorControls();
+        ctl.collective = collective;
+        for (let i = 0; i < 6 / FLIGHT_STEP; i++) {
+          m.pos.copy(p0);
+          m.vel.set(0, 0, 0);
+          m.q.copy(q0);
+          m.omega.set(0, 0, 0);
+          m.wind.copy(fwd).scale(-knots * KNOT);
+          m.step(ctl, ground);
+        }
+        return { inflow: m.inflow, thrust: m.telemetry.thrust };
       };
-      const h = inflow(0);
-      expect(inflow(10) / h).toBeGreaterThan(0.85);
-      expect(inflow(25) / h).toBeLessThan(0.8);
+      const h = at(0);
+      const ten = at(10);
+      const etl = at(25);
+      // Per unit of thrust, since the thrust rises with the moving air at a fixed collective.
+      const per = (x: { inflow: number; thrust: number }) => x.inflow / x.thrust;
+      expect(per(ten) / per(h)).toBeGreaterThan(0.85);
+      expect(per(etl) / per(h)).toBeLessThan(0.8);
+      expect(etl.thrust).toBeGreaterThan(1.05 * h.thrust);
     }
   });
 
@@ -143,6 +158,7 @@ describe('thrust disc', () => {
     // Swept away with speed.
     expect(groundEffect(5, 2.5, 0.3, 0.05)).toBeGreaterThan(0.98);
     // A low hover needs less power than a high one.
+    // Skids 0.3 m up (the hub at about three quarters of a radius) against 80 m.
     const power = (height: number) => {
       const m = scout();
       spawn(m, height);
@@ -157,9 +173,11 @@ describe('thrust disc', () => {
           if (t > 25) p = m.telemetry.powerRequired;
         },
       );
+      expect(m.crashed).toBeNull();
+      expect(m.onGround).toBe(false);
       return p;
     };
-    expect(power(0.5)).toBeLessThan(0.95 * power(80));
+    expect(power(scout().gearHeight + 0.3)).toBeLessThan(0.93 * power(80));
   });
 
   it('gives identical states for identical inputs', () => {

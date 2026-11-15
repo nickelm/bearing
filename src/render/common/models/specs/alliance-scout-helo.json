@@ -253,7 +253,7 @@
   ],
   "flight": {
     "kind": "rotorcraft",
-    "notes": "MH-14 Wren, a light scout analogue of the MD 500E/530F and MH-6 Little Bird. Figures from FAA TCDS H3WE, MDHI specifications and NASA CR-3144 (OH-6A) as quoted in public sources; inertias scaled from the OH-6A; hub stiffness, Lock number, twist and drag areas are tuning values. Model frame: x forward, y up, z starboard, origin on the ground under the main rotor shaft.",
+    "notes": "MH-14 Wren, a light scout analogue of the MD 530F and MH-6 Little Bird: a 250-C30 of 485 kW (650 shp) through a 317 kW (425 shp) transmission. Figures from FAA TCDS H3WE, MDHI specifications and NASA CR-3144 (OH-6A) as quoted in public sources; inertias scaled from the OH-6A; hub stiffness, Lock number, twist and drag areas are tuning values. Model frame: x forward, y up, z starboard, origin on the ground under the main rotor shaft.",
     "mass": {
       "empty": 750,
       "fuel": 180,
@@ -299,7 +299,7 @@
       "pitch": [-8, 24]
     },
     "engine": {
-      "power": 375000,
+      "power": 485000,
       "transmission": 317000,
       "lapse": 0.85,
       "hotLoss": 0.007,

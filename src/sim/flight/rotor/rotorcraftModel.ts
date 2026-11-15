@@ -148,8 +148,10 @@ export class RotorcraftModel implements Airframe<RotorControls, RotorTelemetry> 
   // ---- Rotor and engine states ----
   /** Main rotor speed (rad/s). */
   rotorOmega: number;
-  /** Induced inflow ratios of the main and tail rotors. */
+  /** Induced inflow ratios of the main rotor (ground effect applied) and the tail rotor. */
   inflow = 0.05;
+  /** The main rotor's induced inflow ratio as it would be in free air: the lagged state. */
+  inflowFree = 0.05;
   tailInflow = 0.05;
   /** Disc tilt against the shaft (rad): + forward, + right. */
   tiltForward = 0;
@@ -264,6 +266,11 @@ export class RotorcraftModel implements Airframe<RotorControls, RotorTelemetry> 
     };
   }
 
+  /** Landing sink rate (m/s) above which the outcomes monitor counts a crash. */
+  get crashSink(): number {
+    return this.spec.limits.crashSink;
+  }
+
   get mass(): number {
     const m = this.spec.mass;
     return m.empty + m.payload + this.fuel;
@@ -329,6 +336,7 @@ export class RotorcraftModel implements Airframe<RotorControls, RotorTelemetry> 
     const ct = (this.mass * gravityAt(this.radius, this.pos.length())) / scale;
     const lambda = Math.sqrt(Math.max(1e-6, ct) / 2);
     this.inflow = lambda;
+    this.inflowFree = lambda;
     tel.mu = 0;
     tel.lambda = lambda;
     tel.thrust = ct * scale;
@@ -471,6 +479,15 @@ export class RotorcraftModel implements Airframe<RotorControls, RotorTelemetry> 
     const mu = vIp / tip;
     const theta =
       M.collective[0] + clamp(ctl.collective, 0, 1) * (M.collective[1] - M.collective[0]);
+    // The hub's height over the ground, for ground effect: Cheeseman and Bennett's factor
+    // scales the induced inflow outside Glauert's fixed point (inside it the inflow fell only
+    // by the factor's square root, half the cushion).
+    const hubW = this.q.rotate(this.main.hub, sc.c).add(this.pos);
+    const hubR = hubW.length();
+    const hubDir = hubW.scale(1 / hubR);
+    const hubHeight = hubR - R - ground.height(hubDir);
+    const ge = groundEffect(M.radius, hubHeight, mu, Math.max(0.02, this.inflowFree));
+    this.inflow = ge * this.inflowFree;
     const lambda = lambdaC + this.inflow;
     const ct = thrustCoefficient(
       this.main.sigma,
@@ -481,16 +498,12 @@ export class RotorcraftModel implements Airframe<RotorControls, RotorTelemetry> 
       lambda,
       M.tipLoss,
     );
-    // The hub's height over the ground, for ground effect.
-    const hubW = this.q.rotate(this.main.hub, sc.c).add(this.pos);
-    const hubR = hubW.length();
-    const hubDir = hubW.scale(1 / hubR);
-    const hubHeight = hubR - R - ground.height(hubDir);
+    // Glauert's inflow in free air, held from below at a fraction of the hover's, lagged as a
+    // state; the ground's cushion applies to it above.
     const lambdaH = Math.sqrt(Math.max(1e-6, Math.abs(ct)) / 2);
-    const ge = groundEffect(M.radius, hubHeight, mu, lambdaH);
-    // Glauert's inflow, held from below at a fraction of the hover's, lagged as a state.
-    const target = ge * glauertInflow(ct, mu, lambda, 0.5 * lambdaH);
-    this.inflow += (target - this.inflow) * Math.min(1, dt / inflowTime(Om, lambda));
+    const lambdaFree = lambdaC + this.inflowFree;
+    const target = glauertInflow(ct, mu, lambdaFree, 0.5 * lambdaH);
+    this.inflowFree += (target - this.inflowFree) * Math.min(1, dt / inflowTime(Om, lambdaFree));
     const thrust = ct * rho * this.main.area * tip * tip;
     const cp = powerCoefficient(
       ct,

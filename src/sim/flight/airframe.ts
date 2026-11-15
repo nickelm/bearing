@@ -65,6 +65,8 @@ export interface Airframe<
   readonly mass: number;
   fuel: number;
   unlimitedFuel: boolean;
+  /** Landing sink rate (m/s) above which a touchdown is a crash; absent: the outcomes' 6 m/s. */
+  readonly crashSink?: number;
   /** Landing gear 0 (up) .. 1 (down); 1 for fixed gear and skids. */
   readonly gear: number;
   /** Why it crashed, or null. A crashed airframe no longer moves. */
