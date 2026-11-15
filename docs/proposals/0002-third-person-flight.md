@@ -1,6 +1,6 @@
 # Proposal 0002: Third-Person Flight Without Cockpits
 
-*Drafted 2026-11-11. Status: accepted. Affects `docs/design.md`, `docs/visual-style.md`, `docs/proposals/0001-two-views.md`, and `TODO.md`.*
+*Drafted 2026-11-11. Status: accepted. Affects `docs/design.md`, `docs/visual-style.md`, `docs/proposals/0001-two-views.md`, and `TODO.md`. Amended for helicopters by [proposal 0004](0004-helicopter-flight.md) (decision 149): helicopters take off and land under the player's control, and that proposal specifies their camera rig and hover symbology.*
 
 ## Decision
 
@@ -23,7 +23,7 @@ The cost is immersion and some realism. A chase camera gives the player more awa
 The camera rig becomes the most important piece of the simulation view's presentation.
 
 - **Chase camera.** Positioned behind and slightly above the aircraft, attached through a spring-damper so the camera lags behind rolls, pitch changes, and acceleration. Lag conveys speed and maneuvering; tuning must keep the aircraft near screen center during hard turns.
-- **Per-type rigs.** Each aircraft class gets its own offsets and damping: further back and looser for fast jets, closer and tighter for helicopters, further back and higher for bombers and transports.
+- **Per-type rigs.** Each aircraft class gets its own offsets and damping: further back and looser for fast jets, closer and tighter for helicopters, further back and higher for bombers and transports. The helicopter rig also lifts and tilts down as airspeed falls (proposal 0004).
 - **Free look.** Holding a key or mouse button orbits the camera around the aircraft; releasing it springs the camera back.
 - **Target camera.** Keeps both the player's aircraft and the selected target in frame, with the aircraft in the foreground. This view is essential for dogfights and attack runs.
 - **Weapon camera.** Optionally follows a released missile or bomb, as picture-in-picture or full screen.
@@ -105,7 +105,7 @@ The player's aircraft fills the center of the screen for entire missions, so it 
 - **Budget.** The controlled aircraft uses a higher detail level of 1,500 to 4,000 triangles, still flat-shaded. Other aircraft keep the budgets in `docs/visual-style.md`.
 - **Animated parts.** Ailerons, elevators or stabilators, rudders, flaps, slats, airbrakes, and speedbrakes respond to control inputs. Swing wings (F-111, F-14, Tornado, Su-24, MiG-23, and Tu-22M analogues) animate with speed, which pays off strongly in a third-person view. Afterburner nozzles open and glow. Helicopter rotors blur into discs.
 - **Stores.** Weapons hang visibly on pylons and disappear as they are released. Fuel tanks can be jettisoned.
-- **No landing gear animation.** Takeoff and landing stay with the AI, so gear only needs to exist on parked and AI-controlled aircraft.
+- **No landing gear animation.** Takeoff and landing stay with the AI, so gear only needs to exist on parked and AI-controlled aircraft. Helicopters are the exception: their missions end on the ground, and the player flies their landings (proposal 0004).
 - **Effects.** Vapor and wingtip vortices at high G, contrails at altitude, heat shimmer behind engines, dust and spray at very low level, rotor wash for helicopters, smoke, fire, and missing parts for damage.
 - **Shadow.** The aircraft's shadow on terrain is a key height cue at low level and must stay visible down to the ground.
 - **Model specification.** The JSON format for procedural aircraft gains hinge axes for control surfaces, pivots for swing wings, store stations, nozzles, light positions, crew figure positions, and the camera rig offsets.

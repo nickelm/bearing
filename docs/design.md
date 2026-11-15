@@ -28,8 +28,8 @@ The war is seen in two views of the same world. The **strategic view** is an ill
 - **Casting:** Automatic and deterministic. Players get the war their seed produces and do not confirm or edit it.
 - **Sides:** Alliance and Pact are both playable. The player picks a side at campaign start and keeps it for the campaign. The side is a view: the simulation never reads it.
 - **Player role:** Pilot, not commander. The player does not command ground or naval forces.
-- **Core loop:** Search ongoing missions, jump in, fly, hand back. No takeoff or landing by default.
-- **Flight view:** A third-person chase camera and no cockpits. The HUD and displays are 2D overlays. AI pilots and the player share one flight director and one flight model.
+- **Core loop:** Search ongoing missions, jump in, fly, hand back. No takeoff or landing by default, except in helicopters, whose missions end on the ground (decision 149).
+- **Flight view:** A third-person chase camera and no cockpits. The HUD and displays are 2D overlays. AI pilots and the player share one flight director and one flight model; helicopters have their own rotor-disc model behind the same director interface (decision 149).
 - **Ranges:** Aircraft ranges compressed by a factor that the casting step adapts to each world; speeds stay real.
 - **Time:** Variable time acceleration from the first demo.
 - **Day, night, seasons, and weather:** In demo scope. They shape air operations: night sorties, weather cancellations, seasonal snow.
@@ -266,6 +266,7 @@ Each mission records its type, side, theater, package, target or station, and a 
 Mission search is the player's main interface to the war. A panel lists the ongoing and upcoming missions of the player's side, with filters for mission type, aircraft, theater, current phase, threat level, and time until action ("on target in under 5 minutes"). Selecting a mission focuses the map on it and draws its route. *Follow* carries the camera through the transition into the simulation view, with a chase camera behind one of its aircraft; *Jump in* (after the demo) gives the player that aircraft's controls in the same chase view, so only the source of the inputs changes. Returning to the map lands the strategic camera above the flight's position.
 
 - **Jump-in window.** A mission accepts the player from climb-out until approach. Takeoff and landing stay with the AI, so joining puts the player in the air with the package already formed.
+- **Helicopter missions** (decision 149). For helicopters, landing is the mission: inserting troops, delivering a sling load, reaching a forward arming and refueling point. Their jump-in window extends over their ground phases, and the player may fly every takeoff and landing.
 - **Handback.** Leaving an aircraft returns it to the AI with its current orders, at any phase.
 - **Subscriptions.** The player can subscribe to a query, such as "next attack helicopter CAS in corridor 2" or "any strike on our airbases". When a matching mission reaches the chosen phase, auto-slowdown drops time to 1× and offers the jump. Subscriptions combine time acceleration and search into one loop: accelerate, get notified, jump in.
 
@@ -273,11 +274,12 @@ For the demo, the panel, the chase camera, and a read-only HUD are in scope. Pla
 
 ## Flying
 
-*Specified in `docs/proposals/0002-third-person-flight.md` (decision 94); `docs/visual-style.md`, Part I, covers the controlled aircraft's model and the HUD's look.*
+*Specified in `docs/proposals/0002-third-person-flight.md` (decision 94) and, for helicopters, `docs/proposals/0004-helicopter-flight.md` (decision 149); `docs/visual-style.md`, Part I, covers the controlled aircraft's model and the HUD's look.*
 
 - **Camera rig.** A chase camera behind and slightly above the aircraft, attached through a spring-damper so it lags behind rolls, pitch changes, and acceleration while keeping the aircraft near the center of the screen. Each aircraft class gets its own offsets and damping. Free look orbits the camera while a key or button is held and springs back on release. A target camera keeps the aircraft and the selected target in frame, a weapon camera can follow a released missile or bomb, and flyby and cinematic cameras serve transitions, replays, and idle spectating. The camera raycasts against the height map, never clips terrain, and lowers and closes in at low altitude.
 - **Flight director and controls.** The flight director is an autopilot that turns a desired direction and speed into control inputs for the flight model. With mouse aim (the default), the mouse steers an aim point in the world and the flight director flies toward it; with direct control, keyboard, mouse-as-stick, or a flight stick drive the control surfaces through a stability augmentation layer. AI pilots use the same flight director and the same flight model, so handback only gives the flight director an aim point from the AI's orders instead of from the mouse.
 - **Flight model.** Table-driven at medium fidelity: per-type thrust, drag, lift, instantaneous and sustained turn rates, specific excess power, roll rate, and the effects of altitude, wing sweep, and stores, with energy management, stalls, and departures in simplified form. The tables live in the aircraft's JSON specification, next to its geometry and avionics profile. The ground model treats the forest canopy as an obstacle: rotor or airframe below the canopy top inside a closed stand strikes the trees, while hovering beside a tree line is safe (decision 148).
+- **Helicopters** (decision 149, proposal 0004). A rotor-disc model of medium fidelity beside the fixed-wing one: cyclic tilts the thrust disc with a flapping lag, hub stiffness (teetering, articulated, hingeless) sets low-g behavior, power required follows the bucket with translational lift and ground effect, a tail rotor of limited authority counters torque, and retreating blade stall, vortex ring state, mast bumping, autorotation and tail rotor loss are modeled hazards. Three control modes feed the same flight director: fly-by-mouse (the default; the mouse's horizontal motion yaws in the hover and banks into a coordinated turn in cruise), mouse aim for gun and rocket runs, and direct control for sticks. Assists toggle one by one under three presets (Assisted, Standard, Expert); switching one off removes protection, never a capability. The helicopter HUD adds hover symbology (a ground-plane velocity vector with an acceleration cue, radar altitude, torque, rotor RPM, landing zone marker, hazard cues), and the helicopter camera rig sits closer and higher and lifts and tilts down as airspeed falls.
 - **HUD and displays.** World-anchored symbols are projected from the scene every frame (flight path marker, boresight, gun pipper, CCIP fall lines, target boxes, waypoint diamonds, seeker circles); screen-anchored instruments sit at fixed positions (airspeed, altitude, and heading tapes, a compact attitude indicator instead of a pitch ladder, Mach, G, fuel, master caution). The displays are radar, a moving map drawn by the strategic renderer, threat warning, stores, a targeting sensor where the aircraft has one, messages, and systems.
 - **Sensors.** A sensor model filters simulation state per aircraft: radar by type, mode, range, radar cross-section, aspect, terrain masking, and clutter; RWR; visual detection; datalinks and AWACS with lower precision and a delay; targeting pods and terrain-following radar. Avionics profiles per type set which sensors exist and how good they are. The displays show only this filtered picture, and the AI uses the same one.
 - **Crews.** See *Factions and Sides*. Transports and heavy helicopters add a drop zone marker and release cue for airdrops and a hook camera for sling loads.
@@ -353,11 +355,21 @@ The roadmap splits into a foundation and three tracks that can advance in parall
 - **P2. HUD and display framework.** Canvas overlay, layout system, world-anchored and screen-anchored symbology, message log, collapsible displays.
 - **P3. Sensors and displays.** Sensor model, avionics profiles, radar, RWR, moving map from the strategic renderer, stores display.
 - **P4. Weapons.** Guns with lead-computing pipper, air-to-air missiles, bombs with CCIP and CCRP, target and weapon cameras, damage states.
-- **P5. Crews and special roles.** AI crewmate and callouts, crew station mode, attack helicopter gunner mode, targeting sensor display, airdrop and sling-load tools with the hook camera.
+- **P5. Crews and special roles.** AI crewmate and callouts, crew station mode, targeting sensor display, airdrop tools. Attack helicopter gunner mode and the sling-load tools with the hook camera move to track H (decision 149).
+
+### Helicopter Track (after P1; decision 149)
+
+*Specified in `docs/proposals/0004-helicopter-flight.md`; the plan is `docs/plans/helicopters.md`. Free Flight is the test bed for H1–H4.*
+
+- **H1. Rotor model and fly-by-mouse.** The thrust-disc model, the speed-scheduled controls, the Assisted preset, the hover HUD, the helicopter camera rig, and Free Flight from a helicopter pad with the Little Bird and Black Hawk analogues.
+- **H2. All modes and types.** Mouse aim, direct control with flight stick support, all assists and presets, and the remaining types.
+- **H3. Ground and utility.** Skids and wheels, slope and confined-area landings, dynamic rollover, sling loads with the hook camera, hoisting, fast-roping.
+- **H4. Hazards and damage.** Vortex ring state, mast bumping, retreating blade stall, autorotation, tail rotor loss, and their cues.
+- **H5. Combat and AI.** Fixed and turreted weapons, gunner mode, AI nap-of-the-earth and battle-position behaviors, and helicopter missions in the campaign with jump-in over their ground phases.
 
 ### Dependencies and Order
 
-S1 and V1 both depend on F2. S3 depends on S2 for named corridors. V3 depends on S4 for settlement and base data. C2 depends on C1 and S4. V4 depends on C2 and V2. P1 depends on V4. P2 depends on P1. P3 depends on P2 and S4. P4 and P5 depend on P3.
+S1 and V1 both depend on F2. S3 depends on S2 for named corridors. V3 depends on S4 for settlement and base data. C2 depends on C1 and S4. V4 depends on C2 and V2. P1 depends on V4. P2 depends on P1. P3 depends on P2 and S4. P4 and P5 depend on P3. H1 depends on P1's framework (the shared airframe and director interfaces, input) and Free Flight; H5 depends on P4 and on P1's take control and hand back.
 
 Suggested order: F1, F2, S1, V1, S2, V2, S3, C1, S4, V3, C2, V4, C3, I1. Alternating between the map and the flight view keeps both looking good as the project grows, and each milestone produces something visible.
 
@@ -378,7 +390,7 @@ When the roadmap was adopted (revision 7), F1, F2, C1, and most of S3 and S4 wer
 | M9 Polish | I1 (tree kit and weather effects to V2) |
 | (new) | S1, S2 |
 
-**After the demo:** entity promotion and ground behaviors, the Piloting track (P1–P5), air combat, naval combat, the campaign economy.
+**After the demo:** entity promotion and ground behaviors, the Piloting track (P1–P5), the Helicopter track (H1–H5), air combat, naval combat, the campaign economy.
 
 ## Open Questions
 
@@ -394,7 +406,9 @@ When the roadmap was adopted (revision 7), F1, F2, C1, and most of S3 and S4 wer
 - **HUD color.** Green for both factions, or green for the Alliance and a different hue for the Pact, as a subtle cue for the side being flown?
 - **Voice.** Text-only messages at first, or early voice callouts with synthesized speech?
 - **Clean mode.** Should a mode exist that hides all overlays for screenshots and spectating?
+- **Helicopter engine start.** Should helicopters ever spawn cold, with a short start sequence, for missions from a forward arming and refueling point? (Proposal 0004; the plan recommends hot starts through H4.)
+- **Door gunners.** AI-only, or can the player take a door gun seat in transport helicopters? (Proposal 0004; the plan recommends AI-only in H5.)
 
 ## Later (Out of Scope)
 
-Campaign economy with factories, resources, pilot training, and resupply; air defense networks; player flight control, HUD, and displays, and flight stick support (the Piloting track; Free Flight, decision 134, has a first version); CSAR missions; carriers, surface combatants, and submarines in combat; multiplayer. On the map: enemy territory that friendly reconnaissance has not covered recently drawn in a sketched, desaturated style, revealed by reconnaissance missions.
+Campaign economy with factories, resources, pilot training, and resupply; air defense networks; player flight control, HUD, and displays, and flight stick support (the Piloting track; Free Flight, decision 134, has a first version); player-flown helicopters (the Helicopter track, decision 149); CSAR missions; carriers, surface combatants, and submarines in combat; multiplayer. On the map: enemy territory that friendly reconnaissance has not covered recently drawn in a sketched, desaturated style, revealed by reconnaissance missions.

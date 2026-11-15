@@ -34,9 +34,10 @@ docs/design.md      design doc (source of truth; do not reformat)
 docs/decisions.md   architecture decision log
 docs/visual-style.md  visual style guide (source of truth for the look; do not reformat)
 docs/style/references/  reference screenshots: local only, gitignored, never shipped (decision 70)
-docs/proposals/     owner proposals (do not reformat); 0001-two-views.md (decision 72) and
-                    0002-third-person-flight.md (decision 94) and 0003-forests-for-low-flight.md
-                    (decision 148) are accepted
+docs/proposals/     owner proposals (do not reformat); 0001-two-views.md (decision 72),
+                    0002-third-person-flight.md (decision 94), 0003-forests-for-low-flight.md
+                    (decision 148) and 0004-helicopter-flight.md (decision 149) are accepted
+docs/plans/         implementation plans: free-flight.md (decision 134), helicopters.md (track H)
 src/core/           units, float64 Vec3d, coordinates, seeded RNG, invented names, the moon's ephemeris. Leaf layer.
 src/worldgen/       planet generation pipeline stages (may use GPU compute)
   coarsePass.ts     the design's pipeline at 256² on the CPU; campaignWorld.ts adds the validity retries
@@ -61,7 +62,9 @@ src/sim/            headless simulation; runs in a worker: event queue + fixed t
   flight/           flight model, control laws, ground model, runways, outcomes, flight director and a
                     scripted test pilot, shared by AI and player (Free Flight, decision 134; P1 extends it;
                     the sensor model comes with P3); wind and gusts from the weather (wind.ts, decision 143);
-                    the track hold on the wheels with free pedals (controlLaws.ts, decision 145)
+                    the track hold on the wheels with free pedals (controlLaws.ts, decision 145);
+                    rotor/ will hold the helicopters' rotor-disc model, laws, assists and director
+                    behind the same airframe and director interfaces (track H, decision 149)
 src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Both scenes stay resident;
                     the app renders the active one (GUI → View → View). Until V1, sim/'s GlobeScene
                     still draws orbit to ground.
@@ -105,7 +108,7 @@ tests/              Vitest unit tests (node); tests/gpu/ runs WGSL kernels on a 
 tools/              offline previews (npm run maps; terrain/bench *.preview.ts), output in tools/out/;
                     hud/ (pages that draw Free Flight's HUD, cards, session and the software-adapter notice without WebGPU);
                     browser.smoke.mjs runs the built app in Chromium (browser/: launch, page probe, lavapipe shim)
-TODO.md             task list by milestone (F, S, C, V, I tracks, then P after the demo; design.md, Milestones)
+TODO.md             task list by milestone (F, S, C, V, I tracks, then P and H after the demo; design.md, Milestones)
 ```
 
 ## Rules
@@ -153,6 +156,7 @@ These are the project conventions. Lint enforces some of them (marked ⚙).
 12. **No cockpits; one flight director and one flight model** (decision 94, Proposal 0002).
     - Bearing has no cockpits. Every aircraft and helicopter is flown and followed from a third-person chase camera, and the HUD and displays are 2D overlays (`docs/visual-style.md` Part I, _HUD and Displays_). Do not add cockpit interiors, cockpit cameras or cockpit-only assets.
     - AI pilots and the player share one flight director (desired direction and speed → control inputs) and one flight model. The player's input only replaces where the aim point or stick input comes from. Never give the player's aircraft its own physics path or the AI a shortcut around the flight model.
+    - Fixed-wing and rotary-wing aircraft share one flight director interface and one airframe interface (decision 149, Proposal 0004). Helicopter physics live in `src/sim/flight/` beside the fixed-wing model, headless and deterministic at the same 120 Hz step. Assists and envelope protection belong to the control layer, never to the physics.
     - Displays show only what the aircraft's sensor model knows, which is the same filtered picture the AI uses, never ground truth.
 
 ## Fidelity as level of detail
@@ -175,7 +179,7 @@ Promotion expands a unit deterministically from its seed and current strength. D
 - Work on one milestone task at a time. Keep `TODO.md` current: check off finished tasks and add subtasks you discover.
 - Record any architectural decision, or any deviation from `docs/design.md`, in `docs/decisions.md` with the date, the decision and the reason. In the same commit, update whatever `docs/design.md` or `docs/visual-style.md` says on the subject.
 - Run `npm test` and `npm run typecheck` (or `npm run check`) before declaring a task complete.
-- **Visual milestones close only after the acceptance checks** in `docs/visual-style.md` for the views they touch. A visual milestone is any milestone with rendering, model or UI tasks (all of S1–S4, V1–V4, I1 and P1–P5).
+- **Visual milestones close only after the acceptance checks** in `docs/visual-style.md` for the views they touch. A visual milestone is any milestone with rendering, model or UI tasks (all of S1–S4, V1–V4, I1, P1–P5 and H1–H5).
   - Simulation view (Part I): checks 1–5 as `tools/render.preview.ts` views; check 6, the silhouette test, in the model viewer once aircraft models exist; checks 7–10 (HUD and camera rig) as scripted sequences from V4 on.
   - Strategic view (Part II): checks 1, 2, 4 and 5 as preview views (4 through simulated color-vision deficiencies); check 3, the ten-second legibility test, with the owner.
   - Read the PNGs next to the reference board in `docs/style/references/` and report to the owner where they match and where they fall short.

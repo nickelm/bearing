@@ -2381,3 +2381,27 @@ The forest layer still draws the clumps of decision 45; the kit replaces them wi
 **Not done:** nobody has looked at it in a browser or in motion. Lake foam is thin: the band is about one mesh vertex wide at level 7. Bars follow the 48 m samples.
 
 **Reason:** Banks, bars and white water are what make a river read as moving water at low altitude, and each follows data the world already has: the water surface of decision 146 gives the gradient and the level a bar must lie near.
+
+### 149. Helicopters: a rotor-disc flight model, fly-by-mouse, three assist presets, and landings flown by the player (proposal 0004 accepted)
+
+**Date:** 2026-11-15
+**Decision:** The owner accepts proposal 0004. Helicopters get their own flight model beside the fixed-wing one and a new post-demo track, H1–H5. The plan is `docs/plans/helicopters.md`.
+
+- **Thrust-disc model.** One rigid body; the main rotor is a disc whose thrust acts along its normal, with no blade-element simulation. Cyclic tilts the disc with a first-order flapping lag; hub stiffness (teetering, articulated, hingeless) sets the control moment beyond the thrust tilt and the behavior at low load factor; power required follows the bucket, with translational lift at 15–25 kt and ground effect within about one diameter; torque is countered by a tail rotor of limited authority (a yaw-authority parameter for tandem and coaxial types); fuselage, fin, stabilizer and stub wings; retreating blade stall, vortex ring state, mast bumping, autorotation and tail rotor loss as modeled hazards. Same 120 Hz step, float64 position and determinism as the fixed-wing model, in `src/sim/flight/`. Type parameters live in the model spec.
+- **One director interface.** Fixed-wing and rotary-wing aircraft share one flight director interface and one `Airframe` interface that the camera, HUD, outcomes and Free Flight read. The AI flies helicopters through the same director and model as the player (rule 12).
+- **Fly-by-mouse is the default.** Mouse vertical motion commands pitch attitude; horizontal motion commands yaw rate below about 20 kt and a coordinated turn above about 40 kt, blended between (type parameters); W/S collective, A/D lateral cyclic, Q/E pedals, H hover hold. Mouse aim (for gun and rocket runs) and direct control (for sticks) are the other two modes.
+- **Three presets over independent assists:** Assisted (default), Standard and Expert, as tabulated in the proposal. Switching an assist off removes protection, never a capability. Envelope protection limits inputs near hazards and never changes the physics; the AI flies with it on.
+- **Landing exception.** Helicopter missions extend the jump-in window over their ground phases, and the player may fly every helicopter takeoff and landing. Fixed-wing aircraft keep proposal 0002's rule, apart from Free Flight (decision 134).
+- **Track H** follows P1 and uses Free Flight as its test bed: H1 rotor model and fly-by-mouse (Little Bird and Black Hawk analogues), H2 all modes and types, H3 ground and utility, H4 hazards and damage, H5 combat and AI (after P4). H milestones are visual milestones and close after Part I's acceptance checks.
+
+How the plan reads the proposal, for the owner to confirm:
+
+- **"Follows P1"** means P1's framework: the shared airframe and director interfaces, which H1's first step builds from Free Flight's code, and the input and gamepad plumbing. P1's campaign tasks (promotion, jump-in, handback) block only H5.
+- **New types stay out of the campaign** until a task adds them with its own decision. The air war's type table has four helicopters (AH-70, CH-60, Ve-28, Ve-36); the Little Bird, Black Hawk, Lynx, Cobra, Huey and Mi-8 analogues are new, and adding them to the order of battle would change every world's cast. H1–H4 fly them in Free Flight.
+- **Power from physics, calibrated to the spec's curve.** Momentum theory and a closed-form blade integral give thrust and power; the spec's power-required curve and hover ceilings are the calibration targets the tests check, so translational lift and ground effect emerge rather than come from a table.
+- **P5's gunner mode and sling-load tools** move to H5 and H3; P1's rotor discs and rotor wash move to H1 and H3.
+- **Wind** needs no new weather work: decision 143 already gives the flight model local wind and gusts. Its 8 m/s cap below 150 m, a runway accommodation for jets, gives way to a surface-layer profile for helicopters in H1.
+
+The proposal's open questions on engine start and door gunners stay open; the plan recommends hot starts through H4 and AI-only door gunners in H5. `docs/design.md` (*Decisions So Far*, *Mission Search and Jump-In*, *Flying*, *Milestones*, *Open Questions*), Part I (*The Controlled Aircraft*, *HUD and Displays*), proposal 0002, `CLAUDE.md` and `TODO.md` change with this decision.
+
+**Reason:** Attack and transport helicopters are a large part of the war Bearing simulates, and their missions end on the ground. A thrust disc with a few physical effects gives each type its character at a cost the browser can carry, and a control layer that changes meaning with speed lets a mouse fly it, as Arma 3's standard model showed. Keeping protection in the control layer, never in the physics, lets one model serve both the new player and the expert.

@@ -156,13 +156,22 @@ The aircraft the player controls or follows uses a higher detail level of 1,500 
 The aircraft the player controls or follows fills the center of the screen for entire missions, so it is the most-viewed asset in the game.
 
 - **Detail level.** 1,500 to 4,000 triangles, still flat-shaded, with the same construction, camouflage, and markings as the standard level. Other aircraft keep the budgets above.
-- **Animated parts.** Ailerons, elevators or stabilators, rudders, flaps, slats, airbrakes, and speedbrakes respond to control inputs. Swing wings (the F-111, F-14, Tornado, Su-24, MiG-23, and Tu-22M analogues) animate with speed. Afterburner nozzles open and glow. Helicopter rotors blur into discs.
+- **Animated parts.** Ailerons, elevators or stabilators, rudders, flaps, slats, airbrakes, and speedbrakes respond to control inputs. Swing wings (the F-111, F-14, Tornado, Su-24, MiG-23, and Tu-22M analogues) animate with speed. Afterburner nozzles open and glow. Helicopter rotors blur into discs that tilt with the cyclic (see *Helicopters*).
 - **Stores.** Weapons hang visibly on pylons and disappear as they are released. Fuel tanks can be jettisoned.
-- **Landing gear.** In the campaign, takeoff and landing stay with the AI, so gear only needs to exist on parked and AI-controlled aircraft. The Free Flight sandbox (decision 134) flies from the runway, so its aircraft animates gear extension and retraction from hinges in its model spec.
-- **Effects.** Vapor and wingtip vortices at high G, contrails at altitude, heat shimmer behind engines, dust and spray at very low level, rotor wash for helicopters, and smoke, fire, and missing parts for damage.
+- **Landing gear.** In the campaign, takeoff and landing stay with the AI, so gear only needs to exist on parked and AI-controlled aircraft. The Free Flight sandbox (decision 134) flies from the runway, so its aircraft animates gear extension and retraction from hinges in its model spec. Helicopters land in the campaign too (decision 149), so their skids and wheels touch the ground under the player's control.
+- **Effects.** Vapor and wingtip vortices at high G, contrails at altitude, heat shimmer behind engines, dust and spray at very low level, downwash for helicopters (see *Helicopters*), and smoke, fire, and missing parts for damage.
 - **Shadow.** The aircraft's shadow on terrain is a key height cue at low level and must stay visible down to the ground.
 - **Crew figures.** The blocky crew figures stay visible through canopies.
-- **Model specification.** The aircraft spec adds hinge axes for control surfaces, pivots for swing wings, store stations, nozzles, light positions, crew figure positions, and the camera rig offsets.
+- **Model specification.** The aircraft spec adds hinge axes for control surfaces, pivots for swing wings, store stations, nozzles, light positions, crew figure positions, and the camera rig offsets; helicopter specs add their rotors (hub, axis, radius, blade count) and the hook, hoist and fast-rope points.
+
+### Helicopters
+
+Helicopters are flown to the ground and hovered close to it (decision 149, proposal 0004), so the rotor is the player's main cue for what the controls are doing.
+
+- **Rotors.** Below about a third of rotor speed the blades show as thin flat-shaded blades. As the rotor spins up they fade into a translucent disc: a faceted fan in the blades' color with two or three rings of falling opacity and a faint tip ring, never a smooth gradient or a motion-blur texture. The disc tilts with the flight model's flapping state, so cyclic inputs show at once. Tail rotors and the second rotor of tandem and coaxial types follow the same rule. The disc counts as part of the helicopter's budget.
+- **Downwash.** Below about one and a half rotor diameters the rotor raises dust on dry ground, snow where snow lies, and spray and a ring of ruffled water on lakes and the sea, scaled with power and drawn with the weather's particles (decision 142). Near trees and grass sway in the near field.
+- **Sling loads.** The cable is a thin line from the hook, and the load a low-poly model of its own; both swing as the simulation moves them, never on a canned animation.
+- **Damage.** Smoke from a hit engine, a fuselage that spins after tail rotor loss, and a rotor that visibly slows in autorotation, blades returning as it slows.
 
 ### Ground Vehicles and People
 
@@ -262,6 +271,8 @@ The chase camera sits behind and above the aircraft, so HUD symbols cannot sit a
 - **Screen-anchored instruments** sit at fixed positions around the aircraft: airspeed and altitude tapes, a heading tape, a compact attitude indicator, Mach, G, fuel, and the master caution.
 
 A full pitch ladder is confusing when seen from outside the aircraft, so the compact attitude indicator replaces it.
+
+**Helicopters** add hover symbology (decision 149), because small drift in the hover is hard to judge from a chase camera: a velocity vector on the ground plane from the helicopter's ground point, with an acceleration cue at its tip (world-anchored); radar altitude with vertical speed, torque as a percentage of maximum, rotor RPM (prominent in autorotation), and a landing zone marker with distance and bearing (screen-anchored, the marker also world-anchored); cable tension and the load's position under the hook for sling loads; and hazard cues for vortex ring state, mast bumping, retreating blade stall, and dynamic rollover.
 
 ### Displays
 

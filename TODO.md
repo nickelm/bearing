@@ -1,8 +1,8 @@
 # TODO
 
-Tech-demo milestones from [docs/design.md](docs/design.md) (revision 8, decisions 72 and 94): a foundation (F), a strategic track (S), a simulation core track (C), a flight view track (V) and integration (I), after a scaffold, then a post-demo piloting track (P, decision 94). The design doc's _Milestones_ section maps the old M1–M9 onto these. Each task should take a few hours. Check tasks off as they are completed, and add subtasks as you discover them.
+Tech-demo milestones from [docs/design.md](docs/design.md) (revision 8, decisions 72 and 94): a foundation (F), a strategic track (S), a simulation core track (C), a flight view track (V) and integration (I), after a scaffold, then a post-demo piloting track (P, decision 94) and helicopter track (H, decision 149). The design doc's _Milestones_ section maps the old M1–M9 onto these. Each task should take a few hours. Check tasks off as they are completed, and add subtasks as you discover them.
 
-Suggested order for the remaining work: S1, V1, S2, V2, the rest of S3 and S4, V3, C2, V4, C3, I1. Visual milestones (all S, V, I and P) close only after the acceptance checks in [docs/visual-style.md](docs/visual-style.md) for the views they touch: Part I for the simulation view, Part II for the strategic view.
+Suggested order for the remaining work: S1, V1, S2, V2, the rest of S3 and S4, V3, C2, V4, C3, I1. Visual milestones (all S, V, I, P and H) close only after the acceptance checks in [docs/visual-style.md](docs/visual-style.md) for the views they touch: Part I for the simulation view, Part II for the strategic view.
 
 ## Scaffold (done)
 
@@ -703,8 +703,8 @@ Table-driven flight model, flight director shared with the AI, mouse-aim and dir
 - [ ] Flight stick support through the Gamepad API, with axis and button bindings
 - [ ] Take control and hand back: _Jump in_ from mission search and subscription offers; handback gives the flight director an aim point from the AI's orders instead of the mouse
 - [ ] Flight cap on time acceleration: while the player controls an aircraft, up to 8× in cruise phases, cancelled on any threat
-- [ ] Animated parts from model-spec hinge axes and pivots: control surfaces, flaps, slats, airbrakes and speedbrakes from control inputs; swing wings with speed; afterburner nozzles; helicopter rotor discs
-- [ ] Flight effects: vapor and wingtip vortices at high G, contrails at altitude, heat shimmer behind engines, dust and spray at very low level, rotor wash
+- [ ] Animated parts from model-spec hinge axes and pivots: control surfaces, flaps, slats, airbrakes and speedbrakes from control inputs; swing wings with speed; afterburner nozzles (helicopter rotor discs move to H1, decision 149)
+- [ ] Flight effects: vapor and wingtip vortices at high G, contrails at altitude, heat shimmer behind engines, dust and spray at very low level (rotor downwash moves to H3, decision 149)
 - [ ] Acceptance check 9 (aircraft readable and centered in a maximum-rate turn) as a scripted sequence
 - [ ] Checkpoint: owner flies representative aircraft with mouse aim and a flight stick, takes control and hands back
 
@@ -751,16 +751,101 @@ Guns with lead-computing pipper, air-to-air missiles, bombs with CCIP and CCRP, 
 
 ### P5. Crews and special roles
 
-AI crewmate and callouts, crew station mode, attack helicopter gunner mode, targeting sensor display, airdrop and sling-load tools with the hook camera.
+AI crewmate and callouts, crew station mode, targeting sensor display, airdrop tools. Attack helicopter gunner mode moves to H5 and the sling-load tools with the hook camera to H3 (decision 149).
 
 - [ ] AI crewmate in the F-111, A-6 and Su-24 analogues: runs the radar and targeting sensor, manages terrain-following, calls out threats, waypoints and releases
 - [ ] Crew station mode: the AI pilot flies, the player operates radar, targeting sensor and weapons, with the targeting display enlarged
-- [ ] Attack helicopter gunner mode with an enlarged gunner sight display
 - [ ] Targeting sensor display: FLIR or TV picture-in-picture from a render target with a thermal post-process
 - [ ] Airdrop: drop zone marker and release cue
-- [ ] Sling load: downward-looking hook camera display for pickup and placement
 - [ ] Blocky crew figures visible through canopies
-- [ ] Checkpoint: owner review of crew station, gunner, airdrop and sling-load sorties
+- [ ] Checkpoint: owner review of crew station and airdrop sorties
+
+## Helicopter track (after P1; decision 149)
+
+Rotor-disc helicopters with fly-by-mouse, mouse aim and direct control over one flight director, and three assist presets ([docs/proposals/0004-helicopter-flight.md](docs/proposals/0004-helicopter-flight.md)); the plan is [docs/plans/helicopters.md](docs/plans/helicopters.md). Free Flight is the test bed for H1–H4. H1 depends on P1's framework (the shared airframe and director interfaces, which H1's first task builds, and the input plumbing) and on Free Flight; H5 depends on P4 and on P1's take control and hand back. All H milestones touch rendering or UI, so they close only after the Part I acceptance checks.
+
+- [ ] Owner: confirm the plan's readings (H1 may start before P1 closes; new types stay out of the campaign until a task adds them; power from physics calibrated to the spec's curve) and answer the open questions on engine start and door gunners
+
+### H1. Rotor model and fly-by-mouse
+
+The thrust-disc model, the speed-scheduled controls, the Assisted preset, the hover HUD, the helicopter camera rig, and Free Flight from a helicopter pad with the Little Bird and Black Hawk analogues.
+
+- [ ] Shared `Airframe` interface, `rigidBody.ts` and `contact.ts` split out of `flightModel.ts`; Free Flight, the chase camera, the HUD frame and the outcomes read the interface; a lockstep test that the Kestrel's circuit, air maneuvers and braked stand stay bit-identical
+- [ ] Shared director interface (`sim/flight/director.ts`); `DirectorTarget` gains optional heading, ground-velocity and height-reference fields that the fixed-wing director ignores
+- [ ] `rotor/rotorSpec.ts`: the spec's `rotor` block (masses, inertias, rotor radius, blades, solidity, hub type and stiffness, flapping time constant, power available by altitude and temperature, power-required curve, tail rotor or yaw authority, drag, fin, stabilizer and wing areas, never-exceed speed, gear, hook points, mouse-turn thresholds), with validation and tests
+- [ ] Specs for the Little Bird and Black Hawk analogues: names, public figures marked as tuning values, Free Flight only (not in the air war's type table)
+- [ ] Inflow and thrust (`inflow.ts`): Glauert momentum inflow by a fixed number of Newton steps, closed-form thrust from collective, ground effect (Cheeseman–Bennett), an empirical branch for steep descent; tests that translational lift arrives between 15 and 25 kt and that ground effect cuts hover power within one diameter
+- [ ] Flapping and hub moment (`flapping.ts`): first-order disc tilt from cyclic, lag behind body rates, moment from hub stiffness and thrust offset by hub type; step-response tests per hub type
+- [ ] Power and rotor speed (`powerplant.ts`): induced, profile, parasite and climb power; power available and the transmission limit; governed rotor speed as a state with droop; tests of hover ceilings in and out of ground effect
+- [ ] Yaw (`tailRotor.ts`): torque reaction, tail rotor thrust and its authority limit with power and relative wind; yaw authority for tandem and coaxial types
+- [ ] Airframe forces: fuselage drag areas, fin and stabilizer (weathervaning, nose attitude), stub-wing lift; `RotorcraftModel` assembles them at 120 Hz in four substeps; determinism test bit for bit
+- [ ] Calibration figures in `tools/flight.preview.ts`: power-required curves against the spec, translational lift, hover ceilings, step responses; tests that hover, bucket and maximum-speed power match the curve within the type's tolerance
+- [ ] Augmentation (`rotor/heloLaws.ts`): attitude command and hold, yaw rate command with pedal trim, translational rate command near the hover, climb-rate collective, hover hold on ground velocity and position
+- [ ] Assists (`rotor/assists.ts`): independent toggles and the Assisted preset (bank and pitch limits, torque limiter, auto hover hold, radar-altitude hold, ground collision warning)
+- [ ] Rotary director (`rotor/heloDirector.ts`) and a scripted helicopter test pilot; test that the director and the same recorded inputs fly the same result
+- [ ] Wind for rotorcraft: a surface-layer profile (logarithmic, roughness from land cover) instead of the jets' 8 m/s ground cap; test that hover hold keeps position in a 10 m/s crosswind; decide whether jets keep the cap
+- [ ] Fly-by-mouse: pointer lock with relative motion, pitch-attitude command, the speed-scheduled yaw-rate and turn blend between the type's thresholds (settle ground speed against airspeed with the wind tests), W/S, A/D, Q/E and H in the binding table; Escape and the pause menu with pointer lock
+- [ ] Model specs with `rotors`; the animated model spins hubs, tilts the disc by the flapping state, and fades blades into a faceted translucent disc with rotor speed (Part I, _Helicopters_); `tools/models.preview.ts` renders them with the disc
+- [ ] Helicopter `ChaseRig` from the spec: closer and higher, lifting and tilting down as airspeed falls, free look without spring-back in the hover; tests for the schedule
+- [ ] Hover HUD in `hud.ts` and `hudFrame.ts`: ground-plane velocity vector with acceleration cue, radar altitude with vertical speed, torque, rotor RPM, landing zone marker
+- [ ] Free Flight: aircraft choice on the start screen and in the URL (`&aircraft=`), helipads painted on airbase aprons on the graded pad, spawn on a pad or in a hover, a landing zone marker at a point picked on the start screen's map
+- [ ] Maneuver tests: 60 s hover in ground effect within 1 m with hover hold; a 360° pedal turn within the type's time; a nap-of-the-earth course at 30 m radar altitude over synthetic ridges without contact
+- [ ] Previews: `tools/freeflight.preview.ts` shots of a hover over a pad, a transition and low flight; a helicopter scene in `tools/freeflight.session.mjs` and `tools/browser.smoke.mjs`
+- [ ] Adversarial probe workflow on fly-by-mouse and the Assisted preset before the owner flies it (as in decision 136)
+- [ ] Part I acceptance checks for the helicopter views (check 9 for a helicopter in a maximum-rate turn; the rotor disc in the silhouette test)
+- [ ] Checkpoint: the owner takes off from a pad, flies to a landing zone and lands on the first attempt with mouse and keyboard, in the Little Bird and the Black Hawk analogues
+
+### H2. All modes and types
+
+Mouse aim, direct control with flight stick support, all assists and presets, and the remaining types.
+
+- [ ] Mouse aim: the director points the nose (and a fixed gun or rocket pods) at a world-locked aim point while holding altitude; one key switches to fly-by-mouse in flight
+- [ ] Direct control: cyclic and pedals command rates through augmentation, or deflect the controls with it off; manual collective
+- [ ] Flight stick, throttle-as-collective and twist or rudder-pedal axes through the Gamepad API, shared with P1's stick task
+- [ ] Standard and Expert presets and every assist as a toggle in the pause menu and the URL
+- [ ] Remaining type specs: Lynx or Bo-105 (hingeless), Cobra and Huey (teetering), Apache (the AH-70 Lancer of the air war), Hind with wings (the Ve-28 Shershen), Mi-8, and the heavy CH-47 (CH-60 Mule, tandem) and Mi-26 (Ve-36 Bizon); models within Part I's helicopter budget
+- [ ] Tests: per-type power and pedal-turn figures; the Lynx analogue's loop and roll with protection off; the Hind's wing offload at speed
+- [ ] Checkpoint: owner flies mouse aim, a stick in direct mode, and each preset
+
+### H3. Ground and utility
+
+Skids and wheels, slope and confined-area landings, dynamic rollover, sling loads with the hook camera, hoisting, fast-roping.
+
+- [ ] Skids as sliding contact points and wheels with castoring tail wheel or steered nose wheel; slope limits by type; ground taxi for wheeled types
+- [ ] Dynamic rollover from the contact physics, with a warning under protection; test of a slope takeoff that rolls over with protection off
+- [ ] Slope and confined-area landings; tests of a slope landing at the type limit and a rejected one beyond it
+- [ ] Rooftop and structure contact: the ground query includes building tops (Little Bird rooftop landings); tree strikes from the canopy height field once it exists (decision 148)
+- [ ] Ship decks as moving ground where a ship is in the simulation view
+- [ ] Sling loads: a cable that can go slack, a load with mass and drag, pickup and release; cable tension and load position on the HUD; test of a load carried 5 km and set down within 3 m
+- [ ] Hook camera: a downward render-target display for pickup and placement (moved from P5)
+- [ ] Hoist and fast-rope as cable-length states with crew figures
+- [ ] Downwash: dust, snow, spray and a water ring under the rotor by surface and power, through the weather's particles; near trees sway once the near trees exist (Part I, _Helicopters_)
+- [ ] Checkpoint: owner flies slope, confined-area and rooftop landings and a sling-load delivery
+
+### H4. Hazards and damage
+
+Vortex ring state, mast bumping, retreating blade stall, autorotation, tail rotor loss, and their cues.
+
+- [ ] Vortex ring state from the descent branch of the inflow, with deterministic thrust fluctuation; recovery by forward or lateral cyclic; test of entry and recovery
+- [ ] Mast bumping in teetering types at low load factor; envelope protection's load-factor floor; test that a Cobra pushover bumps with protection off and is prevented with it on
+- [ ] Retreating blade stall as a soft never-exceed speed with roll-off and vibration; protection's speed limit
+- [ ] Engine failure and autorotation: rotor speed free, the flare's energy; test of an autorotation from 300 m to a landing under the type's crash sink rate
+- [ ] Tail rotor loss and the controlled crash
+- [ ] HUD hazard cues for each hazard and for dynamic rollover; rotor RPM prominent in autorotation
+- [ ] Damage effects: engine smoke, the spinning fuselage, the slowing rotor with blades returning
+- [ ] Checkpoint: owner flies each hazard with protection on, with warnings only, and off
+
+### H5. Combat and AI
+
+Fixed and turreted weapons, gunner mode from proposal 0002, AI nap-of-the-earth and battle-position behaviors. Depends on P4.
+
+- [ ] Fixed guns and rocket pods with mouse aim; turreted guns following free look
+- [ ] Attack helicopter gunner mode with an enlarged gunner sight display (moved from P5)
+- [ ] AI behaviors with protection on: nap-of-the-earth routes with radar-altitude hold on the real terrain, battle positions with line of sight through the canopy height field, pop-up attacks, landing zone approaches, sling-load deliveries
+- [ ] Door gunners operated by the AI
+- [ ] Campaign: helicopter missions' jump-in window over their ground phases, handback on the ground (with P1's take control and hand back)
+- [ ] New helicopter types and mission types (troop insertion, scout) in the order of battle, with their own decision, since they change every world's cast
+- [ ] Checkpoint: owner flies a CAS sortie with pop-up attacks and a troop insertion in the campaign
 
 ## Known issues
 
@@ -771,6 +856,7 @@ AI crewmate and callouts, crew station mode, attack helicopter gunner mode, targ
 
 - Entity promotion and ground behaviors
 - The piloting track (P1–P5, above)
+- The helicopter track (H1–H5, above)
 - Flyby and cinematic cameras for transitions, replays and idle spectating (Proposal 0002; not yet in a milestone)
 - Air combat
 - Naval combat
