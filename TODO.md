@@ -854,6 +854,7 @@ Vortex ring state, mast bumping, retreating blade stall, autorotation, tail roto
 - [ ] Mast bumping in teetering types at low load factor; envelope protection's load-factor floor; test that a Cobra pushover bumps with protection off and is prevented with it on
 - [ ] Retreating blade stall as a soft never-exceed speed with roll-off and vibration; protection's speed limit
 - [ ] Engine failure and autorotation (the collective's low stops let a full-down autorotation overspeed the rotor to 126–150% today; the Assisted preset holds it near 103% with a collective floor): rotor speed free, the flare's energy; test of an autorotation from 300 m to a landing under the type's crash sink rate
+  - [ ] Overspeed: a 35° yank in a quick stop still takes the Buzzard to 114% under the Assisted preset's collective floor, and the Standard and Expert presets' lever collective has no floor at all (review of decision 159); the low stops, the floor's rate and a HIGH RPM cue's timing together
 - [ ] Tail rotor loss and the controlled crash
 - [ ] HUD hazard cues for each hazard and for dynamic rollover; rotor RPM prominent in autorotation
 - [ ] Damage effects: engine smoke, the spinning fuselage, the slowing rotor with blades returning
