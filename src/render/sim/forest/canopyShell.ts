@@ -8,9 +8,9 @@
  *   on the canopy threshold's contour to full height EDGE_RISE of density
  *   inside it (decision 153), below the edge trees' crowns. Trees are not
  *   exaggerated: the height adds to the exaggerated ground.
- * - **Edges.** Fragments whose interpolated density is under the threshold are
- *   discarded, so the shell starts at the ground on the density contour, the
- *   contour the terrain's canopy shading follows (decision 71). Lanes open
+ * - **Edges.** The shell slopes to the ground across the mesh triangles that
+ *   straddle the density contour (the contour the terrain's canopy shading
+ *   follows, decision 71) and ends where it meets the ground (decision 157). Lanes open
  *   along roads, runways and taxiways, and over towns and industry.
  * - **Near the camera** the shell sinks to `understory` of H within
  *   `nearRadius`, where instanced crowns stand on it, and darkens: it fills the
@@ -113,11 +113,11 @@ export function canopyShellMaterial(d: CanopyShellDeps): MeshBasicNodeMaterial {
   const up = attribute('up', 'vec3');
   const surface = attribute('surface', 'vec4');
   const rawHeight = surface.x;
-  const forest = surface.w;
   const seed = style.seed as unknown as U;
 
   const grid = varyingProperty('vec3', 'vShellGrid');
   const rise = varyingProperty('float', 'vShellRise');
+  const lifted = varyingProperty('float', 'vShellLift');
   const apInscatter = varyingProperty('vec3', 'vShellInscatter');
   const apTransmittance = varyingProperty('vec3', 'vShellTransmittance');
 
@@ -139,9 +139,11 @@ export function canopyShellMaterial(d: CanopyShellDeps): MeshBasicNodeMaterial {
     const shares = sharesNode(meanTemperature(climate, rawHeight));
     const stand = standNode(sea, shares.conifer, shares.tropical, seed);
     const top = standTopNode(stand, sea, seed);
-    // The shell rises from the ground on the edge's contour to the canopy a little inside it
-    // (decision 153), so it never hangs over the edge trees' trunks.
-    const lift = smoothstep(CANOPY_THRESHOLD, CANOPY_THRESHOLD + EDGE_RISE, forest);
+    // The shell rises from the ground to the canopy inside the forest (decisions 153, 157):
+    // on the least density around the vertex, so a vertex next to open ground stays on the
+    // ground and the slope lies a cell inside the edge, behind the edge trees.
+    const inner = attribute('canopyEdge', 'float');
+    const lift = smoothstep(CANOPY_THRESHOLD, CANOPY_THRESHOLD + EDGE_RISE, inner);
     const dist = length(modelWorldMatrix.mul(vec4(ground, 1)).xyz);
     // 0 within the understory's reach, 1 beyond it.
     const near = max(style.nearRadius, 1);
@@ -153,6 +155,7 @@ export function canopyShellMaterial(d: CanopyShellDeps): MeshBasicNodeMaterial {
     const far = smoothstep(style.range, style.range.sub(style.fade), dist);
     const share = mix(style.understory, float(1), outer);
     rise.assign(outer);
+    lifted.assign(lift);
     const h = top.mul(lift).mul(share).mul(far).mul(style.enabled);
     const p = ground.add(radial.mul(h));
     const ap = L.atmosphere.aerialPerspective(modelWorldMatrix.mul(vec4(p, 1)).xyz as V3);
@@ -176,8 +179,11 @@ export function canopyShellMaterial(d: CanopyShellDeps): MeshBasicNodeMaterial {
     const faceHeight = face.at(rawHeight).toVar();
     const planet = L.planetPosition(positionWorld);
 
-    // The edge on the density contour, and lanes along roads and through towns.
-    If(forest.lessThan(CANOPY_THRESHOLD).or(style.enabled.lessThan(0.5)), () => {
+    // The edge: the shell slopes down to the ground on the triangles that straddle the
+    // forest's contour and ends where it meets it (decision 157). Cutting on the density
+    // instead left it hanging at half height where the density falls steeply, which is
+    // most edges. Lanes along roads and through towns.
+    If(lifted.lessThan(0.04).or(style.enabled.lessThan(0.5)), () => {
       Discard();
     });
     const lane = d.roads.clearance(planet, roadStart, roadCount, style.roadMargin);
@@ -215,19 +221,13 @@ export function canopyShellMaterial(d: CanopyShellDeps): MeshBasicNodeMaterial {
     const turned = foliage(albedo, t as F, stand.w as F);
     albedo = mix(albedo, turned, deciduous) as V3;
     const bare = leafless(t as F).mul(deciduous);
-    const groundSnow = land.snowCover(
-      t,
-      float(0) as F,
-      climate.z as F,
-      float(0.5) as F,
-      float(1) as F,
-    );
+    const groundSnow = land.snowCover(t, float(0) as F, climate.z as F, face.jitter, float(1) as F);
     const twigs = mix(FALL.twigs.mul(stand.z), land.snowColor, groundSnow.mul(0.5));
     albedo = mix(albedo, select(below, twigs.mul(0.6), twigs), bare) as V3;
     // Snow where the ground has it (cold and wet enough, decided per face as on the
     // ground), on upward faces, less on conifers.
     const snow = land
-      .snowCover(t, float(0) as F, climate.z as F, float(0.5) as F, float(1) as F)
+      .snowCover(t, float(0) as F, climate.z as F, face.jitter, float(1) as F)
       .mul(clamp(dot(normal, radial).mul(1.5).sub(0.3), 0, 1))
       .mul(mix(float(0.8), float(0.45), conifer))
       .mul(float(1).sub(bare));

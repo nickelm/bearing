@@ -140,6 +140,11 @@ const SPARKLE_POINT_PIXELS = 1.3;
 /** Radiance of a glint per unit of sunlight: several times a white surface, so the bloom takes it. */
 const SPARKLE_GAIN = 10;
 
+/** Spread of the per-face snow decision around its threshold (decision 157; 0.2 before). */
+export const SNOW_DITHER = 0.35;
+/** Weight of the low-frequency noise in the snow decision: patches of snow near the line. */
+export const SNOW_PATCH = 0.5;
+
 /** Strata on dry ground (decision 126): layer thickness (m), as tileSynth's strataThickness. */
 export const STRATA_THICKNESS = 75;
 
@@ -478,13 +483,16 @@ export class LandShading {
    * snow-covered or bare, switching where the smooth cover would be half
    * (about −2.5 °C on gentle, wet ground), dithered by the jitter (decision 125).
    */
-  snowCover(t: F, steep: F, moisture: F, jitter: F, faceted: F): F {
+  snowCover(t: F, steep: F, moisture: F, jitter: F, faceted: F, patch: F = float(0) as F): F {
     const cold = smoothstep(0, -5, t);
     // Snow slides off faces steeper than about 30–45° (decision 126): high ranges show rock.
     const sticks = float(1).sub(smoothstep(0.55, 1.0, steep));
     const wetEnough = smoothstep(0.03, 0.2, moisture);
     const smooth = cold.mul(sticks).mul(wetEnough);
-    const face = step(0.5, smooth.add(jitter.sub(0.5).mul(0.2)));
+    // Near the snow line (decision 157), `patch` (low-frequency noise) leaves patches of
+    // snow and bare ground several faces wide, and the jitter roughens their edges along
+    // facets, so the line is a patchy band hundreds of meters wide rather than a contour.
+    const face = step(0.5, smooth.add(patch).add(jitter.sub(0.5).mul(SNOW_DITHER)));
     return mix(smooth, face, faceted) as F;
   }
 
@@ -570,7 +578,8 @@ export class LandShading {
     // Vegetation browns as it cools (deciduous autumn and winter).
     const t = this.surfaceTemperature(i.climate, i.height, i.up).add(noise.mul(1.5));
     const green = clamp(a.y.sub(max(a.x, a.z)).mul(12), 0, 1);
-    const autumn = smoothstep(10, 2, t).mul(green).mul(0.75).mul(float(1).sub(evergreen));
+    // Grass and the forest floor brown with the trees' turning (decision 157).
+    const autumn = smoothstep(12, 4, t).mul(green).mul(0.8).mul(float(1).sub(evergreen));
     a = mix(a, this.autumnColor.mul(noise.mul(0.2).add(1)), autumn) as V3;
 
     // Rock and snow switch per face when faceted (decision 125), and blend otherwise.
@@ -606,9 +615,14 @@ export class LandShading {
     a = this.wet(a);
 
     // Snow lies under evergreen canopy more than on it: forests stay dark in winter.
-    const snow = this.snowCover(t, steep, moisture, jitter, faceted).mul(
-      float(1).sub(evergreen.mul(0.6)),
-    );
+    const snow = this.snowCover(
+      t,
+      steep,
+      moisture,
+      jitter,
+      faceted,
+      noise.mul(SNOW_PATCH) as F,
+    ).mul(float(1).sub(evergreen.mul(0.6)));
     // Two snow shades per face: sunlit faces still differ, as in the reference board.
     const snowTone = mix(float(1), step(0.5, jitter).mul(0.06).add(0.94), faceted);
     a = mix(a, this.snowColor.mul(snowTone), snow) as V3;

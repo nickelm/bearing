@@ -19,6 +19,8 @@ import {
   BufferGeometry,
   DoubleSide,
   Group,
+  InterleavedBuffer,
+  InterleavedBufferAttribute,
   Mesh,
   MeshBasicNodeMaterial,
   Vector3,
@@ -667,14 +669,19 @@ export class TerrainRenderer {
     const g = new BufferGeometry();
     g.setAttribute('position', new BufferAttribute(m.base, 3));
     g.setAttribute('up', new BufferAttribute(m.up, 3));
-    const surface = new Float32Array(TILE_VERTEX_COUNT * 4);
+    // Packed per-vertex scalars and the canopy shell's edge density in one interleaved
+    // buffer: WebGPU allows eight vertex buffers and the terrain uses them all (decision 157).
+    const surface = new Float32Array(TILE_VERTEX_COUNT * 5);
     for (let v = 0; v < TILE_VERTEX_COUNT; v++) {
-      surface[v * 4] = m.height[v]!;
-      surface[v * 4 + 1] = m.water[v]!;
-      surface[v * 4 + 2] = m.shore[v]!;
-      surface[v * 4 + 3] = m.forest[v]!;
+      surface[v * 5] = m.height[v]!;
+      surface[v * 5 + 1] = m.water[v]!;
+      surface[v * 5 + 2] = m.shore[v]!;
+      surface[v * 5 + 3] = m.forest[v]!;
+      surface[v * 5 + 4] = m.forestInner[v]!;
     }
-    g.setAttribute('surface', new BufferAttribute(surface, 4));
+    const packed = new InterleavedBuffer(surface, 5);
+    g.setAttribute('surface', new InterleavedBufferAttribute(packed, 4, 0));
+    g.setAttribute('canopyEdge', new InterleavedBufferAttribute(packed, 1, 4));
     g.setAttribute('parentBase', new BufferAttribute(m.parentBase, 3));
     g.setAttribute('parentDisp', new BufferAttribute(m.parentDisp, 3));
     g.setAttribute('slope', new BufferAttribute(m.slope, 3));

@@ -88,6 +88,11 @@ export interface TileMeshData {
   /** Forest density 0..1 (decision 44) in the biome view, 0 in debug views; the shader draws the canopy (decision 71). */
   forest: Float32Array;
   /**
+   * The least forest density at the vertex and its eight grid neighbors (decision 157):
+   * the canopy shell rises on it, so its slope lies a cell inside the forest's edge.
+   */
+  forestInner: Float32Array;
+  /**
    * Landform masks per vertex, three each: aridity and glaciation, 0..1 (decision 126),
    * and 1 where the biome is farmable (decision 127), 0 elsewhere and in debug views.
    */
@@ -552,6 +557,36 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
     }
   }
 
+  // The least density around each vertex: its neighbors in the grid, or beyond the tile's
+  // edge from the data (nearest sample, inside its border), so neighboring tiles agree.
+  const forestInner = new Float32Array(TILE_VERTEX_COUNT);
+  const densityAt = (sx: number, sy: number) => {
+    const x = Math.min(
+      TILE_TEXELS + TILE_BORDER,
+      Math.max(-TILE_BORDER, Math.round(dox + sx * dscale)),
+    );
+    const y = Math.min(
+      TILE_TEXELS + TILE_BORDER,
+      Math.max(-TILE_BORDER, Math.round(doy + sy * dscale)),
+    );
+    return (sources.data.material[(y + TILE_BORDER) * TILE_STRIDE + x + TILE_BORDER]! >>> 24) / 255;
+  };
+  for (let j = 0; j <= TILE_SEGMENTS; j++) {
+    for (let i = 0; i <= TILE_SEGMENTS; i++) {
+      const v = j * V + i;
+      let m = forest[v]!;
+      for (let dj = -1; dj <= 1 && m > 0; dj++) {
+        for (let di = -1; di <= 1; di++) {
+          const ni = i + di;
+          const nj = j + dj;
+          const inGrid = ni >= 0 && nj >= 0 && ni <= TILE_SEGMENTS && nj <= TILE_SEGMENTS;
+          m = Math.min(m, inGrid ? forest[nj * V + ni]! : densityAt(ni * STEP, nj * STEP));
+        }
+      }
+      forestInner[v] = m;
+    }
+  }
+
   // Skirts: copies of the edge vertices with the base lowered, deep enough for any
   // exaggeration the GUI allows.
   const skirt =
@@ -572,6 +607,7 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
       water[dst] = water[src]!;
       shore[dst] = shore[src]!;
       forest[dst] = forest[src]!;
+      forestInner[dst] = forestInner[src]!;
       landform.copyWithin(dst * 3, src * 3, src * 3 + 3);
     }
   }
@@ -588,6 +624,7 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
     slope,
     color,
     forest,
+    forestInner,
     landform,
     minHeight: minH,
     maxHeight: maxH,

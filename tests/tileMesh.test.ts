@@ -265,3 +265,41 @@ describe('buildTileMesh', () => {
     expect(dry).toBeGreaterThan(100);
   });
 });
+
+describe('canopy edge density (decision 157)', () => {
+  it('is the least forest density around each vertex, lower beside open ground', () => {
+    const t = tileKey(4, 9, 300, 280);
+    const data = fakeData(dataTileFor(t));
+    // Forest (0.8) where the data sample's x passes the middle of the tile, open (0) before.
+    const mid = TILE_TEXELS / 2;
+    const [dox] = [((t.x % 4) * TILE_TEXELS) / 4];
+    for (let sy = -TILE_BORDER; sy <= TILE_TEXELS + TILE_BORDER; sy++)
+      for (let sx = -TILE_BORDER; sx <= TILE_TEXELS + TILE_BORDER; sx++) {
+        const i = (sy + TILE_BORDER) * TILE_STRIDE + sx + TILE_BORDER;
+        data.material[i] = (data.material[i]! & 0xffffff) | ((sx >= dox + mid / 4 ? 204 : 0) << 24);
+      }
+    const m = buildTileMesh(t, { data, parentData: null }, opts);
+    let edge = 0;
+    for (let j = 0; j < V; j++)
+      for (let i = 0; i < V; i++) {
+        const v = j * V + i;
+        expect(m.forestInner[v]).toBeLessThanOrEqual(m.forest[v]! + 1e-6);
+        // A forested vertex next to an open one keeps the canopy shell on the ground.
+        const left = i > 0 ? m.forest[v - 1]! : m.forest[v]!;
+        if (m.forest[v]! > 0.5 && left === 0) {
+          expect(m.forestInner[v]).toBe(0);
+          edge++;
+        }
+        if (
+          m.forest[v]! > 0.5 &&
+          i > 1 &&
+          m.forest[v - 2]! > 0.5 &&
+          i < V - 1 &&
+          j > 0 &&
+          j < V - 1
+        )
+          expect(m.forestInner[v]).toBeCloseTo(m.forest[v]!, 6);
+      }
+    expect(edge).toBeGreaterThan(0);
+  });
+});

@@ -52,6 +52,7 @@ import {
   normalize,
   positionWorld,
   sin,
+  smoothstep,
   step,
   uniform,
   varyingProperty,
@@ -601,11 +602,13 @@ export class ForestLayer {
     // Snow where the ground has it (cold and wet enough, decided as on the ground), on
     // upward-facing crowns.
     const snow = land
-      .snowCover(t, float(0), sample.z, float(0.5), float(1))
+      // Each tree decides at its own place in the snow line's speckled band (decision 157).
+      .snowCover(t, float(0), sample.z, fract(params.z.mul(5.71)), float(1))
       .mul(crown)
-      .mul(clamp(dot(normal, up).mul(1.5), 0, 1));
+      // The sloped faces of a fir's tiers hold snow too, so a snowy conifer reads white.
+      .mul(smoothstep(0.05, 0.4, dot(normal, up)));
     albedo = land.wet(albedo);
-    albedo = mix(albedo, land.snowColor, snow.mul(0.8)) as V3;
+    albedo = mix(albedo, land.snowColor, snow.mul(0.95)) as V3;
     m.colorNode = lighting.applyAerial(
       lighting.shadeDiffuse(albedo, normal, positionWorld as V3),
       apInscatter as V3,
