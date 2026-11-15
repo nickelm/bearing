@@ -17,11 +17,25 @@
  *   up to a quarter of the model's radius; each ray that hits another face darkens
  *   the vertex. Models standing on the ground (`ground`, default for buildings)
  *   also darken toward y = 0.
+ * - **Rotors** (decision 157). Each rotor builds a hub (a six-sided drum along its
+ *   axis) and flat plank blades at azimuth 0, which the static model includes and
+ *   counts in its budget, and a translucent disc for the flown view (`buildRotors`):
+ *   a faceted fan in bands of falling opacity with a faint tip ring and a thin rim
+ *   that shows edge on, one alpha per face, never a gradient (Part I, Helicopters).
+ *   The disc is outside the budget.
  */
 import { EMISSIVE_COLORS, hexToLinear, MODEL_COLORS, SCHEMES } from './palettes';
 import type { CamoScheme } from './palettes';
 import { MODEL_BUDGETS } from './spec';
-import type { AnimChannel, ModelClass, ModelSpec, PartSpec, Station, Vec3 } from './spec';
+import type {
+  AnimChannel,
+  ModelClass,
+  ModelSpec,
+  PartSpec,
+  RotorSpec,
+  Station,
+  Vec3,
+} from './spec';
 
 export interface Emissive {
   kind: string;
@@ -561,9 +575,18 @@ export interface BuildOptions {
 
 export function buildModel(spec: ModelSpec, options: BuildOptions = {}): BuiltModel {
   const sink = new Sink();
-  for (const p of spec.parts) {
+  emitParts(sink, spec.parts, spec.groups);
+  for (const r of spec.rotors ?? []) {
+    rotorHub(sink, r);
+    rotorBlades(sink, r);
+  }
+  return finish(spec, sink.tris, options);
+}
+
+function emitParts(sink: Sink, parts: PartSpec[], groups: Record<string, string>): void {
+  for (const p of parts) {
     const start = sink.tris.length;
-    emitPart(sink, p, spec.groups);
+    emitPart(sink, p, groups);
     if (p.mirror) {
       const n = sink.tris.length;
       for (let i = start; i < n; i++) {
@@ -574,7 +597,10 @@ export function buildModel(spec: ModelSpec, options: BuildOptions = {}): BuiltMo
       }
     }
   }
-  const tris = sink.tris;
+}
+
+/** Colors, occlusion, outline normals and emissives of a triangle list. */
+function finish(spec: ModelSpec, tris: Tri[], options: BuildOptions): BuiltModel {
   const count = tris.length;
   const position = new Float32Array(count * 9);
   const normal = new Float32Array(count * 9);
@@ -698,6 +724,8 @@ export interface AnimatedModel {
   /** Everything that does not move, with the spec's emissives. */
   body: BuiltModel;
   pieces: AnimatedPiece[];
+  /** The spec's rotors, in spec order. */
+  rotors: BuiltRotor[];
 }
 
 /** The mirror image of a built model across z = 0 (orientation kept outward). */
@@ -743,11 +771,15 @@ function mirrorModel(m: BuiltModel): BuiltModel {
 
 /**
  * Builds a spec as a static body plus one piece per animated part (and per mirror
- * image), each with its hinge, for the controlled aircraft. The pieces together
- * with the body hold the same triangles as `buildModel(spec)`.
+ * image), each with its hinge, and its rotors, for the controlled aircraft. The
+ * pieces and the rotors' hubs and blades together with the body hold the same
+ * triangles as `buildModel(spec)`.
  */
 export function buildAnimatedModel(spec: ModelSpec, options: BuildOptions = {}): AnimatedModel {
-  const body = buildModel({ ...spec, parts: spec.parts.filter((p) => !p.anim) }, options);
+  const body = buildModel(
+    { ...spec, parts: spec.parts.filter((p) => !p.anim), rotors: undefined },
+    options,
+  );
   const pieces: AnimatedPiece[] = [];
   for (const p of spec.parts) {
     if (!p.anim) continue;
@@ -767,5 +799,168 @@ export function buildAnimatedModel(spec: ModelSpec, options: BuildOptions = {}):
       });
     }
   }
-  return { body, pieces };
+  return { body, pieces, rotors: buildRotors(spec, options) };
+}
+
+// ---- Rotors (decision 157) ----
+
+/** Hub radius of a rotor (m). */
+export function rotorHubRadius(r: RotorSpec): number {
+  return Math.max(0.8 * r.chord, 0.06 * r.radius);
+}
+
+/**
+ * A rotor's frame: the unit spin axis, `u` along the first blade at azimuth 0 (aft,
+ * projected into the rotor's plane; down if the axis runs fore and aft) and
+ * `v` = axis × u, a quarter turn on in the right-handed sense.
+ */
+export function rotorFrame(r: RotorSpec): { axis: Vec3; u: Vec3; v: Vec3 } {
+  const axis = norm(r.axis ?? [0, 1, 0]);
+  const flat = (d: V) => sub(d, scale(axis, dot(d, axis)));
+  let u = flat([-1, 0, 0]);
+  if (len(u) < 0.1) u = flat([0, -1, 0]);
+  u = norm(u);
+  return { axis, u, v: cross(axis, u) };
+}
+
+/** Blade thickness along the axis (m): thick enough not to vanish edge on. */
+const bladeThickness = (r: RotorSpec) => Math.max(0.04, 0.12 * r.chord);
+
+function rotorHub(s: Sink, r: RotorSpec): void {
+  const { axis } = rotorFrame(r);
+  const h = Math.max(0.12, 3 * bladeThickness(r));
+  cylinder(s, {
+    type: 'cylinder',
+    group: r.group,
+    from: add(r.hub, scale(axis, -h / 2)),
+    to: add(r.hub, scale(axis, h / 2)),
+    radius: rotorHubRadius(r),
+    sides: 6,
+  });
+}
+
+/** Plank blades at azimuth 0, spaced in the direction of rotation from `u`. */
+function rotorBlades(s: Sink, r: RotorSpec): void {
+  const { axis, u, v } = rotorFrame(r);
+  const t = bladeThickness(r) / 2;
+  const r0 = 0.6 * rotorHubRadius(r);
+  for (let k = 0; k < r.blades; k++) {
+    const a = (r.direction * 2 * Math.PI * k) / r.blades;
+    const d = add(scale(u, Math.cos(a)), scale(v, Math.sin(a)));
+    const w = scale(cross(axis, d), r.chord / 2);
+    const end = (rad: number): V[] => {
+      const c = add(r.hub, scale(d, rad));
+      return [
+        add(add(c, w), scale(axis, t)),
+        add(sub(c, w), scale(axis, t)),
+        sub(sub(c, w), scale(axis, t)),
+        sub(add(c, w), scale(axis, t)),
+      ];
+    };
+    ringStack(s, [end(r0), end(r.radius)], r.group, add(r.hub, scale(d, (r0 + r.radius) / 2)));
+  }
+}
+
+/**
+ * The disc's bands (fractions of the radius, alpha): a fan and two rings of falling
+ * opacity, then a faint tip ring a little stronger than the band inside it.
+ */
+export const DISC_BANDS: readonly (readonly [number, number, number])[] = [
+  [0, 0.45, 0.42],
+  [0.45, 0.75, 0.3],
+  [0.75, 0.94, 0.19],
+  [0.94, 1, 0.32],
+];
+
+/** Alpha of the disc's rim, the tip path seen edge on. */
+export const DISC_RIM_ALPHA = 0.26;
+
+/** A rotor's translucent disc (model frame), one alpha per face. */
+export interface RotorDisc {
+  triangles: number;
+  position: Float32Array;
+  /** The spin axis at every vertex of the bands, outward on the rim. */
+  normal: Float32Array;
+  /** Linear rgb. */
+  color: Float32Array;
+  alpha: Float32Array;
+}
+
+export interface BuiltRotor {
+  /** Hub center and unit spin axis (model frame). */
+  hub: Vec3;
+  axis: Vec3;
+  direction: 1 | -1;
+  radius: number;
+  /** The hub, which stays visible while the rotor spins (model frame). */
+  hubModel: BuiltModel;
+  /** The blades at azimuth 0 (model frame). */
+  blades: BuiltModel;
+  disc: RotorDisc;
+}
+
+function rotorDisc(spec: ModelSpec, r: RotorSpec, scheme: CamoScheme | undefined): RotorDisc {
+  const { axis, u, v } = rotorFrame(r);
+  const sides = r.radius >= 2 ? 24 : 12;
+  const hex = groupHex(spec.groups, r.disc ?? r.group);
+  const rgb = hexToLinear(hex === 'camo' ? (scheme?.colors[0] ?? '#FF00FF') : hex);
+  const at = (rad: number, k: number): V => {
+    const a = (2 * Math.PI * k) / sides;
+    return add(r.hub, scale(add(scale(u, Math.cos(a)), scale(v, Math.sin(a))), rad * r.radius));
+  };
+  const tris: [V, V, V, number, V][] = [];
+  for (const [r0, r1, alpha] of DISC_BANDS) {
+    for (let k = 0; k < sides; k++) {
+      // Counterclockwise about the axis, so faces point along it.
+      if (r0 === 0) tris.push([r.hub, at(r1, k), at(r1, k + 1), alpha, axis]);
+      else {
+        tris.push([at(r0, k), at(r1, k), at(r1, k + 1), alpha, axis]);
+        tris.push([at(r0, k), at(r1, k + 1), at(r0, k + 1), alpha, axis]);
+      }
+    }
+  }
+  // The tip path's rim: a short band across the disc's plane, so a disc seen edge on
+  // still shows as a line.
+  const h = scale(axis, Math.max(0.03, bladeThickness(r)));
+  for (let k = 0; k < sides; k++) {
+    const p0 = at(1, k);
+    const p1 = at(1, k + 1);
+    const out = norm(sub(scale(add(p0, p1), 0.5), r.hub));
+    const [a, b, c, d] = [sub(p0, h), sub(p1, h), add(p1, h), add(p0, h)];
+    tris.push([a, b, c, DISC_RIM_ALPHA, out], [a, c, d, DISC_RIM_ALPHA, out]);
+  }
+  const n = tris.length;
+  const position = new Float32Array(n * 9);
+  const normal = new Float32Array(n * 9);
+  const color = new Float32Array(n * 9);
+  const alpha = new Float32Array(n * 3);
+  tris.forEach(([a, b, c, al, nrm], i) => {
+    [a, b, c].forEach((p, k) => {
+      position.set(p, i * 9 + k * 3);
+      normal.set(nrm, i * 9 + k * 3);
+      color.set(rgb, i * 9 + k * 3);
+      alpha[i * 3 + k] = al;
+    });
+  });
+  return { triangles: n, position, normal, color, alpha };
+}
+
+/** Builds a spec's rotors for the flown view: hub, blades and disc, in spec order. */
+export function buildRotors(spec: ModelSpec, options: BuildOptions = {}): BuiltRotor[] {
+  const schemeId = options.scheme ?? spec.scheme;
+  const scheme = schemeId ? SCHEMES[schemeId] : undefined;
+  const piece = (r: RotorSpec, emit: (s: Sink, r: RotorSpec) => void) => {
+    const sink = new Sink();
+    emit(sink, r);
+    return finish({ ...spec, emissives: [] }, sink.tris, options);
+  };
+  return (spec.rotors ?? []).map((r) => ({
+    hub: [...r.hub],
+    axis: rotorFrame(r).axis,
+    direction: r.direction,
+    radius: r.radius,
+    hubModel: piece(r, rotorHub),
+    blades: piece(r, rotorBlades),
+    disc: rotorDisc(spec, r, scheme),
+  }));
 }

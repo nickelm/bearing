@@ -293,6 +293,25 @@ export class HelpOverlay {
       <div class="ff-note">Takeoff: release the parking brake (P), full throttle; at about 150 kt hold the stick back until about 9° of pitch and let go: with the gear down the stick commands pitch rate (5°/s) and the attitude holds. Gear up (G) once climbing; the stick then commands g. Landing: gear down below 300 kt, fly the approach at 13° angle of attack, 3° glide path, brake (Space) after the nosewheel is down.</div>`;
   }
 
+  /** Shows another aircraft's bindings (the helicopters'), with notes under the table. */
+  showBindings<A extends string>(
+    bindings: Record<A, string[]>,
+    labels: Record<A, string>,
+    notes: readonly string[],
+  ): void {
+    const rows = (Object.keys(bindings) as A[]).map((a) => {
+      const keys = [...new Set(bindings[a].map(keyName))].join(' / ');
+      return `<tr><td>${keys}</td><td>${labels[a]}</td></tr>`;
+    });
+    rows.push(
+      '<tr><td>Mouse</td><td>Forward: nose down; back: nose up; left and right: turn</td></tr>',
+    );
+    rows.push('<tr><td>Right drag</td><td>Free look; the camera springs back at speed</td></tr>');
+    this.el.innerHTML = `<h1>Controls</h1><table>${rows.join('')}</table>${notes
+      .map((n) => `<div class="ff-note">${n}</div>`)
+      .join('')}`;
+  }
+
   get visible(): boolean {
     return !this.el.hidden;
   }

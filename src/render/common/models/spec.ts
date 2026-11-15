@@ -33,6 +33,15 @@
  * Any part may set `mirror: true` to add its reflection across z = 0, and `yaw` (deg)
  * to turn it about the y axis through `center` (box, frustum, house, arch). Parts of
  * the controlled aircraft may set `anim` to turn about a hinge (decision 134).
+ *
+ * Rotors (helicopters, decisions 149 and 157): `rotors` lists main and tail rotors, each a hub
+ * at `hub` turning about `axis` (unit, default [0, 1, 0]; a tail rotor uses about
+ * [0, 0, ±1]), `blades` (2–8) flat blades of `chord` out to `radius`, turning in
+ * `direction` (+1: counterclockwise seen from the axis's tip, right-handed about it;
+ * −1: clockwise). Blades and hub take color `group`; the translucent disc they blur
+ * into at speed takes `disc` (default the blade group). At azimuth 0 the first blade
+ * points aft along the axis's plane (over the tail for a main rotor). The static model
+ * shows the hub and stopped blades; the disc is drawn only by the flown view.
  */
 import { EMISSIVE_COLORS, MODEL_COLORS, SCHEMES } from './palettes';
 
@@ -162,6 +171,26 @@ export interface EmissiveSpec {
   mirror?: boolean;
 }
 
+/** A main or tail rotor (decision 157): see the header. */
+export interface RotorSpec {
+  /** Hub center (model frame, m). */
+  hub: Vec3;
+  /** Spin axis, unit (default [0, 1, 0]). */
+  axis?: Vec3;
+  /** Blade tip radius (m). */
+  radius: number;
+  /** Blade count, 2–8. */
+  blades: number;
+  /** Blade chord (m). */
+  chord: number;
+  /** +1: right-handed about the axis (counterclockwise seen from its tip), −1: the other way. */
+  direction: 1 | -1;
+  /** Color group of the blades and hub. */
+  group: string;
+  /** Color group of the spinning disc (default `group`). */
+  disc?: string;
+}
+
 export interface ModelSpec {
   /** Identifier (file name without .json). */
   id: string;
@@ -174,6 +203,8 @@ export interface ModelSpec {
   groups: Record<string, string>;
   parts: PartSpec[];
   emissives?: EmissiveSpec[];
+  /** Main and tail rotors, in the order the flown view's pose lists them. */
+  rotors?: RotorSpec[];
   /** Darken faces near y = 0 (models standing on the ground). Default true for buildings. */
   ground?: boolean;
   /**
@@ -306,6 +337,31 @@ export function validateSpec(raw: unknown, id = '?'): ModelSpec {
       if (typeof q.kind !== 'string' || !(q.kind in EMISSIVE_COLORS))
         fail(`emissives[${i}].kind`, `unknown kind "${String(q.kind)}"`);
       if (!isVec(q.at, 3)) fail(`emissives[${i}].at`, 'must be [x, y, z]');
+    });
+  }
+  if (s.rotors !== undefined) {
+    if (!Array.isArray(s.rotors)) fail('rotors', 'must be a list');
+    const known = (g: unknown) => typeof g === 'string' && (g in groups || g in MODEL_COLORS);
+    (s.rotors as unknown[]).forEach((r, i) => {
+      const path = `rotors[${i}]`;
+      if (typeof r !== 'object' || r === null) fail(path, 'not an object');
+      const q = r as Record<string, unknown>;
+      if (!isVec(q.hub, 3)) fail(`${path}.hub`, 'must be [x, y, z]');
+      if (q.axis !== undefined) {
+        const a = q.axis as number[];
+        if (!isVec(a, 3) || Math.abs(Math.hypot(a[0]!, a[1]!, a[2]!) - 1) > 0.05)
+          fail(`${path}.axis`, 'must be a unit vector [x, y, z] (length 0.95–1.05)');
+      }
+      if (!isNum(q.radius) || !(q.radius > 0)) fail(`${path}.radius`, 'must be positive (m)');
+      if (!Number.isInteger(q.blades) || (q.blades as number) < 2 || (q.blades as number) > 8)
+        fail(`${path}.blades`, 'must be a whole number 2–8');
+      if (!isNum(q.chord) || !(q.chord > 0) || !(q.chord < (q.radius as number) / 2))
+        fail(`${path}.chord`, 'must be positive and under half the radius (m)');
+      if (q.direction !== 1 && q.direction !== -1) fail(`${path}.direction`, 'must be 1 or -1');
+      if (!known(q.group))
+        fail(`${path}.group`, `group "${String(q.group)}" has no color in groups`);
+      if (q.disc !== undefined && !known(q.disc))
+        fail(`${path}.disc`, `group "${String(q.disc)}" has no color in groups`);
     });
   }
   return { ...(s as unknown as ModelSpec), id };

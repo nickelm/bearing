@@ -123,11 +123,15 @@ export class FlightMonitor {
         this.lastTouchdown = td;
         this.stopReported = false;
         out.push({ kind: 'touchdown', touchdown: td });
+        // A helicopter lands anywhere; its own limits on slopes and rollover come with H3.
+        const runwayRules = model.kind === 'fixed-wing';
         if (td.sinkRate > CRASH_LANDING) {
           model.crash(`Crashed on landing: sink rate ${td.sinkRate.toFixed(1)} m/s`);
-        } else if (loaded.some((w) => w.surface === 'land')) {
+        } else if (runwayRules && loaded.some((w) => w.surface === 'land')) {
           model.crash('Touched down away from a runway');
         }
+      } else if (model.kind !== 'fixed-wing') {
+        // No runway rules for a helicopter on the ground.
       } else if (loaded.some((w) => w.surface === 'land') && t.groundSpeed > 2) {
         model.crash('Ran off the paved field');
       } else if (loaded.some((w) => w.surface === 'field') && t.groundSpeed > EXCURSION_SPEED) {

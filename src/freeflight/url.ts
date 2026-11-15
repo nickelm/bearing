@@ -3,7 +3,7 @@
  * returns to the same flight:
  *
  *   ?mode=freeflight&seed=…&base=…&tod=…&weather=<preset>&spawn=runway|air
- *     &fuel=unlimited|limited&wind=off&autopilot
+ *     &fuel=unlimited|limited&wind=off&aircraft=kestrel|scout|utility&autopilot
  *
  * `weather` is a preset of sim/weather/presets.ts (`fair` by default, `live`
  * for the world's own weather at that hour); `wind=off` flies in still air.
@@ -37,6 +37,9 @@ export function parseFreeFlightUrl(q: URLSearchParams, seed: string): FreeFlight
   const wind = q.get('wind');
   if (wind === 'off') options.wind = false;
   if (wind === 'on') options.wind = true;
+  const aircraft = q.get('aircraft');
+  if (aircraft === 'kestrel' || aircraft === 'scout' || aircraft === 'utility')
+    options.aircraft = aircraft;
   const base = q.has('base') ? Number(q.get('base')) : NaN;
   return {
     seed,
@@ -61,4 +64,5 @@ export function writeFreeFlightParams(
   else q.set('wind', 'off');
   q.set('spawn', options.spawn);
   q.set('fuel', options.unlimitedFuel ? 'unlimited' : 'limited');
+  q.set('aircraft', options.aircraft);
 }

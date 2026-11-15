@@ -18,8 +18,16 @@
  * - **Ground.** On the ground the camera lowers and closes in. It never drops
  *   below the ground: the eye stays 1.5 m above it, and samples along the line
  *   from the aircraft to the eye lift it over rising terrain.
+ * - **Helicopters** (a rig with a `hover` schedule; Proposal 0004, Camera Rig).
+ *   By horizontal ground speed the pose blends from cruise, where the frame
+ *   follows the nose leaning toward the velocity as for jets, to the hover, where
+ *   it follows the heading (the nose flattened onto the horizontal) with its up
+ *   on the local vertical, and the eye lifts and looks down at the ground under
+ *   and ahead of the helicopter. The pose follows the schedule on the ground as
+ *   in the air. In the hover free look stays where it is left; the look point
+ *   turns with it, so the camera orbits the helicopter all the way round.
  */
-import { DEG } from '../../../core/units';
+import { DEG, KNOT } from '../../../core/units';
 import type { Meters, Radians } from '../../../core/units';
 import { Vec3d } from '../../../core/vec3d';
 import type { Airframe } from '../../../sim/flight/airframe';
@@ -38,6 +46,35 @@ export interface ChaseRig {
   stretchPerAccel: number;
   /** Vertical field of view (rad). */
   fov: Radians;
+  /** Helicopters: the speed schedule between the hover and cruise poses; absent for fixed-wing aircraft. */
+  hover?: ChaseHoverSchedule;
+}
+
+/**
+ * A helicopter rig's speed schedule (Proposal 0004, Camera Rig). Speeds are
+ * horizontal ground speeds, not airspeeds: the camera frames the ground, and a
+ * hover over a spot in a 30 kt wind is still a hover.
+ */
+export interface ChaseHoverSchedule {
+  /** The hover pose holds below `hoverSpeed` (m/s) and the cruise pose above `cruiseSpeed`, blended smoothly between. */
+  hoverSpeed: number;
+  cruiseSpeed: number;
+  /** Hover pose: behind and above the aircraft (m), on the ground as in the air. */
+  distance: Meters;
+  height: Meters;
+  /** The look point ahead of and above the aircraft (m) in the hover and in cruise. */
+  hoverAim: [ahead: Meters, up: Meters];
+  cruiseAim: [ahead: Meters, up: Meters];
+  /**
+   * In the hover the look point drops by this share of the height above the
+   * ground, up to `groundLookMax` (m), so a hover higher up still shows the
+   * ground point under the helicopter.
+   */
+  groundLook: number;
+  groundLookMax: Meters;
+  /** Free look stays where it is left below `lookHoldSpeed` (m/s) and springs back above `lookReleaseSpeed`. */
+  lookHoldSpeed: number;
+  lookReleaseSpeed: number;
 }
 
 /** The rig for fast jets: further back and looser (Proposal 0002, Per-type rigs). */
@@ -51,6 +88,44 @@ export const FAST_JET_RIG: ChaseRig = {
   stretchPerAccel: 0.25,
   fov: 50 * DEG,
 };
+
+/**
+ * The rig for a helicopter of rotor radius `rotorRadius` (m): higher than the
+ * jet's and, in the aircraft's own size, closer (3 rotor radii against the
+ * jet's 4 half-spans for a 7.3 m rotor), in proportion to the rotor so every
+ * type frames alike. In cruise (above 40 kt) 2.2 radii + 6 m behind and 0.45 of
+ * that above, looking about 13° down; in the hover (below 10 kt) 0.85 of the
+ * distance behind, lifted to 0.8 of it, and looking about 30° down, so the ground
+ * under and ahead of the helicopter shows in a 60° field of view; higher hovers
+ * look further down, by half the height above the ground (up to 0.6 of the
+ * distance, about 40° in all), to keep the ground point in view. Free look
+ * holds below 15 kt and springs back above 25 kt.
+ */
+export function helicopterRig(rotorRadius: Meters): ChaseRig {
+  const d = 2.2 * rotorRadius + 6;
+  return {
+    distance: d,
+    height: 0.45 * d,
+    groundDistance: 0.85 * d,
+    groundHeight: 0.8 * d,
+    rotation: 3,
+    stretch: 2,
+    stretchPerAccel: 0.15,
+    fov: 60 * DEG,
+    hover: {
+      hoverSpeed: 10 * KNOT,
+      cruiseSpeed: 40 * KNOT,
+      distance: 0.85 * d,
+      height: 0.8 * d,
+      hoverAim: [0.8 * d, -0.15 * d],
+      cruiseAim: [0.9 * d, 0],
+      groundLook: 0.5,
+      groundLookMax: 0.6 * d,
+      lookHoldSpeed: 15 * KNOT,
+      lookReleaseSpeed: 25 * KNOT,
+    },
+  };
+}
 
 /** The pose the camera follows. */
 export interface ChaseTarget {
@@ -79,6 +154,10 @@ const MAX_LOOK_PITCH = 80 * DEG;
 function smooth(t: number): number {
   const x = Math.max(0, Math.min(1, t));
   return x * x * (3 - 2 * x);
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
 }
 
 /** Critically damped spring step for a scalar. */
@@ -126,9 +205,22 @@ export class ChaseCamera {
   private liftVel = 0;
   private lastSpeed = 0;
   private accel = 0;
+  private agl = 0;
   private initialized = false;
 
-  constructor(readonly radius: Meters) {}
+  /** `rig` picks the type's rig: `FAST_JET_RIG`, or `helicopterRig(rotorRadius)`; reset after changing it. */
+  constructor(
+    readonly radius: Meters,
+    rig: ChaseRig = FAST_JET_RIG,
+  ) {
+    this.rig = rig;
+    this.fov = rig.fov;
+  }
+
+  /** The hover schedule's weight, 1 in the hover and 0 in cruise, from the horizontal ground speed (m/s). */
+  static hoverWeight(s: Readonly<ChaseHoverSchedule>, groundSpeed: number): number {
+    return 1 - smooth((groundSpeed - s.hoverSpeed) / (s.cruiseSpeed - s.hoverSpeed));
+  }
 
   /** Snaps the springs to the target, e.g. on a respawn. */
   reset(): void {
@@ -165,19 +257,43 @@ export class ChaseCamera {
     const t = this.target;
     const radial = t.pos.clone().normalize();
     const rig = this.rig;
+    // Helicopters: the schedule's weights from the horizontal ground speed.
+    const hv = rig.hover;
+    let wHover = 0;
+    let wHold = 0;
+    if (hv) {
+      const groundSpeed = t.velocity.clone().addScaled(radial, -t.velocity.dot(radial)).length();
+      wHover = ChaseCamera.hoverWeight(hv, groundSpeed);
+      wHold =
+        1 - smooth((groundSpeed - hv.lookHoldSpeed) / (hv.lookReleaseSpeed - hv.lookHoldSpeed));
+    }
+    // Height above the ground for the hover's look point, smoothed over half a second.
+    let agl = 0;
+    if (hv && this.groundAt) {
+      const g = this.groundAt(radial);
+      if (g !== null) agl = Math.max(0, t.pos.length() - this.radius - g);
+    }
+    const snap = !this.initialized;
     if (!this.initialized) {
       this.camFwd.copy(t.forward);
       this.camUp.copy(t.up);
       this.fwdVel.set(0, 0, 0);
       this.upVel.set(0, 0, 0);
-      this.dist = t.onGround ? rig.groundDistance : rig.distance;
-      this.lift = t.onGround ? rig.groundHeight : rig.height;
+      if (hv) {
+        this.dist = lerp(rig.distance, hv.distance, wHover);
+        this.lift = lerp(rig.height, hv.height, wHover);
+      } else {
+        this.dist = t.onGround ? rig.groundDistance : rig.distance;
+        this.lift = t.onGround ? rig.groundHeight : rig.height;
+      }
       this.distVel = 0;
       this.liftVel = 0;
       this.lastSpeed = t.velocity.length();
       this.accel = 0;
+      this.agl = agl;
       this.initialized = true;
     }
+    if (hv) this.agl += (agl - this.agl) * Math.min(1, dt * 2);
     const h = Math.max(dt, 1e-4);
     // Forward acceleration, smoothed.
     const speed = t.velocity.length();
@@ -187,14 +303,33 @@ export class ChaseCamera {
     // In flight the frame leans toward the velocity (85% above 60 m/s): at an
     // approach's 12° of angle of attack a nose-aligned camera would put the runway,
     // which lies along the flight path, behind the airframe.
-    const vw = t.onGround ? 0 : 0.85 * smooth((speed - 30) / 30);
+    // Helicopters lean toward the velocity as they leave the hover.
+    const vw = t.onGround ? 0 : 0.85 * (hv ? 1 - wHover : smooth((speed - 30) / 30));
     const aimFwd = t.forward.clone();
     if (vw > 0 && speed > 1)
       aimFwd
         .scale(1 - vw)
         .addScaled(t.velocity, vw / speed)
         .normalize();
-    const aimUp = t.up.clone().addScaled(aimFwd, -t.up.dot(aimFwd)).normalize();
+    const aimUp = t.up.clone();
+    if (hv && wHover > 0) {
+      // Hover: the heading, with up on the local vertical; the nose's pitch and roll stay out.
+      const heading = t.forward.clone().addScaled(radial, -t.forward.dot(radial));
+      if (heading.lengthSq() < 1e-12)
+        heading.copy(this.camFwd).addScaled(radial, -this.camFwd.dot(radial));
+      if (heading.lengthSq() > 1e-12) {
+        aimFwd
+          .scale(1 - wHover)
+          .addScaled(heading.normalize(), wHover)
+          .normalize();
+      }
+      aimUp.scale(1 - wHover).addScaled(radial, wHover);
+    }
+    aimUp.addScaled(aimFwd, -aimUp.dot(aimFwd)).normalize();
+    if (snap && hv) {
+      this.camFwd.copy(aimFwd);
+      this.camUp.copy(aimUp);
+    }
     // Rotation lag: critically damped springs on the camera's axes.
     const w = rig.rotation;
     for (const [x, v, target] of [
@@ -214,15 +349,24 @@ export class ChaseCamera {
     const u = this.camUp.clone().scale(2).addScaled(radial, 1);
     u.addScaled(f, -u.dot(f)).normalize();
     // Distance and height, lower and closer on the ground.
+    // A helicopter's pose follows the schedule instead, on the ground as in the air.
     const dTarget =
-      (t.onGround ? rig.groundDistance : rig.distance) +
+      (hv
+        ? lerp(rig.distance, hv.distance, wHover)
+        : t.onGround
+          ? rig.groundDistance
+          : rig.distance) +
       rig.stretchPerAccel * Math.max(-10, Math.min(20, this.accel));
-    const hTarget = t.onGround ? rig.groundHeight : rig.height;
+    const hTarget = hv
+      ? lerp(rig.height, hv.height, wHover)
+      : t.onGround
+        ? rig.groundHeight
+        : rig.height;
     [this.dist, this.distVel] = spring(this.dist, this.distVel, dTarget, rig.stretch, dt);
     [this.lift, this.liftVel] = spring(this.lift, this.liftVel, hTarget, rig.stretch, dt);
-    // Free look springs back when released.
-    if (!this.lookHeld) {
-      const k = Math.exp(-dt / 0.25);
+    // Free look springs back when released; in a helicopter's hover it stays.
+    if (!this.lookHeld && wHold < 1) {
+      const k = Math.exp((-dt / 0.25) * (1 - wHold));
       this.lookYaw *= k;
       this.lookPitch *= k;
     }
@@ -267,7 +411,19 @@ export class ChaseCamera {
     this.eye.copy(eye);
     // Look at a point well ahead of the aircraft, so it sits below the center
     // and the way ahead (a runway on approach) shows above it.
-    const aim = t.pos.clone().addScaled(f, 25).addScaled(u, 1);
+    // A helicopter's look point turns with the free look, so an orbit keeps it
+    // in view, and in the hover drops with the height above the ground.
+    const aim = hv
+      ? t.pos
+          .clone()
+          .addScaled(f, cy * cp * lerp(hv.cruiseAim[0], hv.hoverAim[0], wHover))
+          .addScaled(right, sy * cp * lerp(hv.cruiseAim[0], hv.hoverAim[0], wHover))
+          .addScaled(
+            u,
+            lerp(hv.cruiseAim[1], hv.hoverAim[1], wHover) -
+              wHover * Math.min(hv.groundLookMax, hv.groundLook * this.agl),
+          )
+      : t.pos.clone().addScaled(f, 25).addScaled(u, 1);
     this.forward.copy(aim.sub(this.eye)).normalize();
     this.up.copy(u).addScaled(this.forward, -u.dot(this.forward)).normalize();
     this.fov = rig.fov;

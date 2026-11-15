@@ -24,7 +24,8 @@
  *   WORLD    a world written by tools/browser.world.preview.ts, as its path without the
  *            extension (tools/out/browser/world-1983): it is put into the browser's world
  *            cache before the app loads, which spares a machine without a GPU the global pass
- *   ONLY     comma list of parts to run: flight, takeoff, campaign (default all)
+ *   ONLY     comma list of parts to run: flight, takeoff, helicopter, campaign (default all)
+ *   HELO     the helicopter the helicopter part flies: scout (default) or utility
  *   SCENES   comma list of the flight's scenes: fair, storm, snow, fog, night, dust
  *   SCALE    render scale for the pictures: 100% (default), 75%, 50%, 35%, or auto
  *   W, H     viewport (640 × 360)
@@ -65,7 +66,7 @@ const app = (process.argv[2] ?? 'http://localhost:4173/bearing/').replace(/\/?$/
 const mode = defaultMode();
 const out = env('OUT', join(here, 'out', 'browser'));
 const seed = env('SEED', '1983');
-const parts = env('ONLY', 'flight,takeoff,campaign').split(',');
+const parts = env('ONLY', 'flight,takeoff,helicopter,campaign').split(',');
 const scale = env('SCALE', '100%');
 const slow = Number(env('SLOW', mode === 'gpu' ? '1' : '8'));
 // The app does not start on a software adapter unasked (webgpuSupport.ts): these modes ask.
@@ -396,6 +397,110 @@ async function takeoff() {
   await deviceHealthy('takeoff');
 }
 
+/**
+ * A helicopter (track H1): from the ground beside the runway, W to climb, a hover that holds,
+ * a pedal turn, forward flight from the mouse (nudged: headless Chromium does not lock the
+ * pointer), back to a hover, and S to land.
+ */
+async function helicopter() {
+  const which = env('HELO', 'scout');
+  await open(`mode=freeflight&seed=${seed}&aircraft=${which}&weather=clear&tod=10&spawn=runway`);
+  await until(() => document.querySelectorAll('.ff-bases tbody tr').length > 0, 240);
+  await page.evaluate(() => document.querySelector('.ff-bases tbody tr').click());
+  await until(() => !document.querySelector('.ff-fly').disabled, 900);
+  await button(page, 'Fly');
+  await until(() => window.bearing?.freeFlight.state === 'flying', 120);
+  await fixScale();
+  await settled();
+  const helo = () => {
+    const ff = window.bearing.freeFlight;
+    const m = ff.flight.helo;
+    if (!m) return null;
+    const t = m.telemetry;
+    return {
+      height: +t.radarAltitude.toFixed(1),
+      knots: Math.round(t.groundSpeed / 0.5144),
+      heading: Math.round((t.heading * 180) / Math.PI),
+      pitch: +((t.pitch * 180) / Math.PI).toFixed(1),
+      bank: +((t.bank * 180) / Math.PI).toFixed(1),
+      rpm: +t.rotorSpeed.toFixed(3),
+      torque: +t.torque.toFixed(2),
+      onGround: m.onGround,
+      crashed: m.crashed,
+    };
+  };
+  const start = await page.evaluate(helo);
+  check(
+    start !== null && start.onGround && !start.crashed,
+    `helicopter: not on the ground at the start: ${JSON.stringify(start)}`,
+  );
+  await picture('helo-ground');
+  // W: climb until about 15 m, then let go: the altitude holds and the hover holds.
+  await page.keyboard.down('KeyW');
+  await until(() => {
+    const m = window.bearing.freeFlight.flight.helo;
+    return m.crashed || m.telemetry.radarAltitude > 15;
+  }, 120).catch(() => {});
+  await page.keyboard.up('KeyW');
+  await frames(40);
+  const hover = await page.evaluate(helo);
+  check(
+    hover &&
+      !hover.crashed &&
+      !hover.onGround &&
+      hover.height > 8 &&
+      Math.abs(hover.rpm - 1) < 0.06,
+    `helicopter: no hover after the climb: ${JSON.stringify(hover)}`,
+  );
+  await picture('helo-hover');
+  // Q: a pedal turn to the left.
+  await page.keyboard.down('KeyQ');
+  await frames(25);
+  await page.keyboard.up('KeyQ');
+  await frames(10);
+  const turned = await page.evaluate(helo);
+  check(
+    turned && Math.abs(((turned.heading - hover.heading + 540) % 360) - 180) > 10,
+    `helicopter: the pedals do not turn it: ${JSON.stringify([hover, turned])}`,
+  );
+  // The mouse forward: nose down, forward flight.
+  for (let i = 0; i < 10; i++) {
+    await page.evaluate(() => window.bearing.freeFlight.heloInput.nudge(0, -6));
+    await frames(1);
+  }
+  await frames(60);
+  const forward = await page.evaluate(helo);
+  check(
+    forward && forward.knots > 10 && !forward.crashed,
+    `helicopter: no forward flight: ${JSON.stringify(forward)}`,
+  );
+  await picture('helo-forward');
+  // Back to a hover: the mouse back, then S to land.
+  for (let i = 0; i < 10; i++) {
+    await page.evaluate(() => window.bearing.freeFlight.heloInput.nudge(0, 6));
+    await frames(1);
+  }
+  await frames(60);
+  await page.keyboard.down('KeyS');
+  await until(() => {
+    const m = window.bearing.freeFlight.flight.helo;
+    return m.crashed || (m.onGround && m.telemetry.groundSpeed < 3);
+  }, 240).catch(() => {});
+  await frames(30);
+  await page.keyboard.up('KeyS');
+  const landed = await page.evaluate(helo);
+  check(
+    landed && landed.onGround && !landed.crashed,
+    `helicopter: no landing: ${JSON.stringify(landed)}`,
+  );
+  await picture('helo-landed');
+  results['helo-landed'].helicopter = { start, hover, turned, forward, landed };
+  log(
+    `helicopter: hover at ${hover.height} m, ${forward.knots} kt forward, landed ${landed.onGround}`,
+  );
+  await deviceHealthy('helicopter');
+}
+
 /** The campaign: the simulation view, a weather override, the map and back, the time controls. */
 async function campaign() {
   await open(`seed=${seed}`);
@@ -464,6 +569,7 @@ async function campaign() {
 try {
   if (parts.includes('flight')) await flight();
   if (parts.includes('takeoff')) await takeoff();
+  if (parts.includes('helicopter')) await helicopter();
   if (parts.includes('campaign')) await campaign();
 } catch (e) {
   fail(`the run stopped: ${String(e.stack ?? e).slice(0, 800)}`);

@@ -14,6 +14,14 @@
  *   localizer and glideslope deviation bars for a 3° glide path.
  * - **Messages:** airborne, touchdown summaries, warnings, crash reasons.
  * - **Debug panel** (F3): α, β, CL, CD, thrust, load factor, body forces, timing.
+ * - **Helicopter layout** (when the frame carries `hover`; decision 149): the
+ *   velocity vector on the ground plane from the ground point with the
+ *   acceleration cue at its tip, the landing zone's marker (a caret at the edge
+ *   when off screen), a digital radar altitude with a vertical-speed bar, torque
+ *   and rotor RPM, ground speed, mode tags and hazard cues. It leaves out what
+ *   only a jet has: Mach, G, α and the indexer, throttle stages, speedbrake, and
+ *   the landing aid's needles (the runway outline stays); the flight path marker
+ *   shows only above 12 m/s, where the velocity's direction means something.
  *
  * The F-21 is an Alliance aircraft, so the HUD reads knots and feet. One color,
  * green, with a thin dark halo, so it stays legible on bright sky and snow
@@ -21,6 +29,7 @@
  */
 import './flight.css';
 import { DEG, FOOT, KNOT, NAUTICAL_MILE } from '../../core/units';
+import type { Vec3d } from '../../core/vec3d';
 import type { FlightWarning } from '../../sim/flight/outcomes';
 
 /** HUD green and its halo. */
@@ -49,6 +58,45 @@ export interface HudLandingAid {
   corners: [number, number, number][];
   aim: [number, number, number];
 }
+
+/**
+ * The helicopter's hover symbology (decision 149, Proposal 0004, HUD and Camera).
+ * When a frame carries it, the HUD draws the helicopter layout.
+ */
+export interface HoverHud {
+  /** Ground velocity in the heading frame (m/s): + forward, + right; and its acceleration (m/s², same frame). */
+  velocity: { forward: number; right: number };
+  accel: { forward: number; right: number };
+  /**
+   * World-anchored: the point on the ground under the aircraft, and the tips of
+   * the velocity vector and acceleration cue on the ground plane, each relative
+   * to the camera eye (m). `hoverSymbols` in freeflight/hudFrame.ts builds them.
+   */
+  groundPoint: Vec3d;
+  velocityTip: Vec3d;
+  accelTip: Vec3d;
+  /** Height above the ground (m). */
+  radarAltitude: number;
+  /** Vertical speed (m/s, + up). */
+  verticalSpeed: number;
+  /** Torque and rotor speed as fractions of their maximum and governed values (1 = 100 %). */
+  torque: number;
+  rotorRpm: number;
+  /** Landing zone: distance (m), bearing relative to the nose (rad, + right), and its point relative to the eye; or null. */
+  lz: { distance: number; bearing: number; point: Vec3d } | null;
+  /** Active assists and modes shown as short tags, e.g. 'HOVER HOLD', 'ALT HOLD', 'ASSISTED'. */
+  modes: string[];
+  /** Hazard cues ('VRS', 'MAST BUMP', 'RBS', 'ROLLOVER', 'LOW RPM', 'TORQUE'): amber, the severe ones flashing. */
+  hazards: string[];
+}
+
+/** Hazards that flash: those that need action within a second or two. */
+export const SEVERE_HAZARDS: ReadonlySet<string> = new Set([
+  'VRS',
+  'MAST BUMP',
+  'ROLLOVER',
+  'LOW RPM',
+]);
 
 export interface HudFrame {
   cas: number;
@@ -94,6 +142,8 @@ export interface HudFrame {
     physicsMs: number;
     steps: number;
   } | null;
+  /** Helicopters: the hover symbology; absent or null for fixed-wing aircraft. */
+  hover?: HoverHud | null;
 }
 
 /**
@@ -132,6 +182,13 @@ interface Message {
   text: string[];
   until: number;
   warn: boolean;
+}
+
+/** A landing zone's distance: feet to the nearest 10 within 0.3 NM, nautical miles beyond. */
+export function hoverDistance(d: number): string {
+  const nm = d / NAUTICAL_MILE;
+  if (nm < 0.3) return `${Math.round(d / FOOT / 10) * 10} FT`;
+  return `${nm < 10 ? nm.toFixed(1) : Math.round(nm)} NM`;
 }
 
 const WARNING_TEXT: Record<FlightWarning, string> = {
@@ -208,14 +265,22 @@ export class Hud {
     // Tapes flank the aircraft at a share of the width; the numbers stack under them.
     const tx = Math.min(0.3 * W, 400 * s);
     const span = 120 * s;
+    const hv = f.hover ?? null;
     this.worldSymbols(f, project, s);
+    if (hv) this.hoverWorld(hv, project, s);
     this.speedTape(f, cx - tx, cy, s);
     this.altitudeTape(f, cx + tx, cy, s);
     this.headingTape(f, cx, 70 * s, s);
-    this.numbers(f, cx - tx - 28 * s, cy + span + 44 * s, s);
+    if (hv) {
+      this.hoverAltitude(hv, cx + tx, cy, s);
+      this.rotor(hv, cx - tx - 28 * s, cy + span + 44 * s, s);
+    } else {
+      this.numbers(f, cx - tx - 28 * s, cy + span + 44 * s, s);
+    }
     this.attitude(f, cx - tx + 6 * s, cy + span + 118 * s, s);
     this.status(f, cx + tx, cy + span + 44 * s, s);
-    this.landingAid(f, cx + tx - 150 * s, cy - span - 120 * s, s);
+    if (hv) this.landingZone(f, hv, cx + tx - 150 * s, cy - span - 120 * s, s);
+    else this.landingAid(f, cx + tx - 150 * s, cy - span - 120 * s, s);
     this.messagesAndWarnings(f, cx, 130 * s, s);
     // Below the app's frame-time readout.
     if (f.debug) this.debugPanel(f, 16, 64, s);
@@ -281,7 +346,8 @@ export class Hud {
       });
     }
     // Flight path marker: a circle with wings and a fin.
-    if (Math.hypot(...f.velocity) > 0.5) {
+    // A helicopter's velocity points anywhere in the hover: its marker waits for 12 m/s.
+    if (Math.hypot(...f.velocity) > (f.hover ? 12 : 0.5)) {
       const p = project(...f.velocity, false);
       if (p) {
         const r = 7 * s;
@@ -351,7 +417,12 @@ export class Hud {
       if (Math.abs(ty - y) > 14 * s) this.text(String(v), x + 14 * s, ty, 'right');
     }
     this.box(x - 30 * s, y, 58 * s, `${Math.round(kias)}`, 'right');
-    this.text(`M ${f.mach.toFixed(2)}`, x + 28 * s, y + span + 18 * s, 'right');
+    if (f.hover) {
+      const gs = Math.hypot(f.hover.velocity.forward, f.hover.velocity.right) / KNOT;
+      this.text(`GS ${Math.round(gs)}`, x + 28 * s, y + span + 18 * s, 'right');
+    } else {
+      this.text(`M ${f.mach.toFixed(2)}`, x + 28 * s, y + span + 18 * s, 'right');
+    }
   }
 
   private altitudeTape(f: HudFrame, x: number, y: number, s: number): void {
@@ -383,7 +454,8 @@ export class Hud {
       'left',
     );
     const ra = f.radarAltitude / FOOT;
-    if (ra < 1500)
+    // The helicopter layout draws its own radar altitude (hoverAltitude).
+    if (ra < 1500 && !f.hover)
       this.text(
         `R ${Math.max(0, Math.round(ra)).toLocaleString('en-US')}`,
         x - 28 * s,
@@ -424,7 +496,7 @@ export class Hud {
     for (let d = Math.ceil((hdg - 30) / 10) * 10; d <= hdg + 30; d += 10) {
       const tx = x + (d - hdg) * pxPerDeg;
       const v = ((d % 360) + 360) % 360;
-      if (Math.abs(tx - x) > 22 * s)
+      if (Math.abs(tx - x) > 30 * s)
         this.text(String(v).padStart(3, '0'), tx, y - 10 * s, 'center');
     }
     this.text(String(Math.round(hdg) % 360).padStart(3, '0'), x, y - 10 * s, 'center');
@@ -505,6 +577,7 @@ export class Hud {
   }
 
   private status(f: HudFrame, x: number, y: number, s: number): void {
+    if (f.hover) return this.hoverStatus(f, f.hover, x, y, s);
     const lines: [string, string?][] = [];
     const lever = f.throttle;
     x += 28 * s;
@@ -517,11 +590,7 @@ export class Hud {
             ? 'IDLE'
             : `${Math.round(60 + 40 * (lever / 0.8))}%`;
     lines.push([`THR ${thr}`]);
-    const lb = f.fuel / 0.453_592;
-    lines.push([
-      `FUEL ${Math.round(lb / 10) * 10 > 0 ? (Math.round(lb / 10) * 10).toLocaleString('en-US') : 0} LB${f.unlimitedFuel ? ' ∞' : ''}`,
-      f.fuel < 500 && !f.unlimitedFuel ? WARN_COLOR : undefined,
-    ]);
+    lines.push(this.fuelLine(f));
     lines.push([
       f.gear >= 0.999 ? 'GEAR DOWN' : f.gear <= 0.001 ? 'GEAR UP' : 'GEAR ▒ TRANSIT',
       f.gear > 0.001 && f.gear < 0.999 ? WARN_COLOR : undefined,
@@ -586,6 +655,10 @@ export class Hud {
     this.messages = this.messages.filter((m) => m.until > now);
     let row = 0;
     const blink = Math.floor(now / 350) % 2 === 0;
+    if (f.hover && f.hover.hazards.length > 0) {
+      this.hazards(f.hover.hazards, x, y, s, blink);
+      row += 1.7;
+    }
     for (const w of f.warnings) {
       if (w === 'pull-up' && !blink) {
         row++;
@@ -600,6 +673,276 @@ export class Hud {
         row++;
       }
     }
+  }
+
+  // ---- Helicopter layout ----
+
+  /** Draws `fn` in a font of `px` CSS pixels, then restores the HUD's font. */
+  private withFont(px: number, fn: () => void): void {
+    const c = this.ctx;
+    const saved = c.font;
+    c.font = `${Math.round(px)}px ui-monospace, 'JetBrains Mono', Consolas, monospace`;
+    fn();
+    c.font = saved;
+  }
+
+  /**
+   * World-anchored hover symbols: a cross at the ground point, the velocity
+   * vector along the ground to its tip, the acceleration cue (a circle; centered
+   * on the cross in a steady hover), and the landing zone's marker, or a caret
+   * at the screen's edge pointing to it.
+   */
+  private hoverWorld(hv: HoverHud, project: Projector, s: number): void {
+    const c = this.ctx;
+    const at = (p: Readonly<Vec3d>) => project(p.x, p.y, p.z, true);
+    const g = at(hv.groundPoint);
+    if (g) {
+      const v = at(hv.velocityTip);
+      const a = at(hv.accelTip);
+      const d = 8 * s;
+      this.stroke(() => {
+        c.beginPath();
+        c.moveTo(g.x - d, g.y);
+        c.lineTo(g.x + d, g.y);
+        c.moveTo(g.x, g.y - d);
+        c.lineTo(g.x, g.y + d);
+      });
+      if (v && Math.hypot(v.x - g.x, v.y - g.y) > 2) {
+        this.stroke(
+          () => {
+            c.beginPath();
+            c.moveTo(g.x, g.y);
+            c.lineTo(v.x, v.y);
+          },
+          HUD_COLOR,
+          2.6,
+        );
+      }
+      if (a) {
+        this.stroke(() => {
+          c.beginPath();
+          c.arc(a.x, a.y, 5.5 * s, 0, 2 * Math.PI);
+        });
+      }
+    }
+    const lz = hv.lz;
+    if (!lz) return;
+    const W = this.w;
+    const H = this.h;
+    // The caret stays inside these margins, clear of the heading tape.
+    const m = 36 * s;
+    const top = 112 * s;
+    const p = at(lz.point);
+    if (p && p.x >= m && p.x <= W - m && p.y >= top && p.y <= H - m) {
+      const r = 14 * s;
+      const k = 5.5 * s;
+      this.stroke(() => {
+        c.beginPath();
+        c.moveTo(p.x, p.y - r);
+        c.lineTo(p.x + r, p.y);
+        c.lineTo(p.x, p.y + r);
+        c.lineTo(p.x - r, p.y);
+        c.closePath();
+        c.moveTo(p.x - k, p.y - k);
+        c.lineTo(p.x - k, p.y + k);
+        c.moveTo(p.x + k, p.y - k);
+        c.lineTo(p.x + k, p.y + k);
+        c.moveTo(p.x - k, p.y);
+        c.lineTo(p.x + k, p.y);
+      });
+      this.text(hoverDistance(lz.distance), p.x + r + 6 * s, p.y, 'left');
+      return;
+    }
+    // Off screen: toward its projection, or, behind the camera, by its bearing (lower half).
+    const ox = W / 2;
+    const oy = H / 2;
+    let dx = p ? p.x - ox : Math.sin(lz.bearing);
+    let dy = p ? p.y - oy : Math.abs(Math.cos(lz.bearing));
+    const n = Math.hypot(dx, dy);
+    if (n < 1e-6) {
+      dx = 0;
+      dy = 1;
+    } else {
+      dx /= n;
+      dy /= n;
+    }
+    let t = Infinity;
+    if (dx > 1e-6) t = Math.min(t, (W - m - ox) / dx);
+    if (dx < -1e-6) t = Math.min(t, (m - ox) / dx);
+    if (dy > 1e-6) t = Math.min(t, (H - m - oy) / dy);
+    if (dy < -1e-6) t = Math.min(t, (top - oy) / dy);
+    const ex = ox + dx * t;
+    const ey = oy + dy * t;
+    const l = 12 * s;
+    const w = 8 * s;
+    this.stroke(
+      () => {
+        c.beginPath();
+        c.moveTo(ex - dx * l - dy * w, ey - dy * l + dx * w);
+        c.lineTo(ex, ey);
+        c.lineTo(ex - dx * l + dy * w, ey - dy * l - dx * w);
+      },
+      HUD_COLOR,
+      2.2,
+    );
+    // The label sits inward of the caret: beyond its tail on the side edges, and
+    // a line further in on the top and bottom.
+    const lx = ex - dx * 20 * s;
+    const ly = ey - dy * 20 * s - (Math.abs(dy) > 0.5 ? Math.sign(dy) * 12 * s : 0);
+    const align: CanvasTextAlign = dx > 0.5 ? 'right' : dx < -0.5 ? 'left' : 'center';
+    this.text(`LZ ${hoverDistance(lz.distance)}`, lx, ly, align);
+  }
+
+  /** Radar altitude (feet, boxed and larger) and the vertical-speed bar (±1,000 fpm) inside the altitude tape. */
+  private hoverAltitude(hv: HoverHud, x: number, y: number, s: number): void {
+    const c = this.ctx;
+    const half = 90 * s;
+    const sx = x - 50 * s;
+    this.stroke(
+      () => {
+        c.beginPath();
+        c.moveTo(sx, y - half);
+        c.lineTo(sx, y + half);
+        for (const k of [-1, -0.5, 0, 0.5, 1]) {
+          c.moveTo(sx, y - k * half);
+          c.lineTo(sx - (k === 0 ? 9 : 5) * s, y - k * half);
+        }
+      },
+      HUD_COLOR,
+      1.2,
+    );
+    const fpm = (hv.verticalSpeed / FOOT) * 60;
+    const k = Math.max(-1, Math.min(1, fpm / 1000));
+    if (Math.abs(k) > 0.01) {
+      this.stroke(
+        () => {
+          c.beginPath();
+          c.moveTo(sx + 5 * s, y);
+          c.lineTo(sx + 5 * s, y - k * half);
+        },
+        HUD_COLOR,
+        3.6,
+      );
+    }
+    const ra = hv.radarAltitude / FOOT;
+    if (ra >= 1500) return;
+    const v = ra < 50 ? Math.round(ra) : Math.round(ra / 10) * 10;
+    const bw = 58 * s;
+    const bh = 28 * s;
+    const bx = sx - 14 * s - bw / 2;
+    this.stroke(() => {
+      c.beginPath();
+      c.rect(bx - bw / 2, y - bh / 2, bw, bh);
+    });
+    this.withFont(20 * s, () => this.text(String(Math.max(0, v)), bx, y + 1, 'center'));
+    this.text('R', bx - bw / 2 - 6 * s, y, 'right');
+  }
+
+  /** Torque and rotor RPM; RPM larger, both amber outside their limits (torque over 100 %, RPM outside 95–105 %). */
+  private rotor(hv: HoverHud, x: number, y: number, s: number): void {
+    this.text(
+      `TRQ ${Math.round(hv.torque * 100)}%`,
+      x,
+      y,
+      'left',
+      hv.torque > 1 ? WARN_COLOR : HUD_COLOR,
+    );
+    const off = hv.rotorRpm < 0.95 || hv.rotorRpm > 1.05;
+    this.withFont(20 * s, () =>
+      this.text(
+        `NR ${Math.round(hv.rotorRpm * 100)}%`,
+        x,
+        y + 24 * s,
+        'left',
+        off ? WARN_COLOR : HUD_COLOR,
+      ),
+    );
+  }
+
+  /** Fuel, gear when it is not down and locked (skids never show), brakes, the mode tags and the control mode. */
+  private hoverStatus(f: HudFrame, hv: HoverHud, x: number, y: number, s: number): void {
+    const lines: [string, string?][] = [this.fuelLine(f)];
+    if (f.gear < 0.999)
+      lines.push([
+        f.gear <= 0.001 ? 'GEAR UP' : 'GEAR ▒ TRANSIT',
+        f.gear > 0.001 ? WARN_COLOR : undefined,
+      ]);
+    if (f.parkingBrake) lines.push(['PARK BRK', WARN_COLOR]);
+    else if (f.brakes) lines.push(['BRAKES']);
+    for (const m of hv.modes) lines.push([m.toUpperCase()]);
+    lines.push([f.mode.toUpperCase()]);
+    lines.forEach(([t, color], i) => this.text(t, x, y + i * 18 * s, 'left', color));
+  }
+
+  private fuelLine(f: HudFrame): [string, string?] {
+    const lb = Math.round(f.fuel / 0.453_592 / 10) * 10;
+    return [
+      `FUEL ${lb > 0 ? lb.toLocaleString('en-US') : 0} LB${f.unlimitedFuel ? ' ∞' : ''}`,
+      f.fuel < 500 && !f.unlimitedFuel ? WARN_COLOR : undefined,
+    ];
+  }
+
+  /** The landing zone's distance and bearing off the nose, under the destination runway's line. */
+  private landingZone(f: HudFrame, hv: HoverHud, x: number, y: number, s: number): void {
+    const a = f.aid;
+    if (a) {
+      const nm = a.distance / NAUTICAL_MILE;
+      const brg = String(Math.round((((a.bearing / DEG) % 360) + 360) % 360)).padStart(3, '0');
+      this.text(
+        `RWY ${a.designator}  ${nm < 10 ? nm.toFixed(1) : Math.round(nm)} NM  ${brg}°`,
+        x,
+        y - 22 * s,
+        'left',
+      );
+    }
+    const lz = hv.lz;
+    if (!lz) return;
+    const deg = Math.round(Math.abs(lz.bearing) / DEG);
+    const side = deg === 0 ? '' : lz.bearing > 0 ? 'R' : 'L';
+    this.text(
+      `LZ  ${hoverDistance(lz.distance)}  ${String(deg).padStart(3, '0')}°${side}`,
+      x,
+      y - 4 * s,
+      'left',
+    );
+  }
+
+  /** Hazard cues in a centered row of amber boxes; the severe ones flash between filled and outlined. */
+  private hazards(list: string[], x: number, y: number, s: number, blink: boolean): void {
+    const c = this.ctx;
+    const pad = 8 * s;
+    const gap = 12 * s;
+    const h = 26 * s;
+    this.withFont(17 * s, () => {
+      const widths = list.map((t) => c.measureText(t).width + 2 * pad);
+      let left = x - (widths.reduce((a, b) => a + b, 0) + gap * (list.length - 1)) / 2;
+      list.forEach((t, i) => {
+        const w = widths[i]!;
+        const filled = SEVERE_HAZARDS.has(t) && blink;
+        if (filled) {
+          c.strokeStyle = HALO;
+          c.lineWidth = 2.4;
+          c.strokeRect(left, y - h / 2, w, h);
+          c.fillStyle = WARN_COLOR;
+          c.fillRect(left, y - h / 2, w, h);
+          c.textAlign = 'center';
+          c.textBaseline = 'middle';
+          c.fillStyle = '#1A1B1D';
+          c.fillText(t, left + w / 2, y);
+        } else {
+          this.stroke(
+            () => {
+              c.beginPath();
+              c.rect(left, y - h / 2, w, h);
+            },
+            WARN_COLOR,
+            1.6,
+          );
+          this.text(t, left + w / 2, y, 'center', WARN_COLOR);
+        }
+        left += w + gap;
+      });
+    });
   }
 
   private debugPanel(f: HudFrame, x: number, y: number, s: number): void {

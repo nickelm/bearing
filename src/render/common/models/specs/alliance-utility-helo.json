@@ -1,0 +1,404 @@
+{
+  "name": "UH-68 Buzzard",
+  "class": "helicopter",
+  "scheme": "alliance-woodland",
+  "groups": {
+    "body": "camo",
+    "canopy": "canopy",
+    "rotor": "#34373A",
+    "nozzle": "nozzle",
+    "gear": "#2E3328",
+    "tire": "intake"
+  },
+  "parts": [
+    {
+      "type": "loft",
+      "group": "body",
+      "sides": 8,
+      "stations": [
+        {
+          "x": 4.75,
+          "y": 1.25,
+          "w": 0.3,
+          "h": 0.3,
+          "square": 0.3
+        },
+        {
+          "x": 4.45,
+          "y": 1.3,
+          "w": 0.85,
+          "h": 0.72,
+          "square": 0.5
+        },
+        {
+          "x": 3.7,
+          "y": 1.45,
+          "w": 1.12,
+          "h": 0.95,
+          "square": 0.7
+        },
+        {
+          "x": 2.6,
+          "y": 1.5,
+          "w": 1.2,
+          "h": 1.0,
+          "square": 0.8
+        },
+        {
+          "x": -1.6,
+          "y": 1.5,
+          "w": 1.2,
+          "h": 1.0,
+          "square": 0.8
+        },
+        {
+          "x": -2.9,
+          "y": 1.75,
+          "w": 0.95,
+          "h": 0.75,
+          "square": 0.7
+        },
+        {
+          "x": -4.0,
+          "y": 1.95,
+          "w": 0.58,
+          "h": 0.5,
+          "square": 0.5
+        },
+        {
+          "x": -8.6,
+          "y": 2.18,
+          "w": 0.3,
+          "h": 0.32,
+          "square": 0.4
+        },
+        {
+          "x": -9.3,
+          "y": 2.3,
+          "w": 0.22,
+          "h": 0.25,
+          "square": 0.4
+        }
+      ]
+    },
+    {
+      "type": "loft",
+      "group": "canopy",
+      "sides": 8,
+      "stations": [
+        {
+          "x": 4.55,
+          "y": 1.62,
+          "w": 0.55,
+          "h": 0.18,
+          "square": 0.6
+        },
+        {
+          "x": 4.0,
+          "y": 1.95,
+          "w": 1.05,
+          "h": 0.45,
+          "square": 0.6
+        },
+        {
+          "x": 3.0,
+          "y": 2.05,
+          "w": 1.23,
+          "h": 0.42,
+          "square": 0.6
+        }
+      ]
+    },
+    {
+      "type": "box",
+      "group": "canopy",
+      "mirror": true,
+      "center": [1.0, 1.95, 1.2],
+      "size": [0.9, 0.5, 0.04]
+    },
+    {
+      "type": "box",
+      "group": "canopy",
+      "mirror": true,
+      "center": [-0.6, 1.95, 1.2],
+      "size": [0.6, 0.45, 0.04]
+    },
+    {
+      "type": "box",
+      "group": "body",
+      "center": [0.2, 2.75, 0],
+      "size": [2.4, 0.6, 0.9],
+      "bevel": 0.2
+    },
+    {
+      "type": "cylinder",
+      "group": "body",
+      "mirror": true,
+      "from": [0.6, 2.75, 0.5],
+      "to": [-2.0, 2.75, 0.5],
+      "radius": 0.34,
+      "sides": 8
+    },
+    {
+      "type": "cylinder",
+      "group": "nozzle",
+      "mirror": true,
+      "from": [-1.95, 2.78, 0.55],
+      "to": [-2.6, 2.85, 0.8],
+      "radius": 0.22,
+      "sides": 6
+    },
+    {
+      "type": "frustum",
+      "group": "body",
+      "center": [0.0, 3.0, 0],
+      "base": [1.4, 0.9],
+      "top": [0.8, 0.6],
+      "height": 0.45
+    },
+    {
+      "type": "cylinder",
+      "group": "rotor",
+      "from": [0, 3.4, 0],
+      "to": [0, 3.95, 0],
+      "radius": 0.16,
+      "sides": 6
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [-8.3, 2.3, 0],
+      "rootChord": 1.6,
+      "tipChord": 0.9,
+      "span": 1.75,
+      "sweep": 38,
+      "dihedral": -20,
+      "vertical": true,
+      "thickness": 0.14
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "mirror": true,
+      "root": [-9.3, 2.02, 0.1],
+      "rootChord": 1.2,
+      "tipChord": 1.0,
+      "span": 2.1,
+      "sweep": 4,
+      "thickness": 0.08
+    },
+    {
+      "type": "box",
+      "group": "body",
+      "center": [-9.96, 3.77, -0.38],
+      "size": [0.4, 0.35, 0.3]
+    },
+    {
+      "type": "cylinder",
+      "group": "gear",
+      "mirror": true,
+      "from": [1.5, 0.351, 1.3],
+      "to": [1.25, 1.1, 1.1],
+      "radius": 0.09,
+      "sides": 4
+    },
+    {
+      "type": "cylinder",
+      "group": "gear",
+      "mirror": true,
+      "from": [1.5, 0.45, 1.3],
+      "to": [2.3, 0.6, 0.95],
+      "radius": 0.07,
+      "sides": 4
+    },
+    {
+      "type": "cylinder",
+      "group": "tire",
+      "mirror": true,
+      "from": [1.5, 0.351, 1.2],
+      "to": [1.5, 0.351, 1.46],
+      "radius": 0.38,
+      "sides": 8
+    },
+    {
+      "type": "cylinder",
+      "group": "gear",
+      "from": [-7.1, 1.85, 0],
+      "to": [-7.3, 0.203, 0],
+      "radius": 0.08,
+      "sides": 4
+    },
+    {
+      "type": "cylinder",
+      "group": "tire",
+      "from": [-7.3, 0.203, -0.1],
+      "to": [-7.3, 0.203, 0.1],
+      "radius": 0.22,
+      "sides": 8
+    }
+  ],
+  "rotors": [
+    {
+      "hub": [0, 4.0, 0],
+      "radius": 8.18,
+      "blades": 4,
+      "chord": 0.53,
+      "direction": 1,
+      "group": "rotor"
+    },
+    {
+      "hub": [-9.96, 3.82, -0.18],
+      "axis": [0, 0.342, 0.94],
+      "radius": 1.68,
+      "blades": 4,
+      "chord": 0.25,
+      "direction": 1,
+      "group": "rotor"
+    }
+  ],
+  "emissives": [
+    {
+      "kind": "nav-red",
+      "at": [0.3, 2.45, -1.22]
+    },
+    {
+      "kind": "nav-green",
+      "at": [0.3, 2.45, 1.22]
+    },
+    {
+      "kind": "nav-white",
+      "at": [-10.5, 3.3, -0.4]
+    },
+    {
+      "kind": "beacon",
+      "at": [-9.75, 3.98, -0.62]
+    },
+    {
+      "kind": "beacon",
+      "at": [0.0, 0.48, 0]
+    }
+  ],
+  "flight": {
+    "kind": "rotorcraft",
+    "notes": "UH-68 Buzzard, a utility transport analogue of the UH-60A Black Hawk. Figures from NASA CR-166309 (Howlett, GenHel), NASA TM-85890 and Army manuals as quoted in public sources: rotor geometry, speed, hinge offset, engines, transmission, inertias, flat-plate area, tail rotor cant. Twist is the nonlinear -18 deg as linear -16; hub stiffness from a 0.381 m hinge offset and 115 kg blades; drag areas off the x axis and tail surfaces are tuning values. Model frame: x forward, y up, z starboard, origin on the ground under the main rotor shaft; the model's hub stands at 4.0 m (the real 3.76 m), so the CG is 1.7 m under it.",
+    "mass": {
+      "empty": 5100,
+      "fuel": 1000,
+      "payload": 1200
+    },
+    "inertia": [6317, 52215, 49890],
+    "cg": [-0.4, 2.3, 0],
+    "main": {
+      "at": [0, 4.0, 0],
+      "radius": 8.18,
+      "blades": 4,
+      "chord": 0.527,
+      "liftSlope": 5.73,
+      "cd0": 0.011,
+      "twist": -16,
+      "kappa": 1.13,
+      "tipLoss": 0.97,
+      "speed": 27.0,
+      "direction": 1,
+      "hub": "articulated",
+      "hubStiffness": 255000,
+      "lock": 8.1,
+      "shaftTilt": 3,
+      "inertia": 10500,
+      "collective": [0, 20],
+      "cyclicLon": 12,
+      "cyclicLat": 8,
+      "maxFlap": 15
+    },
+    "tail": {
+      "at": [-9.96, 3.82, -0.18],
+      "radius": 1.68,
+      "blades": 4,
+      "chord": 0.25,
+      "liftSlope": 5.7,
+      "cd0": 0.01,
+      "twist": -18,
+      "kappa": 1.2,
+      "tipLoss": 0.95,
+      "speed": 124.6,
+      "direction": 1,
+      "axis": [0, 0.342, 0.94],
+      "pitch": [-15, 25]
+    },
+    "engine": {
+      "power": 2300000,
+      "transmission": 2109000,
+      "lapse": 0.9,
+      "hotLoss": 0.006,
+      "spool": 1.0,
+      "sfc": 8.06e-8
+    },
+    "fuselage": {
+      "drag": [2.4, 18, 25],
+      "fin": {
+        "at": [-9.3, 3.24, 0],
+        "area": 3.0,
+        "slope": 3.0,
+        "incidence": 4
+      },
+      "stabilizer": {
+        "at": [-9.1, 1.84, 0],
+        "area": 4.18,
+        "slope": 3.5,
+        "incidence": 4
+      }
+    },
+    "gear": {
+      "kind": "wheels",
+      "points": [
+        {
+          "at": [1.5, 0, 1.33],
+          "stiffness": 270000,
+          "damping": 30000,
+          "travel": 0.3,
+          "braked": true
+        },
+        {
+          "at": [1.5, 0, -1.33],
+          "stiffness": 270000,
+          "damping": 30000,
+          "travel": 0.3,
+          "braked": true
+        },
+        {
+          "at": [-7.3, 0, 0],
+          "stiffness": 60000,
+          "damping": 6000,
+          "travel": 0.25,
+          "castor": true
+        }
+      ],
+      "tire": {
+        "rolling": 0.02,
+        "braking": 0.5,
+        "lateral": 0.6,
+        "cornering": 6,
+        "gripStiffness": 300000,
+        "gripDamping": 6000
+      }
+    },
+    "contacts": [
+      [4.6, 0.6, 0],
+      [-10.6, 1.3, 0],
+      [-9.1, 1.4, 2.2],
+      [-9.1, 1.4, -2.2]
+    ],
+    "limits": {
+      "vne": 99,
+      "crashSink": 5,
+      "slope": 15
+    },
+    "controls": {
+      "hoverSpeed": 10.3,
+      "turnSpeed": 20.6,
+      "maxYawRate": 40,
+      "maxClimbRate": 8,
+      "maxSideSpeed": 9
+    }
+  }
+}

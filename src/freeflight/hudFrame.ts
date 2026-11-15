@@ -5,7 +5,7 @@
  * preview tool builds the same frames headlessly.
  */
 import { DEG } from '../core/units';
-import type { Vec3d } from '../core/vec3d';
+import { Vec3d } from '../core/vec3d';
 import type { FlightControls } from '../sim/flight/controlLaws';
 import type { Airframe } from '../sim/flight/airframe';
 import type { FlightModel } from '../sim/flight/flightModel';
@@ -22,7 +22,7 @@ import {
   toRunway,
 } from '../sim/flight/runway';
 import type { Runway, RunwayEnd } from '../sim/flight/runway';
-import type { HudFrame, HudLandingAid } from '../ui/flight/hud';
+import type { HoverHud, HudFrame, HudLandingAid } from '../ui/flight/hud';
 
 /** Range of the landing aid (m): the nearest runway within it is the destination. */
 export const AID_RANGE = 80_000;
@@ -102,6 +102,7 @@ export function buildHudFrame(
     mode: string;
     aim: { x: number; y: number } | null;
     timing: { frameMs: number; physicsMs: number; steps: number } | null;
+    hover?: HoverHud | null;
   },
 ): HudFrame {
   const tel = m.telemetry;
@@ -135,6 +136,7 @@ export function buildHudFrame(
     aid: opts.aid,
     mode: opts.mode,
     aim: opts.aim,
+    hover: opts.hover ?? null,
     debug: opts.timing
       ? {
           cl: tel.cl,
@@ -148,5 +150,103 @@ export function buildHudFrame(
           ...opts.timing,
         }
       : null,
+  };
+}
+
+/**
+ * The hover vector's scale (Proposal 0004, Hover Symbology): the velocity
+ * vector reaches as far over the ground as the helicopter drifts in
+ * `HOVER_VECTOR_TIME` seconds, approaching `HOVER_VECTOR_MAX` meters softly, so
+ * a drift of 0.5 m/s still shows and a transition does not reach the horizon.
+ */
+export const HOVER_VECTOR_TIME = 2;
+export const HOVER_VECTOR_MAX = 12;
+/** The acceleration cue marks the velocity `HOVER_CUE_TIME` seconds ahead, on the same scale. */
+export const HOVER_CUE_TIME = 1;
+
+/** Plain inputs for the hover symbology: world frame, SI. */
+export interface HoverInputs {
+  /** Aircraft reference point (m), its nose axis (unit) and the camera eye (m). */
+  pos: Readonly<Vec3d>;
+  forward: Readonly<Vec3d>;
+  eye: Readonly<Vec3d>;
+  /** Planet radius and the ground's height under the aircraft (m). */
+  radius: number;
+  groundHeight: number;
+  /** Height of the reference point above the skids or wheels (m), taken off the radar altitude. */
+  gearHeight?: number;
+  /** Velocity (m/s) and acceleration (m/s²). */
+  velocity: Readonly<Vec3d>;
+  accel: Readonly<Vec3d>;
+  /** Fractions of maximum torque and governed rotor speed. */
+  torque: number;
+  rotorRpm: number;
+  /** The landing zone's point on the ground (world, m), or null. */
+  lz?: Readonly<Vec3d> | null;
+  modes?: string[];
+  hazards?: string[];
+}
+
+/** Length on the ground (m) of the hover vector for a horizontal speed (m/s). */
+export function hoverVectorLength(speed: number): number {
+  return HOVER_VECTOR_MAX * Math.tanh((speed * HOVER_VECTOR_TIME) / HOVER_VECTOR_MAX);
+}
+
+/**
+ * The hover symbology from plain numbers. The heading frame is the nose axis
+ * flattened onto the local horizontal; the ground point lies on the local
+ * vertical at the ground's height; the velocity vector and the acceleration cue
+ * lie on the tangent plane through it, scaled by `hoverVectorLength`. Points are
+ * relative to `eye`, subtracted in float64 (rule 4). The LZ's distance is
+ * horizontal, its bearing relative to the nose.
+ */
+export function hoverSymbols(i: HoverInputs): HoverHud {
+  const up = i.pos.clone().normalize();
+  const fwd = i.forward.clone().addScaled(up, -i.forward.dot(up));
+  if (fwd.lengthSq() < 1e-12) {
+    // Nose straight up or down: any horizontal direction will do.
+    fwd.set(0, 1, 0).addScaled(up, -up.y);
+    if (fwd.lengthSq() < 1e-12) fwd.set(1, 0, 0).addScaled(up, -up.x);
+  }
+  fwd.normalize();
+  const right = fwd.clone().cross(up).normalize();
+  const vf = i.velocity.dot(fwd);
+  const vr = i.velocity.dot(right);
+  const af = i.accel.dot(fwd);
+  const ar = i.accel.dot(right);
+  const ground = up.clone().scale(i.radius + i.groundHeight);
+  const tip = (f: number, r: number): Vec3d => {
+    const speed = Math.hypot(f, r);
+    const k = speed > 1e-9 ? hoverVectorLength(speed) / speed : 0;
+    return ground
+      .clone()
+      .addScaled(fwd, f * k)
+      .addScaled(right, r * k)
+      .sub(i.eye);
+  };
+  let lz: HoverHud['lz'] = null;
+  if (i.lz) {
+    const d = i.lz.clone().sub(i.pos);
+    const df = d.dot(fwd);
+    const dr = d.dot(right);
+    lz = {
+      distance: Math.hypot(df, dr),
+      bearing: Math.atan2(dr, df),
+      point: i.lz.clone().sub(i.eye),
+    };
+  }
+  return {
+    velocity: { forward: vf, right: vr },
+    accel: { forward: af, right: ar },
+    groundPoint: ground.clone().sub(i.eye),
+    velocityTip: tip(vf, vr),
+    accelTip: tip(vf + af * HOVER_CUE_TIME, vr + ar * HOVER_CUE_TIME),
+    radarAltitude: Math.max(0, i.pos.length() - i.radius - i.groundHeight - (i.gearHeight ?? 0)),
+    verticalSpeed: i.velocity.dot(up),
+    torque: i.torque,
+    rotorRpm: i.rotorRpm,
+    lz,
+    modes: i.modes ?? [],
+    hazards: i.hazards ?? [],
   };
 }

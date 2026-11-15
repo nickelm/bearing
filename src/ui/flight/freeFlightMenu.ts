@@ -11,11 +11,21 @@ import type { WeatherPreset } from '../../sim/weather/presets';
 
 export type SpawnKind = 'runway' | 'air';
 
+/** The aircraft to fly: the F-21 Kestrel, or one of the H1 helicopters (Proposal 0004). */
+export type AircraftChoice = 'kestrel' | 'scout' | 'utility';
+
+export const AIRCRAFT_CHOICES: { id: AircraftChoice; label: string; note: string }[] = [
+  { id: 'kestrel', label: 'F-21 Kestrel', note: 'Fighter (F-16 analogue)' },
+  { id: 'scout', label: 'MH-14 Wren', note: 'Light scout helicopter (Little Bird analogue)' },
+  { id: 'utility', label: 'UH-68 Buzzard', note: 'Utility helicopter (Black Hawk analogue)' },
+];
+
 export interface FreeFlightOptions {
   /** Local solar time at the base (hours). */
   timeOfDay: number;
   unlimitedFuel: boolean;
   spawn: SpawnKind;
+  aircraft: AircraftChoice;
   /** The weather to fly in (sim/weather/presets.ts); `live` is the world's own at that hour. */
   weather: WeatherPreset;
   /** The aircraft feels the weather's wind and gusts (sim/flight/wind.ts). */
@@ -26,6 +36,7 @@ export const DEFAULT_OPTIONS: FreeFlightOptions = {
   timeOfDay: 17,
   unlimitedFuel: true,
   spawn: 'runway',
+  aircraft: 'kestrel',
   weather: 'fair',
   wind: true,
 };
@@ -128,7 +139,7 @@ export class FreeFlightMenu {
     el.className = 'ff-panel ff-menu';
     el.innerHTML = `
       <h1>Free Flight</h1>
-      <div class="ff-note">Pick an airbase, take off in the F-21 Kestrel, land anywhere. No war, no traffic, no weapons.</div>
+      <div class="ff-note">Pick an aircraft and an airbase, take off, land anywhere. No war, no traffic, no weapons.</div>
       <div class="ff-row">
         <label>Seed <input type="text" class="ff-seed" size="14" spellcheck="false"></label>
         <button class="ff-load">Load</button>
@@ -142,6 +153,9 @@ export class FreeFlightMenu {
       </table></div>
       <h2>Options</h2>
       <div class="ff-row">
+        <label>Aircraft <select class="ff-aircraft"></select></label> <span class="ff-aircraft-note ff-note"></span>
+      </div>
+      <div class="ff-row">
         <label>Time of day <input type="range" class="ff-tod" min="0" max="24" step="0.25"> <span class="ff-tod-label"></span></label>
       </div>
       <div class="ff-row">
@@ -154,8 +168,8 @@ export class FreeFlightMenu {
       </div>
       <div class="ff-row">
         Start:
-        <label><input type="radio" name="ff-spawn" value="runway"> On the runway</label>
-        <label><input type="radio" name="ff-spawn" value="air"> In the air (3,000 m, 300 kt)</label>
+        <label><input type="radio" name="ff-spawn" value="runway"> <span class="ff-spawn-ground">On the runway</span></label>
+        <label><input type="radio" name="ff-spawn" value="air"> <span class="ff-spawn-air">In the air (3,000 m, 300 kt)</span></label>
       </div>
       <div class="ff-row">
         <button class="ff-primary ff-fly" disabled>Fly</button>
@@ -183,6 +197,30 @@ export class FreeFlightMenu {
     wind.addEventListener('change', () => (this.options.wind = wind.checked));
     const fuel = q<HTMLInputElement>('.ff-fuel');
     fuel.addEventListener('change', () => (this.options.unlimitedFuel = fuel.checked));
+    const aircraft = q<HTMLSelectElement>('.ff-aircraft');
+    const aircraftNote = q<HTMLSpanElement>('.ff-aircraft-note');
+    for (const a of AIRCRAFT_CHOICES) {
+      const o = document.createElement('option');
+      o.value = a.id;
+      o.textContent = a.label;
+      aircraft.append(o);
+    }
+    const spawnGround = q<HTMLSpanElement>('.ff-spawn-ground');
+    const spawnAir = q<HTMLSpanElement>('.ff-spawn-air');
+    const showAircraft = () => {
+      const a =
+        AIRCRAFT_CHOICES.find((c) => c.id === this.options.aircraft) ?? AIRCRAFT_CHOICES[0]!;
+      aircraft.value = a.id;
+      aircraftNote.textContent = a.note;
+      const helo = a.id !== 'kestrel';
+      spawnGround.textContent = helo ? 'On the ground beside the runway' : 'On the runway';
+      spawnAir.textContent = helo ? 'In the air (150 m, hovering)' : 'In the air (3,000 m, 300 kt)';
+    };
+    aircraft.addEventListener('change', () => {
+      this.options.aircraft = aircraft.value as AircraftChoice;
+      showAircraft();
+    });
+    aircraft.addEventListener('keydown', (e) => e.stopPropagation());
     const spawns = [...el.querySelectorAll<HTMLInputElement>('input[name="ff-spawn"]')];
     for (const r of spawns) {
       r.addEventListener('change', () => {
@@ -196,6 +234,7 @@ export class FreeFlightMenu {
       wind.checked = this.options.wind;
       fuel.checked = this.options.unlimitedFuel;
       for (const r of spawns) r.checked = r.value === this.options.spawn;
+      showAircraft();
     };
     this.sync();
     const load = () => {

@@ -4,6 +4,7 @@
  * tools/out/freeflight-<name>.png and .json and draws the HUD with the
  * frame's camera, so the screenshot shows the real HUD code over the real
  * render. tools/freeflight.screens.mjs drives it in headless Chromium.
+ * `composite.html?hover=<case>` draws the helicopter layout instead (hover.ts).
  */
 import { Hud, matrixProjector } from '../../src/ui/flight/hud';
 import type { HudFrame } from '../../src/ui/flight/hud';
@@ -18,7 +19,16 @@ interface Shot {
 }
 
 async function main(): Promise<void> {
-  const name = new URLSearchParams(location.search).get('shot') ?? 'runway';
+  const query = new URLSearchParams(location.search);
+  const hover = query.get('hover');
+  if (hover !== null) {
+    // The helicopter layout over a stand-in scene (hover.ts); no render needed.
+    const { drawHover } = await import('./hover');
+    await drawHover(hover);
+    document.title = 'ready';
+    return;
+  }
+  const name = query.get('shot') ?? 'runway';
   const shot = (await (await fetch(`../out/freeflight-${name}.json`)).json()) as Shot;
   const img = document.getElementById('shot') as HTMLImageElement;
   img.src = `../out/freeflight-${name}.png`;

@@ -27,9 +27,18 @@ import { modelSpec } from '../render/common/models/library';
 import type { StrategicScene } from '../render/strategic/strategicScene';
 import { FlightDirector, along } from '../sim/flight/flightDirector';
 import type { FlightControls } from '../sim/flight/controlLaws';
-import { followAirframe } from '../render/sim/camera/chaseCamera';
+import { FAST_JET_RIG, followAirframe, helicopterRig } from '../render/sim/camera/chaseCamera';
 import type { Airframe } from '../sim/flight/airframe';
 import { FLIGHT_STEP, FlightModel } from '../sim/flight/flightModel';
+import { assistsFor } from '../sim/flight/rotor/assists';
+import { HeloLaws } from '../sim/flight/rotor/heloLaws';
+import { neutralRotorControls, RotorcraftModel } from '../sim/flight/rotor/rotorcraftModel';
+import { parseRotorcraftSpec } from '../sim/flight/rotor/rotorSpec';
+import type { RotorcraftSpec } from '../sim/flight/rotor/rotorSpec';
+import { fromRunway, runwayFrame } from '../sim/flight/runway';
+import { HeloInput, HELO_BINDINGS, HELO_LABELS } from '../ui/flight/heloInput';
+import type { HeloAction } from '../ui/flight/heloInput';
+import type { ModelSpec } from '../render/common/models/spec';
 import { parseFlightSpec } from '../sim/flight/flightSpec';
 import { FlightMonitor } from '../sim/flight/outcomes';
 import type { FlightEvent } from '../sim/flight/outcomes';
@@ -53,13 +62,19 @@ import type { SoundSettings } from '../ui/flight/flightCards';
 import { FlightInput } from '../ui/flight/flightInput';
 import type { FlightAction } from '../ui/flight/flightInput';
 import { DEFAULT_OPTIONS, FreeFlightMenu } from '../ui/flight/freeFlightMenu';
-import type { BaseEntry, FreeFlightOptions, SpawnKind } from '../ui/flight/freeFlightMenu';
+import type {
+  AircraftChoice,
+  BaseEntry,
+  FreeFlightOptions,
+  SpawnKind,
+} from '../ui/flight/freeFlightMenu';
 import { Hud, matrixProjector } from '../ui/flight/hud';
 import { flightStartTime } from './clock';
 import { writeFreeFlightParams } from './url';
 import type { FreeFlightUrl } from './url';
 import { FlightWeather } from './flightWeather';
 import { buildHudFrame, landingAid } from './hudFrame';
+import { buildHeloHudFrame } from './heloHud';
 import { AirfieldGround, runwaysOf } from './ground';
 
 export { parseFreeFlightUrl } from './url';
@@ -91,6 +106,20 @@ type State = 'menu' | 'flying' | 'paused' | 'summary';
 /** Most physics steps per frame: a stalled tab catches up at most a quarter second. */
 const MAX_STEPS = 30;
 const AIRCRAFT = 'alliance-fighter';
+/** The helicopters' model specs (track H1, Proposal 0004). */
+const HELICOPTERS: Record<Exclude<AircraftChoice, 'kestrel'>, string> = {
+  scout: 'alliance-scout-helo',
+  utility: 'alliance-utility-helo',
+};
+/** The help card's note for helicopters. */
+const HELO_HELP = [
+  'Click the view to capture the mouse; Escape gives it back and pauses.',
+  'Takeoff: hold W until clear of the ground, let go to hold the altitude. Move the mouse forward to tilt the nose down and fly forward; back to slow down. Slow and let go: the hover holds (Assisted).',
+  'In the hover the mouse turns the nose; above about 40 kt it banks into a coordinated turn. A/D slide sideways in the hover.',
+  'Landing: slow to a hover over the spot, then hold S: the descent eases near the ground. Keep S held on the ground to lower the collective.',
+];
+/** Where a helicopter starts on the ground: beside the runway's middle (m across, to the right). */
+const HELO_SPOT_ACROSS = 75;
 
 export class FreeFlight {
   state: State = 'menu';
@@ -112,6 +141,15 @@ export class FreeFlight {
   private monitor: FlightMonitor | null = null;
   private view: AircraftView | null = null;
   private readonly director = new FlightDirector();
+  /** The flown helicopter, its control layer, assists, input and controls (null: the Kestrel flies). */
+  private helo: RotorcraftModel | null = null;
+  private heloSpec: { model: ModelSpec; flight: RotorcraftSpec } | null = null;
+  private readonly laws = new HeloLaws();
+  private readonly assists = assistsFor('assisted');
+  readonly heloInput: HeloInput;
+  private readonly heloControls = neutralRotorControls();
+  /** The views built so far, one per aircraft. */
+  private readonly views = new Map<string, AircraftView>();
   private pilot: TestPilot | null = null;
   private baseId: number | null = null;
   private pendingBase: number | null;
@@ -185,6 +223,8 @@ export class FreeFlight {
     });
     this.input = new FlightInput(deps.canvas);
     this.input.onAction = (a) => this.action(a);
+    this.heloInput = new HeloInput(deps.canvas);
+    this.heloInput.onAction = (a) => this.heloAction(a);
     this.pose = {
       pos: new Vec3d(),
       q: new Quatd(),
@@ -214,7 +254,8 @@ export class FreeFlight {
       }
     };
     deps.globe.beforeDraw = (eye) => {
-      if (this.view && this.model && this.state !== 'menu') this.view.update(this.pose, eye);
+      if (this.view && (this.model || this.helo) && this.state !== 'menu')
+        this.view.update(this.pose, eye);
     };
     window.addEventListener('beforeunload', this.unload);
     deps.setView('strategic');
@@ -363,6 +404,14 @@ export class FreeFlight {
     if (!r || !this.ground) return;
     this.baseId = id;
     this.writeUrl(id);
+    if (this.options.aircraft !== 'kestrel') {
+      this.startHelo(r, spawn, this.options.aircraft);
+      return;
+    }
+    this.helo = null;
+    this.heloInput.enabled = false;
+    this.heloInput.release();
+    this.help.refresh();
     const R = this.deps.radius;
     const m = new FlightModel(this.flightSpec, R);
     m.unlimitedFuel = this.options.unlimitedFuel;
@@ -389,13 +438,8 @@ export class FreeFlight {
     this.crashAt = 0;
     // Scene: the aircraft, its shadow, the chase camera.
     const g = this.deps.globe;
-    if (!this.view) {
-      this.view = new AircraftView(this.spec, this.flightSpec.cg, g.lighting);
-      this.view.planetRadius = R;
-      g.vehicles.add(this.view.group, this.view.shadowMesh);
-    }
-    this.view.group.visible = true;
-    this.view.shadowMesh.visible = true;
+    this.showView(AIRCRAFT, () => new AircraftView(this.spec, this.flightSpec.cg, g.lighting));
+    g.chase.rig = FAST_JET_RIG;
     this.pose.q = m.q;
     g.cameraMode = 'chase';
     g.chase.reset();
@@ -422,10 +466,166 @@ export class FreeFlight {
     this.input.enabled = true;
   }
 
+  /** Shows the view of aircraft `id` (built on first use) and hides the others. */
+  private showView(id: string, build: () => AircraftView): void {
+    const g = this.deps.globe;
+    let v = this.views.get(id);
+    if (!v) {
+      v = build();
+      v.planetRadius = this.deps.radius;
+      g.vehicles.add(v.group, v.shadowMesh);
+      this.views.set(id, v);
+    }
+    for (const [k, w] of this.views) {
+      w.group.visible = k === id;
+      w.shadowMesh.visible = k === id;
+    }
+    this.view = v;
+  }
+
+  /**
+   * Spawns a helicopter at runway `r`: on the ground beside the runway's middle, or hovering
+   * 150 m above it, rotor turning (a hot start, decision 151).
+   */
+  private startHelo(r: Runway, spawn: SpawnKind, choice: Exclude<AircraftChoice, 'kestrel'>): void {
+    const R = this.deps.radius;
+    const id = HELICOPTERS[choice];
+    if (this.heloSpec?.model.id !== id) {
+      const model = modelSpec(id);
+      this.heloSpec = { model, flight: parseRotorcraftSpec(model.flight, id) };
+    }
+    const spec = this.heloSpec!;
+    const m = new RotorcraftModel(spec.flight, R);
+    m.unlimitedFuel = this.options.unlimitedFuel;
+    const end = runwayEnds(r)[0];
+    const dir = fromRunway(runwayFrame(r), 0, HELO_SPOT_ACROSS, R);
+    const h = this.ground!.height(dir);
+    if (spawn === 'air')
+      m.place(dir.clone().scale(R + h + 150), new Vec3d(), end.heading, spec.flight.main.shaftTilt);
+    else m.place(dir.clone().scale(R + h + m.gearHeight - 0.03), new Vec3d(), end.heading, 0);
+    m.updateAttitude(this.ground!);
+    this.model = null;
+    this.helo = m;
+    this.laws.reset(m, spawn !== 'air');
+    this.monitor = new FlightMonitor(this.runways, R);
+    this.monitor.reset(spawn === 'air');
+    this.input.enabled = false;
+    this.input.reset(false);
+    this.heloInput.reset(spec.flight.gear.kind === 'wheels' && spawn !== 'air');
+    this.pilot = null;
+    this.gameTime = this.startTime(r);
+    this.weather.preset = this.options.weather;
+    this.weather.finish(this.gameTime);
+    this.temperatureShift = this.weather.temperatureShift(r.center, this.gameTime);
+    this.acc = 0;
+    this.flightTime = 0;
+    this.distance = 0;
+    this.crashAt = 0;
+    const g = this.deps.globe;
+    this.showView(id, () => new AircraftView(spec.model, spec.flight.cg, g.lighting));
+    this.pose.q = m.q;
+    g.cameraMode = 'chase';
+    g.chase.rig = helicopterRig(spec.flight.main.radius);
+    g.chase.reset();
+    this.syncPose();
+    this.updateChase();
+    g.resetAtmosphere();
+    this.deps.setView('simulation');
+    this.menu.visible = false;
+    this.summary.visible = false;
+    this.pause.visible = false;
+    this.help.visible = false;
+    this.hud.show(true);
+    this.hud.clearMessages();
+    this.hud.message(
+      [
+        spawn === 'air'
+          ? `${spec.model.name} hovering over ${r.name}`
+          : `${spec.model.name} beside runway ${end.designator}, ${r.name}`,
+        'Click the view to capture the mouse. W climbs, S descends, the mouse flies',
+        'A/D slide, Q/E pedals, H hover hold, F1 help, Esc pause',
+      ],
+      9,
+    );
+    this.state = 'flying';
+    this.heloInput.enabled = true;
+  }
+
+  private heloAction(a: HeloAction): void {
+    switch (a) {
+      case 'pause':
+        if (this.help.visible) this.help.visible = false;
+        else this.setPaused(this.state === 'flying');
+        break;
+      case 'help':
+        this.help.visible = !this.help.visible;
+        if (this.help.visible) this.help.showBindings(HELO_BINDINGS, HELO_LABELS, HELO_HELP);
+        break;
+      case 'debug':
+        this.debug = !this.debug;
+        break;
+      default:
+        break;
+    }
+  }
+
+  /** One frame of a helicopter's flight: input, control layer, model, outcomes. */
+  private heloFrame(dt: number): void {
+    const m = this.helo!;
+    const chase = this.deps.globe.chase;
+    const inp = this.heloInput;
+    inp.update();
+    chase.lookHeld = inp.lookHeld;
+    if (inp.lookHeld) {
+      const cam = this.deps.globe.camera;
+      const rpp = (cam.fov * DEG) / Math.max(1, window.innerHeight);
+      chase.look(inp.lookDelta.x, inp.lookDelta.y, rpp);
+      inp.lookDelta.x = inp.lookDelta.y = 0;
+    }
+    const t0 = performance.now();
+    let steps = 0;
+    if (this.state === 'flying' || this.state === 'summary') {
+      this.acc += Math.min(dt, 0.25);
+      while (this.acc >= FLIGHT_STEP && steps < MAX_STEPS) {
+        this.acc -= FLIGHT_STEP;
+        steps++;
+        if (this.state === 'flying')
+          this.laws.update(m, inp.command, this.assists, FLIGHT_STEP, this.heloControls);
+        inp.consumed();
+        const p0 = m.pos.clone();
+        this.setWind(m);
+        m.step(this.heloControls, this.ground!);
+        this.distance += p0.distanceTo(m.pos);
+        if (!m.crashed) this.flightTime += FLIGHT_STEP;
+        this.gameTime += FLIGHT_STEP;
+        for (const e of this.monitor!.update(m, FLIGHT_STEP)) this.event(e);
+      }
+      if (steps >= MAX_STEPS) this.acc = 0;
+    }
+    this.steps = steps;
+    this.physicsMs = performance.now() - t0;
+    if (
+      m.crashed &&
+      this.state === 'flying' &&
+      performance.now() > this.crashAt &&
+      this.crashAt > 0
+    )
+      this.showSummary(m.crashed);
+    this.syncPose();
+    this.updateChase();
+    if (this.view) {
+      this.view.sun.copy(this.deps.globe.sun);
+      const cam = this.deps.globe.camera;
+      this.view.radPerPixel = (cam.fov * DEG) / Math.max(1, window.innerHeight);
+    }
+  }
+
   private toMenu(): void {
     this.state = 'menu';
     this.weather.hide();
     this.input.enabled = false;
+    this.heloInput.enabled = false;
+    this.heloInput.release();
     this.summary.visible = false;
     this.pause.visible = false;
     this.help.visible = false;
@@ -448,7 +648,12 @@ export class FreeFlight {
     if (this.state !== 'flying' && this.state !== 'paused') return;
     this.state = p ? 'paused' : 'flying';
     this.pause.visible = p;
-    this.input.enabled = !p;
+    if (this.helo) {
+      this.heloInput.enabled = !p;
+      if (p) this.heloInput.release();
+    } else {
+      this.input.enabled = !p;
+    }
   }
 
   private action(a: FlightAction): void {
@@ -497,8 +702,24 @@ export class FreeFlight {
 
   /** Copies the model's state into the view's pose. */
   private syncPose(): void {
-    const m = this.model!;
     const p = this.pose;
+    if (this.helo) {
+      const h = this.helo;
+      p.pos.copy(h.pos);
+      p.q = h.q;
+      p.elevator = p.aileron = p.rudder = 0;
+      p.gear = 1;
+      p.speedbrake = p.afterburner = p.flaps = 0;
+      p.groundHeight = this.ground!.height(h.pos.clone().normalize());
+      const speed = h.telemetry.rotorSpeed;
+      p.rotors = [
+        { azimuth: h.azimuth, speed, tiltForward: h.tiltForward, tiltRight: h.tiltRight },
+        { azimuth: h.tailAzimuth, speed, tiltForward: 0, tiltRight: 0 },
+      ];
+      return;
+    }
+    p.rotors = undefined;
+    const m = this.model!;
     const t = m.telemetry;
     p.pos.copy(m.pos);
     p.q = m.q;
@@ -513,7 +734,7 @@ export class FreeFlight {
   }
 
   private updateChase(): void {
-    followAirframe(this.deps.globe.chase.target, this.model!);
+    followAirframe(this.deps.globe.chase.target, this.helo ?? this.model!);
   }
 
   /** Advances the mode by `dt` real seconds; call before the scene renders. */
@@ -533,6 +754,12 @@ export class FreeFlight {
           this.deps.calendar(),
         ),
       );
+      return;
+    }
+    if (this.helo) {
+      if (!this.ground || !this.monitor) return;
+      this.weather.update(this.gameTime);
+      this.heloFrame(dt);
       return;
     }
     const m = this.model;
@@ -638,7 +865,7 @@ export class FreeFlight {
   }
 
   private event(e: FlightEvent): void {
-    const m = this.model!;
+    const m: Airframe = this.helo ?? this.model!;
     switch (e.kind) {
       case 'liftoff':
         this.hud.message('AIRBORNE', 3);
@@ -668,7 +895,7 @@ export class FreeFlight {
   }
 
   private showSummary(crash: string | null): void {
-    const m = this.model!;
+    const m: Airframe = this.helo ?? this.model!;
     const stopped = crash ? null : this.monitor!.runwayUnder(m);
     this.summary.show({
       crash,
@@ -680,18 +907,41 @@ export class FreeFlight {
     });
     this.state = 'summary';
     this.input.enabled = false;
+    this.heloInput.enabled = false;
+    this.heloInput.release();
   }
 
   /** Draws the HUD after the scene has rendered (the camera's matrices are current). */
   drawHud(camera: PerspectiveCamera): void {
-    const m = this.model;
-    if (!m || this.state === 'menu') return;
+    if (this.state === 'menu') return;
     const project = matrixProjector(
       camera.matrixWorldInverse.elements,
       camera.projectionMatrix.elements,
       window.innerWidth,
       window.innerHeight,
     );
+    if (this.helo) {
+      const eye = this.deps.globe.chase.eye;
+      const frame = buildHeloHudFrame(
+        this.helo,
+        this.laws,
+        this.heloControls,
+        this.heloInput.command,
+        {
+          aid: landingAid(this.helo, this.runways, eye),
+          ground: this.ground!,
+          eye,
+          locked: this.heloInput.locked,
+          timing: this.debug
+            ? { frameMs: this.frameMs, physicsMs: this.physicsMs, steps: this.steps }
+            : null,
+        },
+      );
+      this.hud.draw(frame, project);
+      return;
+    }
+    const m = this.model;
+    if (!m) return;
     const frame = buildHudFrame(m, this.input.controls, {
       aid: landingAid(m, this.runways, this.deps.globe.chase.eye),
       mode: this.pilot
@@ -738,7 +988,17 @@ export class FreeFlight {
   }
 
   /** For headless checks and screenshots: the flown aircraft's state. */
-  get flight(): { model: FlightModel | null; state: State; pilot: string | null } {
-    return { model: this.model, state: this.state, pilot: this.pilot?.phase ?? null };
+  get flight(): {
+    model: FlightModel | null;
+    helo: RotorcraftModel | null;
+    state: State;
+    pilot: string | null;
+  } {
+    return {
+      model: this.model,
+      helo: this.helo,
+      state: this.state,
+      pilot: this.pilot?.phase ?? null,
+    };
   }
 }
