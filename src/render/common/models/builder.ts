@@ -302,7 +302,18 @@ function blob(s: Sink, p: Extract<PartSpec, { type: 'blob' }>): void {
     });
   }
   const [rx, ry, rz] = p.radius;
-  const place = (q: V): V => {
+  // Jitter: each vertex of the unit sphere moves along its radius by a hash of where it
+  // is, so faces sharing a vertex stay welded and the blob stays closed.
+  const j = p.jitter ?? 0;
+  const seed = p.seed ?? 0;
+  const lump = (q: V): V => {
+    if (!j) return q;
+    const k = (x: number) => Math.round(x * 1e4);
+    const f = 1 + j * (2 * hash(k(q[0]), k(q[1]), k(q[2]), seed) - 1);
+    return scale(q, f);
+  };
+  const place = (u: V): V => {
+    const q = lump(u);
     const y = p.half ? Math.max(0, q[1]) : q[1];
     return [p.center[0] + q[0] * rx, p.center[1] + y * ry, p.center[2] + q[2] * rz];
   };
@@ -602,7 +613,7 @@ export function buildModel(spec: ModelSpec, options: BuildOptions = {}): BuiltMo
     });
   });
   const size = count ? len(sub(max, min)) : 1;
-  const ground = spec.ground ?? spec.class === 'building';
+  const ground = spec.ground ?? (spec.class === 'building' || spec.class === 'tree');
   const ao = options.noAo
     ? new Float32Array(count * 3).fill(1)
     : bakeAo(tris, normals, size / 4, ground);

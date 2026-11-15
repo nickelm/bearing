@@ -48,6 +48,8 @@ export const MODEL_BUDGETS = {
   truck: [80, 200],
   person: [60, 150],
   building: [12, 200],
+  /** Part I, Tree Kit: 12 (shrub) to 80 (broadleaf) triangles. */
+  tree: [12, 80],
   carrier: [2000, 5000],
   ship: [400, 2000],
 } as const satisfies Record<string, readonly [number, number]>;
@@ -121,7 +123,17 @@ export type PartSpec =
       sides: number;
       caps?: boolean;
     })
-  | (PartBase & { type: 'blob'; center: Vec3; radius: Vec3; detail?: number; half?: boolean })
+  | (PartBase & {
+      type: 'blob';
+      center: Vec3;
+      radius: Vec3;
+      detail?: number;
+      half?: boolean;
+      /** Moves each vertex along its radius by up to ± this fraction, for lumpy crowns. */
+      jitter?: number;
+      /** Picks the jitter pattern (default 0). */
+      seed?: number;
+    })
   | (PartBase & {
       type: 'arch';
       center: Vec3;
@@ -273,6 +285,11 @@ export function validateSpec(raw: unknown, id = '?'): ModelSpec {
         fail(`${path}.anim.hinge`, 'must be two points [[x, y, z], [x, y, z]]');
       if (!isNum(a.angle)) fail(`${path}.anim.angle`, 'must be a number (degrees)');
     }
+    if (
+      part.jitter !== undefined &&
+      !(isNum(part.jitter) && (part.jitter as number) >= 0 && (part.jitter as number) <= 0.5)
+    )
+      fail(`${path}.jitter`, 'must be 0–0.5');
     for (const k of ['size', 'radius'] as const) {
       const v = part[k];
       if (Array.isArray(v) && v.some((x) => !(x > 0))) fail(`${path}.${k}`, 'must be positive');

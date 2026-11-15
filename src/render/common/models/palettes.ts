@@ -66,6 +66,21 @@ export const MODEL_COLORS: Record<string, string> = {
   'wall-dark': '#B5A898',
   'roof-red': '#8E5A48',
   'roof-gray': '#5E5E62',
+  // Vegetation (Part I, Palette: the canopy shades of temperate and conifer forest, plus
+  // a lighter birch green and barks; tree kit, docs/proposals/0003).
+  'leaf-conifer-dark': '#24382A',
+  'leaf-conifer': '#2C4434',
+  'leaf-conifer-light': '#35503C',
+  'leaf-dark': '#2F4A2A',
+  leaf: '#3B5A33',
+  'leaf-light': '#466B3B',
+  'leaf-birch': '#52713A',
+  'leaf-birch-light': '#5F7E40',
+  'leaf-dry': '#6B6A3A',
+  bark: '#4A3A2C',
+  'bark-dark': '#3A2E24',
+  'bark-pale': '#BDB8AA',
+  'bark-dead': '#6A625A',
   // Ships.
   deck: '#5A5C5E',
   'flight-deck': '#4A4C4E',

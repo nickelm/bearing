@@ -1,0 +1,39 @@
+{
+  "name": "Dead tree",
+  "class": "tree",
+  "groups": {
+    "wood": "bark-dead"
+  },
+  "parts": [
+    {
+      "type": "cylinder",
+      "group": "wood",
+      "from": [0, -1, 0],
+      "to": [0, 9, 0],
+      "radius": 0.75,
+      "sides": 5,
+      "radius2": 0.3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "wood",
+      "from": [0, 4, 0],
+      "to": [2.6, 7.5, 0.4],
+      "radius": 0.38,
+      "sides": 4,
+      "radius2": 0.18,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "wood",
+      "from": [0, 5.5, 0],
+      "to": [-2.0, 8.5, -0.8],
+      "radius": 0.34,
+      "sides": 4,
+      "radius2": 0.16,
+      "caps": false
+    }
+  ]
+}

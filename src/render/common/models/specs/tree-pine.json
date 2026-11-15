@@ -1,0 +1,47 @@
+{
+  "name": "Pine",
+  "class": "tree",
+  "groups": {
+    "trunk": "bark",
+    "dark": "leaf-conifer-dark",
+    "mid": "leaf-conifer"
+  },
+  "parts": [
+    {
+      "type": "cylinder",
+      "group": "trunk",
+      "from": [0, -1, 0],
+      "to": [0, 13, 0],
+      "radius": 0.8,
+      "sides": 5,
+      "radius2": 0.55,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "trunk",
+      "from": [0, 10, 0],
+      "to": [1.8, 13.5, 0.6],
+      "radius": 0.45,
+      "sides": 4,
+      "radius2": 0.35,
+      "caps": false
+    },
+    {
+      "type": "blob",
+      "group": "mid",
+      "center": [0, 15, 0],
+      "radius": [4.4, 2.6, 4.2],
+      "jitter": 0.25,
+      "seed": 1
+    },
+    {
+      "type": "blob",
+      "group": "dark",
+      "center": [2.2, 13.4, 0.9],
+      "radius": [2.8, 1.8, 2.6],
+      "jitter": 0.25,
+      "seed": 2
+    }
+  ]
+}

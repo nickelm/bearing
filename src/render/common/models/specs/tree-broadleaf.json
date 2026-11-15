@@ -1,0 +1,37 @@
+{
+  "name": "Broadleaf",
+  "class": "tree",
+  "groups": {
+    "trunk": "bark",
+    "mid": "leaf",
+    "light": "leaf-light"
+  },
+  "parts": [
+    {
+      "type": "cylinder",
+      "group": "trunk",
+      "from": [0, -1, 0],
+      "to": [0, 6, 0],
+      "radius": 0.8,
+      "sides": 5,
+      "radius2": 0.55,
+      "caps": false
+    },
+    {
+      "type": "blob",
+      "group": "mid",
+      "center": [0, 9.5, 0],
+      "radius": [4.4, 4.6, 4.2],
+      "jitter": 0.2,
+      "seed": 6
+    },
+    {
+      "type": "blob",
+      "group": "light",
+      "center": [1.2, 12.6, 0.6],
+      "radius": [2.7, 2.5, 2.6],
+      "jitter": 0.22,
+      "seed": 7
+    }
+  ]
+}

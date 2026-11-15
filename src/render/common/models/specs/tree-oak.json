@@ -1,0 +1,46 @@
+{
+  "name": "Oak",
+  "class": "tree",
+  "groups": {
+    "trunk": "bark-dark",
+    "dark": "leaf-dark",
+    "mid": "leaf",
+    "light": "leaf-light"
+  },
+  "parts": [
+    {
+      "type": "cylinder",
+      "group": "trunk",
+      "from": [0, -1, 0],
+      "to": [0, 7.5, 0],
+      "radius": 1.05,
+      "sides": 5,
+      "radius2": 0.65,
+      "caps": false
+    },
+    {
+      "type": "blob",
+      "group": "mid",
+      "center": [0, 11.5, 0],
+      "radius": [5.8, 3.8, 5.6],
+      "jitter": 0.24,
+      "seed": 3
+    },
+    {
+      "type": "blob",
+      "group": "dark",
+      "center": [3.6, 9.4, 1.6],
+      "radius": [3.6, 2.7, 3.4],
+      "jitter": 0.24,
+      "seed": 4
+    },
+    {
+      "type": "blob",
+      "group": "light",
+      "center": [-2.8, 10.2, -2.2],
+      "radius": [3.8, 2.9, 3.6],
+      "jitter": 0.24,
+      "seed": 5
+    }
+  ]
+}

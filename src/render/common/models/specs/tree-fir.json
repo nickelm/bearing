@@ -1,0 +1,58 @@
+{
+  "name": "Fir",
+  "class": "tree",
+  "groups": {
+    "trunk": "bark",
+    "dark": "leaf-conifer-dark",
+    "mid": "leaf-conifer",
+    "light": "leaf-conifer-light"
+  },
+  "parts": [
+    {
+      "type": "cylinder",
+      "group": "trunk",
+      "from": [0, -1, 0],
+      "to": [0, 5, 0],
+      "radius": 0.75,
+      "sides": 5,
+      "radius2": 0.5,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "dark",
+      "from": [0, 3, 0],
+      "to": [0, 10.5, 0],
+      "radius": 4.9,
+      "radius2": 0,
+      "sides": 6
+    },
+    {
+      "type": "cylinder",
+      "group": "mid",
+      "from": [0, 6.5, 0],
+      "to": [0, 13.5, 0],
+      "radius": 3.9,
+      "radius2": 0,
+      "sides": 6
+    },
+    {
+      "type": "cylinder",
+      "group": "mid",
+      "from": [0, 10, 0],
+      "to": [0, 16.5, 0],
+      "radius": 2.9,
+      "radius2": 0,
+      "sides": 6
+    },
+    {
+      "type": "cylinder",
+      "group": "light",
+      "from": [0, 13.5, 0],
+      "to": [0, 19, 0],
+      "radius": 1.8,
+      "radius2": 0,
+      "sides": 6
+    }
+  ]
+}

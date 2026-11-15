@@ -1,0 +1,17 @@
+{
+  "name": "Shrub",
+  "class": "tree",
+  "groups": {
+    "mid": "leaf-dark"
+  },
+  "parts": [
+    {
+      "type": "blob",
+      "group": "mid",
+      "center": [0, 0.7, 0],
+      "radius": [2.0, 1.5, 1.8],
+      "jitter": 0.25,
+      "seed": 12
+    }
+  ]
+}

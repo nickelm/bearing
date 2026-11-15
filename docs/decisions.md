@@ -2325,3 +2325,18 @@ Plausibility, checked by `tests/flightModel.test.ts` and printed by `tools/fligh
 **Not done:** nobody has looked at it in a browser. Beach and marsh edges follow the 48 m samples. A thin parallel channel beside a large river draws as dark water along its bank (seen at the marsh view; not from the marsh). Salt marsh is rare. Sea state follows only the storm channel and the wind's direction at the camera. These are tasks in `TODO.md`.
 
 **Reason:** Water must run downhill: a river that climbs breaks the illusion more than any missing detail, and the cause was structural (a surface sampled where the river is not), so the fix gives each river a surface of its own instead of tuning the carve. Beaches, cliffs and marshes follow causes the world already has (the coast's relief, waves eroding headlands and filling coves, a water table on flat ground), as decision 126 asks, and each is a monotone or local change that keeps coastlines, lakes and the campaign's data as they are. The sea's repetition came from a periodic field seen at a scale where its period shows; non-periodic modulation and an earlier hand-over to roughness remove it without losing the field's precision near the surface.
+
+### 147. A tree kit from model specs; lumpy blobs
+
+**Date:** 2026-11-15
+**Decision:** The tree kit of Part I's *Vegetation* exists as model specs (decision 106), the first step of the owner's brief on forests for low flight, written up as the draft proposal 0003.
+
+- **Model class `tree`** with Part I's budget of 12–80 triangles. Trees darken toward the ground in the baked occlusion, as buildings do.
+- **Blob jitter.** A blob may set `jitter` (0–0.5) and `seed`: each vertex of the unit icosphere moves along its radius by up to ± that fraction, by a hash of its position, so faces that share a vertex move together and the blob stays closed. Crowns become lumpy and faceted rather than geometric.
+- **Nine specs:** fir (four tiered cones, 50 triangles), pine (umbrella crown on a tall trunk, 58), oak (three masses, 70), broadleaf (two masses, 50), birch (pale trunk, 50), poplar (column, 30), acacia (flat disc on a forked trunk, 44), shrub (20) and dead tree (26). Crowns carry two or three of Part I's canopy shades, so value varies within a tree; new model colors name those shades, a birch green, a dry savanna green and four barks.
+- **Previews.** `tools/trees.preview.ts` draws the kit in a row and a forest corner (closed fir and pine stand, lower broadleaf stand, fringe, hedgerow, poplar row, lone oak, dead tree) from a hovering helicopter and from above, on the CPU; the rasterizer of `tools/models.preview.ts` moved to `tools/modelRaster.ts` so both use it. The model viewer lists the trees with the other specs.
+- **What the previews showed.** A broadleaf stand at 9.5 m spacing leaves the floor showing between crowns from above; at 7.5 m it closes, and a dark sheet at about 60% of the crown height (the proposal's understory shell) makes it read as one mass with crowns as relief. The conifer stand standing 4–5 m above the broadleaf stand is the most legible feature of the oblique view.
+
+The forest layer still draws the clumps of decision 45; the kit replaces them with the proposal's near trees, after the owner's review.
+
+**Reason:** The brief asks for faceted, slightly cartoonish trees that fit the faceted terrain. Specs keep the trees reviewable as text and within budget, and the CPU previews let the look be judged before the forest layer changes.

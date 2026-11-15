@@ -148,6 +148,48 @@ describe('model builder primitives', () => {
     expect(both.triangles).toBe(2 * half.triangles);
     expect(signedVolume(both.position)).toBeCloseTo(2, 6);
   });
+
+  it('jitters blobs into lumpy crowns that stay closed and repeatable (proposal 0003)', () => {
+    const part = { type: 'blob', center: [0, 5, 0], radius: [4, 3, 4], jitter: 0.25, seed: 3 };
+    const m = buildModel(one(part), { noAo: true });
+    // Closed: every edge is shared by exactly two faces, so jitter moved shared
+    // vertices together.
+    const edges = new Map<string, number>();
+    const key = (i: number) =>
+      Array.from(m.position.subarray(i, i + 3), (x) => x.toFixed(4)).join(',');
+    for (let t = 0; t < m.triangles; t++) {
+      const v = [0, 1, 2].map((k) => key(t * 9 + k * 3));
+      for (let k = 0; k < 3; k++) {
+        const e = [v[k]!, v[(k + 1) % 3]!].sort().join('|');
+        edges.set(e, (edges.get(e) ?? 0) + 1);
+      }
+    }
+    expect([...edges.values()].every((n) => n === 2)).toBe(true);
+    expect(signedVolume(m.position)).toBeGreaterThan(0);
+    // Lumpy: radii differ from the smooth blob's, within the jitter.
+    const smooth = buildModel(one({ ...part, jitter: 0 }), { noAo: true });
+    expect(Array.from(m.position)).not.toEqual(Array.from(smooth.position));
+    for (let i = 0; i < m.position.length; i += 3) {
+      const r = (p: Float32Array) => Math.hypot(p[i]! / 4, (p[i + 1]! - 5) / 3, p[i + 2]! / 4);
+      expect(r(m.position)).toBeGreaterThanOrEqual(0.75 - 1e-5);
+      expect(r(m.position)).toBeLessThanOrEqual(1.25 + 1e-5);
+    }
+    // Another seed, another shape; the same seed, the same bytes.
+    const other = buildModel(one({ ...part, seed: 4 }), { noAo: true });
+    expect(Array.from(other.position)).not.toEqual(Array.from(m.position));
+    expect(buildModel(one(part), { noAo: true }).position).toEqual(m.position);
+    expect(() => one({ ...part, jitter: 0.8 })).toThrow(ModelSpecError);
+  });
+
+  it('builds the tree kit within the tree budget (Part I, Tree Kit)', () => {
+    const trees = Object.keys(MODEL_SPECS).filter((id) => id.startsWith('tree-'));
+    expect(trees.length).toBeGreaterThanOrEqual(9);
+    for (const id of trees) {
+      const m = buildModel(MODEL_SPECS[id]!);
+      expect(m.class).toBe('tree');
+      expect(withinBudget(m), `${id}: ${m.triangles}`).toBe(true);
+    }
+  });
 });
 
 describe('model spec validation', () => {
