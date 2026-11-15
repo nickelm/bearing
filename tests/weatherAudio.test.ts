@@ -475,6 +475,44 @@ describe('WeatherAudio', () => {
     audio.dispose();
   });
 
+  it('starts from a lifting finger also after the frame loop has paused it', async () => {
+    // A touch device with the campaign paused, as it starts: the finger going down makes the
+    // context, which cannot run yet; the next frame finds the game paused and suspends the
+    // audio; then the finger lifts. That gesture must run the context once, paused or not, or
+    // no later resume from the frame loop can start it.
+    const context = new StubContext();
+    let gesture = false;
+    let hasRun = false;
+    context.resume = () => {
+      // Outside a gesture a browser resumes only a context that has run before.
+      if (gesture || hasRun) {
+        context.state = 'running';
+        hasRun = true;
+      }
+      return Promise.resolve();
+    };
+    const audio = new WeatherAudio({ createContext: () => context as unknown as AudioContext });
+    const target = new EventTarget();
+    audio.attach(target);
+    target.dispatchEvent(new Event('pointerdown'));
+    expect(audio.started).toBe(true);
+    expect(context.state).toBe('suspended');
+    audio.suspend();
+    gesture = true;
+    target.dispatchEvent(new Event('pointerup'));
+    gesture = false;
+    expect(hasRun).toBe(true);
+    // Paused still: silent again at once.
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(context.state).toBe('suspended');
+    // The game runs on: the frame loop resumes the audio, outside any gesture.
+    audio.resume();
+    expect(context.state).toBe('running');
+    audio.dispose();
+  });
+
   it('lets the volume be heard, also while paused', async () => {
     vi.useFakeTimers();
     try {
@@ -519,6 +557,61 @@ describe('WeatherAudio', () => {
       expect(context.state).toBe('running');
       audio.dispose();
       new WeatherAudio().audition();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('ends the moment of sound while paused also where the context is slow to start', async () => {
+    // The moment is counted on the context's clock, and that clock stands until the context
+    // runs. A context that took a third of a second to resume (a wireless output, a sleeping
+    // audio device) was found short of its time when the timer came, and then ran on through
+    // the whole pause: rain, wind and the thunder on its way under the pause menu.
+    vi.useFakeTimers();
+    try {
+      const { audio, context } = started();
+      audio.suspend();
+      expect(context.state).toBe('suspended');
+      context.resume = () =>
+        new Promise<void>((resolve) => {
+          setTimeout(() => {
+            context.state = 'running';
+            resolve();
+          }, 300);
+        });
+      /** Lets `seconds` pass on the wall clock, and on the context's while it runs. */
+      const pass = async (seconds: number) => {
+        for (let t = 0; t < seconds - 1e-9; t += 0.05) {
+          await vi.advanceTimersByTimeAsync(50);
+          if (context.state === 'running') context.currentTime += 0.05;
+        }
+      };
+      audio.audition();
+      await pass(0.4);
+      expect(context.state).toBe('running');
+      // Heard for about a second from when it started, then silent again, and it stays so.
+      await pass(0.7);
+      expect(context.state).toBe('running');
+      await pass(0.6);
+      expect(context.state).toBe('suspended');
+      await pass(5);
+      expect(context.state).toBe('suspended');
+      // A move of the slider near the end of the moment still extends it.
+      audio.audition();
+      await pass(1.5);
+      audio.audition();
+      await pass(0.6);
+      expect(context.state).toBe('running');
+      await pass(1.2);
+      expect(context.state).toBe('suspended');
+      // Unpaused meanwhile: the timer leaves the running context alone.
+      audio.audition();
+      await pass(0.5);
+      audio.resume();
+      await pass(3);
+      expect(context.state).toBe('running');
+      audio.dispose();
+      await pass(3);
     } finally {
       vi.useRealTimers();
     }

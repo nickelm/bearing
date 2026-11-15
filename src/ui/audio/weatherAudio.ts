@@ -103,6 +103,8 @@ export class WeatherAudio {
   /** Context time until which an audition keeps a suspended context running, and of its last tone. */
   private auditionUntil = -Infinity;
   private auditionTone = -Infinity;
+  /** The timer that ends an audition's moment of sound, while one is set. */
+  private auditionTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly createContext: () => AudioContext | null;
 
   constructor(options: WeatherAudioOptions = {}) {
@@ -325,20 +327,37 @@ export class WeatherAudio {
     }
     if (!this.paused) return;
     this.auditionUntil = now + AUDITION_SECONDS;
-    if (context.state === 'suspended') void this.settle(context.resume());
-    setTimeout(
+    // The moment is counted on the context's clock, which stands until the context runs: its
+    // end is timed from then. Timed from here, a context slow to resume was found short of
+    // its time and left running for the rest of the pause.
+    if (context.state === 'suspended') {
+      void this.settle(context.resume()).then(() => this.endAudition(context));
+    } else {
+      this.endAudition(context);
+    }
+  }
+
+  /** Suspends the context again when an audition's moment is over, if the audio is still paused. */
+  private endAudition(context: AudioContext): void {
+    if (this.auditionTimer !== null || this.context !== context || !this.paused) return;
+    const left = Math.max(0, this.auditionUntil - context.currentTime);
+    this.auditionTimer = setTimeout(
       () => {
-        // Still paused, and no later audition has taken over: silence again.
-        if (this.context !== context || !this.paused) return;
-        if (context.currentTime < this.auditionUntil - 0.05) return;
-        if (context.state === 'running') void this.settle(context.suspend());
+        this.auditionTimer = null;
+        // Still paused and still sounding: silence again, unless a later audition has moved
+        // the end, which is then waited for.
+        if (this.context !== context || !this.paused || context.state !== 'running') return;
+        if (context.currentTime < this.auditionUntil - 0.05) this.endAudition(context);
+        else void this.settle(context.suspend());
       },
-      AUDITION_SECONDS * 1000 + 30,
+      left * 1000 + 30,
     );
   }
 
   /** Stops everything and closes the context. */
   dispose(): void {
+    if (this.auditionTimer !== null) clearTimeout(this.auditionTimer);
+    this.auditionTimer = null;
     this.ambience?.dispose();
     this.ambience = null;
     this.master?.disconnect();

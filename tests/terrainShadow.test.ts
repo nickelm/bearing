@@ -1,10 +1,14 @@
 /**
  * Terrain shadows (decision 139), the parts that need no GPU: window snapping,
- * the anchor face, re-bake thresholds, the height atlas, tile heights, and
- * the bake's CPU reference against the geometry (a ridge's shadow, the
- * planet's limb, a fine grid continued by a coarse one).
+ * the anchor face and what the lookups read while it changes, re-bake
+ * thresholds, the height atlas, tile heights, and the bake's CPU reference
+ * against the geometry (a ridge's shadow, the planet's limb, a fine grid
+ * continued by a coarse one).
  */
 import { describe, expect, it } from 'vitest';
+import { uniform } from 'three/tsl';
+import { Vector3 } from 'three/webgpu';
+import type { WebGPURenderer } from 'three/webgpu';
 import { CubeFace, cubeFaceUvToDirection, projectToCubeFace } from '../src/core/coords';
 import { TILE_BORDER, TILE_STRIDE, TILE_TEXELS } from '../src/core/tiles';
 import { DEG, KM, PLANET_RADIUS } from '../src/core/units';
@@ -25,9 +29,11 @@ import {
   SHADOW_SIZE,
   SHADOW_SNAP,
   SHADOW_STEP_TEXELS,
+  SHADOW_TILE_LEVELS,
   shadowFollow,
   shadowStrength,
   shadowVisibility,
+  TerrainShadow,
   tileHeightAt,
   windowOrigin,
 } from '../src/render/sim/lighting/terrainShadow';
@@ -108,6 +114,116 @@ describe('shadow windows', () => {
     // And coming back, +X holds until 49° from its own center.
     const back = new Vec3d(Math.sin(43 * DEG), 0, Math.cos(43 * DEG));
     expect(anchorFace(back, CubeFace.PosX)).toBe(CubeFace.PosX);
+  });
+});
+
+describe('crossing to another anchor face', () => {
+  /** Where the anchor goes from +Z to +X on the equator (48.7° east). */
+  const edge = Math.acos(0.66);
+  /** The camera on the equator at a longitude (rad), 3 km up. */
+  const eyeAt = (lon: number) => new Vec3d(Math.sin(lon), 0, Math.cos(lon)).scale(R + 3000);
+  /** The sun 8° over the eastern horizon at the crossing. */
+  const sun = new Vec3d(Math.sin(edge + 82 * DEG), 0, Math.cos(edge + 82 * DEG));
+  const flown = () => {
+    const shadow = new TerrainShadow(uniform(new Vector3(1, 0, 0)), R);
+    const n = 16;
+    shadow.setHeights(new Float32Array(6 * n * n).fill(500), n);
+    const renderer = { compute: () => undefined } as unknown as WebGPURenderer;
+    let now = 0;
+    const frame = (lon: number) => {
+      shadow.update(renderer, eyeAt(lon), sun, 1 / 60, (now += 1000 / 60));
+    };
+    // The anchor is the face under the camera at first, and is then kept a little past its edge.
+    frame(40 * DEG);
+    return { shadow, frame };
+  };
+  /** Whether the camera lies inside a grid's published window, in the frame of the face the field lies on. */
+  const inWindow = (shadow: TerrainShadow, l: number, lon: number) => {
+    const face = shadow.shownFace(l);
+    const origin = shadow.origin(l);
+    if (face === null || !origin) return false;
+    const uv = projectToCubeFace(eyeAt(lon), face);
+    const size = latticeSize(SHADOW_TILE_LEVELS[l]!);
+    const x = uv.u * size - origin[0];
+    const y = uv.v * size - origin[1];
+    const inner = (t: number) => t > 0.25 * SHADOW_SIZE && t < 0.75 * SHADOW_SIZE;
+    return inner(x) && inner(y);
+  };
+  // 250 m/s eastward along the equator, a frame at a time, from 1.25 km before the crossing.
+  const step = 250 / 60 / R;
+  const start = edge - 300 * step;
+
+  it('keeps every grid in the lookups, each on the face it was baked on, until it is baked again', () => {
+    const { shadow, frame } = flown();
+    let lon = start;
+    for (let f = 0; f < 250; f++) frame((lon += step));
+    expect(shadow.anchor).toBe(CubeFace.PosZ);
+    expect([0, 1, 2].map((l) => shadow.shown(l))).toEqual([1, 1, 1]);
+    const moved: number[] = [];
+    let crossed = -1;
+    let bakes = 0;
+    for (let f = 0; f < 3 * PASSES_PER_GRID + 80; f++) {
+      if (crossed < 0) bakes = shadow.stats.bakes;
+      frame((lon += step));
+      if (crossed < 0 && shadow.anchor === CubeFace.PosX) crossed = f;
+      for (let l = 0; l < 3; l++) {
+        // No grid leaves the lookups or fades, and none is read in another face's frame.
+        expect(shadow.shown(l)).toBe(1);
+        expect(inWindow(shadow, l, lon)).toBe(true);
+        if (shadow.shownFace(l) === CubeFace.PosX && !moved.includes(l)) {
+          moved.push(l);
+          // Published in the frame that finished its bake, the coarse grid first.
+          expect(f - crossed).toBe(moved.length * PASSES_PER_GRID - 1);
+        } else if (!moved.includes(l)) {
+          expect(shadow.shownFace(l)).toBe(CubeFace.PosZ);
+        }
+      }
+      expect(shadow.strength.value).toBeGreaterThan(0.9);
+    }
+    expect(crossed).toBeGreaterThan(40);
+    expect(moved).toEqual([2, 1, 0]);
+    // Three bakes, as after any change that makes all three grids stale.
+    expect(shadow.stats.bakes).toBe(bakes + 3);
+  });
+
+  it('drops the old face\u2019s fields when the shadows are switched off during the crossing', () => {
+    const { shadow, frame } = flown();
+    let lon = start;
+    for (let f = 0; f < 250; f++) frame((lon += step));
+    while (shadow.anchor === CubeFace.PosZ) frame((lon += step));
+    // The coarse grid is on the new face, the finer two still on the old one.
+    for (let f = 0; f < PASSES_PER_GRID + 2; f++) frame((lon += step));
+    expect([0, 1, 2].map((l) => shadow.shownFace(l))).toEqual([
+      CubeFace.PosZ,
+      CubeFace.PosZ,
+      CubeFace.PosX,
+    ]);
+    // Off: nothing applies; after two seconds nothing is kept, of either face.
+    shadow.enabled = false;
+    frame(lon);
+    expect(shadow.strength.value).toBe(0);
+    expect([0, 1, 2].map((l) => shadow.shown(l))).toEqual([1, 1, 1]);
+    for (let f = 0; f < 121; f++) frame(lon);
+    expect([0, 1, 2].map((l) => shadow.shown(l))).toEqual([0, 0, 0]);
+    expect([0, 1, 2].map((l) => shadow.origin(l))).toEqual([null, null, null]);
+    expect(shadow.busy).toBe(false);
+    // Back on: every grid is baked on the anchor and fades in from nothing, the coarse one first.
+    shadow.enabled = true;
+    frame(lon);
+    expect(shadow.strength.value).toBeGreaterThan(0.9);
+    expect([0, 1, 2].map((l) => shadow.shown(l))).toEqual([0, 0, 0]);
+    for (let f = 0; f < PASSES_PER_GRID; f++) frame(lon);
+    expect(shadow.shown(2)).toBeGreaterThan(0);
+    expect(shadow.shown(2)).toBeLessThan(0.1);
+    expect(shadow.shown(1)).toBe(0);
+    for (let f = 0; f < 2 * PASSES_PER_GRID + 40; f++) frame(lon);
+    expect([0, 1, 2].map((l) => shadow.shown(l))).toEqual([1, 1, 1]);
+    expect([0, 1, 2].map((l) => shadow.shownFace(l))).toEqual([
+      CubeFace.PosX,
+      CubeFace.PosX,
+      CubeFace.PosX,
+    ]);
+    for (let l = 0; l < 3; l++) expect(inWindow(shadow, l, lon)).toBe(true);
   });
 });
 

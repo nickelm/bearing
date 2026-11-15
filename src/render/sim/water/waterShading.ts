@@ -160,6 +160,13 @@ export interface WaterInputs {
   light?: LightAt;
 }
 
+/**
+ * The glow of a lightning flash in the cloud over water, as mirrored: a share of the flash's
+ * light on surfaces (the volumetric march draws the lit cloud about that bright, and under
+ * the night's bloom threshold).
+ */
+export const FLASH_MIRROR = 0.5;
+
 /** GGX α² added to the reflection of a river much narrower than its pixel (decision 120). */
 const THIN_RIVER_ALPHA2 = 0.5;
 
@@ -298,8 +305,18 @@ export class WaterShading {
           // Under a closed deck the water mirrors the cloud's underside, not the clear sky
           // behind it: the gray light the deck sends down (`at.sky` without the gains that
           // belong to surfaces), from the column `at` has read. Blue water lay under a gray
-          // or pink deck before.
-          const deck = at.sky.div(max(L.skyFill.mul(L.surfaceGain), 1e-3));
+          // or pink deck before. That light is an irradiance in display units, π times
+          // smaller than the radiance of the even sky that gives it (as the sky's own
+          // irradiance is to its radiance): without the π the water mirrored a deck a third
+          // as bright as the light it sent down. A lightning flash's share of `at.sky` has
+          // no such gains to take out (by night they are zero, and the flash divided by
+          // them turned the water white): the water mirrors the cloud's glow, FLASH_MIRROR
+          // of the flash's light on surfaces.
+          const flash = L.flashAt(at.p);
+          const deck = max(at.sky.sub(flash), 0)
+            .div(max(L.skyFill.mul(L.surfaceGain), 1e-3))
+            .mul(Math.PI)
+            .add(flash.mul(FLASH_MIRROR));
           reflected = mix(reflected, deck, clamp(L.overcast(at.p).div(0.3), 0, 1)) as V3;
         }
         const sky = reflected.mul(fresnel);

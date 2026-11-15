@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { DataUtils } from 'three/webgpu';
 import { latLonToDirection } from '../src/core/coords';
 import { DEG, PLANET_RADIUS } from '../src/core/units';
+import { Vec3d } from '../src/core/vec3d';
 import { CloudLayer, VIEW_ANGLE, viewAngle } from '../src/render/sim/clouds/cloudLayer';
 import {
   developmentOf,
@@ -23,9 +24,14 @@ import {
   generateShapeNoise,
   SHAPE_SIZE,
 } from '../src/render/sim/clouds/noiseVolume';
-import { VOLUMETRIC_QUALITY } from '../src/render/sim/clouds/volumetrics';
+import {
+  CIRRUS_SECONDS,
+  VOLUMETRIC_QUALITY,
+  Volumetrics,
+} from '../src/render/sim/clouds/volumetrics';
 import { WeatherTexture } from '../src/render/sim/clouds/weatherTexture';
 import { PlanetLighting } from '../src/render/sim/lighting/planetLighting';
+import { WeatherState } from '../src/render/sim/weather/weatherState';
 import { WeatherView } from '../src/sim/weather/frame';
 import { WeatherGrid } from '../src/sim/weather/grid';
 import { presetFrame } from '../src/sim/weather/presets';
@@ -315,5 +321,85 @@ describe('volumetric quality', () => {
     expect(low.airSteps).toBeLessThan(high.airSteps);
     // Longer steps where there are fewer of them.
     expect(low.stepGrowth).toBeGreaterThan(high.stepGrowth);
+  });
+});
+
+describe('cirrus and the cloud cover in view', () => {
+  it('comes in and goes out over seconds when that cover steps, and at once on a cut', () => {
+    const weather = new WeatherTexture();
+    const lighting = new PlanetLighting();
+    const clouds = new CloudLayer(PLANET_RADIUS, lighting, weather, 8);
+    clouds.volumetric = true;
+    const state = new WeatherState();
+    const volumetrics = new Volumetrics({ lighting, clouds, weather, state });
+    const eye = new Vec3d(0.027, 0.643, 0.766).normalize().scale(PLANET_RADIUS + 1200);
+    lighting.update(eye, new Vec3d(1, 1, 0).normalize());
+    const frame = (dt: number) => {
+      clouds.update(eye);
+      state.update(null, eye, 1200, 0, dt);
+      volumetrics.update(eye, dt);
+      return volumetrics.stats;
+    };
+    const dt = 1 / 60;
+    const seconds = (s: number) => {
+      for (let f = 0; f < Math.round(s / dt) - 1; f++) frame(dt);
+      return frame(dt);
+    };
+
+    // A cloudless sky: no march, no sheet (the first frame sets it outright).
+    weather.fill(0);
+    expect(frame(dt)).toMatchObject({ clouds: false, cirrus: 0 });
+    // A weather sample with a third of cloud comes into view. In live weather the most cover
+    // in view steps like this (a sample is 65 km wide and the view 400 km), and the sheet
+    // went from nothing to all of it in that frame: a sky of cirrus at once.
+    weather.fill(0.33);
+    let s = frame(dt);
+    expect(s.clouds).toBe(true);
+    expect(s.cirrus).toBeCloseTo(dt / CIRRUS_SECONDS, 9);
+    expect(seconds(CIRRUS_SECONDS / 2).cirrus).toBeCloseTo(0.5, 2);
+    expect(seconds(CIRRUS_SECONDS / 2 + 0.1).cirrus).toBe(1);
+    // The last cloudy sample leaves: the sheet thins over the same time, and the march,
+    // which draws it, runs until it has gone.
+    weather.fill(0);
+    s = frame(dt);
+    expect(s.clouds).toBe(true);
+    expect(s.cirrus).toBeCloseTo(1 - dt / CIRRUS_SECONDS, 9);
+    s = seconds(CIRRUS_SECONDS / 2);
+    expect(s.clouds).toBe(true);
+    expect(s.cirrus).toBeCloseTo(0.5, 2);
+    expect(seconds(CIRRUS_SECONDS / 2 + 0.1)).toMatchObject({ clouds: false, cirrus: 0 });
+    // A little cloud in view brings in a part of it.
+    weather.fill(0.05);
+    const some = seconds(CIRRUS_SECONDS + 0.1).cirrus;
+    expect(some).toBeGreaterThan(0.2);
+    expect(some).toBeLessThan(0.8);
+
+    // Paused on its way (frames without time), it holds; another weather chosen meanwhile
+    // (or a preview's next view) sets it outright, and so does a cut.
+    const held = frame(0).cirrus;
+    expect(held).toBe(some);
+    weather.fill(0.33);
+    expect(frame(dt).cirrus).toBeCloseTo(some + dt / CIRRUS_SECONDS, 9);
+    expect(frame(0).cirrus).toBeCloseTo(some + dt / CIRRUS_SECONDS, 9);
+    weather.fill(0);
+    expect(frame(0)).toMatchObject({ clouds: false, cirrus: 0 });
+    weather.fill(0.33);
+    expect(frame(0).cirrus).toBe(1);
+    weather.fill(0);
+    volumetrics.reset();
+    expect(frame(dt)).toMatchObject({ clouds: false, cirrus: 0 });
+    // With no cirrus to draw the march does not wait for it.
+    weather.fill(0.33);
+    expect(frame(0).cirrus).toBe(1);
+    volumetrics.cirrus.value = 0;
+    weather.fill(0);
+    expect(frame(dt).clouds).toBe(false);
+    // Clouds switched off go at once.
+    volumetrics.cirrus.value = 0.5;
+    weather.fill(0.33);
+    expect(frame(0)).toMatchObject({ clouds: true, cirrus: 1 });
+    clouds.enabled.value = 0;
+    expect(frame(dt)).toMatchObject({ clouds: false, cirrus: 0 });
+    lighting.atmosphere.dispose();
   });
 });

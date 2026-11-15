@@ -3,7 +3,8 @@
  * world: a wall of known height on the sphere and a known sun. The shadow's
  * length matches h / tan(elevation) to the grid's resolution, lit ground stays
  * lit, the planet's limb shades the far side, the kernels agree with the CPU
- * reference, and the per-frame schedule bakes only what is stale.
+ * reference, the shadows stay through a crossing to another anchor face, and
+ * the per-frame schedule bakes only what is stale.
  */
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three/webgpu';
@@ -346,6 +347,99 @@ describe.skipIf(!gpu)('terrain shadows (TSL compute on Dawn)', () => {
     }
     expect(shaded).toBeGreaterThan(300);
     expect(edge).toBeGreaterThan(5);
+    shadow.dispose();
+    head.dispose();
+  }, 240_000);
+
+  it('keeps the shadows through a crossing to another anchor face', async () => {
+    const head = await headlessRenderer(gpu!.device, 64, 64);
+    const sunUniform = uniform(new Vector3());
+    const shadow = new TerrainShadow(sunUniform, R);
+    // Where the anchor goes from +Z to +X on the equator (48.7° east), and a ridge across
+    // the equator 3 to 9 km east of it, in both faces' cells of the global grid.
+    const edge = Math.acos(0.66);
+    const east = (d: Readonly<Vec3d>) => (Math.atan2(d.x, d.z) - edge) * R;
+    const height = new Float32Array(6 * N * N);
+    const d = new Vec3d();
+    for (const face of [CubeFace.PosZ, CubeFace.PosX]) {
+      for (let j = 0; j < N; j++) {
+        for (let i = 0; i < N; i++) {
+          cubeFaceUvToDirection(face, (i + 0.5) / N, (j + 0.5) / N, d);
+          const s = east(d);
+          height[face * N * N + j * N + i] =
+            s >= 3000 && s <= 9000 && Math.abs(d.y) < 0.2 ? WALL : 0;
+        }
+      }
+    }
+    shadow.setHeights(height, N);
+    const place = (s: number, t: number, h: number) => {
+      const lon = edge + s / R;
+      const lat = t / R;
+      return new Vec3d(
+        Math.sin(lon) * Math.cos(lat),
+        Math.sin(lat),
+        Math.cos(lon) * Math.cos(lat),
+      ).scale(R + h);
+    };
+    // The sun 8° over the eastern horizon: the ridge's shadow reaches west across the crossing.
+    const sun = new Vec3d(Math.sin(edge + 82 * DEG), 0, Math.cos(edge + 82 * DEG));
+    sunUniform.value.set(sun.x, sun.y, sun.z);
+    const points: Vec3d[] = [];
+    for (let s = -9000; s <= 2000; s += 250) {
+      for (const t of [-900, 150, 1300]) points.push(place(s, t, 0));
+    }
+    const data = new Float32Array(points.length * 4);
+    points.forEach((p, i) => data.set([p.x, p.y, p.z, 0], i * 4));
+    const input = instancedArray(data, 'vec4');
+    const output = instancedArray(points.length, 'vec4');
+    const kernel = Fn(() => {
+      const p = input.element(instanceIndex).xyz;
+      output.element(instanceIndex).assign(vec4(shadow.visibility(p), 0, 0, 0));
+    })().compute(points.length);
+    const read = async () => {
+      await head.renderer.computeAsync(kernel);
+      const out = new Float32Array(await head.renderer.getArrayBufferAsync(output.value));
+      return Float32Array.from(points, (_, i) => out[i * 4]!);
+    };
+    const frame = (eye: Readonly<Vec3d>) => shadow.update(head.renderer, eye, sun, 1 / 60);
+
+    // On +Z first (the anchor is the face under the camera at first), then 500 m short of the crossing.
+    frame(place(-80_000, 0, 3000));
+    const west = place(-500, 0, 3000);
+    for (let f = 0; f < 150; f++) frame(west);
+    expect(shadow.anchor).toBe(CubeFace.PosZ);
+    expect(shadow.busy).toBe(false);
+    const before = await read();
+    const shaded = before.filter((v) => v < 0.05).length;
+    const lit = before.filter((v) => v > 0.95).length;
+    expect(shaded).toBeGreaterThan(25);
+    expect(lit).toBeGreaterThan(15);
+
+    // Across: every frame until all three grids are baked on +X, the shadows stay as they were.
+    const eastOf = place(500, 0, 3000);
+    let worst = 0;
+    let worstMean = 0;
+    const faces = new Set<string>();
+    for (let f = 0; f < 3 * PASSES_PER_GRID + 45; f++) {
+      frame(eastOf);
+      expect(shadow.anchor).toBe(CubeFace.PosX);
+      faces.add([0, 1, 2].map((l) => shadow.shownFace(l)).join(''));
+      const now = await read();
+      let mean = 0;
+      for (let i = 0; i < points.length; i++) {
+        const difference = Math.abs(now[i]! - before[i]!);
+        worst = Math.max(worst, difference);
+        mean += difference / points.length;
+      }
+      worstMean = Math.max(worstMean, mean);
+    }
+    expect(shadow.busy).toBe(false);
+    // The grids moved to the new face one at a time, the coarse one first.
+    expect([...faces]).toEqual(['444', '440', '400', '000']);
+    // (They went out in the frame of the crossing: a difference of 1, 0.27 on average.)
+    expect(worst).toBeLessThan(0.05);
+    expect(worstMean).toBeLessThan(0.005);
+    expect(gpu!.errors).toEqual([]);
     shadow.dispose();
     head.dispose();
   }, 240_000);

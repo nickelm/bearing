@@ -55,7 +55,8 @@
  * Depth-aware upsample: each pixel weights the four low-resolution texels
  * around it by their bilinear weight over the squared relative difference of
  * their depth to its own (beyond what counts as the same surface), so texels
- * on the other side of a silhouette count for almost nothing. If none of the
+ * on the other side of a silhouette count for almost nothing. Where all four
+ * lie at the pixel's depth the weights are exactly bilinear. If none of the
  * four is within 10%, the 3 × 3 block of low-resolution texels is searched
  * for the closest depth. Where the air in front of the pixel is all but
  * opaque, neighbors whose air is opaque too count whatever their depth. With MSAA, a
@@ -200,6 +201,8 @@ const MARCH_SHADERS = 8;
 const GUARD_FRAMES = 3;
 /** Relative depth difference above which the upsample looks further for a matching texel. */
 const MISMATCH = 0.1;
+/** Bilinear weight a low-resolution texel gets at least in the upsample where the four around a pixel differ in depth. */
+const UPSAMPLE_FLOOR = 0.02;
 /** Samples per pixel of a multisampled target: WebGPU has four or one. */
 const MSAA_SAMPLES = 4;
 /** Relative depth difference between a pixel's samples above which it is treated as a silhouette. */
@@ -908,20 +911,30 @@ export class SimPipeline {
     const weight = float(0).toVar();
     const best = float(1e9).toVar();
     const taps: { m: F; bilinear: F; color: V4 }[] = [];
+    const worst = float(0).toVar();
     for (let j = 0; j < 2; j++) {
       for (let i = 0; i < 2; i++) {
         const texel = clampTexel(corner.add(ivec2(i, j)), last as IV2).toVar();
         const m = mismatch(fetch(lowDepth, texel).x as F).toVar() as F;
         const bilinear = (i ? f.x : f.x.oneMinus()).mul(j ? f.y : f.y.oneMinus()).toVar() as F;
-        // The small floor lets a texel with no bilinear weight stand in when the others do not match.
-        const apart = max(m.sub(SAME_SURFACE), 0);
-        const w = bilinear.add(0.02).div(apart.mul(apart).add(1e-4)).toVar();
         const color = fetch(lowColor, texel).toVar() as V4;
-        sum.addAssign(color.mul(w));
-        weight.addAssign(w);
         best.assign(min(best, m));
+        worst.assign(max(worst, m));
         taps.push({ m, bilinear, color });
       }
+    }
+    // The small floor lets a texel with no bilinear weight stand in when the others do not
+    // match. Where all four match (the sky, a cloud deck, open ground) there is none: with
+    // it the weights were not bilinear, and every gradient of the low-resolution image came
+    // out with a ripple at the texel period, a faint lattice of columns over bright cloud.
+    const floorWeight = smoothstep(SAME_SURFACE, SAME_SURFACE + 0.02, worst)
+      .mul(UPSAMPLE_FLOOR)
+      .toVar();
+    for (const tap of taps) {
+      const apart = max(tap.m.sub(SAME_SURFACE), 0);
+      const w = tap.bilinear.add(floorWeight).div(apart.mul(apart).add(1e-4)).toVar();
+      sum.addAssign(tap.color.mul(w));
+      weight.addAssign(w);
     }
     const result = sum.div(weight).toVar();
     If(best.greaterThan(MISMATCH), () => {
@@ -953,7 +966,7 @@ export class SimPipeline {
       for (const tap of taps) {
         const shown = smoothstep(0, HIDDEN_SURFACE, max(tap.color.a, own));
         const apart = max(tap.m.mul(shown).sub(SAME_SURFACE), 0);
-        const w = tap.bilinear.add(0.02).div(apart.mul(apart).add(1e-4)).toVar();
+        const w = tap.bilinear.add(floorWeight).div(apart.mul(apart).add(1e-4)).toVar();
         merged.addAssign(tap.color.mul(w));
         mergedWeight.addAssign(w);
       }

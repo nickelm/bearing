@@ -391,6 +391,8 @@ const CIRRUS_POLAR: [number, number] = [0.866, 0.951];
 const CIRRUS_SKY = 2.5;
 /** The most cloud cover in view from which the cirrus is fully in (see `cirrusIn`). */
 const CIRRUS_IN = 0.1;
+/** Real seconds the cirrus takes to come in or to go out when the cloud cover in view steps. */
+export const CIRRUS_SECONDS = 6;
 
 /** Height above the mean ground up to which fog has its full density (m). */
 export const FOG_FLOOR = 100;
@@ -519,6 +521,8 @@ export interface VolumetricStats {
   /** Whether the cloud march and the air march run this frame. */
   clouds: boolean;
   air: boolean;
+  /** How far the cirrus is in, 0..1 (it follows the cloud cover in view over seconds). */
+  cirrus: number;
   /** The cloud shell's bounds above sea level (m). */
   bottom: number;
   top: number;
@@ -538,9 +542,16 @@ export class Volumetrics {
   /**
    * How far the cirrus is in, 0..1, by the most cloud cover in view (set by `update`). The
    * sheet is drawn with the cloud march, which runs from the first weather sample with cloud
-   * in it: the cirrus comes in over the cover from there to CIRRUS_IN, not at once.
+   * in it: the cirrus comes in over the cover from there to CIRRUS_IN, not at once. That
+   * cover moves in steps (a weather sample 65 km wide enters the view or leaves it, an
+   * hourly frame arrives), often from none to a third: the sheet follows over
+   * CIRRUS_SECONDS, and the march runs on until it has gone.
    */
   private readonly cirrusIn = uniform(1);
+  /** False until an update has set `cirrusIn` outright (a first frame, after `reset`). */
+  private cirrusSettled = false;
+  /** What `cirrusIn` was on its way to at the last update. */
+  private cirrusWanted = 0;
   /**
    * How much of the noise shows in clouds, fog, dust and rain, 0..1. At 0 they are as smooth
    * as the weather's fields: decks are slabs, fog is even, heaps are gone (tests measure the
@@ -556,7 +567,14 @@ export class Volumetrics {
   airEnabled = true;
   /** Draw the clouds (the cloud layer's own `enabled` hides them and their shadows together). */
   cloudsEnabled = true;
-  readonly stats: VolumetricStats = { clouds: false, air: false, bottom: 0, top: 0, airTop: 0 };
+  readonly stats: VolumetricStats = {
+    clouds: false,
+    air: false,
+    cirrus: 0,
+    bottom: 0,
+    top: 0,
+    airTop: 0,
+  };
 
   /** 1 while cloud can be in view, and while fog, dust or rain can. */
   private readonly cloudOn = uniform(0);
@@ -694,9 +712,24 @@ export class Volumetrics {
     this.fade.value = fade;
     const view = clouds.extent;
 
-    const cloudOn = this.cloudsEnabled && clouds.possible && fade > 0;
+    // The cirrus follows the cover in view over CIRRUS_SECONDS. It is set outright on a first
+    // frame, where the clouds are switched off, and where the cover changes while no time
+    // passes (a preview, another weather chosen in a paused view); a paused view otherwise
+    // holds it.
+    const cloudsShown = this.cloudsEnabled && fade > 0 && clouds.enabled.value > 0;
+    const cirrusWanted = cloudsShown
+      ? smooth(clouds.coverLeast, CIRRUS_IN, view.cover + clouds.coverageBias.value)
+      : 0;
+    const outright =
+      !cloudsShown || !this.cirrusSettled || (dt <= 0 && cirrusWanted !== this.cirrusWanted);
+    const ease = outright ? 1 : Math.max(0, dt) / CIRRUS_SECONDS;
+    this.cirrusIn.value += Math.min(ease, Math.max(-ease, cirrusWanted - this.cirrusIn.value));
+    this.cirrusWanted = cirrusWanted;
+    this.cirrusSettled = true;
+    // The march runs while cloud can be in view, and until the cirrus has gone.
+    const cirrusLeft = this.cirrus.value > 0 && this.cirrusIn.value > 0;
+    const cloudOn = cloudsShown && (clouds.possible || cirrusLeft);
     this.cloudOn.value = cloudOn ? 1 : 0;
-    this.cirrusIn.value = smooth(clouds.coverLeast, CIRRUS_IN, view.cover + clouds.coverageBias.value);
     this.bottom.value = clouds.bottom;
     this.top.value = Math.max(clouds.top, clouds.bottom + 100);
     this.stormOn.value = view.storm > 0.02 ? 1 : 0;
@@ -811,6 +844,7 @@ export class Volumetrics {
     const s = this.stats;
     s.clouds = cloudOn;
     s.air = airOn;
+    s.cirrus = this.cirrusIn.value;
     s.bottom = this.bottom.value;
     s.top = this.top.value;
     s.airTop = airTop;
@@ -822,8 +856,12 @@ export class Volumetrics {
     this.source.idle = drawn.frames >= WARM_FRAMES && !(cloudOn || airOn);
   }
 
-  /** Forgets the wind's path (a new flight, a preview view): fog banks start from the same place. */
+  /**
+   * Forgets the wind's path (a new flight, a preview view): fog banks start from the same
+   * place, and the cirrus is as the new place has it.
+   */
   reset(): void {
+    this.cirrusSettled = false;
     this.path.set(0, 0, 0);
     this.pathFine.set(0, 0, 0);
     this.pathNear.set(0, 0, 0);
@@ -1457,12 +1495,7 @@ export class Volumetrics {
       // The sheet thins to nothing as the camera passes through it.
       const near = smoothstep(0, 500, abs(h0.sub(CIRRUS_ALTITUDE)));
       const slant = float(1).div(max(abs(dot(up, rd)), 0.22));
-      const depth = density
-        .mul(CIRRUS_DEPTH)
-        .mul(slant)
-        .mul(near)
-        .mul(polar)
-        .mul(this.cirrusIn);
+      const depth = density.mul(CIRRUS_DEPTH).mul(slant).mul(near).mul(polar).mul(this.cirrusIn);
       const through = exp(depth.negate()).toVar();
       // Ice scatters forward: bright toward the sun, and lit from below once the sun is under it.
       const lit = a

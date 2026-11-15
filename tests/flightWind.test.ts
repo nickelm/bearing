@@ -435,6 +435,49 @@ describe('crosswind on the wheels: the track hold', () => {
     }
   });
 
+  it('does not carry its track into the next flight', () => {
+    // A restart, a new flight or a flight after a crash places the same aircraft again: the
+    // track it held, its timers and the nosewheel's angle belong to the flight before.
+    const runway = testRunway();
+    const ground = flatGround(runway);
+    const end = runwayEnds(runway)[0];
+    const xyz = (v: Readonly<Vec3d>) => [v.x, v.y, v.z];
+    const state = (m: FlightModel) => [...xyz(m.pos), ...xyz(m.vel), ...xyz(m.omega)];
+    const used = kestrel();
+    spawnOnRunway(used, runway, end);
+    const ctl = neutralControls();
+    ctl.throttle = 1;
+    const up = used.pos.clone().normalize();
+    const cross = headingVector(up, end.heading + Math.PI / 2).scale(GROUND_WIND_LIMIT);
+    // Rolling in a crosswind with the hold at work, then off the pavement into the ground.
+    for (let i = 0; i < 8 / FLIGHT_STEP; i++) {
+      used.wind.copy(cross);
+      used.step(ctl, ground);
+    }
+    expect(used.lawState.holdTime).toBeGreaterThan(0);
+    expect(used.telemetry.laws.steer).not.toBe(0);
+    expect(used.lawState.holdTurned).not.toBe(0);
+    used.crash('test');
+    // The same aircraft again, and one that never flew: step for step the same.
+    const fresh = kestrel();
+    for (const m of [used, fresh]) {
+      spawnOnRunway(m, runway, end);
+      m.fuel = fresh.fuel;
+      m.time = 0;
+    }
+    expect(used.lawState).toEqual(newLawState());
+    expect(used.telemetry.laws.steer).toBe(0);
+    for (let i = 0; i < 6 / FLIGHT_STEP; i++) {
+      for (const m of [used, fresh]) {
+        m.wind.copy(cross);
+        m.step(ctl, ground);
+      }
+      if (i % 60 === 0) expect(state(used), `step ${i}`).toEqual(state(fresh));
+    }
+    expect(state(used)).toEqual(state(fresh));
+    expect(used.lawState).toEqual(fresh.lawState);
+  });
+
   it('never acts for the scripted pilot, who keeps the pedals in on the wheels', () => {
     // So the pilot's circuit in still air is the committed model's to the bit (compared in
     // lockstep when the hold was added): the hold is the only change, and it gives nothing.
