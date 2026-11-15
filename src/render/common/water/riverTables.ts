@@ -88,41 +88,42 @@ export class RiverTables {
     const fineLists = options.fineLists ?? true;
     const n = index.segments.count;
     const fineSrc = index.segments.data;
+    const F = index.segments.fields ?? 8;
 
     // Coarse chords: runs of up to COARSE_MERGE consecutive, connected segments.
     const chords: number[] = [];
     for (let s = 0; s < n;) {
       let e = s;
-      let width = Math.max(fineSrc[s * 8 + 6]!, fineSrc[s * 8 + 7]!);
-      const sign = Math.sign(fineSrc[s * 8 + 6]!) || 1;
+      let width = Math.max(fineSrc[s * F + 6]!, fineSrc[s * F + 7]!);
+      const sign = Math.sign(fineSrc[s * F + 6]!) || 1;
       while (e + 1 < n && e + 1 - s < coarseMerge) {
-        const o = e * 8;
-        const q = (e + 1) * 8;
+        const o = e * F;
+        const q = (e + 1) * F;
         const gap = Math.hypot(
           fineSrc[o + 3]! - fineSrc[q]!,
           fineSrc[o + 4]! - fineSrc[q + 1]!,
           fineSrc[o + 5]! - fineSrc[q + 2]!,
         );
-        if (gap > 1e-9 || (Math.sign(fineSrc[(e + 1) * 8 + 6]!) || 1) !== sign) break;
+        if (gap > 1e-9 || (Math.sign(fineSrc[(e + 1) * F + 6]!) || 1) !== sign) break;
         e++;
-        width = Math.max(width, fineSrc[e * 8 + 6]!, fineSrc[e * 8 + 7]!);
+        width = Math.max(width, fineSrc[e * F + 6]!, fineSrc[e * F + 7]!);
       }
       chords.push(
-        fineSrc[s * 8]!,
-        fineSrc[s * 8 + 1]!,
-        fineSrc[s * 8 + 2]!,
-        fineSrc[e * 8 + 3]!,
-        fineSrc[e * 8 + 4]!,
-        fineSrc[e * 8 + 5]!,
+        fineSrc[s * F]!,
+        fineSrc[s * F + 1]!,
+        fineSrc[s * F + 2]!,
+        fineSrc[e * F + 3]!,
+        fineSrc[e * F + 4]!,
+        fineSrc[e * F + 5]!,
         width,
         width,
       );
       s = e + 1;
     }
     const chordCount = chords.length / 8;
-    // Fine segments first, then chords, in one table (same 8-field layout as RiverIndex).
+    // Fine segments first, then chords, in one table (the first 8 fields of RiverIndex's layout).
     const src = new Float64Array((n + chordCount) * 8);
-    src.set(fineSrc.subarray(0, n * 8));
+    for (let s = 0; s < n; s++) src.set(fineSrc.subarray(s * F, s * F + 8), s * 8);
     src.set(chords, n * 8);
     const total = n + chordCount;
     this.segments = new Float32Array(Math.max(1, total) * 8);

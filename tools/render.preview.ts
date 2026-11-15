@@ -161,7 +161,8 @@ export interface PreviewView {
     | 'farmland'
     | 'mixed'
     | 'conifer'
-    | 'beach';
+    | 'beach'
+    | 'ocean';
   /**
    * With a target: face this far clockwise of the sun's azimuth (rad; 0 looks into
    * the sun, π puts it behind), standing back from the target along that heading.
@@ -299,6 +300,19 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     localTime: 16.8,
     target: 'beach',
     sunHeading: 0,
+  },
+  {
+    // Open sea off the check-5 coast from 12 km (decision 146): the wave field must not
+    // read as a repeating tile, and its glint should break into patches and streaks.
+    name: 'ocean',
+    dLat: 0,
+    dLon: 0,
+    altitude: 12 * KM,
+    tilt: 62 * DEG,
+    heading: 0,
+    localTime: 15.5,
+    target: 'ocean',
+    sunHeading: 30 * DEG,
   },
   {
     // The check-5 coast with the sun behind: shallow water and foam without the glint.
@@ -712,6 +726,7 @@ it('renders preview views', async () => {
   const riverIndex = new RiverIndex(global.finish.rivers, {
     height: global.height,
     radius: params.radius,
+    lakeDepth: global.finish.drainage.lakeDepth,
   });
   const synth = new TileSynthesizer(global.grid, {
     seed: params.seed,
@@ -863,7 +878,26 @@ it('renders preview views', async () => {
     ...checks,
     city: sp.cells.length ? new Vec3d(...settlementPoint(sp, biggest)) : null,
     airbase: base ? new Vec3d(...base.point) : null,
+    ocean: null,
   };
+  // Open sea (decision 146): the cell deeper than 150 m nearest the check-5 coast (or
+  // the main continent), away from the ice caps.
+  {
+    const from = checks.beach ?? main;
+    let bestDot = -2;
+    const od = new Vec3d();
+    for (let c = 0; c < global.height.length; c += 2) {
+      if (global.height[c]! > -150) continue;
+      const face = Math.floor(c / (n * n)) as CubeFace;
+      cubeFaceUvToDirection(face, ((c % n) + 0.5) / n, ((Math.floor(c / n) % n) + 0.5) / n, od);
+      if (Math.abs(od.y) > 0.75) continue;
+      const dot = od.dot(from);
+      if (dot > bestDot) {
+        bestDot = dot;
+        targets.ocean = od.clone();
+      }
+    }
+  }
   let deepest = 0;
   let nearest = -2;
   let highest = 0;
@@ -1728,6 +1762,7 @@ async function renderStrategic(
   const riverIndex = new RiverIndex(global.finish.rivers, {
     height: global.height,
     radius: params.radius,
+    lakeDepth: global.finish.drainage.lakeDepth,
   });
   // The relief mesh (decision 77) from the same synthesizer as the terrain.
   const synth = new TileSynthesizer(global.grid, {

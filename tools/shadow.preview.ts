@@ -63,7 +63,11 @@ it('measures the shadow bake', async () => {
   console.log(
     `peak: ${global.height[top]!.toFixed(0)} m at ${(Math.asin(peak.y) / DEG).toFixed(2)}°, ${(Math.atan2(peak.x, peak.z) / DEG).toFixed(2)}° (face ${face})`,
   );
-  const riverIndex = new RiverIndex(global.finish.rivers, { height: global.height, radius: R });
+  const riverIndex = new RiverIndex(global.finish.rivers, {
+    height: global.height,
+    radius: R,
+    lakeDepth: global.finish.drainage.lakeDepth,
+  });
   const synth = new TileSynthesizer(global.grid, {
     seed: params.seed,
     reliefScale: params.reliefScale,

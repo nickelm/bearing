@@ -110,7 +110,11 @@ it('renders Free Flight shots', async () => {
   scene.climate.setValleyFloor(global.finish.display.valleyFloor ?? null, world.maps.height);
   scene.terrain.buildBudgetMs = 10_000;
   scene.terrain.budgetMiB = 600;
-  const rivers = new RiverIndex(global.finish.rivers, { height: global.height, radius: R });
+  const rivers = new RiverIndex(global.finish.rivers, {
+    height: global.height,
+    radius: R,
+    lakeDepth: global.finish.drainage.lakeDepth,
+  });
   const synth = new TileSynthesizer(global.grid, {
     seed: params.seed,
     reliefScale: params.reliefScale,

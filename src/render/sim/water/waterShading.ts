@@ -21,11 +21,17 @@
  *   integer multiples of 2π/WAVE_PERIOD, so they tile with that period, and
  *   each mesh passes its origin modulo the period (computed in float64).
  *   Fragments evaluate the waves on small, precise coordinates.
- * - Waves shorter than a few pixels fade out. Their slope variance moves into
+ * - Waves shorter than about a dozen pixels fade out (decision 146). Their slope variance moves into
  *   the GGX roughness, so from orbit the glint widens into a sunglint instead
  *   of aliasing.
  * - Fresnel (Schlick, F0 = 0.02) mixes the water body with a reflection of
  *   the sky where the mirrored view ray points (the sky-view LUT, decision 140).
+ *
+ * The sea from altitude (decision 146): the wave field's period would show as a
+ * repeating tile, so gusts and calms from noise on the planet-centered position
+ * (which does not repeat) scale the wind waves, drawn out along the wind into
+ * streaks; waves run with the weather's wind; a long swell runs at sea; broad
+ * patches shift the open water's color; storms raise whitecaps.
  *
  * Coastal foam (decision 39): distance to the shore comes per vertex
  * (tileMesh `shore`: depth ÷ depth gradient from the samples). Foam
@@ -33,7 +39,7 @@
  * up by the wave field. Once the band is narrower than a pixel, it fades to
  * its average coverage, so from orbit coasts get a faint light edge.
  */
-import { Color } from 'three/webgpu';
+import { Color, Vector3 } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import {
   clamp,
@@ -41,7 +47,9 @@ import {
   dot,
   exp,
   float,
+  floor,
   Fn,
+  fract,
   fwidth,
   If,
   length,
@@ -49,6 +57,7 @@ import {
   mix,
   normalize,
   pow,
+  sin,
   smoothstep,
   time,
   uniform,
@@ -125,8 +134,61 @@ export function waveSet(count = 32): Wave[] {
   return waves;
 }
 
-/** Slope variance of a wave of peak slope s: s²/2 (one direction). */
-const slopeVariance = (s: number) => (s * s) / 2;
+/**
+ * Swell (decision 146): long waves raised by distant storms, in two systems whose
+ * 3D directions are far apart, so one of them runs across the surface anywhere on
+ * the planet. Each system holds three waves within about 20° of its heading.
+ */
+export function swellSet(): Wave[] {
+  const r = rng(0, 'render/swell');
+  const waves: Wave[] = [];
+  const axes: [number, number, number][] = [
+    [0.8, 0.1, 0.59],
+    [-0.35, 0.55, 0.76],
+  ];
+  for (const axis of axes) {
+    // A frame around the system's heading.
+    const len = Math.hypot(...axis);
+    const a = axis.map((x) => x / len) as [number, number, number];
+    const side = [-a[2], 0, a[0]];
+    const sl = Math.hypot(...side);
+    for (let i = 0; i < 3; i++) {
+      const lambda = 170 + 250 * r.nextFloat();
+      const turn = (r.nextFloat() - 0.5) * 0.9;
+      const dir = a.map((x, k) => x * Math.cos(turn) + (side[k]! / sl) * Math.sin(turn));
+      const m = WAVE_PERIOD / lambda;
+      const n = dir.map((x) => Math.round(x * m)) as [number, number, number];
+      waves.push({
+        n,
+        wavelength: WAVE_PERIOD / Math.hypot(...n),
+        slope: 0.012,
+        phase: 2 * Math.PI * r.nextFloat(),
+      });
+    }
+  }
+  return waves;
+}
+
+/** Hash of a lattice point in [0, 1); lattice indices stay below about 10⁴, where sin is precise enough. */
+function hash3(p: V3): F {
+  return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))).mul(43758.5453)) as F;
+}
+
+/** Value noise in [-1, 1] on lattice cells `cell` m wide, not periodic (planet-centered positions). */
+function valueNoise(p: V3, cell: number): F {
+  const q = p.div(cell);
+  const i = floor(q);
+  const f = fract(q);
+  const u = f.mul(f).mul(f.mul(-2).add(3));
+  const at = (dx: number, dy: number, dz: number) => hash3(i.add(vec3(dx, dy, dz)) as V3);
+  const x00 = mix(at(0, 0, 0), at(1, 0, 0), u.x);
+  const x10 = mix(at(0, 1, 0), at(1, 1, 0), u.x);
+  const x01 = mix(at(0, 0, 1), at(1, 0, 1), u.x);
+  const x11 = mix(at(0, 1, 1), at(1, 1, 1), u.x);
+  return mix(mix(x00, x10, u.y), mix(x01, x11, u.y), u.z)
+    .mul(2)
+    .sub(1) as F;
+}
 
 export interface WaterInputs {
   /** Land albedo, shaded (rock, snow, season). */
@@ -139,6 +201,12 @@ export interface WaterInputs {
   normal: V3;
   /** Raw surface height, interpolated (m; negative under the sea). */
   height: F;
+  /**
+   * Height of the drawn surface above sea level (m, true scale). Sea is drawn only
+   * where it is near 0: a triangle from a flattened sea vertex up a cliff interpolates
+   * a negative raw height partway up the wall (decision 146).
+   */
+  elevation?: F;
   /** Signed lake depth (m): positive under a lake. */
   lake: F;
   /** River coverage 0..1 as drawn (decision 46). */
@@ -156,6 +224,11 @@ export interface WaterInputs {
   relative: V3;
   /** Fragment position modulo WAVE_PERIOD (per-mesh wrapped origin + local position). */
   wavePosition: V3;
+  /**
+   * Planet-centered position of the fragment (m), for fields that must not repeat:
+   * the sea's patches of wind and calm, and its color (decision 146).
+   */
+  planet?: V3;
   /** Light at the fragment, if the material already built it (PlanetLighting.at). */
   light?: LightAt;
 }
@@ -186,9 +259,18 @@ export class WaterShading {
   /** Foam amount multiplier (0 = none). */
   readonly foamStrength = uniform(1);
   readonly waves = waveSet();
+  readonly swell = swellSet();
+  /** Surface wind direction (world, unit, or zero in calm air): waves run with it (decision 146). */
+  readonly windDirection = uniform(new Vector3(0, 0, 0));
+  /** Sea state: multiplies wind waves (1 = moderate breeze); whitecaps from about 1.3. */
+  readonly seaState = uniform(1);
+  /** Swell slope multiplier (0 = none). */
+  readonly swellStrength = uniform(1);
   /** Silt in warm rivers (decision 126): color (linear) and strength at full warmth. */
   readonly siltColor = uniform(new Color(0.16, 0.095, 0.04));
   readonly siltStrength = uniform(0.85);
+  /** Water body color near the coast (linear): greener with silt and plankton (decision 146). */
+  readonly coastalColor = uniform(new Color(0.012, 0.05, 0.055));
 
   constructor(private readonly lighting: PlanetLighting) {}
 
@@ -200,7 +282,10 @@ export class WaterShading {
       // WGSL allows derivatives only in uniform control flow.
       const at = i.light ?? L.at(i.relative);
       const fw = max(fwidth(i.height), 1e-3);
-      const sea = smoothstep(fw.negate(), fw, i.height.negate()).mul(this.enabled).toVar();
+      const sea = smoothstep(fw.negate(), fw, i.height.negate())
+        .mul(i.elevation ? float(1).sub(smoothstep(1, 3, i.elevation)) : float(1))
+        .mul(this.enabled)
+        .toVar();
       const lfw = max(fwidth(i.lake), 1e-3);
       const lake = smoothstep(lfw.negate(), lfw, i.lake).mul(this.enabled).toVar();
       const river = i.river.mul(this.enabled).mul(float(1).sub(sea)).toVar();
@@ -236,33 +321,84 @@ export class WaterShading {
           ),
         );
         const bedVisible = exp(depth.mul(vec3(...ABSORPTION)).mul(-2));
-        const clear = mix(this.deepColor, i.bed, bedVisible) as V3;
+        // Open water is not one color (decision 146): broad patches a little greener or
+        // darker (plankton, mixing), and greener, siltier water near the coast.
+        let deep: V3 = this.deepColor as unknown as V3;
+        if (i.planet) {
+          const patch = valueNoise(i.planet, 11000)
+            .mul(0.6)
+            .add(valueNoise(i.planet.add(vec3(0, 733, 0)), 29000).mul(0.4));
+          const tinted = mix(
+            deep.mul(patch.mul(0.12).add(1)),
+            deep.mul(vec3(0.8, 1.3, 1.08)),
+            max(patch, 0).mul(0.55),
+          );
+          const coastal = float(1).sub(smoothstep(250, 3000, max(i.shore, 0)));
+          deep = mix(deep, mix(tinted, this.coastalColor, coastal.mul(0.4)), sea) as V3;
+        }
+        const clear = mix(deep, i.bed, bedVisible) as V3;
         // Warm rivers carry silt (decision 126): the Amazon's and the Nile's brown.
         const riverShare = clamp(river.div(max(wet, 1e-4)), 0, 1).mul(float(1).sub(max(sea, lake)));
         const turbid = riverShare.mul(smoothstep(10, 22, i.temperature)).mul(this.siltStrength);
         const body = mix(clear, this.siltColor, turbid) as V3;
 
         // Waves: tangent-plane slope from resolved waves, variance from the rest.
+        // The wave field tiles every WAVE_PERIOD; from altitude that showed as a
+        // repeating pattern on a uniform sea. Gusts and calms that do not repeat set
+        // the local strength of the wind waves (decision 146): rough patches, calm
+        // slicks that mirror the sky, and streaks drawn out along the wind. Waves
+        // running with the wind are stronger than those across it.
+        const wind = this.windDirection;
+        const windT = wind.sub(i.up.mul(dot(wind, i.up)));
+        const windLen = length(windT);
+        const windDir = windT.div(max(windLen, 1e-4));
+        const hasWind = smoothstep(0.05, 0.3, windLen);
+        let rough: F = float(1);
+        if (i.planet) {
+          // Streaks: features four times longer along the wind than across it.
+          const along = windDir.mul(dot(i.planet, windDir).mul(hasWind.mul(-0.75)));
+          const q = i.planet.add(along);
+          const gust = valueNoise(q, 2600)
+            .mul(0.55)
+            .add(valueNoise(q, 7300).mul(0.3))
+            .add(valueNoise(q.add(vec3(511, 0, 0)), 900).mul(0.15));
+          // Calm where the noise is low, gusty where it is high.
+          rough = clamp(gust.mul(1.1).add(1), 0.2, 1.9) as F;
+        }
+        const strength = this.waveStrength.mul(this.seaState).mul(rough);
         let grad: V3 = vec3(0);
         let unresolved: F = float(0);
         // Crests of the shorter waves, for breaking up the foam.
         let crest: F = float(0);
-        for (const [index, w] of this.waves.entries()) {
+        const wave = (w: Wave, s0: F, alongWind: boolean) => {
           const k = (2 * Math.PI) / WAVE_PERIOD;
           const kv = vec3(w.n[0] * k, w.n[1] * k, w.n[2] * k);
           const omega = Math.sqrt(GRAVITY * ((2 * Math.PI) / w.wavelength));
-          const resolved = smoothstep(2, 6, footprint.reciprocal().mul(w.wavelength));
-          const s = this.waveStrength.mul(w.slope);
-          const phase = dot(kv, i.wavePosition).sub(time.mul(omega)).add(w.phase);
+          // Waves under about a dozen pixels hand over to the roughness: from altitude a
+          // few long waves resolved alone interfere into a regular plaid (decision 146).
+          const resolved = smoothstep(4, 12, footprint.reciprocal().mul(w.wavelength));
           const dir = vec3(w.n[0], w.n[1], w.n[2]).div(Math.hypot(...w.n));
+          // Directional spreading: full along the wind, a third across it.
+          const spread = alongWind
+            ? mix(float(1), dot(dir, windDir).abs().mul(0.95).add(0.35), hasWind)
+            : float(1);
+          const s = s0.mul(spread);
+          const phase = dot(kv, i.wavePosition).sub(time.mul(omega)).add(w.phase);
           grad = grad.add(dir.mul(cos(phase).mul(s).mul(resolved))) as V3;
-          if (index >= this.waves.length / 2) crest = crest.add(cos(phase).mul(resolved)) as F;
-          unresolved = unresolved.add(
-            float(slopeVariance(w.slope))
-              .mul(this.waveStrength.mul(this.waveStrength))
-              .mul(float(1).sub(resolved)),
-          ) as F;
+          // Slope variance s²/2 of the part too short to resolve moves into the roughness.
+          unresolved = unresolved.add(s.mul(s).mul(0.5).mul(float(1).sub(resolved))) as F;
+          return cos(phase).mul(resolved) as F;
+        };
+        for (const [index, w] of this.waves.entries()) {
+          const c = wave(w, strength.mul(w.slope) as F, true);
+          if (index >= this.waves.length / 2) crest = crest.add(c) as F;
         }
+        // Swell at sea only, fading in water shallower than a few tens of meters.
+        const swellAt = this.swellStrength
+          .mul(sea)
+          .mul(smoothstep(3, 40, i.height.negate()))
+          .mul(this.waveStrength);
+        for (const w of this.swell) wave(w, swellAt.mul(w.slope) as F, false);
         const tangentGrad = grad.sub(i.up.mul(dot(grad, i.up)));
         const waveNormal = normalize(i.up.sub(tangentGrad)) as V3;
         // Beckmann–GGX correspondence: α² ≈ 2σ².
@@ -339,7 +475,19 @@ export class WaterShading {
           .mul(clamp(band.div(footprint), 0, 1))
           .mul(this.foamStrength)
           .mul(sea);
-        const foamy = clamp(foam, 0, 1);
+        // Whitecaps (decision 146): where the sea runs high, the crests of the shorter
+        // waves break; once those waves are below a few pixels the caps average out.
+        const capped = smoothstep(1.25, 1.9, this.seaState.mul(rough));
+        const capDetail = smoothstep(2, 6, footprint.reciprocal().mul(20));
+        const crestN = crest
+          .div(Math.sqrt(this.waves.length / 2))
+          .mul(0.5)
+          .add(0.5);
+        const caps = capped
+          .mul(mix(float(0.07), smoothstep(0.66, 0.86, crestN), capDetail))
+          .mul(sea)
+          .mul(smoothstep(5, 30, i.height.negate()));
+        const foamy = clamp(foam.add(caps), 0, 1);
         const surface = mix(body, vec3(0.8, 0.82, 0.82), foamy) as V3;
 
         const bodyLight = L.shadeDiffuse(surface, i.up, i.relative, at).mul(float(1).sub(fresnel));

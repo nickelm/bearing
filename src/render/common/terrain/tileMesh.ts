@@ -29,7 +29,7 @@ import type { Noise3 } from '../../../core/noise';
 import { parentTile, tileKey, TILE_BORDER, TILE_STRIDE, TILE_TEXELS } from '../../../core/tiles';
 import type { TileKey } from '../../../core/tiles';
 import { Vec3d } from '../../../core/vec3d';
-import { Biome } from '../../../worldgen/biomes';
+import { Biome, TileCover } from '../../../worldgen/biomes';
 import type { TileData } from '../../../worldgen/gpu/tileSynth';
 import { MAX_BAKED_LEVEL, NO_LAKE } from '../../../worldgen/gpu/tileSynth';
 import { BIOME_COLORS, FARMABLE_BIOMES, HEIGHT_RAMP, hsl, ramp, srgbToLinear } from '../palette';
@@ -287,6 +287,12 @@ const OPEN_GROUND: Partial<Record<number, Rgb>> = {
   [Biome.TropicalRainforest]: hexRgb(0x6e8b3d),
 };
 
+/** Ground covers only tiles produce (decision 146): sand from Part I's palette, marsh olive. */
+const TILE_COVER_COLORS: Partial<Record<number, Rgb>> = {
+  [TileCover.Beach]: [0.788, 0.706, 0.541],
+  [TileCover.Marsh]: [0.42, 0.478, 0.306],
+};
+
 function hexRgb(h: number): Rgb {
   return [((h >> 16) & 255) / 255, ((h >> 8) & 255) / 255, (h & 255) / 255];
 }
@@ -328,7 +334,13 @@ function colorFor(
     } else {
       // The canopy is drawn by the shader from the forest density (decision 71);
       // rivers from vector data (decision 46).
-      c = OPEN_GROUND[biome] ?? BIOME_COLORS[biome] ?? [1, 0, 1];
+      c = OPEN_GROUND[biome] ?? BIOME_COLORS[biome] ?? TILE_COVER_COLORS[biome] ?? [1, 0, 1];
+      // A dry vertex can read a water biome from the sample next to it on a steep shore
+      // (the material is the nearest data sample): sand when low, rock above (decision 146).
+      // The shelf's blue drew on cliff feet and skerry islands.
+      if (biome <= Biome.SeaIce && mode === 'biome') {
+        c = h < 4 ? TILE_COVER_COLORS[TileCover.Beach]! : BIOME_COLORS[Biome.Alpine]!;
+      }
     }
     if (mode === 'borders') {
       const l = hsl((level * 0.13) % 1, 0.7, 0.5);

@@ -35,11 +35,39 @@ function smoothstep(a: number, b: number, x: number): number {
 
 export interface RiverSegments {
   count: number;
-  /** Per segment: a.xyz, b.xyz (unit directions), widthA, widthB (m). */
+  /**
+   * Per segment (FIELDS values): a.xyz, b.xyz (unit directions), widthA, widthB (m),
+   * the water surface at a and b (m), and the surface stepped into pools and falls
+   * at a and b (m). Both surfaces never rise downstream (decision 146).
+   */
   data: Float64Array;
+  /** Values per segment: 12 here; other users of the layout (roads) keep the first 8. */
+  fields?: number;
 }
 
-const FIELDS = 8;
+const FIELDS = 12;
+
+/** Surface of a river without a height source: no channel is carved. */
+export const NO_SURFACE = 1e9;
+
+/**
+ * Water surface profiles (decision 146). Each river's surface comes from the
+ * global grid's heights at the cells it drains through (the lake level in a
+ * lake, sea level at the mouth), `drop` m below them, and never rises
+ * downstream: a reach that the interpolated terrain lifts above an upstream
+ * point is cut through instead of flowing uphill. Tributaries meet their main
+ * river at its surface. On steep reaches (bed gradient `gradient`, measured
+ * over ±`probe` m, rivers at least `minWidth` m wide) the surface steps down
+ * the `strata` m rock layers in pools and drops, each drop over about `run` m.
+ */
+export const PROFILE_TUNING = {
+  drop: 0.5,
+  gradient: [0.012, 0.03] as [number, number],
+  probe: 400,
+  run: 140,
+  minWidth: 15,
+  strata: 75,
+};
 
 /** Two Chaikin corner-cutting passes on a polyline of unit vectors with attributes. */
 export function chaikin(pts: number[][], passes: number): number[][] {
@@ -90,6 +118,9 @@ export interface MeanderOptions {
   /** Physical height per global cell (the rivers' `cells` index it). */
   height: Float32Array;
   radius: number;
+  /** Lake depth per global cell (m): a river in a lake runs at the lake's level. */
+  lakeDepth?: Float32Array;
+  profile?: Partial<typeof PROFILE_TUNING>;
   tuning?: Partial<typeof MEANDER_TUNING>;
 }
 
@@ -147,7 +178,7 @@ export function meander(
       a[1]! + (b[1]! - a[1]!) * f,
       a[2]! + (b[2]! - a[2]!) * f,
     ).normalize();
-    const w = a[3]! + (b[3]! - a[3]!) * f;
+    const attrs = a.slice(3).map((x, c) => x + (b[3 + c]! - x) * f);
     // Phase advances by 2π per bend wavelength; each half bend draws a new length.
     const before = Math.floor(phase / Math.PI);
     phase += ((sk - prevS) / bendLambda) * 2 * Math.PI;
@@ -168,7 +199,7 @@ export function meander(
       .clone()
       .addScaled(side, y / radius)
       .normalize();
-    out.push([d.x, d.y, d.z, w]);
+    out.push([d.x, d.y, d.z, ...attrs]);
   }
   return out;
 }
@@ -186,6 +217,160 @@ export const DELTA_TUNING = {
 /** Per delta: mouth.xyz, seaward direction.xyz (tangent, unit), width (m), fan radius (m). */
 export const DELTA_FIELDS = 8;
 
+/** Arc length (m) along a polyline of unit directions. */
+function arcLengths(line: number[][], radius: number): number[] {
+  const s = [0];
+  for (let i = 1; i < line.length; i++) {
+    const a = line[i - 1]!;
+    const b = line[i]!;
+    const dot = Math.min(1, a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!);
+    s.push(s[i - 1]! + Math.acos(dot) * radius);
+  }
+  return s;
+}
+
+/** Linear interpolation of attribute `c` at arc length `x` (clamped to the ends). */
+function attrAt(line: number[][], s: number[], c: number, x: number): number {
+  if (x <= 0) return line[0]![c]!;
+  const L = s[s.length - 1]!;
+  if (x >= L) return line[line.length - 1]![c]!;
+  let lo = 0;
+  let hi = s.length - 1;
+  while (hi - lo > 1) {
+    const m = (lo + hi) >> 1;
+    if (s[m]! <= x) lo = m;
+    else hi = m;
+  }
+  const f = (x - s[lo]!) / Math.max(s[hi]! - s[lo]!, 1e-9);
+  return line[lo]![c]! + (line[hi]![c]! - line[lo]![c]!) * f;
+}
+
+/** A point between two polyline points: directions renormalized, attributes linear. */
+function lerpPoint(a: number[], b: number[], f: number): number[] {
+  const q = a.map((x, c) => x + (b[c]! - x) * f);
+  const l = Math.hypot(q[0]!, q[1]!, q[2]!);
+  q[0]! /= l;
+  q[1]! /= l;
+  q[2]! /= l;
+  return q;
+}
+
+/**
+ * Water surfaces for smoothed polylines [x, y, z, width, surface] (decision
+ * 146; PROFILE_TUNING): returns them as [x, y, z, width, surface, stepped],
+ * with points added at the top and foot of each drop. Polylines are visited
+ * upstream first, so a main river starts no higher than the tributaries that
+ * join it, and each tributary then ends at the main river's surface.
+ */
+export function riverProfiles(
+  lines: number[][][],
+  downstream: Int32Array,
+  radius: number,
+  t: typeof PROFILE_TUNING,
+): number[][][] {
+  const n = lines.length;
+  const donors: number[][] = Array.from({ length: n }, () => []);
+  for (let k = 0; k < n; k++) {
+    const d = downstream[k]!;
+    if (d >= 0 && d < n) donors[d]!.push(k);
+  }
+  const out: number[][][] = new Array(n);
+  const pending = donors.map((d) => d.length);
+  const queue: number[] = [];
+  for (let k = 0; k < n; k++) if (pending[k] === 0) queue.push(k);
+  const done = new Uint8Array(n);
+  const visit = (k: number) => {
+    done[k] = 1;
+    const line = lines[k]!.map((q) => q.slice(0, 5));
+    if (line.length === 0) {
+      out[k] = [];
+      return;
+    }
+    // Smooth surface: no higher than any donor's end, never rising downstream.
+    for (const j of donors[k]!) {
+      const e = out[j]?.[out[j]!.length - 1];
+      if (e) line[0]![4] = Math.min(line[0]![4]!, e[4]!);
+    }
+    for (let i = 1; i < line.length; i++) line[i]![4] = Math.min(line[i]![4]!, line[i - 1]![4]!);
+    // Falls: the bed gradient over ±probe, and the weight of the steps at each point.
+    const s = arcLengths(line, radius);
+    const T = t.strata;
+    const fall = line.map((q, i) => {
+      const g =
+        (attrAt(line, s, 4, s[i]! - t.probe) - attrAt(line, s, 4, s[i]! + t.probe)) / (2 * t.probe);
+      const w =
+        smoothstep(t.gradient[0], t.gradient[1], g) *
+        (q[3]! >= t.minWidth ? 1 : 0) *
+        (q[4]! > T ? 1 : 0);
+      return [w, Math.min(0.5, Math.max(0.005, (t.run * g) / T))];
+    });
+    // Points at the top and the foot of each drop, so a drop is a ramp over its run.
+    const pts: number[][] = [];
+    const meta: number[][] = [];
+    for (let i = 0; i < line.length; i++) {
+      pts.push(line[i]!);
+      meta.push(fall[i]!);
+      if (i + 1 === line.length) break;
+      const a = line[i]!;
+      const b = line[i + 1]!;
+      const sa = a[4]!;
+      const sb = b[4]!;
+      if (Math.max(fall[i]![0]!, fall[i + 1]![0]!) <= 0 || sa - sb <= 1e-6) continue;
+      const eps = Math.max(fall[i]![1]!, fall[i + 1]![1]!);
+      const cuts: number[] = [];
+      for (let L = Math.floor(sa / T) * T; L > sb && cuts.length < 64; L -= T) {
+        for (const level of [L, L - eps * T]) {
+          if (level < sa && level > sb) cuts.push((sa - level) / (sa - sb));
+        }
+      }
+      cuts.sort((x, y) => x - y);
+      for (const f of cuts) {
+        pts.push(lerpPoint(a, b, f));
+        meta.push([
+          fall[i]![0]! + (fall[i + 1]![0]! - fall[i]![0]!) * f,
+          fall[i]![1]! + (fall[i + 1]![1]! - fall[i]![1]!) * f,
+        ]);
+      }
+    }
+    // Stepped surface: pools at each stratum, drops over its top eps.
+    for (let i = 0; i < pts.length; i++) {
+      const q = pts[i]!;
+      const surf = q[4]!;
+      const [w, eps] = meta[i]!;
+      let stepped = surf;
+      if (w! > 0) {
+        const x = surf / T;
+        const k0 = Math.floor(x);
+        stepped = surf + w! * ((k0 + smoothstep(1 - eps!, 1, x - k0)) * T - surf);
+      }
+      q.push(stepped);
+    }
+    for (const j of donors[k]!) {
+      const e = out[j]?.[out[j]!.length - 1];
+      if (e) pts[0]![5] = Math.min(pts[0]![5]!, e[5]!);
+    }
+    for (let i = 1; i < pts.length; i++) pts[i]![5] = Math.min(pts[i]![5]!, pts[i - 1]![5]!);
+    // Each tributary ends exactly on the main river's surface.
+    for (const j of donors[k]!) {
+      const e = out[j]?.[out[j]!.length - 1];
+      if (e) {
+        e[4] = pts[0]![4]!;
+        e[5] = pts[0]![5]!;
+      }
+    }
+    out[k] = pts;
+  };
+  for (let head = 0; head < queue.length; head++) {
+    const k = queue[head]!;
+    visit(k);
+    const d = downstream[k]!;
+    if (d >= 0 && d < n && --pending[d]! === 0) queue.push(d);
+  }
+  // Cycles cannot occur in a drainage tree; visit anything left over anyway.
+  for (let k = 0; k < n; k++) if (!done[k]) visit(k);
+  return out;
+}
+
 export class RiverIndex {
   readonly segments: RiverSegments;
   /** River mouths that build deltas, DELTA_FIELDS per record. */
@@ -195,7 +380,18 @@ export class RiverIndex {
   /** With `meanders`, lowland rivers wind across their floodplains (decision 126). */
   constructor(rivers: Rivers, meanders?: MeanderOptions) {
     const mt = { ...MEANDER_TUNING, ...meanders?.tuning };
-    const segs: number[] = [];
+    const pt = { ...PROFILE_TUNING, ...meanders?.profile };
+    const height = meanders?.height;
+    const lakeDepth = meanders?.lakeDepth;
+    // The water surface at a global cell: its lake's level in a lake, sea level at the mouth.
+    const cellSurface = (c: number): number => {
+      if (!height) return NO_SURFACE;
+      const h = height[c]!;
+      const lake = lakeDepth ? lakeDepth[c]! : 0;
+      return (lake > 0 ? h + lake : Math.max(h, 0)) - pt.drop;
+    };
+    // Smoothed polylines: [x, y, z, width, surface].
+    const lines: number[][][] = [];
     for (let k = 0; k < rivers.count; k++) {
       const pts: number[][] = [];
       for (let p = rivers.offsets[k]!; p < rivers.offsets[k + 1]!; p++) {
@@ -204,6 +400,7 @@ export class RiverIndex {
           rivers.points[p * 3 + 1]!,
           rivers.points[p * 3 + 2]!,
           rivers.width[p]!,
+          cellSurface(rivers.cells[p]!),
         ]);
       }
       let sm = chaikin(pts, 2);
@@ -225,13 +422,34 @@ export class RiverIndex {
           smoothstep(mt.minWidth, 2 * mt.minWidth, Math.max(...pts.map((p) => p[3]!)));
         if (strength > 0) sm = meander(sm, k, meanders.radius, mt, strength);
       }
+      lines.push(sm);
+    }
+    const radius = meanders?.radius ?? 1;
+    const profiled = height
+      ? riverProfiles(lines, rivers.downstream, radius, pt)
+      : lines.map((l) => l.map((q) => [...q, NO_SURFACE]));
+    const segs: number[] = [];
+    for (const sm of profiled) {
       for (let i = 0; i + 1 < sm.length; i++) {
         const a = sm[i]!;
         const b = sm[i + 1]!;
-        segs.push(a[0]!, a[1]!, a[2]!, b[0]!, b[1]!, b[2]!, a[3]!, b[3]!);
+        segs.push(
+          a[0]!,
+          a[1]!,
+          a[2]!,
+          b[0]!,
+          b[1]!,
+          b[2]!,
+          a[3]!,
+          b[3]!,
+          a[4]!,
+          b[4]!,
+          a[5]!,
+          b[5]!,
+        );
       }
     }
-    this.segments = { count: segs.length / FIELDS, data: Float64Array.from(segs) };
+    this.segments = { count: segs.length / FIELDS, data: Float64Array.from(segs), fields: FIELDS };
     // Deltas at mouths of wide rivers: the last land point and the sea point after it.
     const deltas: number[] = [];
     for (let k = 0; k < rivers.count; k++) {

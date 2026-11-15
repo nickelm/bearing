@@ -54,6 +54,9 @@ Across all five, edges show slight stair-stepping and the image has faint grain,
 - **Water in motion.** River water on steep facets (falls and rapids) is drawn as white water rather than a reflecting surface (decision 126).
 - **Silt.** Warm rivers' water is brown under its sky reflection (decision 126); cold and temperate rivers stay clear.
 - **Shallows and reefs.** Water color counts the first few tens of meters of depth at Earth depth, so lagoons, reef flats, skerry sounds and lake margins read turquoise over sand and deeper water darkens as before; warm coasts carry reefs with a surf line on the crest (decision 129). Lakes keep a darker water color so shallow ones still read as water, and lakes in dry land are white salt pans (decision 130).
+- **Coasts.** Headlands of coasts with relief end in cliffs, with rocks and stacks offshore; the coves between them hold sand beaches (`#C9B48A`) over a pale, shallow shelf. Glaciated coasts keep their bare-rock skerries, and islets raised from the sea are bare rock (decision 146).
+- **Wetlands.** Flat, wet ground at a river's, a lake's or the sea's level is olive marsh (`#6B7A4E`) with dark pools drawn as water; warm, low coasts grow mangroves (decision 146).
+- **Rivers run downhill.** A river's water surface never rises downstream, through canyons, confluences and falls alike (decision 146).
 - **Farmland.** Near settlements and on flat lowland, a Voronoi field pattern assigns each cell a crop color (wheat, green crop, fallow, pasture). Field cells are a few hundred meters across with slight color variation. Fields lie where the strategic map puts its farmland (settled land in farmable biomes, decision 80), on flat lowland; each face takes the field at its center, so field edges follow facets, and distant fields draw toward their mean color (decision 127).
 - **Rivers.** Rivers render as bright ribbons that mirror the sky color, with a narrow darker bank. They should be the most visible terrain feature from altitude, since they matter tactically.
 - **Roads.** Thin, muted gray-brown lines from vector data, visible below about 3 km altitude.
@@ -97,7 +100,7 @@ Beyond 5 km, forests are dark canopy masses in the terrain shading with a sharp 
 
 ## Water
 
-- **Ocean.** Calm, deep-colored water with faint, large facets from a low-frequency normal pattern (reference 1). Color shifts from deep blue-green offshore to teal in shallows, with a pale foam line at the coast.
+- **Ocean.** Calm, deep-colored water with faint, large facets from a low-frequency normal pattern (reference 1). Color shifts from deep blue-green offshore to teal in shallows, with a pale foam line at the coast. From altitude the sea must not read as one repeating texture: gusts and calms that do not repeat break its glint into patches and streaks along the wind, a long swell runs at sea, broad patches shift its color slightly, and storms raise whitecaps (decision 146).
 - **Reflections.** Fresnel blend toward the sky color, plus a stretched sun glint that forms a soft column at low sun angles. Rivers drawn wider than a pixel for legibility reflect only their true width, so distant rivers do not glitter. Planar or screen-space reflections are a later option; the sky blend carries most of the effect.
 - **Rivers and lakes.** Same material, calmer, with stronger sky reflection.
 
@@ -178,6 +181,7 @@ Starting values; final values get tuned in the model viewer and on the globe.
 | Deep ocean | `#1E3A4C` |
 | Shallow water | `#2F6B73` |
 | Beach and sand | `#C9B48A`, `#B9A276` |
+| Wetland | `#6B7A4E` (marsh), dark pools |
 | Grassland | `#7A8C4A`, `#6B7C40`, `#8A9A55` |
 | Farmland | `#C8A85A` (wheat), `#6E8B3D` (green crop), `#8A6A45` (fallow), `#7F944F` (pasture) |
 | Temperate forest | `#2F4A2A`, `#3B5A33`, `#466B3B` |

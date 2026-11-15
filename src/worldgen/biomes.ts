@@ -30,6 +30,18 @@ export const Biome = {
 export type Biome = (typeof Biome)[keyof typeof Biome];
 export const BIOME_COUNT = 17;
 
+/**
+ * Ground covers that only detail tiles produce (decision 146), in the biome byte of
+ * the tile material above the global biomes: the global grid never classifies them.
+ * Both read as land (above Biome.SeaIce).
+ */
+export const TileCover = {
+  /** Sand on low, gentle coasts: beaches in coves and bays. */
+  Beach: 32,
+  /** Reeds, sedge and pools at the water table: floodplains, lake shores, low coasts. */
+  Marsh: 33,
+} as const;
+
 export const BIOME_NAMES: readonly string[] = [
   'deep ocean',
   'ocean',

@@ -440,13 +440,13 @@ Simulation view (needs S1's `render/sim/` split):
   - [ ] Check 1: the river at the town is hard to find at 5 km; rivers should be the most visible terrain feature from altitude (Part I)
   - [ ] Check 2 (`conifer`): the town's built-up patch reads as large triangles of roof and wall colors under the buildings; the road is faint at 500 m
   - [ ] Check 4 (`dusk`): no parked aircraft yet (aircraft meshes in the simulation view, V4)
-  - [ ] Check 5 (`beach`): no beach: the coast has the foam line and shallow water but no sand strip
+  - [x] Check 5 (`beach`): no beach: the coast has the foam line and shallow water but no sand strip (sand in coves of gentle coasts, decision 146)
 - [x] Style audit: compare those views with the reference board and Part I (terrain facets and shade quantization, farmland, rivers, ocean, haze, trees, towns, lights); the old M3 and M5 rendering predates the guide (smooth shading, clump trees). Add a task per gap (carried from old M5) ([docs/style/audit-sim-2026-11-13.md](docs/style/audit-sim-2026-11-13.md); light and post-processing gaps are under V2)
   - [ ] Owner: compare the audit's previews with the reference board (the screenshots are local only)
   - [ ] Rivers are gray ribbons at 2 km and hard to find at 5 km (`mixed`); Part I wants them the most visible terrain feature from altitude: brighter sky mirror, wider legibility floor from altitude, or a darker bank
   - [ ] In `trees`, a river leaves a lake as a straight canal between even grass banks; find which layer draws it (channel carving, the green corridor of decision 126, or the river polyline)
   - [ ] Shallow water in `shore` ends in straight edges; check the shelf depth field and the seabed color at tile or grid boundaries
-  - [ ] Beaches: a sand strip (`#C9B48A`, `#B9A276`) on low, gentle coasts between open ground and the foam line (Part I palette), per face
+  - [x] Beaches: a sand strip (`#C9B48A`, `#B9A276`) on low, gentle coasts between open ground and the foam line (Part I palette), per face (decision 146)
   - [ ] Built-up patches (decision 71) read as large triangles of roof and wall colors under the buildings (`conifer`): give them a block pattern finer than the facets, or evaluate them per fragment
   - [ ] The `town` view scatters buildings across hills and does not frame the city; aim it at the city's urban extent
 - [x] Frame time over 0–20 km within Part I's budgets (decision 131: draw calls, triangles and CPU per frame measured headless with `PERF`; trees and buildings culled by the frustum, trees thinned with distance; every view from 2 m to 20 km now under 2 M triangles and 100 draws)
@@ -568,6 +568,14 @@ Simulation view (needs S1's `render/sim/` split):
   - [ ] The shadow bake's tile-height fill allocates 40 to 80 KB per frame in bursts; its two work grids (4 MiB) could be freed between bakes
   - [ ] Add the cost pass's modes (weather × quality matrix, per-subsystem flight profile) to `tools/render.preview.ts`
 - [x] Adversarial review of decisions 137–144 and of its own fixes: the render scale no longer ratchets on single long frames, the track hold, the march's skip, fog strata, near veils, cirrus, water under cloud, shadows across a cube-face crossing, the upsample's ripple (decision 145)
+- [x] Water in the terrain (decision 146): river water surfaces that never rise downstream (profiles in `RiverIndex`, carving last in the tiles; `tools/rivers.preview.ts`), cliffs on headlands and beaches in coves, marshes with pools at the water table, a sea that does not repeat from altitude (gusts and calms, wind-aligned waves, swell, color patches, whitecaps)
+  - [ ] Owner: canyons, falls and confluences in the browser; the sea from 5–15 km; beaches, cliffs and marshes (`SPOTS=cliffs,marsh`)
+  - [x] Skerry islands showed pale blue patches on land at 150 m (`SPOTS=skerries`): dry vertices reading the shelf's material; now sand or rock (decision 146)
+  - [ ] A thin channel beside a large river draws as a dark water strip along its bank (`tower` at 3.04, −26.19 on seed 1983); find which layer draws it
+  - [ ] Salt marsh on low coasts is rare (most become beaches); decide with the owner whether wet, low coasts should favor marsh over sand
+  - [ ] Beach and marsh edges step with the 48 m samples (per-sample covers); a smoother edge would need the cover as a field the shader thresholds
+  - [ ] The strategic map's wetland mask (decision 81) could take the tiles' marsh rule on the global grid
+  - [ ] Sea state from the surface wind once the weather reports it near the ground (the shader takes only the wind's direction, read at the camera's height, and the storm channel)
 
 ### V3. Models and bases
 

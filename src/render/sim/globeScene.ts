@@ -458,6 +458,13 @@ export class GlobeScene {
     else this.shadows.strength.value = 0;
     // Rain darkens the ground.
     this.terrain.land.wetness.value = this.weatherState.wetness.value;
+    // The sea follows the wind (decision 146): waves run with it, and storms raise
+    // whitecaps. Only the direction is taken: the wind is read at the camera's height.
+    const wind = this.weatherState.wind.value;
+    const windSpeed = wind.length();
+    if (windSpeed > 0.5) this.terrain.water.windDirection.value.copy(wind).divideScalar(windSpeed);
+    else this.terrain.water.windDirection.value.set(0, 0, 0);
+    this.terrain.water.seaState.value = 1 + 0.9 * this.weatherState.storm.value;
     this.draw(o.eye);
   }
 

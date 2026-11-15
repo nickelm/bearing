@@ -40,13 +40,19 @@ import { rng } from '../../core/rng';
 import type { WorldSeed } from '../../core/rng';
 import { TILE_BORDER, TILE_STRIDE, TILE_TEXELS } from '../../core/tiles';
 import type { TileKey } from '../../core/tiles';
-import { DELTA_FIELDS, RIVER_INDEX_LEVEL, RIVER_SEGMENT_FIELDS, RiverIndex } from '../riverIndex';
+import {
+  DELTA_FIELDS,
+  NO_SURFACE,
+  RIVER_INDEX_LEVEL,
+  RIVER_SEGMENT_FIELDS,
+  RiverIndex,
+} from '../riverIndex';
 import type { GlobalGrid } from './globalGrid';
 import { WORKGROUP_SIZE } from './gpuContext';
 import { bicubicSamplerWgsl } from './gridWgsl';
 import { NOISE_WGSL, packPermutations } from './noiseWgsl';
 import { LANDFORM } from './erosion';
-import { Biome } from '../biomes';
+import { Biome, TileCover } from '../biomes';
 import { buildLandformMasks, LANDFORM_MASK_WGSL } from './landformMasks';
 
 export const TILE_SYNTH_TUNING = {
@@ -139,14 +145,10 @@ export const TILE_SYNTH_TUNING = {
    */
   skerryDepth: 160,
   /**
-   * Falls (decision 126): rivers at least `fallMinWidth` m wide whose bed falls
-   * `fallGradient` (m/m over ±`fallProbe` m, ramped) step down in pools and drops one
-   * stratum (`strataThickness`) high, each drop over about `fallRun` m.
+   * Falls (decision 126): the river index steps the water surface down the rock
+   * layers in pools and drops (PROFILE_TUNING, decision 146); tiles whose samples
+   * are finer than about 1.2–3 strata draw the steps.
    */
-  fallGradient: [0.012, 0.03] as [number, number],
-  fallProbe: 400,
-  fallRun: 140,
-  fallMinWidth: 15,
   /** Width of the gorge the steps cut, in river widths beyond the bank (plus 60 m). */
   fallGorge: 4,
   /** Deltas build only on ground lower than this (m), fading between the two. */
@@ -167,6 +169,33 @@ export const TILE_SYNTH_TUNING = {
   coastWavelength: 3200,
   coastShift: 900,
   coastAmp: [2, 45] as [number, number],
+  /**
+   * Coastal profile (decision 146): cliffs on headlands where the coast gains
+   * `cliffRelief` m over 1.5 km (fading in between the two), as tall as that gain up to
+   * `cliffMax` m, with the land's height near sea level raised to the power
+   * `cliffPower` and the sea floor below dropping by the same map over `cliffFoot` of
+   * the height. Beaches in coves of coasts gaining less than `beachRelief` m: heights
+   * within `beachHeight` m of sea level raised to the power `beachPower`, sand up to
+   * `beachSand` m.
+   */
+  cliffRelief: [25, 70] as [number, number],
+  cliffMax: 220,
+  cliffPower: 0.3,
+  cliffFoot: 0.4,
+  beachRelief: [40, 90] as [number, number],
+  beachHeight: 6,
+  beachPower: 1.8,
+  beachSand: 2.5,
+  /**
+   * Marshes (decision 146): on ground with aridity below `marshArid` (fading between),
+   * global slope below `marshSlope` m/m, up to `marshRise` m above the water table, in
+   * patches of about `marshPatch` m; pools from noise of first wavelength `marshPool` m.
+   */
+  marshArid: [0.2, 0.4] as [number, number],
+  marshSlope: [0.002, 0.006] as [number, number],
+  marshRise: 3.5,
+  marshPatch: 6000,
+  marshPool: 380,
   /** Lake outlines (decision 130): warp in global cells; aridity over which lakes become salt pans. */
   lakeWarp: 0.9,
   playaArid: [0.45, 0.65] as [number, number],
@@ -318,6 +347,7 @@ const SEG_FIELDS: u32 = ${RIVER_SEGMENT_FIELDS}u;
 const TWO_PI: f32 = 6.283185307;
 const NO_LAKE: f32 = ${NO_LAKE};
 const NO_LAKE_HALF: f32 = ${f(NO_LAKE_HALF)};
+const RIVER_REACH: f32 = ${f(t.riverReach)};
 
 // Lake surface near d: the highest level among the 3×3 global cells around d's cell
 // whose centers lie within about one cell of d, or NO_LAKE.
@@ -427,6 +457,42 @@ fn gully(q: vec3f, t: vec3f, salt: u32) -> vec2f {
   return vec2f(sum, dsum) / max(wsum, 1e-6);
 }
 
+// River channels (decision 146): every segment within reach cuts the ground down to
+// its channel, whose water surface comes from the river index's profile and never
+// rises downstream. Each segment lowers h by its own share, so where channels meet
+// the deeper one wins without a seam, and carving never raises the ground.
+fn carveRivers(d: vec3f, h: f32, tile: Tile, stepped: f32) -> f32 {
+  var cut = 0.0;
+  for (var s = 0u; s < tile.segCount; s++) {
+    let o = (tile.segStart + s) * SEG_FIELDS;
+    let sA = segs[o + 8u];
+    if (sA > ${f(NO_SURFACE * 0.5)}) { continue; }
+    let a = vec3f(segs[o], segs[o + 1u], segs[o + 2u]);
+    let b = vec3f(segs[o + 3u], segs[o + 4u], segs[o + 5u]);
+    let ab = b - a;
+    let tt = clamp(dot(d - a, ab) / max(dot(ab, ab), 1e-20), 0.0, 1.0);
+    let dist = length(d - (a + tt * ab)) * R;
+    if (dist >= RIVER_REACH) { continue; }
+    let w = mix(segs[o + 6u], segs[o + 7u], tt);
+    let smoothSurf = mix(sA, segs[o + 9u], tt);
+    let surf = mix(smoothSurf, mix(segs[o + 10u], segs[o + 11u], tt), stepped);
+    let half = 0.5 * w;
+    let depth = 1.0 + 0.02 * w;
+    var c = 0.0;
+    if (dist < half) {
+      let x = dist / half;
+      c = surf - depth * (1.0 - x * x);
+    } else {
+      // The steps cut a gorge a few widths across; the valley beyond keeps its slope.
+      let banks = mix(surf, smoothSurf, smoothstep(half, half + ${f(t.fallGorge)} * w + 60.0, dist));
+      c = banks + (dist - half) * ${f(t.bankSlope)};
+    }
+    let reach = 1.0 - smoothstep(0.6 * RIVER_REACH, RIVER_REACH, dist);
+    cut = max(cut, reach * max(h - c, 0.0));
+  }
+  return h - cut;
+}
+
 @compute @workgroup_size(${WORKGROUP_SIZE})
 fn main(@builtin(global_invocation_id) gid: vec3u) {
   let id = i32(gid.x);
@@ -473,14 +539,18 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   var biomeOut = mat & 0xffu;
   // Green ground by water in dry land (decision 126): along rivers and on deltas.
   var fertile = 0.0;
+  // The nearest river (decision 146): distance (m), half-width and water surface, for
+  // the coastal profile and marshes; the global slope (m/m) on land.
+  var riverDist = 1.0e9;
+  var riverHalf = 0.0;
+  var riverSurf = NO_LAKE;
+  var globalSlope = 0.0;
 
   if (base > 0.0) {
     // Rivers: the nearest channel (relative to its floodplain) shapes the terrain.
     var nearest = 1.0e9;
     var bestDist = 1.0e9;
     var bestWidth = 0.0;
-    var bestPoint = d;
-    var bestAlong = vec3f(0.0);
     for (var s = 0u; s < tile.segCount; s++) {
       let o = (tile.segStart + s) * SEG_FIELDS;
       let a = vec3f(segs[o], segs[o + 1u], segs[o + 2u]);
@@ -500,8 +570,11 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
         nearest = dist / plain;
         bestDist = dist;
         bestWidth = w;
-        bestAlong = ab;
-        bestPoint = p;
+      }
+      if (dist < riverDist && segs[o + 8u] < ${f(NO_SURFACE * 0.5)}) {
+        riverDist = dist;
+        riverHalf = 0.5 * w;
+        riverSurf = mix(segs[o + 8u], segs[o + 9u], tt);
       }
     }
     let fade = smoothstep(0.0, 1.0, nearest);
@@ -510,39 +583,6 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     let belt = clamp(${f(t.greenWidths)} * bestWidth, ${f(t.greenMin)}, ${f(t.greenMax)})
       * (1.0 + 0.35 * noise3(d * (R / 1500.0) + vec3f(8.1, 2.2, 6.6), 512u));
     fertile = 1.0 - smoothstep(0.75 * belt, belt, bestDist);
-    var carve = 1.0e9;
-    var reachW = 0.0;
-    if (bestDist < ${f(t.riverReach)}) {
-      // The water surface follows the smooth global height under the channel.
-      let smoothSurf = heightAt(normalize(bestPoint)) - 0.5;
-      var surf = smoothSurf;
-      // Falls (decision 126): on steep reaches the water surface steps down the
-      // rock layers in pools and drops, each drop over about fallRun m.
-      let along = normalize(bestAlong + vec3f(1e-9, 0.0, 0.0)) * (${f(t.fallProbe)} / R);
-      let fallGrad = abs(heightAt(normalize(bestPoint + along)) - heightAt(normalize(bestPoint - along)))
-        / (2.0 * ${f(t.fallProbe)});
-      let T = ${f(t.strataThickness)};
-      let stepW = smoothstep(${f(t.fallGradient[0])}, ${f(t.fallGradient[1])}, fallGrad)
-        * smoothstep(3.0 * T, 1.2 * T, sampleSpacing) * step(${f(t.fallMinWidth)}, bestWidth);
-      if (stepW > 0.0 && surf > T) {
-        let xs = surf / T;
-        let ks = floor(xs);
-        let eps = clamp(${f(t.fallRun)} * fallGrad / T, 0.005, 0.5);
-        surf = mix(surf, (ks + smoothstep(1.0 - eps, 1.0, xs - ks)) * T, stepW);
-      }
-      let half = 0.5 * bestWidth;
-      let depth = 1.0 + 0.02 * bestWidth;
-      if (bestDist < half) {
-        let x = bestDist / half;
-        carve = surf - depth * (1.0 - x * x);
-      } else {
-        // The steps cut a gorge a few widths across; the valley beyond keeps its slope.
-        let banks = mix(surf, smoothSurf, smoothstep(half, half + ${f(t.fallGorge)} * bestWidth + 60.0, bestDist));
-        carve = banks + (bestDist - half) * ${f(t.bankSlope)};
-      }
-      reachW = 1.0 - smoothstep(0.6 * ${f(t.riverReach)}, ${f(t.riverReach)}, bestDist);
-    }
-
     // Global slope: shapes the gullies, and calms detail on flat lowlands.
     let e0 = normalize(cross(vec3f(0.0, 1.0, 0.0), d) + vec3f(1e-7, 0.0, 0.0));
     let n0 = cross(d, e0);
@@ -551,6 +591,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     let hn = heightAt(normalize(d + dl * n0)) - heightAt(normalize(d - dl * n0));
     let grad = (he * e0 + hn * n0) / (2.0 * dl * R);
     let slope = length(grad);
+    globalSlope = slope;
 
     // Detail octaves.
     let up = upliftAt(d);
@@ -656,9 +697,6 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
         h = mix(h, (k + pow(s, p)) * T, strength);
       }
     }
-    // Rivers shape the terrain within reach; carving never raises it.
-    // Not under lakes: a river crossing a lake has no channel in the lake bed.
-    h = mix(h, min(h, carve), reachW * dryBed);
     // Coastal plains stay land, so detail does not pepper the coast with islands.
     h = select(h, max(h, 0.05), base > 0.5);
 
@@ -698,6 +736,8 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   // contour, so in a band either side of it fractal noise moves the shore by up to
   // about coastShift m (scaled by the local slope): headlands, coves, inlets and
   // offshore rocks. Not in lakes.
+  var beachW = 0.0;
+  var rockyShore = 0.0;
   let coastW = select(smoothstep(0.55, 0.95, masks.w), smoothstep(0.3, 0.8, masks.z), base <= 0.0)
     * select(1.0, 0.0, lakeLevel > NO_LAKE * 0.5);
   if (coastW > 0.0) {
@@ -718,6 +758,35 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
       ca *= 0.6;
     }
     h += amp * cnoise * coastW;
+
+    // Coastal profile (decision 146): headlands are cut into cliffs and sand fills the
+    // coves between them. A monotone map of the height near sea level, so the
+    // shoreline itself stays where it is: on headlands (where the coastal noise
+    // raises the shore) of coasts with relief, ground within the cliff height of sea
+    // level is lifted toward it (and the sea floor below it drops away); in the
+    // coves of gentle coasts, the first meters above and below sea level are
+    // flattened into a beach and a sandy shelf.
+    let relief = cslope * 1500.0;
+    let region = noise3(d * (R / 18000.0) + vec3f(3.3, 8.1, 0.7), 512u);
+    let headland = smoothstep(0.0, 0.4, cnoise + 0.35 * region);
+    let notRiver = smoothstep(riverHalf + 300.0, riverHalf + 1200.0, riverDist);
+    let cliffW = coastW * headland * notRiver
+      * smoothstep(${f(t.cliffRelief[0])}, ${f(t.cliffRelief[1])}, relief);
+    let cliffH = clamp(relief, ${f(t.cliffRelief[0])}, ${f(t.cliffMax)})
+      * (0.7 + 0.3 * noise3(d * (R / 2500.0) + vec3f(1.9, 4.4, 2.8), 512u));
+    let hc = select(cliffH, ${f(t.cliffFoot)} * cliffH, h <= 0.0);
+    if (cliffW > 0.0 && abs(h) < hc) {
+      let p = mix(1.0, ${f(t.cliffPower)}, cliffW);
+      h = sign(h) * hc * pow(abs(h) / hc, p);
+    }
+    beachW = coastW * (1.0 - headland) * (1.0 - smoothstep(${f(t.beachRelief[0])}, ${f(t.beachRelief[1])}, relief))
+      * (1.0 - smoothstep(0.35, 0.65, masks.y));
+    let hb = ${f(t.beachHeight)};
+    if (beachW > 0.0 && abs(h) < hb) {
+      h = sign(h) * hb * pow(abs(h) / hb, mix(1.0, ${f(t.beachPower)}, beachW));
+    }
+    // Rock above water off the shore: stacks off headlands, islets in the sea.
+    if (h > 0.0 && (base <= 0.0 || cliffW > 0.5)) { rockyShore = 1.0; }
   }
 
   // Deltas (decision 126): a low fan from an apex upstream of the mouth out into
@@ -831,6 +900,13 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     if (h > 0.0) { biomeOut = ${Biome.HotDesert}u; forest = 0.0; }
   }
 
+  // Rivers cut their channels last (decision 146), so coastal noise, skerries and
+  // delta fans cannot dam them. Not under lakes: a lake bed has no channel.
+  if (base > 0.0 && dryBed > 0.0) {
+    let stepped = smoothstep(3.0 * ${f(t.strataThickness)}, 1.2 * ${f(t.strataThickness)}, sampleSpacing);
+    h = mix(h, carveRivers(d, h, tile, stepped), dryBed);
+  }
+
   // Lake water stands only on the lake's cells (decision 129): elsewhere within the
   // lake level's reach, ground the interpolation or detail left below the level is
   // raised to just above it, so the lake does not spill out to the reach's blocky edge.
@@ -840,7 +916,8 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   if (lakeLevel > NO_LAKE * 0.5) {
     let share = lakeFraction(normalize(d + ${f(t.lakeWarp)} * cellAngle * jit));
     let edge = 0.42 + 0.12 * noise3(d * (R / 700.0) + vec3f(6.2, 0.7, 2.9), 512u);
-    let outside = 1.0 - smoothstep(edge - 0.08, edge + 0.08, share);
+    // River channels near a lake keep their cut (decision 146): raising them would dam the outlet.
+    let outside = (1.0 - smoothstep(edge - 0.08, edge + 0.08, share)) * (1.0 - riverCover);
     h = max(h, mix(h, lakeLevel + 0.6, outside));
     // Lakes in dry land are salt pans (decision 130): flat white ground a little
     // below the level, no water (Bonneville, the Etosha pan).
@@ -851,6 +928,77 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
       biomeOut = ${Biome.IceSheet}u;
       forest = 0.0;
     }
+  }
+  // Marshes (decision 146): flat, wet ground within a few meters of a water table
+  // (a river's surface on its floodplain, a lake's level on its shore, sea level on
+  // low coasts) is leveled to it, with pools where the ground dips below: the pools
+  // are water at the table's level, drawn like lakes. Not in dry land, on slopes,
+  // in river channels or on salt pans.
+  if (h > 0.0 && base > 0.0 && biomeOut != ${Biome.IceSheet}u) {
+    let wetClimate = 1.0 - smoothstep(${f(t.marshArid[0])}, ${f(t.marshArid[1])}, masks.x);
+    let flatW = 1.0 - smoothstep(${f(t.marshSlope[0])}, ${f(t.marshSlope[1])}, globalSlope);
+    let patches = smoothstep(-0.2, 0.2, noise3(d * (R / ${f(t.marshPatch)}) + vec3f(5.7, 2.3, 9.4), 512u));
+    var water = NO_LAKE;
+    var near = 0.0;
+    if (lakeOut > NO_LAKE * 0.5) {
+      water = lakeOut;
+      // The shore only: the lake itself keeps its bed.
+      near = (1.0 - smoothstep(1.0, ${f(t.marshRise)}, h - lakeOut)) * smoothstep(-0.5, 0.0, h - lakeOut);
+    } else if (riverSurf > NO_LAKE * 0.5) {
+      let plain = max(${f(t.floodplainMin)}, ${f(t.floodplainWidths)} * 2.0 * riverHalf);
+      water = riverSurf + 0.3;
+      // A dry levee along the channel, a few samples wide; marsh beyond it.
+      near = (1.0 - smoothstep(1.5 * plain, 3.0 * plain, riverDist))
+        * smoothstep(riverHalf + 2.0 * sampleSpacing, riverHalf + 5.0 * sampleSpacing, riverDist)
+        * (1.0 - smoothstep(1.5, ${f(t.marshRise)}, h - water));
+    }
+    // Low coasts: salt marsh (mangroves where the coast is warm), not on beaches.
+    let coastNear = smoothstep(0.6, 0.9, masks.w) * (1.0 - smoothstep(1.2, 2.5, h)) * (1.0 - beachW);
+    var salt = 0.0;
+    if (coastNear > near) {
+      water = 0.25;
+      near = coastNear;
+      salt = 1.0;
+    }
+    // Not on skerry coasts, whose low ground is ice-polished rock.
+    // Low coasts are flat enough at three times the slope a floodplain needs.
+    let flatHere = select(flatW, 1.0 - smoothstep(3.0 * ${f(t.marshSlope[0])}, 3.0 * ${f(t.marshSlope[1])}, globalSlope), salt > 0.5);
+    let marsh = smoothstep(0.0, 0.45, wetClimate * flatHere * patches * near * (1.0 - riverCover)
+      * (1.0 - smoothstep(0.0, 0.2, skerry)));
+    if (marsh > 0.0 && water > NO_LAKE * 0.5) {
+      var pool = 0.0;
+      var pl = ${f(t.marshPool)};
+      var pa = 1.0;
+      for (var o = 0; o < 3; o++) {
+        let r = smoothstep(2.0, 4.0, pl / sampleSpacing);
+        pool += pa * r * noise3(d * (R / pl) + vec3f(8.8, 0.4, 6.1) + f32(o) * vec3f(2.9, 7.3, 1.7), 512u);
+        pl *= 0.45;
+        pa *= 0.55;
+      }
+      // Pools only inside the marsh: its edge stays dry ground, so no water meets the
+      // samples beyond, which carry no water table.
+      let ground = water + 0.5 + 2.2 * pool;
+      // Ground below the table elsewhere in the marsh's reach (a carved bank) is raised
+      // just above it first, so only the pools' noise makes water.
+      h = mix(max(h, water + 0.4), ground, smoothstep(0.0, 0.25, marsh));
+      lakeOut = water;
+      if (marsh > 0.2) {
+        biomeOut = ${TileCover.Marsh}u;
+        // Reeds and sedge, a few trees; mangroves on warm coasts.
+        let stands = smoothstep(0.0, 0.35, noise3(d * (R / 400.0) + vec3f(2.0, 6.0, 1.0), 0u));
+        forest = mix(forest * 0.2, 0.65 * stands, salt * smoothstep(0.2, 0.45, warmCoast));
+      }
+    }
+  }
+  // Sand on the beaches of gentle coves (decision 146); bare rock on islets and stacks.
+  let sandTop = ${f(t.beachSand)} * (1.0 + 0.5 * noise3(d * (R / 600.0) + vec3f(0.3, 5.5, 2.2), 512u));
+  if (h > 0.0 && beachW > 0.25 && h < sandTop && h >= lakeOut && biomeOut != ${TileCover.Marsh}u && skerry <= 0.0) {
+    biomeOut = ${TileCover.Beach}u;
+    forest = 0.0;
+  }
+  if (h > 0.0 && rockyShore > 0.0 && biomeOut <= ${Biome.SeaIce}u) {
+    biomeOut = ${Biome.Alpine}u;
+    forest = 0.0;
   }
   // Dry ground on a water biome (lake shores, islets and coastal ground over global
   // sea cells) takes a land biome near it, not the water's color (decision 129).

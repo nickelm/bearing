@@ -8,6 +8,7 @@ import {
   tileSampleDirection,
   tileSampleIndex,
   TILE_BORDER,
+  TILE_STRIDE,
   TILE_TEXELS,
 } from '../../src/core/tiles';
 import type { TileKey } from '../../src/core/tiles';
@@ -17,7 +18,7 @@ import { buildGlobalWorld } from '../../src/worldgen/globalPipeline';
 import { NO_LAKE, TileSynthesizer } from '../../src/worldgen/gpu/tileSynth';
 import { DEFAULT_PLANET_PARAMS } from '../../src/worldgen/params';
 import { generateWorld } from '../../src/worldgen/pipeline';
-import { RiverIndex } from '../../src/worldgen/riverIndex';
+import { RIVER_SEGMENT_FIELDS, RiverIndex } from '../../src/worldgen/riverIndex';
 import { testGpu } from './device';
 
 const gpu = await testGpu();
@@ -31,6 +32,13 @@ describe.skipIf(!gpu)('tile synthesis (GPU)', async () => {
         finish: async (input) => finishWorld(input),
       })
     : null;
+  const index = g
+    ? new RiverIndex(g.finish.rivers, {
+        height: g.height,
+        radius: params.radius,
+        lakeDepth: g.finish.drainage.lakeDepth,
+      })
+    : null;
   const synth = g
     ? new TileSynthesizer(g.grid, {
         seed: params.seed,
@@ -41,7 +49,7 @@ describe.skipIf(!gpu)('tile synthesis (GPU)', async () => {
         height: g.height,
         forest: g.finish.forest,
         treeline: g.finish.treeline,
-        index: new RiverIndex(g.finish.rivers),
+        index: index!,
       })
     : null;
   // A tile on the main continent.
@@ -145,6 +153,87 @@ describe.skipIf(!gpu)('tile synthesis (GPU)', async () => {
     }
     expect(inRiver).toBeGreaterThan(0);
     expect(riverSum / inRiver).toBeLessThan(landSum / land);
+  });
+
+  it('lets river beds fall downstream without humps (decision 146)', async () => {
+    // The longest river's channel, walked every 40 m along the index's segments.
+    const rivers = g!.finish.rivers;
+    let best = 0;
+    for (let k = 0; k < rivers.count; k++) {
+      const n = rivers.offsets[k + 1]! - rivers.offsets[k]!;
+      if (n > rivers.offsets[best + 1]! - rivers.offsets[best]!) best = k;
+    }
+    const F = RIVER_SEGMENT_FIELDS;
+    const seg = index!.segments.data;
+    const o0 = rivers.offsets[best]! * 3;
+    let s0 = 0;
+    while (
+      Math.hypot(
+        seg[s0 * F]! - rivers.points[o0]!,
+        seg[s0 * F + 1]! - rivers.points[o0 + 1]!,
+        seg[s0 * F + 2]! - rivers.points[o0 + 2]!,
+      ) > 1e-12
+    )
+      s0++;
+    const R = params.radius;
+    const pts: Vec3d[] = [];
+    for (let s = s0; s < index!.segments.count && pts.length < 400; s++) {
+      if (s > s0) {
+        const gap = Math.hypot(
+          seg[(s - 1) * F + 3]! - seg[s * F]!,
+          seg[(s - 1) * F + 4]! - seg[s * F + 1]!,
+          seg[(s - 1) * F + 5]! - seg[s * F + 2]!,
+        );
+        if (gap > 1e-12) break;
+      }
+      const a = new Vec3d(seg[s * F]!, seg[s * F + 1]!, seg[s * F + 2]!);
+      const b = new Vec3d(seg[s * F + 3]!, seg[s * F + 4]!, seg[s * F + 5]!);
+      const steps = Math.max(1, Math.ceil((Math.acos(Math.min(1, a.dot(b))) * R) / 40));
+      for (let i = 0; i < steps; i++) {
+        const f = i / steps;
+        pts.push(
+          new Vec3d(
+            a.x + (b.x - a.x) * f,
+            a.y + (b.y - a.y) * f,
+            a.z + (b.z - a.z) * f,
+          ).normalize(),
+        );
+      }
+    }
+    expect(pts.length).toBeGreaterThan(20);
+    const level = 6;
+    const keys = new Map<string, TileKey>();
+    for (const d of pts) {
+      const k = tileForDirection(d, level);
+      keys.set(`${k.face}/${k.x}/${k.y}`, k);
+    }
+    const tiles = new Map<string, Awaited<ReturnType<TileSynthesizer['generate']>>[number]>();
+    for (const t of await synth!.generate([...keys.values()]))
+      tiles.set(`${t.key.face}/${t.key.x}/${t.key.y}`, t);
+    let low = Infinity;
+    let worst = 0;
+    for (const d of pts) {
+      const k = tileForDirection(d, level);
+      const t = tiles.get(`${k.face}/${k.x}/${k.y}`)!;
+      const uv = projectToCubeFace(d, k.face);
+      const size = TILE_TEXELS * (1 << level);
+      const fx = uv.u * size - k.x * TILE_TEXELS + TILE_BORDER;
+      const fy = uv.v * size - k.y * TILE_TEXELS + TILE_BORDER;
+      const x0 = Math.floor(fx);
+      const y0 = Math.floor(fy);
+      const tx = fx - x0;
+      const ty = fy - y0;
+      // The water's floor: the bed, or a lake's level where the river crosses a lake.
+      const at = (x: number, y: number) =>
+        Math.max(t.height[y * TILE_STRIDE + x]!, t.lake[y * TILE_STRIDE + x]!);
+      const h =
+        (at(x0, y0) * (1 - tx) + at(x0 + 1, y0) * tx) * (1 - ty) +
+        (at(x0, y0 + 1) * (1 - tx) + at(x0 + 1, y0 + 1) * tx) * ty;
+      low = Math.min(low, h);
+      worst = Math.max(worst, h - low);
+    }
+    // Bilinear sampling of a channel narrower than the samples leaves a meter or two.
+    expect(worst).toBeLessThan(4);
   });
 
   it('floods lakes to their level with a shoreline from the fine terrain', async () => {

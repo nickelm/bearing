@@ -499,6 +499,7 @@ async function main(): Promise<void> {
       const riverIndex = new RiverIndex(global.finish.rivers, {
         height: global.height,
         radius: params.radius,
+        lakeDepth: global.finish.drainage.lakeDepth,
       });
       synth = new TileSynthesizer(global.grid, {
         seed: params.seed,

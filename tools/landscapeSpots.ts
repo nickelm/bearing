@@ -15,6 +15,8 @@
  *   jungle     the largest river in tropical rainforest (the Amazon)
  *   falls      a river dropping steeply across a step (Niagara)
  *   reef       a warm island coast with a reef and lagoon (the Pacific, decision 129)
+ *   cliffs     a high coast that is not glaciated (the Cliffs of Moher, decision 146)
+ *   marsh      flat, wet lowland along a large river (the Sudd, the Okavango, decision 146)
  */
 import { directionToCubeFace } from '../src/core/coords';
 import { Vec3d } from '../src/core/vec3d';
@@ -33,6 +35,8 @@ export const SPOT_KINDS = [
   'jungle',
   'falls',
   'reef',
+  'cliffs',
+  'marsh',
 ] as const;
 export type SpotKind = (typeof SPOT_KINDS)[number];
 
@@ -313,6 +317,25 @@ export async function findSpots(
             if (s.height(s.offset(d, (k * Math.PI) / 4, 6000)) <= -20) sea++;
           if (sea >= 5) offer('reef', sea * 100 - h, c);
         }
+        // Cliffs: high coast (a sea cell within 2–3 km) outside the ice and the deserts.
+        if (h > 60 && !COLD.has(b) && !ARID.has(b)) {
+          let sea = 0;
+          for (let k = 0; k < 8; k++)
+            if (s.height(s.offset(d, (k * Math.PI) / 4, 2500)) <= -10) sea++;
+          if (sea >= 2 && sea <= 4)
+            offer('cliffs', Math.min(h, 300) - 0.2 * s.relief(d, [6000]), c);
+        }
+        // Marsh: a large river on flat, wet lowland.
+        if (
+          h < 200 &&
+          lake[c]! <= 0 &&
+          discharge[c]! > 60 &&
+          !ARID.has(b) &&
+          b !== Biome.IceSheet
+        ) {
+          const rel = s.relief(d, [3000, 6000]);
+          if (rel < 60) offer('marsh', Math.sqrt(discharge[c]!) / (1 + rel), c);
+        }
         // Falls: a steep reach of a sizable river that crosses a stratum boundary
         // (tileSynth steps its surface there, decision 126).
         if (discharge[c]! > 60 && r >= 0 && height[r]! > 0) {
@@ -498,6 +521,27 @@ export async function findSpots(
         const sea = s.mostRelief(p, 3000, 8000, -1);
         const at = s.offset(p, sea, 6000);
         spot = { kind, point: at, facing: sea + Math.PI, height: 600, pitch: -10 * DEG, note };
+        break;
+      }
+      case 'cliffs': {
+        // From over the sea, 2.5 km out and a little above the cliff tops, looking back.
+        const sea = s.mostRelief(p, 1500, 4000, -1);
+        const at = s.offset(p, sea, 2500);
+        spot = { kind, point: at, facing: sea + Math.PI, height: 180, pitch: -4 * DEG, note };
+        break;
+      }
+      case 'marsh': {
+        // Beside the river, looking across the floodplain downstream.
+        const r = receiver[b.cell]!;
+        const down = s.headingTo(p, cellCenterDirection(n, r, new Vec3d()));
+        spot = {
+          kind,
+          point: s.offset(p, down + Math.PI / 2, 1500),
+          facing: down - Math.PI / 3,
+          height: 250,
+          pitch: -10 * DEG,
+          note,
+        };
         break;
       }
       case 'falls': {

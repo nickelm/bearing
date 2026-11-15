@@ -405,6 +405,7 @@ export class TerrainRenderer {
         temperature: this.land.surfaceTemperature(climateHere, rawHeight, radial),
         normal,
         height: rawHeight,
+        elevation: length(planet).sub(radius).div(max(exaggeration, 1e-3)),
         lake: lakeDepth,
         river,
         riverReflect: riverCover.y,
@@ -412,6 +413,7 @@ export class TerrainRenderer {
         up: radial,
         relative: positionWorld,
         wavePosition: wrapped,
+        planet,
         light: at,
       });
       // Roads and pavement over dry land and rivers (a road over a river reads as a bridge).

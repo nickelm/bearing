@@ -290,7 +290,11 @@ it('relief at a point', { timeout: 1_800_000 }, async () => {
     height: global.height,
     forest: global.finish.forest,
     treeline: global.finish.treeline,
-    index: new RiverIndex(global.finish.rivers, { height: global.height, radius: R }),
+    index: new RiverIndex(global.finish.rivers, {
+      height: global.height,
+      radius: R,
+      lakeDepth: global.finish.drainage.lakeDepth,
+    }),
     // TUNING='{"gullies":0.2}' overrides tile-synthesis tuning, for experiments.
     tuning: env.TUNING ? (JSON.parse(env.TUNING) as Record<string, number>) : undefined,
   });
