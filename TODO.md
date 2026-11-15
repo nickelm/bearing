@@ -777,7 +777,9 @@ Rotor-disc helicopters with fly-by-mouse, mouse aim and direct control over one 
 
 The thrust-disc model, the speed-scheduled controls, the Assisted preset, the hover HUD, the helicopter camera rig, and Free Flight from a helicopter pad with the Little Bird and Black Hawk analogues.
 
-- [ ] Shared `Airframe` interface, `rigidBody.ts` and `contact.ts` split out of `flightModel.ts`; Free Flight, the chase camera, the HUD frame and the outcomes read the interface; a lockstep test that the Kestrel's circuit, air maneuvers and braked stand stay bit-identical
+- [x] Shared `Airframe` interface, `rigidBody.ts` and `contact.ts` split out of `flightModel.ts`; Free Flight, the chase camera, the HUD frame and the outcomes read the interface; a lockstep test that the Kestrel's circuit, air maneuvers and braked stand stay bit-identical (decision 154: 15 scenarios hashed every step on Node 22 and 24, recorded before the split; `tools/lockstep.preview.ts` charts them)
+  - [ ] Free Flight's flown model as a pair keyed by `kind` (model, controls, director, pose, HUD builder) when the aircraft choice arrives (item below); until then `FreeFlight.model` stays a `FlightModel`
+  - [ ] Split `buildHudFrame` into the fields every airframe has and the jet's, for the hover HUD
 - [ ] Shared director interface (`sim/flight/director.ts`); `DirectorTarget` gains optional heading, ground-velocity and height-reference fields that the fixed-wing director ignores
 - [ ] `rotor/rotorSpec.ts`: the spec's `rotor` block (masses, inertias, rotor radius, blades, solidity, hub type and stiffness, flapping time constant, power available by altitude and temperature, power-required curve, tail rotor or yaw authority, drag, fin, stabilizer and wing areas, never-exceed speed, gear, hook points, mouse-turn thresholds), with validation and tests
 - [ ] Specs for the Little Bird and Black Hawk analogues: names, public figures marked as tuning values, Free Flight only (not in the air war's type table)

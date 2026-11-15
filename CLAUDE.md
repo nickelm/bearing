@@ -20,6 +20,7 @@ Guidance for Claude Code sessions in this repository. `docs/design.md` is the so
 | Seed browser (theaters)  | `npm run seeds` (env: `SEEDS`, `FROM`, `COUNT`, `BRIEFING=1`)   |
 | Weather preview          | `npm run weather` (env: `SEED`, `HOURS`, `DAYS`, `PRESET`) → `tools/out/` |
 | Flight-model figures     | `npx vitest run --config vitest.tools.config.ts tools/flight.preview.ts` |
+| Kestrel lockstep charts  | `npx vitest run --config vitest.tools.config.ts tools/lockstep.preview.ts` (`ONLY`) → `tools/out/lockstep.html`: the lockstep test's 15 flights (decision 154) |
 | Sky sheets, shadow bake  | `tools/sky.preview.ts` (sky-only contact sheets; `PERF=n`, `VIBRANCE`), `tools/shadow.preview.ts` (height sources and bake cost; `ROUNDS`), both with the vitest tools config |
 | Clouds, fog, rain        | `tools/clouds.preview.ts` (the volumetrics over a plain ground, 0.1–0.3 s per view; `VIEWS`, `QUALITY`, `COUNT=1` for steps and texture reads, `PERF=n`, `GRAIN=0`, `TUNING` and `TUNING_AIR` as in the render preview), `tools/precip.preview.ts` (particles and a bolt; `BOLT`), both with the vitest tools config |
 | Free Flight renders      | `tools/freeflight.preview.ts` (env: `SEED`, `GRES`, `TOD`, `SHOTS`, `WEATHER`, `WIND`, `QUALITY`, `GOVERNOR`, `POST`, `MSAA`, `SETTLE`, `OUT`), then `node tools/freeflight.screens.mjs` with `npm run dev` up (`SHOTS`, `OUT_DIR`) → `docs/reports/screens/` |
@@ -64,8 +65,11 @@ src/sim/            headless simulation; runs in a worker: event queue + fixed t
                     scripted test pilot, shared by AI and player (Free Flight, decision 134; P1 extends it;
                     the sensor model comes with P3); wind and gusts from the weather (wind.ts, decision 143);
                     the track hold on the wheels with free pedals (controlLaws.ts, decision 145);
+                    airframe.ts (the Airframe interface every flown aircraft implements), rigidBody.ts
+                    (gravity, Euler's equations, the integrator, attitude) and contact.ts (ground query,
+                    wheels, hard points), shared by the Kestrel and the helicopters (decision 154);
                     rotor/ will hold the helicopters' rotor-disc model, laws, assists and director
-                    behind the same airframe and director interfaces (track H, decision 149)
+                    (track H, decision 149)
 src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Both scenes stay resident;
                     the app renders the active one (GUI → View → View). Until V1, sim/'s GlobeScene
                     still draws orbit to ground.
@@ -182,6 +186,7 @@ Promotion expands a unit deterministically from its seed and current strength. D
 - Work on one milestone task at a time. Keep `TODO.md` current: check off finished tasks and add subtasks you discover.
 - Record any architectural decision, or any deviation from `docs/design.md`, in `docs/decisions.md` with the date, the decision and the reason. In the same commit, update whatever `docs/design.md` or `docs/visual-style.md` says on the subject.
 - Run `npm test` and `npm run typecheck` (or `npm run check`) before declaring a task complete.
+- **The Kestrel's flight is pinned bit for bit** by `tests/flightLockstep.test.ts` (decision 154). A change meant to alter it (tuning, a new force) re-records the fixture with `LOCKSTEP_RECORD=1 npx vitest run tests/flightLockstep.test.ts`, once under Node 22 and once under Node 24 (`PATH=/opt/node24/bin:$PATH node node_modules/vitest/vitest.mjs run …` in a cloud session), and says so in its decision. A refactor must pass it unchanged.
 - **Visual milestones close only after the acceptance checks** in `docs/visual-style.md` for the views they touch. A visual milestone is any milestone with rendering, model or UI tasks (all of S1–S4, V1–V4, I1, P1–P5 and H1–H5).
   - Simulation view (Part I): checks 1–5 as `tools/render.preview.ts` views; check 6, the silhouette test, in the model viewer once aircraft models exist; checks 7–10 (HUD and camera rig) as scripted sequences from V4 on.
   - Strategic view (Part II): checks 1, 2, 4 and 5 as preview views (4 through simulated color-vision deficiencies); check 3, the ten-second legibility test, with the owner.

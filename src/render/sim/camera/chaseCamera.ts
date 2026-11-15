@@ -22,6 +22,7 @@
 import { DEG } from '../../../core/units';
 import type { Meters, Radians } from '../../../core/units';
 import { Vec3d } from '../../../core/vec3d';
+import type { Airframe } from '../../../sim/flight/airframe';
 
 export interface ChaseRig {
   /** Behind and above the aircraft in flight (m). */
@@ -61,6 +62,15 @@ export interface ChaseTarget {
   /** Velocity (world, m/s). */
   velocity: Vec3d;
   onGround: boolean;
+}
+
+/** Sets `t` from airframe `a`: its position, forward and up axes, velocity and whether it is on the ground. */
+export function followAirframe(t: ChaseTarget, a: Readonly<Airframe>): void {
+  t.pos.copy(a.pos);
+  a.bodyAxis(0, t.forward);
+  a.bodyAxis(2, t.up).scale(-1);
+  t.velocity.copy(a.vel);
+  t.onGround = a.onGround;
 }
 
 const MIN_CLEARANCE = 1.5;

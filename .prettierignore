@@ -8,3 +8,5 @@ docs/design.md
 docs/visual-style.md
 # Owner proposals, authored by hand. Do not reformat.
 docs/proposals/
+# Recorded by tests (flight lockstep); rewritten by the test, not by hand.
+tests/fixtures/

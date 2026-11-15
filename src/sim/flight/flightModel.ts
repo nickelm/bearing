@@ -31,8 +31,10 @@
  */
 import { Quatd } from '../../core/quat';
 import { Vec3d } from '../../core/vec3d';
-import { calibratedAirspeed, G0, standardAtmosphere } from './atmosphere';
-import type { AirState } from './atmosphere';
+import type { Airframe, AirframeTelemetry } from './airframe';
+import { calibratedAirspeed, standardAtmosphere } from './atmosphere';
+import { hardPointHit, ON_WATER, release, smooth01, supportHeight, wheelForce } from './contact';
+import type { GroundQuery, WheelContact } from './contact';
 import {
   AB_GATE,
   controlLaws,
@@ -45,76 +47,39 @@ import {
 import type { FlightControls, LawInput, LawOutput, LawState } from './controlLaws';
 import { lookup, lookup2 } from './flightSpec';
 import type { FlightSpec, WheelSpec } from './flightSpec';
-import { headingOf } from './runway';
+import {
+  airVelocityBody,
+  attitudeQuat,
+  attitudeTelemetry,
+  bodyAxisOf,
+  eulerRates,
+  FLIGHT_STEP,
+  gravityAt,
+  integrate,
+  modelToBody,
+  SUBSTEPS,
+} from './rigidBody';
 
-/** Fixed step of the flight model (s) and its substeps. */
-export const FLIGHT_STEP = 1 / 120;
-export const SUBSTEPS = 4;
+export type { GroundQuery, SurfaceKind } from './contact';
+export { FLIGHT_STEP, modelToBody, SUBSTEPS } from './rigidBody';
+
 /** Time constants of the stick prefilter (s). */
 const PITCH_PREFILTER = 0.25;
 /** With the gear down (pitch-rate command), a quick prefilter: letting go stops the rotation. */
 const PITCH_PREFILTER_GEAR = 0.08;
 const ROLL_PREFILTER = 0.08;
 
-export type SurfaceKind = 'runway' | 'field' | 'land' | 'water';
-
-/** The ground the aircraft flies over: the same surface the renderer draws. */
-export interface GroundQuery {
-  /** Surface height (m above sea level; water at its surface) at a unit direction. */
-  height(dir: Readonly<Vec3d>): number;
-  /** What the surface is at a unit direction. */
-  surface(dir: Readonly<Vec3d>): SurfaceKind;
-}
-
-export interface WheelState {
+/** A wheel: its spec, and its contact with the ground (contact.ts). */
+export interface WheelState extends WheelContact {
   readonly spec: WheelSpec;
-  /** Attachment (tire bottom, strut extended) relative to the CG, body axes. */
-  readonly body: Vec3d;
-  /** Strut compression (m) and normal load (N). */
-  compression: number;
-  load: number;
-  /** The grip spring's anchor on the ground (world), or null in the air. */
-  anchor: Vec3d | null;
-  /** Steering angle (rad, + right). */
-  steer: number;
-  /** Surface under the tire while it is loaded. */
-  surface: SurfaceKind | null;
 }
 
-/** Per-substep quantities for the HUD and the debug panel. */
-export interface FlightTelemetry {
-  alpha: number;
-  beta: number;
-  tas: number;
-  cas: number;
-  mach: number;
-  qbar: number;
+/** Per-substep quantities for the HUD and the debug panel: the common ones, and the jet's. */
+export interface FlightTelemetry extends AirframeTelemetry {
+  /** Lift and drag coefficients, and the engine's thrust (N). */
   cl: number;
   cd: number;
   thrust: number;
-  /** Load factor along the lift direction (g) and along body −z (g). */
-  load: number;
-  normalLoad: number;
-  /** Altitude above sea level (m) and vertical speed (m/s, + up). */
-  altitude: number;
-  verticalSpeed: number;
-  /** Height of the lowest wheel above the ground under the CG (m). */
-  radarAltitude: number;
-  groundSpeed: number;
-  /** Compass heading, pitch and bank of the body axes (rad). */
-  heading: number;
-  pitch: number;
-  bank: number;
-  /** Flight path angle (rad). */
-  gamma: number;
-  /** Forces in body axes (N): aerodynamic, thrust, gear, gravity. */
-  aero: Vec3d;
-  gearForce: Vec3d;
-  gravity: Vec3d;
-  /** Weight on wheels 0..1. */
-  wow: number;
-  fuelFlow: number;
-  air: AirState;
   laws: LawOutput;
   /** What the control laws read last substep (the flight director inverts the pitch law with it). */
   lawInput: LawInput | null;
@@ -122,15 +87,8 @@ export interface FlightTelemetry {
 
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 
-/** Model frame (+x forward, +y up, +z starboard) relative to the CG → body axes (x, y right, z down). */
-export function modelToBody(
-  p: readonly [number, number, number],
-  cg: readonly [number, number, number],
-): Vec3d {
-  return new Vec3d(p[0] - cg[0], p[2] - cg[2], -(p[1] - cg[1]));
-}
-
-export class FlightModel {
+export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
+  readonly kind = 'fixed-wing' as const;
   readonly spec: FlightSpec;
   readonly radius: number;
   // ---- State ----
@@ -179,6 +137,7 @@ export class FlightModel {
     f: new Vec3d(),
     l: new Vec3d(),
     w: new Vec3d(),
+    e: new Vec3d(),
   };
 
   constructor(spec: FlightSpec, radius: number) {
@@ -232,6 +191,11 @@ export class FlightModel {
     return m.empty + m.payload + this.fuel;
   }
 
+  /** The wheels, as the points the aircraft stands on (Airframe). */
+  get supports(): readonly WheelState[] {
+    return this.wheels;
+  }
+
   /** Whether any wheel carries load. */
   get onGround(): boolean {
     return this.wheels.some((w) => w.load > 0);
@@ -244,8 +208,7 @@ export class FlightModel {
 
   /** Body axis `axis` (0 x forward, 1 y right, 2 z down) in world coordinates. */
   bodyAxis(axis: 0 | 1 | 2, out = new Vec3d()): Vec3d {
-    const v = this.scratch.d.set(axis === 0 ? 1 : 0, axis === 1 ? 1 : 0, axis === 2 ? 1 : 0);
-    return this.q.rotate(v, out);
+    return bodyAxisOf(this.q, axis, this.scratch.d, out);
   }
 
   /**
@@ -255,19 +218,7 @@ export class FlightModel {
   place(pos: Readonly<Vec3d>, vel: Readonly<Vec3d>, heading: number, pitch: number, bank = 0) {
     this.pos.copy(pos);
     this.vel.copy(vel);
-    const up = pos.clone().normalize();
-    const east = new Vec3d(0, 1, 0).cross(up);
-    if (east.length() < 1e-9) east.set(1, 0, 0);
-    east.normalize();
-    const north = up.clone().cross(east);
-    const h = east.clone().scale(Math.sin(heading)).addScaled(north, Math.cos(heading));
-    const fwd = h.clone().scale(Math.cos(pitch)).addScaled(up, Math.sin(pitch));
-    const right0 = fwd.clone().cross(up).normalize();
-    const up0 = right0.clone().cross(fwd).normalize();
-    // Bank turns the right wing down for positive bank.
-    const right = right0.clone().scale(Math.cos(bank)).addScaled(up0, -Math.sin(bank));
-    const down = fwd.clone().cross(right).normalize();
-    this.q.copy(Quatd.fromAxes(fwd, right, down));
+    attitudeQuat(pos, heading, pitch, bank, this.q);
     this.omega.set(0, 0, 0);
     this.crashed = null;
     this.stick.pitch = 0;
@@ -306,7 +257,7 @@ export class FlightModel {
     const up = sc.up.copy(this.pos).scale(1 / r);
     const altitude = r - R;
     const air = standardAtmosphere(altitude, tel.air);
-    const g = G0 * (R / r) * (R / r);
+    const g = gravityAt(R, r);
     const m = this.mass;
 
     // ---- Systems ----
@@ -329,7 +280,7 @@ export class FlightModel {
     this.afterburner += (abTarget - this.afterburner) * Math.min(1, dt / eng.afterburner);
 
     // ---- Air data ----
-    const vb = this.q.unrotate(sc.w.copy(this.vel).sub(this.wind), sc.vb);
+    const vb = airVelocityBody(this, sc.w, sc.vb);
     const tas = vb.length();
     const mach = tas / air.speedOfSound;
     const qbar = 0.5 * air.density * tas * tas;
@@ -433,15 +384,23 @@ export class FlightModel {
     const low = altitude - groundUnder < 40;
     for (const w of this.wheels) {
       if (!gearDown || !low) {
-        w.load = 0;
-        w.anchor = null;
-        w.surface = null;
+        release(w);
         continue;
       }
       w.steer = w.spec.steerable ? steerAngle : 0;
-      const load = this.wheelForce(w, ctl, ground, up, fwWorld, mb);
+      // Toe brakes on the main wheels, or the parking brake.
+      let brake = 0;
+      if (w.spec.braked) {
+        brake = ctl.parkingBrake
+          ? 1
+          : clamp(w.spec.name === 'left' ? ctl.brakeLeft : ctl.brakeRight, 0, 1);
+      }
+      const load = wheelForce(this, w, w.spec, gs, brake, ground, up, fwWorld, mb);
+      if (load === ON_WATER) {
+        this.crash('Ditched in the water');
+        return;
+      }
       totalLoad += load;
-      if (this.crashed) return;
     }
     const wow = clamp(totalLoad / (0.25 * m * g), 0, 1);
     if (low) this.contactCheck(ground);
@@ -507,22 +466,11 @@ export class FlightModel {
       mb.z +
       halfRhoV * S * b * b * 0.5 * a.cnr * this.omega.z +
       qbar * S * b * a.cnBeta * beta;
-    const [ixx, iyy, izz] = this.inertia;
-    const p = this.omega.x;
-    const qr = this.omega.y;
-    const rr = this.omega.z;
-    // Euler's equations: I ω̇ = M − ω × Iω.
-    const dp = (mx - (izz - iyy) * qr * rr) / ixx;
-    const dq = (my - (ixx - izz) * rr * p) / iyy;
-    const dr = (mz - (iyy - ixx) * p * qr) / izz;
+    const rates = eulerRates(this.inertia, this.omega, mx, my, mz, sc.e);
 
     // ---- Integrate (semi-implicit Euler) ----
     const fWorld = this.q.rotate(fb, sc.d).add(fwWorld).add(gw);
-    this.vel.addScaled(fWorld, dt / m);
-    this.pos.addScaled(this.vel, dt);
-    this.omega.set(p + dp * dt, qr + dq * dt, rr + dr * dt);
-    this.q.integrateBodyRates(this.omega.x, this.omega.y, this.omega.z, dt);
-    this.time += dt;
+    integrate(this, fWorld, m, rates, dt);
 
     // ---- Telemetry ----
     tel.alpha = sensedAlpha;
@@ -546,26 +494,7 @@ export class FlightModel {
   /** Recomputes the attitude, speeds and heights in the telemetry from the state. */
   updateAttitude(ground?: GroundQuery): void {
     const tel = this.telemetry;
-    const up = this.pos.clone().normalize();
-    const fwd = this.bodyAxis(0);
-    const right = this.bodyAxis(1, new Vec3d());
-    tel.heading = headingOf(up, fwd);
-    tel.pitch = Math.asin(clamp(fwd.dot(up), -1, 1));
-    // Bank: the right wing's drop below the horizon, about the nose.
-    const horizRight = fwd.clone().cross(up);
-    const hl = horizRight.length();
-    if (hl > 1e-6) {
-      horizRight.scale(1 / hl);
-      const upPerp = horizRight.clone().cross(fwd);
-      tel.bank = Math.atan2(-right.dot(upPerp), right.dot(horizRight));
-    }
-    const vs = this.vel.dot(up);
-    tel.verticalSpeed = vs;
-    const gs2 = this.vel.lengthSq() - vs * vs;
-    tel.groundSpeed = Math.sqrt(Math.max(0, gs2));
-    const v = this.vel.length();
-    tel.gamma = v > 0.5 ? Math.asin(clamp(vs / v, -1, 1)) : 0;
-    tel.altitude = this.pos.length() - this.radius;
+    const up = attitudeTelemetry(this, tel, this.scratch.d);
     if (ground) {
       tel.radarAltitude = tel.altitude - this.gearHeightNow() - ground.height(up);
     }
@@ -573,129 +502,19 @@ export class FlightModel {
 
   /** Height of the CG above the lowest wheel bottom, at the current attitude (m). */
   gearHeightNow(): number {
-    const up = this.pos.clone().normalize();
-    let h = 0;
-    const tmp = new Vec3d();
-    for (const w of this.wheels) h = Math.max(h, -this.q.rotate(w.body, tmp).dot(up));
-    return h;
-  }
-
-  /**
-   * One wheel's force: normal spring-damper along the local vertical, grip and
-   * rolling resistance in the ground plane. Adds the world force to `fw` and the
-   * body moment to `mb`; returns the normal load (N).
-   */
-  private wheelForce(
-    w: WheelState,
-    ctl: Readonly<FlightControls>,
-    ground: GroundQuery,
-    up: Readonly<Vec3d>,
-    fw: Vec3d,
-    mb: Vec3d,
-  ): number {
-    const g = this.spec.gear;
-    const arm = this.q.rotate(w.body, new Vec3d());
-    const P = arm.clone().add(this.pos);
-    const dir = P.clone().normalize();
-    const groundH = ground.height(dir);
-    const depth = groundH - (P.length() - this.radius);
-    if (depth <= 0) {
-      w.load = 0;
-      w.compression = 0;
-      w.anchor = null;
-      w.surface = null;
-      return 0;
-    }
-    const surface = ground.surface(dir);
-    if (surface === 'water') {
-      this.crash('Ditched in the water');
-      return 0;
-    }
-    w.surface = surface;
-    // Velocity of the tire: v + ω × r (ω in body → world).
-    const omegaW = this.q.rotate(this.omega, new Vec3d());
-    const vP = omegaW.cross(arm).add(this.vel);
-    const sinkRate = -vP.dot(up);
-    let n = w.spec.stiffness * depth + w.spec.damping * sinkRate;
-    if (depth > w.spec.travel) n += 20 * w.spec.stiffness * (depth - w.spec.travel);
-    n = Math.max(0, n);
-    w.compression = Math.min(depth, w.spec.travel);
-    w.load = n;
-    const contact = P.addScaled(up, depth);
-    // Rolling direction: the body's x axis turned by the steering angle, in the ground plane.
-    const fBody = new Vec3d(Math.cos(w.steer), Math.sin(w.steer), 0);
-    const f = this.q.rotate(fBody, new Vec3d());
-    f.addScaled(up, -f.dot(up)).normalize();
-    const l = f.clone().cross(up).normalize();
-    const vf = vP.dot(f);
-    const vl = vP.dot(l);
-    if (!w.anchor) w.anchor = contact.clone();
-    const d = contact.clone().sub(w.anchor);
-    let df = d.dot(f);
-    let dl = d.dot(l);
-    const k = g.gripStiffness;
-    const c = g.gripDamping;
-    // Lateral grip: the grip spring at rest and taxi speeds (no creep), and at speed
-    // a tire's cornering force from its slip angle (cornering · load per radian),
-    // both capped by friction. The spring's damping alone acted like a cornering
-    // stiffness some thirty times a tire's at takeoff speed, so any heading change
-    // saturated the tires and could roll the jet onto a wingtip (decision 136).
-    const capL = g.lateral * n;
-    dl = clamp(dl, -capL / k, capL / k);
-    const spring = clamp(-k * dl - c * vl, -capL, capL);
-    const slip = Math.atan2(vl, Math.abs(vf));
-    const corner = clamp(-g.cornering * n * slip, -capL, capL);
-    const atSpeed = smooth01((Math.abs(vf) - 2) / 4);
-    const Fl = spring * (1 - atSpeed) + corner * atSpeed;
-    if (atSpeed > 0) dl *= 1 - atSpeed;
-    // Rolling: braked wheels grip up to their braking friction; free wheels roll.
-    let brake = 0;
-    if (w.spec.braked) {
-      brake = ctl.parkingBrake
-        ? 1
-        : clamp(w.spec.name === 'left' ? ctl.brakeLeft : ctl.brakeRight, 0, 1);
-    }
-    let Ff: number;
-    if (brake > 0) {
-      const capF = (g.rolling + g.braking * brake) * n;
-      df = clamp(df, -capF / k, capF / k);
-      Ff = clamp(-k * df - c * vf, -capF, capF);
-    } else {
-      Ff = -g.rolling * n * Math.tanh(vf / 0.2);
-      df = 0;
-    }
-    w.anchor.copy(contact).addScaled(f, -df).addScaled(l, -dl);
-    const F = up.clone().scale(n).addScaled(f, Ff).addScaled(l, Fl);
-    fw.add(F);
-    // Moment about the CG in body axes: r × F with r from the CG to the contact.
-    const rc = contact.sub(this.pos);
-    const Mw = rc.cross(F);
-    mb.add(this.q.unrotate(Mw, new Vec3d()));
-    return n;
+    return supportHeight(this, this.wheels);
   }
 
   /** Crashes the aircraft if a hard point is below the ground. */
   private contactCheck(ground: GroundQuery): void {
-    const tmp = new Vec3d();
-    for (let i = 0; i < this.contacts.length; i++) {
-      const P = this.q.rotate(this.contacts[i]!, tmp).add(this.pos);
-      const dir = P.clone().normalize();
-      if (P.length() - this.radius < ground.height(dir)) {
-        const s = ground.surface(dir);
-        this.crash(
-          s === 'water'
-            ? 'Ditched in the water'
-            : this.gear < 0.999 && this.contacts[i]!.z > 0
-              ? 'Landed with the gear up'
-              : 'Struck the ground',
-        );
-        return;
-      }
-    }
+    const hit = hardPointHit(this, this.contacts, ground);
+    if (!hit) return;
+    this.crash(
+      hit.surface === 'water'
+        ? 'Ditched in the water'
+        : this.gear < 0.999 && this.contacts[hit.index]!.z > 0
+          ? 'Landed with the gear up'
+          : 'Struck the ground',
+    );
   }
-}
-
-function smooth01(t: number): number {
-  const x = clamp(t, 0, 1);
-  return x * x * (3 - 2 * x);
 }

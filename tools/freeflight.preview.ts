@@ -47,6 +47,7 @@ import {
 } from '../src/render/sim/infra/airfieldGrading';
 import { InfraScene } from '../src/render/sim/infra/infraScene';
 import { neutralControls } from '../src/sim/flight/controlLaws';
+import { followAirframe } from '../src/render/sim/camera/chaseCamera';
 import { FLIGHT_STEP, FlightModel } from '../src/sim/flight/flightModel';
 import { parseFlightSpec } from '../src/sim/flight/flightSpec';
 import { FlightMonitor } from '../src/sim/flight/outcomes';
@@ -318,12 +319,7 @@ it('renders Free Flight shots', async () => {
     scene.clouds.time.value = gameTime;
     scene.weatherView = weather.finish(gameTime);
     scene.resetAtmosphere();
-    const ch = scene.chase.target;
-    ch.pos.copy(m.pos);
-    m.bodyAxis(0, ch.forward);
-    m.bodyAxis(2, ch.up).scale(-1);
-    ch.velocity.copy(m.vel);
-    ch.onGround = m.onGround;
+    followAirframe(scene.chase.target, m);
     scene.chase.reset();
     view.radPerPixel = (50 * DEG) / height;
     let stable = 0;

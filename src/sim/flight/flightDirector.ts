@@ -17,6 +17,7 @@ import { MIL_DETENT, pitchBlend, pitchCommand } from './controlLaws';
 import type { FlightControls } from './controlLaws';
 import { lookup } from './flightSpec';
 import type { FlightModel } from './flightModel';
+import type { RigidBodyState } from './rigidBody';
 import { headingOf } from './runway';
 
 export interface DirectorTarget {
@@ -44,7 +45,7 @@ const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
 
 /** Course and flight path angle from the aircraft toward world point `point`. */
 export function toward(
-  model: FlightModel,
+  model: Readonly<Pick<RigidBodyState, 'pos'>>,
   point: Readonly<Vec3d>,
 ): { course: number; gamma: number } {
   const up = model.pos.clone().normalize();
@@ -54,7 +55,10 @@ export function toward(
 }
 
 /** Course and flight path angle of world direction `dir` at the aircraft. */
-export function along(model: FlightModel, dir: Readonly<Vec3d>): { course: number; gamma: number } {
+export function along(
+  model: Readonly<Pick<RigidBodyState, 'pos'>>,
+  dir: Readonly<Vec3d>,
+): { course: number; gamma: number } {
   const up = model.pos.clone().normalize();
   const n = dir.length() || 1;
   return { course: headingOf(up, dir), gamma: Math.asin(clamp(dir.dot(up) / n, -1, 1)) };

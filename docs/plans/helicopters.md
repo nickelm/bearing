@@ -34,12 +34,14 @@ Two gaps shape the plan. The Little Bird and Black Hawk analogues that H1 names 
 
 Step 0 of H1 extracts what both models share, without changing the Kestrel:
 
-- `sim/flight/airframe.ts`: the `Airframe` interface the rest of the code reads (position, velocity, attitude, body rates, wind, time, crash state, common telemetry such as radar altitude, ground speed, heading, pitch, bank), plus `step(controls)`.
-- `sim/flight/rigidBody.ts`: state, gravity and the substep integrator.
-- `sim/flight/contact.ts`: the spring-damper and bristle friction for wheels, and for skids, which are contact points that slide but do not roll.
-- A lockstep test that the Kestrel's scripted circuit, air maneuvers and braked stand stay bit-identical to the model before the split, as in decision 143.
+Done (decision 154):
 
-`RotorcraftModel` in `sim/flight/rotor/` implements `Airframe`. Free Flight, the chase camera, the HUD frame and the outcomes take an `Airframe`.
+- `sim/flight/airframe.ts`: the `Airframe` interface the rest of the code reads (position, velocity, attitude, body rates, wind, time, mass and fuel, crash state, the `supports` it stands on, `place`, `step(controls, ground)`) and `AirframeTelemetry`, the telemetry every airframe keeps (attitude, air data, load factor, radar altitude, forces, weight on the supports).
+- `sim/flight/rigidBody.ts`: free functions over a `RigidBodyState`: gravity, the air's velocity in body axes, Euler's equations, the semi-implicit integrator, attitude from heading, pitch and bank, body axes, the attitude telemetry and a point's velocity.
+- `sim/flight/contact.ts`: the ground query, support points, the wheel's strut and bristle tire (`wheelForce`, which returns `ON_WATER` and never crashes anything itself), hard points and the support height. Skids join as a sibling of `wheelForce` built from the same strut and bristle code (H3).
+- A lockstep test: 15 scenarios hash the Kestrel's whole state after every step, recorded on the code before the split, on Node 22 and Node 24.
+
+`RotorcraftModel` in `sim/flight/rotor/` will implement `Airframe`. The outcomes monitor, the landing aid, the chase camera's feed (`followAirframe`) and Free Flight's wind take an `Airframe`; the jet's HUD layout, warnings, spawn, test pilot and director stay with `FlightModel`.
 
 ### The rotor model (`sim/flight/rotor/`)
 

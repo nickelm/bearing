@@ -18,7 +18,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { runScenario, SAMPLE_NAMES, SCENARIOS } from './helpers/lockstep';
+import { LIB, runScenario, SAMPLE_NAMES, SCENARIOS } from './helpers/lockstep';
 import type { Digest } from './helpers/lockstep';
 
 interface Fixture {
@@ -89,6 +89,25 @@ describe('the Kestrel in lockstep with its recorded flight', () => {
       }
     });
   }
+
+  it('tells one last bit at one step apart (negative control)', () => {
+    const hash = fixture.hashes[V8]?.['hard-landing'];
+    if (RECORD || hash === undefined) return;
+    // The next double above the velocity's x after the air start, nothing else.
+    const f = new Float64Array(1);
+    const i = new BigInt64Array(f.buffer);
+    const nudged = {
+      ...LIB,
+      spawnInAir: (...args: Parameters<typeof LIB.spawnInAir>) => {
+        LIB.spawnInAir(...args);
+        const m = args[0];
+        f[0] = m.vel.x;
+        i[0]! += m.vel.x >= 0 ? 1n : -1n;
+        m.vel.x = f[0]!;
+      },
+    };
+    expect(runScenario('hard-landing', nudged).hash).not.toBe(hash);
+  });
 
   if (RECORD) {
     it('writes the fixture', () => {

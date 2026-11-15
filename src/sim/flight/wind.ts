@@ -1,7 +1,7 @@
 /**
  * The air's velocity at an aircraft, from the weather (decision 143): the
  * flight model takes its airspeed relative to the moving air
- * (`FlightModel.wind`), so a crosswind drifts the aircraft, a headwind
+ * (`Airframe.wind`), so a crosswind drifts the aircraft, a headwind
  * shortens the takeoff roll, and rough air shakes it.
  *
  * `airVelocity` adds two parts:

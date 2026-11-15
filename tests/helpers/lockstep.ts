@@ -12,6 +12,8 @@ import { rng } from '../../src/core/rng';
 import { KNOT } from '../../src/core/units';
 import { Vec3d } from '../../src/core/vec3d';
 import { MIL_DETENT, neutralControls } from '../../src/sim/flight/controlLaws';
+import { along, FlightDirector } from '../../src/sim/flight/flightDirector';
+import type { DirectorTarget } from '../../src/sim/flight/flightDirector';
 import type { FlightControls } from '../../src/sim/flight/controlLaws';
 import { FLIGHT_STEP } from '../../src/sim/flight/flightModel';
 import type { FlightModel, GroundQuery } from '../../src/sim/flight/flightModel';
@@ -36,6 +38,8 @@ export interface LockstepLib {
   spawnInAir: typeof spawnInAir;
   pilot: (r: Runway, end: RunwayEnd) => { fly: TestPilot['fly']; phase: string };
   monitor: (runways: Runway[]) => { update: FlightMonitor['update'] };
+  director: () => { fly: FlightDirector['fly'] };
+  along: typeof along;
 }
 
 export const LIB: LockstepLib = {
@@ -44,6 +48,8 @@ export const LIB: LockstepLib = {
   spawnInAir,
   pilot: (r, end) => new TestPilot(r, end, RADIUS),
   monitor: (runways) => new FlightMonitor(runways, RADIUS),
+  director: () => new FlightDirector(),
+  along,
 };
 
 export interface Digest {
@@ -200,7 +206,10 @@ interface Run {
   control: (i: number, ctl: FlightControls) => boolean | void;
 }
 
-function record(lib: LockstepLib, run: Run): Digest {
+/** Called after every step with the model, the step's index and the events it gave (preview tools). */
+export type StepHook = (m: FlightModel, i: number, events: readonly FlightEvent[]) => void;
+
+function record(lib: LockstepLib, run: Run, hook?: StepHook): Digest {
   const { m, ground } = run;
   const ctl = neutralControls();
   const mon = lib.monitor(run.runways);
@@ -213,11 +222,13 @@ function record(lib: LockstepLib, run: Run): Digest {
   for (; i < n && !m.crashed; i++) {
     if (run.control(i, ctl) === false) break;
     m.step(ctl, ground);
-    for (const e of mon.update(m, FLIGHT_STEP)) {
+    const stepEvents = mon.update(m, FLIGHT_STEP);
+    for (const e of stepEvents) {
       const d = describeEvent(e);
       events.push(d);
       h.text(d);
     }
+    hook?.(m, i, stepEvents);
     stateNumbers(m, nums);
     for (const x of nums) h.number(x);
     if (i % 600 === 0) {
@@ -290,7 +301,14 @@ export type ScenarioName =
   | 'gear-up'
   | 'hard-landing'
   | 'ditching'
-  | 'hill';
+  | 'hill'
+  | 'respawn'
+  | 'tail-slide'
+  | 'mouse-aim'
+  | 'free-pedal-roll'
+  | 'belly-ditching'
+  | 'excursion'
+  | 'stand-gale';
 
 export const SCENARIOS: readonly ScenarioName[] = [
   'circuit',
@@ -301,9 +319,16 @@ export const SCENARIOS: readonly ScenarioName[] = [
   'hard-landing',
   'ditching',
   'hill',
+  'respawn',
+  'tail-slide',
+  'mouse-aim',
+  'free-pedal-roll',
+  'belly-ditching',
+  'excursion',
+  'stand-gale',
 ];
 
-export function runScenario(name: ScenarioName, lib: LockstepLib = LIB): Digest {
+export function runScenario(name: ScenarioName, lib: LockstepLib = LIB, hook?: StepHook): Digest {
   const runway = testRunway();
   const [end, other] = runwayEnds(runway);
   const flat = flatGround(runway);
@@ -312,139 +337,348 @@ export function runScenario(name: ScenarioName, lib: LockstepLib = LIB): Digest 
     case 'circuit': {
       lib.spawnOnRunway(m, runway, end);
       const pilot = lib.pilot(runway, end);
-      return record(lib, {
-        m,
-        ground: flat,
-        runways: [runway],
-        seconds: 900,
-        control: (_i, ctl) => {
-          if (pilot.phase === 'stopped') return false;
-          pilot.fly(m, ctl, FLIGHT_STEP);
+      return record(
+        lib,
+        {
+          m,
+          ground: flat,
+          runways: [runway],
+          seconds: 900,
+          control: (_i, ctl) => {
+            if (pilot.phase === 'stopped') return false;
+            pilot.fly(m, ctl, FLIGHT_STEP);
+          },
         },
-      });
+        hook,
+      );
     }
     case 'maneuvers': {
       lib.spawnInAir(m, runway, end, 7000, 300 * KNOT);
       const r = rng(7, 'lockstep-maneuvers');
-      return record(lib, {
-        m,
-        ground: mixedGround(runway),
-        runways: [runway],
-        seconds: 150,
-        control: (i, ctl) => {
-          const t = i * FLIGHT_STEP;
-          if (i % 30 === 0) {
-            ctl.pitch = r.range(-1, 1);
-            ctl.roll = r.range(-1, 1);
-            ctl.yaw = r.range(-1, 1);
-          }
-          if (i % 240 === 0) {
-            ctl.throttle = t < 40 ? 1 : r.range(0, 1);
-            ctl.speedbrake = r.range(0, 1) > 0.6;
-            ctl.gearDown = t > 60 && t < 75;
-          }
-          // Keep it high: wings level and pull when low or diving.
-          if (m.telemetry.radarAltitude < 3500 || m.telemetry.gamma < -0.6) {
-            ctl.roll = -0.8 * Math.sign(m.telemetry.bank) * Math.min(1, Math.abs(m.telemetry.bank));
-            ctl.pitch = Math.abs(m.telemetry.bank) < 1.2 ? 0.7 : 0;
-          }
+      return record(
+        lib,
+        {
+          m,
+          ground: mixedGround(runway),
+          runways: [runway],
+          seconds: 150,
+          control: (i, ctl) => {
+            const t = i * FLIGHT_STEP;
+            if (i % 30 === 0) {
+              ctl.pitch = r.range(-1, 1);
+              ctl.roll = r.range(-1, 1);
+              ctl.yaw = r.range(-1, 1);
+            }
+            if (i % 240 === 0) {
+              ctl.throttle = t < 40 ? 1 : r.range(0, 1);
+              ctl.speedbrake = r.range(0, 1) > 0.6;
+              ctl.gearDown = t > 60 && t < 75;
+            }
+            // Keep it high: wings level and pull when low or diving.
+            if (m.telemetry.radarAltitude < 3500 || m.telemetry.gamma < -0.6) {
+              ctl.roll =
+                -0.8 * Math.sign(m.telemetry.bank) * Math.min(1, Math.abs(m.telemetry.bank));
+              ctl.pitch = Math.abs(m.telemetry.bank) < 1.2 ? 0.7 : 0;
+            }
+          },
         },
-      });
+        hook,
+      );
     }
     case 'stand-and-taxi': {
       lib.spawnOnRunway(m, runway, end);
-      return record(lib, {
-        m,
-        ground: flat,
-        runways: [runway],
-        seconds: 90,
-        control: (i, ctl) => {
-          const t = i * FLIGHT_STEP;
-          ctl.parkingBrake = t < 30;
-          ctl.throttle = t < 5 ? MIL_DETENT : t < 30 ? 0 : t < 48 ? 0.2 : 0;
-          ctl.yaw = t > 38 && t < 40 ? 0.15 : t > 43 && t < 45 ? -0.15 : 0;
-          ctl.brakeLeft = t > 52 && t < 60 ? 0.6 : 0;
-          ctl.brakeRight = t > 56 ? 1 : 0;
+      return record(
+        lib,
+        {
+          m,
+          ground: flat,
+          runways: [runway],
+          seconds: 90,
+          control: (i, ctl) => {
+            const t = i * FLIGHT_STEP;
+            ctl.parkingBrake = t < 30;
+            ctl.throttle = t < 5 ? MIL_DETENT : t < 30 ? 0 : t < 48 ? 0.2 : 0;
+            ctl.yaw = t > 38 && t < 40 ? 0.15 : t > 43 && t < 45 ? -0.15 : 0;
+            ctl.brakeLeft = t > 52 && t < 60 ? 0.6 : 0;
+            ctl.brakeRight = t > 56 ? 1 : 0;
+          },
         },
-      });
+        hook,
+      );
     }
     case 'crosswind-roll': {
       lib.spawnOnRunway(m, runway, end);
       const up = m.pos.clone().normalize();
       const cross = headingVector(up, end.heading + Math.PI / 2).scale(7);
-      return record(lib, {
-        m,
-        ground: flat,
-        runways: [runway],
-        seconds: 45,
-        control: (i, ctl) => {
-          const t = i * FLIGHT_STEP;
-          gustyWind(m, cross, t);
-          ctl.throttle = 1;
-          ctl.yaw = t > 8 && t < 8.5 ? 0.3 : 0;
-          ctl.pitch = m.telemetry.cas > 150 * KNOT ? 0.6 : 0;
-          ctl.gearDown = t < 30;
+      return record(
+        lib,
+        {
+          m,
+          ground: flat,
+          runways: [runway],
+          seconds: 45,
+          control: (i, ctl) => {
+            const t = i * FLIGHT_STEP;
+            gustyWind(m, cross, t);
+            ctl.throttle = 1;
+            ctl.yaw = t > 8 && t < 8.5 ? 0.3 : 0;
+            ctl.pitch = m.telemetry.cas > 150 * KNOT ? 0.6 : 0;
+            ctl.gearDown = t < 30;
+          },
         },
-      });
+        hook,
+      );
     }
     case 'gear-up': {
       lib.spawnInAir(m, runway, end, 150, 200 * KNOT);
-      return record(lib, {
-        m,
-        ground: flat,
-        runways: [runway],
-        seconds: 60,
-        control: (_i, ctl) => {
-          ctl.gearDown = false;
-          ctl.throttle = 0;
-          ctl.pitch = m.telemetry.gamma > -3 * (Math.PI / 180) ? -0.2 : 0.05;
+      return record(
+        lib,
+        {
+          m,
+          ground: flat,
+          runways: [runway],
+          seconds: 60,
+          control: (_i, ctl) => {
+            ctl.gearDown = false;
+            ctl.throttle = 0;
+            ctl.pitch = m.telemetry.gamma > -3 * (Math.PI / 180) ? -0.2 : 0.05;
+          },
         },
-      });
+        hook,
+      );
     }
     case 'hard-landing': {
       lib.spawnInAir(m, runway, other, 60, 170 * KNOT);
       m.gear = 1;
-      return record(lib, {
-        m,
-        ground: flat,
-        runways: [runway],
-        seconds: 40,
-        control: (_i, ctl) => {
-          ctl.gearDown = true;
-          ctl.throttle = 0;
-          ctl.pitch = m.telemetry.verticalSpeed > -7 ? -0.35 : 0;
+      return record(
+        lib,
+        {
+          m,
+          ground: flat,
+          runways: [runway],
+          seconds: 40,
+          control: (_i, ctl) => {
+            ctl.gearDown = true;
+            ctl.throttle = 0;
+            ctl.pitch = m.telemetry.verticalSpeed > -7 ? -0.35 : 0;
+          },
         },
-      });
+        hook,
+      );
     }
     case 'ditching': {
       lib.spawnInAir(m, runway, end, 400, 250 * KNOT);
-      return record(lib, {
-        m,
-        ground: mixedGround(runway),
-        runways: [runway],
-        seconds: 120,
-        control: (i, ctl) => {
-          ctl.throttle = 0.5;
-          ctl.gearDown = i * FLIGHT_STEP > 20;
-          ctl.pitch = m.telemetry.gamma > -2 * (Math.PI / 180) ? -0.15 : 0.02;
+      return record(
+        lib,
+        {
+          m,
+          ground: mixedGround(runway),
+          runways: [runway],
+          seconds: 120,
+          control: (i, ctl) => {
+            ctl.throttle = 0.5;
+            ctl.gearDown = i * FLIGHT_STEP > 20;
+            ctl.pitch = m.telemetry.gamma > -2 * (Math.PI / 180) ? -0.15 : 0.02;
+          },
         },
-      });
+        hook,
+      );
     }
     case 'hill': {
       lib.spawnInAir(m, runway, end, 300, 280 * KNOT);
-      return record(lib, {
-        m,
-        ground: mixedGround(runway, true),
-        runways: [runway],
-        seconds: 120,
-        control: (_i, ctl) => {
-          // Straight and level into the hill on the extended centerline.
-          ctl.throttle = 0.7;
-          ctl.gearDown = false;
-          ctl.roll = -0.5 * m.telemetry.bank;
-          ctl.pitch = m.telemetry.verticalSpeed < 0 ? 0.1 : 0;
+      return record(
+        lib,
+        {
+          m,
+          ground: mixedGround(runway, true),
+          runways: [runway],
+          seconds: 120,
+          control: (_i, ctl) => {
+            // Straight and level into the hill on the extended centerline.
+            ctl.throttle = 0.7;
+            ctl.gearDown = false;
+            ctl.roll = -0.5 * m.telemetry.bank;
+            ctl.pitch = m.telemetry.verticalSpeed < 0 ? 0.1 : 0;
+          },
         },
-      });
+        hook,
+      );
+    }
+    case 'respawn': {
+      // A used model: rolled in a gusty crosswind, crashed, placed on the other end, flown again.
+      lib.spawnOnRunway(m, runway, end);
+      const up = m.pos.clone().normalize();
+      const cross = headingVector(up, end.heading + Math.PI / 2).scale(7);
+      return record(
+        lib,
+        {
+          m,
+          ground: flat,
+          runways: [runway],
+          seconds: 30,
+          control: (i, ctl) => {
+            const t = i * FLIGHT_STEP;
+            if (i === 1200) {
+              m.crash('respawn');
+              lib.spawnOnRunway(m, runway, other);
+            }
+            gustyWind(m, cross, t);
+            ctl.parkingBrake = t > 10 && t < 12;
+            ctl.throttle = t < 10 ? 1 : t < 12 ? 0 : MIL_DETENT;
+            ctl.yaw = t > 4 && t < 4.6 ? 0.2 : 0;
+          },
+        },
+        hook,
+      );
+    }
+    case 'tail-slide': {
+      // Straight up at 120 m/s at idle with the stick let go (as in flightWind.test.ts).
+      lib.spawnInAir(m, runway, end, 6000, 250 * KNOT);
+      const up = m.pos.clone().normalize();
+      const pitch = 88 * (Math.PI / 180);
+      const nose = headingVector(up, end.heading)
+        .scale(Math.cos(pitch))
+        .addScaled(up, Math.sin(pitch));
+      m.place(m.pos.clone(), nose.scale(120), end.heading, pitch);
+      m.lawState.airborne = 30;
+      m.gear = 0;
+      return record(
+        lib,
+        {
+          m,
+          ground: flat,
+          runways: [runway],
+          seconds: 40,
+          control: (_i, ctl) => {
+            ctl.gearDown = false;
+            ctl.throttle = 0;
+          },
+        },
+        hook,
+      );
+    }
+    case 'mouse-aim': {
+      // The flight director toward directions that change every 4 s, as mouse aim drives it.
+      lib.spawnInAir(m, runway, end, 4000, 350 * KNOT);
+      const director = lib.director();
+      const r = rng(11, 'lockstep-mouse-aim');
+      const dir = new Vec3d();
+      return record(
+        lib,
+        {
+          m,
+          ground: flat,
+          runways: [runway],
+          seconds: 90,
+          control: (i, ctl) => {
+            if (i % 480 === 0) {
+              const up = m.pos.clone().normalize();
+              const course = r.range(0, 2 * Math.PI);
+              const climb = r.range(-0.3, 0.3);
+              dir
+                .copy(headingVector(up, course))
+                .scale(Math.cos(climb))
+                .addScaled(up, Math.sin(climb));
+              ctl.throttle = r.range(0.4, 1);
+            }
+            const a = lib.along(m, dir);
+            const target: DirectorTarget = {
+              course: a.course,
+              gamma: a.gamma,
+              speed: null,
+              maxBank: 80 * (Math.PI / 180),
+              maxTurnRate: 20 * (Math.PI / 180),
+              maxLoadDelta: 4,
+            };
+            director.fly(m, target, ctl, FLIGHT_STEP);
+            ctl.gearDown = false;
+          },
+        },
+        hook,
+      );
+    }
+    case 'free-pedal-roll': {
+      // A takeoff roll in a gusty crosswind with the pedals never touched: the track hold steers.
+      lib.spawnOnRunway(m, runway, end);
+      const up = m.pos.clone().normalize();
+      const cross = headingVector(up, end.heading - Math.PI / 2).scale(6);
+      return record(
+        lib,
+        {
+          m,
+          ground: flat,
+          runways: [runway],
+          seconds: 25,
+          control: (i, ctl) => {
+            gustyWind(m, cross, i * FLIGHT_STEP);
+            ctl.throttle = 0.6;
+          },
+        },
+        hook,
+      );
+    }
+    case 'belly-ditching': {
+      // Gear up, gliding into the water: a hard point, not a wheel, finds it.
+      lib.spawnInAir(m, runway, end, 250, 220 * KNOT);
+      return record(
+        lib,
+        {
+          m,
+          ground: mixedGround(runway),
+          runways: [runway],
+          seconds: 120,
+          control: (_i, ctl) => {
+            ctl.gearDown = false;
+            ctl.throttle = 0.45;
+            ctl.pitch = m.telemetry.gamma > -1.5 * (Math.PI / 180) ? -0.12 : 0.03;
+          },
+        },
+        hook,
+      );
+    }
+    case 'excursion': {
+      // Full power with a pedal held in a crosswind: off the side of the runway at speed.
+      lib.spawnOnRunway(m, runway, end);
+      const up = m.pos.clone().normalize();
+      const cross = headingVector(up, end.heading + Math.PI / 2).scale(8);
+      return record(
+        lib,
+        {
+          m,
+          ground: flat,
+          runways: [runway],
+          seconds: 40,
+          control: (i, ctl) => {
+            const t = i * FLIGHT_STEP;
+            gustyWind(m, cross, t);
+            ctl.throttle = MIL_DETENT;
+            ctl.yaw = t > 6 ? 0.5 : 0;
+          },
+        },
+        hook,
+      );
+    }
+    case 'stand-gale': {
+      // Parked with the brake set at military power, then in a side gale that rises past its grip.
+      lib.spawnOnRunway(m, runway, end);
+      const up = m.pos.clone().normalize();
+      const side = headingVector(up, end.heading + Math.PI / 2);
+      return record(
+        lib,
+        {
+          m,
+          ground: flat,
+          runways: [runway],
+          seconds: 40,
+          control: (i, ctl) => {
+            const t = i * FLIGHT_STEP;
+            ctl.parkingBrake = true;
+            ctl.throttle = t < 10 ? MIL_DETENT : 0;
+            m.wind.copy(side).scale(t < 10 ? 0 : Math.min(60, 15 + 2 * (t - 10)));
+          },
+        },
+        hook,
+      );
     }
   }
 }

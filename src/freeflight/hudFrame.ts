@@ -7,6 +7,7 @@
 import { DEG } from '../core/units';
 import type { Vec3d } from '../core/vec3d';
 import type { FlightControls } from '../sim/flight/controlLaws';
+import type { Airframe } from '../sim/flight/airframe';
 import type { FlightModel } from '../sim/flight/flightModel';
 import { flightWarnings } from '../sim/flight/outcomes';
 import {
@@ -28,7 +29,7 @@ export const AID_RANGE = 80_000;
 
 /** The destination runway: the nearest within range, and the end being approached. */
 export function destination(
-  m: FlightModel,
+  m: Airframe,
   runways: readonly Runway[],
 ): { runway: Runway; end: RunwayEnd } | null {
   const up = m.pos.clone().normalize();
@@ -51,7 +52,7 @@ export function destination(
  * the aim point), and the runway's outline relative to `eye` for the HUD.
  */
 export function landingAid(
-  m: FlightModel,
+  m: Airframe,
   runways: readonly Runway[],
   eye: Readonly<Vec3d>,
 ): HudLandingAid | null {

@@ -11,7 +11,7 @@
  */
 import { Vec3d } from '../core/vec3d';
 import type { GradePad, SurfaceGrading } from '../render/common/terrain/grading';
-import type { GroundQuery, SurfaceKind } from '../sim/flight/flightModel';
+import type { GroundQuery, SurfaceKind } from '../sim/flight/contact';
 import {
   nearestRunway,
   onRunway,

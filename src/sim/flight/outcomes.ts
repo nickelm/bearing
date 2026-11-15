@@ -6,6 +6,7 @@
  * 6 m/s, wheels on open ground) but never moves it.
  */
 import { DEG } from '../../core/units';
+import type { Airframe } from './airframe';
 import type { FlightModel } from './flightModel';
 import {
   endFor,
@@ -94,7 +95,7 @@ export class FlightMonitor {
   }
 
   /** Checks the model after a step of `dt` s; returns the events of this step. */
-  update(model: FlightModel, dt: number): FlightEvent[] {
+  update(model: Airframe, dt: number): FlightEvent[] {
     const out: FlightEvent[] = [];
     const t = model.telemetry;
     if (model.crashed) {
@@ -104,7 +105,7 @@ export class FlightMonitor {
       }
       return out;
     }
-    const loaded = model.wheels.filter((w) => w.load > 0);
+    const loaded = model.supports.filter((w) => w.load > 0);
     const onGround = loaded.length > 0;
     if (!onGround) {
       this.lastVs = t.verticalSpeed;
@@ -155,7 +156,7 @@ export class FlightMonitor {
   }
 
   /** The runway under the aircraft (on its pavement or overruns), or null. */
-  runwayUnder(model: FlightModel): Runway | null {
+  runwayUnder(model: Airframe): Runway | null {
     const n = nearestRunway(this.runways, model.pos.clone().normalize(), this.radius);
     if (!n || n.distance > n.runway.length) return null;
     const c = toRunway(n.runway, runwayFrame(n.runway), model.pos, this.radius);
@@ -164,7 +165,7 @@ export class FlightMonitor {
       : null;
   }
 
-  private touchdown(model: FlightModel, sinkRate: number): Touchdown {
+  private touchdown(model: Airframe, sinkRate: number): Touchdown {
     const t = model.telemetry;
     const runway = this.runwayUnder(model);
     let end: RunwayEnd | null = null;
@@ -193,7 +194,7 @@ export class FlightMonitor {
   }
 }
 
-/** The warnings that apply now. */
+/** The warnings that apply now (the Kestrel's: gear speed, tail strike, stall, pull up). */
 export function flightWarnings(model: FlightModel): FlightWarning[] {
   const t = model.telemetry;
   const out: FlightWarning[] = [];

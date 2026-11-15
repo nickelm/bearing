@@ -27,6 +27,8 @@ import { modelSpec } from '../render/common/models/library';
 import type { StrategicScene } from '../render/strategic/strategicScene';
 import { FlightDirector, along } from '../sim/flight/flightDirector';
 import type { FlightControls } from '../sim/flight/controlLaws';
+import { followAirframe } from '../render/sim/camera/chaseCamera';
+import type { Airframe } from '../sim/flight/airframe';
 import { FLIGHT_STEP, FlightModel } from '../sim/flight/flightModel';
 import { parseFlightSpec } from '../sim/flight/flightSpec';
 import { FlightMonitor } from '../sim/flight/outcomes';
@@ -511,13 +513,7 @@ export class FreeFlight {
   }
 
   private updateChase(): void {
-    const m = this.model!;
-    const t = this.deps.globe.chase.target;
-    t.pos.copy(m.pos);
-    m.bodyAxis(0, t.forward);
-    m.bodyAxis(2, t.up).scale(-1);
-    t.velocity.copy(m.vel);
-    t.onGround = m.onGround;
+    followAirframe(this.deps.globe.chase.target, this.model!);
   }
 
   /** Advances the mode by `dt` real seconds; call before the scene renders. */
@@ -600,7 +596,7 @@ export class FreeFlight {
   }
 
   /** The air's velocity at the aircraft from the weather, before a step of the model. */
-  private setWind(m: FlightModel): void {
+  private setWind(m: Airframe): void {
     if (!this.options.wind) {
       m.wind.set(0, 0, 0);
       return;
