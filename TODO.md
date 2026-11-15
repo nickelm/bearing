@@ -781,7 +781,7 @@ The thrust-disc model, the speed-scheduled controls, the Assisted preset, the ho
 - [x] Shared `Airframe` interface, `rigidBody.ts` and `contact.ts` split out of `flightModel.ts`; Free Flight, the chase camera, the HUD frame and the outcomes read the interface; a lockstep test that the Kestrel's circuit, air maneuvers and braked stand stay bit-identical (decision 154: 15 scenarios hashed every step on Node 22 and 24, recorded before the split; `tools/lockstep.preview.ts` charts them)
   - [ ] Free Flight's flown model as a pair keyed by `kind` (model, controls, director, pose, HUD builder) when the aircraft choice arrives (item below); until then `FreeFlight.model` stays a `FlightModel`
   - [ ] Split `buildHudFrame` into the fields every airframe has and the jet's, for the hover HUD
-- [ ] Shared director interface (`sim/flight/director.ts`); `DirectorTarget` gains optional heading, ground-velocity and height-reference fields that the fixed-wing director ignores
+- [x] Shared director interface (`sim/flight/director.ts`); `DirectorTarget` gains optional heading, ground-velocity and height-reference fields that the fixed-wing director ignores (decision 156: also a point to hover over; a test that the jet's controls are unchanged with them)
 - [ ] `rotor/rotorSpec.ts`: the spec's `rotor` block (masses, inertias, rotor radius, blades, solidity, hub type and stiffness, flapping time constant, power available by altitude and temperature, power-required curve, tail rotor or yaw authority, drag, fin, stabilizer and wing areas, never-exceed speed, gear, hook points, mouse-turn thresholds), with validation and tests
 - [ ] Specs for the Little Bird and Black Hawk analogues: names, public figures marked as tuning values, Free Flight only (not in the air war's type table)
 - [ ] Inflow and thrust (`inflow.ts`): Glauert momentum inflow by a fixed number of Newton steps, closed-form thrust from collective, ground effect (Cheeseman–Bennett), an empirical branch for steep descent; tests that translational lift arrives between 15 and 25 kt and that ground effect cuts hover power within one diameter
@@ -799,6 +799,7 @@ The thrust-disc model, the speed-scheduled controls, the Assisted preset, the ho
 - [ ] Helicopter `ChaseRig` from the spec: closer and higher, lifting and tilting down as airspeed falls, free look without spring-back in the hover; tests for the schedule
 - [ ] Hover HUD in `hud.ts` and `hudFrame.ts`: ground-plane velocity vector with acceleration cue, radar altitude with vertical speed, torque, rotor RPM, landing zone marker
 - [ ] Free Flight: aircraft choice on the start screen and in the URL (`&aircraft=`), helipads painted on airbase aprons on the graded pad, spawn on a pad or in a hover, a landing zone marker at a point picked on the start screen's map
+  - [ ] The outcomes monitor's runway rules (touched down away from a runway, ran off the runway or the paved field) by kind: a helicopter may land and hover-taxi anywhere; its own hazards (slope, rollover, rotor strike) come with H3 and H4
 - [ ] Maneuver tests: 60 s hover in ground effect within 1 m with hover hold; a 360° pedal turn within the type's time; a nap-of-the-earth course at 30 m radar altitude over synthetic ridges without contact
 - [ ] Previews: `tools/freeflight.preview.ts` shots of a hover over a pad, a transition and low flight; a helicopter scene in `tools/freeflight.session.mjs` and `tools/browser.smoke.mjs`
 - [ ] Adversarial probe workflow on fly-by-mouse and the Assisted preset before the owner flies it (as in decision 136)
@@ -822,6 +823,7 @@ Mouse aim, direct control with flight stick support, all assists and presets, an
 Skids and wheels, slope and confined-area landings, dynamic rollover, sling loads with the hook camera, hoisting, fast-roping.
 
 - [ ] Skids as sliding contact points and wheels with castoring tail wheel or steered nose wheel; slope limits by type; ground taxi for wheeled types
+  - [ ] The ground's normal in `GroundQuery` and `contact.ts`: today the strut acts along the local vertical and friction in the horizontal plane (the Kestrel's level pads), so nothing slides down a slope; the Kestrel must stay bit-identical where the normal is vertical
 - [ ] Dynamic rollover from the contact physics, with a warning under protection; test of a slope takeoff that rolls over with protection off
 - [ ] Slope and confined-area landings; tests of a slope landing at the type limit and a rejected one beyond it
 - [ ] Rooftop and structure contact: the ground query includes building tops (Little Bird rooftop landings); tree strikes from the canopy height field once it exists (decision 148)

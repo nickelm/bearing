@@ -9,60 +9,22 @@
  * of a coordinated turn at that rate; the flight path error sets a climb rate,
  * and from both the load factor (or, at low speed, the pitch rate) that the
  * stick asks for. An integrator on calibrated airspeed drives the throttle.
+ * The interface and the target it reads are in director.ts (decision 156).
  */
-import type { Vec3d } from '../../core/vec3d';
 import { DEG } from '../../core/units';
 import { SEA_LEVEL_DENSITY } from './atmosphere';
 import { MIL_DETENT, pitchBlend, pitchCommand } from './controlLaws';
 import type { FlightControls } from './controlLaws';
 import { lookup } from './flightSpec';
+import type { Director, DirectorTarget } from './director';
 import type { FlightModel } from './flightModel';
-import type { RigidBodyState } from './rigidBody';
 import { headingOf } from './runway';
 
-export interface DirectorTarget {
-  /** Course over the ground (rad, clockwise from north). */
-  course: number;
-  /** Flight path angle (rad, + climbing). */
-  gamma: number;
-  /** Calibrated airspeed to hold (m/s), or null to leave the throttle alone. */
-  speed: number | null;
-  /** Bank limit (rad); default 60°. */
-  maxBank?: number;
-  /** Turn-rate limit (rad/s); default 12°/s. */
-  maxTurnRate?: number;
-  /**
-   * Most load factor (g) the path change may add to or take from the path's own
-   * cos γ / cos(bank); default 0.6 g, so a gentle descent is not a push to 0.2 g.
-   */
-  maxLoadDelta?: number;
-  /** Whether the throttle may enter the afterburner. */
-  afterburner?: boolean;
-}
+export type { DirectorTarget, GroundVelocity, HeightHold } from './director';
+export { along, toward } from './director';
 
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
-
-/** Course and flight path angle from the aircraft toward world point `point`. */
-export function toward(
-  model: Readonly<Pick<RigidBodyState, 'pos'>>,
-  point: Readonly<Vec3d>,
-): { course: number; gamma: number } {
-  const up = model.pos.clone().normalize();
-  const d = point.clone().sub(model.pos);
-  const n = d.length() || 1;
-  return { course: headingOf(up, d), gamma: Math.asin(clamp(d.dot(up) / n, -1, 1)) };
-}
-
-/** Course and flight path angle of world direction `dir` at the aircraft. */
-export function along(
-  model: Readonly<Pick<RigidBodyState, 'pos'>>,
-  dir: Readonly<Vec3d>,
-): { course: number; gamma: number } {
-  const up = model.pos.clone().normalize();
-  const n = dir.length() || 1;
-  return { course: headingOf(up, dir), gamma: Math.asin(clamp(dir.dot(up) / n, -1, 1)) };
-}
 
 /**
  * The calibrated airspeed (m/s) at which the aircraft flies at 1 g and angle of
@@ -74,7 +36,8 @@ export function speedForAlpha(model: FlightModel, alpha = 13 * DEG): number {
   return Math.sqrt((2 * model.mass * 9.806_65) / (SEA_LEVEL_DENSITY * s.wing.area * cl));
 }
 
-export class FlightDirector {
+/** The fixed-wing director: bank-to-turn through the F-16-style control laws. It ignores the rotary-wing target fields. */
+export class FlightDirector implements Director<FlightModel, FlightControls> {
   /** Integrated speed error (m·s/s) of the autothrottle. */
   private throttleI = 0;
   /** Gains: course → turn rate (1/s), bank error → roll rate (1/s), flight path → climb rate (1/s). */

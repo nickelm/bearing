@@ -7,7 +7,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { Quatd } from '../src/core/quat';
-import { DEG } from '../src/core/units';
+import { DEG, KNOT } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
 import type { Airframe, AirframeTelemetry } from '../src/sim/flight/airframe';
 import { followAirframe } from '../src/render/sim/camera/chaseCamera';
@@ -24,6 +24,11 @@ import {
 import type { ContactState, GroundQuery, TireSpec, WheelContact } from '../src/sim/flight/contact';
 import { standardAtmosphere } from '../src/sim/flight/atmosphere';
 import { neutralControls } from '../src/sim/flight/controlLaws';
+import type { FlightControls } from '../src/sim/flight/controlLaws';
+import { along, toward } from '../src/sim/flight/director';
+import type { Director, DirectorTarget } from '../src/sim/flight/director';
+import { FlightDirector } from '../src/sim/flight/flightDirector';
+import type { FlightModel } from '../src/sim/flight/flightModel';
 import { FlightMonitor } from '../src/sim/flight/outcomes';
 import {
   airVelocityBody,
@@ -37,7 +42,7 @@ import {
 } from '../src/sim/flight/rigidBody';
 import type { AttitudeTelemetry, Inertia, RigidBodyState } from '../src/sim/flight/rigidBody';
 import { headingVector, runwayEnds, runwayFrame, runwayPoint } from '../src/sim/flight/runway';
-import { spawnOnRunway } from '../src/sim/flight/spawn';
+import { spawnInAir, spawnOnRunway } from '../src/sim/flight/spawn';
 import { flatGround, kestrel, RADIUS, testRunway } from './helpers/flight';
 
 function body(pos = new Vec3d(0, 0, RADIUS + 1000)): RigidBodyState {
@@ -446,5 +451,52 @@ describe('an airframe that is not the Kestrel', () => {
     expect(t.forward.dot(s.bodyAxis(0))).toBeCloseTo(1, 12);
     expect(t.up.dot(s.pos.clone().normalize())).toBeCloseTo(1, 9);
     expect(t.onGround).toBe(false);
+  });
+});
+
+describe('the director interface', () => {
+  it("leaves the fixed-wing director's controls alone when a target carries rotary-wing fields", () => {
+    const runway = testRunway();
+    const ground = flatGround(runway);
+    const end = runwayEnds(runway)[0];
+    const fly = (rotary: boolean) => {
+      const m = kestrel();
+      spawnInAir(m, runway, end, 3000, 300 * KNOT);
+      const d: Director<FlightModel, FlightControls> = new FlightDirector();
+      const ctl = neutralControls();
+      ctl.throttle = 0.6;
+      const out: number[] = [];
+      for (let i = 0; i < 600; i++) {
+        const t: DirectorTarget = {
+          course: end.heading + 0.5,
+          gamma: 0.05,
+          speed: 280 * KNOT,
+          ...(rotary
+            ? {
+                heading: 1,
+                groundVelocity: { north: 3, east: -2, up: 1 },
+                hoverPoint: m.pos.clone(),
+                height: { reference: 'radar' as const, value: 30 },
+              }
+            : {}),
+        };
+        d.fly(m, t, ctl, FLIGHT_STEP);
+        m.step(ctl, ground);
+        out.push(ctl.pitch, ctl.roll, ctl.yaw, ctl.throttle);
+      }
+      return out;
+    };
+    expect(fly(true)).toEqual(fly(false));
+  });
+
+  it('points toward a world point and along a world direction', () => {
+    const b = body(new Vec3d(0, 0, RADIUS));
+    // At latitude 0, longitude 0: +X is east, +Y north, +Z up.
+    const north = toward(b, b.pos.clone().add(new Vec3d(0, 1000, 0)));
+    expect(north.course).toBeCloseTo(0, 9);
+    expect(north.gamma).toBeCloseTo(0, 9);
+    const climbEast = along(b, new Vec3d(1, 0, 1));
+    expect(climbEast.course).toBeCloseTo(Math.PI / 2, 9);
+    expect(climbEast.gamma).toBeCloseTo(Math.PI / 4, 9);
   });
 });

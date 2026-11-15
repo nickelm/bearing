@@ -2484,3 +2484,14 @@ The proposal's open questions on engine start and door gunners stay open; the pl
 **How it was checked.** The `trees` view in clear weather (its lake has a river flowing in): before, a pale patch with a blocky edge in the lake and surf stripes across the rest; after, calm water mirroring the sky with foam at the shore only. With the gust field off the patch was weaker but still there, and 10 °C warmer it was unchanged, which ruled out slicks and ice as its cause.
 
 **Reason:** Surf belongs where waves meet a shore, and white water where a river runs fast; an estimate that is only valid near the shoreline must not be used away from it.
+
+### 156. One director interface for fixed-wing aircraft and helicopters
+
+**Date:** 2026-11-15
+**Decision:** H1's second task. `sim/flight/director.ts` holds the `Director<A, C>` interface (`reset`, `fly(model, target, controls, dt)`), the `DirectorTarget` every director reads, and the geometry helpers `toward` and `along`, which now take any body with a position. `FlightDirector` implements it for the Kestrel; the helicopters' director (`rotor/heloDirector.ts`) will too, so AI pilots, scripted pilots and mouse aim drive either kind the same way (rule 12).
+
+- **The target's rotary-wing fields**, all optional: `heading` (the nose apart from the course: pedal turns, sideward and rearward flight, pointing a gun), `groundVelocity` (north, east, up in m/s, for the hover and hover taxi; replaces course, flight path and speed), `hoverPoint` (a world point to hover over, held by the director) and `height` (altitude or radar height to hold, for nap-of-the-earth flight; replaces the flight path's vertical part). The fixed-wing director ignores them; a test flies the Kestrel through 600 steps with and without them and gets the same controls.
+- `flightDirector.ts` re-exports the moved names, so no importer changes. The lockstep test passes unchanged, its `mouse-aim` scenario included.
+- **From the review of decision 154:** an adversarial review found the shared interface sound for the rotor model and no defect in the split, but two gaps the later steps must close, now TODO tasks: the outcomes monitor's runway rules would crash a helicopter that lands off the pavement (gate them by kind with the helipads, H1), and contact acts along the local vertical, so nothing slides on a slope until the ground query gives a normal (H3).
+
+**Reason:** The proposal's three control modes and the AI all hand a director a target; one interface with fields only a helicopter reads keeps that a single contract, and the jet's director stays exactly as tuned.
