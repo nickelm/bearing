@@ -486,11 +486,14 @@ Simulation view (needs S1's `render/sim/` split):
   - [ ] Palm (with the coast work)
   - [x] Owner: review proposal 0003 (accepted 2026-11-15, decision 148); the birch's crown floated over its thin trunk (owner), now lower on a thicker trunk
 - [ ] Forests for low flight (proposal 0003, decision 148), replacing the old tree LOD and denser-forest tasks:
-  - [ ] Canopy height field H with stands (composition, height, shade), CPU and GPU versions with a test that they agree; a stand map mode in `npm run maps`
-  - [ ] Canopy shell from the terrain tiles: lifted by H, cut at the edge, stand shades, the understory hand-off near the camera; preview views 30 m and 300 m over forest (the 30 m edge view joins check 2)
-  - [ ] Near trees from the kit on level-11 tiles: closed-canopy spacing, crowns only inside stands, whole edge trees, per-instance variation; retire the clumps of decision 45
-  - [ ] Edge trees and linear features: forest edges, gallery woods, tree rows along roads, lone trees; hedgerows by climate (seasonal half-range, moisture, relief, a regional term) and shelterbelts on continental plains
-  - [ ] Measure (`PERF`, then the owner's laptop and tablet); near and edge radii as quality-governor steps; aerial perspective per instance or from a froxel volume if the per-vertex march dominates
+  - [x] Canopy height field H with stands (composition, height, shade), CPU and GPU versions with a test that they agree (`worldgen/canopy.ts`, `render/common/canopyNode.ts`; decision 150)
+  - [ ] A stand map mode in `npm run maps`
+  - [x] Canopy shell from the terrain tiles: lifted by H, cut at the edge and along roads and towns, stand shades, the understory near the camera; preview views `treeline` (25 m) and `canopy` (100 m) (decision 150)
+  - [ ] The shell's edge is notched where its ramp crosses mesh triangles: visible beyond the edge trees' 1.2 km
+  - [x] Near trees from the kit on quarters of level-10 tiles: closed-canopy spacing, crowns only inside stands, whole edge trees, per-instance variation, far models beyond 350 m, culling per tree; the clumps of decision 45 retired (decision 150)
+  - [ ] Edge trees and linear features: gallery woods, tree rows along roads, lone trees; hedgerows by climate (seasonal half-range, moisture, relief, a regional term) and shelterbelts on continental plains
+  - [ ] Measure on the owner's laptop and tablet; near and edge radii as quality-governor steps (tablet 400 m and 1 km, desktop 1 km and 2 km); aerial perspective per instance or from a froxel volume if the per-vertex march dominates; GPU culling with indirect draws if the CPU re-sort costs show
+  - [ ] Owner: fly Free Flight low over forest (seed 1983 near −45.5, −28.0 has a river through dense forest) and judge the look, the stands and the frame rate
   - [ ] Line of sight from H (opaque for any sight line from or to an aircraft) and tree strikes in the ground model (with P3 and P1)
   - [ ] Seasons per species: birch yellow, oak brown, conifers green
 - [ ] Sky, haze and clouds tuned for 0–20 km only (Part I): drop orbit-only work such as the limb glow from the simulation view (the sky and the clouds are done, decisions 140 and 141; the old cloud shell and sky march remain for the debug camera above 30–50 km)

@@ -117,6 +117,32 @@ export class RoadShading {
       return vec2(cover, concrete).mul(this.style.enabled);
     })() as V2;
   }
+
+  /**
+   * 1 where a planet-centered position lies within `margin` m of any paved
+   * segment's edge, else 0: the lane cut through a forest's canopy shell along
+   * roads, runways and taxiways (decision 148). Independent of the style, so
+   * hiding the road paint does not close the lanes.
+   */
+  clearance(planetPosition: V3, start: F, count: F, margin: F, gate?: Node<'bool'>): F {
+    return Fn(() => {
+      const p = normalize(planetPosition);
+      const clear = float(0).toVar();
+      const first = int(start);
+      const end = gate ? select(gate, int(count), int(0)) : int(count);
+      Loop({ start: int(0), end, type: 'int' }, ({ i }) => {
+        const id = this.lists.element(first.add(i)).toInt();
+        const a = this.segments.element(id.mul(2));
+        const b = this.segments.element(id.mul(2).add(1));
+        const ab = b.xyz.sub(a.xyz);
+        const t = clamp(dot(p.sub(a.xyz), ab).div(max(dot(ab, ab), 1e-20)), 0, 1);
+        const d = length(p.sub(a.xyz.add(ab.mul(t)))).mul(this.radius);
+        const halfWidth = abs(mix(a.w, b.w, t));
+        clear.assign(max(clear, select(d.lessThan(halfWidth.add(margin)), float(1), float(0))));
+      });
+      return clear;
+    })() as F;
+  }
 }
 
 /**

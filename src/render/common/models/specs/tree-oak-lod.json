@@ -1,0 +1,28 @@
+{
+  "name": "Oak (far)",
+  "class": "tree",
+  "groups": {
+    "trunk": "bark-dark",
+    "mid": "leaf"
+  },
+  "parts": [
+    {
+      "type": "cylinder",
+      "group": "trunk",
+      "from": [0, -1, 0],
+      "to": [0, 7, 0],
+      "radius": 1.05,
+      "sides": 4,
+      "radius2": 0.65,
+      "caps": false
+    },
+    {
+      "type": "blob",
+      "group": "mid",
+      "center": [0, 10.8, 0],
+      "radius": [6.6, 4.5, 6.3],
+      "jitter": 0.24,
+      "seed": 3
+    }
+  ]
+}

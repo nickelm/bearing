@@ -35,10 +35,14 @@ export interface ViewGuiParams {
   tileMemory: number;
   /** Prefetch the bubble's level-7 tiles and the look-ahead (decision 119). */
   prefetch: boolean;
-  /** Instanced tree clumps near the camera. */
+  /** Instanced trees near the camera (decision 148). */
   trees: boolean;
-  /** Tree range (km). */
+  /** Crowns inside stands and whole trees on edges and in the open: ranges (km). */
   treeRange: number;
+  edgeTreeRange: number;
+  /** The forests' canopy shell (decision 148) and its range (km). */
+  canopyShell: boolean;
+  canopyRange: number;
   /** Instanced buildings of towns, airbases and industry near the camera. */
   buildings: boolean;
   /** Ink outlines on models (decision 107) and their width (px). */
@@ -395,10 +399,19 @@ export class DebugGui {
       .name('Prefetch (bubble, ahead)')
       .onChange(() => callbacks.viewChanged(view));
     t.add(view, 'trees')
-      .name('Trees (sim detail)')
+      .name('Trees')
       .onChange(() => callbacks.viewChanged(view));
-    t.add(view, 'treeRange', 1, 8, 0.5)
+    t.add(view, 'treeRange', 0.2, 2, 0.1)
       .name('Tree range (km)')
+      .onFinishChange(() => callbacks.viewChanged(view));
+    t.add(view, 'edgeTreeRange', 0.4, 4, 0.1)
+      .name('Edge tree range (km)')
+      .onFinishChange(() => callbacks.viewChanged(view));
+    t.add(view, 'canopyShell')
+      .name('Forest canopy (shell)')
+      .onChange(() => callbacks.viewChanged(view));
+    t.add(view, 'canopyRange', 2, 20, 1)
+      .name('Canopy range (km)')
       .onFinishChange(() => callbacks.viewChanged(view));
     t.add(view, 'buildings')
       .name('Buildings (sim detail)')

@@ -1,0 +1,28 @@
+{
+  "name": "Birch (far)",
+  "class": "tree",
+  "groups": {
+    "trunk": "bark-pale",
+    "mid": "leaf-birch"
+  },
+  "parts": [
+    {
+      "type": "cylinder",
+      "group": "trunk",
+      "from": [0, -1, 0],
+      "to": [0, 10, 0],
+      "radius": 0.7,
+      "sides": 4,
+      "radius2": 0.45,
+      "caps": false
+    },
+    {
+      "type": "blob",
+      "group": "mid",
+      "center": [0, 10, 0],
+      "radius": [3.3, 5.4, 3.1],
+      "jitter": 0.18,
+      "seed": 8
+    }
+  ]
+}

@@ -94,6 +94,8 @@ import {
 import { FaceSampler, tileGridCoordinate } from './faceShading';
 import { facetNormal } from './facets';
 import { LandShading, periodicValueNoise } from './landShading';
+import { CANOPY_THRESHOLD, canopySeed } from '../../../worldgen/canopy';
+import { CanopyStyle, canopyShellMaterial, LIFT_BELOW } from '../forest/canopyShell';
 import { DEFAULT_LOD, selectTiles } from '../../common/terrain/quadtree';
 import {
   aheadView,
@@ -144,6 +146,8 @@ export interface TerrainStats {
   ahead: number;
   /** Tiles the view wants but cannot build for lack of data: detail arriving late. */
   waiting: number;
+  /** Canopy shells drawn (decision 148). */
+  shells: number;
 }
 
 /** A frame's view for the terrain, with the camera's velocity for the look-ahead. */
@@ -185,6 +189,7 @@ export class TerrainRenderer {
     bubbleReady: 0,
     ahead: 0,
     waiting: 0,
+    shells: 0,
   };
   readonly prefetch: TerrainPrefetch = {
     enabled: true,
@@ -204,6 +209,13 @@ export class TerrainRenderer {
   private detail: Noise3 = new Noise3(rng(0, 'render-detail'));
   private readonly index = new BufferAttribute(buildTileIndex(), 1);
   private material: MeshBasicNodeMaterial;
+  /** The forest's canopy shell over forested tiles (decision 148); built with the material. */
+  private shellMaterial!: MeshBasicNodeMaterial;
+  /** Each forested tile mesh's shell, sharing its geometry and userData. */
+  private readonly shells = new WeakMap<Mesh, Mesh>();
+  private shellsShown = new Set<Mesh>();
+  /** Canopy shell settings (decision 148). */
+  readonly canopy = new CanopyStyle();
   private rivers: RiverTables | null = null;
   private roads: RiverTables | null = null;
   private lights: LightTables | null = null;
@@ -221,6 +233,11 @@ export class TerrainRenderer {
     (1 - DATA_SHARE) * DEFAULT_TILE_MEMORY_MIB * 2 ** 20,
     (e) => {
       this.group.remove(e.value);
+      const shell = this.shells.get(e.value);
+      if (shell) {
+        this.group.remove(shell);
+        this.shellsShown.delete(shell);
+      }
       // The index buffer is shared by every tile: detach it, or dispose() would free it for all.
       e.value.geometry.setIndex(null);
       e.value.geometry.dispose();
@@ -301,6 +318,17 @@ export class TerrainRenderer {
     const radius = this.world?.radius ?? 1e6;
     const roads = new RoadShading(this.roads, radius, this.roadStyle);
     const lights = new LightShading(this.lights, radius);
+    this.shellMaterial = canopyShellMaterial({
+      style: this.canopy,
+      exaggeration,
+      radius,
+      reliefScale: this.land.reliefScale,
+      lighting: this.lighting,
+      climate: this.climate,
+      land: this.land,
+      roads,
+      lights,
+    });
     const objectUniform = (key: string) =>
       uniform(0).onObjectUpdate(
         ({ object }) => ((object as Mesh | undefined)?.userData[key] as number | undefined) ?? 0,
@@ -559,13 +587,17 @@ export class TerrainRenderer {
       ? new HabitabilityTexture(world.infra.habitability, world.infra.habitabilityResolution)
       : new HabitabilityTexture(null, 1);
     const old = this.material;
+    const oldShell = this.shellMaterial;
     this.material = this.buildMaterial();
     old.dispose();
+    oldShell.dispose();
+    this.canopy.seed.value = world ? canopySeed(world.seed) : 0;
     oldHabitability.dispose();
     this.detail = new Noise3(rng(world?.seed ?? 0, 'render-detail'));
     this.data.clear();
     this.meshes.clear();
     this.visible.clear();
+    this.shellsShown.clear();
   }
 
   /** Applied in the vertex shader: no meshes are rebuilt. */
@@ -662,6 +694,17 @@ export class TerrainRenderer {
     mesh.visible = false;
     this.group.add(mesh);
     this.meshes.set(t, mesh, MESH_TILE_BYTES);
+    // Forested tiles get a canopy shell: the same geometry under the shell material.
+    let forestMax = 0;
+    for (let v = 0; v < m.forest.length; v++) forestMax = Math.max(forestMax, m.forest[v]!);
+    if (this.mode === 'biome' && forestMax >= CANOPY_THRESHOLD - LIFT_BELOW) {
+      const shell = new Mesh(g, this.shellMaterial);
+      shell.frustumCulled = false;
+      shell.userData = mesh.userData;
+      shell.visible = false;
+      this.group.add(shell);
+      this.shells.set(mesh, shell);
+    }
     return mesh;
   }
 
@@ -725,6 +768,7 @@ export class TerrainRenderer {
     }
     for (const m of this.visible) if (!now.has(m)) m.visible = false;
     this.visible = now;
+    this.placeShells(view.eye);
 
     // Generates what this frame asked for, plus the requests trees and buildings made
     // after the last update; then starts collecting the next frame's requests.
@@ -746,6 +790,34 @@ export class TerrainRenderer {
     s.bubble = this.bubbleTiles.length;
     s.bubbleReady = this.bubbleTiles.filter((b) => this.data.has(b.tile)).length;
     s.ahead = this.aheadWanted.length;
+  }
+
+  /**
+   * Shows the canopy shells of drawn tiles that reach within the shell's range,
+   * placed as their tiles (decision 148).
+   */
+  private placeShells(eye: Readonly<Vec3d>): void {
+    const shown = new Set<Mesh>();
+    const on = this.canopy.enabled.value > 0 && this.mode === 'biome' && this.world;
+    if (on) {
+      const R = this.world!.radius;
+      const range = this.canopy.range.value;
+      for (const mesh of this.visible) {
+        const shell = this.shells.get(mesh);
+        if (!shell) continue;
+        const o = mesh.userData.origin as Vec3d;
+        const level = (mesh.userData.tile as Vector4).y;
+        // More than half the tile's diagonal, plus room for its relief.
+        const reach = ((Math.PI / 2) * R) / 2 ** level + 200;
+        if (o.distanceTo(eye) - reach > range) continue;
+        shell.position.copy(mesh.position);
+        shell.visible = true;
+        shown.add(shell);
+      }
+    }
+    for (const s of this.shellsShown) if (!shown.has(s)) s.visible = false;
+    this.shellsShown = shown;
+    this.stats.shells = shown.size;
   }
 
   /**
@@ -887,5 +959,6 @@ export class TerrainRenderer {
   dispose(): void {
     this.setWorld(null);
     this.material.dispose();
+    this.shellMaterial.dispose();
   }
 }

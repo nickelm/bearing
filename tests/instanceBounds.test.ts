@@ -4,7 +4,6 @@ import { PLANET_RADIUS } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
 import { sphereOutsideView } from '../src/render/common/terrain/quadtree';
 import { instanceExtent, instanceSphere } from '../src/render/sim/instanceBounds';
-import { shuffled, thinKeep, THIN_MIN, THIN_START } from '../src/render/sim/forest/forestLayer';
 
 const R = PLANET_RADIUS;
 
@@ -60,36 +59,5 @@ describe('instance bounds (decision 131)', () => {
     expect(sphereOutsideView(at(-3000, 0, 0), 3100, view)).toBe(false); // around the eye
     expect(sphereOutsideView(at(1000, 5000, 0), 100, view)).toBe(true); // far to the side
     expect(sphereOutsideView(at(1000, 5000, 0), 4500, view)).toBe(false); // reaching into view
-  });
-});
-
-describe('tree thinning (decision 131)', () => {
-  it('keeps every clump within 1.5 km, then (1.5 km / d)², at least a quarter', () => {
-    expect(thinKeep(0)).toBe(1);
-    expect(thinKeep(THIN_START)).toBe(1);
-    expect(thinKeep(2 * THIN_START)).toBeCloseTo(0.25, 10);
-    expect(thinKeep(1.2 * THIN_START)).toBeCloseTo(1 / 1.44, 10);
-    expect(thinKeep(5000)).toBe(THIN_MIN);
-    for (let d = 0; d < 6000; d += 100) expect(thinKeep(d + 100)).toBeLessThanOrEqual(thinKeep(d));
-  });
-
-  it('shuffles rows deterministically, as a permutation', () => {
-    const stride = 3;
-    const data = Float32Array.from(
-      { length: 300 },
-      (_, i) => Math.floor(i / stride) * 10 + (i % stride),
-    );
-    const a = shuffled(data, stride, 'tile/conifer');
-    expect(a).toEqual(shuffled(data, stride, 'tile/conifer'));
-    expect(a).not.toEqual(data);
-    expect(shuffled(data, stride, 'tile/broadleaf')).not.toEqual(a);
-    // Rows stay whole, and every row appears once.
-    const rows = new Set<number>();
-    for (let i = 0; i < a.length; i += stride) {
-      expect(a[i + 1]).toBe(a[i]! + 1);
-      expect(a[i + 2]).toBe(a[i]! + 2);
-      rows.add(a[i]!);
-    }
-    expect(rows.size).toBe(100);
   });
 });

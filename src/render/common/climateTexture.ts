@@ -28,7 +28,8 @@ import {
 } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import { abs, atan, dot, int, select, texture, vec2, vec3 } from 'three/tsl';
-import { CUBE_FACES } from '../../core/coords';
+import { CUBE_FACES, directionToCubeFace } from '../../core/coords';
+import type { Vec3d } from '../../core/vec3d';
 import { LAPSE_RATE } from '../../worldgen/climate';
 import type { World } from '../../worldgen/pipeline';
 
@@ -144,6 +145,35 @@ export class ClimateTexture {
       this.texture.image = { data: new Uint16Array(6 * n * n * 4), width: n, height: n, depth: 6 };
     }
     this.fill(climateTexels(world));
+  }
+
+  /**
+   * `sample` on the CPU: the climate at a direction, bilinear between texel
+   * centers and clamped at the face's edges as the GPU filters it, from the
+   * same half floats (decision 148: trees pick the shell's stand kinds).
+   */
+  sampleAt(dir: Readonly<Vec3d>, out: Float32Array = new Float32Array(4)): Float32Array {
+    const n = this.n;
+    const half = this.texture.image.data as Uint16Array;
+    const { face, u, v } = directionToCubeFace(dir);
+    const x = Math.min(n - 1, Math.max(0, u * n - 0.5));
+    const y = Math.min(n - 1, Math.max(0, v * n - 0.5));
+    const x0 = Math.min(n - 2, Math.floor(x));
+    const y0 = Math.min(n - 2, Math.floor(y));
+    const tx = n > 1 ? x - x0 : 0;
+    const ty = n > 1 ? y - y0 : 0;
+    const at = (i: number, j: number, c: number) =>
+      DataUtils.fromHalfFloat(
+        half[((face * n + Math.min(j, n - 1)) * n + Math.min(i, n - 1)) * 4 + c]!,
+      );
+    for (let c = 0; c < 4; c++) {
+      const a = at(Math.max(0, x0), Math.max(0, y0), c);
+      const b = at(Math.max(0, x0) + 1, Math.max(0, y0), c);
+      const d = at(Math.max(0, x0), Math.max(0, y0) + 1, c);
+      const e = at(Math.max(0, x0) + 1, Math.max(0, y0) + 1, c);
+      out[c] = (a * (1 - tx) + b * tx) * (1 - ty) + (d * (1 - tx) + e * tx) * ty;
+    }
+    return out;
   }
 
   /** Climate at a direction (need not be normalized): vec4(T_sea °C, half-range K, moisture, valley floor m). */

@@ -1,0 +1,28 @@
+{
+  "name": "Broadleaf (far)",
+  "class": "tree",
+  "groups": {
+    "trunk": "bark",
+    "mid": "leaf"
+  },
+  "parts": [
+    {
+      "type": "cylinder",
+      "group": "trunk",
+      "from": [0, -1, 0],
+      "to": [0, 6, 0],
+      "radius": 0.8,
+      "sides": 4,
+      "radius2": 0.55,
+      "caps": false
+    },
+    {
+      "type": "blob",
+      "group": "mid",
+      "center": [0, 10.2, 0],
+      "radius": [4.6, 5.4, 4.4],
+      "jitter": 0.2,
+      "seed": 6
+    }
+  ]
+}

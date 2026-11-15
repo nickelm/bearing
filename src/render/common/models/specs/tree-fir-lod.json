@@ -1,0 +1,29 @@
+{
+  "name": "Fir (far)",
+  "class": "tree",
+  "groups": {
+    "trunk": "bark",
+    "mid": "leaf-conifer"
+  },
+  "parts": [
+    {
+      "type": "cylinder",
+      "group": "trunk",
+      "from": [0, -1, 0],
+      "to": [0, 4, 0],
+      "radius": 0.75,
+      "sides": 4,
+      "radius2": 0.5,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "mid",
+      "from": [0, 3, 0],
+      "to": [0, 19, 0],
+      "radius": 4.6,
+      "radius2": 0,
+      "sides": 6
+    }
+  ]
+}

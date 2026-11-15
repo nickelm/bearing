@@ -109,7 +109,7 @@ export class GlobeScene {
   readonly shadows: TerrainShadow;
   /** Tiled LOD terrain; drawn instead of the M1 grid mesh once a world has a global pass. */
   readonly terrain: TerrainRenderer;
-  /** Instanced tree clumps near the camera (decision 45). */
+  /** The tree kit near the camera, on the terrain's canopy shell (decision 150). */
   readonly forest: ForestLayer;
   /** Buildings of towns, airbases and industry near the camera (decision 65). */
   readonly structures: StructureLayer;

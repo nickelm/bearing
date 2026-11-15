@@ -192,9 +192,13 @@ async function main(): Promise<void> {
     sse: DEFAULT_LOD.sseThreshold,
     tileMemory: DEFAULT_TILE_MEMORY_MIB,
     prefetch: true,
-    // Individual trees and buildings are simulator detail (decision 71).
-    trees: false,
-    treeRange: 5,
+    // Trees near the camera on the canopy shell (decision 148): laptop ranges.
+    trees: true,
+    treeRange: 0.6,
+    edgeTreeRange: 1.2,
+    // The canopy shell gives forests height and cover at every range (decision 148).
+    canopyShell: true,
+    canopyRange: 12,
     // On: the simulation view is a ground view now (the observer camera, decision 112).
     buildings: true,
     ink: true,
@@ -724,7 +728,10 @@ async function main(): Promise<void> {
       globe.terrain.budgetMiB = v.tileMemory;
       globe.terrain.prefetch.enabled = v.prefetch;
       globe.forest.enabled = v.trees;
-      globe.forest.range.value = v.treeRange * KM;
+      globe.forest.nearRange.value = v.treeRange * KM;
+      globe.forest.edgeRange.value = Math.max(v.edgeTreeRange, v.treeRange) * KM;
+      globe.terrain.canopy.enabled.value = v.canopyShell ? 1 : 0;
+      globe.terrain.canopy.range.value = v.canopyRange * KM;
       globe.structures.enabled = v.buildings;
       globe.structures.ink = v.ink;
       globe.structures.setInk(v.inkWidth, 0);
@@ -1241,8 +1248,8 @@ async function main(): Promise<void> {
     const ts = globe.terrain.stats;
     const fs = globe.forest.stats;
     gui.status.trees = globe.forest.group.visible
-      ? `${fs.instances} clumps in ${fs.tiles} tiles${fs.pending ? `, ${fs.pending} loading` : ''}`
-      : 'off (shown below 8 km)';
+      ? `${fs.instances} trees (${(fs.triangles / 1e6).toFixed(2)} M tris) in ${fs.tiles} tiles, ${ts.shells} canopy tiles${fs.pending ? `, ${fs.pending} loading` : ''}`
+      : `off (shown below 4 km); ${ts.shells} canopy tiles`;
     const bs = globe.structures.stats;
     gui.status.buildings = globe.structures.group.visible
       ? `${bs.instances} in ${bs.tiles} tiles${bs.pending ? `, ${bs.pending} loading` : ''}`

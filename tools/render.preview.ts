@@ -197,6 +197,11 @@ export interface PreviewView {
   observer?: boolean;
   /** Through the observer camera at a landscape spot (SPOTS=…, tools/landscapeSpots.ts). */
   spot?: LandscapeSpot;
+  /**
+   * With a target: through the observer camera this far (m) back from the target along
+   * `heading`, facing it, at `eyeHeight` above the ground and `pitch` (decision 148).
+   */
+  observerBack?: number;
   /** Image size for this view (strategic previews; default W × H). */
   width?: number;
   height?: number;
@@ -345,6 +350,37 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     heading: 0,
     localTime: 15,
     target: 'forest',
+  },
+  {
+    // Helicopter height over a river through dense forest (decision 148): the canopy
+    // shell and the near and edge trees, looking along the tree lines.
+    name: 'treeline',
+    dLat: 0,
+    dLon: 0,
+    altitude: 0,
+    tilt: 0,
+    heading: 0,
+    localTime: 15,
+    target: 'forest',
+    observerBack: 700,
+    eyeHeight: 25,
+    pitch: -3 * DEG,
+    detail: true,
+  },
+  {
+    // 100 m over dense forest (decision 148): stands, crowns and the shell's skyline.
+    name: 'canopy',
+    dLat: 0,
+    dLon: 0,
+    altitude: 0,
+    tilt: 0,
+    heading: 0,
+    localTime: 15,
+    target: 'forest',
+    observerBack: 300,
+    eyeHeight: 100,
+    pitch: -18 * DEG,
+    detail: true,
   },
   {
     // The check-2 forest edge in its hemisphere's midwinter: snow on open ground, dark conifers.
@@ -630,7 +666,7 @@ function drawStats(scene: GlobeScene): string {
     })
     .filter(Boolean)
     .join(', ');
-  return `${groups}; deepest L${scene.terrain.stats.deepest}, ${scene.forest.stats.instances} tree clumps, ${scene.structures.stats.instances} buildings`;
+  return `${groups}; deepest L${scene.terrain.stats.deepest}, ${scene.forest.stats.instances} trees (${(scene.forest.stats.triangles / 1e6).toFixed(2)} M tris), ${scene.terrain.stats.shells} canopy shells, ${scene.structures.stats.instances} buildings`;
 }
 
 const env = (k: string, d: string) => process.env[k] ?? d;
@@ -722,6 +758,7 @@ it('renders preview views', async () => {
   scene.globe.setExaggeration(exaggeration);
   scene.terrain.setExaggeration(exaggeration);
   scene.terrain.buildBudgetMs = 10_000;
+  scene.forest.buildBudgetMs = scene.forest.compactBudgetMs = 10_000;
   scene.terrain.budgetMiB = 600; // the app's default (GUI → Tile memory)
   const riverIndex = new RiverIndex(global.finish.rivers, {
     height: global.height,
@@ -1062,20 +1099,35 @@ it('renders preview views', async () => {
     o.altitude = o.targetAltitude = v.altitude;
     o.tilt = v.tilt;
     o.heading = v.alongRunway && base ? base.heading : v.heading;
-    const station = v.spot
+    const back =
+      target && v.observerBack !== undefined
+        ? offsetPoint(target, v.heading, -v.observerBack, 0, params.radius).normalize()
+        : null;
+    const station = back
       ? {
-          key: `spot-${v.spot.kind}`,
-          label: v.spot.kind,
+          key: `view-${v.name}`,
+          label: v.name,
           kind: 'port' as const,
           side: 'alliance' as const,
-          point: v.spot.point,
-          facing: v.spot.facing,
-          height: v.spot.height,
-          pitch: v.spot.pitch,
+          point: back,
+          facing: v.heading,
+          height: v.eyeHeight ?? 30,
+          pitch: v.pitch ?? -6 * DEG,
         }
-      : v.observer && base
-        ? stations.find((x) => x.key === `airbase-${base.id}`)
-        : null;
+      : v.spot
+        ? {
+            key: `spot-${v.spot.kind}`,
+            label: v.spot.kind,
+            kind: 'port' as const,
+            side: 'alliance' as const,
+            point: v.spot.point,
+            facing: v.spot.facing,
+            height: v.spot.height,
+            pitch: v.spot.pitch,
+          }
+        : v.observer && base
+          ? stations.find((x) => x.key === `airbase-${base.id}`)
+          : null;
     if (station) {
       // OBS_HEIGHT (m above the ground) and OBS_PITCH (deg) override the station's;
       // OBS_HEADING (deg, or 'sun' to face the sun's azimuth) is applied once the sun is set.
@@ -1201,6 +1253,11 @@ it('renders preview views', async () => {
     }
     // FARMLAND=0 leaves the fields out (decision 127).
     scene.terrain.land.farmland.value = process.env.FARMLAND === '0' ? 0 : 1;
+    // SHELL=0 leaves the forests' canopy shell out (decision 148); TREE_NEAR and TREE_EDGE
+    // set the crown and whole-tree ranges (m).
+    scene.terrain.canopy.enabled.value = process.env.SHELL === '0' ? 0 : 1;
+    if (process.env.TREE_NEAR) scene.forest.nearRange.value = Number(process.env.TREE_NEAR);
+    if (process.env.TREE_EDGE) scene.forest.edgeRange.value = Number(process.env.TREE_EDGE);
     // DETAIL=1 adds the instanced trees and buildings (off in the strategic view, decision 71).
     // A view's own detail flag turns them on unless DETAIL=0.
     scene.forest.enabled = scene.structures.enabled =
@@ -1701,7 +1758,7 @@ it('renders preview views', async () => {
     }
     if (scene.forest.stats.instances) {
       console.log(
-        `  trees: ${scene.forest.stats.tiles} tiles, ${scene.forest.stats.instances} clumps`,
+        `  trees: ${scene.forest.stats.tiles} parts, ${scene.forest.stats.instances} trees, ${(scene.forest.stats.triangles / 1e6).toFixed(2)} M triangles; ${scene.terrain.stats.shells} canopy shells`,
       );
     }
     {
