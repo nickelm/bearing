@@ -306,7 +306,10 @@ export class HelpOverlay {
     rows.push(
       '<tr><td>Mouse</td><td>Forward: nose down; back: nose up; left and right: turn</td></tr>',
     );
-    rows.push('<tr><td>Right drag</td><td>Free look; the camera springs back at speed</td></tr>');
+    rows.push(
+      '<tr><td>Right drag</td><td>Free look; the view stays where you leave it (V or the middle button recenters it)</td></tr>',
+    );
+    rows.push('<tr><td>Wheel</td><td>Camera closer or farther</td></tr>');
     this.el.innerHTML = `<h1>Controls</h1><table>${rows.join('')}</table>${notes
       .map((n) => `<div class="ff-note">${n}</div>`)
       .join('')}`;

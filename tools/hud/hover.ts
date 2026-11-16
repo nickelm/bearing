@@ -7,7 +7,7 @@
  * Cases: hover (a steady hover with a small drift, the LZ in view), hazard
  * (settling with power, low rotor RPM, over-torque, the LZ behind), transition
  * (35 kt and accelerating, the LZ off the top), sink (a landing come in at
- * 3.2 m/s from 6 m: the vertical speed in amber), snow (the hover over white
+ * 3.2 m/s from 4 m: the vertical speed in amber), snow (the hover over white
  * ground under a pale sky, for the halo). tools/freeflight.screens.mjs shoots
  * them as `SHOTS=hover-hover,hover-hazard,…`.
  */
@@ -73,8 +73,8 @@ const CASES: Record<string, Case> = {
     snow: false,
   },
   sink: {
-    // A landing come in too fast: 3.2 m/s down at 6 m (decision 160's amber vertical speed).
-    height: 6,
+    // A landing come in too fast: 3.2 m/s down at 4 m (decision 160's amber vertical speed).
+    height: 4,
     heading: 200 * DEG,
     pitch: 5 * DEG,
     bank: 1 * DEG,

@@ -17,6 +17,7 @@ import { groundEffect } from '../src/sim/flight/rotor/rotorAero';
 import { neutralRotorControls } from '../src/sim/flight/rotor/rotorcraftModel';
 import type { RotorcraftModel } from '../src/sim/flight/rotor/rotorcraftModel';
 import { parseRotorcraftSpec, solidity } from '../src/sim/flight/rotor/rotorSpec';
+import { sinkWarning } from '../src/ui/flight/hud';
 import scoutJson from '../src/render/common/models/specs/alliance-scout-helo.json';
 import { flatGround, RADIUS, testRunway } from './helpers/flight';
 import { scout, scoutSpec, utility, utilitySpec } from './helpers/rotor';
@@ -437,5 +438,43 @@ describe('flown through the Assisted preset', () => {
     expect(PRESETS.standard.autoHoverHold).toBe(false);
     expect(PRESETS.expert.protection).toBe('off');
     expect(PRESETS.expert.maxBank).toBeNull();
+  });
+});
+
+describe('the HUD sink warning against the flown descent (decision 160)', () => {
+  /** Holds S from a hover at `h0` m until the gear touches; seconds of warning and the touchdown sink. */
+  function descend(make: () => RotorcraftModel, landingAid: boolean, h0: number) {
+    const m = make();
+    spawn(m, h0);
+    const laws = lawsFor(m, false);
+    const a = { ...assistsFor('assisted'), landingAid };
+    const cmd = neutralCommand();
+    const ctl = neutralRotorControls();
+    let warned = 0;
+    let touchdown = 0;
+    for (let i = 0; i < 90 / FLIGHT_STEP; i++) {
+      Object.assign(cmd, neutralCommand());
+      if (i * FLIGHT_STEP > 3) cmd.collective = -1;
+      laws.update(m, cmd, a, FLIGHT_STEP, ctl);
+      m.step(ctl, ground);
+      if (m.onGround) {
+        touchdown = -m.telemetry.verticalSpeed;
+        break;
+      }
+      if (sinkWarning(m.telemetry.verticalSpeed, m.telemetry.radarAltitude)) warned += FLIGHT_STEP;
+    }
+    return { warned, touchdown };
+  }
+
+  it('stays quiet through the landing aid and warns well before a hard landing without it', () => {
+    for (const make of [scout, utility])
+      for (const h0 of [20, 80, 150]) {
+        const eased = descend(make, true, h0);
+        expect(eased.warned, `aid, ${h0} m`).toBe(0);
+        expect(eased.touchdown).toBeLessThan(1);
+        const hard = descend(make, false, h0);
+        expect(hard.touchdown, `no aid, ${h0} m`).toBeGreaterThan(5);
+        expect(hard.warned, `no aid, ${h0} m`).toBeGreaterThan(1);
+      }
   });
 });

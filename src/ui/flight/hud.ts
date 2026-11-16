@@ -185,16 +185,21 @@ interface Message {
   warn: boolean;
 }
 
+/** Time to the ground (s) at the current sink below which `sinkWarning` warns. */
+export const SINK_WARNING_TIME = 1.6;
+
 /**
  * Whether a helicopter's descent would meet the ground hard: sinking faster
- * than 2 m/s (about 400 fpm) with less than 2.5 s to the ground at that rate.
- * The landing aid's eased descent (0.3 of the radar altitude per second, 3.3 s
- * to go) stays clear of it; the types' crash sinks are 4–5 m/s.
+ * than 2 m/s (about 400 fpm) with less than SINK_WARNING_TIME to the ground at
+ * that rate. The landing aid's eased descent, as both types fly it, keeps at
+ * least 2.2 s in hand (tests/rotorcraft.test.ts), so it stays white; without
+ * the aid, S held to the ground meets it at about 7.7 m/s, with about 1.6 s of
+ * amber first. The types' crash sinks are 4–5 m/s.
  * `verticalSpeed` (m/s, up positive) and `radarAltitude` (m).
  */
 export function sinkWarning(verticalSpeed: number, radarAltitude: number): boolean {
   const sink = -verticalSpeed;
-  return sink > 2 && radarAltitude < 2.5 * sink;
+  return sink > 2 && radarAltitude < SINK_WARNING_TIME * sink;
 }
 
 /** A vertical speed (fpm) as the HUD writes it: signed, to 10 fpm, "0" when level. */

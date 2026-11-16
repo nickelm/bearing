@@ -149,6 +149,8 @@ export function followAirframe(t: ChaseTarget, a: Readonly<Airframe>): void {
 
 const MIN_CLEARANCE = 1.5;
 const MAX_LOOK_PITCH = 80 * DEG;
+/** The furthest a helicopter may sit from the view's axis (rad); its rig frames it within 19°. */
+const MAX_OFF_AXIS = 20 * DEG;
 /** The range of `zoom`, and the factor of one wheel step. */
 export const MIN_ZOOM = 0.5;
 export const MAX_ZOOM = 3;
@@ -440,7 +442,15 @@ export class ChaseCamera {
     // A helicopter's look point orbits with the free look, opposite the eye, so
     // the helicopter stays in view all the way round and a lowered eye looks up
     // toward the horizon; in the hover it drops with the height above the ground.
+    // It rises only as far as the eye really went down: where the ground held a
+    // lowered eye up, the full rise tipped the view into the sky and lost the
+    // helicopter (decision 160's review).
     const ahead = hv ? lerp(hv.cruiseAim[0], hv.hoverAim[0], wHover) * this.zoom : 0;
+    let spAim = sp;
+    if (hv && sp < 0 && this.dist > 1e-6) {
+      const reached = (eye.clone().sub(t.pos).dot(u) - this.lift * cp) / this.dist;
+      spAim = Math.min(0, Math.max(sp, reached));
+    }
     const aim = hv
       ? t.pos
           .clone()
@@ -451,10 +461,30 @@ export class ChaseCamera {
             (lerp(hv.cruiseAim[1], hv.hoverAim[1], wHover) -
               wHover * Math.min(hv.groundLookMax, hv.groundLook * this.agl)) *
               this.zoom -
-              sp * ahead,
+              spAim * ahead,
           )
       : t.pos.clone().addScaled(f, 25).addScaled(u, 1);
     this.forward.copy(aim.sub(this.eye)).normalize();
+    // A helicopter stays in the picture: where the ground holds a dragged-down
+    // eye close under it, no look point keeps the orbit's framing, so the view
+    // turns toward the helicopter until it sits MAX_OFF_AXIS off the axis. The
+    // rig's own framing keeps it within 19°, so this acts only there.
+    if (hv) {
+      const toCraft = t.pos.clone().sub(this.eye).normalize();
+      const cos = toCraft.dot(this.forward);
+      if (cos < Math.cos(MAX_OFF_AXIS)) {
+        const side = this.forward.clone().addScaled(toCraft, -cos);
+        if (side.lengthSq() > 1e-12) {
+          side.normalize();
+          this.forward
+            .copy(toCraft)
+            .scale(Math.cos(MAX_OFF_AXIS))
+            .addScaled(side, Math.sin(MAX_OFF_AXIS));
+        } else {
+          this.forward.copy(toCraft);
+        }
+      }
+    }
     this.up.copy(u).addScaled(this.forward, -u.dot(this.forward)).normalize();
     this.fov = rig.fov;
     // Clip planes: near enough for the aircraft, far to the horizon past the tallest peaks.

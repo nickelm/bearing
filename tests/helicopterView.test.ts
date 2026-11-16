@@ -197,6 +197,40 @@ describe('helicopter chase rig', () => {
     expect(angle(far.clone().sub(c.eye), c.forward)).toBeLessThan(c.fov / 2 / DEG);
   });
 
+  it('keeps the helicopter in view with the eye dragged down to the ground, at every zoom', () => {
+    // On the gear, in a 5 m hover and a 20 m hover: the ground holds a lowered eye up.
+    for (const [height, onGround] of [
+      [1.2, true],
+      [5, false],
+      [20, false],
+    ] as const)
+      for (const zoom of [0.5, 1, 3])
+        for (const pitch of [-20, -40, -60, -80]) {
+          const c = camera();
+          c.target.pos.set(0, 0, R + height);
+          c.target.onGround = onGround;
+          c.zoom = zoom;
+          c.look(0, 1, -pitch * DEG);
+          settle(c, 4);
+          const off = angle(c.target.pos.clone().sub(c.eye), c.forward);
+          expect(off, `${height} m, zoom ${zoom}, ${pitch}°`).toBeLessThan(20.001);
+        }
+  });
+
+  it('frames the helicopter within 19° on its own, so the in-view guard stays out of ordinary flight', () => {
+    for (const height of [1.2, 5, 20, 60])
+      for (const speed of [0, 15, 30, 60, 120])
+        for (const zoom of [0.5, 1, 3]) {
+          const c = camera(speed * KNOT);
+          c.target.pos.set(0, 0, R + height);
+          c.target.onGround = height < 2 && speed === 0;
+          c.zoom = zoom;
+          settle(c, 4);
+          const off = angle(c.target.pos.clone().sub(c.eye), c.forward);
+          expect(off, `${height} m, ${speed} kt, zoom ${zoom}`).toBeLessThan(19);
+        }
+  });
+
   it('zooms by scaling its distances, keeping the angles', () => {
     const c = camera();
     settle(c);
@@ -355,7 +389,8 @@ describe('vertical-speed readout', () => {
     // The landing aid's eased descent: 0.3 of the radar altitude per second.
     for (const ra of [1, 3, 10, 30, 100]) expect(sinkWarning(-0.3 * ra, ra), `${ra} m`).toBe(false);
     expect(sinkWarning(-1.5, 2)).toBe(false); // slower than 2 m/s
-    expect(sinkWarning(-3, 6)).toBe(true); // 2 s to go
+    expect(sinkWarning(-3, 4)).toBe(true); // 1.3 s to go
+    expect(sinkWarning(-3, 6)).toBe(false); // 2 s to go
     expect(sinkWarning(-4, 30)).toBe(false); // 7.5 s to go
     expect(sinkWarning(3, 1)).toBe(false); // climbing
   });
