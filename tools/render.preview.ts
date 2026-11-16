@@ -898,6 +898,8 @@ it('renders preview views', async () => {
     forest: global.finish.forest,
     treeline: global.finish.treeline,
     index: riverIndex,
+    // TILE_TUNING='{"floodplainMinWidth":1e9}' overrides tile-synthesis tuning (decision 173).
+    tuning: process.env.TILE_TUNING ? JSON.parse(process.env.TILE_TUNING) : undefined,
   });
   scene.terrain.setWorld({
     synth,

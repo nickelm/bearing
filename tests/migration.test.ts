@@ -112,6 +112,25 @@ describe('meander migration (decision 173)', () => {
     for (const p of r.line) expect(Math.abs(Math.asin(p[1]!) * R)).toBeLessThan(half + 200);
   });
 
+  it('keeps reaches without room, such as lakes, on their line', () => {
+    // The middle third of the arc length (27–53 km, about x = 25–49 km along the wavy
+    // seed line) has no room: it lies in a lake.
+    const raw = seedRiver(2);
+    const r = migrate(raw, R, (u) => (u > 27_000 && u < 53_000 ? 0 : 5000));
+    const axis = new Map<number, number>();
+    for (const p of raw)
+      axis.set(Math.round((Math.atan2(p[0]!, p[2]!) * R) / 100), Math.asin(p[1]!) * R);
+    for (const p of r.line) {
+      const x = Math.atan2(p[0]!, p[2]!) * R;
+      if (x < 30_000 || x > 45_000) continue;
+      // Within a node spacing of the seed line there.
+      const y = Math.asin(p[1]!) * R;
+      expect(Math.abs(y - axis.get(Math.round(x / 100))!)).toBeLessThan(
+        1.5 * MIGRATION_TUNING.spacing * W,
+      );
+    }
+  });
+
   it('is deterministic', () => {
     const again = migrate(seedRiver(1), R, () => 5000);
     expect(again.line).toEqual(runs[0]!.line);

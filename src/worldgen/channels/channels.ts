@@ -145,12 +145,60 @@ export interface ChannelOptions {
   tuning?: Partial<MigrationTuning>;
 }
 
+/**
+ * The share of a polyline in lakes as a function of arc length: 1 where its
+ * point lies in a lake (lake depth over half a meter), widened by `pad` m either
+ * way, linear between samples. Rivers run on through lakes to their outlets, and a
+ * reach in a lake must not meander (decision 173).
+ */
+export function lakeAlong(
+  line: readonly number[][],
+  lakeDepth: (d: Readonly<Vec3d>) => number,
+  radius: number,
+  pad: number,
+): { at: (u: number) => number; share: number } {
+  const n = line.length;
+  const s = new Float64Array(n);
+  const wet = new Uint8Array(n);
+  const p = new Vec3d();
+  let count = 0;
+  for (let i = 0; i < n; i++) {
+    const q = line[i]!;
+    if (i > 0) {
+      const a = line[i - 1]!;
+      s[i] =
+        s[i - 1]! + Math.acos(Math.min(1, a[0]! * q[0]! + a[1]! * q[1]! + a[2]! * q[2]!)) * radius;
+    }
+    if (lakeDepth(p.set(q[0]!, q[1]!, q[2]!)) > 0.5) {
+      wet[i] = 1;
+      count++;
+    }
+  }
+  // Wet spans in arc length, widened by the pad.
+  const spans: [number, number][] = [];
+  for (let i = 0; i < n; i++) {
+    if (!wet[i]) continue;
+    let j = i;
+    while (j + 1 < n && wet[j + 1]) j++;
+    spans.push([s[i]! - pad, s[j]! + pad]);
+    i = j;
+  }
+  return {
+    at: (u) => {
+      for (const [a, b] of spans) if (u >= a && u <= b) return 1;
+      return 0;
+    },
+    share: n > 0 ? count / n : 0,
+  };
+}
+
 /** Migrates the large lowland rivers of `rivers` (MIGRATION_TUNING's criteria). */
 export function computeChannels(rivers: Rivers, opts: ChannelOptions): Channels {
   const t0 = performance.now();
   const t = { ...MIGRATION_TUNING, ...opts.tuning };
   const n = Math.round(Math.sqrt(opts.height.length / 6));
   const height = cubeMapSampler(opts.height, n);
+  const lakes = opts.lakeDepth ? cubeMapSampler(opts.lakeDepth, n) : null;
   const { lines, gradients } = riverPlanforms(rivers, {
     height: opts.height,
     radius: opts.radius,
@@ -169,10 +217,15 @@ export function computeChannels(rivers: Rivers, opts: ChannelOptions): Channels 
     for (const p of line) w += p[3]!;
     w /= line.length;
     if (w < t.minWidth) continue;
+    // Reaches in lakes do not migrate: no room there, and a river mostly in lakes not at all.
+    const lake = lakes ? lakeAlong(line, lakes, opts.radius, t.lakePad * w) : null;
+    if (lake && lake.share > t.maxLakeShare) continue;
     // Room to migrate: the measured floodplain, clamped to a few widths either side.
     const measured = floodplainOf(line, height, opts.radius);
     const fp = (u: number) =>
-      Math.min(t.floodplainMax * w, Math.max(t.floodplainMin * w, measured(u)));
+      lake && lake.at(u) > 0
+        ? 0
+        : Math.min(t.floodplainMax * w, Math.max(t.floodplainMin * w, measured(u)));
     const r = migrate(line, opts.radius, fp, t);
     ids.push(k);
     for (const p of r.line) points.push(p[0]!, p[1]!, p[2]!, p[3]!, p[4]!);

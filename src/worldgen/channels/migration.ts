@@ -43,6 +43,10 @@ export const MIGRATION_TUNING = {
    */
   floodplainMin: 3,
   floodplainMax: 8,
+  /** Reaches in lakes, widened by this many widths either way, keep their line. */
+  lakePad: 4,
+  /** Rivers with more of their points than this in lakes do not migrate. */
+  maxLakeShare: 0.5,
   /** Node spacing, in widths. */
   spacing: 1.5,
   /** Iterations. */
