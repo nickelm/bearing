@@ -1012,12 +1012,18 @@ Detail near a low camera for helicopter flight, faceted and slightly cartoony, a
 
 ### G3. Placement
 
-- [ ] `worldgen/groundCover.ts`: a pure function of the point from cell hashes, biome, moisture, slope and snow; talus below cliffs; flowers in meadows; boulders over 0.8 m as landing obstacles for H3; tests for determinism and density by biome
-- [ ] Masks: water and protected channels, roads, runways, taxiways, pads, ballast, built-up patches, the canopy shell, snow; denser verges and field edges; tests
-- [ ] Heights on the drawn triangle of the finest level, with the height exaggeration; a test that the finest level draws throughout the ring under the gate
-- [ ] The ring: one instanced geometry per model, refilled by cells, camera-relative, shrinking into the ground at its edge; ranges by quality tier
-- [ ] Color from `LandShading` at the ground point (season, moisture, snow) under the model's value ramp
-- [ ] `PERF` in a hover at 10 m over grass by a forest edge against the 2 M triangle and 500 draw budgets
+- [x] `worldgen/groundCover.ts`: a pure function of a cell (one level-10 sample) and its site, from cell hashes; mixes by cover, moisture, temperature, slope, forest, aridity and farmland; clumps, boulder fields and flower-color patches; `isObstacle` for boulders of 0.8 m and up; tests (decision 174)
+- [ ] Talus below cliffs (the site knows its slope, not the slope above it), denser verges and field edges, reeds along river banks
+- [x] Masks: sea, lakes, river water (the river index's stretches), the infrastructure's clearings (roads, airfields, towns), closed forest; plants hide under lying snow (decision 174)
+- [x] Heights on the drawn level-10 triangle, as a base and a displacement per unit of exaggeration; a test that every item lies within a centimeter of the mesh's plane at two exaggerations (decision 174)
+- [ ] A test that the finest level draws throughout the ring under the gate (the previews draw level 10 at 5 and 20 m)
+- [x] The ring: chunks of 1/8 level-10 tile placed a few rows per frame, one instanced mesh per kind (at most 15 draws) filled within each kind's range and the view cone from an anchor at the eye, shrinking into the ground at the range's end (decision 174)
+- [ ] Ranges by quality tier (`rangeScale` exists, not wired to the tiers)
+- [x] Color from the open ground's color at the cell with the land shader's moisture tint; plants take its brightness and half its hue; browning by the ground's greenness and the season; wet; snow on rocks' tops; light bent toward the vertical and bounced from the ground so shaded sides never go black (decision 174)
+- [x] Counts in the previews: 4,000–6,200 items, 0.06–0.18 M triangles in 6–9 draws (hover, skid, gallery, peak)
+- [ ] Placement costs about 10 ms of CPU per chunk (a few seconds to fill the ring, nearest first); profile and trim (climate sample and mix per cell)
+- [ ] `PERF` on a real GPU in a hover at 10 m over grass by a forest edge against the 2 M triangle and 500 draw budgets
+- [ ] Owner: the cover in the browser (Free Flight, a helicopter hover over meadow, scrub, desert and scree)
 
 ### G4. Motion
 

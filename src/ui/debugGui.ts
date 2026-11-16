@@ -37,6 +37,8 @@ export interface ViewGuiParams {
   prefetch: boolean;
   /** Instanced trees near the camera (decision 148). */
   trees: boolean;
+  /** Ground cover near a low camera (decision 174). */
+  groundCover: boolean;
   /** Crowns inside stands and whole trees on edges and in the open: ranges (km). */
   treeRange: number;
   edgeTreeRange: number;
@@ -402,6 +404,9 @@ export class DebugGui {
       .onChange(() => callbacks.viewChanged(view));
     t.add(view, 'trees')
       .name('Trees')
+      .onChange(() => callbacks.viewChanged(view));
+    t.add(view, 'groundCover')
+      .name('Ground cover')
       .onChange(() => callbacks.viewChanged(view));
     t.add(view, 'treeRange', 0.2, 2, 0.1)
       .name('Tree range (km)')

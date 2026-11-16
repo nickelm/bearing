@@ -229,7 +229,8 @@ function lakeLevel(data: TileData, fx: number, fy: number): number {
 /** Displayed height before exaggeration: the sea flat at 0, lakes flat at their level. */
 const displayHeight = (h: number, level: number) => Math.max(0, h, level);
 
-function materialAt(data: TileData, fx: number, fy: number): number {
+/** The material word of the data sample nearest (fx, fy), in the data tile's sample space. */
+export function materialAt(data: TileData, fx: number, fy: number): number {
   const x = Math.min(TILE_TEXELS, Math.max(0, Math.round(fx)));
   const y = Math.min(TILE_TEXELS, Math.max(0, Math.round(fy)));
   return data.material[(y + TILE_BORDER) * TILE_STRIDE + x + TILE_BORDER]!;
@@ -325,7 +326,8 @@ function seabedColor(h: number, reliefScale: number): Rgb {
   return [0.66 - 0.3 * t, 0.6 - 0.28 * t, 0.46 - 0.2 * t];
 }
 
-function colorFor(
+/** A vertex's color (sRGB 0..1) in a view mode: in `biome`, the open ground's color by its cover. */
+export function colorFor(
   mode: TileViewMode,
   h: number,
   material: number,

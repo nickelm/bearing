@@ -923,6 +923,8 @@ it('renders preview views', async () => {
   // MICRO=x scales the ground's micro-facets (decision 168; 0 = off); GLINT=x their glints.
   if (process.env.MICRO) scene.terrain.micro.strength.value = Number(process.env.MICRO);
   if (process.env.GLINT) scene.terrain.micro.glint.value = Number(process.env.GLINT);
+  // COVER=0 leaves the ground cover out (decision 174).
+  if (process.env.COVER === '0') scene.groundCover.enabled = false;
   // SKY_LIGHT=x sets the sky light on surfaces (PlanetLighting.skyLight): the fill in the shadows.
   if (process.env.SKY_LIGHT) scene.lighting.skyLight.value = Number(process.env.SKY_LIGHT);
   // DAYLIGHT=x sets the sun's illuminance by day (PlanetLighting.daylight, default 1.4): the exposure.
@@ -1583,7 +1585,8 @@ it('renders preview views', async () => {
       if (process.env.DEBUG) console.log(v.name, f, JSON.stringify(s), o.tilt, o.altitude);
       const treesPending =
         (scene.forest.group.visible ? scene.forest.stats.pending : 0) +
-        (scene.structures.group.visible ? scene.structures.stats.pending : 0);
+        (scene.structures.group.visible ? scene.structures.stats.pending : 0) +
+        (scene.groundCover.group.visible ? scene.groundCover.stats.pending : 0);
       stable = s.pending === 0 && treesPending === 0 && sig === last ? stable + 1 : 0;
       last = sig;
     }
@@ -2064,6 +2067,12 @@ it('renders preview views', async () => {
     if (scene.forest.stats.instances) {
       console.log(
         `  trees: ${scene.forest.stats.tiles} parts, ${scene.forest.stats.instances} trees, ${(scene.forest.stats.triangles / 1e6).toFixed(2)} M triangles; ${scene.terrain.stats.shells} canopy shells`,
+      );
+    }
+    if (scene.groundCover.stats.instances) {
+      const gc = scene.groundCover.stats;
+      console.log(
+        `  ground cover: ${gc.chunks} chunks, ${gc.instances} items in ${gc.draws} draws, ${(gc.triangles / 1e6).toFixed(3)} M triangles`,
       );
     }
     {

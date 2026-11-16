@@ -37,11 +37,12 @@ export const SCHEMES: Record<string, CamoScheme> = {
     patch: 4,
   },
   'pact-bomber': { name: 'Pact bomber', colors: ['#A7ABAE'], patch: 10 },
-  // Ground cover (decision 172): rock shades per face, and gray rock with lichen.
-  rock: { name: 'Rock', colors: ['#6E665E', '#857B70', '#5C554F'], patch: 0.35 },
+  // Ground cover (decisions 172, 174): rock shades per face, and gray rock with lichen, a
+  // step lighter than the terrain's rock so their shaded sides still read as stone.
+  rock: { name: 'Rock', colors: ['#8E867C', '#A39A8E', '#7A7268'], patch: 0.35 },
   'rock-lichen': {
     name: 'Rock with lichen',
-    colors: ['#6E665E', '#857B70', '#8C8A5A', '#5C554F'],
+    colors: ['#8E867C', '#A39A8E', '#A3A06A', '#7A7268'],
     patch: 0.3,
   },
   sandstone: { name: 'Sandstone', colors: ['#B8693C', '#C98D58', '#A65A36'], patch: 0.5 },

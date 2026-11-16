@@ -71,23 +71,23 @@ As built (decision 172; `tools/models/cover.py` writes the specs, class `cover`,
 | Slab                                   | 24        | 2.6 m      | Two stacked sandstone strata, the upper set back                                                         |
 | Pebbles                                | 36        | 0.5 m wide | Three low four-sided stones                                                                              |
 
-- **Color from the ground.** Each instance takes the land albedo of its ground point from the same `LandShading` functions the terrain uses, then the model's own value ramp on top. A tuft therefore matches the grass around it, browns with it in autumn and pales with it in drought; a boulder takes the local rock shade. Mismatched cover is the most common reason ground cover looks pasted on.
+- **Color from the ground.** Each item takes the open ground's color at its cell (the tile vertex color the terrain starts from, with the land shader's moisture tint), computed on the CPU at placement; green parts of plants take its brightness and half its hue under the model's own light and dark shades, and brown with the season where the ground is green. Rocks keep their own shades. Mismatched cover is the most common reason ground cover looks pasted on (decision 174).
 - **No thin parts.** Blades are at least 10 cm wide at the base (Part I, principle 4).
 
 ### 3. Placement and the ring (G3)
 
 - **A shared, pure placement function** in `worldgen/groundCover.ts`, beside `canopy.ts`: given a point, it returns what grows or lies there from integer cell hashes, biome, moisture, slope, snow and the masks below. No RNG stream is drawn, so no other stage changes (rule 5), and the sim can ask the same question later.
-- **Cells.** A jittered lattice in 8 m cells, each with up to a few instances by cover type and density (grass dense, desert sparse; boulders clustered below cliffs as talus and scattered on alpine ground and scree).
+- **Cells.** One cell per level-10 sample (about 6 m on the campaign world), five candidate slots each; clumps of grass and fields of boulders from patterns over blocks of five cells, and one flower color per block of nine (decision 174).
 - **Masks.** None in water or protected channels, on roads, runways, taxiways, pads or rail ballast, in built-up patches, or where the canopy shell covers the ground; tufts thin into snow and vanish under full snow; road verges and field edges get a denser band.
 - **On the drawn surface.** Each instance sits on the triangle the terrain actually draws, interpolated from the finest level's mesh vertices on the mesh's own diagonal, and with the terrain's height exaggeration. A 0.5 m tuft on the smooth height instead of the facet would float or sink visibly. The ring must stay inside the range where the finest level is guaranteed; a test asserts it.
-- **The ring.** Instances live in one instanced geometry per model around the camera, refilled by cells as it moves, camera-relative (rule 4).
+- **The ring.** Chunks of an eighth of a level-10 tile are placed a few rows per frame; one instanced mesh per kind holds the items within the kind's range and the view cone, refilled from an anchor at the eye whenever the eye moves 6 m or turns about 11° (decision 174).
 
-| Layer                 | Full density to | Fades out by | Off above (camera height above ground) |
-| --------------------- | --------------- | ------------ | -------------------------------------- |
-| Micro-facets          | 360 m           | 600 m        | 600 m                                  |
-| Tufts, reeds, pebbles | 100 m           | 200 m        | 150 m                                  |
-| Bushes                | 250 m           | 450 m        | 400 m                                  |
-| Boulders, slabs       | 400 m           | 800 m        | 600 m                                  |
+| Layer                                   | Full density to | Fades out by | Off above (camera height above ground) |
+| --------------------------------------- | --------------- | ------------ | -------------------------------------- |
+| Micro-facets                            | 360 m           | 600 m        | 600 m                                  |
+| Tufts, flowers, pebbles                 | 84–105 m        | 120–150 m    | 120–150 m                              |
+| Tussocks, reeds, small boulders, bushes | 154–315 m       | 220–450 m    | 220–450 m                              |
+| Boulders, slabs                         | 455–560 m       | 650–800 m    | 650–800 m                              |
 
 Instances shrink into the ground over the last stretch of their range, as trees do. Ranges scale with the quality tiers of _Performance Budgets_.
 
@@ -111,7 +111,7 @@ Motion is what turns ground detail into a height and drift cue.
 | -------------------------- | ---------------- | ---------------------------------- | ---------------------------- |
 | Above 600 m                | 0                | 0                                  | one uniform branch           |
 | 150–600 m                  | ≤ 6              | ≤ 0.05 M                           | ≤ 0.3 ms                     |
-| Below 150 m                | ≤ 12             | ≤ 0.35 M (laptop), 0.15 M (tablet) | ≤ 1 ms                       |
+| Below 150 m                | ≤ 15             | ≤ 0.35 M (laptop), 0.15 M (tablet) | ≤ 1 ms                       |
 
 The densest view (hover at 10 m over grass by a forest edge) must still fit the 2 M triangle and 500 draw-call budgets with the trees. `PERF=n` in `tools/render.preview.ts` measures each row.
 

@@ -194,6 +194,7 @@ async function main(): Promise<void> {
     prefetch: true,
     // Trees near the camera on the canopy shell (decision 148): laptop ranges.
     trees: true,
+    groundCover: true,
     treeRange: 0.6,
     edgeTreeRange: 1.2,
     // The canopy shell gives forests height and cover at every range (decision 148).
@@ -729,6 +730,7 @@ async function main(): Promise<void> {
       globe.terrain.budgetMiB = v.tileMemory;
       globe.terrain.prefetch.enabled = v.prefetch;
       globe.forest.enabled = v.trees;
+      globe.groundCover.enabled = v.groundCover;
       globe.forest.nearRange.value = v.treeRange * KM;
       globe.forest.edgeRange.value = Math.max(v.edgeTreeRange, v.treeRange) * KM;
       globe.terrain.canopy.enabled.value = v.canopyShell ? 1 : 0;

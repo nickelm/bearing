@@ -57,9 +57,9 @@ write('cover-reeds', 'Reed clump', {"mid": "reed", "light": "grass-light", "head
 for bid, name, g in [('bush', 'Bush', {"dark": "leaf-dark", "mid": "leaf", "light": "leaf-light"}),
                      ('bush-dry', 'Dry bush', {"dark": "leaf-dry", "mid": "grass-dry", "light": "leaf-dry"})]:
     write('cover-' + bid, name, g, [
-        {"type": "blob", "group": "mid", "center": [0, 0.15, 0], "radius": [0.75, 1.0, 0.7], "half": True, "jitter": 0.12, "seed": 21},
-        {"type": "blob", "group": "light", "center": [0.35, 0.45, -0.25], "radius": [0.45, 0.55, 0.42], "half": True, "jitter": 0.12, "seed": 22},
-        {"type": "blob", "group": "dark", "center": [-0.45, 0.05, 0.3], "radius": [0.45, 0.6, 0.4], "half": True, "jitter": 0.12, "seed": 23},
+        {"type": "blob", "group": "mid", "center": [0, -0.05, 0], "radius": [0.75, 1.05, 0.7], "half": True, "jitter": 0.12, "seed": 21},
+        {"type": "blob", "group": "light", "center": [0.35, 0.3, -0.25], "radius": [0.45, 0.6, 0.42], "half": True, "jitter": 0.12, "seed": 22},
+        {"type": "blob", "group": "dark", "center": [-0.45, -0.05, 0.3], "radius": [0.45, 0.6, 0.4], "half": True, "jitter": 0.12, "seed": 23},
     ])
 # Boulders: jittered, flattened icosahedra, sunk a little; per-face rock shades.
 write('cover-boulder-small', 'Boulder (small)', {"rock": "camo"},

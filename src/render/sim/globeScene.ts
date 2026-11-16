@@ -35,6 +35,7 @@ import { CloudLayer } from './clouds/cloudLayer';
 import { Volumetrics } from './clouds/volumetrics';
 import { WeatherTexture } from './clouds/weatherTexture';
 import { ForestLayer } from './forest/forestLayer';
+import { GroundCoverLayer } from './ground/groundCoverLayer';
 import { GlobeMesh } from '../common/globeMesh';
 import { PlanetLighting } from './lighting/planetLighting';
 import { TerrainShadow } from './lighting/terrainShadow';
@@ -111,6 +112,8 @@ export class GlobeScene {
   readonly terrain: TerrainRenderer;
   /** The tree kit near the camera, on the terrain's canopy shell (decision 150). */
   readonly forest: ForestLayer;
+  /** Ground cover near a low camera (decision 174). */
+  readonly groundCover: GroundCoverLayer;
   /** Buildings of towns, airbases and industry near the camera (decision 65). */
   readonly structures: StructureLayer;
   /** Cloud coverage, cloud shadows and the shell far above the view (decisions 55, 68, 141). */
@@ -199,6 +202,12 @@ export class GlobeScene {
     this.terrain = new TerrainRenderer(this.lighting, this.climate);
     this.shadows.tiles = this.terrain;
     this.forest = new ForestLayer(this.terrain, this.lighting, this.climate, this.terrain.land);
+    this.groundCover = new GroundCoverLayer(
+      this.terrain,
+      this.lighting,
+      this.climate,
+      this.terrain.land,
+    );
     this.structures = new StructureLayer(this.terrain, this.lighting);
     // The sky, drawn behind everything: its LUT, the sun, the moon and the stars (decision 140).
     this.scene.backgroundNode = this.lighting.atmosphere.skyNode();
@@ -208,6 +217,7 @@ export class GlobeScene {
       this.globe.group,
       this.terrain.group,
       this.forest.group,
+      this.groundCover.group,
       this.structures.group,
       this.clouds.group,
       this.strategic.group,
@@ -295,6 +305,7 @@ export class GlobeScene {
   setInfrastructure(scene: InfraScene | null): void {
     this.structures.setScene(scene);
     this.forest.setInfrastructure(scene);
+    this.groundCover.setInfrastructure(scene);
   }
 
   resize(width: number, height: number): void {
@@ -437,6 +448,7 @@ export class GlobeScene {
         aspect: this.camera.aspect,
       };
       this.forest.update(o.eye, aboveGround, cull);
+      this.groundCover.update(o.eye, aboveGround, cull);
       this.structures.setInk(
         this.structures.inkWidth,
         (this.camera.fov * Math.PI) / 180 / this.viewportHeight,
@@ -444,6 +456,7 @@ export class GlobeScene {
       this.structures.update(o.eye, aboveGround, cull);
     } else {
       this.forest.group.visible = false;
+      this.groundCover.group.visible = false;
       this.structures.group.visible = false;
     }
 
@@ -511,6 +524,7 @@ export class GlobeScene {
     this.globe.dispose();
     this.terrain.dispose();
     this.forest.dispose();
+    this.groundCover.dispose();
     this.structures.dispose();
     this.clouds.dispose();
     this.weather.dispose();
