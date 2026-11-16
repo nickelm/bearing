@@ -199,15 +199,19 @@ export class RiverShading {
         const ub = b.xyz.div(length(b.xyz));
         const ab = ub.sub(ua);
         const t = clamp(dot(p.sub(ua), ab).div(max(dot(ab, ab), 1e-20)), 0, 1);
-        const d = length(p.sub(ua.add(ab.mul(t)))).mul(this.radius);
+        const off = p.sub(ua.add(ab.mul(t)));
+        const d = length(off).mul(this.radius);
         const halfWidth = mix(a.w, b.w, t);
         const toBank = d.sub(max(halfWidth, minHalf));
         If(toBank.lessThan(best), () => {
           best.assign(toBank);
-          // Which side of the centerline: the sign against the segment's plane.
+          // Which side of the centerline: the offset from the nearest point against the
+          // segment's sideways direction. Not p · (ua × ub): near a river that product is
+          // about 1e-9, below float32's rounding of the cross product, and the side flipped
+          // at random, which split rivers in two under the wander.
           bestSigned.assign(
             d.mul(
-              sign(dot(cross(ua, ub), p))
+              sign(dot(off, cross(ua, ab)))
                 .add(0.5)
                 .sign(),
             ),

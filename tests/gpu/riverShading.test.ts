@@ -6,6 +6,7 @@ import { latLonToDirection } from '../../src/core/coords';
 import { tileForDirection } from '../../src/core/tiles';
 import { DEG, PLANET_RADIUS } from '../../src/core/units';
 import { RiverShading } from '../../src/render/common/water/riverShading';
+import { offsetPoint } from '../../src/render/sim/infra/infraScene';
 import { RiverTables } from '../../src/render/common/water/riverTables';
 import { RiverIndex } from '../../src/worldgen/riverIndex';
 import { straightRiver } from '../helpers/rivers';
@@ -86,19 +87,27 @@ describe.skipIf(!gpu)('river coverage (TSL on Dawn)', () => {
 
   it('draws natural banks: wandering, swelling and ragged, smooth along the river (decision 167)', async () => {
     const R = PLANET_RADIUS;
-    const tables = new RiverTables(new RiverIndex(straightRiver(40)), R);
+    // An oblique river (not along an axis or the equator), where a float32 side test
+    // against the segment's plane would flip at random: 8.4 km from C heading 35°.
+    const C = latLonToDirection(37 * DEG, 23 * DEG);
+    const H = 35 * DEG;
+    const river = straightRiver(40);
+    for (let i = 0; i < 8; i++) {
+      const q = offsetPoint(C, H, i * 1200, 0, R);
+      river.points.set([q.x, q.y, q.z], i * 3);
+    }
+    const tables = new RiverTables(new RiverIndex(river), R);
     const shading = new RiverShading(tables, R);
     shading.legibility.value = 0;
     shading.minPixels.value = 1;
-    const range = tables.rangeFor(tileForDirection(latLonToDirection(0, 10.25 * DEG), 9));
-    // 160 stations 5 m apart along the river, each sampled across it every 0.5 m.
+    const range = tables.rangeFor(tileForDirection(offsetPoint(C, H, 2400, 0, R), 9));
+    // 160 stations 5 m apart along the river, each sampled across it every 0.5 m out to 80 m.
     const stations = 160;
-    const across = 181;
+    const across = 321;
     const input = new Float32Array(stations * across * 4);
     for (let k = 0; k < stations; k++) {
       for (let j = 0; j < across; j++) {
-        const lon = 10.25 * DEG + (k * 5) / R;
-        const d = latLonToDirection((-45 + 0.5 * j) / R, lon).scale(R + 50);
+        const d = offsetPoint(C, H, 2000 + k * 5, -80 + 0.5 * j, R).scale(R + 50);
         input.set([d.x, d.y, d.z, 0.25], (k * across + j) * 4);
       }
     }
@@ -134,8 +143,11 @@ describe.skipIf(!gpu)('river coverage (TSL on Dawn)', () => {
         hi = j;
       }
       expect(lo).toBeGreaterThan(0);
-      left.push(-45 + 0.5 * lo);
-      right.push(-45 + 0.5 * hi);
+      expect(hi).toBeLessThan(across - 1);
+      // One channel: no dry gap between the banks (the river must not split).
+      for (let j = lo; j <= hi; j++) expect(out[(k * across + j) * 4]!).toBeGreaterThan(0.2);
+      left.push(-80 + 0.5 * lo);
+      right.push(-80 + 0.5 * hi);
     }
     const width = left.map((l, k) => right[k]! - l);
     console.log('natural banks', {
@@ -168,7 +180,7 @@ describe.skipIf(!gpu)('river coverage (TSL on Dawn)', () => {
     // A dark bank band lies outside the water at some stations on each side.
     let banked = 0;
     for (let k = 0; k < stations; k++) {
-      const j = Math.round((left[k]! - 2 + 45) / 0.5);
+      const j = Math.round((left[k]! - 2 + 80) / 0.5);
       if (j >= 0 && out[(k * across + j) * 4 + 1]! > 0.5) banked++;
     }
     expect(banked).toBeGreaterThan(stations / 2);
