@@ -17,6 +17,7 @@
 import { SETTLEMENT_PORT } from './graph';
 import type { RailNetwork, SettlementList } from './graph';
 import type { StrategicContext } from './input';
+import { describeBridges } from './bridges';
 import { railCost } from './movement';
 import {
   findBridges,
@@ -65,6 +66,7 @@ export function buildRailways(ctx: StrategicContext, s: SettlementList): RailNet
   lines.roadClass.fill(0);
   lines.traffic.fill(0);
   const bridges = findBridges(ctx, builder.rivers, builder.edges, lines);
+  describeBridges(ctx, builder.rivers, bridges, lines, true);
   bridges.roadClass.fill(0);
   // Yards: city stations, and stations where three or more lines meet.
   const degree = new Map<number, number>();

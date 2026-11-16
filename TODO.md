@@ -939,9 +939,10 @@ Rivers by regime, roads and railways aligned to the terrain with earthworks as a
 
 - [x] Crossing sites on the coarse rivers and on the eroded rivers: narrow, straight, firm banks, off knickpoints (coarse: decision 175; the eroded rivers' sites go with N5's snapping)
 - [x] Settlement pull: a habitability term for coarse crossing sites; worlds without sites unchanged bit for bit (test); `GENERATOR_VERSION` up; tell the owner which seeds' casts changed (decision 175: 25–30% more settlements at sites; the road search discounts bridges there too)
-- [ ] Bridges as nodes: road and rail polylines cut at bridges; type on the coarse pass (beam, truss, arch, viaduct, suspension), span, traffic carried, detour if it falls
-- [ ] Every bridge a target (decision 163): a network bridge at every coarse crossing of a river that needs a structure (not only 25 m and wider), and viaducts where railways and major roads cross valleys deeper than their class's threshold on the coarse relief
-- [ ] `names/bridges` (after the river, the nearest town or the feature), `names/lines`, `names/reaches`, `names/sections`, in id order; existing streams unchanged (test)
+- [x] Bridges as nodes: road and rail polylines cut at bridges; type on the coarse pass (beam, truss, arch, viaduct, suspension), span, traffic carried, detour if it falls (decision 179; cutting the polylines at bridges is left)
+  - [ ] Cut road and rail polylines at bridges, so each is a node of the network
+- [x] Every bridge a target (decision 163): a network bridge at every coarse crossing of a river that needs a structure (not only 25 m and wider), and viaducts where railways and major roads cross valleys deeper than their class's threshold on the coarse relief (decision 179; viaducts are rare at 6 km cells)
+- [ ] `names/bridges` (after the river, the nearest town or the feature), `names/lines`, `names/reaches`, `names/sections`, in id order; existing streams unchanged (test) (bridges done, after the nearest town: decision 179)
 
 ### N5. Router and alignment
 

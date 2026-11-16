@@ -46,7 +46,10 @@ import {
   SETTLEMENT_COAST,
   SETTLEMENT_PORT,
 } from './graph';
+import { nameBridges, Toponymy } from '../names';
+import { bridgeBuffers, DETOUR_NONE } from './graph';
 import type { BridgeList, Point, RoadNetwork } from './graph';
+import { bridgeFields, describeBridges } from './bridges';
 import { findBridges, roadPolylines } from './roads';
 import { airbaseSuitability } from './sites';
 import {
@@ -61,7 +64,7 @@ import type { Territory } from './territory';
 export type AirbaseKind = 'main' | 'forward' | 'bomber' | 'island';
 export type PortKind = 'military' | 'commercial';
 export type TargetKind =
-  'factory' | 'power-plant' | 'refinery' | 'rail-yard' | 'supply-depot' | 'fuel-depot';
+  'factory' | 'power-plant' | 'refinery' | 'rail-yard' | 'supply-depot' | 'fuel-depot' | 'bridge';
 
 export interface Airbase {
   id: number;
@@ -248,10 +251,29 @@ export function placeInfrastructure(
     riverWidth: Float32Array.from(keep, (i) => all.riverWidth[i]!),
     road: Int32Array.from(keep, (i) => all.road[i]!),
     roadClass: Uint8Array.from(keep, () => RoadClass.Secondary),
+    ...bridgeFields(keep.length),
   };
+  describeBridges(ctx, roads.rivers, spurBridges, spurs, false);
+  // Names from their own stream, unique against the network's bridges (decision 179).
+  nameBridges(
+    spurBridges,
+    s,
+    graph,
+    new Toponymy(rng(seed, 'names').fork('spur-bridges')),
+    new Set([...graph.bridges.names, ...graph.railways.bridges.names]),
+    false,
+  );
   lap('spur roads');
 
-  const targets = placeTargets(build, cast, territory, settlementSide, ports, r.fork('targets'));
+  const targets = placeTargets(
+    build,
+    cast,
+    territory,
+    settlementSide,
+    ports,
+    spurBridges,
+    r.fork('targets'),
+  );
   lap('targets');
   const capitals: Record<Side, number> = { alliance: -1, pact: -1 };
   for (let i = 0; i < s.cells.length; i++) {
@@ -553,6 +575,7 @@ function placeTargets(
   territory: Territory,
   settlementSide: (Side | null)[],
   ports: Port[],
+  spurBridges: BridgeList,
   r: Rng,
 ): TargetSite[] {
   const { ctx, graph } = build;
@@ -679,6 +702,38 @@ function placeTargets(
     if (p.kind !== 'military') continue;
     add('fuel-depot', p.side, p.theaters[0] ?? strategic, p.cell, p.settlement, 0.55);
   }
+  // Every bridge (decisions 163, 179), held by the side whose territory it stands in,
+  // in the theater of the front it lies behind: worth more the more traffic it carries
+  // and the longer the way round if it falls. Railways' bridges weigh more: they cannot
+  // be bypassed by a road convoy.
+  const maxTraffic = Math.max(1, ...graph.bridges.traffic, ...spurBridges.traffic);
+  const addBridges = (b: BridgeList, rail: boolean) => {
+    for (let i = 0; i < b.cells.length; i++) {
+      const c = b.cells[i]!;
+      const side = sideOf(territory.owner[c]!);
+      if (!side) continue;
+      const front = territory.frontTheater[c]!;
+      const detour = b.detour[i]! === DETOUR_NONE ? 1 : Math.min(1, b.detour[i]! / 150e3);
+      const traffic = rail ? 0.6 : Math.sqrt(b.traffic[i]! / maxTraffic);
+      const point: Point = [b.points[i * 3]!, b.points[i * 3 + 1]!, b.points[i * 3 + 2]!];
+      out.push({
+        id: out.length,
+        kind: 'bridge',
+        name: b.names[i]!,
+        side,
+        theater: front >= 0 ? front : strategic,
+        cell: c,
+        point,
+        // Below industry and logistics (0.5–1) but for the busiest bridges with no way
+        // round: there are hundreds of bridges to a few dozen other targets.
+        value: Math.min(1, (rail ? 0.2 : 0.1) + 0.35 * traffic + 0.25 * detour),
+        settlement: nearestIn(s, point, R, 20e3),
+      });
+    }
+  };
+  addBridges(graph.bridges, false);
+  addBridges(graph.railways.bridges, true);
+  addBridges(spurBridges, false);
   return out;
 }
 
@@ -711,11 +766,7 @@ export function infrastructureBuffers(x: Infrastructure): ArrayBufferLike[] {
     r.roadClass.buffer,
     r.traffic.buffer,
     r.route.buffer,
-    b.cells.buffer,
-    b.points.buffer,
-    b.riverWidth.buffer,
-    b.road.buffer,
-    b.roadClass.buffer,
+    ...bridgeBuffers(b),
     x.territory.buffer,
   ];
 }

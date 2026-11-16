@@ -15,8 +15,8 @@
  */
 import { rng } from '../../core/rng';
 import type { WorldSeed } from '../../core/rng';
-import { FeatureKind, RouteKind, STRAIT_MAX_WIDTH } from '../strategic/graph';
-import type { StrategicGraph } from '../strategic/graph';
+import { BridgeKind, FeatureKind, RouteKind, STRAIT_MAX_WIDTH } from '../strategic/graph';
+import type { BridgeList, SettlementList, StrategicGraph } from '../strategic/graph';
 import { ISLAND_FLAVOR, LAND_FLAVORS } from './flavors';
 import { Toponymy } from './toponymy';
 
@@ -96,6 +96,52 @@ export function featureName(
   }
 }
 
+/** Bridges take the name of a town within this distance (m; decision 179). */
+export const BRIDGE_TOWN_REACH = 20e3;
+
+const ROMAN = ['', '', ' II', ' III', ' IV', ' V', ' VI', ' VII', ' VIII', ' IX', ' X'];
+
+/**
+ * Names the bridges of `b` in place (decision 179): after the nearest town within
+ * BRIDGE_TOWN_REACH ("Brann Bridge", "Brann Rail Bridge", "Oskel Viaduct"), else a
+ * fresh name in the nearest town's flavor; a name already in `used` takes a
+ * numeral ("Brann Bridge II").
+ */
+export function nameBridges(
+  b: BridgeList,
+  s: SettlementList,
+  graph: Pick<StrategicGraph, 'nodes' | 'radius'>,
+  t: Toponymy,
+  used: Set<string>,
+  rail: boolean,
+): void {
+  for (let i = 0; i < b.cells.length; i++) {
+    const px = b.points[i * 3]!;
+    const py = b.points[i * 3 + 1]!;
+    const pz = b.points[i * 3 + 2]!;
+    let best = -1;
+    let bestDot = -2;
+    for (let k = 0; k < s.cells.length; k++) {
+      const d = px * s.points[k * 3]! + py * s.points[k * 3 + 1]! + pz * s.points[k * 3 + 2]!;
+      if (d > bestDot) {
+        bestDot = d;
+        best = k;
+      }
+    }
+    const dist = best >= 0 ? Math.acos(Math.min(1, bestDot)) * graph.radius : Infinity;
+    const node = best >= 0 ? s.node[best]! : -1;
+    const flavor = node >= 0 ? graph.nodes[node]!.flavor : LAND_FLAVORS[0]!;
+    const generic = b.kind[i] === BridgeKind.Viaduct ? 'Viaduct' : rail ? 'Rail Bridge' : 'Bridge';
+    const place = dist <= BRIDGE_TOWN_REACH ? s.names[best]! : t.proper(flavor);
+    const stem = `${place} ${generic}`;
+    let name = stem;
+    for (let n = 2; used.has(name); n++)
+      name = n < ROMAN.length ? `${stem}${ROMAN[n]}` : `${stem} ${n}`;
+    used.add(name);
+    b.names[i] = name;
+  }
+}
+
 /** Names features, settlements, corridors and pass and coast roads in place. */
 export function nameWorld(graph: StrategicGraph, seed: WorldSeed): void {
   const flavors = assignFlavors(graph, seed);
@@ -147,4 +193,10 @@ export function nameWorld(graph: StrategicGraph, seed: WorldSeed): void {
     taken.add(name);
     rt.names[i] = name;
   }
+
+  // Bridges (decision 179): road bridges, then rail bridges, from their own stream.
+  const tb = new Toponymy(base.fork('bridges'));
+  const usedBridges = new Set<string>();
+  nameBridges(graph.bridges, s, graph, tb, usedBridges, false);
+  nameBridges(graph.railways.bridges, s, graph, tb, usedBridges, true);
 }

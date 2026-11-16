@@ -159,6 +159,7 @@ const TARGET_SHAPES: Record<TargetKind, MarkShape> = {
   'rail-yard': 'rail-yard',
   'supply-depot': 'supply-depot',
   'fuel-depot': 'fuel-depot',
+  bridge: 'bridge',
 };
 
 function symbol(
@@ -318,6 +319,8 @@ export function buildInfraOverlays(
       marks.push(site('port', p.point, FACTION_COLORS[p.side], SYMBOL_SIZE, REGION));
     }
     for (const t of infra.targets) {
+      // Bridges have their marks on the roads and railways (above), not badges.
+      if (t.kind === 'bridge') continue;
       if (t.kind === 'rail-yard' && t.settlement >= 0) yardTargets.add(t.settlement);
       const point = edgeOf(t.settlement, t.point);
       marks.push(site(TARGET_SHAPES[t.kind], point, FACTION_COLORS[t.side], SYMBOL_SIZE, REGION));

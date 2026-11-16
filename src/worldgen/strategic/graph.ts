@@ -325,7 +325,23 @@ export interface CrossingList {
   riverWidth: Float32Array;
 }
 
-/** Road bridges over rivers at least BRIDGE_MIN_WIDTH wide: targetable features. */
+/** Kinds of bridge, decided on the coarse pass (decision 179). Codes in `BridgeList.kind`. */
+export const BridgeKind = { Beam: 0, Truss: 1, Arch: 2, Viaduct: 3, Suspension: 4 } as const;
+export type BridgeKind = (typeof BridgeKind)[keyof typeof BridgeKind];
+export const BRIDGE_KIND_NAMES: readonly string[] = [
+  'beam',
+  'truss',
+  'arch',
+  'viaduct',
+  'suspension',
+];
+/** `BridgeList.detour` when no way round is found within reach. */
+export const DETOUR_NONE = -1;
+
+/**
+ * Bridges where roads or railways cross rivers that need one (BRIDGE_MIN_WIDTH
+ * and wider): every one a target (decisions 163, 179).
+ */
 export interface BridgeList {
   cells: Int32Array;
   points: Float64Array;
@@ -334,6 +350,19 @@ export interface BridgeList {
   /** Polyline of the road carried (in the network the bridge belongs to). */
   road: Int32Array;
   roadClass: Uint8Array;
+  /** Kind (BridgeKind), from the river, the valley and what it carries. */
+  kind: Uint8Array;
+  /** Span (m). */
+  span: Float32Array;
+  /** Traffic of the road carried (the network's units); for railways, lines carried. */
+  traffic: Float32Array;
+  /**
+   * Extra distance (m) the way round on the same network takes if the bridge
+   * falls, or DETOUR_NONE when none is found within reach.
+   */
+  detour: Float32Array;
+  /** Names ("Brann Bridge", "Oskel Viaduct"), set by the naming stage. */
+  names: string[];
 }
 
 // ---- Named features (design pipeline steps 7 and 8; decisions 95, 96) ----
@@ -620,7 +649,17 @@ export function roadBuffers(r: RoadNetwork): ArrayBufferLike[] {
 }
 
 export function bridgeBuffers(b: BridgeList): ArrayBufferLike[] {
-  return [b.cells.buffer, b.points.buffer, b.riverWidth.buffer, b.road.buffer, b.roadClass.buffer];
+  return [
+    b.cells.buffer,
+    b.points.buffer,
+    b.riverWidth.buffer,
+    b.road.buffer,
+    b.roadClass.buffer,
+    b.kind.buffer,
+    b.span.buffer,
+    b.traffic.buffer,
+    b.detour.buffer,
+  ];
 }
 
 export function settlementPoint(s: SettlementList, i: number): Point {

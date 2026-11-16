@@ -7,7 +7,11 @@ import { latLonToDirection } from '../src/core/coords';
 import { DEG } from '../src/core/units';
 import { buildStrategicGraphWithContext } from '../src/worldgen/strategic/builder';
 import { CROSSING_TUNING, crossingScores } from '../src/worldgen/strategic/crossings';
-import { graphBuffers } from '../src/worldgen/strategic/graph';
+import { BridgeKind, DETOUR_NONE, graphBuffers } from '../src/worldgen/strategic/graph';
+import { CubeGrid } from '../src/core/cubeGrid';
+import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
+import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
+import { RIVER_TUNING } from '../src/worldgen/rivers';
 import { BRIDGE_MIN_DISCHARGE, RiverGeometry } from '../src/worldgen/strategic/movement';
 import { habitability } from '../src/worldgen/strategic/settlements';
 import { boxWorld, graphFingerprint, RADIUS } from './helpers/syntheticWorld';
@@ -102,5 +106,72 @@ describe('crossing sites (decision 175)', () => {
     expect(buffers).toContain(graph.crossings.score.buffer);
     expect(graphFingerprint(valleyWorld(1983).build.graph)).toBe(graphFingerprint(graph));
     expect([...valleyWorld(1983).build.graph.crossings.cells]).toEqual([...graph.crossings.cells]);
+  });
+});
+
+describe('bridges (decision 179)', () => {
+  const { build } = valleyWorld(1983);
+  const { graph } = build;
+  const all = [
+    { b: graph.bridges, rail: false },
+    { b: graph.railways.bridges, rail: true },
+  ];
+
+  it('each has a kind, a span over its river, traffic, a detour and a unique name', () => {
+    const names = new Set<string>();
+    let total = 0;
+    for (const { b, rail } of all) {
+      for (let i = 0; i < b.cells.length; i++) {
+        total++;
+        expect(Object.values(BridgeKind)).toContain(b.kind[i]);
+        expect(b.span[i]).toBeGreaterThanOrEqual(b.riverWidth[i]!);
+        expect(b.traffic[i]).toBeGreaterThanOrEqual(0);
+        expect(b.detour[i] === DETOUR_NONE || b.detour[i]! >= 0).toBe(true);
+        expect(b.names[i]).toMatch(
+          rail ? /(Rail Bridge|Viaduct)( [IVX]+| \d+)?$/ : /(Bridge|Viaduct)( [IVX]+| \d+)?$/,
+        );
+        expect(names.has(b.names[i]!)).toBe(false);
+        names.add(b.names[i]!);
+      }
+    }
+    expect(total).toBeGreaterThan(0);
+    // A river with several bridges: some can be bypassed over another.
+    expect([...graph.bridges.detour].some((d) => d > 0)).toBe(true);
+  });
+
+  it('cross every river that needs one, down to the rivers the world draws', () => {
+    expect(BRIDGE_MIN_DISCHARGE).toBe(RIVER_TUNING.minDischarge);
+  });
+});
+
+describe('bridges as targets (decision 179)', () => {
+  const w = generateCampaignWorld(
+    { ...DEFAULT_PLANET_PARAMS, seed: 7 },
+    { grid: new CubeGrid(64) },
+  );
+  const infra = w.infrastructure;
+  const bridgeTargets = infra.targets.filter((t) => t.kind === 'bridge');
+
+  it('makes every bridge in held territory a target, named after it', () => {
+    const lists = [w.graph.bridges, w.graph.railways.bridges, infra.spurBridges];
+    let held = 0;
+    const names = new Set<string>();
+    for (const b of lists)
+      for (let i = 0; i < b.cells.length; i++) {
+        const owner = infra.territory[b.cells[i]!]!;
+        if (owner === 1 || owner === 2) {
+          held++;
+          names.add(b.names[i]!);
+        }
+      }
+    expect(bridgeTargets.length).toBe(held);
+    for (const t of bridgeTargets) {
+      expect(names.has(t.name)).toBe(true);
+      expect(t.value).toBeGreaterThan(0);
+      expect(t.value).toBeLessThanOrEqual(1);
+      expect(infra.territory[t.cell]).toBe(t.side === 'alliance' ? 1 : 2);
+    }
+    // Target ids stay their index.
+    infra.targets.forEach((t, i) => expect(t.id).toBe(i));
   });
 });

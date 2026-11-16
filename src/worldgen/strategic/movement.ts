@@ -8,13 +8,18 @@
  * bridge, which the road search charges per crossing step (see roads.ts).
  */
 import { Biome } from '../biomes';
-import { riverWidth } from '../rivers';
+import { RIVER_TUNING, riverWidth } from '../rivers';
 import type { StrategicContext } from './input';
 
-/** Rivers at least this wide (m) need a bridge; narrower ones are culverts and fords. */
-export const BRIDGE_MIN_WIDTH = 25;
-/** Discharge (m³/s) of a river BRIDGE_MIN_WIDTH wide (w = 4·√Q). */
-export const BRIDGE_MIN_DISCHARGE = (BRIDGE_MIN_WIDTH / 4) ** 2;
+/**
+ * Rivers at least this wide (m) need a bridge: every river the eroded world draws
+ * (RIVER_TUNING.minDischarge, about 18 m wide), so the bridges a player sees over its
+ * rivers are network bridges and targets (decisions 163, 179). Narrower streams are
+ * culverts and fords.
+ */
+export const BRIDGE_MIN_DISCHARGE = RIVER_TUNING.minDischarge;
+/** Width (m) of a river carrying BRIDGE_MIN_DISCHARGE. */
+export const BRIDGE_MIN_WIDTH = riverWidth(BRIDGE_MIN_DISCHARGE);
 
 /** Extra cost per biome, added to the base of 1. */
 const BIOME_COST: Partial<Record<number, number>> = {

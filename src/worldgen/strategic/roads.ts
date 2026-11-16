@@ -34,6 +34,7 @@ import { MinHeap } from '../../core/heap';
 import { RoadClass } from './graph';
 import type { BridgeList, RoadNetwork, SettlementList } from './graph';
 import type { StrategicContext } from './input';
+import { bridgeFields, describeBridges } from './bridges';
 import { CROSSING_TUNING } from './crossings';
 import { RiverGeometry } from './movement';
 
@@ -467,6 +468,7 @@ export function findBridges(
     roadClass: Uint8Array.from(out, (x) =>
       x.road >= 0 ? net.roadClass[x.road]! : RoadClass.Secondary,
     ),
+    ...bridgeFields(out.length),
   };
   out.forEach((x, i) =>
     b.points.set([g[x.cell * 3]!, g[x.cell * 3 + 1]!, g[x.cell * 3 + 2]!], i * 3),
@@ -811,5 +813,6 @@ export function buildRoads(
     classifyRoads(ctx, traffic),
   );
   const bridges = findBridges(ctx, builder.rivers, builder.edges, network);
+  describeBridges(ctx, builder.rivers, bridges, network, false);
   return { builder, network, bridges };
 }
