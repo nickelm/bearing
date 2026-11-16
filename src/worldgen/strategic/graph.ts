@@ -313,6 +313,18 @@ export interface RailNetwork {
   yardSettlement: Int32Array;
 }
 
+/**
+ * Crossing sites (decision 175): the best place to bridge each reach of a river
+ * that needs a bridge, on the coarse grid, with its score (0..1).
+ */
+export interface CrossingList {
+  cells: Int32Array;
+  points: Float64Array;
+  score: Float32Array;
+  /** Width of the river there (m). */
+  riverWidth: Float32Array;
+}
+
 /** Road bridges over rivers at least BRIDGE_MIN_WIDTH wide: targetable features. */
 export interface BridgeList {
   cells: Int32Array;
@@ -474,6 +486,8 @@ export interface StrategicGraph {
   habitability: Uint8Array;
   roads: RoadNetwork;
   bridges: BridgeList;
+  /** Crossing sites on the rivers that need bridges (decision 175). */
+  crossings: CrossingList;
   /** Numbered and named roads (decision 103). */
   routes: RouteList;
   railways: RailNetwork;
@@ -581,6 +595,8 @@ export function graphBuffers(g: StrategicGraph): ArrayBuffer[] {
   out.push(s.cells.buffer, s.points.buffer, s.population.buffer, s.node.buffer, s.flags.buffer);
   out.push(g.habitability.buffer);
   out.push(...roadBuffers(g.roads), ...bridgeBuffers(g.bridges), ...featureBuffers(g.features));
+  const cr = g.crossings;
+  out.push(cr.cells.buffer, cr.points.buffer, cr.score.buffer, cr.riverWidth.buffer);
   const rt = g.routes;
   out.push(rt.offsets.buffer, rt.roads.buffer, rt.roadClass.buffer, rt.kind.buffer);
   out.push(rt.length.buffer, rt.region.buffer);

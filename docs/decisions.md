@@ -2803,3 +2803,18 @@ The contact sheet is `docs/reports/screens/ground-g2-kit.png`. `docs/visual-styl
 `docs/plans/ground-detail.md` changes with this decision.
 
 **Reason:** Cover on the drawn facets, colored from the ground it stands on, is what makes low flight read as close to the ground; one draw per kind keeps the cost flat however many chunks are near, and a pure placement function lets the sim treat the same boulders as obstacles.
+
+### 175. Crossing sites on the coarse rivers; settlements drawn to them, bridges cheaper at them
+
+**Date:** 2026-11-16
+**Decision:** N4's first task (proposal 0005, generation step 2): crossing sites on the rivers that need bridges, before settlements and roads, in `worldgen/strategic/crossings.ts`.
+
+- **Score** per coarse river cell that needs a bridge, 0..1: a straight reach (the cosine between the reach in and out, from 0.3 to 0.95), firm banks on both sides (reference slope from 0.2% to 1.2%, half again on cliffs steeper than 12–35%, so gorges still score: an arch spans them), one river (a third at a confluence), a narrower river (down by up to 30% from 100 to 600 m wide), and nothing at a mouth or next to a lake or the sea.
+- **Sites**: cells scoring at least 0.45, taken best first, each keeping other sites three cells away up- and downstream (a first rule, "beat every cell within three", left a single site on straight reaches of equal score). They join the graph as `crossings` (cells, points, scores, river widths), transferred with it.
+- **Settlements**: habitability's water term gains 0.35 × the score of a site at or next to the cell. **Roads and railways**: entering a river cell costs the bridge times (1 − 0.5 × its crossing score).
+- **Effect** on six seeds (1–5 and 1983): about a thousand sites per world; settlements at or next to a site up 25–30% (seed 1983: 157 → 199 of about 1,700), bridges at a site from about 8% to about 30% (28 → 89 of 304), about 2% more settlements and 10% more bridges. Every seed keeps its cast seed (no new validity retries). `GENERATOR_VERSION` is 19; casts change, which decision 163 accepts.
+- **Tests** (`tests/crossings.test.ts`): on a synthetic valley, sites lie on the river with scores above the threshold and spaced, no score off the river, at the mouth or on flat banks, the pull raises habitability only at sites and their neighbors, and the graph carries and reproduces them. The full CPU suite passes (98 files, 877 tests).
+
+The eroded world's crossing sites, where the alignment snaps bridges (N5), come later.
+
+**Reason:** Towns grow where a river can be crossed (Oxford, Frankfurt, Maastricht), and roads converge there; scoring the crossings before both lets the settlement pattern and the bridges follow the rivers, as the proposal's generation order asks, with changes local to the river cells.

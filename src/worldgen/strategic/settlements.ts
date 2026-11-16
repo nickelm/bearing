@@ -23,6 +23,7 @@ import { NameGenerator } from '../../core/names';
 import { Biome } from '../biomes';
 import { SETTLEMENT_COAST, SETTLEMENT_PORT, SETTLEMENT_RIVER } from './graph';
 import type { LandNode, SettlementList } from './graph';
+import { CROSSING_TUNING } from './crossings';
 import { CapWalker, smoothstep } from './input';
 import type { StrategicContext } from './input';
 
@@ -83,6 +84,8 @@ export function habitability(ctx: StrategicContext, portCells: ReadonlySet<numbe
     if (coast) water += 0.35;
     if (lake) water += 0.2;
     if (portCells.has(c)) water += 0.5;
+    // A good river crossing draws a town (decision 175).
+    if (ctx.crossingNear) water += CROSSING_TUNING.pull * ctx.crossingNear[c]!;
     out[c] = Math.min(1, (fertility * lowland * flat * (1 + water)) / 2);
   }
   return out;

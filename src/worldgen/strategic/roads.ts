@@ -34,6 +34,7 @@ import { MinHeap } from '../../core/heap';
 import { RoadClass } from './graph';
 import type { BridgeList, RoadNetwork, SettlementList } from './graph';
 import type { StrategicContext } from './input';
+import { CROSSING_TUNING } from './crossings';
 import { RiverGeometry } from './movement';
 
 /** Longest direct link between two settlements (m). */
@@ -111,7 +112,12 @@ export class RoadBuilder {
     if (this.crossesDiagonally(a, b)) return Infinity;
     let c = len * 0.5 * (ca + cb);
     if (this.rivers.isBridged(b)) {
-      c += this.ctx.cellSize * (BRIDGE_PENALTY + this.rivers.width(b) / BRIDGE_WIDTH_SCALE);
+      // Cheaper at a crossing site (decision 175).
+      const site = this.ctx.crossing ? CROSSING_TUNING.discount * this.ctx.crossing[b]! : 0;
+      c +=
+        this.ctx.cellSize *
+        (BRIDGE_PENALTY + this.rivers.width(b) / BRIDGE_WIDTH_SCALE) *
+        (1 - site);
     }
     return c;
   }

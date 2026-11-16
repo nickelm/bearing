@@ -42,6 +42,13 @@ export interface StrategicContext extends StrategicInput {
   cellSize: number;
   /** Downstream cell per land cell (−1 at sea or where none is lower). */
   receiver: Int32Array;
+  /**
+   * Crossing score per cell (decision 175): a site's score at a crossing site, 0
+   * elsewhere; absent before the builder computes them.
+   */
+  crossing?: Float32Array;
+  /** Per cell, the score of a crossing site at or next to it (the settlement pull). */
+  crossingNear?: Float32Array;
 }
 
 /** Steepest-descent receivers over 8-neighbors, for inputs without drainage. */

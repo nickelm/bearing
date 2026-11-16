@@ -19,7 +19,8 @@ import { barrierMap, buildFronts } from './fronts';
 import type { StrategicGraph } from './graph';
 import { CapWalker, forestDensity, steepestDescent } from './input';
 import type { StrategicContext, StrategicInput } from './input';
-import { movementCost } from './movement';
+import { crossingNearness, crossingScores, crossingSites } from './crossings';
+import { movementCost, RiverGeometry } from './movement';
 import { buildNodes } from './nodes';
 import type { NodeBuild } from './nodes';
 import { buildRoads } from './roads';
@@ -75,6 +76,13 @@ export function buildStrategicGraphWithContext(input: StrategicInput): Strategic
     t0 = now;
   };
   const ctx = strategicContext(input);
+  // Crossing sites (decision 175) before settlements and roads, which both use them.
+  const crossingRivers = new RiverGeometry(ctx);
+  const crossingScore = crossingScores(ctx, crossingRivers);
+  const crossings = crossingSites(ctx, crossingRivers, crossingScore);
+  ctx.crossing = new Float32Array(ctx.grid.cellCount);
+  crossings.cells.forEach((c, i) => (ctx.crossing![c] = crossings.score[i]!));
+  ctx.crossingNear = crossingNearness(ctx, crossings);
   const walker = new CapWalker(ctx.grid);
   lap('landmasses');
   const airbases = airbaseSites(ctx, walker);
@@ -123,6 +131,7 @@ export function buildStrategicGraphWithContext(input: StrategicInput): Strategic
     habitability,
     roads: roads.network,
     bridges: roads.bridges,
+    crossings,
     routes,
     railways,
     urban,
