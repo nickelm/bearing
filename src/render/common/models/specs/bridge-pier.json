@@ -1,0 +1,9 @@
+{
+  "name": "Bridge wall pier (1 m tall, 1 m wide)",
+  "class": "building",
+  "groups": { "pier": "concrete", "cap": "concrete-dark" },
+  "parts": [
+    { "type": "box", "group": "pier", "center": [0, 0.5, 0], "size": [1.6, 1, 1], "bevel": 0.1 },
+    { "type": "box", "group": "cap", "center": [0, 0.98, 0], "size": [2.2, 0.04, 1.08] }
+  ]
+}

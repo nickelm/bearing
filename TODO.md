@@ -1024,7 +1024,12 @@ Rivers by regime, roads and railways aligned to the terrain with earthworks as a
 ### N7. Structures and names
 
 - [ ] Bridge kit specs (abutments, piers, beam decks, truss panels, arch ribs, viaduct arches, suspension towers) and tunnel portals within the budgets; silhouettes in the model viewer (check 6)
-- [ ] Assembly per structure record and instancing in `structureLayer.ts`
+  - [x] Deck, parapet, wall pier, column pier, abutment, truss panel and top brace (`bridge-*.json`, decision 192)
+  - [ ] Arch ribs and viaduct arches (arch bridges are drawn as beam bridges until then)
+  - [ ] Suspension towers and cables (suspension bridges are drawn as trusses until then)
+  - [ ] Tunnel portals
+  - [ ] Ink outlines on bridges, like the buildings
+- [x] Assembly per structure record: `bridgeRecords` (a crossing's run of bridge points, viaducts in pieces of 1.2 km), `bridgeKit` (beam on wall piers at most 35 m apart, truss up to 90 m with panels and braces, viaduct on columns every 40 m, abutments), `BridgeLayer` (merged per structure, within 12 km; decision 192)
 - [ ] Map: bridge labels in the Region band, dashed tunnels, aligned routes generalized where they exist
 - [ ] Alignment-tier names from per-piece forks (tunnels, minor bridges, spirals and inclines); names in briefings and mission names
 - [ ] Acceptance checks: Part I (`bridge` spot at 300 m), Part II checks 1, 2, 4, 5 in the Region band and check 3 with the owner

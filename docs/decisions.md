@@ -3087,3 +3087,20 @@ The Kestrel has no downwash and is unaffected.
 **Not done:** a preview view of a hover beside a tree line; the frame time over pavement measured in the browser.
 
 **Reason:** The owner's report and request; dust a pilot sees only in a hover or a slow approach, where it matters, costs nothing in transit.
+
+### 192. The bridge kit, first parts: beam, truss and viaduct structures assembled per record, merged per structure
+
+**Date:** 2026-11-16
+**Decision:** Every river crossing of the alignment tier (decision 190) and every stretch of viaduct is drawn as a structure built from kit parts, and roads are no longer painted across the water.
+
+- **Kit specs** (`render/common/models/specs/bridge-*.json`, class `building`): a deck meter (concrete slab, asphalt top, dark girder underneath, so the deck reads from above and in silhouette), a parapet, a wall pier, a column pier, an abutment, a 10 m truss panel of one side (chords, post and diagonal in steel) and a top brace. A new model color `asphalt` (#55565A) tops the deck.
+- **Records** (`render/sim/infra/bridgeRecords.ts`). A crossing's structure is the run of `Bridge` points nearest it, and each run of `Viaduct` points is one, cut into pieces of at most 1.2 km; each run takes its neighbors on the ground at both ends, so the deck meets the formation. A bridge matched to a network bridge takes its kind (truss and suspension as truss, viaduct as viaduct, beam and arch as beam); an unmatched one is a truss on a railway over 45 m, else a beam. Deck width is the formation's (secondary road 9 m, motorway 30 m, railway 8 m).
+- **Assembly** (`bridgeKit.ts`, pure). Deck segments of at most 20 m follow the record's design elevations and grade, with parapets (none on railways); a beam bridge rests on wall piers at most 35 m apart, a truss spans up to 90 m with panels on both sides and braces over the top, a viaduct stands on column piers every 40 m (two side by side on decks over 10 m wide); abutments close both ends. Piers reach from 4 m below the lowest ground under a bridge (the record's ground is 96 m terrain; carved beds lie deeper) to the girder. Parts are scaled along their own axes only, so normals stay exact.
+- **Drawing** (`BridgeLayer`, in `GlobeScene` beside the buildings). Every structure is unique in length, height and grade, so its parts are merged into one mesh per structure, in the planet frame about its first deck point, placed camera-relative; structures within 12 km are built (four per frame at most) and dropped some seconds after leaving the range. Lit like the buildings (diffuse light and aerial perspective); hidden above 15 km and while the terrain is exaggerated, since structures keep true heights. A 100 m beam bridge is about 400 triangles, within Part I's 300–1,500.
+- **Roads** are painted on the ground only where the record carries them on it: bridges and viaducts carry them on their decks.
+
+`docs/visual-style.md` (Part I, Bridge kit: merged per structure, not instanced) changes with this decision.
+
+**Not done:** arch ribs, viaduct arches and suspension towers (arch and suspension bridges are drawn as beam and truss bridges until then); tunnel portals; ink outlines on bridges; the model viewer's silhouette check (check 6) for the kit; the `bridge` acceptance view at 300 m.
+
+**Reason:** Bridges are where the alignment says rivers are crossed, at the span and height the record gives, so the kit draws them from the record rather than from the network tier; merging per structure keeps one draw call per bridge, and the few dozen within range cost far less than the buildings.

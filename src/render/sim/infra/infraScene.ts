@@ -227,11 +227,8 @@ export class InfraScene {
             alignedPoint(alignments, link, o + i, p);
             sm.push([p.x, p.y, p.z, w]);
           }
-          // Bridges are painted across the water until the bridge kit draws them (N7, decision 190).
-          onGround = (i) => {
-            const st = alignments.structure[o + i + 1];
-            return st === STRUCTURE.Corridor || st === STRUCTURE.Bridge;
-          };
+          // Bridges and viaducts carry the road on the kit's decks (decision 192).
+          onGround = (i) => alignments.structure[o + i + 1] === STRUCTURE.Corridor;
         } else if (kind === 'rail') {
           continue;
         } else {

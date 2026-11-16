@@ -64,6 +64,8 @@ export const MODEL_COLORS: Record<string, string> = {
   // Buildings and bases (Part I, Buildings and Bases: pale concrete and muted paint).
   concrete: '#A9A69E',
   'concrete-dark': '#8D8A83',
+  // Bridge decks (decision 192).
+  asphalt: '#55565A',
   'paint-green': '#5E6B4F',
   'paint-sand': '#B3A585',
   'paint-white': '#D9D7D0',

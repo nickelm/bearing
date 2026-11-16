@@ -648,6 +648,11 @@ async function main(): Promise<void> {
         airbases: strategic.infrastructure,
       });
       globe.setInfrastructure(infra);
+      globe.bridges.setAlignments(alignments, {
+        road: strategic.graph.bridges,
+        rail: strategic.graph.railways.bridges,
+        spur: strategic.infrastructure.spurBridges,
+      });
       globe.terrainReady = true;
       // The first frames of a world load its tiles: the governor does not count them.
       governor.warmUp(performance.now());

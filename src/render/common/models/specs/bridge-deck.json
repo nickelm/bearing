@@ -1,0 +1,10 @@
+{
+  "name": "Bridge deck (1 m)",
+  "class": "building",
+  "groups": { "slab": "concrete", "top": "asphalt", "girder": "concrete-dark" },
+  "parts": [
+    { "type": "box", "group": "slab", "center": [0, -0.2, 0], "size": [1, 0.4, 1] },
+    { "type": "box", "group": "top", "center": [0, 0.02, 0], "size": [1, 0.04, 0.88] },
+    { "type": "box", "group": "girder", "center": [0, -0.85, 0], "size": [1, 0.9, 0.72] }
+  ]
+}

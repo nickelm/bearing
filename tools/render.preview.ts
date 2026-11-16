@@ -935,6 +935,13 @@ it('renders preview views', async () => {
           ),
   });
   scene.setInfrastructure(infra);
+  // The bridge kit along the alignments (decision 192).
+  if (alignments)
+    scene.bridges.setAlignments(alignments, {
+      road: campaign.graph.bridges,
+      rail: campaign.graph.railways.bridges,
+      spur: campaign.infrastructure.spurBridges,
+    });
   scene.terrainReady = true;
   // Mountain shadows (decision 139) from the global heights; SHADOW=0 leaves them out.
   // SPARKLE=0 leaves the snow's glints out; WET=x (0..1) wets the ground whatever the weather.

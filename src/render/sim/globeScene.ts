@@ -48,6 +48,7 @@ import { MotionEstimate } from '../common/terrain/prefetch';
 import { OrbitCamera, attachOrbitInput } from '../common/orbitCamera';
 import { StrategicOverlay } from '../strategic/strategicOverlay';
 import { StructureLayer } from './infra/structureLayer';
+import { BridgeLayer } from './infra/bridgeLayer';
 import type { InfraScene } from './infra/infraScene';
 import { SimPipeline } from './post/simPipeline';
 import type { WeatherView } from '../../sim/weather/frame';
@@ -117,6 +118,8 @@ export class GlobeScene {
   readonly groundCover: GroundCoverLayer;
   /** Buildings of towns, airbases and industry near the camera (decision 65). */
   readonly structures: StructureLayer;
+  /** Bridges and viaducts of the aligned roads and railways (decision 192). */
+  readonly bridges: BridgeLayer;
   /** Cloud coverage, cloud shadows and the shell far above the view (decisions 55, 68, 141). */
   readonly clouds: CloudLayer;
   /**
@@ -212,6 +215,7 @@ export class GlobeScene {
       this.terrain.land,
     );
     this.structures = new StructureLayer(this.terrain, this.lighting);
+    this.bridges = new BridgeLayer(this.terrain, this.lighting);
     // The sky, drawn behind everything: its LUT, the sun, the moon and the stars (decision 140).
     this.scene.backgroundNode = this.lighting.atmosphere.skyNode();
     this.globe = new GlobeMesh(options.grid, options.radius);
@@ -222,6 +226,7 @@ export class GlobeScene {
       this.forest.group,
       this.groundCover.group,
       this.structures.group,
+      this.bridges.group,
       this.clouds.group,
       this.strategic.group,
       this.vehicles,
@@ -482,7 +487,9 @@ export class GlobeScene {
         (this.camera.fov * Math.PI) / 180 / this.viewportHeight,
       );
       this.structures.update(o.eye, aboveGround, cull);
+      this.bridges.update(o.eye, aboveGround);
     } else {
+      this.bridges.group.visible = false;
       this.forest.group.visible = false;
       this.groundCover.group.visible = false;
       if (this.rotorDust) this.rotorDust.group.visible = false;
@@ -555,6 +562,7 @@ export class GlobeScene {
     this.forest.dispose();
     this.groundCover.dispose();
     this.structures.dispose();
+    this.bridges.dispose();
     this.clouds.dispose();
     this.weather.dispose();
     this.shadows.dispose();

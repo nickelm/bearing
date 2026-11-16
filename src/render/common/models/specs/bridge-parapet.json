@@ -1,0 +1,6 @@
+{
+  "name": "Bridge parapet (1 m)",
+  "class": "building",
+  "groups": { "wall": "concrete" },
+  "parts": [{ "type": "box", "group": "wall", "center": [0, 0.45, 0], "size": [1, 0.9, 0.3] }]
+}
