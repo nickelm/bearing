@@ -2847,3 +2847,17 @@ The eroded world's crossing sites, where the alignment snaps bridges (N5), come 
 **How it was checked.** `npm run check` without the GPU suite: 99 files, 881 tests; the river coverage GPU test with the CPU twin; the forest layer's tests now measure distances to the drawn water. Not yet seen in a render or the browser.
 
 **Reason:** Trees should crowd a river's bank, which is where a low-flying pilot sees them, and must never stand in its water; the only way to do both with banks the shader moves is to place them with the same function. Rivers that appear from nowhere halfway down a valley read as wrong; their real sources are streams near the crests.
+
+### 178. Micro-facets on 2D triangle lattices (no moiré); darker boulders, larger tufts
+
+**Date:** 2026-11-16
+**Decision:** The owner's first look in the browser found moiré in the micro-facets (decision 171) where an octave fades, and asked for darker boulders and perhaps larger grass.
+
+- **Cause.** Each octave was a field on a 3D lattice of tetrahedra cut by the ground. A plane cuts a tetrahedron into cells of any shape, including slivers far thinner than the octave's size, so where the mean cell was the 3–7 px of the fade, slivers fell below a pixel and aliased: swirls of lit and shaded slivers (green-gray dots on tan ground), in a ring at the fade's distance. Not doubled geometry. The previews at one sample per pixel did not show it clearly.
+- **Fix.** Each octave is now a height field on a 2D square lattice split along one diagonal, every cell a whole right triangle of the octave's size, on the plane across the world axis nearest the terrain facet's normal. The facet's normal is constant over the facet, so the plane changes only along facet edges, which are shading edges anyway; cells stretch by at most √3 on the steepest faces. Periodicity holds as before (integer 2 × 2 matrices on the wrapped coordinates): cells of 4 m, 1.2 m (turned 45°) and 0.45 m (turned and sheared, det 3). The hash takes the plane as its third coordinate. Three hashes per octave instead of four. The fade starts at 4 px per cell and is full at 9 (was 3 and 7). `docs/reports/screens/ground-g1-skid-triangles.png`: the skid view with the cover off.
+- **Boulders.** The `rock` and `rock-lichen` schemes are cool grays a step darker (`#77736E`, `#8A857E`, `#64605B`), so boulders stand out from warm open ground; the bounce light of decision 174 keeps their shaded sides from going black.
+- **Grass.** Tufts and dry tufts scale 1.05–1.75 (was 0.8–1.35), tussocks 0.9–1.5, flowers 1.0–1.45: about 30% larger, at no cost in triangles.
+
+`docs/plans/ground-detail.md` changes with this decision.
+
+**Reason:** Thin cells are the one thing a fade by cell size cannot catch; a lattice whose cells are all whole triangles of one size can be faded safely, and keeps the faceted look the owner liked.

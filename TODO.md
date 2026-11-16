@@ -1003,6 +1003,8 @@ Detail near a low camera for helicopter flight, faceted and slightly cartoony, a
 - [x] Glints per micro-facet on wet ground (by wetness) and glacier-polished rock; snow's normal and sparkle untouched (decision 171)
 - [ ] Glints on ice (frozen lakes are the water shader's); check wet glints looking into a low sun in the browser
 - [x] Preview views `hover` (5 m) and `skid` (20 m) over the `meadow` target, `nap` (60 m) over farmland; `TARGET=peak` for rock; `MICRO`, `GLINT` (decision 171)
+- [x] Moiré where an octave faded (owner, in the browser): slivers of the 3D lattice; octaves are 2D triangle lattices on the facet's dominant plane (decision 178)
+- [ ] Owner: the micro-facets in the browser after decision 178 (no moiré at any distance); up close the cells lean a little toward one diagonal
 - [ ] Views over scrub, scree, a field and dunes once their patterns exist; shimmer in motion (`FLICKER`)
 - [ ] The `hover` and `skid` previews show a vertical line down the middle of the frame with the micro-facets off as well; find its source
 - [ ] `PERF` at 1 km and at 20 m against the plan's budgets on a real GPU (lavapipe times are not meaningful; above 600 m the evaluation is skipped by a uniform)

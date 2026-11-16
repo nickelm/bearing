@@ -37,7 +37,7 @@ export const SCHEMES: Record<string, CamoScheme> = {
     patch: 4,
   },
   'pact-bomber': { name: 'Pact bomber', colors: ['#A7ABAE'], patch: 10 },
-  // Ground cover (decisions 172, 174, 177): rock shades per face, and gray rock with lichen,
+  // Ground cover (decisions 172, 174, 178): rock shades per face, and gray rock with lichen,
   // cool grays a little darker than warm open ground so boulders stand out from it; the
   // bounce light keeps their shaded sides from going black.
   rock: { name: 'Rock', colors: ['#77736E', '#8A857E', '#64605B'], patch: 0.35 },
