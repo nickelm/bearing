@@ -32,6 +32,8 @@ import { FLIGHT_STEP, FlightModel } from '../sim/flight/flightModel';
 import { assistsFor } from '../sim/flight/rotor/assists';
 import { HeloLaws } from '../sim/flight/rotor/heloLaws';
 import { neutralRotorControls, RotorcraftModel } from '../sim/flight/rotor/rotorcraftModel';
+import { rotorDownwash } from '../sim/flight/rotor/downwash';
+import type { Downwash } from '../sim/flight/rotor/downwash';
 import { parseRotorcraftSpec } from '../sim/flight/rotor/rotorSpec';
 import type { RotorcraftSpec } from '../sim/flight/rotor/rotorSpec';
 import { fromRunway, runwayFrame } from '../sim/flight/runway';
@@ -144,6 +146,8 @@ export class FreeFlight {
   private readonly director = new FlightDirector();
   /** The flown helicopter, its control layer, assists, input and controls (null: the Kestrel flies). */
   private helo: RotorcraftModel | null = null;
+  /** The helicopter's downwash at the ground, reused each frame. */
+  private readonly wash: Downwash = { center: new Vec3d(), speed: 0, radius: 1 };
   private heloSpec: { model: ModelSpec; flight: RotorcraftSpec } | null = null;
   private readonly laws = new HeloLaws();
   private readonly assists = assistsFor('assisted');
@@ -196,7 +200,10 @@ export class FreeFlight {
           Object.assign(this.options, o);
           this.start(id, o.spawn);
         },
-        exit: () => this.deps.exit(),
+        exit: () => {
+          this.deps.globe.groundCover.setDownwash(null);
+          this.deps.exit();
+        },
         weather: (preset) => this.setWeather(preset),
       },
       this.options,
@@ -208,7 +215,10 @@ export class FreeFlight {
         resume: () => this.setPaused(false),
         restart: (spawn) => this.start(this.baseId!, spawn),
         changeBase: () => this.toMenu(),
-        exit: () => this.deps.exit(),
+        exit: () => {
+          this.deps.globe.groundCover.setDownwash(null);
+          this.deps.exit();
+        },
         optionsChanged: (o) => {
           const flown = this.helo ?? this.model;
           if (flown) flown.unlimitedFuel = o.unlimitedFuel;
@@ -737,9 +747,12 @@ export class FreeFlight {
         { azimuth: h.azimuth, speed, tiltForward: h.tiltForward, tiltRight: h.tiltRight },
         { azimuth: h.tailAzimuth, speed, tiltForward: 0, tiltRight: 0 },
       ];
+      // The rotor's wash flattens the grass under it (decision 175).
+      this.deps.globe.groundCover.setDownwash(rotorDownwash(h, this.wash));
       return;
     }
     p.rotors = undefined;
+    this.deps.globe.groundCover.setDownwash(null);
     const m = this.model!;
     const t = m.telemetry;
     p.pos.copy(m.pos);

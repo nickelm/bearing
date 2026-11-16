@@ -448,7 +448,11 @@ export class GlobeScene {
         aspect: this.camera.aspect,
       };
       this.forest.update(o.eye, aboveGround, cull);
-      this.groundCover.update(o.eye, aboveGround, cull);
+      this.groundCover.update(o.eye, aboveGround, cull, {
+        view: this.weatherView,
+        gameTime: this.gameTime,
+        dt: effectDt,
+      });
       this.structures.setInk(
         this.structures.inkWidth,
         (this.camera.fov * Math.PI) / 180 / this.viewportHeight,

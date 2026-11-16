@@ -44,7 +44,9 @@ import {
   dot,
   float,
   Fn,
+  length,
   max,
+  min,
   mix,
   modelWorldMatrix,
   normalize,
@@ -56,7 +58,7 @@ import {
   vec3,
   vec4,
 } from 'three/tsl';
-import { Color } from 'three/webgpu';
+import { Color, Vector3 } from 'three/webgpu';
 import { placeCameraRelative } from '../../common/cameraRelative';
 import { cubeFaceUvToDirection, directionToCubeFace } from '../../../core/coords';
 import { tileForDirection, tileKeyString, TILE_TEXELS } from '../../../core/tiles';
@@ -90,6 +92,8 @@ import type { PlanetLighting } from '../lighting/planetLighting';
 import type { LandShading } from '../terrain/landShading';
 import type { TerrainRenderer } from '../terrain/terrainRenderer';
 import { riverStretches, treeDataTile } from '../forest/forestLayer';
+import { airVelocity } from '../../../sim/flight/wind';
+import type { WeatherView } from '../../../sim/weather/frame';
 import type { RiverStretch } from '../forest/forestLayer';
 
 type V3 = Node<'vec3'>;
@@ -118,6 +122,49 @@ export const COVER_RANGE: Readonly<Record<CoverKind, number>> = {
   'cover-slab': 700,
   'cover-boulder-large': 800,
 };
+
+/** How far each plant bends in the wind (1: a grass tuft; rocks do not). */
+const STIFFNESS: Partial<Record<CoverKind, number>> = {
+  'cover-tuft': 1,
+  'cover-tuft-dry': 1,
+  'cover-flowers-cream': 0.9,
+  'cover-flowers-yellow': 0.9,
+  'cover-flowers-violet': 0.9,
+  'cover-tussock': 0.8,
+  'cover-reeds': 1.1,
+  'cover-bush': 0.2,
+  'cover-bush-dry': 0.2,
+};
+
+/** Tip lean (fraction of the plant's height) per m/s of wind across it, and its most. */
+const LEAN_PER_SPEED = 0.05;
+const MAX_LEAN = 0.85;
+/** Length (m) of the waves a wind drives across a meadow. */
+const WIND_WAVE = 9;
+/** Spacing of the downwash's travelling rings, in rotor radii, and their least spacing (m). */
+const WASH_RING = 0.8;
+
+/**
+ * A rotor's downwash at the ground (decision 175): where it meets the ground,
+ * the outwash speed there (m/s) and the rotor's radius (m).
+ */
+export interface GroundDownwash {
+  /** Planet-centered point where the disc's axis meets the ground (m). */
+  center: Readonly<Vec3d>;
+  /** Outwash speed near one rotor radius out (m/s). */
+  speed: number;
+  /** Rotor radius (m). */
+  radius: number;
+}
+
+/** What the layer needs from the air each frame. */
+export interface CoverAir {
+  /** The weather (null: still air). */
+  view: WeatherView | null;
+  gameTime: number;
+  /** Real seconds since the last frame (0 while paused). */
+  dt: number;
+}
 
 /** Part I's middle grassland shade (linear): green parts of the kit are drawn relative to it. */
 const GRASS_REFERENCE = new Color().setHex(0x7a8c4a);
@@ -384,7 +431,13 @@ export function coverGeometry(model: BuiltModel, rock: boolean) {
       tint[t * 3 + v] = tinted ? 1 : 0;
     }
   }
-  return { position: model.position.slice(), normal: model.normal.slice(), color, tint };
+  return {
+    position: model.position.slice(),
+    normal: model.normal.slice(),
+    color,
+    tint,
+    height: Math.max(1e-3, model.bounds.max[1]),
+  };
 }
 
 interface Chunk extends CoverChunk {
@@ -416,6 +469,20 @@ export class GroundCoverLayer {
   private seed = 0;
   private dirty = true;
   private readonly anchor = new Vec3d();
+  /** The air over the ring (relative to the anchor) and the rotor's wash, as uniforms. */
+  private readonly air = {
+    time: uniform(0),
+    at: uniform(new Vector3()),
+    dEast: uniform(new Vector3()),
+    dNorth: uniform(new Vector3()),
+    east: uniform(new Vector3(1, 0, 0)),
+    north: uniform(new Vector3(0, 0, 1)),
+    washCenter: uniform(new Vector3(0, -1e7, 0)),
+    washSpeed: uniform(0),
+    washRadius: uniform(1),
+  };
+  private downwash: GroundDownwash | null = null;
+  private readonly wscratch = [new Vec3d(), new Vec3d(), new Vec3d(), new Vec3d(), new Vec3d()];
   private readonly center = new Vec3d();
   private filledAt: Vec3d | null = null;
   private readonly filledForward = new Vec3d();
@@ -452,6 +519,9 @@ export class GroundCoverLayer {
       );
     const range = perMesh('range', 200);
     const plant = perMesh('plant', 1);
+    const stiffness = perMesh('stiffness', 0);
+    const height = perMesh('height', 0.5);
+    const air = this.air;
 
     // The surface temperature today (as the trees' compaction and landShading.ts).
     const hemisphere = clamp(up.y.mul(20), -1, 1);
@@ -469,6 +539,7 @@ export class GroundCoverLayer {
     const az = t0.mul(sa).sub(t1.mul(ca));
     const local = attribute('position', 'vec3');
     const foot = base.add(disp.mul(ex));
+    const bend = varyingProperty('float', 'vCoverBend');
     const apInscatter = varyingProperty('vec3', 'vCoverInscatter');
     const apTransmittance = varyingProperty('vec3', 'vCoverTransmittance');
     m.positionNode = Fn(() => {
@@ -477,7 +548,55 @@ export class GroundCoverLayer {
       // Shrink into the ground over the last 30% of the range.
       const k = clamp(range.sub(dist).div(max(range.mul(0.3), 1)), 0, 1);
       const s = params.x.mul(k.mul(k).mul(k.mul(-2).add(3))).mul(float(1).sub(buried));
-      const p = foot.add(ax.mul(local.x).add(up.mul(local.y)).add(az.mul(local.z)).mul(s));
+      // Wind (decision 175): the flight model's air at the ground, a linear field over the
+      // ring, across the ground, plus the rotor's outwash in travelling rings.
+      const wind = air.at
+        .add(air.dEast.mul(dot(foot, air.east)))
+        .add(air.dNorth.mul(dot(foot, air.north)));
+      const offset = foot.sub(air.washCenter);
+      const across = offset.sub(up.mul(dot(offset, up)));
+      const r = length(across);
+      const R = max(air.washRadius, 0.5);
+      const outward = across.div(max(r, 0.01));
+      const ring = max(R.mul(WASH_RING), 1.5);
+      const pulse = sin(
+        r
+          .sub(air.time.mul(air.washSpeed.mul(0.5).add(2)))
+          .div(ring)
+          .mul(2 * Math.PI),
+      )
+        .mul(0.35)
+        .add(0.65);
+      const reach = smoothstep(0, R.mul(0.5), r).mul(min(float(1), R.mul(1.6).div(max(r, 0.01))));
+      const wash = outward.mul(air.washSpeed.mul(reach).mul(pulse));
+      const flow = wind.sub(up.mul(dot(wind, up))).add(wash);
+      const speed = length(flow);
+      const along = flow.div(max(speed, 1e-3));
+      // Gusts roll over a meadow as waves along the wind.
+      const waves = sin(
+        dot(foot, along)
+          .div(WIND_WAVE)
+          .mul(2 * Math.PI)
+          .sub(air.time.mul(speed.mul(0.25).add(1.2))),
+      )
+        .mul(0.25)
+        .add(0.75);
+      const lean = min(speed.mul(LEAN_PER_SPEED).mul(waves), MAX_LEAN).mul(stiffness);
+      // Each plant flutters at its own phase.
+      const flutter = sin(air.time.mul(speed.mul(0.3).add(5)).add(params.y.mul(7)))
+        .mul(min(speed, 15).mul(0.012).add(0.03))
+        .mul(stiffness);
+      bend.assign(lean);
+      // Bent from the root: the tip moves most, and drops as it leans.
+      const tall = height.mul(s);
+      const kk = clamp(local.y.div(max(height, 1e-3)), 0, 1);
+      const w = kk.mul(kk);
+      const sway = along
+        .mul(lean.add(flutter).mul(tall).mul(w))
+        .sub(up.mul(lean.mul(lean).mul(0.5).mul(tall).mul(w)));
+      const p = foot
+        .add(ax.mul(local.x).add(up.mul(local.y)).add(az.mul(local.z)).mul(s))
+        .add(sway);
       const ap = lighting.atmosphere.aerialPerspective(
         modelWorldMatrix.mul(vec4(p, 1)).xyz as V3,
         3,
@@ -500,6 +619,8 @@ export class GroundCoverLayer {
     const brightness = luma(ground as V3).div(luma(reference as V3));
     const ratio = clamp(mix(vec3(brightness), full, 0.5), 0.5, 1.8);
     let albedo = mix(model, model.mul(ratio), tint) as V3;
+    // Grass laid flat by a rotor shows its paler side.
+    albedo = albedo.mul(smoothstep(0.35, 0.8, bend).mul(tint).mul(0.35).add(1)) as V3;
     // The season browns them as it browns the grass around them (landShading.ts): by how
     // green the ground is, so a tuft never turns where its meadow does not.
     const green = clamp(ground.y.sub(max(ground.x, ground.z)).mul(12), 0, 1);
@@ -540,7 +661,17 @@ export class GroundCoverLayer {
   }
 
   /** Builds and draws the cover around `eye`. Call once per frame after the terrain. */
-  update(eye: Readonly<Vec3d>, heightAboveGround: number, view?: CullView): void {
+  /** A rotor's downwash this frame, or null (decision 175). */
+  setDownwash(d: GroundDownwash | null): void {
+    this.downwash = d;
+  }
+
+  update(
+    eye: Readonly<Vec3d>,
+    heightAboveGround: number,
+    view?: CullView,
+    airNow?: CoverAir,
+  ): void {
     this.frame++;
     const world = this.terrain.currentWorld;
     const opts = this.terrain.meshOptions();
@@ -645,6 +776,7 @@ export class GroundCoverLayer {
     const moved = !this.filledAt || this.filledAt.distanceTo(eye) > REFILL_STEP;
     const turned = forward !== null && forward.dot(this.filledForward) < REFILL_TURN;
     if (this.dirty || moved || turned) this.fill(eye, ranges, view, forward);
+    this.updateAir(eye, heightAboveGround, R, airNow);
     let draws = 0;
     for (const mesh of this.meshes.values()) {
       if (!mesh.visible) continue;
@@ -653,6 +785,68 @@ export class GroundCoverLayer {
     }
     this.stats.chunks = this.chunks.size;
     this.stats.draws = draws;
+  }
+
+  /**
+   * The air's uniforms for this frame: the flight model's wind and gusts at the ground
+   * under the eye and 50 m east, west, north and south of it (a linear field over the
+   * ring), and the downwash, all relative to the anchor.
+   */
+  private updateAir(eye: Readonly<Vec3d>, aboveGround: number, R: number, a?: CoverAir): void {
+    const u = this.air;
+    u.time.value += a?.dt ?? 0;
+    const up = this.wscratch[0]!.copy(eye).normalize();
+    const east = this.wscratch[1]!.set(0, 1, 0).cross(up);
+    if (east.length() < 1e-6) east.set(1, 0, 0);
+    east.normalize();
+    const north = this.wscratch[2]!.copy(up).cross(east);
+    u.east.value.set(east.x, east.y, east.z);
+    u.north.value.set(north.x, north.y, north.z);
+    const groundR = eye.length() - Math.max(0, aboveGround);
+    const at = (de: number, dn: number, out: Vec3d) => {
+      const p = this.wscratch[3]!.copy(up)
+        .addScaled(east, de / R)
+        .addScaled(north, dn / R)
+        .normalize()
+        .scale(groundR);
+      return airVelocity(a?.view ?? null, p, R, a?.gameTime ?? 0, 0.5, out);
+    };
+    const w0 = at(0, 0, this.wscratch[4]!);
+    u.at.value.set(w0.x, w0.y, w0.z);
+    const STEP = 50;
+    const e1 = at(STEP, 0, new Vec3d());
+    const e0 = at(-STEP, 0, new Vec3d());
+    const n1 = at(0, STEP, new Vec3d());
+    const n0 = at(0, -STEP, new Vec3d());
+    u.dEast.value.set(
+      (e1.x - e0.x) / (2 * STEP),
+      (e1.y - e0.y) / (2 * STEP),
+      (e1.z - e0.z) / (2 * STEP),
+    );
+    u.dNorth.value.set(
+      (n1.x - n0.x) / (2 * STEP),
+      (n1.y - n0.y) / (2 * STEP),
+      (n1.z - n0.z) / (2 * STEP),
+    );
+    // The field is linear about the eye's ground point; the shader measures from the anchor.
+    const ox = this.anchor.x - eye.x;
+    const oy = this.anchor.y - eye.y;
+    const oz = this.anchor.z - eye.z;
+    const de = ox * east.x + oy * east.y + oz * east.z;
+    const dn = ox * north.x + oy * north.y + oz * north.z;
+    u.at.value.addScaledVector(u.dEast.value, de).addScaledVector(u.dNorth.value, dn);
+    const d = this.downwash;
+    if (d && d.speed > 0) {
+      u.washCenter.value.set(
+        d.center.x - this.anchor.x,
+        d.center.y - this.anchor.y,
+        d.center.z - this.anchor.z,
+      );
+      u.washSpeed.value = d.speed;
+      u.washRadius.value = d.radius;
+    } else {
+      u.washSpeed.value = 0;
+    }
   }
 
   /** Copies the items within range and in view into the meshes, relative to an anchor at the eye. */
@@ -772,6 +966,8 @@ export class GroundCoverLayer {
       mesh = new Mesh(g, this.material);
       mesh.frustumCulled = false;
       mesh.userData.plant = ROCK_KINDS.has(kind) ? 0 : 1;
+      mesh.userData.stiffness = STIFFNESS[kind] ?? 0;
+      mesh.userData.height = geo.height;
       mesh.userData.triangles = geo.position.length / 9;
       this.group.add(mesh);
       this.meshes.set(kind, mesh);

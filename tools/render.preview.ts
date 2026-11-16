@@ -1579,7 +1579,23 @@ it('renders preview views', async () => {
     let stable = 0;
     let last = '';
     const t0 = performance.now();
+    // WASH=speed[,radius] (m/s, m) puts a rotor's downwash on the ground 12 m ahead of the
+    // observer (decision 175), to see the cover flattened in its rings.
+    const washArgs = process.env.WASH?.split(',').map(Number);
+    const placeWash = () => {
+      if (!washArgs || scene.cameraMode !== 'observer') return;
+      const ob = scene.observer;
+      const up = ob.eye.clone().normalize();
+      const ahead = ob.forward.clone().addScaled(up, -ob.forward.dot(up)).normalize();
+      const center = ob.eye.clone().addScaled(up, -ob.height).addScaled(ahead, 12);
+      scene.groundCover.setDownwash({
+        center,
+        speed: washArgs[0]!,
+        radius: washArgs[1] ?? 4,
+      });
+    };
     for (let f = 0; f < 400 && stable < 3; f++) {
+      placeWash();
       // The camera clamps to 2 km above the highest terrain until the ground under it
       // has loaded; ask for the view's altitude again every frame.
       o.altitude = o.targetAltitude = v.altitude;
