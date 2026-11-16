@@ -2894,3 +2894,20 @@ The eroded world's crossing sites, where the alignment snaps bridges (N5), come 
 **Next:** spiral loops as a template where a railway cannot meet its grade (conflict 9), river crossings in the router's extra cost with structure records, anchors from the network's links, the routing surface (level-6 tiles; spike N5.0), and the corridors into the app's `TerrainEdits` and the segment tables (N6).
 
 **Reason:** These are the parts every road and railway goes through; building and testing them on ground whose answers are known (a face too steep, a ridge with a gap, a valley too deep to fill) before the world's ground makes failures there legible.
+
+### 181. G5: dust, grit, snow and spray under the rotor
+
+**Date:** 2026-11-16
+**Decision:** What a rotor's downwash (decision 176) raises from the ground, as soft, wispy sprites (decisions 168, 169: sprites, not a density in the volumetric march).
+
+- **Which** (`washSurface`, pure, tested): spray over the sea, lakes and rivers and a little over marsh; snow powder where the surface temperature is under −1.5 °C and the ground is wet enough for snow (not off pavement); ochre dust on deserts and beaches, and on dry grass and scrub (moisture under 0.4); gray grit on gravel, alpine ground, tundra and pavement (the infrastructure's paved clearings); nothing on green ground, where the flattened grass is the cue. Rain-wet ground raises less, none when soaked. Read once per frame at the wash's center from the level-7 data, the climate, the season and the river index.
+- **Motion without state** (`render/sim/ground/rotorDust.ts`). Up to 700 instances times the particles' quality factor (`Precipitation.density`), scaled by the outwash (full at 10 m/s) and the surface. Each sprite's life (2.2–4 s), phase, pace, size and, at each rebirth, direction come from a hash of its index; its place is a function of its age: out along the ground from half a rotor radius to about three (fast, then slowing, as the wall jet spreads), up into a billow of up to a radius, and off with the wind at the ground (the flight model's, decision 176). Reborn under the rotor, so the cloud follows the helicopter.
+- **Look.** A camera-facing quad, stretched along its motion on screen, swelling and thinning with age; its opacity falls off from the middle and value noise eats its edge, so it reads as a wisp. It fades against the scene's depth over 1.5 m (soft against the ground) and near the lens. Dust takes the ground's color, lightened; grit, snow and spray their own tints. Light from `particleLight`, as the weather's particles: ambient and sun, brighter toward the sun.
+- **Drawing.** One instanced mesh in the pipeline's overlay, invisible without a wash or on green ground; a first frame with one empty sprite compiles its material before it is needed.
+- **Preview.** `WASH=14,4 WASH_AT=14` over seed 1983's alpine meadow: a soft gray veil of grit rolling out over the flattened grass (`docs/reports/screens/ground-g5-grit-alpine.png`).
+
+`docs/visual-style.md` (*Helicopters*, downwash) changes with this decision.
+
+**Not done:** the ring of ruffled water under the rotor (the water shader); leaves on green ground; wheels, vehicles and impacts through the same emitter; a check in Free Flight in the browser.
+
+**Reason:** The owner asked for wispy, soft dust; sprites whose motion is a formula of their age cost no CPU per sprite and need no buffers, and reading the ground once per frame puts the right material under the rotor.
