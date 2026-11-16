@@ -56,30 +56,52 @@ export async function buildAlignments(o: AlignmentBuildOptions): Promise<Alignme
   let synthesized = 0;
   // One synthesizer call at a time.
   let gpu: Promise<unknown> = Promise.resolve();
+  // Tiles a lane is waiting for or about to hand out are pinned: another lane's
+  // eviction must not drop them in between (it did, with 16 lanes: decision 186).
+  const pinned = new Map<string, number>();
+  const queued = new Set<string>();
   const ensure = async (keys: TileKey[]): Promise<[string, Float32Array][]> => {
     const want = keys.map((k) => tileKeyString(k));
-    const missing = keys.filter((_, i) => !cache.has(want[i]!));
-    if (missing.length) {
-      const job = gpu.then(async () => {
-        for (let i = 0; i < missing.length; i += batch) {
-          const part = missing.slice(i, i + batch);
-          const heights = await o.synthesize(part);
-          part.forEach((k, j) => cache.set(tileKeyString(k), heights[j]!));
-          synthesized += part.length;
-        }
+    for (const s of want) pinned.set(s, (pinned.get(s) ?? 0) + 1);
+    try {
+      const missing = keys.filter((_, i) => !cache.has(want[i]!) && !queued.has(want[i]!));
+      for (const k of missing) queued.add(tileKeyString(k));
+      if (missing.length) {
+        const job = gpu.then(async () => {
+          try {
+            for (let i = 0; i < missing.length; i += batch) {
+              const part = missing.slice(i, i + batch);
+              const heights = await o.synthesize(part);
+              part.forEach((k, j) => cache.set(tileKeyString(k), heights[j]!));
+              synthesized += part.length;
+            }
+          } finally {
+            for (const k of missing) queued.delete(tileKeyString(k));
+          }
+        });
+        gpu = job.catch(() => undefined);
+      }
+      // Calls run in order: once the chain is done, so are this lane's tiles and any another lane queued.
+      await gpu;
+      return want.map((s) => {
+        const h = cache.get(s);
+        if (!h) throw new Error(`alignment: tile ${s} was not synthesized`);
+        // Most recently used last.
+        cache.delete(s);
+        cache.set(s, h);
+        return [s, h];
       });
-      gpu = job.catch(() => undefined);
-      await job;
+    } finally {
+      for (const s of want) {
+        const n = pinned.get(s)! - 1;
+        if (n > 0) pinned.set(s, n);
+        else pinned.delete(s);
+      }
+      for (const s of cache.keys()) {
+        if (cache.size <= capacity) break;
+        if (!pinned.has(s)) cache.delete(s);
+      }
     }
-    const out: [string, Float32Array][] = want.map((s) => {
-      const h = cache.get(s)!;
-      // Most recently used last.
-      cache.delete(s);
-      cache.set(s, h);
-      return [s, h];
-    });
-    while (cache.size > Math.max(capacity, want.length)) cache.delete(cache.keys().next().value!);
-    return out;
   };
 
   const lengths = o.tasks.map(taskLength);

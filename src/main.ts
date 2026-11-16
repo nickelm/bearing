@@ -24,7 +24,7 @@ import { OVERLAY_LAYERS } from './render/strategic/overlays/militaryModel';
 import { INFRA_LAYERS } from './render/strategic/infra/infraModel';
 import { InfraScene } from './render/sim/infra/infraScene';
 import { airfieldGrading, globalMapSampler } from './render/sim/infra/airfieldGrading';
-import { observerStations } from './render/sim/camera/observerStations';
+import { observerStations, roadStations } from './render/sim/camera/observerStations';
 import type { ObserverStation } from './render/sim/camera/observerStations';
 import { VIEW_MODES } from './render/common/globeMesh';
 import type { ViewMode } from './render/common/globeMesh';
@@ -65,7 +65,7 @@ import type { Alignments } from './worldgen/networks/alignments';
 import { AlignmentCancelled, buildAlignments } from './worldgen/networks/build';
 import { linkTasks } from './worldgen/networks/tasks';
 import { AlignmentPool } from './workers/alignmentPool';
-import { BuildProgress } from './ui/buildProgress';
+import { BuildScreen } from './ui/buildScreen';
 import type { World } from './worldgen/pipeline';
 import type { GlobalWorld } from './worldgen/globalPipeline';
 import { GPU_SELF_TESTS, runSelfTest } from './worldgen/gpu/selfTests';
@@ -443,7 +443,7 @@ async function main(): Promise<void> {
   let globalWorld: GlobalWorld | null = null;
   let synth: TileSynthesizer | null = null;
   const store = new WorldStore();
-  const buildProgress = new BuildProgress();
+  const buildScreen = new BuildScreen();
   // Cached worlds are large (about 150 MB at 1024²); ask the browser not to evict them.
   void navigator.storage?.persist?.().catch(() => false);
 
@@ -469,10 +469,11 @@ async function main(): Promise<void> {
     url.searchParams.set('gres', String(globalN));
     history.replaceState(null, '', url);
     const t0 = performance.now();
-    const status = (stage: string, f: number) => {
+    /** Progress of `stage` in the debug panel and, for a build phase, on the build screen. */
+    const status = (stage: string, f: number, phase = -1, note = stage) => {
       if (token !== generation) return;
       gui.status.generation = `${stage} (${Math.round(f * 100)}%)`;
-      buildProgress.show(stage, f);
+      if (phase >= 0) buildScreen.progress(phase, f, stage, note);
     };
     const showTectonic = (world: World) => {
       if (grid.n !== resolution) {
@@ -531,8 +532,12 @@ async function main(): Promise<void> {
       strategic: StrategicWorld,
       params: PlanetParams,
       terrain: ReturnType<typeof terrainOf>,
+      phase: number,
     ): Promise<Alignments | null> => {
-      if (query.get('align') === '0') return null;
+      if (query.get('align') === '0') {
+        buildScreen.done(phase, 'skipped (align=0): coarse roads, no corridors');
+        return null;
+      }
       const tasks = linkTasks(strategic.graph, strategic.infrastructure.spurs, params.radius);
       const pool = new AlignmentPool(params.radius);
       try {
@@ -547,7 +552,13 @@ async function main(): Promise<void> {
             return keys.map((k) => byKey.get(tileKeyString(k))!);
           },
           run: (task, tiles) => pool.run(task, tiles),
-          onProgress: (f) => status('aligning roads and railways', f),
+          onProgress: (f, done, total) =>
+            status(
+              `aligning roads and railways: ${done} of ${total} links`,
+              f,
+              phase,
+              `aligning ${total} roads and railway lines`,
+            ),
           cancelled: () => token !== generation,
         });
         const s = alignmentStats(al);
@@ -557,6 +568,11 @@ async function main(): Promise<void> {
             `${s.forced} forced, ${s.unrouted} unrouted, viaducts ${s.viaduct.toFixed(1)} km, tunnels ` +
             `${s.tunnel.toFixed(1)} km, ${(s.bytes / 2 ** 20).toFixed(1)} MiB` +
             (pool.missing ? `; ${pool.missing} height lookups off the tiles` : ''),
+        );
+        buildScreen.done(
+          phase,
+          `${s.links} links, ${s.km.toFixed(0)} km on ${pool.size} workers; ` +
+            `viaducts ${s.viaduct.toFixed(0)} km, tunnels ${s.tunnel.toFixed(0)} km`,
         );
         return al;
       } finally {
@@ -621,6 +637,8 @@ async function main(): Promise<void> {
         params.radius,
         globalMapSampler(global.height, global.n),
       );
+      // The aligned roads' most winding stretches, to find them (decision 186).
+      if (alignments) stations.push(...roadStations(alignments, params.radius));
       gui.setStations(stations.map((x) => x.label));
       globe.observer.station = null;
       applyCamera();
@@ -663,6 +681,12 @@ async function main(): Promise<void> {
     };
     showStrategic(null);
     const key = worldKey(params, resolution, globalN);
+    // The build screen hides the world until it is ready (decision 186).
+    buildScreen.begin(`World ${worldParams.seed}`, [
+      'Planet and campaign',
+      `Terrain at ${globalN}²: detail, erosion, rivers`,
+      'Roads and railways',
+    ]);
     try {
       // 0. A world generated before with the same parameters loads from IndexedDB.
       const stored = await store.load(key).catch((err: unknown) => {
@@ -671,6 +695,8 @@ async function main(): Promise<void> {
       });
       if (token !== generation) return;
       if (stored?.strategic) {
+        buildScreen.begin(`World ${worldParams.seed}`, ['Stored world', 'Roads and railways']);
+        buildScreen.done(0, "loaded from the browser's world cache");
         showTectonic(stored.tectonic);
         showStrategic(stored.strategic);
         startSim(stored.tectonic, stored.strategic, params.radius);
@@ -678,11 +704,12 @@ async function main(): Promise<void> {
         const storedParams = { ...params, seed: stored.strategic.seed };
         const terrain = terrainOf(restored, storedParams);
         // A world stored before the alignment stage existed is aligned now, and stored again.
+        if (stored.alignments) buildScreen.done(1, 'stored with the world');
         const alignments =
-          stored.alignments ?? (await alignNetworks(stored.strategic, storedParams, terrain));
+          stored.alignments ?? (await alignNetworks(stored.strategic, storedParams, terrain, 1));
         if (token !== generation) return;
         showGlobal(stored.tectonic, restored, storedParams, stored.strategic, alignments, terrain);
-        buildProgress.hide();
+        buildScreen.finish();
         gui.status.generation = `cached (${((performance.now() - t0) / 1000).toFixed(1)} s)`;
         if (!stored.alignments && alignments)
           store
@@ -693,9 +720,17 @@ async function main(): Promise<void> {
 
       // 1. Coarse pass (graph, theaters, casting, validity retries) and the tectonic
       // world in the worker, shown at once as a preview.
-      const generated = await worldgen.generate(params, resolution, status);
+      const generated = await worldgen.generate(params, resolution, (stage, f) =>
+        status(stage, f, 0),
+      );
       if (token !== generation) return;
       const { strategic, ...world } = generated;
+      buildScreen.done(
+        0,
+        `${(world.info.landFraction * 100).toFixed(0)}% land, ${world.info.landmassCount} landmasses, ` +
+          `${strategic.graph.settlements.cells.length} settlements, ${strategic.graph.roads.count} roads, ` +
+          `${strategic.graph.railways.lines.count} railway lines`,
+      );
       showTectonic(world);
       showStrategic(strategic);
       startSim(world, strategic, params.radius);
@@ -713,22 +748,23 @@ async function main(): Promise<void> {
       const global = await buildGlobalWorld(gpu, worldSeedParams, world, {
         n: globalN,
         finish: (input) => worldgen.finish(input),
-        onProgress: (stage, f) => status(`global ${globalN}: ${stage}`, f),
+        onProgress: (stage, f) => status(stage, f, 1),
         cancelled: () => token !== generation,
       });
       if (token !== generation) {
         global.grid.dispose();
         return;
       }
+      buildScreen.done(1, `${global.finish.rivers.count} rivers`);
       // 3. Roads and railways aligned on the eroded world (decision 184).
       const terrain = terrainOf(global, worldSeedParams);
-      const alignments = await alignNetworks(strategic, worldSeedParams, terrain);
+      const alignments = await alignNetworks(strategic, worldSeedParams, terrain, 2);
       if (token !== generation) {
         global.grid.dispose();
         return;
       }
       showGlobal(world, global, worldSeedParams, strategic, alignments, terrain);
-      buildProgress.hide();
+      buildScreen.finish();
       const total = performance.now() - t0;
       gui.status.generation = `done in ${(total / 1000).toFixed(1)} s`;
       console.info(
@@ -761,7 +797,7 @@ async function main(): Promise<void> {
         .catch((err: unknown) => console.warn('Could not cache the world', err));
     } catch (err) {
       if (token !== generation) return;
-      buildProgress.hide();
+      buildScreen.finish();
       if (
         err instanceof GenerationCancelled ||
         err instanceof GlobalPassCancelled ||
@@ -797,6 +833,7 @@ async function main(): Promise<void> {
     cancel: () => {
       generation++;
       worldgen.cancel();
+      buildScreen.finish();
       gui.status.generation = 'cancelled';
     },
     viewChanged: (v) => {
@@ -1250,6 +1287,8 @@ async function main(): Promise<void> {
   await renderer.setAnimationLoop((now) => {
     const frameMs = now - last;
     last = now;
+    // Nothing is drawn or simulated behind the build screen (decision 186).
+    if (buildScreen.active) return;
     overlay.record(frameMs, now);
     if (viewParams.renderScale === 'auto') {
       const scale = renderScale.record(frameMs, now);

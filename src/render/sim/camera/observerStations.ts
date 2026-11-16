@@ -9,12 +9,17 @@
  * - **Ports:** at the port's site, 30 m up, looking toward the lowest ground
  *   within a few kilometers, which is the sea. Port points come from the
  *   coarse pass (decision 65), so they can sit a little inland or offshore.
+ * - **Switchbacks** (`roadStations`, decision 186): the aligned roads' most
+ *   winding stretches, 700 m to the side and 350 m up, looking at them.
  */
 import { Vec3d } from '../../../core/vec3d';
 import type { Infrastructure } from '../../../worldgen/strategic/infrastructure';
+import { alignedPoint } from '../../../worldgen/networks/alignments';
+import type { Alignments } from '../../../worldgen/networks/alignments';
+import { CLASS_KEYS } from '../../../worldgen/networks/link';
 import { APRON_LENGTH, APRON_OFFSET, localFrame, offsetPoint } from '../infra/infraScene';
 
-export type StationKind = 'airbase' | 'port';
+export type StationKind = 'airbase' | 'port' | 'road';
 
 export interface ObserverStation {
   /** Stable identifier, e.g. "airbase-3". */
@@ -22,7 +27,8 @@ export interface ObserverStation {
   /** For pickers: "Alliance · Name (main airbase)". */
   label: string;
   kind: StationKind;
-  side: 'alliance' | 'pact';
+  /** The side whose site it is; null for roads. */
+  side: 'alliance' | 'pact' | null;
   /** Unit direction of the spot the observer stands over. */
   point: Vec3d;
   /** Compass heading the observer faces at first (rad, clockwise from north). */
@@ -129,4 +135,64 @@ function seaward(p: Readonly<Vec3d>, radius: number, heightAt: (d: Readonly<Vec3
     }
   }
   return best;
+}
+
+/**
+ * Stations over the `count` most winding stretches of the aligned roads and
+ * railways (decision 186): the 2 km of line with the most stored points (they
+ * gather on curves and grade breaks), mountain classes counting double, at
+ * least 30 km apart.
+ */
+export function roadStations(al: Alignments, radius: number, count = 8): ObserverStation[] {
+  const WINDOW = 2000;
+  const mountain = new Set([
+    CLASS_KEYS.indexOf('mountainRoad'),
+    CLASS_KEYS.indexOf('mountainRailway'),
+    CLASS_KEYS.indexOf('track'),
+  ]);
+  const found: { score: number; k: number; i: number; j: number }[] = [];
+  const a = new Vec3d();
+  const b = new Vec3d();
+  for (let k = 0; k < al.count; k++) {
+    const o = al.offsets[k]!;
+    const e = al.offsets[k + 1]!;
+    let j = o;
+    let score = 0;
+    for (let i = o; i < e; i++) {
+      alignedPoint(al, k, i, a);
+      while (j < e && alignedPoint(al, k, j, b).distanceTo(a) * radius < WINDOW) {
+        score += mountain.has(al.cls[j]!) ? 2 : 1;
+        j++;
+      }
+      found.push({ score, k, i, j });
+      score -= mountain.has(al.cls[i]!) ? 2 : 1;
+    }
+  }
+  found.sort((x, y) => y.score - x.score || x.k - y.k || x.i - y.i);
+  const out: ObserverStation[] = [];
+  const picked: Vec3d[] = [];
+  for (const f of found) {
+    if (out.length >= count) break;
+    const mid = alignedPoint(al, f.k, (f.i + f.j - 1) >> 1);
+    if (picked.some((p) => p.distanceTo(mid) * radius < 30_000)) continue;
+    picked.push(mid);
+    const ahead = alignedPoint(al, f.k, Math.min(f.j - 1, ((f.i + f.j - 1) >> 1) + 1));
+    const heading = ahead.distanceTo(mid) > 0 ? bearingTo(mid, ahead) : 0;
+    const eye = offsetPoint(mid, heading, 0, -700, radius);
+    const lat = (Math.asin(mid.y) * 180) / Math.PI;
+    const lon = (Math.atan2(mid.x, mid.z) * 180) / Math.PI;
+    out.push({
+      key: `road-${f.k}-${f.i}`,
+      label:
+        `Roads · switchbacks ${out.length + 1} (${Math.abs(lat).toFixed(2)}° ${lat < 0 ? 'S' : 'N'}, ` +
+        `${Math.abs(lon).toFixed(2)}° ${lon < 0 ? 'W' : 'E'})`,
+      kind: 'road',
+      side: null,
+      point: eye,
+      facing: bearingTo(eye, mid),
+      height: 350,
+      pitch: -25 * (Math.PI / 180),
+    });
+  }
+  return out;
 }

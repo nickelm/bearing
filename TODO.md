@@ -952,7 +952,10 @@ Rivers by regime, roads and railways aligned to the terrain with earthworks as a
   - [ ] Fewer corners tighter than their radius on rough tiles
 - [x] Offline alignment stage (decision 184, superseding 181's lazy choice): link tasks from roads, railways and spurs in Hilbert order; level-6 tiles synthesized along the bands with a shared cache; a worker pool; links assembled whole (one plan and profile across their anchors); thinned, packed and stored with the world in IndexedDB; a progress panel; `?align=0` skips it
   - [ ] Whole-world run on a desktop GPU: time, tiles, forced pieces, record size; `tools/alignment.preview.ts` on seeds 1, 2, 3
-  - [ ] Free Flight's start screen shows the build's progress
+  - [x] A build screen in place of the progress panel: phases, bars, times and a log, nothing drawn or simulated behind it (decision 186; it covers Free Flight's start screen too)
+  - [x] Tiles evicted from the stage's cache while a lane waited: a million height lookups at 0 m in the owner's run on 8 workers; tiles pinned until handed out, regression test (decision 186)
+  - [x] Observer stations at the 8 most winding stretches (GUI → Simulation camera → Observer at "Roads · switchbacks", decision 186)
+  - [ ] The owner's run with the fix: viaducts and tunnels without the 0 m lookups (1,918 and 1,401 km of 86,818 before)
 - [x] Anchors: polyline ends (settlements, junctions) and every 12 km of the polyline (decision 185)
   - [ ] Anchors at strategic bridges, once they are snapped to rendered rivers
   - [ ] Elevations at anchors from the network (fixed decks, junction platforms); now the ground at link ends

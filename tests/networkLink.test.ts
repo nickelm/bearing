@@ -16,6 +16,7 @@ import {
   packAlignments,
 } from '../src/worldgen/networks/alignments';
 import { buildAlignments } from '../src/worldgen/networks/build';
+import { roadStations } from '../src/render/sim/camera/observerStations';
 import { alignLink, CLASS_KEYS, NETWORK, UNROUTED } from '../src/worldgen/networks/link';
 import type { LinkTask } from '../src/worldgen/networks/link';
 import { gnomonic } from '../src/worldgen/networks/pieces';
@@ -109,6 +110,16 @@ describe('links', () => {
     const s = alignmentStats(al);
     expect(s.links).toBe(2);
     expect(s.km).toBeGreaterThan(18);
+    // The most winding stretch gets an observer station, looking at it from the side.
+    const stations = roadStations(al, R, 3);
+    expect(stations.length).toBeGreaterThan(0);
+    expect(stations[0]!.kind).toBe('road');
+    expect(stations[0]!.side).toBeNull();
+    const k = Number(stations[0]!.key.split('-')[1]);
+    const i = Number(stations[0]!.key.split('-')[2]);
+    const d = stations[0]!.point.distanceTo(alignedPoint(al, k, i)) * R;
+    expect(d).toBeGreaterThan(500);
+    expect(d).toBeLessThan(3000);
   });
 });
 
@@ -140,6 +151,34 @@ describe('the stage', () => {
     });
     expect(Array.from(al.line)).toEqual([0, 1, 2]);
     expect(al.tiles).toBe(synthesized);
+  });
+
+  it('never hands a task a tile another lane evicted', async () => {
+    // Forty tasks whose tiles overlap, a cache of two tiles, eight lanes and a slow GPU:
+    // a lane finds some tiles cached and waits for the rest while others evict.
+    const tasks = Array.from({ length: 40 }, (_, id) => ({
+      ...task([-9000 + (id % 10) * 9_000, -1000 + (id % 7) * 13_000]),
+      id,
+      line: id,
+    }));
+    let calls = 0;
+    const al = await buildAlignments({
+      tasks,
+      radius: R,
+      workers: 4,
+      cacheTiles: 2,
+      batch: 1,
+      synthesize: async (ks) => {
+        await new Promise((r) => setTimeout(r, 1 + (calls++ % 3)));
+        return ks.map(() => new Float32Array(1));
+      },
+      run: async (tk, tiles) => {
+        for (const [key, h] of tiles) expect(h, key).toBeInstanceOf(Float32Array);
+        await new Promise((r) => setTimeout(r, 1 + (tk.id % 4)));
+        return alignLink(tk, ridge, R);
+      },
+    });
+    expect(al.count).toBe(40);
   });
 
   it('samples tile heights bilinearly and counts lookups outside its tiles', () => {
