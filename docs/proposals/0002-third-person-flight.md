@@ -1,6 +1,6 @@
 # Proposal 0002: Third-Person Flight Without Cockpits
 
-*Drafted 2026-11-11. Status: accepted. Affects `docs/design.md`, `docs/visual-style.md`, `docs/proposals/0001-two-views.md`, and `TODO.md`. Amended for helicopters by [proposal 0004](0004-helicopter-flight.md) (decision 149): helicopters take off and land under the player's control, and that proposal specifies their camera rig and hover symbology.*
+*Drafted 2026-11-11. Status: accepted. Affects `docs/design.md`, `docs/visual-style.md`, `docs/proposals/0001-two-views.md`, and `TODO.md`. Amended for helicopters by [proposal 0004](0004-helicopter-flight.md) (decision 149): helicopters take off and land under the player's control, and that proposal specifies their camera rig and hover symbology. [Proposal 0006](0006-displays-and-crew.md) (decision 189) supersedes the *Displays* and *Layout and Style* sections and the P2, P3 and P5 milestones below; the HUD symbology and crew station mode stay, crew station mode now working through format ownership.*
 
 ## Decision
 
@@ -56,6 +56,8 @@ A full pitch ladder is confusing when it is seen from outside the aircraft, so a
 
 ### Displays
 
+*Superseded by [proposal 0006](0006-displays-and-crew.md) (decision 189): docked slots, one display frame, and the formats listed there.*
+
 | Display | Contents | Notes |
 |---|---|---|
 | Radar | B-scope for fighter radars, PPI for maritime and AWACS radars, with mode, range scale, and contacts | Content depends on the aircraft's radar and its mode |
@@ -67,6 +69,8 @@ A full pitch ladder is confusing when it is seen from outside the aircraft, so a
 | Systems | Engines, fuel state, damage | Compact; expands on warnings |
 
 ### Layout and Style
+
+*Superseded by [proposal 0006](0006-displays-and-crew.md) (decision 189): the allocation rule, the slots, the status strip, master modes and faction skins. The HUD's single color and halo stay (`docs/visual-style.md`, Part I).*
 
 The aircraft sits slightly below screen center. Tapes flank it; the radar and moving map occupy the lower corners; the threat warning sits upper right; messages sit upper left; stores sit at bottom center. Each display can be collapsed, and a minimal mode shows only the world-anchored symbols and tapes.
 
@@ -93,7 +97,7 @@ The sensor model also benefits the AI, which uses the same filtered information 
 Two-seat aircraft keep their crews, represented by displays and callouts instead of seats.
 
 - **AI crewmate.** In the F-111, A-6, and Su-24 analogues, an AI weapon systems officer or bombardier/navigator runs the radar and targeting sensor, manages terrain-following, and calls out threats, waypoints, and releases.
-- **Crew station mode.** The player can hand the flying to the AI pilot and operate the radar, targeting sensor, and weapons themselves, still in the chase view with the targeting display enlarged. This replaces the earlier idea of taking the right-hand seat.
+- **Crew station mode.** The player can hand the flying to the AI pilot and operate the radar, targeting sensor, and weapons themselves, still in the chase view with the targeting display enlarged. This replaces the earlier idea of taking the right-hand seat. (Proposal 0006: the player takes the sensor and weapon formats from the crewmate through format ownership.)
 - **Attack helicopters.** The same split applies to pilot and gunner. Gunner mode enlarges the gunner sight display.
 - **Transports and heavy helicopters.** Airdrops show a drop zone marker and release cue. Sling-load missions add a downward-looking hook camera display for pickup and placement.
 - **Crew figures.** The blocky crew figures stay visible through canopies, which adds life to the chase view at low cost.
@@ -139,6 +143,8 @@ The tech demo includes the camera rig and a read-only HUD for followed flights, 
 - **V4. Transition, camera rig, and spectator HUD.** Follow a flight from mission search into the simulation view and back. Chase camera with per-type rigs, free look, and terrain avoidance. Read-only HUD with flight path marker, tapes, and heading for the followed aircraft.
 
 **New post-demo track: Piloting (P)**
+
+*P2, P3 and P5 as redefined by [proposal 0006](0006-displays-and-crew.md), which also adds P6, companion displays.*
 
 - **P1. Flight model and controls.** Table-driven flight model, flight director shared with the AI, mouse-aim and direct schemes, flight stick support through the Gamepad API, take control and hand back.
 - **P2. HUD and display framework.** Canvas overlay, layout system, world-anchored and screen-anchored symbology, message log, collapsible displays.

@@ -1,6 +1,6 @@
 # TODO
 
-Tech-demo milestones from [docs/design.md](docs/design.md) (revision 9, decisions 72, 94 and 161): a foundation (F), a strategic track (S), a simulation core track (C), a flight view track (V) and integration (I), after a scaffold, then a post-demo piloting track (P, decision 94) and helicopter track (H, decision 149), and the terrain networks track (N, decision 161). The design doc's _Milestones_ section maps the old M1–M9 onto these. Each task should take a few hours. Check tasks off as they are completed, and add subtasks as you discover them.
+Tech-demo milestones from [docs/design.md](docs/design.md) (revision 9, decisions 72, 94 and 161): a foundation (F), a strategic track (S), a simulation core track (C), a flight view track (V) and integration (I), after a scaffold, then a post-demo piloting track (P, decisions 94 and 189) and helicopter track (H, decision 149), and the terrain networks track (N, decision 161). The design doc's _Milestones_ section maps the old M1–M9 onto these. Each task should take a few hours. Check tasks off as they are completed, and add subtasks as you discover them.
 
 Suggested order for the remaining work: S1, V1, S2, V2, the rest of S3 and S4, V3, C2, V4, C3, I1. Visual milestones (all S, V, I, P, H and G, and N3, N6, N7 and N8) close only after the acceptance checks in [docs/visual-style.md](docs/visual-style.md) for the views they touch: Part I for the simulation view, Part II for the strategic view.
 
@@ -700,7 +700,7 @@ A sandbox outside the campaign: pick a seed and an airbase, take off in the F-21
 
 ## Piloting track (after the demo)
 
-Player flight control in the chase view, with the HUD and displays as 2D overlays and no cockpits ([docs/proposals/0002-third-person-flight.md](docs/proposals/0002-third-person-flight.md), decision 94). AI pilots and the player share one flight director and one flight model. P1 depends on V4. P2 depends on P1. P3 depends on P2 and S4. P4 and P5 depend on P3. All P milestones touch rendering or UI, so they close only after the Part I acceptance checks.
+Player flight control in the chase view, with the HUD and displays as 2D overlays and no cockpits ([docs/proposals/0002-third-person-flight.md](docs/proposals/0002-third-person-flight.md), decision 94). AI pilots and the player share one flight director and one flight model. The displays, status strip, master modes and AI crews follow [docs/proposals/0006-displays-and-crew.md](docs/proposals/0006-displays-and-crew.md) (decision 189); the plan is [docs/plans/displays.md](docs/plans/displays.md). P1 depends on V4. P2 depends on P1, and its Free Flight work may start before P1 closes. P3 depends on P2 and S4. P4 and P5 depend on P3, P6 on P3. All P milestones touch rendering or UI, so they close only after the Part I acceptance checks.
 
 ### P1. Flight model and controls
 
@@ -721,31 +721,52 @@ Table-driven flight model, flight director shared with the AI, mouse-aim and dir
 - [ ] Acceptance check 9 (aircraft readable and centered in a maximum-rate turn) as a scripted sequence
 - [ ] Checkpoint: owner flies representative aircraft with mouse aim and a flight stick, takes control and hands back
 
-### P2. HUD and display framework
+### P2. HUD, displays and status strip
 
-Canvas overlay, layout system, world-anchored and screen-anchored symbology, message log, collapsible displays. Free Flight's HUD (decision 135, `src/ui/flight/hud.ts`) is the starting point.
+The allocation rule, the display frame, slots and slot states, the status strip, master modes, cursor mode, faction skins and the moving map format; Free Flight's discrete indicators move from the HUD into the status strip. Free Flight's HUD (decision 135, `src/ui/flight/hud.ts`) is the starting point; the steps are the plan's.
 
-- [ ] Overlay and layout system: aircraft slightly below center, tapes flanking it, display slots in the corners, upper edge and bottom center; collapsible displays; minimal mode with only world-anchored symbols and tapes
-- [ ] World-anchored symbology framework: projection from the scene each frame, boresight cross, target boxes, waypoint and target diamonds, missile seeker circles (extends V4's flight path marker)
-- [ ] Screen-anchored instruments: airspeed, altitude and heading tapes, compact attitude indicator (no pitch ladder), Mach, G, fuel, master caution
-- [ ] Message log: AWACS, wingman, crew and ground controller calls as text
-- [ ] Systems display: engines, fuel state, damage; compact, expands on warnings
-- [ ] HUD color: green by default, amber option, thin dark halo; tune the values and record them in `docs/visual-style.md`
-- [ ] Acceptance check 7 with the full HUD
-- [ ] Checkpoint: owner review of HUD legibility and layout
+- [ ] Owner: confirm decision 189's readings (torque and RPM to the strip; time-critical warnings and the throttle stay on the HUD; fuel to an early engines and fuel format; avionics state in the sim; a software cursor under pointer lock; P2 before P1 closes; the hook camera with H3 or P5) and the plan's recommendations on voice, single-seat help and spectating
+- [ ] Spike: which key chords a page can capture in Chrome, Firefox and Safari on Windows, macOS and Linux, with and without fullscreen Keyboard Lock (Shift and Ctrl are the throttle, Left Alt is cursor mode); a software cursor under pointer lock; record the bindings for bezel buttons, focus, slots, master modes and the crew menu
+- [ ] Allocation inventory: every Free Flight HUD item classified by the rule (the plan's table), recorded with the decision that closes P2
+- [ ] `layout()`: slot rects from the viewport and the UI scale (large squares about 28% of the height lower left and right, small slots upper left and right, the strip at bottom center, the middle 60% clear); the HUD's tapes kept clear of the slots on 16:10 and 4:3; layout snapshot test that rects never depend on the master mode or the aircraft
+- [ ] Display model types (`DisplayModel`, 20 bezel buttons with label, state, enabled and command; owner tag; scope vector items, map descriptions, render-target screens), `DisplayCommand`, `DisplayState`, the format registry in `src/ui/displays/`; test that snapshots and models survive `structuredClone` and JSON
+- [ ] `sim/avionics/`: `AvionicsState`, `AvionicsCommand`, `apply`; avionics profiles in the model spec (slots, formats per slot, systems, skin, era bezel, crew roles) parsed and validated as `rotorSpec.ts` is; profiles for the Kestrel, the Wren and the Buzzard
+- [ ] Display frame in HTML and CSS: bezel with 20 buttons, on-screen labels, owner tag, focus ring, alert highlight; expanded, collapsed and hidden states with 300 ms transitions from the edge; Alliance and Pact skins as CSS variables (Part I, _Displays and Status Strip_); the round era bezel
+- [ ] Status strip: `stripItems(snapshot, mode)` rules for GEAR, PARK BRK, BRAKES, SPD BRK, AB, the control mode, HOVER HOLD, ALT HOLD, JOKER, BINGO, LOW FUEL, GEAR SPEED and the proposal's conflicts; levels, shapes and labels; clicks and keys; the master caution; the helicopter's torque, rotor RPM and power margin gauges
+- [ ] Master modes: `nextMode` with the triggers (ground, navigation, approach, hover; air-to-air, dogfight and air-to-ground by key until P4), hysteresis, presets, pins, HUD declutter levels; preset edits saved per viewer in browser storage with the defaults as fallback
+- [ ] Cursor mode: hold Left Alt or toggle; the director holds the aim point, or attitude and altitude in direct control; hover hold in a slow helicopter; the wheel over a display sets range or zoom
+- [ ] Display bindings in the binding table and the help overlay; test that enumerates every format's, the strip's and the crew menu's actions against the bindings
+- [ ] Messages format in the messages slot: Free Flight's messages move there (summary and crash cards stay)
+- [ ] Moving map, strategic mode: `StrategicScene` from a top-down camera into a render target at 2–5 Hz, larger than the display so track-up and own-ship motion are a texture transform per frame; 10–160 nm (the region band magnified below the zoom floor, no trees or buildings); north-up and track-up; own ship, airbases, the destination runway, range rings; drawn into the canvas under the slot
+  - [ ] Judge the base map at 10 nm on a 400-pixel display; if the 1.5 km grid looks blocky, strategic mode stops at 20 nm
+- [ ] Engines and fuel format, first version: fuel state, joker and bingo (pulled forward from P3 so fuel can leave the HUD)
+- [ ] Retrofit Free Flight: states, fuel, messages, torque and rotor RPM leave the HUD (`hud.ts`, `hudFrame.ts`, `heloHud.ts`); the HUD follows the master mode; the helicopter's hover symbology stays
+- [ ] Tests: master mode transitions and pins; strip items in scripted Free Flight scenarios (gear up slow and low, speedbrake with afterburner, parking brake with throttle, hover hold); display model snapshots
+- [ ] Previews: `tools/hud/` composites of displays and strip for the Kestrel and a helicopter in each master mode; `tools/freeflight.screens.mjs` shots; the browser smoke test checks that displays and strip exist and measures their CPU time (under 2 ms per frame) and the map's GPU pass
+- [ ] HUD color: tune the values and record them in `docs/visual-style.md`
+- [ ] Acceptance checks 7, 12 and 13 (Part I)
+- [ ] Checkpoint: owner review of the HUD, displays and strip in Free Flight in both aircraft kinds, with mouse and keyboard
 
-### P3. Sensors and displays
+### P3. Sensors and formats
 
-Sensor model, avionics profiles, radar, RWR, moving map from the strategic renderer, stores display.
+The sensor model, avionics profiles with display complements, datalink tracks, the elevation mode of the moving map, and the air-to-air radar, air-to-ground radar, threat warning, stores, engines and fuel, and comms formats; the Su-27 analogue's HUD-integrated radar. May split into P3a (sensor model, radar, threat warning) and P3b (the rest).
 
-- [ ] Sensor model in the sim, per aircraft: radar detection by radar type (none, ranging only, pulse, pulse-Doppler with look-down), mode, range, radar cross-section, aspect, terrain masking and clutter; deterministic, with tests
-- [ ] RWR (emitting radars by bearing and type), visual detection (range, size, aspect, contrast, light), datalinks and AWACS contacts with lower precision and a delay (Pact leaning on ground control, Alliance on AWACS), targeting pods and terrain-following radar
+- [ ] Sensor model in `sim/sensors/`, per aircraft: radar detection by radar type (none, ranging only, pulse, pulse-Doppler with look-down), mode, range, radar cross-section, aspect, terrain masking and clutter; RWR (emitting radars by bearing and type); visual detection (range, size, aspect, contrast, light); datalink and AWACS tracks with lower precision and a delay (Pact leaning on ground control, Alliance on AWACS); targeting pods and terrain-following radar; deterministic, with tests
 - [ ] The AI uses the same filtered picture as the player
-- [ ] Avionics profiles per type in the aircraft spec
-- [ ] Radar display: B-scope for fighter radars, PPI for maritime and AWACS radars, with mode, range scale and contacts; phosphor vector graphics
-- [ ] Threat warning display: RWR symbols by bearing and type
-- [ ] Moving map: the strategic renderer in a viewport, centered on the aircraft, with route, threats and front
-- [ ] Stores display: weapons and pylons, selected weapon, quantities, chaff and flares
+- [ ] Avionics profiles for every type of the air war's table, with display complements (the proposal's examples as the first cases)
+- [ ] Free Flight targets: scripted traffic and emitters as a start-screen option, so the formats have something to sense
+- [ ] Air-to-air radar format: B-scope with range-while-search, track-while-scan, single-target track and dogfight sub-modes; designation cursor with keys and mouse; elevation and azimuth coverage; contact altitude and aspect; datalink tracks marked
+- [ ] Threat warning format: RWR symbols by bearing and type, lock and launch indications
+- [ ] Air-to-ground radar format: ground map, moving-target mode; the terrain-following scope for the F-111 and Su-24 analogues
+- [ ] Stores format: pylons and weapons, selection, fuzing, release mode (CCIP or CCRP), quantity and ripple, jettison, countermeasure programs
+- [ ] Engines and fuel format, complete: engine states, damage and failures
+- [ ] Comms format: radio channels, AWACS and controller calls, wingman commands, ATC, message history
+- [ ] Moving map, elevation mode: the resident terrain tiles drawn from an orthographic camera with hypsometric tints, contours and spot heights; the relative sub-mode (red and hatched above the aircraft, amber within 500 ft below); the global grid beyond the tiles; datalink tracks and threat rings from the side's picture on both modes
+- [ ] The Su-27 analogue's radar picture in its HUD
+- [ ] Single-seat assists, if the owner wants them: the radar's mode follows the master mode, dogfight mode locks the nearest contact in the boresight; each a toggle
+- [ ] Spectator displays, if the owner wants them: the followed aircraft's own picture, read-only
+- [ ] Tests: each aircraft shows only its profile's formats in its profile's slots; display model snapshots (radar with tracks, stores after a scripted release, datalink fallback); relative elevation colors in scripted low-level scenarios
+- [ ] Acceptance checks 12–14 for a fighter and a strike aircraft
 - [ ] Checkpoint: owner review of the displays across aircraft with very different avionics
 
 ### P4. Weapons
@@ -758,20 +779,36 @@ Guns with lead-computing pipper, air-to-air missiles, bombs with CCIP and CCRP, 
 - [ ] Stores hang on pylons and disappear on release; fuel tanks can be jettisoned
 - [ ] Target camera: keeps the aircraft (foreground) and the selected target in frame
 - [ ] Weapon camera: follows a released missile or bomb, picture-in-picture or full screen
-- [ ] Damage states: smoke, fire and missing parts on models; damage in the systems display
+- [ ] Damage states: smoke, fire and missing parts on models; damage in the engines and fuel format
 - [ ] Acceptance check 8 with the gun pipper
 - [ ] Checkpoint: owner review of a dogfight and an attack run
 
 ### P5. Crews and special roles
 
-AI crewmate and callouts, crew station mode, targeting sensor display, airdrop tools. Attack helicopter gunner mode moves to H5 and the sling-load tools with the hook camera to H3 (decision 149).
+Format ownership, the crew command menu, the six crew roles, callouts, crew station mode, and the targeting pod, hook camera and airdrop formats (decision 189). Attack helicopter gunner mode moves to H5 and the sling-load tools to H3 (decision 149); the hook camera format is built by whichever of H3 and P5 comes first.
 
-- [ ] AI crewmate in the F-111, A-6 and Su-24 analogues: runs the radar and targeting sensor, manages terrain-following, calls out threats, waypoints and releases
-- [ ] Crew station mode: the AI pilot flies, the player operates radar, targeting sensor and weapons, with the targeting display enlarged
-- [ ] Targeting sensor display: FLIR or TV picture-in-picture from a render target with a thermal post-process
-- [ ] Airdrop: drop zone marker and release cue
+- [ ] `sim/crew/`: a crewmate per crewed seat of the controlled or followed aircraft (role, owned formats, task, skill from the squadron's experience and morale, added to the order of battle if missing); acts only through avionics commands; randomness from a fork of the aircraft's stream
+- [ ] Format ownership: shown on the bezel; the player takes a format by using it and hands it back from the crew menu
+- [ ] Crew command menu: a radial menu with numbered entries per role, clickable in cursor mode; the crew format (role, task, owned formats)
+- [ ] Callouts: events with a priority (launch, lock, threat, contact, waypoint, fuel, task results) in one queue shown in the messages slot; a higher priority interrupts a lower one
+- [ ] Roles: radar intercept officer (F-14 analogue), weapon systems officer (F-111, F-4G, Tornado, Su-24 analogues), bombardier/navigator (A-6 analogue), copilot/gunner (attack helicopters), crew chief with directive calls (transport helicopters), loadmaster (transport aircraft)
+- [ ] Crew station mode through ownership: the AI pilot flies through the shared director, the player owns the sensor and weapon formats
+- [ ] Targeting pod format: FLIR white-hot and black-hot or TV from a render target with a thermal post-process; zoom; point and area track; laser arm and fire
+- [ ] Hook camera format, unless H3 built it
+- [ ] Airdrop format: drop zone marker and release cue
+- [ ] Headless scenario tests: a crewmate locks a contact, designates a ground target, and guides a sling load
 - [ ] Blocky crew figures visible through canopies
-- [ ] Checkpoint: owner review of crew station and airdrop sorties
+- [ ] Acceptance checks 12–14 for a crewed strike aircraft and a transport helicopter
+- [ ] Checkpoint: owner review of crew station and airdrop sorties and the crew command menu
+
+### P6. Companion displays (later)
+
+Displays popped out of the game window (decision 189). Depends on P3.
+
+- [ ] A display in a second browser window, synced through a `BroadcastChannel`: display models out, display commands back
+- [ ] A companion page for a tablet or phone: peer-to-peer pairing by WebRTC with the offer and answer exchanged through QR codes (static hosting, rule 8), or an optional public signaling broker
+- [ ] Render-target screens (map, pod, hook camera) on a companion: a light 2D map from the display model, or compressed frames at 2 Hz
+- [ ] Checkpoint: owner flies with a display on a second window and a tablet
 
 ## Helicopter track (after P1; decision 149)
 
@@ -815,6 +852,7 @@ The thrust-disc model, the speed-scheduled controls, the Assisted preset, the ho
   - [ ] The shadow does not dim in a dust storm yet (decision 142 left it out; the lighting has no dust term for it to read)
   - [ ] Owner: the shadow near the ground in the browser, on flat ground and on a slope, high and low sun
 - [x] Hover HUD in `hud.ts` and `hudFrame.ts`: ground-plane velocity vector with acceleration cue, radar altitude with vertical speed, torque, rotor RPM, landing zone marker (`hoverSymbols`; `freeflight/heloHud.ts` builds the frame)
+  - [ ] Torque and rotor RPM move to the status strip's gauges with P2's retrofit (decision 189)
   - [x] The vertical speed as a figure under the radar altitude, amber in a hard descent near the ground (decision 160: the owner had not found the small fpm figure above the tape)
 - [ ] Free Flight: aircraft choice on the start screen and in the URL (`&aircraft=`), helipads painted on airbase aprons on the graded pad, spawn on a pad or in a hover, a landing zone marker at a point picked on the start screen's map
   - [x] Aircraft choice (start screen, `&aircraft=kestrel|scout|utility`), spawn beside the runway's middle or hovering at 150 m, the helicopter's own session path (decision 159)
@@ -855,7 +893,7 @@ Skids and wheels, slope and confined-area landings, dynamic rollover, sling load
 - [ ] Rooftop and structure contact: the ground query includes building tops (Little Bird rooftop landings); tree strikes from the canopy height field once it exists (decision 148)
 - [ ] Ship decks as moving ground where a ship is in the simulation view
 - [ ] Sling loads: a cable that can go slack, a load with mass and drag, pickup and release; cable tension and load position on the HUD; test of a load carried 5 km and set down within 3 m
-- [ ] Hook camera: a downward render-target display for pickup and placement (moved from P5)
+- [ ] Hook camera: a downward render-target view for pickup and placement, as the hook camera format on P2's display frame with load position and cable tension (decision 189; built here or in P5, whichever comes first)
 - [ ] Hoist and fast-rope as cable-length states with crew figures
 - [ ] Downwash: dust, snow, spray and a water ring under the rotor by surface and power, through the weather's particles; near trees sway once the near trees exist (Part I, _Helicopters_); the dust, snow, spray and flattening are done (decisions 176, 182); the water ring is done (decision 188); open: the near trees
 - [ ] Checkpoint: owner flies slope, confined-area and rooftop landings and a sling-load delivery
@@ -879,7 +917,7 @@ Vortex ring state, mast bumping, retreating blade stall, autorotation, tail roto
 Fixed and turreted weapons, gunner mode from proposal 0002, AI nap-of-the-earth and battle-position behaviors. Depends on P4.
 
 - [ ] Fixed guns and rocket pods with mouse aim; turreted guns following free look
-- [ ] Attack helicopter gunner mode with an enlarged gunner sight display (moved from P5)
+- [ ] Attack helicopter gunner mode: the gunner sight as P5's targeting pod format slaved to the turret, owned by the copilot/gunner or the player (moved from P5; decision 189)
 - [ ] AI behaviors with protection on: nap-of-the-earth routes with radar-altitude hold on the real terrain, battle positions with line of sight through the canopy height field, pop-up attacks, landing zone approaches, sling-load deliveries
 - [ ] Door gunners operated by the AI (decision 151); the crew built so that every seat has an AI and the player can later take any one
 - [ ] Campaign: helicopter missions' jump-in window over their ground phases, handback on the ground (with P1's take control and hand back)
@@ -1074,7 +1112,7 @@ Detail near a low camera for helicopter flight, faceted and slightly cartoony, a
 ## After the demo
 
 - Entity promotion and ground behaviors
-- The piloting track (P1–P5, above)
+- The piloting track (P1–P6, above)
 - The helicopter track (H1–H5, above)
 - Flyby and cinematic cameras for transitions, replays and idle spectating (Proposal 0002; not yet in a milestone)
 - Air combat

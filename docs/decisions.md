@@ -3014,3 +3014,42 @@ The eroded world's crossing sites, where the alignment snaps bridges (N5), come 
 `docs/visual-style.md` (*Helicopters*, downwash) already asks for the ring.
 
 **Reason:** Over water the ring is the only near cue a hovering pilot has; the waves' own machinery gives it the water's light for free.
+
+### 189. Displays, status strip, master modes and AI crew (proposal 0006 accepted)
+
+**Date:** 2026-11-16
+**Decision:** The owner accepts proposal 0006. Bearing stays third-person with a HUD overlay; cockpit functions that need not be heads-up move into docked multifunction displays and a status strip, master modes reconfigure both with the HUD, a cursor mode frees the mouse for the displays, and crewed aircraft get an AI crewmate the player commands. The proposal replaces proposal 0002's *Displays* and *Layout and Style*. The plan is `docs/plans/displays.md`; nothing is implemented yet.
+
+- **Allocation rule.** Every item lives in exactly one place: the HUD (spatial and time-critical information used while looking outside), a display (sensor pictures, selection, configuration, planning) or the status strip (discrete states and warnings).
+- **Standardization.** Five docked slots with fixed positions and bindings for every aircraft (left and right MFD, threat, messages, status strip); one layout and button set per format wherever it exists; the avionics profile decides which slots and formats an aircraft has; faction skins change colors, fonts, labels and units, never layout.
+- **Slots** are expanded, collapsed to a tab or hidden; they never move, pins beat automation, alerts may claim a slot in place, and transitions take about 300 ms and never cross the central 60% of the screen.
+- **Master modes:** ground, navigation, air-to-air, dogfight, air-to-ground, approach and hover, with the proposal's triggers and presets, selectable by key, and preset edits that apply to every aircraft.
+- **Status strip** on the dark cockpit principle: items only when relevant, warnings on conflicts, green, amber and red with a label and a shape each, clickable and bound to keys, and a master caution; helicopters end it with torque and rotor gauges.
+- **Display frame and formats:** one square frame with bezel buttons; the formats of the proposal's table at their update rates; the moving map in a strategic mode (the strategic view's illustrated rendering, a deliberate full-color anachronism in both factions) and an elevation mode with a relative sub-mode; formats exist only where the aircraft carries the system; datalink tracks on the map and the radar; the Su-27 analogue's HUD-integrated radar.
+- **Cursor mode:** hold Left Alt (or toggle) to use the displays while the flight director holds the aim point or attitude and altitude; every display action also has a key.
+- **AI crew:** six roles (radar intercept officer, weapon systems officer, bombardier/navigator, copilot/gunner, crew chief, loadmaster), format ownership shown on the bezel, a radial crew command menu, prioritized callouts in the messages slot, skill from the squadron's experience and morale. Crew station mode works through ownership.
+- **Serializable display models:** every format is a pure function from the sensor-filtered snapshot and the display state to a display description, with no rendering code (`src/ui/displays/`), so companion displays (P6) and tests use the same models, and input from anywhere returns as the same commands. Chrome in HTML and CSS, scopes in Canvas 2D, map, pod and hook camera from render targets; all displays under 2 ms of CPU per frame.
+- **Roadmap:** P2 becomes HUD, displays and status strip; P3 sensors and formats; P5 adds ownership, the command menu, the six roles, callouts and the targeting pod and hook camera formats; a new P6 holds companion displays. The torque and rotor gauges and the hook camera replace proposal 0004's dedicated displays; the hover symbology stays on the HUD.
+
+How the plan reads the proposal, for the owner to confirm (the plan's *How the plan reads the proposal* gives the reasons):
+
+1. Torque and rotor RPM leave the HUD for the strip's gauges; the rest of the hover symbology stays.
+2. Warnings that demand an immediate maneuver (PULL UP, STALL, tail strike, the sink cue, the helicopter hazard cues) stay on the HUD; system cautions, warnings and the master caution go to the strip.
+3. The throttle readout stays on the HUD; the afterburner moves to the strip.
+4. Fuel moves to the engines and fuel format, which P2 builds early for Free Flight; JOKER, BINGO and LOW FUEL go to the strip.
+5. Avionics state (what changes what the aircraft does, senses, emits or releases) lives in `sim/avionics/` and changes only by avionics commands; display state lives in `ui/displays/`. Crewmates (`sim/crew/`) and AI pilots issue the same commands and never touch the UI.
+6. Cursor mode is a software cursor under pointer lock, since browsers re-grant pointer lock only within a user gesture and a key release is none.
+7. Key chords are fixed after a spike: Shift and Ctrl are the throttle, Left Alt is cursor mode, and browsers reserve some digit chords.
+8. The moving map draws from 10 to 160 nm, below the strategic zoom floor, with the region band magnified and no trees or buildings (rule 11); elevation mode reads the resident terrain tiles, which already pass through the one height function (rule 13).
+9. Map overlays of the war (front, threat rings, contacts) come from the side's picture and the aircraft's sensors, never ground truth (rule 12).
+10. P2 starts in Free Flight before P1 closes, as H1 did (decision 151).
+11. The hook camera is built by whichever of H3 and P5 comes first, on P2's frame; the gunner sight is the targeting pod format slaved to a turret, so H5's gunner mode builds on P5's.
+12. All seven master modes exist in P2 by key; air-to-air, dogfight and air-to-ground fill in with P3 and P4, and their automatic triggers wait for weapons.
+13. Proposal 0002's minimal mode becomes the hidden slot state and HUD declutter levels; the clean-mode question stays open.
+14. A player's preset edits are saved per viewer in browser storage, with the defaults as fallback.
+
+The proposal's three open questions (voice, single-seat help, spectating) stay open in `docs/design.md`, with the plan's recommendations: text first; a light assistant as avionics assists, each a toggle; read-only displays of the followed aircraft's picture.
+
+`docs/design.md` (*Vision*, *Decisions So Far*, *Factions and Sides*, *Flying*, *Rendering*, *Milestones*, *Open Questions*, *Later*), Part I (*Principles* preamble, *HUD and Displays*, the new *Displays and Status Strip*, *Acceptance Checks*), proposals 0002 and 0004, `CLAUDE.md` and `TODO.md` change with this decision.
+
+**Reason:** Without cockpits, everything a cockpit shows competed for the HUD, and Free Flight's HUD already carried states, fuel and messages beside its flight symbology. One rule for where each item goes, fixed slots that never move, and formats that look the same in every aircraft let a player switch types without relearning the screen, while the avionics profile keeps each type's character. Display models that are plain data keep the crewmate, the tests and later companion screens on the same footing as the player, and keep the displays honest to the sensor picture.

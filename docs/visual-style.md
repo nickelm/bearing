@@ -1,6 +1,6 @@
 # Bearing: Visual Style Guide
 
-*Revision 4, 2026-11-16. Companion to `docs/design.md`. Revision 4 adds meanders and floodplains, roads and railways with their earthworks in the terrain, the bridge kit and its budgets, and bridge labels, dashed tunnels and generalized rivers on the map (Proposal 0005, decision 161); revision 3 adds the controlled aircraft, the HUD and displays, and their acceptance checks for third-person flight without cockpits (Proposal 0002, decision 94); revision 2 split the guide into two parts for the two views (Proposal 0001, decision 72).*
+*Revision 5, 2026-11-16. Companion to `docs/design.md`. Revision 5 adds the displays and status strip: the allocation rule, slots, the display frame, faction skins and their palette tokens, the full-color moving map, and their acceptance checks (Proposal 0006, decision 189); revision 4 adds meanders and floodplains, roads and railways with their earthworks in the terrain, the bridge kit and its budgets, and bridge labels, dashed tunnels and generalized rivers on the map (Proposal 0005, decision 161); revision 3 adds the controlled aircraft, the HUD and displays, and their acceptance checks for third-person flight without cockpits (Proposal 0002, decision 94); revision 2 split the guide into two parts for the two views (Proposal 0001, decision 72).*
 
 ## Summary
 
@@ -13,7 +13,7 @@ The two parts share the faction colors and the UI panels, and nothing else is as
 
 # Part I: Simulation View
 
-Everything in Part I applies to the simulation view: chase, target, weapon, flyby, and observer cameras from the ground to about 20 km altitude, with terrain drawn only within the horizon (about 200 km at 20 km, farther for peaks that rise above it). Nothing in it is tuned for orbit; the globe belongs to Part II. Bearing has no cockpits: the player sees their aircraft from outside, with the HUD and displays as 2D overlays (see *HUD and Displays*).
+Everything in Part I applies to the simulation view: chase, target, weapon, flyby, and observer cameras from the ground to about 20 km altitude, with terrain drawn only within the horizon (about 200 km at 20 km, farther for peaks that rise above it). Nothing in it is tuned for orbit; the globe belongs to Part II. Bearing has no cockpits: the player sees their aircraft from outside, with the HUD, docked displays and status strip as 2D overlays (see *HUD and Displays* and *Displays and Status Strip*).
 
 ## Principles
 
@@ -269,37 +269,89 @@ Starting values; final values get tuned in the model viewer and on the globe.
 
 ## HUD and Displays
 
-With no cockpits, the HUD and the cockpit displays draw as 2D elements over the chase view (decision 94). They show only what the aircraft and its crew know.
+With no cockpits, the HUD and the cockpit displays draw as 2D elements over the chase view (decision 94). They show only what the aircraft and its crew know. Every item lives in exactly one of three places (decision 189): the **HUD** holds spatial and time-critical information used while looking outside, the **displays** hold sensor pictures, selection, configuration and planning, and the **status strip** holds discrete states and warnings (*Displays and Status Strip*).
 
 ### Two Kinds of Symbols
 
 The chase camera sits behind and above the aircraft, so HUD symbols cannot sit at fixed screen positions as on a real HUD.
 
 - **World-anchored symbols** are projected from the 3D scene every frame: the flight path marker (from the velocity vector, projected at a great distance so the camera offset causes no parallax), the boresight cross, the gun pipper (at the predicted impact point), CCIP bomb fall lines, target boxes, waypoint and target diamonds, and missile seeker circles.
-- **Screen-anchored instruments** sit at fixed positions around the aircraft: airspeed and altitude tapes, a heading tape, a compact attitude indicator, Mach, G, fuel, and the master caution.
+- **Screen-anchored instruments** sit at fixed positions around the aircraft: airspeed and altitude tapes, a heading tape, a compact attitude indicator, Mach, G, and the throttle with its detent. Fuel moves to the engines and fuel format, and gear, brakes, speedbrake, afterburner and the master caution move to the status strip.
+- **Warnings that demand an immediate maneuver** (PULL UP, STALL, tail strike, the sink cue, and the helicopter hazard cues) stay on the HUD in amber; system cautions and warnings go to the strip.
 
 A full pitch ladder is confusing when seen from outside the aircraft, so the compact attitude indicator replaces it.
 
-**Helicopters** add hover symbology (decision 149), because small drift in the hover is hard to judge from a chase camera: a velocity vector on the ground plane from the helicopter's ground point, with an acceleration cue at its tip (world-anchored); radar altitude with vertical speed, torque as a percentage of maximum, rotor RPM (prominent in autorotation), and a landing zone marker with distance and bearing (screen-anchored, the marker also world-anchored); cable tension and the load's position under the hook for sling loads; and hazard cues for vortex ring state, mast bumping, retreating blade stall, and dynamic rollover.
+**Helicopters** add hover symbology (decision 149), because small drift in the hover is hard to judge from a chase camera: a velocity vector on the ground plane from the helicopter's ground point, with an acceleration cue at its tip (world-anchored); radar altitude with vertical speed, ground speed, and a landing zone marker with distance and bearing (screen-anchored, the marker also world-anchored); the load's position under the hook for sling loads; and hazard cues for vortex ring state, mast bumping, retreating blade stall, and dynamic rollover. Torque and rotor RPM are gauges at the end of the status strip, the rotor RPM gauge highlighted in autorotation (decision 189).
 
-### Displays
+### HUD Style
 
-| Display | Contents | Notes |
-|---|---|---|
-| Radar | B-scope for fighter radars, PPI for maritime and AWACS radars, with mode, range scale, and contacts | Content depends on the aircraft's radar and its mode |
-| Moving map | The strategic map, centered on the aircraft, with route, threats, and front | Drawn by the strategic renderer in a viewport, so both views share one cartographic language (Part II) |
-| Threat warning | RWR display with threat symbols by bearing and type | |
-| Stores | Weapons and pylons, selected weapon, quantities, chaff and flares | |
-| Targeting sensor | FLIR or TV picture-in-picture from a targeting pod or gunner sight | Thermal post-process on a render target; only aircraft with such a sensor |
-| Messages | AWACS, wingman, crew, and ground controller calls as text, later as voice | |
-| Systems | Engines, fuel state, damage | Compact; expands on warnings |
-
-### Layout and Style
-
-- **Layout.** The aircraft sits slightly below screen center. Tapes flank it; the radar and moving map occupy the lower corners; the threat warning sits upper right; messages sit upper left; stores sit at bottom center. Each display can be collapsed, and a minimal mode shows only the world-anchored symbols and tapes.
+- **Layout.** The aircraft sits slightly below screen center, the tapes flank it, and the HUD keeps within the middle 60% of the screen, clear of the display slots. Declutter levels follow the master mode, down to the world-anchored symbols and tapes alone.
 - **HUD symbology.** A single color (green by default, amber as an option) with a thin dark halo, so it stays legible against bright sky, snow, and night. Free Flight's first HUD (decision 135) starts from green `#6CFF8A` with a halo of `rgba(0, 18, 6, 0.75)` and amber `#FFB347` for warnings; exact values are tuned with the HUD (milestone P2).
-- **Displays.** The dark translucent panels and monospaced type of *User Interface*, with phosphor-colored vector graphics for radar and RWR.
-- **Implementation.** A Canvas 2D overlay at device pixel ratio for HUD symbols and vector displays, the strategic renderer in a viewport for the moving map, and render targets for targeting sensors.
+- **Implementation.** A Canvas 2D overlay at device pixel ratio.
+
+## Displays and Status Strip
+
+Multifunction displays docked at the screen edges and a status strip carry what the HUD should not (Proposal 0006, decision 189). Players switch aircraft often, so the screen stays the same across types while each keeps its own equipment.
+
+### Slots
+
+| Slot | Position | Size | Default use |
+|---|---|---|---|
+| Left MFD | Lower left | Large: a square about 28% of the screen height | Moving map or stores |
+| Right MFD | Lower right | Large | Radar or targeting pod |
+| Threat | Upper right | Small | Threat warning |
+| Messages | Upper left | Small | Comms log and crew callouts |
+| Status strip | Bottom center, below the aircraft | Strip | Discrete states |
+
+- **Fixed.** Each slot has one position and one set of bindings in every aircraft and helicopter. An aircraft may leave a slot empty, never move it, and an empty slot leaves the screen clearer. No free-floating windows.
+- **Central area.** The middle 60% of the screen belongs to the aircraft and the HUD. A UI scale setting resizes all slots together.
+- **States.** Expanded, collapsed to a small labeled tab at its edge, or hidden. At most two large and two small displays are expanded at once.
+- **Calm.** Fades and expansions take about 300 ms and grow from the screen edge; nothing flashes or slides through the central area. An alert that brings a format forward highlights the bezel in amber instead.
+
+### Frame and Formats
+
+- **One frame.** A square screen in a bezel with 20 option-select buttons, five per side. Each format labels its buttons on the screen beside them, in the format's type, and grays the ones that do nothing now. The focused display has a thin ring in the skin's phosphor color; the owner (the player or a crewmate's role, such as `WSO`) is a short tag on the bezel's top edge.
+- **Same format, same look.** A format has the same layout and buttons in every aircraft that carries it.
+- **Scopes** (radar, threat warning, stores, engines and fuel, comms, mission, crew, messages): phosphor vector graphics on a near-black screen, one color with a dimmer second level for secondary items, at device pixel ratio. Datalink tracks draw hollow, own-sensor tracks solid.
+- **Era bezels.** Older types may draw scope formats in a round, analog-styled scope bezel with the same content and buttons.
+
+### Skins
+
+Faction skins change colors, fonts, labels and units, never layout or button positions. The values are starting points, tuned in P2.
+
+| Token | Alliance | Pact | Use |
+|---|---|---|---|
+| `--bezel` | `#2B2E31` | `#3A4650` | Bezel face |
+| `--bezel-edge` | `#1A1C1E` | `#25303A` | Bezel rim and button wells |
+| `--screen` | `#050A07` | `#06090C` | Screen background |
+| `--phosphor` | `#6CFF8A` | `#FFB04A` (amber), or `#7CF29A` (green) by type | Symbology and labels |
+| `--phosphor-dim` | `#6CFF8A` at 45% | `--phosphor` at 45% | Secondary symbology, grayed buttons |
+| `--alert` | `#FFB347` | `#FFB347` | Bezel highlight when an alert claims a slot |
+| Labels | English | Transliterated | Button and screen labels |
+| Units | Knots, feet, nautical miles | Kilometers per hour, meters, kilometers | All readouts and map ranges |
+
+Both skins use the monospaced type of *User Interface*.
+
+### Moving Map
+
+- **Strategic mode** is a deliberate anachronism: full color, drawn by the strategic view's renderer in its illustrated style (Part II), in both factions. Beauty and legibility win over period accuracy here. At ranges below the strategic zoom floor it shows the region band's content, magnified; it never draws individual trees or buildings.
+- **Elevation mode** tints terrain by height (starting values: `#5E7F5A` at sea level, `#8A9A62` at 500 m, `#B5A46E` at 1,000 m, `#A88660` at 2,000 m, `#8F7A6E` at 3,000 m, `#D8D4CC` above 4,000 m; water `#3D5A73`), with thin dark contours and spot heights. The **relative** sub-mode colors terrain against the aircraft's altitude: red `#D9483B` with a diagonal hatch where terrain rises above the aircraft, amber `#E8A33D` within 500 ft below it, plain gray-green shading where it lies clear below. The hatch keeps red and amber apart for color-vision deficiencies.
+- **Overlays** on both modes: own ship, route and waypoints, range rings, bullseye, the front line and threat rings in the faction colors of Part II, and datalink tracks, in the phosphor color with a dark halo. North-up or track-up.
+
+### Sensor Images
+
+The targeting pod and the hook camera show grayscale thermal (white-hot or black-hot) or TV imagery, slightly noisy and low in resolution, with symbology in the skin's phosphor color.
+
+### Status Strip
+
+- **Dark cockpit.** In normal flight the strip is empty. Items appear only when relevant (the parking brake on the ground, the gear on approach or while down, the speedbrake while extended, master arm when armed, the afterburner while lit) and warn when a state conflicts with the situation.
+- **Annunciators.** Green `#34C759` for normal states that matter now, amber `#FFB347` for cautions, red `#FF3B30` for warnings. Every item carries a short text label and a shape (rounded for normal, notched for cautions, capped with a triangle for warnings), so color is never the only cue. Warnings flash at 2 Hz until acknowledged; nothing else flashes.
+- **Master caution.** An amber item at the strip's left end, lit while a caution is unacknowledged.
+- **Gauges.** Helicopters end the strip with compact torque, rotor RPM and power margin gauges.
+
+### Legibility
+
+All displays and the strip pass the color-vision check of Part II (check 4's simulated deficiencies) and stay legible at 1366 × 768 with the default UI scale.
 
 ## Performance Budgets
 
@@ -320,6 +372,7 @@ Targets for a mid-range laptop in a desktop browser at 1080p:
 - Thin geometry such as antennas, pitot tubes, and fine branches that alias at distance; omit them or thicken them.
 - Uniform scatter of identical trees; forests need clusters, edges, and value variation.
 - Real national insignia, unit badges, or manufacturer markings.
+- Free-floating windows, displays that move between modes, transitions through the central area, and color as the only cue on displays and the strip (decision 189).
 
 ## Acceptance Checks
 
@@ -336,8 +389,11 @@ Before a visual milestone with simulation-view work closes, capture these views 
 9. The aircraft stays readable and centered in a maximum-rate turn.
 10. The camera never clips terrain during low-level flight through valleys.
 11. Helicopter hovers at 5 m and 30 m over grassland, scrub and scree: the ground shows height and drift, with no visible repetition, shimmer, or cover that floats, sinks or does not match the ground (decision 168).
+12. Each master mode for one fighter, one strike aircraft and one helicopter: slots in the same places in every shot, at most two large and two small displays expanded, the central 60% clear of display chrome, and the strip dark in normal cruise (decision 189).
+13. Displays and the strip in both faction skins at 1366 × 768 and 1920 × 1080: labels and symbology legible, and every item distinguishable under simulated protanopia, deuteranopia and tritanopia.
+14. The moving map's relative elevation mode in a scripted low-level run through a valley: terrain above the aircraft red and hatched, terrain within 500 ft below amber, both matching the ridges seen in the chase view.
 
-Checks 1–5 are the views `mixed`, `conifer`, `range`, `dusk` and `beach` in `tools/render.preview.ts` (`VIEWS=checks`), aimed at places the preview finds in each world (decision 128); check 6 runs in the model viewer. Check 11 is the views `hover` and `skid` in `tools/render.preview.ts` and a Free Flight hover, from G1 on. Checks 7–10 are scripted flight sequences in `tools/render.preview.ts` and apply from milestone V4 (camera rig and flight path marker); check 9 needs the flight model (P1), and the gun pipper part of check 8 needs guns (P4).
+Checks 1–5 are the views `mixed`, `conifer`, `range`, `dusk` and `beach` in `tools/render.preview.ts` (`VIEWS=checks`), aimed at places the preview finds in each world (decision 128); check 6 runs in the model viewer. Check 11 is the views `hover` and `skid` in `tools/render.preview.ts` and a Free Flight hover, from G1 on. Checks 7–10 are scripted flight sequences in `tools/render.preview.ts` and apply from milestone V4 (camera rig and flight path marker); check 9 needs the flight model (P1), and the gun pipper part of check 8 needs guns (P4). Checks 12–14 apply from P2 (14 from P3): 12 and 13 as composites in `tools/hud/` and browser shots, 14 as a scripted Free Flight sequence.
 
 # Part II: Strategic View
 

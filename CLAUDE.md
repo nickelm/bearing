@@ -38,10 +38,11 @@ docs/visual-style.md  visual style guide (source of truth for the look; do not r
 docs/style/references/  reference screenshots: local only, gitignored, never shipped (decision 70)
 docs/proposals/     owner proposals (do not reformat); 0001-two-views.md (decision 72),
                     0002-third-person-flight.md (decision 94), 0003-forests-for-low-flight.md
-                    (decision 148), 0004-helicopter-flight.md (decision 149) and
-                    0005-terrain-adaptive-networks.md (decision 161) are accepted
+                    (decision 148), 0004-helicopter-flight.md (decision 149),
+                    0005-terrain-adaptive-networks.md (decision 161) and 0006-displays-and-crew.md
+                    (decision 189) are accepted
 docs/plans/         implementation plans: free-flight.md (decision 134), helicopters.md (track H), ground-detail.md (track G),
-                    terrain-networks.md (track N)
+                    terrain-networks.md (track N), displays.md (P2, P3, P5, P6; decision 189)
 src/core/           units, float64 Vec3d, coordinates, seeded RNG, invented names, the moon's ephemeris. Leaf layer.
 src/worldgen/       planet generation pipeline stages (may use GPU compute); canopy.ts is the canopy height
                     field with its stands (decision 148), shared by the renderer and later the sim;
@@ -69,6 +70,10 @@ src/sim/            headless simulation; runs in a worker: event queue + fixed t
   air/              the air war (C2, decision 132): aircraft type table, order of battle, missions,
                     analytic routes (great-circle legs, racetracks, fuel) and AirOps (live missions, phase events)
   naval/            carrier groups on their patrol tracks (analytic position); convoys and amphibious groups in C3
+  avionics/         (P2, planned) avionics state per aircraft (master mode, master arm, radar mode, locks, designations,
+                    stores selection) changed only by avionics commands, and avionics profiles (decision 189)
+  sensors/          (P3, planned) the sensor model: the filtered picture per aircraft that displays and AI read
+  crew/             (P5, planned) AI crewmates: roles, format ownership, tasks, callouts; act through avionics commands
   command/          per-side command layer (graph and cast only): campaign input from the main thread, the interim
                     tasker (until the ATO), later the intelligence picture and the ATO
   flight/           flight model, control laws, ground model, runways, outcomes, flight director and a
@@ -112,7 +117,9 @@ src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Bo
     infra/          settlements and infrastructure (decision 104): urban fill texture, building
                     glyph placement, the model of roads, railways, bridges and site symbols
                     (overlays/airModel.ts draws flights, trails, routes and carrier groups; decision 132)
-src/ui/             lil-gui debug panel (atmosphereSettings.ts maps its Atmosphere folder to the scene),
+src/ui/             displays/ (P2, planned): display models, formats, layout, master modes, the status strip's rules,
+                    cursor mode and display bindings, with the HTML, CSS and Canvas 2D that draw them in draw/ (decision 189);
+                    lil-gui debug panel (atmosphereSettings.ts maps its Atmosphere folder to the scene),
                     overlays, time controls, the time bar's weather line; flight/ (Free Flight's start screen, input
                     bindings, HUD, pause menu and cards; decisions 134, 135); audio/ (synthesized thunder,
                     rain and wind, no files; decision 142)
@@ -181,6 +188,10 @@ These are the project conventions. Lint enforces some of them (marked ⚙).
     - Everything that asks for the terrain's height (mesh vertices, trees, buildings, the camera's clearance, the flight model's ground, and later line of sight, ground movement and the AI) goes through that one function. Never add an edit's effect to tile data or the global grid yourself.
     - River channels stay last. Carving, floodplains and delta build-up belong to the tile kernel; no edit may raise the ground inside a river's protected channel, and a road or railway crosses a river on a bridge or culvert, never on terrain. Airfield pads are the one exception until their placement keeps off rendered rivers (decision 164).
     - Roads and railways have two tiers: the network tier (coarse pass, strategic graph) is what campaign logic reads (rule 9); the alignment tier (routes aligned on the eroded world, earthworks, structures) is execution and presentation data only.
+14. **Displays** (decision 189, Proposal 0006; `docs/visual-style.md` Part I, _Displays and Status Strip_).
+    - **Allocation.** Every item lives in exactly one place: the HUD (spatial and time-critical information used while looking outside), a display format (sensor pictures, selection, configuration, planning) or the status strip (discrete states and warnings). Place a new item by this rule; if it fits nowhere, it probably belongs in a format.
+    - **Standardization.** The five slots (left and right MFD, threat, messages, status strip) have one position and one set of bindings in every aircraft; an aircraft may leave a slot empty but never moves it. A format has the same layout and buttons in every aircraft that carries it, and exists only where the aircraft carries the system behind it (its avionics profile). Faction skins change colors, fonts, labels and units, never layout or button positions.
+    - **Display models.** Every format is a pure function from the sensor-filtered aircraft snapshot and the display state to a serializable display model, in `src/ui/displays/`, with no DOM, canvas or three.js in it. Input from keys, clicks, the crewmate or a companion returns as display commands; what changes the aircraft's behavior is an avionics command in `src/sim/avionics/`, and the crew and AI issue the same ones. Every display action has a key binding.
 
 ## Fidelity as level of detail
 
@@ -204,7 +215,7 @@ Promotion expands a unit deterministically from its seed and current strength. D
 - Run `npm test` and `npm run typecheck` (or `npm run check`) before declaring a task complete.
 - **The Kestrel's flight is pinned bit for bit** by `tests/flightLockstep.test.ts` (decision 154). A change meant to alter it (tuning, a new force) re-records the fixture with `LOCKSTEP_RECORD=1 npx vitest run tests/flightLockstep.test.ts`, once under Node 22 and once under Node 24 (`PATH=/opt/node24/bin:$PATH node node_modules/vitest/vitest.mjs run …` in a cloud session), and says so in its decision. A refactor must pass it unchanged.
 - **Visual milestones close only after the acceptance checks** in `docs/visual-style.md` for the views they touch. A visual milestone is any milestone with rendering, model or UI tasks (all of S1–S4, V1–V4, I1, P1–P5, H1–H5, G1–G5, and N3 and N6–N8).
-  - Simulation view (Part I): checks 1–5 as `tools/render.preview.ts` views; check 6, the silhouette test, in the model viewer once aircraft models exist; checks 7–10 (HUD and camera rig) as scripted sequences from V4 on.
+  - Simulation view (Part I): checks 1–5 as `tools/render.preview.ts` views; check 6, the silhouette test, in the model viewer once aircraft models exist; checks 7–10 (HUD and camera rig) as scripted sequences from V4 on; checks 12–14 (displays and status strip) from P2.
   - Strategic view (Part II): checks 1, 2, 4 and 5 as preview views (4 through simulated color-vision deficiencies); check 3, the ten-second legibility test, with the owner.
   - Read the PNGs next to the reference board in `docs/style/references/` and report to the owner where they match and where they fall short.
   - Add a TODO task for each gap. The milestone's owner checkpoint comes after this comparison, not before.

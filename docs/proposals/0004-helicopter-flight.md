@@ -145,8 +145,9 @@ Seen from a chase camera, small drift in the hover is hard to judge. The helicop
 - **radar altitude** with a vertical speed indicator;
 - **torque** as a percentage of maximum, which matters more than airspeed when heavy;
 - **rotor RPM**, prominent during autorotation;
+  (Proposal 0006, decision 189: torque and rotor RPM, with power margin, become the torque and rotor gauges at the end of the status strip; the rest of this list stays on the HUD.)
 - a **landing zone marker** with distance and bearing;
-- for sling loads, **cable tension** and the load's position relative to the hook, plus the hook camera display from proposal 0002;
+- for sling loads, **cable tension** and the load's position relative to the hook, plus the hook camera display from proposal 0002 (now the hook camera format of [proposal 0006](0006-displays-and-crew.md), with load position and cable tension);
 - hazard cues for vortex ring state, mast bumping, retreating blade stall, and dynamic rollover.
 
 ### Camera Rig
