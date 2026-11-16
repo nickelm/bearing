@@ -857,7 +857,7 @@ Skids and wheels, slope and confined-area landings, dynamic rollover, sling load
 - [ ] Sling loads: a cable that can go slack, a load with mass and drag, pickup and release; cable tension and load position on the HUD; test of a load carried 5 km and set down within 3 m
 - [ ] Hook camera: a downward render-target display for pickup and placement (moved from P5)
 - [ ] Hoist and fast-rope as cable-length states with crew figures
-- [ ] Downwash: dust, snow, spray and a water ring under the rotor by surface and power, through the weather's particles; near trees sway once the near trees exist (Part I, _Helicopters_); the dust, snow, spray and flattening are done (decisions 176, 181); open: the water ring and the near trees
+- [ ] Downwash: dust, snow, spray and a water ring under the rotor by surface and power, through the weather's particles; near trees sway once the near trees exist (Part I, _Helicopters_); the dust, snow, spray and flattening are done (decisions 176, 182); open: the water ring and the near trees
 - [ ] Checkpoint: owner flies slope, confined-area and rooftop landings and a sling-load delivery
 
 ### H4. Hazards and damage
@@ -1043,8 +1043,8 @@ Detail near a low camera for helicopter flight, faceted and slightly cartoony, a
 
 ### G5. Dust
 
-- [x] Soft sprites with noise-eroded edges and depth fade, stretched along their motion, in the pipeline's overlay, counts by the particles' quality factor (`render/sim/ground/rotorDust.ts`, decision 181)
-- [x] By surface (`washSurface`, tests): spray over water, snow powder where snow lies, ochre dust in the ground's color on deserts, beaches and dry grass, gray grit on rock, gravel, alpine ground and pavement, nothing on green ground; less when wet (decision 181)
+- [x] Soft sprites with noise-eroded edges and depth fade, stretched along their motion, in the pipeline's overlay, counts by the particles' quality factor (`render/sim/ground/rotorDust.ts`, decision 182)
+- [x] By surface (`washSurface`, tests): spray over water, snow powder where snow lies, ochre dust in the ground's color on deserts, beaches and dry grass, gray grit on rock, gravel, alpine ground and pavement, nothing on green ground; less when wet (decision 182)
 - [ ] A ring of ruffled water under the rotor on lakes and the sea (the water shader)
 - [ ] Leaves and cut grass on green ground; the sprites' self-shadowing (darker underside) if they read too flat
 - [ ] Owner: the wash in Free Flight in the browser over desert, snow, water and a runway

@@ -2895,7 +2895,7 @@ The eroded world's crossing sites, where the alignment snaps bridges (N5), come 
 
 **Reason:** These are the parts every road and railway goes through; building and testing them on ground whose answers are known (a face too steep, a ridge with a gap, a valley too deep to fill) before the world's ground makes failures there legible.
 
-### 181. G5: dust, grit, snow and spray under the rotor
+### 182. G5: dust, grit, snow and spray under the rotor
 
 **Date:** 2026-11-16
 **Decision:** What a rotor's downwash (decision 176) raises from the ground, as soft, wispy sprites (decisions 168, 169: sprites, not a density in the volumetric march).

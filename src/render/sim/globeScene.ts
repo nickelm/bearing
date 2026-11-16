@@ -152,7 +152,7 @@ export class GlobeScene {
    * overlay; null without a pipeline. `precipitation.enabled` switches the particles.
    */
   precipitation: Precipitation | null = null;
-  /** Dust, grit, snow and spray raised by a rotor's downwash (decision 181), in the overlay; null without a pipeline. */
+  /** Dust, grit, snow and spray raised by a rotor's downwash (decision 182), in the overlay; null without a pipeline. */
   rotorDust: RotorDust | null = null;
   /**
    * Lightning: flashes, the bolt and thunder (weather/lightning.ts). The app sets its `seed`

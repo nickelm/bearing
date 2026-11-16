@@ -1,4 +1,4 @@
-/** What a rotor's downwash raises from the ground (decision 181). */
+/** What a rotor's downwash raises from the ground (decision 182). */
 import { describe, expect, it } from 'vitest';
 import { washSurface } from '../src/render/sim/ground/rotorDust';
 import type { WashSite } from '../src/render/sim/ground/rotorDust';
@@ -15,7 +15,7 @@ const site = (o: Partial<WashSite>): WashSite => ({
   ...o,
 });
 
-describe('rotor wash surfaces (decision 181)', () => {
+describe('rotor wash surfaces (decision 182)', () => {
   it('raises spray over water, whatever the ground around it', () => {
     expect(washSurface(site({ water: true, cover: Biome.HotDesert }))).toEqual({
       kind: 'spray',
