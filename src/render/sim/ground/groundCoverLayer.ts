@@ -484,6 +484,8 @@ export class GroundCoverLayer {
     washRadius: uniform(1),
   };
   private downwash: GroundDownwash | null = null;
+  /** The wind at the ground under the eye this frame (world, m/s): for the rotor's dust. */
+  readonly groundWind = new Vec3d();
   private readonly wscratch = [new Vec3d(), new Vec3d(), new Vec3d(), new Vec3d(), new Vec3d()];
   private readonly center = new Vec3d();
   private filledAt: Vec3d | null = null;
@@ -675,6 +677,11 @@ export class GroundCoverLayer {
     this.downwash = d;
   }
 
+  /** The downwash set for this frame, or null. */
+  get currentDownwash(): GroundDownwash | null {
+    return this.downwash;
+  }
+
   update(
     eye: Readonly<Vec3d>,
     heightAboveGround: number,
@@ -821,6 +828,7 @@ export class GroundCoverLayer {
       return airVelocity(a?.view ?? null, p, R, a?.gameTime ?? 0, 0.5, out);
     };
     const w0 = at(0, 0, this.wscratch[4]!);
+    this.groundWind.copy(w0);
     u.at.value.set(w0.x, w0.y, w0.z);
     const STEP = 50;
     const e1 = at(STEP, 0, new Vec3d());

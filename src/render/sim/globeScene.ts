@@ -36,6 +36,7 @@ import { Volumetrics } from './clouds/volumetrics';
 import { WeatherTexture } from './clouds/weatherTexture';
 import { ForestLayer } from './forest/forestLayer';
 import { GroundCoverLayer } from './ground/groundCoverLayer';
+import { RotorDust } from './ground/rotorDust';
 import { GlobeMesh } from '../common/globeMesh';
 import { PlanetLighting } from './lighting/planetLighting';
 import { TerrainShadow } from './lighting/terrainShadow';
@@ -151,6 +152,8 @@ export class GlobeScene {
    * overlay; null without a pipeline. `precipitation.enabled` switches the particles.
    */
   precipitation: Precipitation | null = null;
+  /** Dust, grit, snow and spray raised by a rotor's downwash (decision 180), in the overlay; null without a pipeline. */
+  rotorDust: RotorDust | null = null;
   /**
    * Lightning: flashes, the bolt and thunder (weather/lightning.ts). The app sets its `seed`
    * (the world's) and `onThunder`; `lightning.enabled` switches it. Without a pipeline it
@@ -255,6 +258,14 @@ export class GlobeScene {
         this.pipeline.sceneDistance,
       );
       this.pipeline.overlay.add(this.precipitation.group, this.lightning.group);
+      this.rotorDust = new RotorDust(
+        this.terrain,
+        this.climate,
+        this.terrain.land,
+        this.lighting,
+        this.pipeline.sceneDistance,
+      );
+      this.pipeline.overlay.add(this.rotorDust.group);
     }
 
     this.inputEnabled = options.input !== false;
@@ -306,6 +317,7 @@ export class GlobeScene {
     this.structures.setScene(scene);
     this.forest.setInfrastructure(scene);
     this.groundCover.setInfrastructure(scene);
+    this.rotorDust?.setInfrastructure(scene);
   }
 
   resize(width: number, height: number): void {
@@ -453,6 +465,15 @@ export class GlobeScene {
         gameTime: this.gameTime,
         dt: effectDt,
       });
+      this.rotorDust?.update({
+        eye: o.eye,
+        forward: o.forward,
+        up: o.up,
+        dt: effectDt,
+        wash: this.groundCover.currentDownwash,
+        wind: this.groundCover.groundWind,
+        density: this.precipitation?.density ?? 1,
+      });
       this.structures.setInk(
         this.structures.inkWidth,
         (this.camera.fov * Math.PI) / 180 / this.viewportHeight,
@@ -461,6 +482,7 @@ export class GlobeScene {
     } else {
       this.forest.group.visible = false;
       this.groundCover.group.visible = false;
+      if (this.rotorDust) this.rotorDust.group.visible = false;
       this.structures.group.visible = false;
     }
 
@@ -536,6 +558,7 @@ export class GlobeScene {
     this.strategic.dispose();
     this.lighting.atmosphere.dispose();
     this.precipitation?.dispose();
+    this.rotorDust?.dispose();
     this.lightning.dispose();
     this.pipeline?.dispose();
   }
