@@ -153,6 +153,8 @@ export interface LightingGuiParams {
   temperatureShift: number;
   /** Terrain albedo detail-noise strength. */
   detail: number;
+  /** Micro-facets near a low camera (decision 168; 0 = off). */
+  microFacets: number;
   /** Flat-shaded terrain facets (decision 123); off shades smoothly. */
   facets: boolean;
   /** Farmland patchwork on settled, flat lowland (decision 127). */
@@ -598,6 +600,9 @@ export class DebugGui {
       .onChange(() => changed(light));
     f.add(light, 'detail', 0, 3, 0.05)
       .name('Ground detail')
+      .onChange(() => changed(light));
+    f.add(light, 'microFacets', 0, 2, 0.05)
+      .name('Micro-facets')
       .onChange(() => changed(light));
     f.add(light, 'facets')
       .name('Faceted terrain')

@@ -2730,3 +2730,19 @@ Budgets: nothing above 600 m beyond one uniform branch; below 150 m at most 12 d
 **Not done.** Dust does not dim the shadow yet (decision 142; the lighting has no dust term); a steeper slope than 4.8° was not rendered (the unit test covers 17°); the owner's look in the browser.
 
 **Reason:** The shadow is the main height cue near the ground (Part I, The Controlled Aircraft), and the owner flies helicopters there.
+
+### 171. G1, first pass: micro-facets as piecewise-linear fields on turned lattices
+
+**Date:** 2026-11-16
+**Decision:** The ground shader draws stepped relief finer than the mesh near a low camera (`render/sim/terrain/microFacets.ts`, decisions 168, 169).
+
+- **The field.** Each octave is a scalar field on a cubic lattice split into six tetrahedra per cube (the Kuhn triangulation), with an integer hash at each lattice point, linear inside each tetrahedron. Its gradient is constant per tetrahedron, so where the ground cuts the lattice it falls into flat cells, triangles and quads about a cell across, each with one tilted normal and one albedo step. The plan's triangular lattice on a tangent frame per cube face is not needed: the field is 3D, so it has no seams at cube faces and no stretch on slopes.
+- **Periodic and turned.** The lattice lies on the wrapped coordinates (decision 38) with a whole number of cells per wave period, and each octave's integer matrix maps that period onto itself. The first renders with axis-aligned lattices of 4, 1 and 0.5 m showed diagonal stripes, because nested powers of two share lattice planes; the octaves now have 1024, 2400 and 5400 cells per period (cells about 4, 1.2 and 0.5 m across) under three different integer matrices, and the stripes are mostly gone.
+- **Land cover.** Grass takes soft lumps (the 1.2 m octave strongest), dry ground grit (0.5 m), rock chiseled planes (4 m); snow keeps its normal and its sparkle and takes only faint shade steps at 4 m. Water, towns, the canopy and roads keep the facet's normal.
+- **Fade and cost.** An octave shows from 3 px per cell and fully from 7 px; all fade out from 360 m to 600 m. A uniform set from the camera's height above the ground skips the evaluation above 600 m, and a per-fragment distance test beyond it.
+- **Glints.** A cell flashes where its tilt, and not the facet under it, mirrors the sun toward the camera, on wet ground (by wetness) and on rock polished by glaciation. In the previews rock glints at full polish were too many; their weight is 0.25 against 1.5 for wet ground.
+- **Previews.** `tools/render.preview.ts` gains the target `meadow` (open, unsettled grassland or shrubland nearest the main continent, by the global forest density, of 255, under 45 in its cell and 70 around it) and the views `hover` (5 m) and `skid` (20 m) over it and `nap` (60 m) over the farmland; `MICRO=x` and `GLINT=x`. The debug panel's Lighting folder gains "Micro-facets". Seed 1983 on lavapipe: `docs/reports/screens/ground-g1-*.png` (hover with the detail off and on, skid, and a rock face with `TARGET=peak`).
+
+**Not done:** crop furrows, sand ripples, scree and marsh (each needs a direction or a mask the shader does not have yet); timing on a real GPU; ice glints.
+
+**Reason:** Stepped cells extend the faceted style down in scale (the owner's direction, decision 168), and a field on a lattice in space is the cheapest way to get them without seams or a second parameterization of the ground.

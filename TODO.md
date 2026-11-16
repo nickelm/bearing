@@ -991,13 +991,16 @@ Detail near a low camera for helicopter flight, faceted and slightly cartoony, a
 
 ### G1. Micro-facets
 
-- [ ] Triangular lattice on the wrapped coordinates with a tangent frame per cube face; micro-triangle normal and shade step; derivatives before any branch
-- [ ] Land-cover table (grass, scrub, soil, crop furrows by field heading, gravel and scree, rock, sand ripples, snow, marsh) with cell, tilt and shades
-- [ ] Fade below about 4 px per micro-triangle; uniform gate on the camera's height above the ground; distance cutoff
-- [ ] Glints per micro-facet on wet ground (by wetness), ice and smooth rock; snow's normal and sparkle untouched
-- [ ] A 4–8 m octave of the detail noise between the micro-facets and the 16 m cells
-- [ ] Preview views `hover` (5 m), `skid` (20 m) and `nap` (60 m) over grass, scrub, scree, a field and dunes; a cube-face seam view; grazing angles for shimmer
-- [ ] `PERF` at 1 km and at 20 m against the plan's budgets
+- [x] Piecewise-linear fields on Kuhn-split cubic lattices on the wrapped coordinates (no tangent frame, no seams), three octaves turned against each other by integer matrices; one normal and one shade step per cell; no derivatives inside (decision 171)
+- [x] Land cover, first pass: grass, dry ground, rock, snow (shade steps only) (decision 171)
+- [ ] Crop furrows by field heading, sand ripples across the wind, gravel bars and scree, marsh hummocks
+- [x] Fade from 7 to 3 px per cell; uniform gate on the camera's height above the ground; distance cutoff at 600 m (decision 171)
+- [x] Glints per micro-facet on wet ground (by wetness) and glacier-polished rock; snow's normal and sparkle untouched (decision 171)
+- [ ] Glints on ice (frozen lakes are the water shader's); check wet glints looking into a low sun in the browser
+- [x] Preview views `hover` (5 m) and `skid` (20 m) over the `meadow` target, `nap` (60 m) over farmland; `TARGET=peak` for rock; `MICRO`, `GLINT` (decision 171)
+- [ ] Views over scrub, scree, a field and dunes once their patterns exist; shimmer in motion (`FLICKER`)
+- [ ] The `hover` and `skid` previews show a vertical line down the middle of the frame with the micro-facets off as well; find its source
+- [ ] `PERF` at 1 km and at 20 m against the plan's budgets on a real GPU (lavapipe times are not meaningful; above 600 m the evaluation is skipped by a uniform)
 
 ### G2. Ground cover kit
 

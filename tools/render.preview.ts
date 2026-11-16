@@ -171,7 +171,8 @@ export interface PreviewView {
     | 'ocean'
     | 'hedges'
     | 'roadrow'
-    | 'gallery';
+    | 'gallery'
+    | 'meadow';
   /**
    * With a target: face this far clockwise of the sun's azimuth (rad; 0 looks into
    * the sun, π puts it behind), standing back from the target along that heading.
@@ -422,6 +423,55 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     observerBack: 400,
     eyeHeight: 40,
     pitch: -6 * DEG,
+    detail: true,
+  },
+  {
+    // Ground detail (decision 168, check 11): a helicopter's hover at 5 m over open, unsettled
+    // grassland or shrubland (target `meadow`), the sun from the side. TARGET=peak puts it on a mountain.
+    name: 'hover',
+    dLat: 0,
+    dLon: 0,
+    altitude: 0,
+    tilt: 0,
+    heading: 0,
+    localTime: 16,
+    target: 'meadow',
+    sunHeading: 100 * DEG,
+    observerBack: 150,
+    eyeHeight: 5,
+    pitch: -14 * DEG,
+    detail: true,
+  },
+  {
+    // Ground detail at 20 m (decision 168, check 11).
+    name: 'skid',
+    dLat: 0,
+    dLon: 0,
+    altitude: 0,
+    tilt: 0,
+    heading: 0,
+    localTime: 16,
+    target: 'meadow',
+    sunHeading: 100 * DEG,
+    observerBack: 250,
+    eyeHeight: 20,
+    pitch: -22 * DEG,
+    detail: true,
+  },
+  {
+    // Ground detail at 60 m over the farmland (decision 168): where the micro-facets fade.
+    name: 'nap',
+    dLat: 0,
+    dLon: 0,
+    altitude: 0,
+    tilt: 0,
+    heading: 0,
+    localTime: 16,
+    target: 'farmland',
+    sunHeading: 100 * DEG,
+    observerBack: 500,
+    eyeHeight: 60,
+    pitch: -12 * DEG,
     detail: true,
   },
   {
@@ -867,6 +917,9 @@ it('renders preview views', async () => {
   // SPARKLE=0 leaves the snow's glints out; WET=x (0..1) wets the ground whatever the weather.
   if (process.env.SHADOW !== '0') scene.shadows.setHeights(global.height, global.n);
   if (process.env.SPARKLE === '0') scene.terrain.land.sparkle.value = 0;
+  // MICRO=x scales the ground's micro-facets (decision 168; 0 = off); GLINT=x their glints.
+  if (process.env.MICRO) scene.terrain.micro.strength.value = Number(process.env.MICRO);
+  if (process.env.GLINT) scene.terrain.micro.glint.value = Number(process.env.GLINT);
   // SKY_LIGHT=x sets the sky light on surfaces (PlanetLighting.skyLight): the fill in the shadows.
   if (process.env.SKY_LIGHT) scene.lighting.skyLight.value = Number(process.env.SKY_LIGHT);
   // DAYLIGHT=x sets the sun's illuminance by day (PlanetLighting.daylight, default 1.4): the exposure.
@@ -993,6 +1046,7 @@ it('renders preview views', async () => {
     hedges: null,
     roadrow: null,
     gallery: null,
+    meadow: null,
   };
   // Hedgerow country (decision 162): the settled, farmable open cell anywhere whose
   // climate and region hedge the largest share of field boundaries.
@@ -1028,6 +1082,43 @@ it('renders preview views', async () => {
       }
     }
     console.log(`hedges: best share × habitability ${best.toFixed(2)}`);
+  }
+  // Open, unsettled grassland or shrubland (decision 168): forest density (of 255) well
+  // under the canopy's threshold in its global cell and its neighbors, few fields, the nearest such cell to the main continent, for the
+  // ground detail's views.
+  {
+    let bestDot = -2;
+    const md = new Vec3d();
+    for (let c = 0; c < global.height.length; c++) {
+      const b = global.finish.biome[c]!;
+      if (b !== Biome.TemperateGrassland && b !== Biome.Shrubland) continue;
+      if (global.height[c]! < 30) continue;
+      const face = Math.floor(c / (n * n)) as CubeFace;
+      const i = c % n;
+      const j = Math.floor(c / n) % n;
+      if (i < 1 || j < 1 || i > n - 2 || j > n - 2) continue;
+      let open = true;
+      for (let dj = -1; dj <= 1 && open; dj++) {
+        for (let di = -1; di <= 1; di++) {
+          if (forestMap[c + dj * n + di]! > (dj === 0 && di === 0 ? 45 : 70)) {
+            open = false;
+            break;
+          }
+        }
+      }
+      if (!open) continue;
+      cubeFaceUvToDirection(face, (i + 0.5) / n, (j + 0.5) / n, md);
+      if (habitabilityAt(campaign.graph.habitability, campaign.graph.resolution, md) > 0.25)
+        continue;
+      if (md.dot(main) > bestDot) {
+        bestDot = md.dot(main);
+        targets.meadow = md.clone();
+      }
+    }
+    if (targets.meadow) {
+      const km = (Math.acos(Math.min(1, bestDot)) * params.radius) / KM;
+      console.log(`meadow: open grassland ${km.toFixed(0)} km from the main continent`);
+    }
   }
   let deepest = 0;
   let nearest = -2;

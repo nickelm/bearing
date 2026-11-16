@@ -126,6 +126,7 @@ import {
   TILE_VERTEX_COUNT,
 } from '../../common/terrain/tileMesh';
 import type { MeshOptions, TileViewMode } from '../../common/terrain/tileMesh';
+import { MicroFacets } from './microFacets';
 
 const ZERO = new Vector3();
 const NO_TILE = new Vector4();
@@ -230,6 +231,8 @@ export class TerrainRenderer {
   readonly riverStyle = new RiverStyle();
   /** Land albedo: moisture, rock, snow, season and detail (decision 43). */
   readonly land = new LandShading();
+  /** Stepped relief finer than the mesh near a low camera (decisions 168, 169). */
+  readonly micro = new MicroFacets();
   private readonly data = new TileCache<TileData>(DATA_SHARE * DEFAULT_TILE_MEMORY_MIB * 2 ** 20);
   private readonly meshes = new TileCache<Mesh>(
     (1 - DATA_SHARE) * DEFAULT_TILE_MEMORY_MIB * 2 ** 20,
@@ -383,6 +386,7 @@ export class TerrainRenderer {
       const faceSlope = face.at(attribute('slope', 'vec3')).toVar();
       const faceJitter = face.jitter.toVar();
       const faceSpacing = face.spacing.toVar();
+      const faceLandform = face.at(attribute('landform', 'vec3')).toVar();
       const planet = L.planetPosition(positionWorld);
       // Sunlight, cloud shadow and sky light once for every layer shaded here.
       const at = L.at(positionWorld);
@@ -417,13 +421,26 @@ export class TerrainRenderer {
         wrapped: faceWrapped,
         forest: surfaceAttr.w,
         face: { spacing: faceSpacing, jitter: faceJitter },
-        landform: face.at(attribute('landform', 'vec3')),
+        landform: faceLandform,
         settled: this.habitability.sample(faceUp),
       });
       const snow = ground.snow.toVar();
       const canopy = ground.canopy.toVar();
+      const distance = length(positionWorld).toVar();
+      // Micro-facets on bare dry land near a low camera (decisions 168, 169): water,
+      // towns and the canopy keep the facet's normal, and roads draw over them.
+      const micro = this.micro.evaluate({
+        wrapped,
+        normal,
+        footprint,
+        distance,
+        mask: dry.mul(float(1).sub(river)).mul(float(1).sub(builtCover)).mul(float(1).sub(canopy)),
+        rock: ground.rock,
+        dry: ground.dry,
+        snow,
+      });
       const landAlbedo = mix(
-        ground.albedo,
+        ground.albedo.mul(micro.shade),
         builtAlbedo(planet, footprint, built.y.div(max(built.x.add(built.y), 1e-4))),
         builtCover,
       );
@@ -445,7 +462,7 @@ export class TerrainRenderer {
         albedo: landAlbedo as unknown as typeof normal,
         bed,
         temperature: this.land.surfaceTemperature(climateHere, rawHeight, radial),
-        normal,
+        normal: micro.normal,
         height: rawHeight,
         elevation: length(planet).sub(radius).div(max(exaggeration, 1e-3)),
         lake: lakeDepth,
@@ -532,17 +549,33 @@ export class TerrainRenderer {
         snow: snow.mul(bare).mul(float(1).sub(river)),
         wrapped,
         footprint: pixel,
-        distance: length(positionWorld),
+        distance,
         normal,
         view,
         up: radial,
         sun: L.sunDirection,
         sunlight: at.sunlight,
       });
+      // Single micro-facets flash toward the sun on wet ground and smooth rock (decision 169):
+      // rock polished by ice where the land was glaciated.
+      const polish = ground.rock.mul(faceLandform.y);
+      const glints = at.sunlight.mul(
+        this.micro
+          .glints(
+            micro,
+            normal,
+            view,
+            L.sunDirection,
+            this.land.wetness.mul(float(1).sub(snow)),
+            polish,
+          )
+          .mul(float(1).sub(paved.x)),
+      );
       const lit = withRoads
         .add(vec3(1, 0.7, 0.38).mul(glow))
         .add(sheen)
-        .add(sparkle);
+        .add(sparkle)
+        .add(glints);
       return L.applyAerial(lit, apInscatter, apTransmittance);
     })();
     return material;
@@ -610,6 +643,7 @@ export class TerrainRenderer {
     old.dispose();
     oldShell.dispose();
     this.canopy.seed.value = world ? canopySeed(world.seed) : 0;
+    this.micro.seed.value = (this.canopy.seed.value ^ 0x6d1c_7a05) >>> 0;
     // Fields share the canopy's hash and seed, so hedgerows follow them (decision 162).
     this.land.fieldSeed.value = this.canopy.seed.value;
     this.land.radius.value = world?.radius ?? 1e6;

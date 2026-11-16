@@ -475,10 +475,11 @@ export class LandShading {
   }
 
   /**
-   * The land albedo for a fragment, its snow cover 0..1 (for the sparkle) and
-   * its canopy cover 0..1 (a forest's crowns take no sheen from the rain).
+   * The land albedo for a fragment, its snow cover 0..1 (for the sparkle), its
+   * canopy cover 0..1 (a forest's crowns take no sheen from the rain), and its
+   * rock cover and dryness 0..1 (for the micro-facets, decision 168).
    */
-  surface(i: LandInputs): { albedo: V3; snow: F; canopy: F } {
+  surface(i: LandInputs): { albedo: V3; snow: F; canopy: F; rock: F; dry: F } {
     // Per face, noise finer than a few facets would only speckle (decision 124).
     const footprint = i.face
       ? (mix(length(fwidth(i.wrapped)), i.face.spacing, this.facets) as F)
@@ -604,6 +605,8 @@ export class LandShading {
       albedo: mix(i.albedo, a, this.enabled) as V3,
       snow: snow.mul(this.enabled) as F,
       canopy: cover.mul(this.enabled) as F,
+      rock: rock.mul(this.enabled) as F,
+      dry: dryRock.mul(this.enabled) as F,
     };
   }
 }

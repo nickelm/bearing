@@ -412,6 +412,8 @@ export class GlobeScene {
     placePlanetCentered(this.globe.group, o.eye);
     this.beforeDraw?.(o.eye);
 
+    // Micro-facets only while the camera is low enough to see them (decision 168).
+    this.terrain.micro.setCamera(aboveGround);
     this.globe.group.visible = !tiles;
     this.terrain.group.visible = tiles;
     if (tiles) {

@@ -914,6 +914,7 @@ async function main(): Promise<void> {
     foam: globe.terrain.water.foamStrength.value,
     temperatureShift: 0,
     detail: globe.terrain.land.detail.value,
+    microFacets: globe.terrain.micro.strength.value,
     facets: globe.terrain.land.facets.value > 0,
     farmland: globe.terrain.land.farmland.value > 0,
     riverLegibility: globe.terrain.riverStyle.legibility.value,
@@ -937,6 +938,7 @@ async function main(): Promise<void> {
     globe.terrain.water.foamStrength.value = l.foam;
     // The temperature shift is applied each frame, with the weather preset's (see the loop).
     globe.terrain.land.detail.value = l.detail;
+    globe.terrain.micro.strength.value = l.microFacets;
     globe.terrain.land.facets.value = l.facets ? 1 : 0;
     globe.terrain.land.farmland.value = l.farmland ? 1 : 0;
     globe.terrain.riverStyle.legibility.value = l.riverLegibility;
