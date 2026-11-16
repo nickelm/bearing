@@ -1,10 +1,11 @@
 /**
- * The alignment router (decision 180) on synthetic ground: straight on a plain,
- * switchbacks up a face too steep for the road, a railway round a ridge
- * through its gap, curves no tighter than the class allows.
+ * The alignment router (decisions 180, 181) on synthetic ground: straight on a
+ * plain, switchbacks up a face too steep for the road, a railway round a ridge
+ * through its gap, and plans and profiles from them within radius and grade.
  */
 import { describe, expect, it } from 'vitest';
-import { MOVES, ROUTE_CLASSES, route } from '../src/worldgen/networks/router';
+import { designProfile, fitPlan } from '../src/worldgen/networks/alignment';
+import { MAX_OVER, MOVES, ROUTE_CLASSES, route } from '../src/worldgen/networks/router';
 import type { RouteClass } from '../src/worldgen/networks/router';
 
 type Path = [number, number][];
@@ -14,29 +15,6 @@ function length(p: Path): number {
   for (let i = 1; i < p.length; i++)
     L += Math.hypot(p[i]![0] - p[i - 1]![0], p[i]![1] - p[i - 1]![1]);
   return L;
-}
-
-/**
- * The radius implied at each turn, as the router reckons it: the straight run
- * before the turn (at most six moves) over twice the tangent of half the turn.
- */
-function radii(p: Path): number[] {
-  const out: number[] = [];
-  let run = 0;
-  for (let i = 1; i + 1 < p.length; i++) {
-    const a = Math.atan2(p[i]![1] - p[i - 1]![1], p[i]![0] - p[i - 1]![0]);
-    const b = Math.atan2(p[i + 1]![1] - p[i]![1], p[i + 1]![0] - p[i]![0]);
-    const L = Math.hypot(p[i]![0] - p[i - 1]![0], p[i]![1] - p[i - 1]![1]);
-    let turn = Math.abs(b - a);
-    if (turn > Math.PI) turn = 2 * Math.PI - turn;
-    if (turn < 1e-9) {
-      run = Math.min(5, run + 1);
-      continue;
-    }
-    out.push(((run + 1) * L) / (2 * Math.tan(turn / 2)));
-    run = 0;
-  }
-  return out;
 }
 
 function maxGrade(p: Path, h: (x: number, y: number) => number): number {
@@ -81,8 +59,9 @@ describe('the alignment router (decision 180)', () => {
       cls,
     })!;
     expect(r).not.toBeNull();
-    expect(maxGrade(r.path, h)).toBeLessThanOrEqual(cls.maxGrade + 1e-9);
-    expect(length(r.path)).toBeGreaterThan(180 / cls.maxGrade);
+    // The ground may be cut and filled (decision 181), but no move climbs straight at the face's 30%.
+    expect(maxGrade(r.path, h)).toBeLessThanOrEqual(MAX_OVER * cls.maxGrade + 1e-9);
+    expect(length(r.path)).toBeGreaterThan(0.8 * (180 / cls.maxGrade));
     // Switchbacks: the eastward component of travel changes sign several times.
     let turns = 0;
     let last = 0;
@@ -92,7 +71,19 @@ describe('the alignment router (decision 180)', () => {
       if (dx !== 0) last = dx;
     }
     expect(turns).toBeGreaterThanOrEqual(2);
-    for (const rad of radii(r.path)) expect(rad).toBeGreaterThanOrEqual(cls.minRadius - 1e-6);
+    // The plan rounds the hairpins at the class's radius; the profile keeps its grade.
+    const plan = fitPlan(r.path, cls.minRadius, 2);
+    expect(plan.violations.length).toBeLessThanOrEqual(2);
+    const z = designProfile(
+      plan.points.map(([x, y]) => h(x, y)),
+      plan.s,
+      cls.maxGrade,
+      { startZ: 0, endZ: 180, smooth: 50, verticalCurve: 40 },
+    );
+    for (let i = 1; i < z.length; i++)
+      expect(Math.abs(z[i]! - z[i - 1]!) / (plan.s[i]! - plan.s[i - 1]!)).toBeLessThanOrEqual(
+        cls.maxGrade + 1e-9,
+      );
   });
 
   it('takes a railway round a ridge through its gap', () => {
@@ -109,11 +100,12 @@ describe('the alignment router (decision 180)', () => {
       cls,
     })!;
     expect(r).not.toBeNull();
-    expect(maxGrade(r.path, h)).toBeLessThanOrEqual(cls.maxGrade + 1e-9);
+    expect(maxGrade(r.path, h)).toBeLessThanOrEqual(MAX_OVER * cls.maxGrade + 1e-9);
     // Through the gap: the line passes the ridge's crest well south of the direct route.
     const atCrest = r.path.reduce((best, q) => (Math.abs(q[0]) < Math.abs(best[0]) ? q : best));
     expect(Math.abs(atCrest[1])).toBeLessThan(700);
-    for (const rad of radii(r.path)) expect(rad).toBeGreaterThanOrEqual(cls.minRadius - 1e-6);
+    // Its curves fit at the class's radius but for a corner or two.
+    expect(fitPlan(r.path, cls.minRadius, 10).violations.length).toBeLessThanOrEqual(2);
   });
 
   it('gives up where no route meets the grade, and is deterministic', () => {

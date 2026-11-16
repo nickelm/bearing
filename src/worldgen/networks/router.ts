@@ -1,27 +1,28 @@
 /**
- * The router of the alignment tier (decision 180; proposal 0005, "Routing"):
- * one A* search for roads and railways, with parameters per class.
+ * The router of the alignment tier (decisions 180, 181; proposal 0005,
+ * "Routing"): one A* search for roads and railways, with parameters per class.
  *
- * - **Lattice.** Square, `spacing` m, on a local plane in meters. The state
- *   is a node and the heading it was entered by, so curvature can be charged;
- *   moves go to the 16 neighbors of Galin et al.'s k = 2 neighborhood (the
- *   axes, diagonals and knight's moves), so paths are not held to 45° angles.
+ * - **Lattice.** Square, `spacing` m, on a local plane in meters; moves go to
+ *   the 16 neighbors of Galin et al.'s k = 2 neighborhood (the axes, diagonals
+ *   and knight's moves), so paths are not held to 45° angles. The state is the
+ *   node alone (decision 181: a state per heading and straight run cost a
+ *   hundred times the expansions on a real world's ground); each node keeps
+ *   the heading of its best parent, against which turns are charged, as in
+ *   Galin et al.
  * - **Grade** along the move: free up to a quarter of the class's maximum,
- *   rising as the square of grade over maximum beyond, and forbidden above
- *   the maximum. On a face steeper than the maximum the cheapest way up is a
- *   zigzag: switchbacks emerge rather than being drawn.
- * - **Curvature.** The state also counts the straight moves since the last
- *   turn (up to RUNS − 1), since with 16 headings the least turn is about 18°
- *   and a wide curve is straight runs with turns between them. A turn implies
- *   a radius, the run before it over twice the tangent of half the turn;
- *   turns tighter than the class's minimum radius are forbidden, others cost
- *   their angle squared.
+ *   then (grade over maximum)² × `gradeWeight`; above the maximum the ground
+ *   must be cut or filled, costing `steepWeight` × the excess squared, and
+ *   above `maxOver` × the maximum a move is forbidden. On a face steeper than
+ *   the maximum the cheapest way up is a zigzag: switchbacks emerge.
+ * - **Curvature.** A turn costs its angle² × `curveWeight`; turns sharper than
+ *   90° are forbidden unless the class's minimum radius is under the lattice
+ *   spacing (hairpins). The radius itself is the plan's business (`fitPlan`).
  * - **Earthworks.** The ground's departure at the move's midpoint from the
  *   straight grade between its ends, as an estimate of cut and fill.
  * - **Extra costs** (river crossings, attractors) come from the caller, as
  *   does the search's region (a band around the network's link).
  *
- * Pure and deterministic: ties break by state index.
+ * Pure and deterministic: ties break by node index.
  */
 import { MinHeap } from '../../core/heap';
 
@@ -143,11 +144,12 @@ function gcd(a: number, b: number): number {
   return a;
 }
 
-/** Straight-run lengths counted in the state: 0 .. RUNS − 1 moves since the last turn. */
-const RUNS = 6;
 const ANGLE = MOVES.map(([x, y]) => Math.atan2(y, x));
 const LENGTH = MOVES.map(([x, y]) => Math.hypot(x, y));
-const NONE = MOVES.length;
+
+/** Cost of cut and fill per (excess grade over maximum)², and the largest ground grade taken. */
+export const STEEP_WEIGHT = 30;
+export const MAX_OVER = 3;
 
 /** The cheapest path from start to goal, or null if there is none within the budget. */
 export function route(p: RouteProblem): Route | null {
@@ -165,94 +167,79 @@ export function route(p: RouteProblem): Route | null {
   const h = new Float32Array(nodes);
   const ok = new Uint8Array(nodes);
   for (let i = 0; i < nodes; i++) {
-    h[i] = p.height(X(i), Y(i));
     ok[i] = !p.allowed || p.allowed(X(i), Y(i)) ? 1 : 0;
+    h[i] = ok[i] ? p.height(X(i), Y(i)) : 0;
   }
   const start = snap(p.start);
   const goal = snap(p.goal);
+  if (!ok[start]) h[start] = p.height(X(start), Y(start));
+  if (!ok[goal]) h[goal] = p.height(X(goal), Y(goal));
   ok[start] = 1;
   ok[goal] = 1;
-  const K = (NONE + 1) * RUNS;
-  // float32 costs: a meter's resolution over tens of kilometers is plenty, at half the memory.
-  const g = new Float32Array(nodes * K).fill(Infinity);
-  const from = new Int32Array(nodes * K).fill(-1);
-  const closed = new Uint8Array(nodes * K);
+  const g = new Float32Array(nodes).fill(Infinity);
+  const from = new Int32Array(nodes).fill(-1);
+  const dirIn = new Int8Array(nodes).fill(-1);
+  const closed = new Uint8Array(nodes);
   const gx = X(goal);
   const gy = Y(goal);
   const heur = (i: number) => Math.hypot(X(i) - gx, Y(i) - gy);
   const heap = new MinHeap();
-  const s0 = start * K + NONE * RUNS;
-  g[s0] = 0;
-  heap.push(heur(start), s0);
+  g[start] = 0;
+  heap.push(heur(start), start);
   const budget = p.maxExpansions ?? 4_000_000;
+  const hairpins = cls.minRadius < s;
+  const maxTurn = hairpins ? (3 * Math.PI) / 4 + 1e-6 : Math.PI / 2 + 1e-6;
   let expansions = 0;
-  let found = -1;
   const free = cls.maxGrade / 4;
   while (heap.size > 0) {
-    const st = heap.pop();
-    if (closed[st]) continue;
-    closed[st] = 1;
-    const node = Math.floor(st / K);
-    const rest = st - node * K;
-    const dIn = Math.floor(rest / RUNS);
-    const run = rest - dIn * RUNS;
-    if (node === goal) {
-      found = st;
-      break;
-    }
-    if (++expansions > budget) break;
+    const node = heap.pop();
+    if (closed[node]) continue;
+    closed[node] = 1;
+    if (node === goal) break;
+    if (++expansions > budget) return null;
     const ix = node % nx;
     const iy = Math.floor(node / nx);
     const x0 = X(node);
     const y0 = Y(node);
+    const dIn = dirIn[node]!;
     for (let m = 0; m < MOVES.length; m++) {
       const jx = ix + MOVES[m]![0];
       const jy = iy + MOVES[m]![1];
       if (jx < 0 || jy < 0 || jx >= nx || jy >= ny) continue;
       const next = jy * nx + jx;
-      if (!ok[next]) continue;
+      if (!ok[next] || closed[next]) continue;
       const L = LENGTH[m]! * s;
       const grade = Math.abs(h[next]! - h[node]!) / L;
-      if (grade > cls.maxGrade) continue;
+      const r = grade / cls.maxGrade;
+      if (r > MAX_OVER) continue;
       let turn = 0;
-      let nextRun = 0;
-      if (dIn !== NONE) {
-        if (m === dIn) nextRun = Math.min(RUNS - 1, run + 1);
-        else {
-          turn = Math.abs(ANGLE[m]! - ANGLE[dIn]!);
-          if (turn > Math.PI) turn = 2 * Math.PI - turn;
-          // The arc that rounds this corner: the straight run before it, over twice the
-          // tangent of half the turn.
-          const straight = (run + 1) * LENGTH[dIn]! * s;
-          if (turn >= Math.PI - 1e-9 || straight / (2 * Math.tan(turn / 2)) < cls.minRadius)
-            continue;
-        }
+      if (dIn >= 0) {
+        turn = Math.abs(ANGLE[m]! - ANGLE[dIn]!);
+        if (turn > Math.PI) turn = 2 * Math.PI - turn;
+        if (turn > maxTurn) continue;
       }
-      const r = Math.max(0, grade - free) / (cls.maxGrade - free);
+      const q = Math.max(0, grade - free) / (cls.maxGrade - free);
       const x1 = X(next);
       const y1 = Y(next);
       const mid = p.height(0.5 * (x0 + x1), 0.5 * (y0 + y1));
       const earth = Math.abs(mid - 0.5 * (h[node]! + h[next]!));
       let cost =
-        L * (1 + cls.gradeWeight * r * r) +
+        L * (1 + cls.gradeWeight * Math.min(q, 1) ** 2 + STEEP_WEIGHT * Math.max(0, r - 1) ** 2) +
         cls.curveWeight * turn * turn * s +
         cls.earthWeight * earth * L;
       if (p.extra) cost += p.extra(x0, y0, x1, y1);
-      const ns = next * K + m * RUNS + nextRun;
-      const ng = Math.fround(g[st]! + cost);
-      if (ng < g[ns]!) {
-        g[ns] = ng;
-        from[ns] = st;
-        heap.push(ng + heur(next), ns);
+      const ng = Math.fround(g[node]! + cost);
+      if (ng < g[next]!) {
+        g[next] = ng;
+        from[next] = node;
+        dirIn[next] = m;
+        heap.push(ng + heur(next), next);
       }
     }
   }
-  if (found < 0) return null;
+  if (!closed[goal]) return null;
   const path: [number, number][] = [];
-  for (let st = found; st >= 0; st = from[st]!) {
-    const node = Math.floor(st / K);
-    path.push([X(node), Y(node)]);
-  }
+  for (let n = goal; n >= 0; n = from[n]!) path.push([X(n), Y(n)]);
   path.reverse();
-  return { path, cost: g[found]!, expansions };
+  return { path, cost: g[goal]!, expansions };
 }
