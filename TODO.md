@@ -917,7 +917,8 @@ Rivers by regime, roads and railways aligned to the terrain with earthworks as a
 - [ ] Regimes per reach (mountain, lowland meandering, small lowland; braided as stretch) from bed gradient, discharge and floodplain width (per polyline so far: migration for lowland rivers at least 80 m wide with a floodplain of eight widths, the train below, wander for all; decisions 167, 173)
 - [x] Floodplain mask from `valleyFloor` and the height above the river's surface (as a half-width along each river, from the global heights within a few meters of its surface; decision 173)
 - [x] Meander migration (Howard and Knutson) with resampling, cutoffs within about a width and oxbow polylines; `rng(seed, "meanders")` forked per river; endpoints fixed; caps on iterations and time; fallback to the procedural train (decision 173: no random numbers, the train seeds the bends; run once per world in the worker and stored)
-  - [ ] Move the migration off the worker's critical path or speed it further if the stage costs more than about 10 s on a real GPU's world
+  - [x] Move the migration off the worker's critical path or speed it further if the stage costs more than about 10 s on a real GPU's world (6.7 s on seed 1983 after a faster loop; decision 173)
+  - [ ] A render of oxbows at low altitude over open floodplain (the views so far are of a river beside a deep lake)
 - [x] Profiles recomputed on the final planform; carve segments from it (decision 173)
 - [x] Floodplain edit in the kernel (lowers and smooths, never raises, before the carve) (in the carve itself, as its profile beyond the bank, so the carve stays the minimum; decision 173)
 - [ ] Distributaries that bifurcate in deltas, with a build-up edit to just above sea level
