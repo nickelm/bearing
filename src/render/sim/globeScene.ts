@@ -465,6 +465,8 @@ export class GlobeScene {
         gameTime: this.gameTime,
         dt: effectDt,
       });
+      // The rotor's ring on water (decision 188).
+      this.terrain.water.setDownwash(this.groundCover.currentDownwash, o.eye);
       this.rotorDust?.update({
         eye: o.eye,
         forward: o.forward,

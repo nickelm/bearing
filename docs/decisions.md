@@ -3000,3 +3000,17 @@ The eroded world's crossing sites, where the alignment snaps bridges (N5), come 
 `docs/plans/ground-detail.md` changes with this decision.
 
 **Reason:** The owner's review.
+
+### 188. The rotor's ring on water
+
+**Date:** 2026-11-16
+**Decision:** Over lakes, rivers and the sea, the downwash (decision 176) draws in the water shader what the flattened grass shows on land: a pilot's cue for height and drift where there is no ground cover.
+
+- **Ripples.** Two trains of short ripples (1.2 m and 0.52 m) run outward from where the wash meets the water, at 1.5 m/s plus a quarter of the outwash speed, added to the waves' slope like any wave: lit, mirrored and glinting as the sea is, and handed over to the roughness where they are too fine to resolve, so a far ring reads as a dull, rough disc. Their strength follows the grass's reach: rising over 0.4 rotor radii, falling as 1.6R/r, gone between five and eight radii, scaled by the outwash (full at 10 m/s, up to 1.5 times).
+- **Churn.** A faint, broken white ring between about one and two radii joins the surf's foam (not on rivers' widened ribbons).
+- **Where.** `WaterShading.setDownwash` takes the wash's center camera-relative each frame from `GlobeScene` (the same record as the grass and the dust); frozen lakes show their ice, unchanged.
+- **Preview.** `TARGET=ocean VIEWS=hover WASH=14,4 WASH_AT=14`: concentric ripples on the open sea behind the spray (`docs/reports/screens/ground-g5-water-ring.png`). The deepest-lake target was frozen at the preview's date.
+
+`docs/visual-style.md` (*Helicopters*, downwash) already asks for the ring.
+
+**Reason:** Over water the ring is the only near cue a hovering pilot has; the waves' own machinery gives it the water's light for free.

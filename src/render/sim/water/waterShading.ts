@@ -53,6 +53,7 @@ import {
   fwidth,
   If,
   length,
+  min,
   max,
   mix,
   normalize,
@@ -240,6 +241,9 @@ export interface WaterInputs {
  */
 export const FLASH_MIRROR = 0.5;
 
+/** Wavelength (m) of the longer of the downwash's two ripple trains (decision 188). */
+const WASH_RIPPLE = 1.2;
+
 /** GGX α² added to the reflection of a river much narrower than its pixel (decision 120). */
 const THIN_RIVER_ALPHA2 = 0.5;
 
@@ -274,7 +278,29 @@ export class WaterShading {
   /** Water body color near the coast (linear): greener with silt and plankton (decision 146). */
   readonly coastalColor = uniform(new Color(0.012, 0.05, 0.055));
 
+  /**
+   * A rotor's downwash on the water (decision 188): where the wash meets the surface,
+   * camera-relative (m), its outwash speed (m/s, 0 = none) and the rotor's radius (m).
+   */
+  readonly washCenter = uniform(new Vector3(0, -1e7, 0));
+  readonly washSpeed = uniform(0);
+  readonly washRadius = uniform(4);
+
   constructor(private readonly lighting: PlanetLighting) {}
+
+  /** Sets the downwash for this frame (planet-centered center), or clears it. */
+  setDownwash(
+    wash: { center: { x: number; y: number; z: number }; speed: number; radius: number } | null,
+    eye: { x: number; y: number; z: number },
+  ): void {
+    if (!wash || !(wash.speed > 0)) {
+      this.washSpeed.value = 0;
+      return;
+    }
+    this.washCenter.value.set(wash.center.x - eye.x, wash.center.y - eye.y, wash.center.z - eye.z);
+    this.washSpeed.value = wash.speed;
+    this.washRadius.value = wash.radius;
+  }
 
   /** Radiance of a terrain fragment: land, or water over a seabed with waves and glint. */
   shade(i: WaterInputs): V3 {
@@ -406,6 +432,44 @@ export class WaterShading {
           .mul(smoothstep(3, 40, i.height.negate()))
           .mul(this.waveStrength);
         for (const w of this.swell) wave(w, swellAt.mul(w.slope) as F);
+        // Downwash (decision 188): short ripples running outward from under a rotor, a
+        // rough, dull disc where they are too fine to resolve, and a ring of churn.
+        const washOffset = i.relative.sub(this.washCenter);
+        const washAcross = washOffset.sub(i.up.mul(dot(washOffset, i.up)));
+        const washR = length(washAcross);
+        const R = max(this.washRadius, 0.5);
+        const washReach = smoothstep(0, R.mul(0.4), washR)
+          .mul(min(float(1), R.mul(1.6).div(max(washR, 0.01))))
+          .mul(smoothstep(R.mul(8), R.mul(5), washR))
+          .mul(clamp(this.washSpeed.div(10), 0, 1.5))
+          .toVar();
+        let washChurn: F;
+        {
+          const outward = washAcross.div(max(washR, 0.01));
+          for (const [k, len] of [WASH_RIPPLE, WASH_RIPPLE * 0.43].entries()) {
+            const speed = this.washSpeed.mul(0.25).add(1.5);
+            const phase = washR
+              .sub(time.mul(speed))
+              .div(len)
+              .mul(2 * Math.PI)
+              .add(k * 1.3);
+            const s = washReach.mul(k === 0 ? 0.22 : 0.14);
+            const resolved = smoothstep(handLo, handLo.mul(3), footprint.reciprocal().mul(len));
+            grad = grad.add(outward.mul(cos(phase).mul(s).mul(resolved))) as V3;
+            unresolved = unresolved.add(s.mul(s).mul(0.5).mul(float(1).sub(resolved))) as F;
+          }
+          const ring = smoothstep(R.mul(0.6), R.mul(1.1), washR).mul(
+            smoothstep(R.mul(2.4), R.mul(1.3), washR),
+          );
+          const broken = sin(washR.mul(3.1).sub(time.mul(4.0)))
+            .mul(cos(dot(washAcross, vec3(1.7, 0.9, 1.3))))
+            .mul(0.5)
+            .add(0.5);
+          washChurn = ring
+            .mul(smoothstep(0.45, 0.85, broken))
+            .mul(washReach)
+            .mul(0.45) as F;
+        }
         const tangentGrad = grad.sub(i.up.mul(dot(grad, i.up)));
         const waveNormal = normalize(i.up.sub(tangentGrad)) as V3;
         // Beckmann–GGX correspondence: α² ≈ 2σ².
@@ -497,7 +561,7 @@ export class WaterShading {
           .mul(mix(float(0.07), smoothstep(0.66, 0.86, crestN), capDetail))
           .mul(sea)
           .mul(smoothstep(5, 30, i.height.negate()));
-        const foamy = clamp(foam.add(caps), 0, 1);
+        const foamy = clamp(foam.add(caps).add(washChurn.mul(float(1).sub(river))), 0, 1);
         const surface = mix(body, vec3(0.8, 0.82, 0.82), foamy) as V3;
 
         const bodyLight = L.shadeDiffuse(surface, i.up, i.relative, at).mul(float(1).sub(fresnel));
