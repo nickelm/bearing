@@ -115,7 +115,7 @@ describe('ground cover', () => {
     expect(block(MEADOW).filter((i) => i.kind === 'cover-tuft' && isObstacle(i))).toHaveLength(0);
   });
 
-  it('piles talus below a cliff, reeds on a bank and tufts along field verges (decision 184)', () => {
+  it('piles talus below a cliff, reeds on a bank and tufts along field verges (decision 185)', () => {
     const rocks = (items: CoverItem[]) => count(items, (i) => ROCK_KINDS.has(i.kind));
     const below = block({ ...MEADOW, talus: 1 });
     expect(rocks(below)).toBeGreaterThan(0.6 * below.length);

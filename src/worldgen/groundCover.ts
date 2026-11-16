@@ -112,11 +112,11 @@ export interface CoverSite {
   aridity: number;
   /** Farmland 0..1: fields, where only the verges keep tufts. */
   farmland: number;
-  /** How near a field's boundary, 0..1: verges keep and gather tufts and flowers (decision 184). */
+  /** How near a field's boundary, 0..1: verges keep and gather tufts and flowers (decision 185). */
   verge?: number;
-  /** How near a river's or lake's edge, 0..1 (on dry ground): reeds and lush tufts (decision 184). */
+  /** How near a river's or lake's edge, 0..1 (on dry ground): reeds and lush tufts (decision 185). */
   bank?: number;
-  /** How much cliff stands just above, 0..1: talus, boulders fallen from it (decision 184). */
+  /** How much cliff stands just above, 0..1: talus, boulders fallen from it (decision 185). */
   talus?: number;
 }
 
@@ -246,7 +246,7 @@ export function coverMix(s: CoverSite): Mix {
   // The forest's fringe grows bushes.
   const fringe = smooth(0.2, CANOPY_THRESHOLD, s.forest);
   if (fringe > 0) veg = { ...veg, 'cover-bush': (veg['cover-bush'] ?? 0) + 0.06 * fringe };
-  // Fields keep tufts only along their verges, and the verges gather them (decision 184).
+  // Fields keep tufts only along their verges, and the verges gather them (decision 185).
   if (s.farmland > 0) {
     const verge = s.verge ?? 0;
     const keep = 1 - 0.9 * s.farmland * (1 - verge);
@@ -266,7 +266,7 @@ export function coverMix(s: CoverSite): Mix {
     veg = blend(veg, { 'cover-reeds': 0.4 * warm, 'cover-tuft': 0.35 }, 0.85 * bank);
   }
   // Steep ground: scree and rock faces, sandstone where it is dry, lichen where cold and wet;
-  // below a cliff, its talus (decision 184).
+  // below a cliff, its talus (decision 185).
   const steep = smooth(0.35, 0.65, s.steep);
   const talus = (s.talus ?? 0) * 0.9;
   const rocky = Math.max(steep, talus);

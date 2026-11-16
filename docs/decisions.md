@@ -2958,3 +2958,18 @@ The eroded world's crossing sites, where the alignment snaps bridges (N5), come 
 **Not done:** anchors at strategic bridges and river crossings in the router (N5); railway spirals; matching alignment structures to network bridges; the shading of N6 (shoulders, markings, ballast, rails, bank faces); the map still draws the network tier's roads; Free Flight's start screen does not yet show the build's progress.
 
 **Reason:** Aligning once gives the same roads everywhere from the first frame (map, terrain, briefings and bridge matching can all read one record), with no pop-in and no edits changing under a visible mesh. The owner accepted the wait of a build step, and a worker pool and a stored record bring it to minutes, once per world.
+
+### 185. Ground cover follows the land: talus below cliffs, reeds on banks, tufts on field verges
+
+**Date:** 2026-11-16
+**Decision:** G3's placement learns three things about a cell's surroundings (decision 174), all on the CPU in `placeCoverChunk`, so the sim's `coverInCell` sees the same sites once it asks.
+
+- **Talus.** Each chunk now also samples the mesh's vertices two quads (about 48 m) round it and keeps each quad's steepness and mean height. A cell that is not itself steep (under 0.6) takes `talus` from the steepest quad within two quads that stands at least 2 m above it, fading with distance: boulders of every size and stones (`TALUS`: small 0.14, medium 0.08, large 0.035, pebbles 0.12 per slot), sandstone slabs on arid ground. Rock faces themselves keep the scree mix.
+- **Banks.** A cell within 1.5–10 m of a river's water (the river index's stretches, as the woods along rivers) or up to 3 m above a lake's level takes `bank`: reeds at the edge where the annual mean is above freezing (0.4 per slot) and lush tufts.
+- **Verges.** In fields, a cell within 1.5–5 m of its field's boundary (`fieldAt`, the hedgerows' fields, decision 162) takes `verge`: it keeps its tufts and gathers more tufts and flowers, so field edges are lines of grass between bare crops.
+- **Tests.** Talus turns a meadow mostly to rock with large boulders; a bank grows reeds (none in the cold); verges hold more than five times a field's items; every mix stays under one per slot.
+- **Previews.** Over the butte's desert from 20 m (`docs/reports/screens/ground-g3-desert-stones.png`): stones, small boulders and sandstone slabs on sand with ripples. The previews' views did not catch the talus (the butte's foot lies beyond the boulders' 800 m range from the spot), the reeds (the gallery view's bank is behind its trees) or a verge clearly; they are covered by the tests, and the browser check should look for them.
+
+**Not done:** a preview view at a cliff's foot and on a river bank; hedges' own verges along roads.
+
+**Reason:** Where things lie tells the eye how the land works: rocks under cliffs, reeds by water, grass along field edges. All three come from data placement already had.

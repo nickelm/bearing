@@ -953,11 +953,11 @@ Rivers by regime, roads and railways aligned to the terrain with earthworks as a
 - [x] Offline alignment stage (decision 184, superseding 181's lazy choice): link tasks from roads, railways and spurs in Hilbert order; level-6 tiles synthesized along the bands with a shared cache; a worker pool; links assembled whole (one plan and profile across their anchors); thinned, packed and stored with the world in IndexedDB; a progress panel; `?align=0` skips it
   - [ ] Whole-world run on a desktop GPU: time, tiles, forced pieces, record size; `tools/alignment.preview.ts` on seeds 1, 2, 3
   - [ ] Free Flight's start screen shows the build's progress
-- [x] Anchors: polyline ends (settlements, junctions) and every 12 km of the polyline (decision 184)
+- [x] Anchors: polyline ends (settlements, junctions) and every 12 km of the polyline (decision 185)
   - [ ] Anchors at strategic bridges, once they are snapped to rendered rivers
   - [ ] Elevations at anchors from the network (fixed decks, junction platforms); now the ground at link ends
 - [x] Router: tangent-plane lattice by class, state (node, heading of 16), Galin's k = 2 neighborhood, long viaduct and tunnel edges; grade, curvature, earthwork, crossing, pass and corridor terms; tests on synthetic slopes (switchbacks on a steep face, a valley detour for a railway) (decision 180: state also counts the straight run; structures from the profile instead of long edges; crossing, pass and corridor terms through the caller's extra cost, not yet used)
-- [x] Class switches: mountain railway where a piece cannot meet 2%; mountain road for secondary roads in mountains; motorway → trunk → mountain road; spurs → mountain road → track; forced pieces as the last resort (decision 184)
+- [x] Class switches: mountain railway where a piece cannot meet 2%; mountain road for secondary roads in mountains; motorway → trunk → mountain road; spurs → mountain road → track; forced pieces as the last resort (decision 185)
 - [x] Plan fitting (straights and arcs, hairpins with a shelf pad), profile (slope-limited passes, vertical curves, fixed decks and anchors), earthworks (cut, fill, viaduct, tunnel by class thresholds) (decision 180; hairpin shelves and bridge decks as fixed points still to come)
   - [x] `alignPiece`: a piece between two anchors on the sphere with its corridor edits (decision 180)
 - [ ] Railways, then major roads, then minor roads; earlier corridors as obstacles and attachment points
@@ -1030,7 +1030,8 @@ Detail near a low camera for helicopter flight, faceted and slightly cartoony, a
 ### G3. Placement
 
 - [x] `worldgen/groundCover.ts`: a pure function of a cell (one level-10 sample) and its site, from cell hashes; mixes by cover, moisture, temperature, slope, forest, aridity and farmland; clumps, boulder fields and flower-color patches; `isObstacle` for boulders of 0.8 m and up; tests (decision 174)
-- [ ] Talus below cliffs (the site knows its slope, not the slope above it), denser verges and field edges, reeds along river banks
+- [x] Talus below cliffs, reeds on river and lake banks, tufts and flowers on field verges (decision 185)
+- [ ] Preview views at a cliff's foot and on a river bank to see talus and reeds (the existing views miss them)
 - [x] Masks: sea, lakes, river water (the river index's stretches), the infrastructure's clearings (roads, airfields, towns), closed forest; plants hide under lying snow (decision 174)
 - [x] Heights on the drawn level-10 triangle, as a base and a displacement per unit of exaggeration; a test that every item lies within a centimeter of the mesh's plane at two exaggerations (decision 174)
 - [ ] A test that the finest level draws throughout the ring under the gate (the previews draw level 10 at 5 and 20 m)

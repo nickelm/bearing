@@ -99,7 +99,7 @@ import type { RiverStretch } from '../forest/forestLayer';
 
 type V3 = Node<'vec3'>;
 
-/** How far (mesh quads, about 24 m each) a cell looks for a cliff above it (decision 184). */
+/** How far (mesh quads, about 24 m each) a cell looks for a cliff above it (decision 185). */
 const TALUS_REACH = 2;
 
 /** Chunks: the level-10 tiles, cut COVER_SPLIT ways along each axis. */
@@ -306,7 +306,7 @@ export function* coverPlacer(
     return tri;
   };
 
-  // Cliffs just above (decision 184): the mesh's quads over the chunk and MARGIN quads round
+  // Cliffs just above (decision 185): the mesh's quads over the chunk and MARGIN quads round
   // it, each with its steepness and mean height, so a cell below a cliff takes its talus.
   const M = TALUS_REACH;
   const nx = nq + 2 * M;
