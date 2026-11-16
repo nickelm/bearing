@@ -39,17 +39,17 @@ Three layers, each switched off well before it stops paying for itself.
 
 A virtual mesh, finer than the real one, drawn only in the shader. Each octave is a height field on a square lattice split along its diagonal, with a hashed value at each lattice point and linear inside each triangle, laid on the plane across the world axis nearest the terrain facet's normal. Its gradient is constant inside a triangle, so the ground falls into small flat triangles about a cell across. A fragment tilts the face normal by its cell's gradient and takes its cell's shade step. Every fragment of a cell shares one normal and one shade, so the result is a bump map that obeys the facet rule: stepped, never smooth or noisy. Three octaves (4, 1.2 and 0.45 m) are weighted by land cover (`render/sim/terrain/microFacets.ts`, decisions 171, 178). A first version cut a 3D lattice of tetrahedra with the ground; its slivers aliased into moiré.
 
-| Land cover                | Cell           | Tilt           | Character                                                                          |
-| ------------------------- | -------------- | -------------- | ---------------------------------------------------------------------------------- |
-| Grass, pasture            | 1.5 m          | ±8°            | Soft lumps, two or three greens                                                    |
-| Scrub, dry grass          | 1.2 m          | ±10°           | Mottled straw and soil                                                             |
-| Soil, fallow              | 1 m            | ±6°            | Clods; on fields, stretched across the furrows                                     |
-| Crop fields               | 0.75 m rows    | stepped ridges | Furrows along each field's own heading (from its Voronoi cell hash, decision 162)  |
-| Gravel, river bars, scree | 0.6 m          | ±18°           | Sharp, high contrast                                                               |
-| Rock faces                | 3 m            | ±20°           | Chiseled planes; strata keep their bands (decision 126)                            |
-| Sand, desert              | ripples, 0.8 m | two faces      | Windward and lee faces as two shades, aligned across the prevailing wind           |
-| Snow                      | 4 m            | none           | Faint shade steps only; the normal and the sparkle stay as they are (decision 139) |
-| Marsh                     | 1 m            | ±4°            | Hummocks around the pools                                                          |
+| Land cover                | Cell           | Tilt           | Character                                                                                                   |
+| ------------------------- | -------------- | -------------- | ----------------------------------------------------------------------------------------------------------- |
+| Grass, pasture            | 1.5 m          | ±8°            | Soft lumps, two or three greens                                                                             |
+| Scrub, dry grass          | 1.2 m          | ±10°           | Mottled straw and soil                                                                                      |
+| Soil, fallow              | 1 m            | ±6°            | Clods; on fields, stretched across the furrows                                                              |
+| Crop fields               | 0.7–1.1 m rows | stepped ridges | Furrows along each field's own heading (from its Voronoi cell hash, decision 162), by crop (decision 183)   |
+| Gravel, river bars, scree | 0.6 m          | ±18°           | Sharp, high contrast                                                                                        |
+| Rock faces                | 3 m            | ±20°           | Chiseled planes; strata keep their bands (decision 126)                                                     |
+| Sand, desert              | ripples, 0.9 m | two faces      | A long windward and a short lee face, crests snaking, along one prevailing heading per world (decision 183) |
+| Snow                      | 4 m            | none           | Faint shade steps only; the normal and the sparkle stay as they are (decision 139)                          |
+| Marsh                     | 1 m            | ±4°            | Hummocks around the pools                                                                                   |
 
 - **Coordinates.** The lattice lies on the wrapped coordinates of decision 38, with every cell a divisor of the wave period, so the pattern stays nailed to the ground as the camera moves, continues across meshes and keeps float32 precision. The projection plane is chosen per terrain facet, so it changes only along facet edges, and stretches cells by at most √3 on the steepest faces (decision 178).
 - **Fade.** Tilt and shade steps fade where a micro-triangle shrinks below about 4 px, so nothing shimmers; the derivatives are taken before any branch (decision 69).

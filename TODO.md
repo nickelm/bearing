@@ -1003,7 +1003,9 @@ Detail near a low camera for helicopter flight, faceted and slightly cartoony, a
 
 - [x] Piecewise-linear fields on Kuhn-split cubic lattices on the wrapped coordinates (no tangent frame, no seams), three octaves turned against each other by integer matrices; one normal and one shade step per cell; no derivatives inside (decision 171)
 - [x] Land cover, first pass: grass, dry ground, rock, snow (shade steps only) (decision 171)
-- [ ] Crop furrows by field heading, sand ripples across the wind, gravel bars and scree, marsh hummocks
+- [x] Crop furrows by field heading and crop, sand ripples with snaking crests along a prevailing heading (decision 183)
+- [x] Single pixels of the neighboring field's crop in fields (the owner's dotted fields): the face's center from the camera-relative position (decision 183)
+- [ ] Gravel bars and scree, marsh hummocks
 - [x] Fade from 7 to 3 px per cell; uniform gate on the camera's height above the ground; distance cutoff at 600 m (decision 171)
 - [x] Glints per micro-facet on wet ground (by wetness) and glacier-polished rock; snow's normal and sparkle untouched (decision 171)
 - [ ] Glints on ice (frozen lakes are the water shader's); check wet glints looking into a low sun in the browser

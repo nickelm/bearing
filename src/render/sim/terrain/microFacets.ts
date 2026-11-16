@@ -50,6 +50,7 @@ import {
   mix,
   normalize,
   select,
+  sin,
   smoothstep,
   step,
   uint,
@@ -142,11 +143,13 @@ const HEADINGS: readonly (readonly [number, number])[] = [
 ];
 /** Row spacing (m) and ridge slope of each crop: wheat, fallow (plowed), green crop; pasture has none. */
 const FURROW_SPACING = [0.8, 1.1, 0.7] as const;
-const FURROW_SLOPE = [0.4, 0.6, 0.45] as const;
+const FURROW_SLOPE = [0.16, 0.28, 0.2] as const;
 /** Sand ripples: spacing (m), the windward slope over the windward share, the lee slope. */
 const RIPPLE_SPACING = 0.9;
 const RIPPLE_WINDWARD = 0.75;
-const RIPPLE_SLOPE = 0.12;
+const RIPPLE_SLOPE = 0.18;
+/** Wavelengths (m) along the crests of their two bends. */
+const RIPPLE_BEND = [9, 3.7] as const;
 
 /**
  * Rows along integer direction `v` with `k` rows per wave period of
@@ -281,7 +284,7 @@ export class MicroFacets {
         const s = float(0).toVar();
         const seen = float(0).toVar();
         const farm = (i.farm ?? float(0)) as F;
-        const desert = smoothstep(0.6, 0.9, i.dry)
+        const desert = smoothstep(0.35, 0.7, i.dry)
           .mul(float(1).sub(i.rock))
           .mul(float(1).sub(farm))
           .mul(bare);
@@ -360,7 +363,18 @@ export class MicroFacets {
         If(desert.greaterThan(0.01), () => {
           const v = vec2(this.ripple.x, this.ripple.y) as V2;
           const len = length(v);
-          const phase = rows(uv, v, this.ripple.z as F);
+          // Crests snake: the phase shifts with two waves along the crests, at integer
+          // frequencies along the integer perpendicular, so they repeat with the period.
+          const w = vec2(v.y.negate(), v.x) as V2;
+          const across = dot(uv, w)
+            .div(WAVE_PERIOD)
+            .mul(2 * Math.PI);
+          const m1 = floor(float(WAVE_PERIOD).div(len.mul(RIPPLE_BEND[0])).add(0.5));
+          const m2 = floor(float(WAVE_PERIOD).div(len.mul(RIPPLE_BEND[1])).add(0.5));
+          const bend = sin(across.mul(m1))
+            .mul(0.55)
+            .add(sin(across.mul(m2).add(1.7)).mul(0.25));
+          const phase = fract(rows(uv, v, this.ripple.z as F).add(bend));
           const dir = v.div(len);
           const lee = (RIPPLE_SLOPE * RIPPLE_WINDWARD) / (1 - RIPPLE_WINDWARD);
           const slope = select(phase.lessThan(RIPPLE_WINDWARD), float(RIPPLE_SLOPE), float(-lee));

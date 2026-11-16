@@ -99,6 +99,14 @@ export interface LandInputs {
   landform?: V3;
   /** The strategic graph's habitability, 0..1: farmland lies on settled land (decision 127). */
   settled?: F;
+  /**
+   * The face's center on the sea-level sphere (m), for the field it lies in. Default
+   * `up` times the radius; with per-face shading pass a point found from the
+   * camera-relative position (decision 183): `up` extrapolated to the face's
+   * center carries float32 noise of meters per pixel at the planet's radius, which
+   * scattered single pixels of the neighboring field's crop near field boundaries.
+   */
+  fieldPoint?: V3;
 }
 
 /** What `snowSparkle` needs at a fragment. */
@@ -546,7 +554,11 @@ export class LandShading {
       const fieldFootprint = (footprint ?? length(fwidth(i.wrapped))) as F;
       const field = vec3(0).toVar();
       If(farm.greaterThan(0), () => {
-        const f = this.field(i.up.mul(this.radius) as V3, moisture, fieldFootprint);
+        const f = this.field(
+          (i.fieldPoint ?? i.up.mul(this.radius)) as V3,
+          moisture,
+          fieldFootprint,
+        );
         field.assign(f.color);
         crop.assign(f.crop);
         heading.assign(f.heading);

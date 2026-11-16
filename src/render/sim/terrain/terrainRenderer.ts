@@ -387,6 +387,11 @@ export class TerrainRenderer {
       const faceJitter = face.jitter.toVar();
       const faceSpacing = face.spacing.toVar();
       const faceLandform = face.at(attribute('landform', 'vec3')).toVar();
+      // The face's center from the camera-relative position (meters, precise near the camera)
+      // plus the eye, the same for every pixel: the field it lies in (decision 183).
+      const faceField = normalize(L.planetPosition(face.at(positionWorld)))
+        .mul(radius)
+        .toVar();
       const planet = L.planetPosition(positionWorld);
       // Sunlight, cloud shadow and sky light once for every layer shaded here.
       const at = L.at(positionWorld);
@@ -423,6 +428,7 @@ export class TerrainRenderer {
         face: { spacing: faceSpacing, jitter: faceJitter },
         landform: faceLandform,
         settled: this.habitability.sample(faceUp),
+        fieldPoint: faceField,
       });
       const snow = ground.snow.toVar();
       const canopy = ground.canopy.toVar();

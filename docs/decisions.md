@@ -2924,3 +2924,17 @@ The eroded world's crossing sites, where the alignment snaps bridges (N5), come 
 **Not done:** the ring of ruffled water under the rotor (the water shader); leaves on green ground; wheels, vehicles and impacts through the same emitter; a check in Free Flight in the browser.
 
 **Reason:** The owner asked for wispy, soft dust; sprites whose motion is a formula of their age cost no CPU per sprite and need no buffers, and reading the ground once per frame puts the right material under the rotor.
+
+### 183. Crop furrows and sand ripples in the micro-facets; the dots in fields
+
+**Date:** 2026-11-16
+**Decision:** The rest of G1's land-cover table (decision 168), and the cause of the dotted fields the owner saw in the browser.
+
+- **Furrows.** On fields, ridged rows along each field's own heading: two faces per row, so each catches the light on one side. The land shader's field lookup now returns the field's crop (0 wheat, 1 fallow, 2 green crop, 3 pasture) and a second bit of its hash for the heading, one of eight integer directions on the micro-facets' plane; rows along an integer direction with a whole number of rows per wave period repeat with it, so they continue across meshes. Spacing and ridge slope by crop: wheat 0.8 m and 0.16, plowed fallow 1.1 m and 0.28, green crop 0.7 m and 0.2, pasture none. The first slopes (0.4–0.6) drew a barcode of black and pale stripes. The lumps of the other octaves step back by 60% in fields and on dunes. Faded by pixels per row as the octaves (4 to 9).
+- **Sand ripples.** Where the ground is dry (decision 126's aridity, from 0.35) and not rock: asymmetric ripples 0.9 m apart, a windward face of slope 0.18 over three quarters of each and a steep lee face, along one prevailing heading per world (from its seed). Their crests snake: the phase shifts by two waves along the crests (9 and 3.7 m), at integer frequencies along the integer perpendicular, so they too repeat with the period. Straight crests read as plowing.
+- **Dots in fields.** Fields showed single pixels of the neighboring field's crop, scattered in bands near field boundaries and, from height, all over farmland: the dotted and moiré-like texture of the owner's screenshots. Each face takes its field at its center, and that center's direction was `up` extrapolated to it with screen-space derivatives: across a pixel `up` changes by about 1e-8, under float32's resolution, so the extrapolation carried noise of the order of 20 m at the planet's radius, and pixels within that of a boundary picked either field. The face's center now comes from the camera-relative position (precise near the camera) plus the eye, the same for every pixel (`LandInputs.fieldPoint`). With per-face shading off, or fields off, the dots were already gone; with the fix they are gone with both on (`docs/reports/screens/ground-field-dots-fix.png`, before and after).
+- **Previews.** `TARGET=farmland VIEWS=hover`: furrows in two fields at their own headings (`ground-g1-furrows.png`); `SPOTS=buttes OBS_HEIGHT=5 OBS_PITCH=-15`: ripples below a butte (`ground-g1-ripples.png`).
+
+`docs/plans/ground-detail.md` changes with this decision.
+
+**Reason:** Fields and dunes are the largest areas a low pilot crosses, and rows give them direction and scale; the dots were the most visible defect in the owner's look at the ground.
