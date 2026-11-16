@@ -347,13 +347,23 @@ it('renders Free Flight shots', async () => {
         stable = st.pending === 0 && scene.structures.stats.pending === 0 && sig === last ? stable + 1 : 0;
         last = sig;
       }
+      // The drawn ground has loaded now: measure the hover height from it, not from the
+      // coarse global heights the first query fell back to.
+      const drawn = ground.height(spot);
+      if (Math.abs(drawn - gh) > 0.01) {
+        h.place(spot.clone().scale(R + drawn + h.gearHeight + hover), new Vec3d(), away, hf.main.shaftTilt);
+        h.updateAttitude(ground);
+        hpose.groundHeight = drawn;
+        followAirframe(scene.chase.target, h);
+        scene.chase.reset();
+      }
       for (let fr = 0; fr < 30; fr++) scene.render(1 / 60);
       const rgb = await head.readRgb();
       const name = `helo-${heloKind}-${hover}m${process.env.SLOPE === '1' ? '-slope' : ''}`;
       const file = join(outDir, `freeflight-${name}${env('OUT', '')}.png`);
       writeFileSync(file, encodePng(width, height, rgb));
       console.log(
-        `${name}: sun ${(scene.lighting.sunElevation / DEG).toFixed(1)}°, ground ${gh.toFixed(1)} m, ` +
+        `${name}: sun ${(scene.lighting.sunElevation / DEG).toFixed(1)}°, ground ${drawn.toFixed(1)} m (first query ${gh.toFixed(1)} m), ` +
           `shadow ${hview.shadowMesh.visible ? 'shown' : 'hidden'} → ${file}`,
       );
     }

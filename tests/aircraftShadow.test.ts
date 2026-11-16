@@ -17,12 +17,17 @@ const R = 1_000_000;
 /** Ground rising 0.3 m per m toward +X (east at the point (0, 0, R)), 100 m at x = 0. */
 const slope = (d: Readonly<Vec3d>) => 100 + 0.3 * R * (d.x / d.z);
 
-function setup(rotorSpeed: number, ground?: (d: Readonly<Vec3d>) => number) {
+function setup(
+  rotorSpeed: number,
+  ground?: (d: Readonly<Vec3d>) => number,
+  height = 8,
+  sun: [number, number, number] = [0.25, 0.15, 1],
+) {
   const spec = MODEL_SPECS['alliance-scout-helo']!;
   const view = new AircraftView(spec, [-0.05, 1.15, 0], new PlanetLighting(R));
   view.planetRadius = R;
-  view.sun.set(0.25, 0.15, 1).normalize();
-  const pos = new Vec3d(0, 0, R + 100 + 8);
+  view.sun.set(...sun).normalize();
+  const pos = new Vec3d(0, 0, R + (ground ? ground(new Vec3d(0, 0, 1)) : 100) + height);
   const pose: AircraftPose = {
     pos,
     q: new Quatd(),
@@ -108,6 +113,57 @@ describe('aircraft shadow', () => {
     for (const t of [fast, slow])
       for (let i = 0; i < t.shade.length; i++)
         if (t.shade[i] === 0) expect([t.pts[3 * i], t.pts[3 * i + 1], t.pts[3 * i + 2]]).toEqual([0, 0, 0]);
+  });
+
+  it('never floats in the air over a valley when a knoll stands where the shadow would fall', () => {
+    // 200 m over a valley floor at 0, sun 25° up toward −X; a 150 m flat-topped knoll
+    // 330–600 m toward +X. On the floor the shadow would fall 430 m off, inside the knoll;
+    // a plane fitted there (150 m) meets the sun's ray 107 m off, over the valley, where
+    // the shadow would hang 150 m in the air. The ray really hits the knoll's wall, which
+    // no plane can carry: the shadow may hide, but it must not float.
+    const knoll = (d: Readonly<Vec3d>) => {
+      const x = (R * d.x) / d.z;
+      return x > 330 && x < 600 ? 150 : 0;
+    };
+    const e = 25 * (Math.PI / 180);
+    const t = setup(1, knoll, 200, [-Math.cos(e), 0, Math.sin(e)]);
+    for (const q of live(t.pts, t.shade)) {
+      const w = q.clone().add(t.eye);
+      const above = w.length() - (R + knoll(w.clone().normalize()));
+      expect(above).toBeLessThan(0.06 + 0.002 * q.length() + 0.05);
+    }
+  });
+
+  it('lies on a hillside that rises toward where the shadow falls', () => {
+    // Level to 100 m toward +X, then rising 0.3 m/m: the sun's ray from 200 m meets it
+    // 300 m off, 60 m up (on the level floor it would be 430 m off).
+    const ramp = (d: Readonly<Vec3d>) => Math.max(0, 0.3 * ((R * d.x) / d.z - 100));
+    const e = 25 * (Math.PI / 180);
+    const t = setup(1, ramp, 200, [-Math.cos(e), 0, Math.sin(e)]);
+    const p = live(t.pts, t.shade);
+    expect(p.length).toBeGreaterThan(300);
+    for (const q of p) {
+      const w = q.clone().add(t.eye);
+      const above = w.length() - (R + ramp(w.clone().normalize()));
+      expect(above).toBeGreaterThan(0);
+      expect(above).toBeLessThan(0.06 + 0.002 * q.length() + 0.05);
+    }
+  });
+
+  it('keeps its edges above ground that bends up under it', () => {
+    // A V-shaped gully along y under the helicopter, sides rising 0.4 m/m.
+    const gully = (d: Readonly<Vec3d>) => 100 + 0.4 * Math.abs((R * d.x) / d.z);
+    const t = setup(1, gully, 6, [0, 0.2, 1]);
+    for (const q of live(t.pts, t.shade)) {
+      const w = q.clone().add(t.eye);
+      expect(w.length() - (R + gully(w.clone().normalize()))).toBeGreaterThan(0);
+    }
+  });
+
+  it('draws first among the transparent draws, both faces at once', () => {
+    const { view } = setup(1, slope);
+    expect(view.shadowMesh.renderOrder).toBeLessThan(0);
+    expect((view.shadowMesh.material as { forceSinglePass: boolean }).forceSinglePass).toBe(true);
   });
 
   it('shows below 400 m with the sun up, and not below a low sun', () => {

@@ -371,6 +371,11 @@ export class AircraftView {
     this.geometries.push(shadowGeo);
     this.shadow = new Mesh(shadowGeo, this.buildShadowMaterial(lighting));
     this.shadow.frustumCulled = false;
+    // First among the transparent draws, right after the opaque terrain and aircraft:
+    // drawn after the disc or the flame it would darken them too, and fading blades,
+    // which write depth, would block it (decision 170's review). Its sort key would
+    // otherwise come from a bounding sphere frozen at its first frame.
+    this.shadow.renderOrder = -1;
   }
 
   /** The shadow, in camera-relative coordinates: add it to a group at the origin. */
@@ -430,6 +435,8 @@ export class AircraftView {
    */
   private buildShadowMaterial(lighting: PlanetLighting): MeshBasicNodeMaterial {
     const sm = new MeshBasicNodeMaterial({ transparent: true, side: DoubleSide });
+    // Both faces in one draw (a transparent double-sided material draws twice otherwise).
+    sm.forceSinglePass = true;
     // Multiply: result = source × destination; the destination's alpha stays.
     sm.blending = CustomBlending;
     sm.blendEquation = sm.blendEquationAlpha = AddEquation;
@@ -538,11 +545,13 @@ export class AircraftView {
     const R0 = this.planetRadius + pose.groundHeight;
     const agl = pose.pos.length() - R0;
     const fade = smoothstep(SHADOW_SUN[0], SHADOW_SUN[1], sunUp);
+    this.shadow.visible = fade > 0 && agl < 400;
+    if (!this.shadow.visible) return;
     const n = new Vec3d();
     const G = this.shadowPlane(pose, up, agl, sunUp, n);
     const L = this.sun;
     const Ln = L.dot(n);
-    this.shadow.visible = fade > 0 && agl < 400 && Ln > 0.05;
+    this.shadow.visible = Ln > 0.05;
     if (!this.shadow.visible) return;
     this.group.updateMatrixWorld(true);
     // Camera-relative, lifted off the ground against z-fighting.
@@ -588,10 +597,14 @@ export class AircraftView {
   }
 
   /**
-   * The plane the shadow lies on (world point, returned; unit normal in `n`): through
-   * the drawn ground where the CG's ray along the sun meets it, along the ground's
-   * slope from four samples `shadowSpan` around that point; the level plane at the
-   * ground under the aircraft without `pose.ground`, and on cliffs over 70°.
+   * The plane the shadow lies on (world point, returned; unit normal in `n`): fitted
+   * to the drawn ground where the CG's ray along the sun meets it. First around where
+   * the ray meets the level ground under the aircraft; if the ray meets that fit more
+   * than the span away (a knoll, a ridge, a valley), once more around that point. The
+   * slope comes from four samples `shadowSpan` around the middle one, and the plane
+   * rises to the highest of the five, so that on ground that bends up (a gully, the
+   * foot of a slope) the shadow's edges do not sink under it. Level at the ground
+   * under the aircraft without `pose.ground`, and on cliffs over 70°.
    */
   private shadowPlane(
     pose: Readonly<AircraftPose>,
@@ -601,26 +614,61 @@ export class AircraftView {
     n: Vec3d,
   ): Vec3d {
     const R = this.planetRadius;
+    const L = this.sun;
     n.copy(up);
     const level = up.clone().scale(R + pose.groundHeight);
     if (!pose.ground || sunUp <= 0.01) return level;
+    const far = 2000;
     // Where the shadow falls on the level ground (at most 2 km off).
-    const c = pose.pos.clone().addScaled(this.sun, -Math.min(2000, Math.max(0, agl) / sunUp));
-    const dir = c.normalize();
+    let c = pose.pos.clone().addScaled(L, -Math.min(far, Math.max(0, agl) / sunUp));
+    let fit = this.fitGround(pose.ground, c);
+    if (fit) {
+      const Ln = L.dot(fit.n);
+      if (Ln > 0.05) {
+        const t = pose.pos.clone().sub(fit.p).dot(fit.n) / Ln;
+        const c1 = pose.pos.clone().addScaled(L, -Math.min(far, Math.max(0, t)));
+        if (c1.distanceTo(c) > this.shadowSpan) {
+          c = c1;
+          fit = this.fitGround(pose.ground, c) ?? fit;
+        }
+      }
+    }
+    if (!fit) return level;
+    n.copy(fit.n);
+    return fit.p;
+  }
+
+  /**
+   * The plane of the drawn ground around the point over `at`: normal from four samples
+   * `shadowSpan` around it, through the highest of the five; null on cliffs over 70°.
+   */
+  private fitGround(
+    ground: (d: Readonly<Vec3d>) => number,
+    at: Readonly<Vec3d>,
+  ): { p: Vec3d; n: Vec3d } | null {
+    const R = this.planetRadius;
+    const dir = at.clone().normalize();
     const e1 = Math.abs(dir.y) < 0.9 ? new Vec3d(0, 1, 0) : new Vec3d(1, 0, 0);
     e1.addScaled(dir, -e1.dot(dir)).normalize();
     const e2 = dir.clone().cross(e1);
-    const at = (e: Vec3d, s: number): Vec3d => {
-      const d = dir.clone().scale(R).addScaled(e, s).normalize();
-      return d.scale(R + pose.ground!(d));
-    };
     const span = this.shadowSpan;
-    const a = at(e1, span).sub(at(e1, -span));
-    const b = at(e2, span).sub(at(e2, -span));
-    const fit = a.cross(b).normalize();
-    if (!(fit.dot(dir) > 0.34)) return level;
-    n.copy(fit);
-    return dir.clone().scale(R + pose.ground(dir));
+    const sample = (e: Vec3d | null, s: number): Vec3d => {
+      const d = dir.clone().scale(R);
+      if (e) d.addScaled(e, s);
+      d.normalize();
+      return d.scale(R + ground(d));
+    };
+    const mid = sample(null, 0);
+    const pts = [sample(e1, span), sample(e1, -span), sample(e2, span), sample(e2, -span)];
+    const n = pts[0]!
+      .clone()
+      .sub(pts[1]!)
+      .cross(pts[2]!.clone().sub(pts[3]!))
+      .normalize();
+    if (!(n.dot(dir) > 0.34)) return null;
+    let rise = 0;
+    for (const q of pts) rise = Math.max(rise, q.clone().sub(mid).dot(n));
+    return { p: mid.addScaled(n, rise), n };
   }
 
   /** Planet radius (m), set by the app. */
