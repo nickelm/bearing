@@ -2,7 +2,7 @@
  * Airfields graded into the terrain (V3): one flat pad per airbase covering
  * the runway with its overruns, the parallel taxiway, the apron and the
  * buildings beside them, at the field's elevation, blending back to the
- * terrain over a margin (render/common/terrain/grading.ts).
+ * terrain over a margin: pad edits in `worldgen/edits/` (decision 108, rule 13).
  *
  * The field elevation is the mean of the global eroded height (the smooth
  * surface the tiles add their detail to) over the pad, so it is known as soon
@@ -11,8 +11,8 @@
 import { directionToCubeFace } from '../../../core/coords';
 import type { CubeFaceUv } from '../../../core/coords';
 import type { Vec3d } from '../../../core/vec3d';
-import { SurfaceGrading } from '../../common/terrain/grading';
-import type { GradePad } from '../../common/terrain/grading';
+import { TerrainEdits } from '../../../worldgen/edits';
+import type { ChannelSource, PadEdit } from '../../../worldgen/edits';
 import { APRON_OFFSET, APRON_WIDTH, offsetPoint, RUNWAY_WIDTH } from './infraScene';
 import type { InfraScene } from './infraScene';
 
@@ -52,9 +52,9 @@ export function globalMapSampler(map: Float32Array, n: number): (d: Readonly<Vec
 export function airfieldPads(
   infra: InfraScene,
   heightAt: (d: Readonly<Vec3d>) => number,
-): GradePad[] {
+): PadEdit[] {
   const R = infra.radius;
-  const pads: GradePad[] = [];
+  const pads: PadEdit[] = [];
   for (const site of infra.sites) {
     if (site.kind !== 'airbase') continue;
     const L = site.runwayLength;
@@ -86,11 +86,19 @@ export function airfieldPads(
   return pads;
 }
 
-/** The grading of every airfield in `infra` over the global height map `height` (n per face). */
+/**
+ * The terrain edits of every airfield in `infra` over the global height map
+ * `height` (n per face), with the carved channels of `channels` kept last.
+ */
 export function airfieldGrading(
   infra: InfraScene,
   height: Float32Array,
   n: number,
-): SurfaceGrading {
-  return new SurfaceGrading(airfieldPads(infra, globalMapSampler(height, n)), infra.radius);
+  channels: ChannelSource | null = null,
+): TerrainEdits {
+  return new TerrainEdits({
+    radius: infra.radius,
+    pads: airfieldPads(infra, globalMapSampler(height, n)),
+    channels,
+  });
 }

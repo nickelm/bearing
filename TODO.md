@@ -889,15 +889,16 @@ Fixed and turreted weapons, gunner mode from proposal 0002, AI nap-of-the-earth 
 Rivers by regime, roads and railways aligned to the terrain with earthworks as analytic edits, and a bridge or culvert at every crossing ([docs/proposals/0005-terrain-adaptive-networks.md](docs/proposals/0005-terrain-adaptive-networks.md)); the plan is [docs/plans/terrain-networks.md](docs/plans/terrain-networks.md). The network tier stays on the coarse pass; the alignment tier runs on the eroded world. N1, N2 and N4 can start in any order; N3, N6, N7 and N8 touch rendering and close only after the acceptance checks (Part I, and Part II for the map work). Protect decisions 146, 147 and 155: keep their tests passing and port a test before replacing what it tests.
 
 - [x] Proposal saved, plan, decision 161; design doc, style guide, proposal 0001, `CLAUDE.md` (rule 13) updated
-- [ ] Owner: the plan's open questions (feature branch or `main`; accept seeds changing with the settlement pull; scenery structures as targets; lazy alignment if eager is slow) and the readings in decision 161
+- [x] Owner: the plan's open questions (decision 163): `main`; seeds may change, nothing is frozen in development; every bridge is a target; lazy alignment is acceptable
 
 ### N1. Edit framework
 
-- [ ] `worldgen/edits/`: corridor and pad records, the clamp form for banks (fill 1:1.5, cut 1:1 or 1:2), priority blending, an index by level-7 tile, `TerrainEdits.apply(dir, base)`
-- [ ] Protected channels: inside a river's channel and inner banks, the minimum of the edited and the carved height (distance from the `RiverIndex` segments; no CPU re-run of the carve)
-- [ ] Migrate decision 108's airfield pads; tests that every mesh vertex, `heightAt`, `displaySurfaceAt` and Free Flight's ground are unchanged; the Kestrel lockstep passes unchanged
-- [ ] One function for meshes, trees, buildings, the camera's clearance and the flight model's ground; `SurfaceGrading` becomes its client
-- [ ] Tests per edit type and for the composition order, including a fill corridor across a channel that never raises the channel
+- [x] `worldgen/edits/`: corridor and pad records, the clamp form for banks (fill 1:1.5, cut 1:1 or 1:2), priority blending, an index by level-7 tile, `TerrainEdits.apply(dir, base)`
+- [x] Protected channels: inside a river's channel and inner banks, the minimum of the edited and the carved height (distance from the `RiverIndex` segments; no CPU re-run of the carve)
+- [x] Migrate decision 108's airfield pads; tests that every mesh vertex, `heightAt`, `displaySurfaceAt` and Free Flight's ground are unchanged; the Kestrel lockstep passes unchanged (decision 164)
+  - [ ] `tools/edits.preview.ts` on seed 1983: airfield pads over carved channels, where protection now changes the ground; exempt pads or move those airfields if any runway is cut
+- [x] One function for meshes, trees, buildings, the camera's clearance and the flight model's ground; `SurfaceGrading` becomes its client
+- [x] Tests per edit type and for the composition order, including a fill corridor across a channel that never raises the channel
 
 ### N2. River planform
 
@@ -923,6 +924,7 @@ Rivers by regime, roads and railways aligned to the terrain with earthworks as a
 - [ ] Crossing sites on the coarse rivers and on the eroded rivers: narrow, straight, firm banks, off knickpoints
 - [ ] Settlement pull: a habitability term for coarse crossing sites; worlds without sites unchanged bit for bit (test); `GENERATOR_VERSION` up; tell the owner which seeds' casts changed
 - [ ] Bridges as nodes: road and rail polylines cut at bridges; type on the coarse pass (beam, truss, arch, viaduct, suspension), span, traffic carried, detour if it falls
+- [ ] Every bridge a target (decision 163): a network bridge at every coarse crossing of a river that needs a structure (not only 25 m and wider), and viaducts where railways and major roads cross valleys deeper than their class's threshold on the coarse relief
 - [ ] `names/bridges` (after the river, the nearest town or the feature), `names/lines`, `names/reaches`, `names/sections`, in id order; existing streams unchanged (test)
 
 ### N5. Router and alignment
@@ -934,7 +936,7 @@ Rivers by regime, roads and railways aligned to the terrain with earthworks as a
 - [ ] Plan fitting (straights and arcs, hairpins with a shelf pad), profile (slope-limited passes, vertical curves, fixed decks and anchors), earthworks (cut, fill, viaduct, tunnel by class thresholds)
 - [ ] Railways, then major roads, then minor roads; earlier corridors as obstacles and attachment points
 - [ ] Spiral template where a railway cannot meet its grade
-- [ ] Structure records for every crossing, viaduct and tunnel; strategic bridges snapped to rendered rivers (closes the S4 follow-up)
+- [ ] Structure records for every crossing, viaduct and tunnel; strategic bridges snapped to rendered rivers (closes the S4 follow-up); each alignment bridge matched to a network bridge on its link, the unmatched counted (under a tenth, decision 163)
 - [ ] Tracks and minor roads as local detail near the camera, `rng(seed, "tracks")` per region
 - [ ] Tests: grades within 0.5 points, radii, every crossing recorded, eager and lazy pieces byte-identical
 

@@ -9,7 +9,6 @@ import { CubeGrid } from '../src/core/cubeGrid';
 import { KNOT } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
 import { AirfieldGround, runwaysOf } from '../src/freeflight/ground';
-import { SurfaceGrading } from '../src/render/common/terrain/grading';
 import { airfieldPads, globalMapSampler } from '../src/render/sim/infra/airfieldGrading';
 import { InfraScene } from '../src/render/sim/infra/infraScene';
 import { neutralControls } from '../src/sim/flight/controlLaws';
@@ -21,6 +20,7 @@ import type { Runway } from '../src/sim/flight/runway';
 import { spawnOnRunway } from '../src/sim/flight/spawn';
 import { TestPilot } from '../src/sim/flight/testPilot';
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
+import { TerrainEdits } from '../src/worldgen/edits';
 import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
 import { kestrel } from './helpers/flight';
 
@@ -40,9 +40,9 @@ describe('headless flight test on a generated airbase', () => {
     const infra = new InfraScene(w.graph, w.infrastructure, R);
     const sampler = globalMapSampler(w.world.maps.height, N);
     const pads = airfieldPads(infra, sampler);
-    const grading = new SurfaceGrading(pads, R);
+    const edits = new TerrainEdits({ radius: R, pads });
     const runways = runwaysOf(w.infrastructure, pads);
-    ground = new AirfieldGround(runways, grading, (d) => grading.apply(d, sampler(d)), R);
+    ground = new AirfieldGround(runways, edits, (d) => edits.apply(d, sampler(d)), R);
     // The first Alliance main base whose circuit stays clear of high ground (within
     // 20 km nothing more than 500 m above the field).
     const clear = (r: Runway) => {

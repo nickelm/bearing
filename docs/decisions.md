@@ -2597,3 +2597,31 @@ How the plan reads the proposal, for the owner to confirm: no-humps is checked e
 - **Measured:** `hedgerows` with `HEDGES=0.85`: 0.59 M tree triangles in 98 draws (0.39 M and 51 without hedges at seed 1983's own share); placing a farmland part's hedges is incremental, a row of the lattice at a time.
 
 **Reason:** Hedges must follow the fields the player sees, so the fields had to move to a hash both sides compute; climate, not biome, separates bocage from open plains (decision 148).
+
+### 163. Owner's answers on proposal 0005: `main`, seeds may change, every bridge is a target, lazy alignment is acceptable
+
+**Date:** 2026-11-16
+**Decision:** The owner confirmed decision 161's readings and answered the plan's four questions.
+
+- **Branch.** Track N commits to `main`, as `CLAUDE.md` says; the session brief's feature branch and pull request do not apply.
+- **Seeds may change.** Nothing is frozen while the game is in development: a generator change may change any seed's world, cast and campaign, as the settlement pull will. Future decisions need not preserve seeds, only say which outputs change.
+- **Every bridge is a target.** This replaces decision 161's "minor bridges stay scenery". Targets must be the same on every machine (rule 9, decision 65), so the network tier predicts the bridges: N4 records a bridge at every coarse crossing of a river that needs a structure, not only rivers at least 25 m wide, and a viaduct where a railway or major road crosses a valley deeper than its class's threshold on the coarse relief. N5 matches each alignment bridge to the nearest network bridge on its link; those left unmatched (rendered rivers or valleys the coarse pass cannot see) are drawn but not targets, and the metrics count them, aiming to keep them under a tenth of all bridges. Culverts and tunnels are not targets.
+- **Lazy alignment** is acceptable if spike N5.0 shows eager alignment to be slow: the map may draw network-tier roads until a region's aligned pieces exist.
+
+`docs/design.md` (*World Generation Pipeline*, *Reading the World*, *Open Questions*), the plan and `TODO.md` change with this decision.
+
+**Reason:** Bridges are what interdiction is about, and a bridge the player can see but not strike would read as a bug. A coarse-pass prediction keeps targets deterministic across machines; counting the mismatches tells us whether it is good enough.
+
+### 164. N1: the terrain edit framework, one height function, and protected river channels
+
+**Date:** 2026-11-16
+**Decision:** Track N's first milestone (decision 161): `src/worldgen/edits/` replaces `render/common/terrain/grading.ts`.
+
+- **`TerrainEdits.apply(dir, h)`** is the one height function of rule 13: the unedited height in (tile data with its render detail, or the global grid before tiles load), the edited height out. Tile meshes and their morph targets and slopes, the canopy's clearing, trees and buildings (through `surfaceSampler`), `TerrainRenderer.heightAt` and `displaySurfaceAt`, the camera's clearance and Free Flight's ground all call it. `forTile(t)` keeps only the edits that reach a tile, so other tiles build byte-identical meshes. It lives in `worldgen/`, so `sim/` may use it.
+- **Order.** Corridors first, blended where they overlap (each rank of priority weighs four times as much); pads over them, at exactly their elevation (decision 108's formula, unchanged bit for bit); then protected channels. Only land is edited.
+- **Corridors** (`corridor.ts`): a polyline with a design elevation per point, a formation half-width, fill and cut runs (1.5 and 1 by default) and a reach. Outside the formation the ground is clamped between the fill bank below and the cut bank above, one closed form for cut and fill; over the last `fade` meters before the reach the edit blends out. Segments are split to 500 m, so a chord sags at most 3 cm below the sphere, and indexed by level-6 tile. Corridors apply on mesh levels 6 and finer (level-6 vertices are about 380 m apart), and a tile and its own morph target agree because both use the tile's own edits. No corridor exists yet: the aligner (N5) will make them.
+- **Protected channels** (`channels.ts`): where an edit would raise the ground inside a carved river channel or its inner bank (the half-width plus a quarter of the width, at least 10 m), the result is held at the unedited, already-carved height, letting go over a further 10 m. It needs only the distance to the river index's segments; the CPU never re-runs the carve, which is not idempotent in its fade band. Rivers without a water surface are not protected, since nothing carved them. The app and the render and Free Flight previews pass the world's `RiverIndex`.
+- **Tests** (`tests/terrainEdits.test.ts`): formation, banks, reach and fade, split segments, cover, malformed records, blending by priority, pads over corridors, the tile restriction, a fill corridor across a river that never raises the channel, cuts that stand, pads held over a channel, uncarved rivers unprotected, and pads bit for bit as before where no channel is near. The grading, Free Flight and Kestrel lockstep tests pass unchanged.
+- **`tools/edits.preview.ts`** lists the campaign world's airfield pads that reach a carved channel, where the protection now changes the ground (pads used to fill channels). Its result on seed 1983 is pending at the time of this entry.
+
+**Reason:** Rule 13 asks for one function that every height query uses, with rivers always last; building it before any corridor exists lets the airfields prove it unchanged and gives N5 and N6 a tested target.

@@ -45,7 +45,7 @@ src/core/           units, float64 Vec3d, coordinates, seeded RNG, invented name
 src/worldgen/       planet generation pipeline stages (may use GPU compute); canopy.ts is the canopy height
                     field with its stands (decision 148), shared by the renderer and later the sim
   coarsePass.ts     the design's pipeline at 256² on the CPU; campaignWorld.ts adds the validity retries
-  edits/            (track N, planned) terrain edits: corridors and pads, their index by tile, protected
+  edits/            terrain edits (decision 164): pads and corridors, their index by tile, protected
                     river channels and TerrainEdits.apply, the one height function (rule 13)
   channels/         (track N, planned) river regimes, meander migration with oxbows, floodplain mask
   networks/         (track N, planned) crossing sites, anchors, the router, plans, profiles, earthworks,
@@ -84,7 +84,7 @@ src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Bo
                     globe, palette, climate and habitability textures, render scale and the quality
                     governor of the atmospheric effects (decision 143), canopyNode.ts (the canopy
                     field in TSL, decision 148), cube-sphere
-                    geometry, WebGPU checks, terrain/ (tile quadtree, tile meshes, tile cache, budget, prefetch, grading),
+                    geometry, WebGPU checks, terrain/ (tile quadtree, tile meshes, tile cache, budget, prefetch),
                     water/ (river segment tables and river shading), models/ (model spec format,
                     procedural builder, palettes and schemes, specs/*.json; decision 106);
                     later the transition controller
@@ -173,7 +173,7 @@ These are the project conventions. Lint enforces some of them (marked ⚙).
     - Fixed-wing and rotary-wing aircraft share one flight director interface and one airframe interface (decision 149, Proposal 0004). Helicopter physics live in `src/sim/flight/` beside the fixed-wing model, headless and deterministic at the same 120 Hz step. Assists and envelope protection belong to the control layer, never to the physics.
     - Displays show only what the aircraft's sensor model knows, which is the same filtered picture the AI uses, never ground truth.
 13. **Terrain edits and one height function** (decision 161, Proposal 0005).
-    - Every change to the terrain surface beyond the tile kernel's own synthesis (airfield pads, road and rail corridors with their banks, hairpin shelves, rail yards, lock chambers) is an analytic edit, a pure function of direction and the unedited height, applied after the render detail. Edits live in `src/worldgen/edits/`, so `sim/` can use them; until track N's N1 lands, `SurfaceGrading` in `render/common/terrain/grading.ts` is that function and holds the airfield pads.
+    - Every change to the terrain surface beyond the tile kernel's own synthesis (airfield pads, road and rail corridors with their banks, hairpin shelves, rail yards, lock chambers) is an analytic edit, a pure function of direction and the unedited height, applied after the render detail. Edits live in `src/worldgen/edits/`, so `sim/` can use them: `TerrainEdits` holds the airfield pads (built by `render/sim/infra/airfieldGrading.ts`) and later the corridors, and takes the river index for protected channels (decision 164).
     - Everything that asks for the terrain's height (mesh vertices, trees, buildings, the camera's clearance, the flight model's ground, and later line of sight, ground movement and the AI) goes through that one function. Never add an edit's effect to tile data or the global grid yourself.
     - River channels stay last. Carving, floodplains and delta build-up belong to the tile kernel; no edit may raise the ground inside a river's protected channel, and a road or railway crosses a river on a bridge or culvert, never on terrain.
     - Roads and railways have two tiers: the network tier (coarse pass, strategic graph) is what campaign logic reads (rule 9); the alignment tier (routes aligned on the eroded world, earthworks, structures) is execution and presentation data only.

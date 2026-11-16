@@ -82,7 +82,7 @@ import { RiverTables } from '../../common/water/riverTables';
 import { WAVE_PERIOD, WaterShading } from '../water/waterShading';
 import type { RiverIndex } from '../../../worldgen/riverIndex';
 import type { InfraScene } from '../infra/infraScene';
-import type { SurfaceGrading } from '../../common/terrain/grading';
+import type { TerrainEdits } from '../../../worldgen/edits';
 import { HabitabilityTexture } from '../../common/habitabilityTexture';
 import {
   builtAlbedo,
@@ -173,8 +173,8 @@ export interface TerrainWorld {
   rivers?: RiverIndex;
   /** Roads, airfield pavement and settlement lights (decision 65); none when absent. */
   infra?: InfraScene;
-  /** Airfields graded into the terrain (V3); none when absent. */
-  grading?: SurfaceGrading;
+  /** Terrain edits: airfields graded in (V3), later corridors (rule 13); none when absent. */
+  edits?: TerrainEdits;
 }
 
 export class TerrainRenderer {
@@ -562,7 +562,7 @@ export class TerrainRenderer {
       reliefScale: w.reliefScale,
       mode: this.mode,
       detail: this.detail,
-      grading: w.grading ?? null,
+      edits: w.edits ?? null,
     };
   }
 
@@ -667,7 +667,7 @@ export class TerrainRenderer {
       mode: this.mode,
       detail: this.detail,
       lakeShore: true,
-      grading: w.grading ?? null,
+      edits: w.edits ?? null,
     });
     const g = new BufferGeometry();
     g.setAttribute('position', new BufferAttribute(m.base, 3));
@@ -934,7 +934,7 @@ export class TerrainRenderer {
       const raw =
         (h[i]! * (1 - tx) + h[i + 1]! * tx) * (1 - ty) +
         (h[i + TILE_STRIDE]! * (1 - tx) + h[i + TILE_STRIDE + 1]! * tx) * ty;
-      return this.world?.grading ? this.world.grading.apply(dir, raw) : raw;
+      return this.world?.edits ? this.world.edits.apply(dir, raw) : raw;
     }
     return null;
   }
@@ -942,7 +942,7 @@ export class TerrainRenderer {
   /**
    * Displayed height (m, exaggerated, sea and lakes flat) of the finest surface
    * under a direction: the level-MAX_TILE_LEVEL surface the finest meshes, trees
-   * and buildings use (render detail and grading included), so an eye a couple
+   * and buildings use (render detail and edits included), so an eye a couple
    * of meters up stays above the drawn ground. Asks for the data tile it needs;
    * falls back to `displayHeightAt` until it has loaded.
    */

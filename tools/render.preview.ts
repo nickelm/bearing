@@ -839,8 +839,10 @@ it('renders preview views', async () => {
     rivers: riverIndex,
     infra,
     // GRADE=0 leaves the airfields ungraded, for comparison.
-    grading:
-      process.env.GRADE === '0' ? undefined : airfieldGrading(infra, global.height, global.n),
+    edits:
+      process.env.GRADE === '0'
+        ? undefined
+        : airfieldGrading(infra, global.height, global.n, riverIndex),
   });
   scene.setInfrastructure(infra);
   scene.terrainReady = true;

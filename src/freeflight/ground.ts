@@ -10,7 +10,6 @@
  * height map, graded the same way, before that.
  */
 import { Vec3d } from '../core/vec3d';
-import type { GradePad, SurfaceGrading } from '../render/common/terrain/grading';
 import type { GroundQuery, SurfaceKind } from '../sim/flight/contact';
 import {
   nearestRunway,
@@ -20,10 +19,11 @@ import {
   toRunway,
 } from '../sim/flight/runway';
 import type { Runway, RunwayFrame } from '../sim/flight/runway';
+import type { PadEdit, TerrainEdits } from '../worldgen/edits';
 import type { Infrastructure } from '../worldgen/strategic/infrastructure';
 
 /** One runway per airbase, in `infra.airbases` order, at its graded pad's elevation. */
-export function runwaysOf(infra: Infrastructure, pads: readonly GradePad[]): Runway[] {
+export function runwaysOf(infra: Infrastructure, pads: readonly PadEdit[]): Runway[] {
   return infra.airbases.map((b, i) => ({
     id: b.id,
     name: b.name,
@@ -41,7 +41,7 @@ export class AirfieldGround implements GroundQuery {
 
   constructor(
     readonly runways: readonly Runway[],
-    private readonly grading: SurfaceGrading,
+    private readonly edits: TerrainEdits,
     /** The graded global height (m) at a unit direction: the fallback before tiles load. */
     private readonly global: (d: Readonly<Vec3d>) => number,
     readonly radius: number,
@@ -62,7 +62,7 @@ export class AirfieldGround implements GroundQuery {
       const c = toRunway(n.runway, f, dir.clone().scale(this.radius), this.radius);
       if (onRunway(n.runway, c.along, c.across)) return 'runway';
     }
-    if (this.grading.cover(dir) > 0.999) return 'field';
+    if (this.edits.cover(dir) > 0.999) return 'field';
     return this.global(dir) <= 0 ? 'water' : 'land';
   }
 }

@@ -20,7 +20,6 @@ import { Vec3d } from '../core/vec3d';
 import type { GlobeScene } from '../render/sim/globeScene';
 import { AircraftView } from '../render/sim/aircraft/aircraftView';
 import type { AircraftPose } from '../render/sim/aircraft/aircraftView';
-import type { SurfaceGrading } from '../render/common/terrain/grading';
 import { airfieldPads, globalMapSampler } from '../render/sim/infra/airfieldGrading';
 import type { InfraScene } from '../render/sim/infra/infraScene';
 import { modelSpec } from '../render/common/models/library';
@@ -51,6 +50,7 @@ import type { WeatherView } from '../sim/weather/frame';
 import type { WeatherConfig } from '../sim/weather/model';
 import type { WeatherPreset } from '../sim/weather/presets';
 import type { StrategicWorld } from '../worldgen/campaignWorld';
+import type { TerrainEdits } from '../worldgen/edits';
 import {
   HelpOverlay,
   PauseMenu,
@@ -317,7 +317,7 @@ export class FreeFlight {
    */
   setTerrain(t: {
     infra: InfraScene;
-    grading: SurfaceGrading;
+    edits: TerrainEdits;
     height: Float32Array;
     n: number;
     airbases: StrategicWorld['infrastructure'];
@@ -328,8 +328,8 @@ export class FreeFlight {
     const terrain = this.deps.globe.terrain;
     this.ground = new AirfieldGround(
       this.runways,
-      t.grading,
-      (d) => t.grading.apply(d, sampler(d)),
+      t.edits,
+      (d) => t.edits.apply(d, sampler(d)),
       this.deps.radius,
       (d) => terrain.displaySurfaceAt(d),
     );

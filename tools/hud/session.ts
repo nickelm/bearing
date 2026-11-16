@@ -117,7 +117,7 @@ async function main(): Promise<void> {
   const infra = new InfraScene(campaign.graph, campaign.infrastructure, R);
   const n = 64;
   const height = new Float32Array(6 * n * n).fill(200);
-  const grading = airfieldGrading(infra, height, n);
+  const edits = airfieldGrading(infra, height, n);
   const orbit = DEFAULT_PLANET_PARAMS;
   const calendar = defaultCampaignStart(new Vec3d(0, 0.6, 0.8), orbit);
   const climate = buildWeatherClimate(syntheticSource(), new WeatherGrid(), R);
@@ -159,7 +159,7 @@ async function main(): Promise<void> {
   );
   ff.setStrategic(campaign);
   ff.setClimate({ seed: String(campaign.seed), radius: R, orbit, calendar, climate });
-  ff.setTerrain({ infra, grading, height, n, airbases: campaign.infrastructure });
+  ff.setTerrain({ infra, edits, height, n, airbases: campaign.infrastructure });
   const base = listeners();
   result.listenersAfterConstruct = base;
   result.listenersAddedByConstruct = Object.fromEntries(

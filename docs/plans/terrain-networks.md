@@ -55,7 +55,7 @@ Each conflict below has a resolution that decision 161 records.
 9. **Spirals do not emerge from a planar search.** A spiral crosses itself at another height; a search over the plane cannot represent that. Horseshoe curves and switchbacks do emerge.
    _Resolution:_ where a railway piece cannot meet its grade within its detour budget, the aligner inserts a helix from a template (radius from the class, a tunnel or bridge where it crosses itself) and searches again. The proposal's "emerge, not drawn by hand" holds for everything except spirals; decision 161 records the exception.
 10. **"Every crossing has a bridge or culvert record"** versus targets that must be the same on every machine.
-    _Resolution:_ the alignment tier creates a structure record for every crossing and every viaduct and tunnel; only those tied to a network-tier bridge are campaign targets. A network-tier bridge's type (beam, truss, arch, viaduct, suspension) is decided on the coarse pass from the coarse river's width, the class and the coarse relief, so names and briefings agree everywhere ("Oskel Viaduct"); the alignment builds that type. Minor bridges, culverts and tunnels are not targets until a later decision.
+    _Resolution:_ the alignment tier creates a structure record for every crossing and every viaduct and tunnel; only those tied to a network-tier bridge are campaign targets. A network-tier bridge's type (beam, truss, arch, viaduct, suspension) is decided on the coarse pass from the coarse river's width, the class and the coarse relief, so names and briefings agree everywhere ("Oskel Viaduct"); the alignment builds that type. Every bridge is a target (owner, decision 163), so the network tier must predict them: N4 records a bridge at every coarse crossing of a river that needs a structure, not only rivers 25 m wide, and a viaduct where a railway or major road crosses a valley deeper than its class's threshold on the coarse relief. In N5 each alignment structure is matched to the nearest network bridge on the same link; the bridges left unmatched (rendered rivers or valleys the coarse pass does not see) are drawn but not targets, and the metrics count them, with the aim of keeping them under a tenth. Culverts and tunnels are not targets.
 11. **Bridges as nodes.** Today a bridge points at the polyline it carries.
     _Resolution:_ road and rail polylines are cut at bridges, so each bridge is a node of the network; its record gains type, span, traffic carried and the detour if it falls (shortest path without it).
 12. **No humps** along "any river" at "every sample". The 48 m samples leave ±1–2 m of bilinear noise across a narrower channel (decision 146).
@@ -171,7 +171,7 @@ Screenshots for the report come from `tools/render.preview.ts` with new spots in
 - **Migration stability.** Howard–Knutson migration can blow up without resampling and a curvature filter. Cap iterations and time per world; fall back to the procedural train per river.
 - **Floodplains and the campaign.** None: floodplains, oxbows and alignments are eroded-world data; the barrier lines read coarse rivers.
 - **Mesh agreement.** If levels 11–12 along corridors exceed the triangle allowance, vertex snapping to the formation's edges is the alternative.
-- **Bridges beside rivers.** A strategic bridge whose coarse river has no rendered counterpart within the snapping radius keeps its position and gets a culvert-sized structure; the metrics count them.
+- **Bridges beside rivers.** A network bridge whose coarse river has no rendered counterpart within the snapping radius keeps its position and gets a short beam bridge over whatever it crosses; an alignment bridge without a network bridge is no target. The metrics count both; if either exceeds about a tenth of the bridges, the coarse prediction needs work before N7.
 
 ## Session rules
 
@@ -185,9 +185,9 @@ From the owner's session brief, for whoever implements this:
 - Unattended sessions take the most reasonable option consistent with the documents, record it in `docs/decisions.md`, and continue.
 - At the end, `docs/reports/terrain-networks-report.md`: what works (with screenshots), the metrics against every criterion, what is simplified or deferred, decisions and deviations, known issues by severity, generation time per stage, and the three most valuable next steps.
 
-## Open questions for the owner
+## Owner's answers (decision 163)
 
-1. **Branch.** A feature branch and a pull request, as the brief asks, or `main`, as `CLAUDE.md` says?
-2. **Seeds change.** The settlement pull changes the cast of nearly every seed. Accept, or keep settlements as they are and nudge only their drawn centers toward crossings in the alignment tier?
-3. **Minor bridges as targets.** Should bridges, viaducts and tunnels that only the alignment tier knows become targets later (which needs a coarse-pass prediction of them), or stay scenery?
-4. **Eager or lazy alignment.** If spike N5.0 shows eager alignment costs more than about 30 s per world, is a map that shows network-tier roads until pieces exist acceptable?
+1. **Branch.** `main`, as `CLAUDE.md` says.
+2. **Seeds change.** Accepted: nothing is frozen while the game is in development, so the settlement pull may change every seed's cast.
+3. **Bridges are targets.** All of them; the network tier predicts them (point 10).
+4. **Lazy alignment** is acceptable if eager alignment is slow: the map may show network-tier roads until a region's pieces exist.

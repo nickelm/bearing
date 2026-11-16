@@ -127,7 +127,7 @@ it('renders Free Flight shots', async () => {
     treeline: global.finish.treeline,
     index: rivers,
   });
-  const grading = airfieldGrading(infra, global.height, global.n);
+  const edits = airfieldGrading(infra, global.height, global.n, rivers);
   scene.terrain.setWorld({
     synth,
     seed: params.seed,
@@ -135,7 +135,7 @@ it('renders Free Flight shots', async () => {
     reliefScale: params.reliefScale,
     rivers,
     infra,
-    grading,
+    edits,
   });
   scene.setInfrastructure(infra);
   scene.structures.enabled = true;
@@ -168,8 +168,8 @@ it('renders Free Flight shots', async () => {
   const runways = runwaysOf(campaign.infrastructure, airfieldPads(infra, sampler));
   const ground = new AirfieldGround(
     runways,
-    grading,
-    (d) => grading.apply(d, sampler(d)),
+    edits,
+    (d) => edits.apply(d, sampler(d)),
     R,
     (d) => scene.terrain.displaySurfaceAt(d),
   );
@@ -178,7 +178,7 @@ it('renders Free Flight shots', async () => {
     for (let a = -20_000; a <= 20_000; a += 2000)
       for (let c = -20_000; c <= 20_000; c += 2000)
         if (
-          Math.max(0, grading.apply(fromRunway(f, a, c, R), sampler(fromRunway(f, a, c, R)))) >
+          Math.max(0, edits.apply(fromRunway(f, a, c, R), sampler(fromRunway(f, a, c, R)))) >
           r.elevation + 500
         )
           return false;

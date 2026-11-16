@@ -16,8 +16,6 @@ import {
 import type { TileKey } from '../src/core/tiles';
 import { DEG, PLANET_RADIUS } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
-import { gradeBlend, SurfaceGrading } from '../src/render/common/terrain/grading';
-import type { GradePad } from '../src/render/common/terrain/grading';
 import { TILE_SEGMENTS } from '../src/render/common/terrain/quadtree';
 import {
   buildTileMesh,
@@ -35,6 +33,8 @@ import { InfraScene, offsetPoint } from '../src/render/sim/infra/infraScene';
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
 import { NO_LAKE } from '../src/worldgen/gpu/tileSynth';
 import type { TileData } from '../src/worldgen/gpu/tileSynth';
+import { gradeBlend, TerrainEdits } from '../src/worldgen/edits';
+import type { PadEdit } from '../src/worldgen/edits';
 import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
 
 const R = PLANET_RADIUS;
@@ -61,7 +61,7 @@ describe('gradeBlend', () => {
 });
 
 /** A 3 km × 0.8 km pad heading 60° at 230 m, centered in tile t (level 8). */
-function padIn(t: TileKey): GradePad {
+function padIn(t: TileKey): PadEdit {
   const n = 1 << t.level;
   return {
     center: cubeFaceUvToDirection(t.face, (t.x + 0.5) / n, (t.y + 0.5) / n),
@@ -75,9 +75,9 @@ function padIn(t: TileKey): GradePad {
   };
 }
 
-describe('SurfaceGrading', () => {
+describe('pad edits', () => {
   const pad = padIn(tileKey(4, 8, 101, 77));
-  const g = new SurfaceGrading([pad], R);
+  const g = new TerrainEdits({ radius: R, pads: [pad] });
   const at = (along: number, across: number) =>
     offsetPoint(pad.center, pad.heading, along, across, R);
 
@@ -149,14 +149,14 @@ function fakeData(k: TileKey): TileData {
 describe('graded tile meshes', () => {
   const home = tileKey(4, 8, 101, 77);
   const pad = padIn(home);
-  const grading = new SurfaceGrading([pad], R);
+  const grading = new TerrainEdits({ radius: R, pads: [pad] });
   const base: MeshOptions = {
     radius: R,
     reliefScale: 0.157,
     mode: 'biome',
     detail: new Noise3(rng(1, 'test-detail')),
   };
-  const graded: MeshOptions = { ...base, grading };
+  const graded: MeshOptions = { ...base, edits: grading };
   const build = (t: TileKey, o: MeshOptions) =>
     buildTileMesh(
       t,

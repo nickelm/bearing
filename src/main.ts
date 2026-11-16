@@ -518,7 +518,7 @@ async function main(): Promise<void> {
       });
       // Roads, airfields, lights and buildings from the coarse pass (decision 65).
       const infra = new InfraScene(strategic.graph, strategic.infrastructure, params.radius);
-      const grading = airfieldGrading(infra, global.height, global.n);
+      const edits = airfieldGrading(infra, global.height, global.n, riverIndex);
       globe.terrain.setWorld({
         synth,
         seed: params.seed,
@@ -526,14 +526,14 @@ async function main(): Promise<void> {
         reliefScale: params.reliefScale,
         rivers: riverIndex,
         infra,
-        // Airfields graded flat into the terrain (V3).
-        grading,
+        // Airfields graded flat into the terrain (V3), river channels kept last (rule 13).
+        edits,
       });
       // Mountain shadows are baked from the global heights (decision 139).
       globe.shadows.setHeights(global.height, global.n);
       freeFlight?.setTerrain({
         infra,
-        grading,
+        edits,
         height: global.height,
         n: global.n,
         airbases: strategic.infrastructure,
