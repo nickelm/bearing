@@ -6,7 +6,8 @@
  * projector, and the real Canvas HUD over it with a frame from `hoverSymbols`.
  * Cases: hover (a steady hover with a small drift, the LZ in view), hazard
  * (settling with power, low rotor RPM, over-torque, the LZ behind), transition
- * (35 kt and accelerating, the LZ off the top), snow (the hover over white
+ * (35 kt and accelerating, the LZ off the top), sink (a landing come in at
+ * 3.2 m/s from 6 m: the vertical speed in amber), snow (the hover over white
  * ground under a pale sky, for the halo). tools/freeflight.screens.mjs shoots
  * them as `SHOTS=hover-hover,hover-hazard,…`.
  */
@@ -68,6 +69,22 @@ const CASES: Record<string, Case> = {
     lz: [-220, -160],
     modes: ['ASSISTED'],
     hazards: ['VRS', 'LOW RPM', 'TORQUE'],
+    aid: false,
+    snow: false,
+  },
+  sink: {
+    // A landing come in too fast: 3.2 m/s down at 6 m (decision 160's amber vertical speed).
+    height: 6,
+    heading: 200 * DEG,
+    pitch: 5 * DEG,
+    bank: 1 * DEG,
+    vel: [2.0, 0.3, -3.2],
+    acc: [-0.6, 0, 0.4],
+    torque: 0.55,
+    rpm: 1.0,
+    lz: [12, 3],
+    modes: ['ALT HOLD', 'ASSISTED'],
+    hazards: [],
     aid: false,
     snow: false,
   },

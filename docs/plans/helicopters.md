@@ -75,7 +75,7 @@ Wind already exists (decision 143). The 8 m/s cap below 150 m is a runway accomm
 ### Presentation
 
 - **Model specs.** A `rotors` list per spec (hub, axis, radius, blade count, chord, direction). The animated model spins the hub, tilts the disc by the flight model's flapping state, and crosses from blades to a translucent disc as rotor speed rises.
-- **Camera.** A helicopter `ChaseRig` from the spec: closer and higher than the jet's; as airspeed drops, the camera lifts and tilts down; in the hover, free look does not spring back.
+- **Camera.** A helicopter `ChaseRig` from the spec: closer and higher than the jet's; as airspeed drops, the camera lifts and tilts down; in the hover, free look does not spring back (decision 160: at no speed; a key recenters it and the wheel zooms).
 - **HUD.** A helicopter layout in `hud.ts`, built by `hudFrame.ts` from the `Airframe`: ground-plane velocity vector with an acceleration cue, radar altitude with vertical speed, torque, rotor RPM, landing zone marker, hazard cues.
 - **Downwash** (H3). The particle system emits dust, snow or spray under the rotor by surface and power; near trees sway once proposal 0003's near trees exist.
 

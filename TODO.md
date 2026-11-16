@@ -599,6 +599,7 @@ Simulation view (needs S1's `render/sim/` split):
   - [ ] Owner: white water and lake foam in motion in the browser; the GUI's "River white water" and "River banks"
   - [ ] Point bars on the inside of bends: store each bend's side in the river index (the meander code knows it)
   - [ ] Lake foam is about one mesh vertex wide at level 7; a finer shore distance (per fragment from the lake depth) would sharpen it
+- [ ] Ground detail that fades in near the ground (owner, 2026-11-16, after the first helicopter flight; future work, not scheduled): below a few tens of meters the terrain's facets and flat color give no sense of height or drift. Candidates: a detail texture or facet noise in the ground shading by land cover (grass, scrub, gravel, sand, snow), scattered low-poly tufts, rocks and bushes in a ring around the camera, faded in by height above the ground and distance; within Part I's flat-shaded look and its budgets. Wanted for H1's hover work and P1's low flight
 
 ### V3. Models and bases
 
@@ -786,6 +787,7 @@ The thrust-disc model, the speed-scheduled controls, the Assisted preset, the ho
 - [x] Shared director interface (`sim/flight/director.ts`); `DirectorTarget` gains optional heading, ground-velocity and height-reference fields that the fixed-wing director ignores (decision 156: also a point to hover over; a test that the jet's controls are unchanged with them)
 - [x] `rotor/rotorSpec.ts`: the spec's `rotor` block (masses, inertias, rotor radius, blades, solidity, hub type and stiffness, flapping time constant, power available by altitude and temperature, power-required curve, tail rotor or yaw authority, drag, fin, stabilizer and wing areas, never-exceed speed, gear, hook points, mouse-turn thresholds), with validation and tests (decision 159; the never-exceed speed, slope limit and crash sink as `limits`; hook points wait for H3)
 - [x] Specs for the Little Bird and Black Hawk analogues: names, public figures marked as tuning values, Free Flight only (not in the air war's type table) (MH-14 Wren and UH-68 Buzzard: figures decision 159, models decision 158)
+  - [x] The Wren's skid struts reach into the fuselage and its step sits on them (decision 160; the owner saw a gap)
 - [x] Inflow and thrust (`inflow.ts`): Glauert momentum inflow by a fixed number of Newton steps, closed-form thrust from collective, ground effect (Cheeseman–Bennett), an empirical branch for steep descent; tests that translational lift arrives between 15 and 25 kt and that ground effect cuts hover power within one diameter (in `rotorAero.ts`: the inflow is a lagged state rather than Newton steps, continuous in every regime; the descent branch is a floor at half the hover's inflow until H4)
 - [x] Flapping and hub moment (`flapping.ts`): first-order disc tilt from cyclic, lag behind body rates, moment from hub stiffness and thrust offset by hub type; step-response tests per hub type (in `rotorcraftModel.ts`; per-hub-type step tests wait for H2's teetering and hingeless types)
 - [x] Power and rotor speed (`powerplant.ts`): induced, profile, parasite and climb power; power available and the transmission limit; governed rotor speed as a state with droop; tests of hover ceilings in and out of ground effect (in `rotorcraftModel.ts`; hover power tested against the published figures, ceilings wait for the calibration task)
@@ -801,7 +803,10 @@ The thrust-disc model, the speed-scheduled controls, the Assisted preset, the ho
   - [x] Free Flight fills `AircraftPose.rotors` (azimuth, rotor speed, flapping tilt) from `RotorcraftModel`
   - [ ] The disc and blade crossfade seen in a browser and in a `tools/freeflight.preview.ts` hover shot (so far only the CPU previews and a static lavapipe render)
 - [x] Helicopter `ChaseRig` from the spec: closer and higher, lifting and tilting down as airspeed falls, free look without spring-back in the hover; tests for the schedule (`helicopterRig(rotorRadius)`; the schedule uses ground speed)
+  - [x] Owner feedback (2026-11-16, decision 160): free look stays where it is left at any speed, V or a middle click recenters it, the mouse wheel zooms (0.5–3×), and the look point orbits with the eye, so a lowered eye looks toward the horizon
+  - [ ] Owner: judge the sticky free look; if the view ahead is still hard to keep, try tilting the camera with the flight path in cruise (the owner's first proposal)
 - [x] Hover HUD in `hud.ts` and `hudFrame.ts`: ground-plane velocity vector with acceleration cue, radar altitude with vertical speed, torque, rotor RPM, landing zone marker (`hoverSymbols`; `freeflight/heloHud.ts` builds the frame)
+  - [x] The vertical speed as a figure under the radar altitude, amber in a hard descent near the ground (decision 160: the owner had not found the small fpm figure above the tape)
 - [ ] Free Flight: aircraft choice on the start screen and in the URL (`&aircraft=`), helipads painted on airbase aprons on the graded pad, spawn on a pad or in a hover, a landing zone marker at a point picked on the start screen's map
   - [x] Aircraft choice (start screen, `&aircraft=kestrel|scout|utility`), spawn beside the runway's middle or hovering at 150 m, the helicopter's own session path (decision 159)
   - [ ] Helipads on the aprons, a landing zone marker

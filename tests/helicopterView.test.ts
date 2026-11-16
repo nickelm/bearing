@@ -14,7 +14,7 @@ import {
   hoverSymbols,
   hoverVectorLength,
 } from '../src/freeflight/hudFrame';
-import { hoverDistance } from '../src/ui/flight/hud';
+import { hoverDistance, sinkWarning, verticalSpeedText } from '../src/ui/flight/hud';
 
 const R = 1_000_000;
 const ROTOR = 7.3;
@@ -140,7 +140,7 @@ describe('helicopter chase rig', () => {
     expect(angle(h, new Vec3d(1, 0, 0))).toBeLessThan(1);
   });
 
-  it('keeps free look where it is left in the hover and orbits with the helicopter in view', () => {
+  it('keeps free look where it is left and orbits with the helicopter in view', () => {
     const c = camera();
     settle(c, 1);
     c.lookHeld = true;
@@ -153,14 +153,75 @@ describe('helicopter chase rig', () => {
     const rel = c.eye.clone().sub(c.target.pos);
     expect(rel.y).toBeGreaterThan(5);
     expect(angle(c.target.pos.clone().sub(c.eye), c.forward)).toBeLessThan(15);
-    // Speeding up past 25 kt springs it back.
-    c.target.velocity.set(0, 30 * KNOT, 0);
-    settle(c, 2);
-    expect(Math.abs(c.lookYaw)).toBeLessThan(0.01);
+    // It stays in cruise too (decision 160).
+    c.target.velocity.set(0, 60 * KNOT, 0);
+    settle(c, 3);
+    expect(c.lookYaw).toBeCloseTo(150 * DEG, 9);
+    // Recentering eases it back, the short way round.
+    c.look(1, 0, 100 * DEG); // 250°, that is −110°
+    c.recenter();
+    expect(c.lookYaw).toBeCloseTo(-110 * DEG, 9);
+    settle(c, 0.25);
+    expect(c.lookYaw).toBeLessThan(0);
+    settle(c, 3);
+    expect(c.lookYaw).toBe(0);
+    expect(c.lookPitch).toBe(0);
   });
 
-  it('springs free look back in cruise, as for jets', () => {
-    const c = camera(60);
+  it('a drag cancels a recentering', () => {
+    const c = camera();
+    settle(c, 1);
+    c.look(1, 0, 90 * DEG);
+    c.recenter();
+    settle(c, 0.1);
+    c.lookHeld = true;
+    c.update(1 / 60);
+    c.lookHeld = false;
+    const held = c.lookYaw;
+    expect(held).toBeGreaterThan(30 * DEG);
+    settle(c, 2);
+    expect(c.lookYaw).toBe(held);
+  });
+
+  it('lowering the eye lifts the view toward the horizon, with the helicopter in view', () => {
+    const c = camera();
+    settle(c);
+    const before = lookDown(c);
+    c.look(0, 1, 25 * DEG); // drag down: the eye lowers
+    settle(c, 3);
+    expect(c.lookPitch).toBeCloseTo(-25 * DEG, 9);
+    expect(lookDown(c)).toBeLessThan(before - 15);
+    expect(angle(c.target.pos.clone().sub(c.eye), c.forward)).toBeLessThan(c.fov / 2 / DEG - 5);
+    // A point 200 m ahead at the helicopter's height is now in the picture.
+    const far = new Vec3d(0, 200, R + 5);
+    expect(angle(far.clone().sub(c.eye), c.forward)).toBeLessThan(c.fov / 2 / DEG);
+  });
+
+  it('zooms by scaling its distances, keeping the angles', () => {
+    const c = camera();
+    settle(c);
+    const d1 = c.eye.distanceTo(c.target.pos);
+    const down = lookDown(c);
+    c.zoomBy(6);
+    settle(c, 4);
+    const d2 = c.eye.distanceTo(c.target.pos);
+    expect(d2 / d1).toBeCloseTo(1.12 ** 6, 1);
+    expect(Math.abs(lookDown(c) - down)).toBeLessThan(6);
+    c.zoomBy(-100);
+    expect(c.zoom).toBe(0.5);
+    c.zoomBy(100);
+    expect(c.zoom).toBe(3);
+    c.resetView();
+    expect(c.zoom).toBe(1);
+  });
+
+  it('springs free look back for jets', () => {
+    const c = new ChaseCamera(R, FAST_JET_RIG);
+    c.target.pos.set(0, 0, R + 500);
+    c.target.forward.set(0, 1, 0);
+    c.target.up.set(0, 0, 1);
+    c.target.velocity.set(0, 150, 0);
+    c.target.onGround = false;
     settle(c, 1);
     c.lookHeld = true;
     c.look(1, 0, 90 * DEG);
@@ -279,5 +340,23 @@ describe('hover symbology', () => {
     expect(hoverDistance(100)).toBe('330 FT');
     expect(hoverDistance(2000)).toBe('1.1 NM');
     expect(hoverDistance(40_000)).toBe('22 NM');
+  });
+});
+
+describe('vertical-speed readout', () => {
+  it('writes the vertical speed signed, to 10 fpm', () => {
+    expect(verticalSpeedText(0)).toBe('0');
+    expect(verticalSpeedText(4)).toBe('0');
+    expect(verticalSpeedText(-343)).toBe('−340');
+    expect(verticalSpeedText(1236)).toBe('+1,240');
+  });
+
+  it('warns of a hard descent near the ground, not of the landing aid', () => {
+    // The landing aid's eased descent: 0.3 of the radar altitude per second.
+    for (const ra of [1, 3, 10, 30, 100]) expect(sinkWarning(-0.3 * ra, ra), `${ra} m`).toBe(false);
+    expect(sinkWarning(-1.5, 2)).toBe(false); // slower than 2 m/s
+    expect(sinkWarning(-3, 6)).toBe(true); // 2 s to go
+    expect(sinkWarning(-4, 30)).toBe(false); // 7.5 s to go
+    expect(sinkWarning(3, 1)).toBe(false); // climbing
   });
 });

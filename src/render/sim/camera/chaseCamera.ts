@@ -24,8 +24,12 @@
  *   it follows the heading (the nose flattened onto the horizontal) with its up
  *   on the local vertical, and the eye lifts and looks down at the ground under
  *   and ahead of the helicopter. The pose follows the schedule on the ground as
- *   in the air. In the hover free look stays where it is left; the look point
- *   turns with it, so the camera orbits the helicopter all the way round.
+ *   in the air. Free look stays where it is left, at any speed, until the
+ *   player recenters it (decision 160); the look point orbits with the eye, so
+ *   the helicopter stays in view all the way round, and lowering the eye lifts
+ *   the view toward the horizon.
+ * - **Zoom.** `zoom` scales the rig's distances (the eye's and, for a
+ *   helicopter, the look point's), so the framing's angles hold; 1 is the rig.
  */
 import { DEG, KNOT } from '../../../core/units';
 import type { Meters, Radians } from '../../../core/units';
@@ -72,9 +76,6 @@ export interface ChaseHoverSchedule {
    */
   groundLook: number;
   groundLookMax: Meters;
-  /** Free look stays where it is left below `lookHoldSpeed` (m/s) and springs back above `lookReleaseSpeed`. */
-  lookHoldSpeed: number;
-  lookReleaseSpeed: number;
 }
 
 /** The rig for fast jets: further back and looser (Proposal 0002, Per-type rigs). */
@@ -99,7 +100,7 @@ export const FAST_JET_RIG: ChaseRig = {
  * under and ahead of the helicopter shows in a 60° field of view; higher hovers
  * look further down, by half the height above the ground (up to 0.6 of the
  * distance, about 40° in all), to keep the ground point in view. Free look
- * holds below 15 kt and springs back above 25 kt.
+ * stays where it is left until recentered.
  */
 export function helicopterRig(rotorRadius: Meters): ChaseRig {
   const d = 2.2 * rotorRadius + 6;
@@ -121,8 +122,6 @@ export function helicopterRig(rotorRadius: Meters): ChaseRig {
       cruiseAim: [0.9 * d, 0],
       groundLook: 0.5,
       groundLookMax: 0.6 * d,
-      lookHoldSpeed: 15 * KNOT,
-      lookReleaseSpeed: 25 * KNOT,
     },
   };
 }
@@ -150,6 +149,10 @@ export function followAirframe(t: ChaseTarget, a: Readonly<Airframe>): void {
 
 const MIN_CLEARANCE = 1.5;
 const MAX_LOOK_PITCH = 80 * DEG;
+/** The range of `zoom`, and the factor of one wheel step. */
+export const MIN_ZOOM = 0.5;
+export const MAX_ZOOM = 3;
+const ZOOM_STEP = 1.12;
 
 function smooth(t: number): number {
   const x = Math.max(0, Math.min(1, t));
@@ -180,6 +183,8 @@ export class ChaseCamera {
   lookYaw = 0;
   lookPitch = 0;
   lookHeld = false;
+  /** Scale on the rig's distances (MIN_ZOOM..MAX_ZOOM); 1 is the rig's framing. */
+  zoom = 1;
   /** The displayed ground height at a unit direction, or null if unknown. */
   groundAt: ((d: Readonly<Vec3d>) => number | null) | null = null;
   /** Highest displayed terrain (m), for the far plane. */
@@ -207,6 +212,8 @@ export class ChaseCamera {
   private accel = 0;
   private agl = 0;
   private initialized = false;
+  /** A helicopter's free look is easing back to center (recenter()). */
+  private recentering = false;
 
   /** `rig` picks the type's rig: `FAST_JET_RIG`, or `helicopterRig(rotorRadius)`; reset after changing it. */
   constructor(
@@ -253,6 +260,24 @@ export class ChaseCamera {
     );
   }
 
+  /** Moves the camera closer (steps < 0) or farther (steps > 0), one wheel notch per step. */
+  zoomBy(steps: number): void {
+    this.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, this.zoom * ZOOM_STEP ** steps));
+  }
+
+  /** Eases a free look that stays where it is left (a helicopter's) back to center; a new drag cancels it. */
+  recenter(): void {
+    this.lookYaw = Math.atan2(Math.sin(this.lookYaw), Math.cos(this.lookYaw));
+    this.recentering = true;
+  }
+
+  /** Centers free look and the zoom at once (a new sortie). */
+  resetView(): void {
+    this.lookYaw = this.lookPitch = 0;
+    this.zoom = 1;
+    this.recentering = false;
+  }
+
   update(dt: number): void {
     const t = this.target;
     const radial = t.pos.clone().normalize();
@@ -260,12 +285,9 @@ export class ChaseCamera {
     // Helicopters: the schedule's weights from the horizontal ground speed.
     const hv = rig.hover;
     let wHover = 0;
-    let wHold = 0;
     if (hv) {
       const groundSpeed = t.velocity.clone().addScaled(radial, -t.velocity.dot(radial)).length();
       wHover = ChaseCamera.hoverWeight(hv, groundSpeed);
-      wHold =
-        1 - smooth((groundSpeed - hv.lookHoldSpeed) / (hv.lookReleaseSpeed - hv.lookHoldSpeed));
     }
     // Height above the ground for the hover's look point, smoothed over half a second.
     let agl = 0;
@@ -280,11 +302,11 @@ export class ChaseCamera {
       this.fwdVel.set(0, 0, 0);
       this.upVel.set(0, 0, 0);
       if (hv) {
-        this.dist = lerp(rig.distance, hv.distance, wHover);
-        this.lift = lerp(rig.height, hv.height, wHover);
+        this.dist = lerp(rig.distance, hv.distance, wHover) * this.zoom;
+        this.lift = lerp(rig.height, hv.height, wHover) * this.zoom;
       } else {
-        this.dist = t.onGround ? rig.groundDistance : rig.distance;
-        this.lift = t.onGround ? rig.groundHeight : rig.height;
+        this.dist = (t.onGround ? rig.groundDistance : rig.distance) * this.zoom;
+        this.lift = (t.onGround ? rig.groundHeight : rig.height) * this.zoom;
       }
       this.distVel = 0;
       this.liftVel = 0;
@@ -355,20 +377,24 @@ export class ChaseCamera {
         ? lerp(rig.distance, hv.distance, wHover)
         : t.onGround
           ? rig.groundDistance
-          : rig.distance) +
+          : rig.distance) *
+        this.zoom +
       rig.stretchPerAccel * Math.max(-10, Math.min(20, this.accel));
-    const hTarget = hv
-      ? lerp(rig.height, hv.height, wHover)
-      : t.onGround
-        ? rig.groundHeight
-        : rig.height;
+    const hTarget =
+      (hv ? lerp(rig.height, hv.height, wHover) : t.onGround ? rig.groundHeight : rig.height) *
+      this.zoom;
     [this.dist, this.distVel] = spring(this.dist, this.distVel, dTarget, rig.stretch, dt);
     [this.lift, this.liftVel] = spring(this.lift, this.liftVel, hTarget, rig.stretch, dt);
-    // Free look springs back when released; in a helicopter's hover it stays.
-    if (!this.lookHeld && wHold < 1) {
-      const k = Math.exp((-dt / 0.25) * (1 - wHold));
+    // Free look springs back when released; a helicopter's stays until recentered.
+    if (this.lookHeld) this.recentering = false;
+    else if (!hv || this.recentering) {
+      const k = Math.exp(-dt / 0.25);
       this.lookYaw *= k;
       this.lookPitch *= k;
+      if (this.recentering && Math.abs(this.lookYaw) + Math.abs(this.lookPitch) < 1e-4) {
+        this.lookYaw = this.lookPitch = 0;
+        this.recentering = false;
+      }
     }
     // Offset behind and above, turned by the free look about the camera's up and right.
     const right = f.clone().cross(u).normalize();
@@ -411,17 +437,21 @@ export class ChaseCamera {
     this.eye.copy(eye);
     // Look at a point well ahead of the aircraft, so it sits below the center
     // and the way ahead (a runway on approach) shows above it.
-    // A helicopter's look point turns with the free look, so an orbit keeps it
-    // in view, and in the hover drops with the height above the ground.
+    // A helicopter's look point orbits with the free look, opposite the eye, so
+    // the helicopter stays in view all the way round and a lowered eye looks up
+    // toward the horizon; in the hover it drops with the height above the ground.
+    const ahead = hv ? lerp(hv.cruiseAim[0], hv.hoverAim[0], wHover) * this.zoom : 0;
     const aim = hv
       ? t.pos
           .clone()
-          .addScaled(f, cy * cp * lerp(hv.cruiseAim[0], hv.hoverAim[0], wHover))
-          .addScaled(right, sy * cp * lerp(hv.cruiseAim[0], hv.hoverAim[0], wHover))
+          .addScaled(f, cy * cp * ahead)
+          .addScaled(right, sy * cp * ahead)
           .addScaled(
             u,
-            lerp(hv.cruiseAim[1], hv.hoverAim[1], wHover) -
-              wHover * Math.min(hv.groundLookMax, hv.groundLook * this.agl),
+            (lerp(hv.cruiseAim[1], hv.hoverAim[1], wHover) -
+              wHover * Math.min(hv.groundLookMax, hv.groundLook * this.agl)) *
+              this.zoom -
+              sp * ahead,
           )
       : t.pos.clone().addScaled(f, 25).addScaled(u, 1);
     this.forward.copy(aim.sub(this.eye)).normalize();

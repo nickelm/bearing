@@ -116,7 +116,8 @@ const HELO_HELP = [
   'Click the view to capture the mouse; Escape gives it back and pauses.',
   'Takeoff: hold W until clear of the ground, let go to hold the altitude. Move the mouse forward to tilt the nose down and fly forward; back to slow down. Slow and let go: the hover holds (Assisted).',
   'In the hover the mouse turns the nose; above about 40 kt it banks into a coordinated turn. A/D slide sideways in the hover.',
-  'Landing: slow to a hover over the spot, then hold S: the descent eases near the ground. Keep S held on the ground to lower the collective.',
+  'Landing: slow to a hover over the spot, then hold S: the descent eases near the ground (VS under the radar altitude turns amber if it is too fast). Keep S held on the ground to lower the collective.',
+  'Camera: drag with the right mouse button to look around; the view stays where you leave it. Drag down to look further ahead. V or the middle button recenters it; the wheel zooms.',
 ];
 /** Where a helicopter starts on the ground: beside the runway's middle (m across, to the right). */
 const HELO_SPOT_ACROSS = 75;
@@ -444,6 +445,7 @@ export class FreeFlight {
     g.chase.rig = FAST_JET_RIG;
     this.pose.q = m.q;
     g.cameraMode = 'chase';
+    g.chase.resetView();
     g.chase.reset();
     this.syncPose();
     this.updateChase();
@@ -528,6 +530,10 @@ export class FreeFlight {
     this.pose.q = m.q;
     g.cameraMode = 'chase';
     g.chase.rig = helicopterRig(spec.flight.main.radius);
+    // A new sortie looks ahead; the zoom the player chose carries over (decision 160).
+    const zoom = g.chase.zoom;
+    g.chase.resetView();
+    g.chase.zoom = zoom;
     g.chase.reset();
     this.syncPose();
     this.updateChase();
@@ -567,6 +573,9 @@ export class FreeFlight {
       case 'debug':
         this.debug = !this.debug;
         break;
+      case 'recenterView':
+        this.deps.globe.chase.recenter();
+        break;
       default:
         break;
     }
@@ -584,6 +593,10 @@ export class FreeFlight {
       const rpp = (cam.fov * DEG) / Math.max(1, window.innerHeight);
       chase.look(inp.lookDelta.x, inp.lookDelta.y, rpp);
       inp.lookDelta.x = inp.lookDelta.y = 0;
+    }
+    if (inp.zoomSteps !== 0) {
+      chase.zoomBy(inp.zoomSteps);
+      inp.zoomSteps = 0;
     }
     const t0 = performance.now();
     let steps = 0;

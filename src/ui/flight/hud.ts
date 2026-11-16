@@ -17,7 +17,8 @@
  * - **Helicopter layout** (when the frame carries `hover`; decision 149): the
  *   velocity vector on the ground plane from the ground point with the
  *   acceleration cue at its tip, the landing zone's marker (a caret at the edge
- *   when off screen), a digital radar altitude with a vertical-speed bar, torque
+ *   when off screen), a digital radar altitude with the vertical speed under it (amber in a hard
+ *   descent near the ground; decision 160) and a vertical-speed bar, torque
  *   and rotor RPM, ground speed, mode tags and hazard cues. It leaves out what
  *   only a jet has: Mach, G, α and the indexer, throttle stages, speedbrake, and
  *   the landing aid's needles (the runway outline stays); the flight path marker
@@ -182,6 +183,25 @@ interface Message {
   text: string[];
   until: number;
   warn: boolean;
+}
+
+/**
+ * Whether a helicopter's descent would meet the ground hard: sinking faster
+ * than 2 m/s (about 400 fpm) with less than 2.5 s to the ground at that rate.
+ * The landing aid's eased descent (0.3 of the radar altitude per second, 3.3 s
+ * to go) stays clear of it; the types' crash sinks are 4–5 m/s.
+ * `verticalSpeed` (m/s, up positive) and `radarAltitude` (m).
+ */
+export function sinkWarning(verticalSpeed: number, radarAltitude: number): boolean {
+  const sink = -verticalSpeed;
+  return sink > 2 && radarAltitude < 2.5 * sink;
+}
+
+/** A vertical speed (fpm) as the HUD writes it: signed, to 10 fpm, "0" when level. */
+export function verticalSpeedText(fpm: number): string {
+  const v = Math.round(fpm / 10) * 10;
+  if (v === 0) return '0';
+  return `${v > 0 ? '+' : '−'}${Math.abs(v).toLocaleString('en-US')}`;
 }
 
 /** A landing zone's distance: feet to the nearest 10 within 0.3 NM, nautical miles beyond. */
@@ -446,13 +466,15 @@ export class Hud {
       if (Math.abs(ty - y) > 14 * s) this.text(v.toLocaleString('en-US'), x - 14 * s, ty, 'left');
     }
     this.box(x + 36 * s, y, 74 * s, Math.round(ft).toLocaleString('en-US'), 'left');
+    // The helicopter layout writes it beside the radar altitude (hoverAltitude).
     const vs = (f.verticalSpeed / FOOT) * 60;
-    this.text(
-      `${vs >= 0 ? '+' : '−'}${Math.abs(Math.round(vs / 10) * 10).toLocaleString('en-US')} fpm`,
-      x - 28 * s,
-      y - span - 18 * s,
-      'left',
-    );
+    if (!f.hover)
+      this.text(
+        `${vs >= 0 ? '+' : '−'}${Math.abs(Math.round(vs / 10) * 10).toLocaleString('en-US')} fpm`,
+        x - 28 * s,
+        y - span - 18 * s,
+        'left',
+      );
     const ra = f.radarAltitude / FOOT;
     // The helicopter layout draws its own radar altitude (hoverAltitude).
     if (ra < 1500 && !f.hover)
@@ -793,7 +815,11 @@ export class Hud {
     this.text(`LZ ${hoverDistance(lz.distance)}`, lx, ly, align);
   }
 
-  /** Radar altitude (feet, boxed and larger) and the vertical-speed bar (±1,000 fpm) inside the altitude tape. */
+  /**
+   * Radar altitude (feet, boxed and larger) with the vertical speed (fpm) under it,
+   * and the vertical-speed bar (±1,000 fpm) inside the altitude tape; the speed and
+   * the bar turn amber in a descent that would meet the ground hard (sinkWarning).
+   */
   private hoverAltitude(hv: HoverHud, x: number, y: number, s: number): void {
     const c = this.ctx;
     const half = 90 * s;
@@ -812,6 +838,8 @@ export class Hud {
       1.2,
     );
     const fpm = (hv.verticalSpeed / FOOT) * 60;
+    const warn = sinkWarning(hv.verticalSpeed, hv.radarAltitude);
+    const color = warn ? WARN_COLOR : HUD_COLOR;
     const k = Math.max(-1, Math.min(1, fpm / 1000));
     if (Math.abs(k) > 0.01) {
       this.stroke(
@@ -820,16 +848,20 @@ export class Hud {
           c.moveTo(sx + 5 * s, y);
           c.lineTo(sx + 5 * s, y - k * half);
         },
-        HUD_COLOR,
+        color,
         3.6,
       );
     }
-    const ra = hv.radarAltitude / FOOT;
-    if (ra >= 1500) return;
-    const v = ra < 50 ? Math.round(ra) : Math.round(ra / 10) * 10;
     const bw = 58 * s;
     const bh = 28 * s;
     const bx = sx - 14 * s - bw / 2;
+    // The vertical speed under the box (in its place above 1,500 ft).
+    const ra = hv.radarAltitude / FOOT;
+    const vy = ra < 1500 ? y + bh / 2 + 15 * s : y;
+    this.withFont(17 * s, () => this.text(verticalSpeedText(fpm), bx, vy, 'center', color));
+    this.text('VS', bx - bw / 2 - 6 * s, vy, 'right', color);
+    if (ra >= 1500) return;
+    const v = ra < 50 ? Math.round(ra) : Math.round(ra / 10) * 10;
     this.stroke(() => {
       c.beginPath();
       c.rect(bx - bw / 2, y - bh / 2, bw, bh);

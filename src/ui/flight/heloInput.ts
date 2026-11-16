@@ -9,7 +9,9 @@
  *   A click on the view captures the mouse; Escape gives it back and pauses.
  * - **Keys.** W/S collective (climb and descend; let go to hold the altitude),
  *   A/D sideways in the hover and bank at speed, Q/E the pedals, H hover hold.
- * - **Free look.** Hold the right mouse button (or C) and move the mouse.
+ * - **Free look.** Hold the right mouse button (or C) and move the mouse; the
+ *   view stays where it is left. V or a middle click recenters it, and the
+ *   mouse wheel moves the camera closer or farther (decision 160).
  */
 import { neutralCommand } from '../../sim/flight/rotor/heloLaws';
 import type { HeloCommand } from '../../sim/flight/rotor/heloLaws';
@@ -25,6 +27,7 @@ export type HeloAction =
   | 'brakes'
   | 'parkingBrake'
   | 'freeLook'
+  | 'recenterView'
   | 'help'
   | 'debug'
   | 'pause';
@@ -41,6 +44,7 @@ export const HELO_BINDINGS: Record<HeloAction, string[]> = {
   brakes: ['Space'],
   parkingBrake: ['KeyP'],
   freeLook: ['KeyC'],
+  recenterView: ['KeyV'],
   help: ['F1'],
   debug: ['F3'],
   pause: ['Escape'],
@@ -56,13 +60,21 @@ export const HELO_LABELS: Record<HeloAction, string> = {
   hoverHold: 'Hover hold on / off',
   brakes: 'Wheel brakes (hold)',
   parkingBrake: 'Parking brake on / off',
-  freeLook: 'Free look (hold; or hold the right mouse button)',
+  freeLook: 'Free look (hold; or hold the right mouse button); the view stays where you leave it',
+  recenterView: 'Recenter the view (or click the middle mouse button); the wheel zooms',
   help: 'This help',
   debug: 'Flight-model debug panel',
   pause: 'Pause menu',
 };
 
-const PRESS_ACTIONS = new Set<HeloAction>(['hoverHold', 'parkingBrake', 'help', 'debug', 'pause']);
+const PRESS_ACTIONS = new Set<HeloAction>([
+  'hoverHold',
+  'parkingBrake',
+  'recenterView',
+  'help',
+  'debug',
+  'pause',
+]);
 
 /** Mouse sensitivity (rad of command per pixel). */
 export const MOUSE_RATE = 0.0018;
@@ -72,6 +84,8 @@ export class HeloInput {
   /** Free look held, and the mouse movement since the last frame (px). */
   lookHeld = false;
   readonly lookDelta = { x: 0, y: 0 };
+  /** Mouse wheel notches since the last frame (positive: farther). */
+  zoomSteps = 0;
   onAction: ((a: HeloAction) => void) | null = null;
   enabled = false;
   /** Whether the mouse is captured (pointer lock), and whether it was last frame. */
@@ -124,9 +138,19 @@ export class HeloInput {
       if (e.button === 2) {
         this.rightDown = true;
         el.setPointerCapture?.(e.pointerId);
+      } else if (e.button === 1) {
+        e.preventDefault();
+        this.onAction?.('recenterView');
       } else if (e.button === 0 && !this.locked) {
         el.requestPointerLock?.();
       }
+    };
+    const wheel = (e: WheelEvent) => {
+      if (!this.enabled) return;
+      e.preventDefault();
+      // One notch is about 100 px in line mode's pixels; trackpads send smaller steps.
+      const px = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaMode === 2 ? e.deltaY * 800 : e.deltaY;
+      this.zoomSteps += Math.max(-3, Math.min(3, px / 100));
     };
     const up = (e: PointerEvent) => {
       if (e.button === 2) this.rightDown = false;
@@ -148,6 +172,7 @@ export class HeloInput {
     window.addEventListener('pointerup', up);
     document.addEventListener('pointerlockchange', lockChange);
     el.addEventListener('contextmenu', menu);
+    el.addEventListener('wheel', wheel, { passive: false });
     this.detach = () => {
       window.removeEventListener('keydown', kd);
       window.removeEventListener('keyup', ku);
@@ -157,6 +182,7 @@ export class HeloInput {
       window.removeEventListener('pointerup', up);
       document.removeEventListener('pointerlockchange', lockChange);
       el.removeEventListener('contextmenu', menu);
+      el.removeEventListener('wheel', wheel);
     };
   }
 
@@ -171,6 +197,7 @@ export class HeloInput {
     this.command.parkingBrake = parkingBrake;
     this.held.clear();
     this.mouse.x = this.mouse.y = 0;
+    this.zoomSteps = 0;
   }
 
   /** Adds mouse movement (px) as if the mouse moved under pointer lock (tools and tests). */

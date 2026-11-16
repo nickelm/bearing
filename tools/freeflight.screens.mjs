@@ -8,7 +8,7 @@
  *
  * Env: SHOTS (comma list of shot names; a preview run with OUT=-storm wrote the
  * shots "runway-storm" and so on; default: the five of a plain run; "hover-hover",
- * "hover-hazard", "hover-transition" and "hover-snow" draw the helicopter HUD over a
+ * "hover-hazard", "hover-sink", "hover-transition" and "hover-snow" draw the helicopter HUD over a
  * stand-in scene at 1280 × 720 and need no render), OUT_DIR (where
  * the screenshots go; default docs/reports/screens). Playwright is no dependency of the
  * repo: tools/browser/launch.mjs says where it is looked for.
