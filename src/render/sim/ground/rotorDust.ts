@@ -159,9 +159,9 @@ const LOOK: Readonly<
     { tint: [number, number, number]; opacity: number; size: [number, number] }
   >
 > = {
-  dust: { tint: [0.6, 0.48, 0.33], opacity: 0.32, size: [0.3, 1.0] },
+  dust: { tint: [0.6, 0.48, 0.33], opacity: 0.2, size: [0.3, 1.0] },
   grit: { tint: [0.42, 0.4, 0.37], opacity: 0.22, size: [0.22, 0.7] },
-  snow: { tint: [0.92, 0.94, 0.97], opacity: 0.36, size: [0.3, 1.1] },
+  snow: { tint: [0.92, 0.94, 0.97], opacity: 0.24, size: [0.3, 1.1] },
   spray: { tint: [0.82, 0.87, 0.92], opacity: 0.26, size: [0.25, 0.8] },
 };
 
@@ -317,7 +317,7 @@ export class RotorDust {
         fract(sin(dot(cell.add(vec2(x, y)), vec2(127.1, 311.7))).mul(43758.5453));
       const n = mix(mix(h(0, 0), h(1, 0), s.x), mix(h(0, 1), h(1, 1), s.x), s.y);
       const shape = clamp(float(1).sub(d), 0, 1).mul(
-        smoothstep(0.15, 0.75, n.add(float(0.45).sub(d.mul(0.4)))),
+        smoothstep(0.35, 0.8, n.add(float(0.35).sub(d.mul(0.45)))),
       );
       // Soft against the ground and whatever else is nearer.
       const clear = smoothstep(float(0), float(1.5), sceneDistance.sub(vDistance));
@@ -393,7 +393,7 @@ export class RotorDust {
       if (s.kind !== 'none' && s.amount > 0) {
         const strength = Math.min(1, wash.speed / FULL_WASH) * s.amount;
         count = Math.round(
-          DUST_CAP * Math.min(2, Math.max(0, f.density)) * Math.min(1, strength * 1.5),
+          DUST_CAP * Math.min(2, Math.max(0, f.density)) * Math.min(1, strength),
         );
         const look = LOOK[s.kind];
         // Dust takes the ground's color, lighter: what it is made of.
