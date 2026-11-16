@@ -241,6 +241,12 @@ export class MicroFacets {
   readonly glint = uniform(1);
   /** The world's hash seed. */
   readonly seed = uniform(0, 'uint');
+  /**
+   * Crop furrows and sand ripples (decision 183) on (1) or off (0). Off by default: in the
+   * browser both read too strong (the owner's review, decision 187).
+   */
+  readonly furrows = uniform(0);
+  readonly ripples = uniform(0);
   /** Sand ripples' direction on the plane (integer x, y) and rows per wave period (z). */
   readonly ripple = uniform(new Vector3(1, 2, 2035));
 
@@ -289,7 +295,7 @@ export class MicroFacets {
           .mul(float(1).sub(farm))
           .mul(bare);
         // Rows and ripples carry fields and dunes: the lumps step back there.
-        const calm = float(1).sub(max(farm, desert).mul(0.6));
+        const calm = float(1).sub(max(farm.mul(this.furrows), desert.mul(this.ripples)).mul(0.6));
         MICRO_OCTAVES.forEach((o, k) => {
           const vis = smoothstep(
             VISIBLE_PIXELS[0],
@@ -321,7 +327,7 @@ export class MicroFacets {
         });
         // Fields: ridged rows along the field's own heading, two faces per row, by crop
         // (decision 183). Rows along an integer direction repeat with the wave period.
-        If(farm.greaterThan(0.01), () => {
+        If(farm.greaterThan(0.01).and(this.furrows.greaterThan(0)), () => {
           const crop = (i.crop ?? float(3)) as F;
           const index = floor((i.heading ?? float(0)).mul(HEADINGS.length - 0.001));
           let v = vec2(...HEADINGS[0]!) as V2;
@@ -360,7 +366,7 @@ export class MicroFacets {
         });
         // Dunes: asymmetric ripples across the prevailing wind, a long windward face and a
         // short lee face (decision 183).
-        If(desert.greaterThan(0.01), () => {
+        If(desert.greaterThan(0.01).and(this.ripples.greaterThan(0)), () => {
           const v = vec2(this.ripple.x, this.ripple.y) as V2;
           const len = length(v);
           // Crests snake: the phase shifts with two waves along the crests, at integer

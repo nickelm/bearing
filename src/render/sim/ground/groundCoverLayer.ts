@@ -605,8 +605,9 @@ export class GroundCoverLayer {
     const hemisphere = clamp(up.y.mul(20), -1, 1);
     const seasonal = cos(land.seasonPhase.sub(WARMEST_PHASE).mul(2 * Math.PI)).mul(hemisphere);
     const temperature = params.z.add(params.w.mul(seasonal)).add(land.temperatureOffset);
-    // Plants hide under lying snow (the ground's cold threshold, decision 125).
-    const buried = smoothstep(-1, -4, temperature).mul(plant);
+    // Plants and stones alike sink under lying snow (the ground's cold threshold, decision
+    // 125): boulders on a snowfield looked out of place (the owner's review, decision 187).
+    const buried = smoothstep(-1, -4, temperature);
 
     const t0 = normalize(cross(up, vec3(0.0001, 1, 0.0002)));
     const t1 = cross(up, t0);

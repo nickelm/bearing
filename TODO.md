@@ -1012,6 +1012,8 @@ Detail near a low camera for helicopter flight, faceted and slightly cartoony, a
 - [x] Piecewise-linear fields on Kuhn-split cubic lattices on the wrapped coordinates (no tangent frame, no seams), three octaves turned against each other by integer matrices; one normal and one shade step per cell; no derivatives inside (decision 171)
 - [x] Land cover, first pass: grass, dry ground, rock, snow (shade steps only) (decision 171)
 - [x] Crop furrows by field heading and crop, sand ripples with snaking crests along a prevailing heading (decision 183)
+- [x] Owner's review (decision 187): no cover on snowfields or faces steeper than about 35°; furrows and ripples switched off
+- [ ] Furrows and ripples again, much fainter or shading-only, if the owner wants them back
 - [x] Single pixels of the neighboring field's crop in fields (the owner's dotted fields): the face's center from the camera-relative position (decision 183)
 - [ ] Gravel bars and scree, marsh hummocks
 - [x] Fade from 7 to 3 px per cell; uniform gate on the camera's height above the ground; distance cutoff at 600 m (decision 171)

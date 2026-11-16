@@ -2986,3 +2986,17 @@ The eroded world's crossing sites, where the alignment snaps bridges (N5), come 
 `docs/design.md` (track N, N5) changes with this decision.
 
 **Reason:** A build that takes minutes once per world is better shown as a build than hidden behind a world that is still changing; the race made the stage's output depend on timing, which the stored record must not; and the network's best mountain roads are a few kilometers in a planet's worth of land.
+
+### 187. Ground cover: none on snow or steep faces; furrows and ripples off for now
+
+**Date:** 2026-11-16
+**Decision:** The owner's review of the ground cover and micro-facets in the browser (decisions 174, 183, 185).
+
+- **Snow.** Boulders and stones on snowfields did not look right. Stones now sink under lying snow as plants do (scaled to nothing as the surface temperature falls from −1 to −4 °C, the ground's own threshold); while they sink, their tops whiten as before.
+- **Steep faces.** Boulders on the steep sides of rocks, buttes and hills did not look as if they would stay. Every kind's probability now falls to nothing between slopes of 0.58 and 0.72 (about 30° to 36°); scree takes rock from 0.35 to 0.55, and talus piles below cliffs (decision 185) are unchanged, since they lie on the gentler ground at a cliff's foot.
+- **Furrows and ripples off.** Both read too strong in the browser. `MicroFacets.furrows` and `.ripples` (default 0) switch them; the lumps of the other octaves are only calmed in fields and on dunes while they are on. The previews take `FURROWS=1` and `RIPPLES=1`. The field-dots fix of decision 183 stays.
+- **Kept:** reeds on banks and the talus piles, which the owner liked.
+
+`docs/plans/ground-detail.md` changes with this decision.
+
+**Reason:** The owner's review.

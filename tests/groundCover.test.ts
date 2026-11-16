@@ -87,8 +87,10 @@ describe('ground cover', () => {
     expect(
       count(block({ ...MEADOW, cover: TileCover.Marsh }), (i) => i.kind === 'cover-reeds'),
     ).toBeGreaterThan(500);
-    const scree = block({ ...MEADOW, steep: 0.9 });
+    const scree = block({ ...MEADOW, steep: 0.55 });
     expect(count(scree, (i) => ROCK_KINDS.has(i.kind))).toBeGreaterThan(0.9 * scree.length);
+    // Nothing stays put on faces steeper than about 35° (decision 187).
+    expect(block({ ...MEADOW, steep: 0.9 })).toHaveLength(0);
     const field = block({ ...MEADOW, farmland: 1 });
     expect(field.length).toBeLessThan(0.15 * block(MEADOW).length);
   });
@@ -105,7 +107,7 @@ describe('ground cover', () => {
   });
 
   it('counts only tall rocks as landing obstacles', () => {
-    const rocks = block({ ...MEADOW, steep: 0.9 }, 60);
+    const rocks = block({ ...MEADOW, talus: 1 }, 60);
     const tall = rocks.filter(isObstacle);
     expect(tall.length).toBeGreaterThan(0);
     for (const i of tall) {

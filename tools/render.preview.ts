@@ -943,6 +943,9 @@ it('renders preview views', async () => {
   // MICRO=x scales the ground's micro-facets (decision 168; 0 = off); GLINT=x their glints.
   if (process.env.MICRO) scene.terrain.micro.strength.value = Number(process.env.MICRO);
   if (process.env.GLINT) scene.terrain.micro.glint.value = Number(process.env.GLINT);
+  // FURROWS=1 and RIPPLES=1 turn the crop furrows and sand ripples back on (off by default, decision 187).
+  if (process.env.FURROWS === '1') scene.terrain.micro.furrows.value = 1;
+  if (process.env.RIPPLES === '1') scene.terrain.micro.ripples.value = 1;
   // COVER=0 leaves the ground cover out (decision 174).
   if (process.env.COVER === '0') scene.groundCover.enabled = false;
   // SKY_LIGHT=x sets the sky light on surfaces (PlanetLighting.skyLight): the fill in the shadows.
