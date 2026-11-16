@@ -950,21 +950,26 @@ Rivers by regime, roads and railways aligned to the terrain with earthworks as a
 - [x] Spike N5.0: level-6 tiles along every link's band for seeds 1, 2, 3 and 1983, synthesis time on Dawn; eager after the global pass or lazy per piece (decision 181: router v2; lazy near the camera on the renderer's tiles)
   - [ ] Why road 2219 of seed 1983 finds no route on either height source
   - [ ] Fewer corners tighter than their radius on rough tiles
-- [ ] Anchors: settlements, junctions, strategic bridges, points every 10–30 km by class, with elevations
+- [x] Offline alignment stage (decision 184, superseding 181's lazy choice): link tasks from roads, railways and spurs in Hilbert order; level-6 tiles synthesized along the bands with a shared cache; a worker pool; links assembled whole (one plan and profile across their anchors); thinned, packed and stored with the world in IndexedDB; a progress panel; `?align=0` skips it
+  - [ ] Whole-world run on a desktop GPU: time, tiles, forced pieces, record size; `tools/alignment.preview.ts` on seeds 1, 2, 3
+  - [ ] Free Flight's start screen shows the build's progress
+- [x] Anchors: polyline ends (settlements, junctions) and every 12 km of the polyline (decision 184)
+  - [ ] Anchors at strategic bridges, once they are snapped to rendered rivers
+  - [ ] Elevations at anchors from the network (fixed decks, junction platforms); now the ground at link ends
 - [x] Router: tangent-plane lattice by class, state (node, heading of 16), Galin's k = 2 neighborhood, long viaduct and tunnel edges; grade, curvature, earthwork, crossing, pass and corridor terms; tests on synthetic slopes (switchbacks on a steep face, a valley detour for a railway) (decision 180: state also counts the straight run; structures from the profile instead of long edges; crossing, pass and corridor terms through the caller's extra cost, not yet used)
-- [ ] Class switches: mountain railway where a piece cannot meet 2%; mountain road for secondary roads in mountains
+- [x] Class switches: mountain railway where a piece cannot meet 2%; mountain road for secondary roads in mountains; motorway → trunk → mountain road; spurs → mountain road → track; forced pieces as the last resort (decision 184)
 - [x] Plan fitting (straights and arcs, hairpins with a shelf pad), profile (slope-limited passes, vertical curves, fixed decks and anchors), earthworks (cut, fill, viaduct, tunnel by class thresholds) (decision 180; hairpin shelves and bridge decks as fixed points still to come)
   - [x] `alignPiece`: a piece between two anchors on the sphere with its corridor edits (decision 180)
 - [ ] Railways, then major roads, then minor roads; earlier corridors as obstacles and attachment points
 - [ ] Spiral template where a railway cannot meet its grade
 - [ ] Structure records for every crossing, viaduct and tunnel; strategic bridges snapped to rendered rivers (closes the S4 follow-up); each alignment bridge matched to a network bridge on its link, the unmatched counted (under a tenth, decision 163)
 - [ ] Tracks and minor roads as local detail near the camera, `rng(seed, "tracks")` per region
-- [ ] Tests: grades within 0.5 points, radii, every crossing recorded, eager and lazy pieces byte-identical
+- [ ] Tests: grades within 0.5 points, radii, every crossing recorded (link assembly, thinning, packing, task order: `tests/networkLink.test.ts`, decision 184)
 
 ### N6. Corridors in the terrain
 
 - [ ] Spike N6.0: the error between mesh and edits on the formation at level-10 spacing (24 m)
-- [ ] Corridor edits from the alignments, through N1's function
+- [x] Corridor edits from the alignments, through N1's function (decision 184: `alignmentCorridors` into the app's `TerrainEdits`; roads drawn along their alignments, off viaducts and tunnels; railways drawn as concrete strips until their shading)
 - [ ] Segment tables: a third vec4 per corridor segment (design elevations, kind and flags, bank width)
 - [ ] Shading: asphalt or gravel, shoulders, center and edge lines, ballast and rails below about 1 km, lighter fill and darker cut banks; nothing in tunnels or under bridges
 - [ ] Corridor-aware refinement (levels 11–12 within 2 km of the camera) if N6.0 needs it; triangle count in the standard views at most 10% up (`PERF`)

@@ -72,6 +72,7 @@
  * (gitignored).
  */
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { deserialize } from 'node:v8';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import { it } from 'vitest';
@@ -109,6 +110,8 @@ import { WeatherTexture } from '../src/render/sim/clouds/weatherTexture';
 import { PlanetLighting } from '../src/render/sim/lighting/planetLighting';
 import { DEFICIENCIES, simulateCvd } from './cvd';
 import { TileSynthesizer } from '../src/worldgen/gpu/tileSynth';
+import { alignmentCorridors } from '../src/worldgen/networks/alignments';
+import type { Alignments } from '../src/worldgen/networks/alignments';
 import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
 import { RiverIndex } from '../src/worldgen/riverIndex';
 import { testGpu } from '../tests/gpu/device';
@@ -821,7 +824,12 @@ it('renders preview views', async () => {
   const campaign = generateCampaignWorld({ ...DEFAULT_PLANET_PARAMS, seed });
   const params = { ...DEFAULT_PLANET_PARAMS, seed: campaign.seed };
   const { world, global } = await previewWorld(gpu, params, tres, gres);
-  const infra = new InfraScene(campaign.graph, campaign.infrastructure, params.radius);
+  // ALIGNMENTS=path: roads and railways along a record from tools/alignment.preview.ts (SAVE),
+  // with their corridors cut into the terrain (decision 184).
+  const alignments = process.env.ALIGNMENTS
+    ? (deserialize(readFileSync(process.env.ALIGNMENTS)) as Alignments)
+    : null;
+  const infra = new InfraScene(campaign.graph, campaign.infrastructure, params.radius, alignments);
 
   if (strategic) {
     await renderStrategic(gpu, {
@@ -918,7 +926,13 @@ it('renders preview views', async () => {
     edits:
       process.env.GRADE === '0'
         ? undefined
-        : airfieldGrading(infra, global.height, global.n, riverIndex),
+        : airfieldGrading(
+            infra,
+            global.height,
+            global.n,
+            riverIndex,
+            alignments ? alignmentCorridors(alignments) : [],
+          ),
   });
   scene.setInfrastructure(infra);
   scene.terrainReady = true;
@@ -1369,6 +1383,14 @@ it('renders preview views', async () => {
       });
     }
   }
+  // TARGETS=1 prints every target's latitude and longitude (for NEAR in tools/alignment.preview.ts).
+  if (process.env.TARGETS === '1')
+    for (const [k, t] of Object.entries(targets))
+      if (t)
+        console.log(
+          `target ${k}: ${((Math.asin(t.y / t.length()) * 180) / Math.PI).toFixed(3)}, ` +
+            `${((Math.atan2(t.x, t.z) * 180) / Math.PI).toFixed(3)}`,
+        );
   for (const listed of views) {
     // ALT (m) and TILT (deg) override a view's altitude and tilt.
     const view: PreviewView = {

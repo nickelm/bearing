@@ -70,38 +70,11 @@ export function fitPlan(
   // How much of each straight is already used by the previous corner's tangent.
   let used = 0;
   for (let i = 1; i + 1 < pts.length; i++) {
-    const a = pts[i - 1]!;
-    const b = pts[i]!;
-    const c = pts[i + 1]!;
-    const l1 = Math.hypot(b[0] - a[0], b[1] - a[1]);
-    const l2 = Math.hypot(c[0] - b[0], c[1] - b[1]);
-    const u1: [number, number] = [(b[0] - a[0]) / l1, (b[1] - a[1]) / l1];
-    const u2: [number, number] = [(c[0] - b[0]) / l2, (c[1] - b[1]) / l2];
-    const turn = Math.acos(Math.max(-1, Math.min(1, u1[0] * u2[0] + u1[1] * u2[1])));
-    if (turn < 1e-9) continue;
-    // Tangent length for the minimum radius; at most what the straights leave.
-    const room = Math.min(l1 - used, l2 / 2);
-    let radius = minRadius;
-    let tangent = radius * Math.tan(turn / 2);
-    if (tangent > room) {
-      tangent = Math.max(0, room);
-      radius = tangent / Math.tan(turn / 2);
-      violations.push(radius);
-    }
-    const t1: [number, number] = [b[0] - u1[0] * tangent, b[1] - u1[1] * tangent];
-    dense.push(t1);
-    // The arc from t1 to t2 about its center, on the inside of the turn.
-    const side = u1[0] * u2[1] - u1[1] * u2[0] > 0 ? 1 : -1;
-    const n1: [number, number] = [-u1[1] * side, u1[0] * side];
-    const cx = t1[0] + n1[0] * radius;
-    const cy = t1[1] + n1[1] * radius;
-    const steps = Math.max(1, Math.ceil((radius * turn) / step));
-    const a0 = Math.atan2(t1[1] - cy, t1[0] - cx);
-    for (let k = 1; k <= steps; k++) {
-      const ang = a0 + side * turn * (k / steps);
-      dense.push([cx + radius * Math.cos(ang), cy + radius * Math.sin(ang)]);
-    }
-    used = tangent;
+    const c = roundCorner(pts[i - 1]!, pts[i]!, pts[i + 1]!, minRadius, used, step);
+    if (!c) continue;
+    dense.push(...c.points);
+    if (c.violation !== null) violations.push(c.violation);
+    used = c.tangent;
   }
   dense.push(pts[pts.length - 1]!);
   // Resample every `step` m.
@@ -127,6 +100,54 @@ export function fitPlan(
     s.push(sk);
   }
   return { points, s, violations };
+}
+
+/**
+ * The arc rounding corner `b` between straights from `a` and to `c`: radius
+ * `minRadius` where it fits, else as large as the straights allow (the first
+ * less the `used` m the previous corner took, half the second), with its
+ * radius as a violation. Points: the tangent point on the first straight, then
+ * the arc every `step` m; null for no turn.
+ */
+export function roundCorner(
+  a: readonly [number, number],
+  b: readonly [number, number],
+  c: readonly [number, number],
+  minRadius: number,
+  used: number,
+  step: number,
+): { points: [number, number][]; tangent: number; violation: number | null } | null {
+  const l1 = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  const l2 = Math.hypot(c[0] - b[0], c[1] - b[1]);
+  if (l1 <= 0 || l2 <= 0) return null;
+  const u1: [number, number] = [(b[0] - a[0]) / l1, (b[1] - a[1]) / l1];
+  const u2: [number, number] = [(c[0] - b[0]) / l2, (c[1] - b[1]) / l2];
+  const turn = Math.acos(Math.max(-1, Math.min(1, u1[0] * u2[0] + u1[1] * u2[1])));
+  if (turn < 1e-9) return null;
+  // Tangent length for the minimum radius; at most what the straights leave.
+  const room = Math.min(l1 - used, l2 / 2);
+  let radius = minRadius;
+  let tangent = radius * Math.tan(turn / 2);
+  let violation: number | null = null;
+  if (tangent > room) {
+    tangent = Math.max(0, room);
+    radius = tangent / Math.tan(turn / 2);
+    violation = radius;
+  }
+  const t1: [number, number] = [b[0] - u1[0] * tangent, b[1] - u1[1] * tangent];
+  const points: [number, number][] = [t1];
+  // The arc from t1 to t2 about its center, on the inside of the turn.
+  const side = u1[0] * u2[1] - u1[1] * u2[0] > 0 ? 1 : -1;
+  const n1: [number, number] = [-u1[1] * side, u1[0] * side];
+  const cx = t1[0] + n1[0] * radius;
+  const cy = t1[1] + n1[1] * radius;
+  const steps = Math.max(1, Math.ceil((radius * turn) / step));
+  const a0 = Math.atan2(t1[1] - cy, t1[0] - cx);
+  for (let k = 1; k <= steps; k++) {
+    const ang = a0 + side * turn * (k / steps);
+    points.push([cx + radius * Math.cos(ang), cy + radius * Math.sin(ang)]);
+  }
+  return { points, tangent, violation };
 }
 
 /** Douglas–Peucker simplification to within `tol` m, keeping both ends; collinear points go at 0. */
@@ -170,15 +191,21 @@ export function simplify(
 
 /**
  * The design elevation along arc lengths `s` over `ground` (see the module
- * comment): grade at most `maxGrade`, ends at `startZ` and `endZ` when given.
+ * comment): grade at most `maxGrade` (one bound, or one per point, where a link
+ * changes class), ends at `startZ` and `endZ` when given.
  */
 export function designProfile(
   ground: readonly number[],
   s: readonly number[],
-  maxGrade: number,
+  maxGrade: number | ArrayLike<number>,
   opts: { smooth?: number; verticalCurve?: number; startZ?: number; endZ?: number } = {},
 ): number[] {
   const n = ground.length;
+  // The grade bound between points i − 1 and i: per point, the stricter of the two.
+  const G =
+    typeof maxGrade === 'number'
+      ? () => maxGrade
+      : (i: number) => Math.min(maxGrade[i]!, maxGrade[i - 1]!);
   // The ground smoothed over `smooth` m: the line follows the terrain's trend, not its texture.
   const target = movingAverage(ground, s, opts.smooth ?? 200);
   if (opts.startZ !== undefined) target[0] = opts.startZ;
@@ -187,12 +214,12 @@ export function designProfile(
   const below = target.slice();
   const above = target.slice();
   for (let i = 1; i < n; i++) {
-    const d = maxGrade * (s[i]! - s[i - 1]!);
+    const d = G(i) * (s[i]! - s[i - 1]!);
     below[i] = Math.min(below[i]!, below[i - 1]! + d);
     above[i] = Math.max(above[i]!, above[i - 1]! - d);
   }
   for (let i = n - 2; i >= 0; i--) {
-    const d = maxGrade * (s[i + 1]! - s[i]!);
+    const d = G(i + 1) * (s[i + 1]! - s[i]!);
     below[i] = Math.min(below[i]!, below[i + 1]! + d);
     above[i] = Math.max(above[i]!, above[i + 1]! - d);
   }
@@ -203,7 +230,7 @@ export function designProfile(
   const pin = (i: number, value: number, dir: 1 | -1) => {
     z[i] = value;
     for (let k = i + dir; k >= 0 && k < n; k += dir) {
-      const d = maxGrade * Math.abs(s[k]! - s[k - dir]!);
+      const d = G(Math.max(k, k - dir)) * Math.abs(s[k]! - s[k - dir]!);
       const lo = z[k - dir]! - d;
       const hi = z[k - dir]! + d;
       if (z[k]! >= lo && z[k]! <= hi) break;

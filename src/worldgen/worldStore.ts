@@ -13,6 +13,7 @@
  */
 import { hashString64 } from '../core/rng';
 import type { StrategicWorld } from './campaignWorld';
+import type { Alignments } from './networks/alignments';
 import type { FinishResult } from './finishWorld';
 import type { PlanetParams } from './params';
 import type { World } from './pipeline';
@@ -36,6 +37,8 @@ export interface StoredWorld {
     uplift: Float32Array;
     finish: FinishResult;
   };
+  /** Roads and railways aligned on the eroded world (decision 184); absent if skipped (?align=0). */
+  alignments?: Alignments;
 }
 
 /** Cache key for a world: parameters (sorted), resolutions and generator version. */

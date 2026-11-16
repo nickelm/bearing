@@ -27,6 +27,8 @@
  *   ONLY     comma list of parts to run: flight, takeoff, helicopter, campaign (default all)
  *   HELO     the helicopter the helicopter part flies: scout (default) or utility
  *   SCENES   comma list of the flight's scenes: fair, storm, snow, fog, night, dust
+ *   ALIGN    1 runs the alignment stage (decision 184); by default the run passes align=0
+ *            in software modes, where its level-6 tiles take about a second each
  *   SCALE    render scale for the pictures: 100% (default), 75%, 50%, 35%, or auto
  *   W, H     viewport (640 × 360)
  *   SLOW     factor on every timeout (default 1 with a GPU, 8 without)
@@ -70,7 +72,9 @@ const parts = env('ONLY', 'flight,takeoff,helicopter,campaign').split(',');
 const scale = env('SCALE', '100%');
 const slow = Number(env('SLOW', mode === 'gpu' ? '1' : '8'));
 // The app does not start on a software adapter unasked (webgpuSupport.ts): these modes ask.
-const software = mode === 'gpu' ? '' : '&software';
+const software =
+  (mode === 'gpu' ? '' : '&software') +
+  (process.env.ALIGN === '1' || (mode === 'gpu' && process.env.ALIGN !== '0') ? '' : '&align=0');
 const flashSeconds = Number(env('FLASH', '20'));
 const verbose = env('VERBOSE', '') === '1';
 mkdirSync(out, { recursive: true });

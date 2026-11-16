@@ -12,7 +12,7 @@ import { directionToCubeFace } from '../../../core/coords';
 import type { CubeFaceUv } from '../../../core/coords';
 import type { Vec3d } from '../../../core/vec3d';
 import { TerrainEdits } from '../../../worldgen/edits';
-import type { ChannelSource, PadEdit } from '../../../worldgen/edits';
+import type { ChannelSource, CorridorEdit, PadEdit } from '../../../worldgen/edits';
 import { APRON_OFFSET, APRON_WIDTH, offsetPoint, RUNWAY_WIDTH } from './infraScene';
 import type { InfraScene } from './infraScene';
 
@@ -95,10 +95,12 @@ export function airfieldGrading(
   height: Float32Array,
   n: number,
   channels: ChannelSource | null = null,
+  corridors: readonly CorridorEdit[] = [],
 ): TerrainEdits {
   return new TerrainEdits({
     radius: infra.radius,
     pads: airfieldPads(infra, globalMapSampler(height, n)),
+    corridors,
     channels,
   });
 }

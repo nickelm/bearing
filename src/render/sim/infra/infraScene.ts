@@ -3,9 +3,12 @@
  * decision 65), derived on the CPU from the strategic graph and the
  * infrastructure:
  *
- * - `segments`: roads (civilian and spur) smoothed like rivers, plus airfield
- *   pavement (runway, parallel taxiway, apron) with negative widths, which
- *   the road shader draws as concrete. Same 8-field layout as RiverSegments.
+ * - `segments`: roads (civilian and spur) smoothed like rivers, or along
+ *   their alignments where the world has them (decision 184), off viaducts
+ *   and tunnels; railways along their alignments only, as concrete until N6
+ *   shades ballast; and airfield pavement (runway, parallel taxiway, apron)
+ *   with negative widths, which the road shader draws as concrete. Same
+ *   8-field layout as RiverSegments.
  * - `lights`: night lights per settlement and airbase, 8 floats each
  *   (direction xyz, radius; intensity, built-up radius, kind, runway).
  *   The terrain draws the built-up area as a patch by day (decision 71):
@@ -26,6 +29,10 @@ import type { RiverSegments } from '../../../worldgen/riverIndex';
 import { ROAD_WIDTH, URBAN_VERTICES } from '../../../worldgen/strategic/graph';
 import type { RoadNetwork, StrategicGraph } from '../../../worldgen/strategic/graph';
 import type { Infrastructure } from '../../../worldgen/strategic/infrastructure';
+import { STRUCTURE } from '../../../worldgen/networks/alignment';
+import { alignedPoint, linksByLine } from '../../../worldgen/networks/alignments';
+import type { Alignments } from '../../../worldgen/networks/alignments';
+import { NETWORK } from '../../../worldgen/networks/link';
 
 export type SiteKind = 'town' | 'airbase' | 'industry';
 
@@ -87,6 +94,8 @@ export function townRadiusToward(site: BuiltSite, d: Readonly<Vec3d>): number {
 /** Runway, taxiway and apron dimensions (m). */
 /** Trees stay this far beyond a road's edge (m); rows of trees stand just outside (decision 162). */
 export const ROAD_CLEARING = 8;
+/** Width of a railway's ballast bed as drawn (m), single track. */
+export const RAIL_WIDTH = 4;
 export const RUNWAY_WIDTH = 45;
 export const TAXIWAY_WIDTH = 23;
 export const TAXIWAY_OFFSET = 190;
@@ -187,37 +196,72 @@ export class InfraScene {
     graph: StrategicGraph,
     infra: Infrastructure,
     readonly radius: number,
+    alignments: Alignments | null = null,
   ) {
     this.habitability = graph.habitability;
     this.habitabilityResolution = graph.resolution;
     const segs: number[] = [];
     let roadIndex = 0;
-    const addRoads = (r: RoadNetwork, spur: boolean) => {
+    // Aligned links (decision 184) replace the coarse polylines they align.
+    const aligned = {
+      road: alignments ? linksByLine(alignments, NETWORK.Road) : null,
+      spur: alignments ? linksByLine(alignments, NETWORK.Spur) : null,
+      rail: alignments ? linksByLine(alignments, NETWORK.Rail) : null,
+    };
+    const addRoads = (r: RoadNetwork, kind: 'road' | 'spur' | 'rail') => {
       for (let k = 0; k < r.count; k++) {
-        const w = ROAD_WIDTH[r.roadClass[k]!]!;
+        // Railways: the ballast bed, drawn as concrete until N6 shades it.
+        const w = kind === 'rail' ? RAIL_WIDTH : ROAD_WIDTH[r.roadClass[k]!]!;
         const road = roadIndex++;
         let along = 0;
-        const pts: number[][] = [];
-        for (let p = r.offsets[k]!; p < r.offsets[k + 1]!; p++) {
-          pts.push([r.points[p * 3]!, r.points[p * 3 + 1]!, r.points[p * 3 + 2]!, w]);
+        const link = aligned[kind]?.get(k);
+        let sm: number[][];
+        // Segment i → i + 1 is drawn on the ground unless a viaduct or tunnel carries it.
+        let onGround = (_i: number) => true;
+        if (link !== undefined && alignments) {
+          const o = alignments.offsets[link]!;
+          const n = alignments.offsets[link + 1]! - o;
+          const p = new Vec3d();
+          sm = [];
+          for (let i = 0; i < n; i++) {
+            alignedPoint(alignments, link, o + i, p);
+            sm.push([p.x, p.y, p.z, w]);
+          }
+          onGround = (i) => alignments.structure[o + i + 1] === STRUCTURE.Corridor;
+        } else if (kind === 'rail') {
+          continue;
+        } else {
+          const pts: number[][] = [];
+          for (let p = r.offsets[k]!; p < r.offsets[k + 1]!; p++) {
+            pts.push([r.points[p * 3]!, r.points[p * 3 + 1]!, r.points[p * 3 + 2]!, w]);
+          }
+          sm = chaikin(pts, 3);
         }
-        const sm = chaikin(pts, 3);
+        const drawn = kind === 'rail' ? -w : w;
         for (let i = 0; i + 1 < sm.length; i++) {
           const a = sm[i]!;
           const b = sm[i + 1]!;
-          segs.push(a[0]!, a[1]!, a[2]!, b[0]!, b[1]!, b[2]!, w, w);
           const va = new Vec3d(a[0]!, a[1]!, a[2]!);
           const vb = new Vec3d(b[0]!, b[1]!, b[2]!);
+          const length = va.distanceTo(vb) * radius;
+          if (!onGround(i)) {
+            along += length;
+            continue;
+          }
+          segs.push(a[0]!, a[1]!, a[2]!, b[0]!, b[1]!, b[2]!, drawn, drawn);
           this.clear(va, vb, w / 2 + ROAD_CLEARING, true);
+          if (kind === 'rail') {
+            along += length;
+            continue;
+          }
           const stretch: RoadStretch = {
             a: va,
             b: vb,
             clearing: w / 2 + ROAD_CLEARING,
             road,
             along,
-            roadClass: spur ? 2 : r.roadClass[k]!,
+            roadClass: kind === 'spur' ? 2 : r.roadClass[k]!,
           };
-          const length = va.distanceTo(vb) * radius;
           along += length;
           // The tiles the road and its rows reach: along it, and 40 m to either side, since a
           // road on a tile's edge has a row in the tile next door.
@@ -246,8 +290,9 @@ export class InfraScene {
         }
       }
     };
-    addRoads(graph.roads, false);
-    addRoads(infra.spurs, true);
+    addRoads(graph.roads, 'road');
+    addRoads(infra.spurs, 'spur');
+    addRoads(graph.railways.lines, 'rail');
 
     const pave = (
       p: Vec3d,

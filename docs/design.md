@@ -377,7 +377,7 @@ The roadmap splits into a foundation and three tracks that can advance in parall
 - **N2. River planform.** River invariants as metrics over many seeds, regimes, meander migration with cutoffs and oxbows, floodplain edits, distributaries.
 - **N3. River rendering.** Oxbows as water, banks on oxbows and distributaries, generalized rivers on the map.
 - **N4. Crossings and settlements.** Crossing sites, the settlement pull, bridges as typed nodes with traffic and detour.
-- **N5. Router and alignment.** The router, railways, major and minor roads and tracks aligned, plans, profiles, earthworks, structure records, spirals.
+- **N5. Router and alignment.** The router, railways, major and minor roads and tracks aligned, plans, profiles, earthworks, structure records, spirals. The network is aligned once, when the world is built, by a worker pool over level-6 tiles behind a progress panel, and stored with the world (decision 184).
 - **N6. Corridors in the terrain.** Corridor edits with banks, road and rail shading, refined terrain along corridors near the camera.
 - **N7. Structures and names.** The bridge kit and tunnel portals, bridge symbols and labels and dashed tunnels on the map, names for reaches, sections, bridges and tunnels.
 - **N8. Verification.** The proposal's criteria over 20 seeds, screenshots, acceptance checks, report.

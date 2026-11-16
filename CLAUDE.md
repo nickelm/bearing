@@ -26,6 +26,7 @@ Guidance for Claude Code sessions in this repository. `docs/design.md` is the so
 | Free Flight renders      | `tools/freeflight.preview.ts` (env: `SEED`, `GRES`, `TOD`, `SHOTS`, `WEATHER`, `WIND`, `QUALITY`, `GOVERNOR`, `POST`, `MSAA`, `SETTLE`, `OUT`), then `node tools/freeflight.screens.mjs` with `npm run dev` up (`SHOTS`, `OUT_DIR`) → `docs/reports/screens/` |
 | Free Flight session      | `node tools/freeflight.session.mjs` with `npm run dev` up: the real `FreeFlight` class in headless Chromium without WebGPU, through every weather preset, pause, restart, a crash and a takeoff roll with free pedals in clear, storm and blizzard |
 | River beds               | `npx vitest run tools/rivers.preview.ts --config vitest.tools.config.ts --disable-console-intercept` (env: `COUNT`, `KM`, `MIN_DROP`, `GRES`): walks rivers' channels on level-7 tiles and prints where the bed climbs (decision 146) |
+| Alignment stage          | `npx vitest run --config vitest.tools.config.ts tools/alignment.preview.ts` (env: `LIMIT`, `NEAR=lat,lon,km`, `SAVE`, `ALIGN_TUNING`); `ALIGNMENTS=<saved>` in the render preview draws it (decision 184) |
 | Browser smoke test       | `npm run build && npm run preview`, then `node tools/browser.smoke.mjs` (env: `MODE`, `WORLD`, `ONLY`, `SCENES`, `OUT`) → `tools/out/browser/` (decision 144) |
 
 ## Directory map
@@ -49,8 +50,9 @@ src/worldgen/       planet generation pipeline stages (may use GPU compute); can
   edits/            terrain edits (decision 164): pads and corridors, their index by tile, protected
                     river channels and TerrainEdits.apply, the one height function (rule 13)
   channels/         (track N, planned) river regimes, meander migration with oxbows, floodplain mask
-  networks/         (track N, planned) crossing sites, anchors, the router, plans, profiles, earthworks,
-                    structure records: the alignment tier (decision 161)
+  networks/         the alignment tier (decisions 161, 180, 184): the router, plans, profiles, earthworks,
+                    link tasks and anchors, links aligned whole, the stage (build.ts, run once per world
+                    on a worker pool over level-6 tiles) and its stored record (alignments.ts)
   strategic/        strategic graph types and builder (settlements, roads, bridges), and infrastructure
                     placed after casting: the only world view campaign logic gets. Road hierarchy,
                     railways and urban extents go here too, and the types of named features (decision 72)

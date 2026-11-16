@@ -131,11 +131,30 @@ export interface RouteProblem {
   extra?: (x0: number, y0: number, x1: number, y1: number) => number;
   /** Search budget in state expansions; the search gives up beyond it. */
   maxExpansions?: number;
+  /**
+   * Within this distance (m) of the start or the goal, moves steeper than
+   * `maxOver` are allowed (at their steep cost): anchors sit on whatever ground
+   * the network put them on, a summit or a gorge side (decision 184). 0 by default.
+   */
+  relax?: number;
+  /**
+   * Weight on the distance heuristic (weighted A*): above 1 the search expands
+   * far fewer nodes for a path at most that factor dearer. 1 by default.
+   */
+  greed?: number;
+  /**
+   * Allow moves steeper than `maxOver` everywhere at OVER_WEIGHT per meter on
+   * top (decision 184): the search never fails on grade, and `Route.over`
+   * says how much of the path needed it.
+   */
+  anyGrade?: boolean;
 }
 
 export interface Route {
   /** Plane coordinates of the path's nodes, start to goal. */
   path: [number, number][];
+  /** Length (m) of the path's moves steeper than `maxOver` away from its ends (`anyGrade`). */
+  over: number;
   cost: number;
   expansions: number;
 }
@@ -164,6 +183,8 @@ const LENGTH = MOVES.map(([x, y]) => Math.hypot(x, y));
 
 /** Cost of cut and fill per (excess grade over maximum)². */
 export const STEEP_WEIGHT = 30;
+/** With `anyGrade`, the extra cost per meter of a move steeper than `maxOver`, per (1 + excess). */
+export const OVER_WEIGHT = 1000;
 
 /** The cheapest path from start to goal, or null if there is none within the budget. */
 export function route(p: RouteProblem): Route | null {
@@ -196,7 +217,8 @@ export function route(p: RouteProblem): Route | null {
   const closed = new Uint8Array(nodes);
   const gx = X(goal);
   const gy = Y(goal);
-  const heur = (i: number) => Math.hypot(X(i) - gx, Y(i) - gy);
+  const greed = p.greed ?? 1;
+  const heur = (i: number) => greed * Math.hypot(X(i) - gx, Y(i) - gy);
   const heap = new MinHeap();
   g[start] = 0;
   heap.push(heur(start), start);
@@ -205,6 +227,13 @@ export function route(p: RouteProblem): Route | null {
   const maxTurn = hairpins ? (3 * Math.PI) / 4 + 1e-6 : Math.PI / 2 + 1e-6;
   let expansions = 0;
   const free = cls.maxGrade / 4;
+  const relax2 = (p.relax ?? 0) ** 2;
+  const sx = X(start);
+  const sy = Y(start);
+  const nearEnd = (i: number) =>
+    relax2 > 0 &&
+    ((X(i) - sx) ** 2 + (Y(i) - sy) ** 2 <= relax2 ||
+      (X(i) - gx) ** 2 + (Y(i) - gy) ** 2 <= relax2);
   while (heap.size > 0) {
     const node = heap.pop();
     if (closed[node]) continue;
@@ -225,7 +254,8 @@ export function route(p: RouteProblem): Route | null {
       const L = LENGTH[m]! * s;
       const grade = Math.abs(h[next]! - h[node]!) / L;
       const r = grade / cls.maxGrade;
-      if (r > cls.maxOver) continue;
+      const overMove = r > cls.maxOver && !(nearEnd(node) && nearEnd(next));
+      if (overMove && !p.anyGrade) continue;
       let turn = 0;
       if (dIn >= 0) {
         turn = Math.abs(ANGLE[m]! - ANGLE[dIn]!);
@@ -241,6 +271,7 @@ export function route(p: RouteProblem): Route | null {
         L * (1 + cls.gradeWeight * Math.min(q, 1) ** 2 + STEEP_WEIGHT * Math.max(0, r - 1) ** 2) +
         cls.curveWeight * cls.minRadius * turn * turn +
         cls.earthWeight * earth * L;
+      if (overMove) cost += L * OVER_WEIGHT * (1 + r - cls.maxOver);
       if (p.extra) cost += p.extra(x0, y0, x1, y1);
       const ng = Math.fround(g[node]! + cost);
       if (ng < g[next]!) {
@@ -253,7 +284,15 @@ export function route(p: RouteProblem): Route | null {
   }
   if (!closed[goal]) return null;
   const path: [number, number][] = [];
-  for (let n = goal; n >= 0; n = from[n]!) path.push([X(n), Y(n)]);
+  let over = 0;
+  for (let n = goal; n >= 0; n = from[n]!) {
+    path.push([X(n), Y(n)]);
+    const f = from[n]!;
+    if (f >= 0 && !(nearEnd(f) && nearEnd(n))) {
+      const L = Math.hypot(X(n) - X(f), Y(n) - Y(f));
+      if (Math.abs(h[n]! - h[f]!) / L / cls.maxGrade > cls.maxOver) over += L;
+    }
+  }
   path.reverse();
-  return { path, cost: g[goal]!, expansions };
+  return { path, over, cost: g[goal]!, expansions };
 }

@@ -31,6 +31,39 @@ body {
   white-space: nowrap;
 }
 
+.build-progress {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  width: min(28rem, calc(100% - 32px));
+  box-sizing: border-box;
+  padding: 8px 12px 10px;
+  background: rgb(0 0 0 / 0.6);
+  border-radius: 4px;
+  font:
+    12px/1.4 ui-monospace,
+    Consolas,
+    monospace;
+  pointer-events: none;
+}
+
+.build-progress[hidden] {
+  display: none;
+}
+
+.build-progress-track {
+  margin-top: 6px;
+  height: 4px;
+  background: rgb(255 255 255 / 0.15);
+}
+
+.build-progress-bar {
+  height: 100%;
+  width: 0;
+  background: #d8dee6;
+}
+
 #fatal {
   position: fixed;
   inset: 0;

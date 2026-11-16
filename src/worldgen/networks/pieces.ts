@@ -12,7 +12,7 @@
 import { Vec3d } from '../../core/vec3d';
 import { CORRIDOR_BANKS } from '../edits/corridor';
 import type { CorridorEdit } from '../edits/corridor';
-import { designProfile, earthworks, fitPlan, STRUCTURE } from './alignment';
+import { designProfile, earthworks, fitPlan, simplify, STRUCTURE } from './alignment';
 import type { EarthworkLimits, Structure } from './alignment';
 import { route } from './router';
 import type { RouteClass } from './router';
@@ -93,13 +93,34 @@ export function gnomonic(c: Readonly<Vec3d>, radius: number) {
  * (m at a unit direction), or null if no route meets the class's grade
  * within the band.
  */
-export function alignPiece(
+export interface RoutedPiece {
+  /** Unit directions of the routed path's corners, simplified, anchors at both ends. */
+  vertices: Vec3d[];
+  /** The same in the piece's gnomonic plane (m). */
+  plane: [number, number][];
+  frame: ReturnType<typeof gnomonic>;
+  expansions: number;
+  /** Path length (m) steeper than the class's `maxOver` (with `anyGrade` only). */
+  over: number;
+}
+
+/**
+ * Routes one piece from `a` to `b` (unit directions) over ground `height` (m at
+ * a unit direction) in its gnomonic plane, and simplifies the lattice path to
+ * within ¾ of a lattice spacing, so its small wiggles merge into the bends they
+ * make (decision 181); null if no route meets the class's grade within the band.
+ */
+export function routePiece(
   a: Readonly<Vec3d>,
   b: Readonly<Vec3d>,
   height: (d: Readonly<Vec3d>) => number,
   radius: number,
-  o: PieceOptions,
-): Piece | null {
+  o: Pick<PieceOptions, 'cls' | 'spacing' | 'band' | 'maxExpansions'> & {
+    relax?: number;
+    greed?: number;
+    anyGrade?: boolean;
+  },
+): RoutedPiece | null {
   const mid = new Vec3d(a.x + b.x, a.y + b.y, a.z + b.z).normalize();
   const frame = gnomonic(mid, radius);
   const pa = frame.toPlane(a);
@@ -128,14 +149,40 @@ export function alignPiece(
     cls: o.cls,
     allowed,
     maxExpansions: o.maxExpansions,
+    relax: o.relax,
+    greed: o.greed,
+    anyGrade: o.anyGrade,
   });
   if (!r) return null;
   // The route ends on lattice nodes: put the anchors back.
   const path = r.path.slice();
   path[0] = [pa[0], pa[1]];
   path[path.length - 1] = [pb[0], pb[1]];
-  // Simplified to within ¾ of a lattice spacing before its corners are rounded.
-  const plan = fitPlan(path, o.cls.minRadius, o.step ?? 10, 0.75 * o.spacing);
+  const plane = simplify(path, 0.75 * o.spacing);
+  const vertices = plane.map(([x, y]) => frame.toSphere(x, y));
+  vertices[0] = new Vec3d(a.x, a.y, a.z);
+  vertices[vertices.length - 1] = new Vec3d(b.x, b.y, b.z);
+  return { vertices, plane, frame, expansions: r.expansions, over: r.over };
+}
+
+/**
+ * Aligns one piece from `a` to `b` (unit directions) over ground `height`
+ * (m at a unit direction), or null if no route meets the class's grade
+ * within the band.
+ */
+export function alignPiece(
+  a: Readonly<Vec3d>,
+  b: Readonly<Vec3d>,
+  height: (d: Readonly<Vec3d>) => number,
+  radius: number,
+  o: PieceOptions,
+): Piece | null {
+  const r = routePiece(a, b, height, radius, o);
+  if (!r) return null;
+  const { frame } = r;
+  const scratch = new Vec3d();
+  const h = (x: number, y: number) => height(frame.toSphere(x, y, scratch));
+  const plan = fitPlan(r.plane, o.cls.minRadius, o.step ?? 10);
   const ground = plan.points.map(([x, y]) => h(x, y));
   const design = designProfile(ground, plan.s, o.cls.maxGrade, {
     startZ: o.startZ ?? ground[0],
