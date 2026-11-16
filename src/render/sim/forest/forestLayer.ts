@@ -34,6 +34,7 @@ import {
   InstancedBufferGeometry,
   Mesh,
   MeshBasicNodeMaterial,
+  Vector3,
 } from 'three/webgpu';
 import type { Node } from 'three/webgpu';
 import {
@@ -46,7 +47,9 @@ import {
   float,
   Fn,
   fract,
+  length,
   max,
+  min,
   mix,
   modelWorldMatrix,
   normalize,
@@ -847,6 +850,10 @@ export const COMPACT_STEP = 25;
 /** Height of the tallest tree plus a crown's spread (m): the bounding sphere's margin. */
 const TREE_MARGIN = 50;
 
+/** A tree's tip lean in a rotor's wash per m/s of outwash (share of its height), and its most (decision 191). */
+const TREE_WASH_LEAN = 0.006;
+const TREE_WASH_MAX = 0.08;
+
 export class ForestLayer {
   readonly group = new Group();
   /** Trees on (the simulation view's forests, decision 148). */
@@ -869,6 +876,13 @@ export class ForestLayer {
   readonly stats = { tiles: 0, instances: 0, pending: 0, triangles: 0 };
 
   private readonly tiles = new Map<string, TreeTile>();
+  /** A rotor's wash, camera-relative (decision 191). */
+  private readonly wash = {
+    center: uniform(new Vector3(0, -1e7, 0)),
+    speed: uniform(0),
+    radius: uniform(4),
+    time: uniform(0),
+  };
   /** Parts being placed, a few rows per frame. */
   private readonly building = new Map<string, Generator<void, TreeInstances, void>>();
   private readonly material: MeshBasicNodeMaterial;
@@ -923,6 +937,9 @@ export class ForestLayer {
     const deciduous = perMesh('deciduous', 0);
     const fallBase = perMesh('fallBase', 0.5);
     const fallSpread = perMesh('fallSpread', 1);
+    // The model's height (model units), for bending it from the root in a rotor's wash.
+    const modelTop = perMesh('height', 12);
+    const wash = this.wash;
 
     // Tree frame: up, and two tangents rotated by the instance angle.
     const t0 = normalize(cross(up, vec3(0.0001, 1, 0.0002)));
@@ -942,7 +959,24 @@ export class ForestLayer {
       const dist = groundRel.length();
       const k = clamp(range.sub(dist).div(max(range.mul(0.3), 1)), 0, 1);
       const s = params.y.mul(k.mul(k).mul(k.mul(-2).add(3)));
-      const p = ground.add(ax.mul(local.x).add(up.mul(local.y)).add(az.mul(local.z)).mul(s));
+      // A hovering rotor's wash (decision 191): trees lean away from where it meets the
+      // ground and buffet, tips most and roots planted, over the reach of the grass's rings.
+      const offset = groundRel.sub(wash.center);
+      const across = offset.sub(up.mul(dot(offset, up)));
+      const r = length(across);
+      const R = max(wash.radius, 0.5);
+      const reach = smoothstep(0, R.mul(0.5), r)
+        .mul(min(float(1), R.mul(1.6).div(max(r, 0.01))))
+        .mul(smoothstep(R.mul(8), R.mul(5), r));
+      const buffet = sin(wash.time.mul(2.3).add(params.z.mul(5.1)))
+        .mul(0.4)
+        .add(0.6);
+      const lean = min(wash.speed.mul(reach).mul(TREE_WASH_LEAN), TREE_WASH_MAX).mul(buffet);
+      const rise = clamp(local.y.div(max(modelTop, 1e-3)), 0, 1);
+      const sway = across.div(max(r, 0.01)).mul(lean.mul(rise.mul(rise)).mul(modelTop).mul(s));
+      const p = ground
+        .add(ax.mul(local.x).add(up.mul(local.y)).add(az.mul(local.z)).mul(s))
+        .add(sway);
       const ap = lighting.atmosphere.aerialPerspective(
         modelWorldMatrix.mul(vec4(p, 1)).xyz as V3,
         3,
@@ -980,6 +1014,22 @@ export class ForestLayer {
       apTransmittance as V3,
     );
     return m;
+  }
+
+  /** A rotor's downwash this frame (planet-centered center) or null; `dt` runs the buffeting. */
+  setDownwash(
+    wash: { center: { x: number; y: number; z: number }; speed: number; radius: number } | null,
+    eye: Readonly<Vec3d>,
+    dt: number,
+  ): void {
+    this.wash.time.value += dt;
+    if (!wash || !(wash.speed > 0)) {
+      this.wash.speed.value = 0;
+      return;
+    }
+    this.wash.center.value.set(wash.center.x - eye.x, wash.center.y - eye.y, wash.center.z - eye.z);
+    this.wash.speed.value = wash.speed;
+    this.wash.radius.value = wash.radius;
   }
 
   /** Sets where trees must not stand, and rebuilds the trees. */
@@ -1275,6 +1325,9 @@ export class ForestLayer {
         mesh.userData.fallBase = fall[0];
         mesh.userData.fallSpread = fall[1];
         mesh.userData.triangles = geo.position.length / 9;
+        let top = 0;
+        for (let v = 1; v < geo.position.length; v += 3) top = Math.max(top, geo.position[v]!);
+        mesh.userData.height = top;
         mesh.frustumCulled = false;
         mesh.visible = false;
         this.group.add(mesh);

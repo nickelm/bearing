@@ -49,6 +49,7 @@ import {
   instanceIndex,
   length,
   max,
+  min,
   mix,
   normalize,
   positionGeometry,
@@ -144,7 +145,17 @@ export function washSurface(s: WashSite): WashSurface {
 }
 
 /** Sprites at full strength and quality factor 1. */
-export const DUST_CAP = 700;
+export const DUST_CAP = 240;
+/**
+ * Dust is raised only by a slow helicopter (the owner's request, decision 191): in full
+ * below 30 kt over the ground, none above 50 kt.
+ */
+const DUST_SLOW = 15.4;
+const DUST_FAST = 25.7;
+/** A sprite never spans more than this share of its distance from the lens (overdraw). */
+const MAX_ANGULAR_SIZE = 0.3;
+/** The wash moves this far (m) before the ground under it is read again. */
+const SURFACE_STEP = 3;
 /** The wash's outwash speed (m/s) at which it raises all it can. */
 const FULL_WASH = 10;
 /** A sprite's life (s), shortest and longest. */
@@ -159,10 +170,10 @@ const LOOK: Readonly<
     { tint: [number, number, number]; opacity: number; size: [number, number] }
   >
 > = {
-  dust: { tint: [0.6, 0.48, 0.33], opacity: 0.2, size: [0.3, 1.0] },
-  grit: { tint: [0.42, 0.4, 0.37], opacity: 0.22, size: [0.22, 0.7] },
-  snow: { tint: [0.92, 0.94, 0.97], opacity: 0.24, size: [0.3, 1.1] },
-  spray: { tint: [0.82, 0.87, 0.92], opacity: 0.26, size: [0.25, 0.8] },
+  dust: { tint: [0.6, 0.48, 0.33], opacity: 0.32, size: [0.3, 1.0] },
+  grit: { tint: [0.42, 0.4, 0.37], opacity: 0.34, size: [0.22, 0.7] },
+  snow: { tint: [0.92, 0.94, 0.97], opacity: 0.36, size: [0.3, 1.1] },
+  spray: { tint: [0.82, 0.87, 0.92], opacity: 0.38, size: [0.25, 0.8] },
 };
 
 /** What `RotorDust.update` needs each frame. */
@@ -208,6 +219,9 @@ export class RotorDust {
     sun: uniform(new Vector3()),
   };
   private readonly scratch = new Vec3d();
+  /** The ground under the wash as last read, and where. */
+  private surface: (WashSurface & { color: [number, number, number] | null }) | null = null;
+  private readonly surfaceCenter = new Vec3d();
   private readonly climateSample = new Float32Array(4);
 
   constructor(
@@ -271,7 +285,12 @@ export class RotorDust {
       );
       const carried = u.wind.mul(age.mul(life).mul(0.7));
       const p = u.center.add(out.mul(r)).add(u.zenith.mul(lift)).add(carried).toVar();
-      const size = R.mul(mix(u.sizes.x, u.sizes.y, rand(5))).mul(age.mul(1.2).add(0.4));
+      // Never wider than a share of its distance: sprites by the lens would fill the screen
+      // many times over (decision 191).
+      const size = min(
+        R.mul(mix(u.sizes.x, u.sizes.y, rand(5))).mul(age.mul(1.2).add(0.4)),
+        length(p).mul(MAX_ANGULAR_SIZE),
+      );
       // Along its motion on screen: out and up.
       const motion = out
         .mul(
@@ -294,7 +313,7 @@ export class RotorDust {
       const opacity = u.opacity
         .mul(u.strength)
         .mul(fade)
-        .mul(smoothstep(0.8, 3, distance));
+        .mul(smoothstep(3, 10, distance));
       vOpacity.assign(opacity);
       vDistance.assign(distance);
       vSeed.assign(rand(6).add(born.mul(0.37)));
@@ -387,14 +406,21 @@ export class RotorDust {
     const wash = this.enabled ? f.wash : null;
     let count = 0;
     let kind: WashKind = 'none';
-    if (wash && wash.speed > 0.5) {
-      const s = this.surfaceAt(wash.center);
+    const slow =
+      wash?.groundSpeed === undefined
+        ? 1
+        : 1 - Math.min(1, Math.max(0, (wash.groundSpeed - DUST_SLOW) / (DUST_FAST - DUST_SLOW)));
+    if (wash && wash.speed > 0.5 && slow > 0) {
+      // The ground under the wash, read again only when the wash has moved (decision 191).
+      if (!this.surface || this.surfaceCenter.distanceTo(wash.center) > SURFACE_STEP) {
+        this.surface = this.surfaceAt(wash.center);
+        this.surfaceCenter.copy(wash.center);
+      }
+      const s = this.surface;
       kind = s.kind;
       if (s.kind !== 'none' && s.amount > 0) {
-        const strength = Math.min(1, wash.speed / FULL_WASH) * s.amount;
-        count = Math.round(
-          DUST_CAP * Math.min(2, Math.max(0, f.density)) * Math.min(1, strength),
-        );
+        const strength = Math.min(1, wash.speed / FULL_WASH) * s.amount * slow;
+        count = Math.round(DUST_CAP * Math.min(2, Math.max(0, f.density)) * Math.min(1, strength));
         const look = LOOK[s.kind];
         // Dust takes the ground's color, lighter: what it is made of.
         const tint =

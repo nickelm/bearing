@@ -161,6 +161,8 @@ export interface GroundDownwash {
   speed: number;
   /** Rotor radius (m). */
   radius: number;
+  /** The helicopter's speed over the ground (m/s), if known (decision 191). */
+  groundSpeed?: number;
 }
 
 /** What the layer needs from the air each frame. */

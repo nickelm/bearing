@@ -895,7 +895,7 @@ Skids and wheels, slope and confined-area landings, dynamic rollover, sling load
 - [ ] Sling loads: a cable that can go slack, a load with mass and drag, pickup and release; cable tension and load position on the HUD; test of a load carried 5 km and set down within 3 m
 - [ ] Hook camera: a downward render-target view for pickup and placement, as the hook camera format on P2's display frame with load position and cable tension (decision 189; built here or in P5, whichever comes first)
 - [ ] Hoist and fast-rope as cable-length states with crew figures
-- [ ] Downwash: dust, snow, spray and a water ring under the rotor by surface and power, through the weather's particles; near trees sway once the near trees exist (Part I, _Helicopters_); the dust, snow, spray and flattening are done (decisions 176, 182); the water ring is done (decision 188); open: the near trees
+- [ ] Downwash: dust, snow, spray and a water ring under the rotor by surface and power, through the weather's particles; near trees sway once the near trees exist (Part I, _Helicopters_); the dust, snow, spray and flattening are done (decisions 176, 182); the water ring and the near trees are done (decisions 188, 191)
 - [ ] Checkpoint: owner flies slope, confined-area and rooftop landings and a sling-load delivery
 
 ### H4. Hazards and damage
@@ -1096,7 +1096,7 @@ Detail near a low camera for helicopter flight, faceted and slightly cartoony, a
 - [x] `sim/flight/rotor/downwash.ts`: the main rotor's outwash at the ground from thrust, disc area and air density, fading with hub height and forward speed, centered down the disc's axis; tests (decision 176)
 - [x] Downwash flattening in travelling rings from that center, the flattened side paler; Free Flight feeds it each frame and clears it on exit (decision 176)
 - [ ] Free Flight hover at 5, 15 and 30 m (check 11), in the browser: the ring's size with height, its offset with drift
-- [ ] The trees near a hovering rotor sway too (Part I, Helicopters: "near trees and grass sway in the near field")
+- [x] The trees near a hovering rotor sway too (decision 191)
 
 ### G5. Dust
 
@@ -1105,6 +1105,8 @@ Detail near a low camera for helicopter flight, faceted and slightly cartoony, a
 - [x] A ring of ruffled water under the rotor on lakes, rivers and the sea (the water shader, decision 188)
 - [ ] Leaves and cut grass on green ground; the sprites' self-shadowing (darker underside) if they read too flat
 - [ ] Owner: the wash in Free Flight in the browser over desert, snow, water and a runway
+- [x] Slowdown over roads (owner): pavement raised up to 700 large sprites; dust only below 30–50 kt, at most 240 sprites, capped size, fade near the lens, ground read when the wash moves (decision 191)
+- [ ] Owner: frame rate in a slow hover over a runway and a desert; trees swaying beside a hover
 - [ ] Wheels on dirt strips, vehicles on gravel roads and impacts through the same emitter
 - [x] Closes H3's downwash task for dust, snow and spray (the water ring stays open)
 

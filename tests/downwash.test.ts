@@ -49,6 +49,8 @@ describe('rotor downwash (decision 176)', () => {
       expect(w!.speed).toBeGreaterThan(0.7 * OUTWASH * v);
       expect(w!.speed).toBeLessThanOrEqual(OUTWASH * v + 1e-9);
       expect(w!.radius).toBe(m.spec.main.radius);
+      // Hovering: next to no speed over the ground (decision 191: dust only when slow).
+      expect(w!.groundSpeed).toBeLessThan(1);
       // On the ground, within a couple of meters of the point under the helicopter.
       const below = m.pos.clone().normalize().scale(w!.center.length());
       expect(w!.center.distanceTo(below)).toBeLessThan(2);

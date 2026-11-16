@@ -30,6 +30,8 @@ export interface Downwash {
   center: Vec3d;
   speed: number;
   radius: number;
+  /** The helicopter's speed over the ground (m/s), for what the wash raises (decision 191). */
+  groundSpeed?: number;
 }
 
 /**
@@ -57,6 +59,8 @@ export function rotorDownwash(h: RotorcraftModel, out: Downwash): Downwash | nul
   out.center.copy(hub).addScaled(n, -height / c);
   out.speed = speed;
   out.radius = R;
+  const vUp = h.vel.dot(up);
+  out.groundSpeed = Math.sqrt(Math.max(0, h.vel.lengthSq() - vUp * vUp));
   return out;
 }
 

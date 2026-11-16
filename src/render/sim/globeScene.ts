@@ -459,6 +459,7 @@ export class GlobeScene {
         fovY: (this.camera.fov * Math.PI) / 180,
         aspect: this.camera.aspect,
       };
+      this.forest.setDownwash(this.groundCover.currentDownwash, o.eye, effectDt);
       this.forest.update(o.eye, aboveGround, cull);
       this.groundCover.update(o.eye, aboveGround, cull, {
         view: this.weatherView,

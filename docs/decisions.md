@@ -3071,3 +3071,19 @@ The proposal's three open questions (voice, single-seat help, spectating) stay o
 **Not done:** the bridge kit (N7); crossing-site discounts on the rendered rivers; railways in mountains still put too much on viaducts and tunnels (one 336 km mainline: about 250 km, the spiral template is a TODO); the owner's decision on network bridges without a rendered river.
 
 **Reason:** Roads in lowland bend for reasons the router cannot see (fields, property, old tracks); a seeded wander within each class's geometry stands in for them, while the costs that can be computed (forest, water, rivers) shape the route itself. A bridge must be where a rendered river is, and the record says where, how long and how high before the kit draws it.
+
+### 191. Rotor dust only when slow and much cheaper; trees sway in the wash
+
+**Date:** 2026-11-16
+**Decision:** The owner found a helicopter flying slowly over a road slowing the frame rate badly, and asked that dust be raised only at low speed; and the trees near a hovering rotor now move (decisions 176, 182).
+
+- **Why it slowed.** Over green ground the wash raises nothing, but roads and runways are pavement, which raises grit: up to 700 soft, overlapping transparent sprites several meters across in front of the camera, so the overlay's fill rate, not the CPU, took the frame. The emitter also read the ground under the wash (a river-index query and the clearings) every frame.
+- **Slow only.** `rotorDownwash` now reports the helicopter's speed over the ground; dust, grit, snow and spray are raised in full below 30 kt and not at all above 50 kt.
+- **Cheaper.** At most 240 sprites (700 before), each a little more opaque (dust 0.32, grit 0.34, snow 0.36, spray 0.38) so the cloud keeps its body; no sprite wider than 0.3 of its distance from the lens; sprites fade in from 3 to 10 m of the lens (0.8 to 3 before), where they filled the screen. The ground under the wash is read again only when the wash has moved 3 m. The alpine meadow's grit veil at seed 1983 is fainter and wispier than before.
+- **Trees in the wash.** The forest's vertex shader leans each tree away from where the wash meets the ground and buffets it at its own phase: the tip moves by up to 8% of the tree's height (0.6% per m/s of outwash), the root stays put (the square of the height fraction), over the grass's reach (rising over half a rotor radius, as 1.6R/r beyond, gone between five and eight radii). The buffeting runs on the scene's effect clock. The previews' views do not put a wash near trees; the browser check should.
+
+The Kestrel has no downwash and is unaffected.
+
+**Not done:** a preview view of a hover beside a tree line; the frame time over pavement measured in the browser.
+
+**Reason:** The owner's report and request; dust a pilot sees only in a hover or a slow approach, where it matters, costs nothing in transit.
