@@ -70,6 +70,8 @@ import {
   projectToCubeFace,
 } from '../../../core/coords';
 import { Biome } from '../../../worldgen/biomes';
+import { RIVER_SEGMENT_FIELDS } from '../../../worldgen/riverIndex';
+import type { RiverIndex } from '../../../worldgen/riverIndex';
 import { FARMABLE_BIOMES } from '../../common/palette';
 import type { InfraScene, RoadStretch } from '../infra/infraScene';
 import { habitabilityAt } from '../../common/habitabilityTexture';
@@ -135,6 +137,20 @@ export const HEDGE_TREES = 0.1;
 /** Tree rows along roads (decision 162): spacing (m) and the share of roads with rows, by class. */
 export const ROW_SPACING = 11;
 export const ROW_SHARE = [0.08, 0.2, 0.3];
+/**
+ * Woods along rivers (decision 166): spacing along the bank (m), the rows out from the
+ * bank and their chance of a tree, and how far beyond the water the first row stands (m).
+ */
+export const GALLERY_SPACING = 7;
+export const GALLERY_ROWS = [0.85, 0.6, 0.35, 0.15];
+export const GALLERY_ROW_WIDTH = 7;
+export const GALLERY_BANK = 3;
+/** Landmark trees (decision 166): the chance of one in each part of open land (about 770 m). */
+export const LANDMARK_SHARE = 0.3;
+const SEED_GALLERY = 0x2f7d61;
+/** Biomes above the tree line or without trees: no woods along rivers, no landmarks. */
+const TREELESS = new Set<number>([Biome.IceSheet, Biome.Tundra, Biome.Alpine, Biome.ColdDesert]);
+const SEED_LANDMARK = 0x59c3a8;
 export const SEED_ROW = 0x4ac215;
 /** Level whose mesh surface the trees stand on. */
 const GROUND_LEVEL = 10;
@@ -199,14 +215,27 @@ export interface TreeInstances {
 export interface TreeContext {
   /** Climate at a direction: (sea-level °C, half-range K, moisture, valley floor m). */
   climate: (d: Readonly<Vec3d>, out: Float32Array) => Float32Array;
-  /** Directions where no tree may stand (towns, airfields, roads; decision 65). */
-  clear?: (d: Readonly<Vec3d>) => boolean;
+  /** Directions where no tree may stand (towns, airfields, roads; decision 65), widened by `extra` m. */
+  clear?: (d: Readonly<Vec3d>, extra?: number) => boolean;
   /** The strategic graph's habitability 0..1 at a direction: hedges grow on farmland (decision 162). */
   habitability?: (d: Readonly<Vec3d>) => number;
   /** Road stretches through a level-10 tile (by key string): rows of trees (decision 162). */
   roads?: (tile: string) => readonly RoadStretch[];
   /** A fixed share of hedged field boundaries in place of the climate's (previews, the GUI). */
   hedgeShare?: number;
+  /** River stretches near a level-10 tile: woods along their banks (decision 166). */
+  rivers?: (tile: TileKey) => readonly RiverStretch[];
+}
+
+/** A stretch of river for the woods along it (decision 166). */
+export interface RiverStretch {
+  /** Unit directions of its ends. */
+  a: Vec3d;
+  b: Vec3d;
+  /** Width of the water (m). */
+  width: number;
+  /** The segment's index, for its draws. */
+  id: number;
 }
 
 /** Bilinear forest density (0..1) at fractional sample coordinates of a data tile. */
@@ -402,11 +431,14 @@ export function* treePlacer(
         (EDGE_TREES + (1 - EDGE_TREES) * edgeRise(f)) *
         (0.85 + 0.25 * size01);
       const kind = standTree(stand, tropical, pick);
+      // Inside a stand, crowns only; at its edge, along a road lane or by a town, whole
+      // trees (decision 166): their trunks show where the shell slopes down.
       const interior =
         density(sx + reach, sy) >= CANOPY_THRESHOLD &&
         density(sx - reach, sy) >= CANOPY_THRESHOLD &&
         density(sx, sy + reach) >= CANOPY_THRESHOLD &&
-        density(sx, sy - reach) >= CANOPY_THRESHOLD;
+        density(sx, sy - reach) >= CANOPY_THRESHOLD &&
+        !ctx.clear?.(d, INTERIOR_REACH);
       push(
         kind,
         interior ? 'crown' : 'whole',
@@ -630,6 +662,113 @@ export function* treePlacer(
     yield;
   }
 
+  // Woods along rivers and streams (decision 166): rows of trees out from each bank, the
+  // nearest row nearly full, the outer ones thinning; in open land below the tree line
+  // only (forest is already there). Willow-like broadleaf, poplar and birch in temperate
+  // land, firs with a few birches in the cold, broadleaf (evergreen) in the tropics and in
+  // hot, dry land, where the gallery may be the only trees.
+  const stretches = ctx.rivers?.(t) ?? [];
+  /** Whether unit direction `p` lies within `margin` m of any stretch's water. */
+  const inWater = (p: Vec3d, margin: number): boolean => {
+    for (const o of stretches) {
+      const ab = o.b.clone().sub(o.a);
+      const k = Math.min(1, Math.max(0, p.clone().sub(o.a).dot(ab) / Math.max(ab.dot(ab), 1e-30)));
+      const q = o.a.clone().addScaled(ab, k);
+      if (q.distanceTo(p) * R < o.width / 2 + margin) return true;
+    }
+    return false;
+  };
+  for (const st of stretches) {
+    const length = st.a.distanceTo(st.b) * R;
+    if (length < 1) continue;
+    const ab = st.b.clone().sub(st.a);
+    const across = st.a.clone().cross(ab).normalize();
+    const steps = Math.floor(length / GALLERY_SPACING);
+    for (let k = 0; k <= steps; k++) {
+      for (const side of [1, -1]) {
+        for (let row = 0; row < GALLERY_ROWS.length; row++) {
+          const draw = cellHash(st.id, k, side * 8 + row, cSeed ^ SEED_GALLERY);
+          if (hashBits(draw, 0) >= GALLERY_ROWS[row]!) continue;
+          const u = (k + hashBits(draw, 10) * 0.8) / Math.max(steps + 1, 1);
+          const out =
+            st.width / 2 + GALLERY_BANK + (row + hashBits(draw, 20) * 0.7) * GALLERY_ROW_WIDTH;
+          const on = st.a
+            .clone()
+            .scale(1 - u)
+            .addScaled(st.b, u)
+            .normalize();
+          const p = on.addScaled(across, (side * out) / R).normalize();
+          const uv = projectToCubeFace(p, t.face);
+          const sx = uv.u * size - t.x * TILE_TEXELS;
+          const sy = uv.v * size - t.y * TILE_TEXELS;
+          if (!(sx >= x0 && sx < x0 + span && sy >= y0 && sy < y0 + span)) continue;
+          if (density(sx, sy) >= CANOPY_THRESHOLD - 0.1) continue;
+          if (stretches.length > 1 && inWater(p, GALLERY_BANK - 0.5)) continue;
+          if (TREELESS.has(biomeAt(sx, sy))) continue;
+          const h = site(sx, sy);
+          if (h === null) continue;
+          climateHere(h);
+          if (climate[2]! < 0.05) continue;
+          const tropical = tropicalShare(meanT);
+          const conifers = coniferShare(meanT);
+          const pick = hashBits(draw, 5);
+          // The cold is all conifer, as in open land (decision 153).
+          const kind: TreeKind =
+            tropical > 0.5 || meanT > 18
+              ? 'tree-broadleaf'
+              : conifers > 0.9
+                ? 'tree-fir'
+                : conifers > 0.5
+                  ? pick < 0.75
+                    ? 'tree-fir'
+                    : 'tree-birch'
+                  : pick < 0.45
+                    ? 'tree-broadleaf'
+                    : pick < 0.75
+                      ? 'tree-poplar'
+                      : 'tree-birch';
+          const scale = 0.75 + 0.4 * hashBits(cellHash(draw, 1, 0, 0), 0);
+          const tone =
+            (0.88 + 0.24 * hashBits(cellHash(draw, 2, 0, 0), 0)) * (tropical > 0.5 ? -1 : 1);
+          push(kind, 'whole', h, scale, hashBits(cellHash(draw, 3, 0, 0), 0) * 2 * Math.PI, tone);
+        }
+      }
+    }
+    yield;
+  }
+
+  // A landmark (decision 166): in some parts of open land one large lone tree, the same
+  // every time, that a low-flying pilot can steer by. The part is a level-11 cell.
+  {
+    const lh = cellHash(
+      t.face,
+      t.x * TREE_SPLIT + part.i,
+      t.y * TREE_SPLIT + part.j,
+      cSeed ^ SEED_LANDMARK,
+    );
+    if (hashBits(lh, 0) < LANDMARK_SHARE) {
+      const sx = x0 + (0.15 + 0.7 * hashBits(lh, 10)) * span;
+      const sy = y0 + (0.15 + 0.7 * hashBits(lh, 20)) * span;
+      const h =
+        density(sx, sy) < 0.2 && !TREELESS.has(biomeAt(sx, sy)) && !inWater(scratchDir(sx, sy), 15)
+          ? site(sx, sy)
+          : null;
+      if (h !== null) {
+        climateHere(h);
+        const biome = biomeAt(sx, sy);
+        const tropical = tropicalShare(meanT);
+        const big = 1.55 + 0.4 * hashBits(lh, 5);
+        const angle = hashBits(lh, 15) * 2 * Math.PI;
+        const evergreen = tropical > 0.5 ? -1 : 1;
+        if (biome === Biome.Savanna) push('tree-acacia', 'whole', h, big, angle, 1);
+        else if (climate[2]! < 0.2) push('tree-dead', 'whole', h, big, angle, 1);
+        else if (coniferShare(meanT) > 0.7) push('tree-fir', 'whole', h, big * 0.9, angle, 1);
+        else if (tropical > 0.5) push('tree-broadleaf', 'whole', h, big, angle, evergreen);
+        else push('tree-oak', 'whole', h, big, angle, 1);
+      }
+    }
+  }
+
   const lists = new Map<string, Float32Array>();
   for (const [k, v] of out) lists.set(k, Float32Array.from(v));
   return { tile: t, part, origin, lists };
@@ -638,6 +777,18 @@ export function* treePlacer(
 function smooth(e0: number, e1: number, x: number): number {
   const k = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
   return k * k * (3 - 2 * k);
+}
+
+/** The river segments that may reach a level-10 tile, as stretches (decision 166). */
+export function riverStretches(rivers: RiverIndex, k: TileKey, radius: number): RiverStretch[] {
+  const seg = rivers.segments.data;
+  const f = rivers.segments.fields ?? RIVER_SEGMENT_FIELDS;
+  return rivers.forTile(k, 80, radius).map((s) => ({
+    a: new Vec3d(seg[s * f]!, seg[s * f + 1]!, seg[s * f + 2]!),
+    b: new Vec3d(seg[s * f + 3]!, seg[s * f + 4]!, seg[s * f + 5]!),
+    width: (seg[s * f + 6]! + seg[s * f + 7]!) / 2,
+    id: s,
+  }));
 }
 
 /** A kit model's geometry for a variant: crowns drop the trunk's triangles. */
@@ -723,7 +874,7 @@ export class ForestLayer {
   private readonly scratch = new Vec3d();
   private readonly center = new Vec3d();
   private lastWorld: unknown = null;
-  private clearings: ((d: Readonly<Vec3d>) => boolean) | undefined;
+  private clearings: ((d: Readonly<Vec3d>, extra?: number) => boolean) | undefined;
   private habitability: ((d: Readonly<Vec3d>) => number) | undefined;
   private roads: ((key: string) => readonly RoadStretch[]) | undefined;
   /** The season the parts were last compacted for: phase (years) and temperature offset. */
@@ -840,7 +991,7 @@ export class ForestLayer {
    * Rebuilds the trees.
    */
   setInfrastructure(scene: InfraScene | null): void {
-    this.clearings = scene ? (d) => scene.isClear(d) : undefined;
+    this.clearings = scene ? (d, extra = 0) => scene.isClear(d, false, extra) : undefined;
     this.habitability = scene
       ? (d) => habitabilityAt(scene.habitability, scene.habitabilityResolution, d)
       : undefined;
@@ -926,6 +1077,7 @@ export class ForestLayer {
       habitability: this.habitability,
       roads: this.roads,
       hedgeShare: this.hedgeShareOverride ?? undefined,
+      rivers: world.rivers ? (k) => riverStretches(world.rivers!, k, R) : undefined,
     };
     for (const [s, { tile: k, part }] of missing) {
       const data = this.terrain.dataTile(treeDataTile(k));

@@ -143,6 +143,11 @@ export interface MeshOptions {
    * off the global lake's cells) keep the sea's distance. Off for the strategic map, whose coastal lines read `shore`.
    */
   lakeShore?: boolean;
+  /**
+   * Clearings in the forest (roads, towns, airfields), widened by `extra` m: vertices in
+   * one count as unforested for the canopy shell's edge density (decision 166).
+   */
+  canopyClear?: ((d: Readonly<Vec3d>, extra: number) => boolean) | null;
 }
 
 /** Shared index buffer: grid triangles split along (i, j)–(i+1, j+1), plus skirts. */
@@ -572,16 +577,27 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
     );
     return (sources.data.material[(y + TILE_BORDER) * TILE_STRIDE + x + TILE_BORDER]! >>> 24) / 255;
   };
+  // Vertices in a clearing (widened by half a vertex spacing, so a road between two
+  // vertices clears one) count as unforested: the shell slopes down to road lanes and
+  // town edges as it does to a forest's edge. Near the camera only, where cells are small.
+  const spacing = vertexSpacing(t.level, R);
+  const lanes = opts.canopyClear && spacing <= 50 ? opts.canopyClear : null;
+  const shellForest = forest.slice(0, GRID_VERTICES);
+  if (lanes) {
+    const dv = new Vec3d();
+    for (let v = 0; v < GRID_VERTICES; v++)
+      if (shellForest[v]! > 0 && lanes(dirOf(v, dv), spacing / 2)) shellForest[v] = 0;
+  }
   for (let j = 0; j <= TILE_SEGMENTS; j++) {
     for (let i = 0; i <= TILE_SEGMENTS; i++) {
       const v = j * V + i;
-      let m = forest[v]!;
+      let m = shellForest[v]!;
       for (let dj = -1; dj <= 1 && m > 0; dj++) {
         for (let di = -1; di <= 1; di++) {
           const ni = i + di;
           const nj = j + dj;
           const inGrid = ni >= 0 && nj >= 0 && ni <= TILE_SEGMENTS && nj <= TILE_SEGMENTS;
-          m = Math.min(m, inGrid ? forest[nj * V + ni]! : densityAt(ni * STEP, nj * STEP));
+          m = Math.min(m, inGrid ? shellForest[nj * V + ni]! : densityAt(ni * STEP, nj * STEP));
         }
       }
       forestInner[v] = m;

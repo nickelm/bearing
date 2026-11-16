@@ -13,7 +13,11 @@ import { PLANET_RADIUS } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
 import { cubeFaceUvToDirection } from '../src/core/coords';
 import {
+  GALLERY_BANK,
+  GALLERY_ROW_WIDTH,
+  GALLERY_ROWS,
   INSTANCE_FLOATS,
+  LANDMARK_SHARE,
   placeTrees,
   TREE_TILE_LEVEL,
   treeDataTile,
@@ -249,5 +253,83 @@ describe('tree placement (decision 148)', () => {
     // About 30% of 40 roads, ~370 m each, a tree every 11 m on one or both sides.
     expect(rows).toBeGreaterThan(100);
     expect(count(placeTrees(t, data(k7, 0), opts, 1, climateOf(10)))).toBe(0);
+  });
+
+  it('lines rivers with woods in open, watered land, never in the water (decision 166)', () => {
+    const size = TILE_TEXELS * (1 << t.level);
+    const at = (sx: number, sy: number) =>
+      cubeFaceUvToDirection(
+        t.face,
+        (t.x * TILE_TEXELS + sx) / size,
+        (t.y * TILE_TEXELS + sy) / size,
+      );
+    // A river 20 m wide across the part, north–south, and a stream meeting it.
+    const river = {
+      a: at(TILE_TEXELS / 4, 1),
+      b: at(TILE_TEXELS / 4, TILE_TEXELS / 2 - 1),
+      width: 20,
+      id: 7,
+    };
+    const stream = {
+      a: at(2, TILE_TEXELS / 4),
+      b: at(TILE_TEXELS / 4, TILE_TEXELS / 4),
+      width: 4,
+      id: 8,
+    };
+    const rivers = () => [river, stream];
+    const wet = placeTrees(t, data(k7, 0), opts, 1, { ...climateOf(10), rivers });
+    const bare = placeTrees(t, data(k7, 0), opts, 1, climateOf(10));
+    const n = count(wet) - count(bare);
+    // Both banks of ~760 m of river and ~370 m of stream, a tree every 7 m in each row.
+    const expected = ((2 * (760 + 370)) / 7) * GALLERY_ROWS.reduce((a, b) => a + b, 0);
+    expect(n).toBeGreaterThan(expected * 0.6);
+    expect(n).toBeLessThan(expected * 1.3);
+    // Every tree stands on a bank, within the rows' reach of some water and out of all of it.
+    const distance = (p: Vec3d, o: typeof river) => {
+      const ab = o.b.clone().sub(o.a);
+      const k = Math.min(1, Math.max(0, p.clone().sub(o.a).dot(ab) / ab.dot(ab)));
+      return o.a.clone().addScaled(ab, k).distanceTo(p) * PLANET_RADIUS - o.width / 2;
+    };
+    const reach = GALLERY_BANK + GALLERY_ROWS.length * GALLERY_ROW_WIDTH + 1;
+    for (const v of wet.lists.values()) {
+      for (let i = 0; i < v.length; i += INSTANCE_FLOATS) {
+        const p = new Vec3d(v[i + 3]!, v[i + 4]!, v[i + 5]!);
+        const near = Math.min(distance(p, river), distance(p, stream));
+        expect(near).toBeGreaterThan(GALLERY_BANK - 1);
+        if (v[i + 7]! < 1.5) expect(near).toBeLessThan(reach);
+      }
+    }
+    // None above the tree line.
+    const tundra = data(k7, 0, Biome.Tundra);
+    expect(count(placeTrees(t, tundra, opts, 1, { ...climateOf(10), rivers }))).toBe(
+      count(placeTrees(t, tundra, opts, 1, climateOf(10))),
+    );
+    // No gallery in the desert, and none added to closed forest.
+    const dry = placeTrees(t, data(k7, 0), opts, 1, { ...climateOf(10, 0.02), rivers });
+    expect(count(dry)).toBe(count(placeTrees(t, data(k7, 0), opts, 1, climateOf(10, 0.02))));
+    const forest = (c: TreeContext) => count(placeTrees(t, data(k7, 1), opts, 1, c));
+    expect(forest({ ...climateOf(10), rivers })).toBe(forest(climateOf(10)));
+  });
+
+  it('stands a large lone landmark in about a third of the parts of open land (decision 166)', () => {
+    let parts = 0;
+    let landmarks = 0;
+    for (let i = 0; i < 24; i++) {
+      const tile = tileKey(4, TREE_TILE_LEVEL, 302 * 2 + (i % 4), 280 * 2 + Math.floor(i / 4));
+      const d7 = data(treeDataTile(tile), 0);
+      for (const part of [
+        { i: 1, j: 0 },
+        { i: 1, j: 1 },
+      ]) {
+        const p = placeTrees(tile, d7, opts, 1, climateOf(10), part);
+        const again = placeTrees(tile, d7, opts, 1, climateOf(10), part);
+        expect(count(again)).toBe(count(p));
+        parts++;
+        for (const v of p.lists.values())
+          for (let k = 0; k < v.length; k += INSTANCE_FLOATS) if (v[k + 7]! >= 1.5) landmarks++;
+      }
+    }
+    expect(landmarks / parts).toBeGreaterThan(LANDMARK_SHARE * 0.4);
+    expect(landmarks / parts).toBeLessThan(LANDMARK_SHARE * 1.8);
   });
 });

@@ -563,6 +563,9 @@ export class TerrainRenderer {
       mode: this.mode,
       detail: this.detail,
       edits: w.edits ?? null,
+      canopyClear: w.infra
+        ? (d, extra) => w.infra!.isClear(d, false, extra) || w.infra!.isBuiltUp(d, extra)
+        : null,
     };
   }
 
@@ -668,6 +671,9 @@ export class TerrainRenderer {
       detail: this.detail,
       lakeShore: true,
       edits: w.edits ?? null,
+      canopyClear: w.infra
+        ? (d, extra) => w.infra!.isClear(d, false, extra) || w.infra!.isBuiltUp(d, extra)
+        : null,
     });
     const g = new BufferGeometry();
     g.setAttribute('position', new BufferAttribute(m.base, 3));

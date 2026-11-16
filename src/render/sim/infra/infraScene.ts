@@ -98,6 +98,13 @@ export const APRON_LINK_ALONG = 200;
 
 /** How far a town's outline may reach beyond its light radius (m): inside LightTables' reach. */
 export const OUTLINE_REACH = 1500;
+/**
+ * Where the shell's cut of a built-up patch ends at the widest edge noise, as a share of
+ * its radius: the shader cuts at a cover of 0.3, 0.925 of the drawn radius, which the
+ * noise widens to 1.25 times a disk's radius and 1.1 times an outline's (decision 166).
+ */
+const BUILT_REACH = 1.25 * 0.925;
+const OUTLINE_CUT = 1.1 * 0.925;
 
 /** Built-up kinds in the light records. */
 export const BUILT_TOWN = 0;
@@ -172,6 +179,8 @@ export class InfraScene {
   readonly habitability: Uint8Array;
   readonly habitabilityResolution: number;
   private readonly clearings = new Map<string, Clearing[]>();
+  /** Towns and industry by level-CLEARING_LEVEL tile, for the canopy shell (decision 166). */
+  private readonly builtTiles = new Map<string, BuiltSite[]>();
   private readonly roadTiles = new Map<string, RoadStretch[]>();
 
   constructor(
@@ -319,6 +328,7 @@ export class InfraScene {
         outline,
       });
       this.clear(p, p, 0.6 * r, false);
+      this.indexBuilt(this.sites[this.sites.length - 1]!);
       let shape = 0;
       if (outline) {
         shape = outlines.length / URBAN_VERTICES + 1;
@@ -353,6 +363,7 @@ export class InfraScene {
         key: `industry-${t.id}`,
       });
       this.clear(p, p, 1000, false);
+      this.indexBuilt(this.sites[this.sites.length - 1]!);
       lights.push(p.x, p.y, p.z, 1200, 0.4, 900, BUILT_INDUSTRY, 0);
     }
     this.lights = Float32Array.from(lights);
@@ -382,13 +393,56 @@ export class InfraScene {
     }
   }
 
+  /** Index a town or industry site under every level-CLEARING_LEVEL tile its built-up area reaches. */
+  private indexBuilt(site: BuiltSite): void {
+    const keys = new Set<string>([tileKeyString(tileForDirection(site.point, CLEARING_LEVEL))]);
+    const { east, north } = localFrame(site.point);
+    const reach = (1.25 * site.radius) / this.radius;
+    for (const ring of [0.25, 0.5, 0.75, 1]) {
+      for (let k = 0; k < 16; k++) {
+        const ang = (k / 16) * 2 * Math.PI;
+        const q = site.point
+          .clone()
+          .addScaled(east, ring * reach * Math.cos(ang))
+          .addScaled(north, ring * reach * Math.sin(ang))
+          .normalize();
+        keys.add(tileKeyString(tileForDirection(q, CLEARING_LEVEL)));
+      }
+    }
+    for (const key of keys) {
+      let l = this.builtTiles.get(key);
+      if (!l) this.builtTiles.set(key, (l = []));
+      l.push(site);
+    }
+  }
+
+  /**
+   * True if a unit direction lies within `extra` m of a town's or industry's built-up
+   * patch as the shell cuts it (the outline or disk at its widest edge noise), so the
+   * shell can slope down before it (decision 166).
+   */
+  isBuiltUp(d: Readonly<Vec3d>, extra = 0): boolean {
+    const list = this.builtTiles.get(tileKeyString(tileForDirection(d, CLEARING_LEVEL)));
+    if (!list) return false;
+    for (const s of list) {
+      const dist = Math.acos(Math.min(1, s.point.dot(d))) * this.radius;
+      if (dist > BUILT_REACH * s.radius + extra) continue;
+      const r = s.outline ? OUTLINE_CUT * townRadiusToward(s, d) : BUILT_REACH * s.radius;
+      if (dist < r + extra) return true;
+    }
+    return false;
+  }
+
   /** The road stretches that pass through a level-ROAD_TILE_LEVEL tile (by its key string). */
   roadsInTile(key: string): readonly RoadStretch[] {
     return this.roadTiles.get(key) ?? [];
   }
 
-  /** True if a unit direction lies in a clearing: no trees; with `pavedOnly`, no buildings. */
-  isClear(d: Readonly<Vec3d>, pavedOnly = false): boolean {
+  /**
+   * True if a unit direction lies in a clearing: no trees; with `pavedOnly`, no
+   * buildings. `extra` widens every clearing by that many meters.
+   */
+  isClear(d: Readonly<Vec3d>, pavedOnly = false, extra = 0): boolean {
     const list = this.clearings.get(tileKeyString(tileForDirection(d, CLEARING_LEVEL)));
     if (!list) return false;
     const R = this.radius;
@@ -407,7 +461,8 @@ export class InfraScene {
       const dx = d.x - (c.a.x + abx * t);
       const dy = d.y - (c.a.y + aby * t);
       const dz = d.z - (c.a.z + abz * t);
-      if ((dx * dx + dy * dy + dz * dz) * R * R < c.r * c.r) return true;
+      const r = c.r + extra;
+      if ((dx * dx + dy * dy + dz * dz) * R * R < r * r) return true;
     }
     return false;
   }

@@ -170,7 +170,8 @@ export interface PreviewView {
     | 'beach'
     | 'ocean'
     | 'hedges'
-    | 'roadrow';
+    | 'roadrow'
+    | 'gallery';
   /**
    * With a target: face this far clockwise of the sun's azimuth (rad; 0 looks into
    * the sun, π puts it behind), standing back from the target along that heading.
@@ -405,6 +406,22 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     observerBack: 150,
     eyeHeight: 60,
     pitch: -14 * DEG,
+    detail: true,
+  },
+  {
+    // 40 m over a river through open land (decision 166): the woods along its banks and
+    // the landmark trees in the fields around.
+    name: 'gallery',
+    dLat: 0,
+    dLon: 0,
+    altitude: 0,
+    tilt: 0,
+    heading: 0,
+    localTime: 15,
+    target: 'gallery',
+    observerBack: 400,
+    eyeHeight: 40,
+    pitch: -6 * DEG,
     detail: true,
   },
   {
@@ -975,6 +992,7 @@ it('renders preview views', async () => {
     ocean: null,
     hedges: null,
     roadrow: null,
+    gallery: null,
   };
   // Hedgerow country (decision 162): the settled, farmable open cell anywhere whose
   // climate and region hedge the largest share of field boundaries.
@@ -1063,6 +1081,60 @@ it('renders preview views', async () => {
       if (!open || !FARMABLE_BIOMES.has(global.finish.biome[g]!)) continue;
       best = infra.habitability[h]!;
       targets.farmland = cellDir.clone();
+    }
+  }
+  // A river 8–80 m wide through open, wet, temperate or boreal land, out of lakes
+  // (decision 166), nearest the farmland target.
+  {
+    const GALLERY_BIOMES = new Set<number>([
+      Biome.TemperateGrassland,
+      Biome.Shrubland,
+      Biome.TemperateForest,
+      Biome.Taiga,
+    ]);
+    const from = targets.farmland ?? main;
+    const seg = riverIndex.segments.data;
+    const f = riverIndex.segments.fields ?? 12;
+    let nearest = -2;
+    for (let s = 0; s < riverIndex.segments.count; s++) {
+      const width = (seg[s * f + 6]! + seg[s * f + 7]!) / 2;
+      if (width < 8 || width > 80) continue;
+      const mid = new Vec3d(
+        seg[s * f]! + seg[s * f + 3]!,
+        seg[s * f + 1]! + seg[s * f + 4]!,
+        seg[s * f + 2]! + seg[s * f + 5]!,
+      ).normalize();
+      if (mid.dot(from) <= nearest || mid.dot(from) > Math.cos((8 * KM) / params.radius)) continue;
+      // Not where it runs through a lake: the cells of both ends and their neighbors dry.
+      const cellOf = (q: Vec3d) => {
+        const uv = directionToCubeFace(q);
+        return { face: uv.face, x: Math.floor(uv.u * n), y: Math.floor(uv.v * n) };
+      };
+      const wet = [s * f, s * f + 3].some((o) => {
+        const c = cellOf(new Vec3d(seg[o]!, seg[o + 1]!, seg[o + 2]!));
+        for (let dy = -1; dy <= 1; dy++)
+          for (let dx = -1; dx <= 1; dx++) {
+            const x = Math.min(n - 1, Math.max(0, c.x + dx));
+            const y = Math.min(n - 1, Math.max(0, c.y + dy));
+            if (lakeDepth[c.face * n * n + y * n + x]! > 0) return true;
+          }
+        return false;
+      });
+      if (wet) continue;
+      const uvm = directionToCubeFace(mid);
+      const cellm =
+        uvm.face * n * n +
+        Math.min(n - 1, Math.floor(uvm.v * n)) * n +
+        Math.min(n - 1, Math.floor(uvm.u * n));
+      if (
+        global.height[cellm]! > 5 &&
+        global.finish.forest[cellm]! < 30 &&
+        GALLERY_BIOMES.has(global.finish.biome[cellm]!) &&
+        scene.climate.sampleAt(mid)[2]! > 0.3
+      ) {
+        nearest = mid.dot(from);
+        targets.gallery = mid;
+      }
     }
   }
   // A rural road with a row of trees (decision 162), 4–60 km from the hedgerow target,

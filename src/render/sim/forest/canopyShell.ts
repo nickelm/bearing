@@ -11,7 +11,8 @@
  * - **Edges.** The shell slopes to the ground across the mesh triangles that
  *   straddle the density contour (the contour the terrain's canopy shading
  *   follows, decision 71) and ends where it meets the ground (decision 157). Lanes open
- *   along roads, runways and taxiways, and over towns and industry.
+ *   along roads, runways and taxiways, and over towns and industry; the mesh counts
+ *   their vertices as open ground, so the shell slopes down before them (decision 166).
  * - **Near the camera** the shell sinks to `understory` of H within
  *   `nearRadius`, where instanced crowns stand on it, and darkens: it fills the
  *   gaps between crowns. Beyond `range` − `fade` it flattens back onto the

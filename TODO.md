@@ -489,10 +489,10 @@ Simulation view (needs S1's `render/sim/` split):
   - [x] Canopy height field H with stands (composition, height, shade), CPU and GPU versions with a test that they agree (`worldgen/canopy.ts`, `render/common/canopyNode.ts`; decision 150)
   - [ ] A stand map mode in `npm run maps`
   - [x] Canopy shell from the terrain tiles: lifted by H, cut at the edge and along roads and towns, stand shades, the understory near the camera; preview views `treeline` (25 m) and `canopy` (100 m) (decision 150)
-  - [ ] The shell's edge is notched where its ramp crosses mesh triangles: visible beyond the edge trees' 1.2 km
+  - [x] The shell's edge is notched where its ramp crosses mesh triangles: visible beyond the edge trees' 1.2 km (gone with the edge a cell inside the forest, decision 157)
   - [x] Near trees from the kit on quarters of level-10 tiles: closed-canopy spacing, crowns only inside stands, whole edge trees, per-instance variation, far models beyond 350 m, culling per tree; the clumps of decision 45 retired (decision 150)
   - [x] Hedgerows by climate along the painted fields and shelterbelts on continental plains; rows of trees along roads; acacias in savanna only (decision 162)
-  - [ ] Gallery woods along rivers and lone landmark trees in open land
+  - [x] Gallery woods along rivers and lone landmark trees in open land; preview view `gallery` (decision 166)
   - [ ] Hedges and rows for the line of sight and the AI's firing positions (with step 7)
   - [ ] Measure on the owner's laptop and tablet; near and edge radii as quality-governor steps (tablet 400 m and 1 km, desktop 1 km and 2 km); aerial perspective per instance or from a froxel volume if the per-vertex march dominates; GPU culling with indirect draws if the CPU re-sort costs show
   - [ ] Owner: fly Free Flight low over forest (seed 1983 near −45.5, −28.0 has a river through dense forest) and judge the look, the stands and the frame rate
@@ -500,7 +500,7 @@ Simulation view (needs S1's `render/sim/` split):
   - [x] Seasons per species: fall colors (birch yellow, oak orange to red), brown, then bare winter models; the shell turns with its stands; tropical forest evergreen (decision 153)
   - [x] Owner's first flight (decision 153): the shell's edge rises from the ground (no skirt over the trunks), the fringe takes after its forest (no acacias before broadleaf), rarer and taller young stands, conifers below 6 °C and all firs in the cold
   - [x] Owner's second look (decision 157): the shell's edge a cell inside the forest (no hanging edge, no ramp past the edge trees), a patchy snow line, whiter snowy conifers, browner ground in the fall
-  - [ ] The shell still ends at full height along road lanes and town clearings (cut per fragment): a hanging edge there from low along a road
+  - [x] The shell still ended at full height along road lanes and town clearings (cut per fragment): it now slopes down before them, and the trees by a lane are whole (decision 166)
   - [ ] Owner: the tablet's frame rate over forest; judge fall colors and winter woods in the browser (the campaign view with time accelerated into the fall; previews: `TEMP_OFFSET`)
 - [ ] Sky, haze and clouds tuned for 0–20 km only (Part I): drop orbit-only work such as the limb glow from the simulation view (the sky and the clouds are done, decisions 140 and 141; the old cloud shell and sky march remain for the debug camera above 30–50 km)
 - [x] Volumetric clouds, cirrus, fog, dust and rain veils: one march at low resolution in the pipeline's volumetric stage, shaped by the weather; cloud shadows and gray sky light under cloud; three quality levels (`render/sim/clouds/volumetrics.ts`, `cloudForm.ts`, `noiseVolume.ts`, decision 141)

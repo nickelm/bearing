@@ -13,6 +13,7 @@ import {
   InfraScene,
   localFrame,
   offsetPoint,
+  townRadiusToward,
   urbanRadius,
 } from '../src/render/sim/infra/infraScene';
 import { LIGHT_LEVEL, LightTables } from '../src/render/sim/infra/roadShading';
@@ -73,6 +74,25 @@ describe('InfraScene from a generated world', () => {
     expect(scene.isClear(town)).toBe(true);
     // Far out at sea nothing is cleared.
     expect(scene.isClear(latLonToDirection(-89 * DEG, 0))).toBe(false);
+  });
+
+  it("knows each town's built-up patch on the CPU, out to its outline (decision 166)", () => {
+    const towns = scene.sites.filter((x) => x.kind === 'town');
+    for (const t of towns.slice(0, 20)) {
+      const { east } = localFrame(t.point);
+      const at = (m: number) =>
+        t.point
+          .clone()
+          .addScaled(east, m / R)
+          .normalize();
+      const edge = townRadiusToward(t, at(100));
+      expect(scene.isBuiltUp(t.point)).toBe(true);
+      expect(scene.isBuiltUp(at(0.9 * edge))).toBe(true);
+      expect(scene.isBuiltUp(at(1.6 * t.radius))).toBe(false);
+      // Widened: the shell's slope starts outside it.
+      expect(scene.isBuiltUp(at(1.6 * t.radius), 1.6 * t.radius)).toBe(true);
+    }
+    expect(scene.isBuiltUp(latLonToDirection(-89 * DEG, 0))).toBe(false);
   });
 
   it('lists every light where it shines, larger lights in coarser tiers', () => {
