@@ -114,4 +114,25 @@ describe('ground cover', () => {
     }
     expect(block(MEADOW).filter((i) => i.kind === 'cover-tuft' && isObstacle(i))).toHaveLength(0);
   });
+
+  it('piles talus below a cliff, reeds on a bank and tufts along field verges (decision 184)', () => {
+    const rocks = (items: CoverItem[]) => count(items, (i) => ROCK_KINDS.has(i.kind));
+    const below = block({ ...MEADOW, talus: 1 });
+    expect(rocks(below)).toBeGreaterThan(0.6 * below.length);
+    expect(count(below, (i) => i.kind === 'cover-boulder-large')).toBeGreaterThan(0);
+    expect(rocks(block(MEADOW))).toBeLessThan(0.05 * block(MEADOW).length);
+    expect(count(block({ ...MEADOW, bank: 1 }), (i) => i.kind === 'cover-reeds')).toBeGreaterThan(
+      300,
+    );
+    expect(count(block({ ...MEADOW, bank: 1, meanT: -5 }), (i) => i.kind === 'cover-reeds')).toBe(
+      0,
+    );
+    const field = block({ ...MEADOW, farmland: 1 }).length;
+    const verge = block({ ...MEADOW, farmland: 1, verge: 1 }).length;
+    expect(verge).toBeGreaterThan(5 * field);
+    for (const extra of [{ talus: 1 }, { bank: 1 }, { farmland: 1, verge: 1 }]) {
+      const sum = Object.values(coverMix({ ...MEADOW, ...extra })).reduce((a, b) => a + b, 0);
+      expect(sum).toBeLessThanOrEqual(1);
+    }
+  });
 });

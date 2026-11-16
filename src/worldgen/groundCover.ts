@@ -112,6 +112,12 @@ export interface CoverSite {
   aridity: number;
   /** Farmland 0..1: fields, where only the verges keep tufts. */
   farmland: number;
+  /** How near a field's boundary, 0..1: verges keep and gather tufts and flowers (decision 184). */
+  verge?: number;
+  /** How near a river's or lake's edge, 0..1 (on dry ground): reeds and lush tufts (decision 184). */
+  bank?: number;
+  /** How much cliff stands just above, 0..1: talus, boulders fallen from it (decision 184). */
+  talus?: number;
 }
 
 /** One placed item: its kind, place in the cell (0..1), scale, turn (rad), shade and height (m). */
@@ -174,6 +180,13 @@ const ROCK: Mix = {
   'cover-boulder-large': 0.01,
   'cover-pebbles': 0.14,
 };
+/** Talus below a cliff: boulders of every size, and stones. */
+const TALUS: Mix = {
+  'cover-boulder-small': 0.14,
+  'cover-boulder': 0.08,
+  'cover-boulder-large': 0.035,
+  'cover-pebbles': 0.12,
+};
 /** Marsh: reeds. */
 const MARSH: Mix = { 'cover-reeds': 0.45, 'cover-tuft': 0.25 };
 /** River gravel. */
@@ -233,18 +246,33 @@ export function coverMix(s: CoverSite): Mix {
   // The forest's fringe grows bushes.
   const fringe = smooth(0.2, CANOPY_THRESHOLD, s.forest);
   if (fringe > 0) veg = { ...veg, 'cover-bush': (veg['cover-bush'] ?? 0) + 0.06 * fringe };
-  // Fields keep tufts only along their verges.
+  // Fields keep tufts only along their verges, and the verges gather them (decision 184).
   if (s.farmland > 0) {
-    const keep = 1 - 0.9 * s.farmland;
+    const verge = s.verge ?? 0;
+    const keep = 1 - 0.9 * s.farmland * (1 - verge);
     const kept: Mix = {};
     for (const [k, p] of Object.entries(veg) as [keyof Mix, number][]) kept[k] = p * keep;
+    const lush = verge * s.farmland;
+    if (lush > 0) {
+      kept['cover-tuft'] = (kept['cover-tuft'] ?? 0) + 0.12 * lush;
+      kept.flowers = (kept.flowers ?? 0) + 0.03 * lush;
+    }
     veg = kept;
   }
-  // Steep ground: scree and rock faces, sandstone where it is dry, lichen where cold and wet.
-  const rocky = smooth(0.35, 0.65, s.steep);
-  let rock: Mix = ROCK;
-  if (s.aridity > 0.4) rock = { ...ROCK, 'cover-slab': 0.02 * s.aridity };
-  else if (s.moisture > 0.35 && s.meanT < 8) rock = { ...ROCK, 'cover-boulder-lichen': 0.03 };
+  // River and lake banks: reeds at the water's edge where it is warm enough, lush tufts.
+  const bank = s.bank ?? 0;
+  if (bank > 0) {
+    const warm = smooth(0, 6, s.meanT);
+    veg = blend(veg, { 'cover-reeds': 0.4 * warm, 'cover-tuft': 0.35 }, 0.85 * bank);
+  }
+  // Steep ground: scree and rock faces, sandstone where it is dry, lichen where cold and wet;
+  // below a cliff, its talus (decision 184).
+  const steep = smooth(0.35, 0.65, s.steep);
+  const talus = (s.talus ?? 0) * 0.9;
+  const rocky = Math.max(steep, talus);
+  let rock: Mix = talus > steep ? TALUS : ROCK;
+  if (s.aridity > 0.4) rock = { ...rock, 'cover-slab': 0.02 * s.aridity + 0.02 * talus };
+  else if (s.moisture > 0.35 && s.meanT < 8) rock = { ...rock, 'cover-boulder-lichen': 0.03 };
   return blend(veg, rock, rocky);
 }
 

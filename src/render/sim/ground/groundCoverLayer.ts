@@ -92,11 +92,15 @@ import type { PlanetLighting } from '../lighting/planetLighting';
 import type { LandShading } from '../terrain/landShading';
 import type { TerrainRenderer } from '../terrain/terrainRenderer';
 import { riverStretches, treeDataTile } from '../forest/forestLayer';
+import { canopySeed, fieldAt } from '../../../worldgen/canopy';
 import { airVelocity } from '../../../sim/flight/wind';
 import type { WeatherView } from '../../../sim/weather/frame';
 import type { RiverStretch } from '../forest/forestLayer';
 
 type V3 = Node<'vec3'>;
+
+/** How far (mesh quads, about 24 m each) a cell looks for a cliff above it (decision 184). */
+const TALUS_REACH = 2;
 
 /** Chunks: the level-10 tiles, cut COVER_SPLIT ways along each axis. */
 export const COVER_TILE_LEVEL = 10;
@@ -187,6 +191,8 @@ export interface CoverContext {
   habitability?: (d: Readonly<Vec3d>) => number;
   /** River stretches near a level-10 tile. */
   rivers?: (tile: TileKey) => readonly RiverStretch[];
+  /** The world's canopy seed, for the fields' boundaries (verges, decision 184). */
+  fieldSeed?: number;
 }
 
 /** The items of one chunk, by kind, relative to its origin. */
@@ -300,7 +306,64 @@ export function* coverPlacer(
     return tri;
   };
 
+  // Cliffs just above (decision 184): the mesh's quads over the chunk and MARGIN quads round
+  // it, each with its steepness and mean height, so a cell below a cliff takes its talus.
+  const M = TALUS_REACH;
+  const nx = nq + 2 * M;
+  const eh = new Float64Array(nx * nx);
+  for (let b = 0; b < nx; b++) {
+    for (let a = 0; a < nx; a++) {
+      const sx = (q0 + a - M) * step;
+      const sy = (r0 + b - M) * step;
+      eh[b * nx + a] = Math.max(0, ground(sx, sy, dirAt(sx, sy, d)));
+    }
+  }
+  const quadM = step * sampleM;
+  const nqx = nx - 1;
+  const qSteep = new Float64Array(nqx * nqx);
+  const qMean = new Float64Array(nqx * nqx);
+  for (let b = 0; b < nqx; b++) {
+    for (let a = 0; a < nqx; a++) {
+      const h00 = eh[b * nx + a]!;
+      const h10 = eh[b * nx + a + 1]!;
+      const h01 = eh[(b + 1) * nx + a]!;
+      const h11 = eh[(b + 1) * nx + a + 1]!;
+      qSteep[b * nqx + a] = Math.hypot(h10 - h00 + h11 - h01, h01 - h00 + h11 - h10) / (2 * quadM);
+      qMean[b * nqx + a] = (h00 + h10 + h01 + h11) / 4;
+    }
+  }
+  /** Talus 0..1 at (cx, cy) of height h: steep quads nearby that stand above it. */
+  const talusAt = (cx: number, cy: number, h: number): number => {
+    const qa = Math.floor(cx / step) - q0 + M;
+    const qb = Math.floor(cy / step) - r0 + M;
+    let best = 0;
+    for (let db = -M; db <= M; db++) {
+      for (let da = -M; da <= M; da++) {
+        const dist = Math.hypot(da, db);
+        if (dist > M + 0.5) continue;
+        const a = qa + da;
+        const b = qb + db;
+        if (a < 0 || b < 0 || a >= nqx || b >= nqx) continue;
+        const k = b * nqx + a;
+        if (qMean[k]! < h + 2) continue;
+        const cliff = smooth(0.7, 1.2, qSteep[k]!) * (1 - dist / (M + 1));
+        if (cliff > best) best = cliff;
+      }
+    }
+    return best;
+  };
+
   const stretches = ctx.rivers?.(t) ?? [];
+  /** Distance (m) from unit direction `p` to the nearest river's water, or Infinity. */
+  const waterGap = (p: Vec3d): number => {
+    let gap = Infinity;
+    for (const o of stretches) {
+      const ab = o.b.clone().sub(o.a);
+      const k = Math.min(1, Math.max(0, p.clone().sub(o.a).dot(ab) / Math.max(ab.dot(ab), 1e-30)));
+      gap = Math.min(gap, o.a.clone().addScaled(ab, k).distanceTo(p) * R - o.width / 2);
+    }
+    return gap;
+  };
   const inWater = (p: Vec3d, margin: number): boolean => {
     for (const o of stretches) {
       const ab = o.b.clone().sub(o.a);
@@ -341,6 +404,17 @@ export function* coverPlacer(
       const hv = below ? vh[kc]! - vh[kb]! : vh[kc]! - vh[ka]!;
       const steep = Math.hypot(hu, hv) / (step * sampleM);
       const hab = ctx.habitability?.(d) ?? 0;
+      const farmland =
+        smooth(0.25, 0.45, hab) * (FARMABLE_BIOMES.has(cover) ? 1 : 0) * smooth(0.16, 0.08, steep);
+      // Verges: near a field's boundary (the hedgerows' fields, decision 162).
+      const verge =
+        farmland > 0 && ctx.fieldSeed !== undefined
+          ? smooth(5, 1.5, fieldAt(d.x * R, d.y * R, d.z * R, ctx.fieldSeed).edge)
+          : 0;
+      // Banks: a few meters from a river's water or above a lake's shore.
+      const gap = stretches.length > 0 ? waterGap(d) : Infinity;
+      const riverBank = gap > 0 ? smooth(10, 1.5, gap) : 0;
+      const lakeBank = level > NO_LAKE / 2 ? smooth(3, 0.3, h - level) : 0;
       const site: CoverSite = {
         cover,
         moisture: climate[2]!,
@@ -348,10 +422,10 @@ export function* coverPlacer(
         steep,
         forest: (mat >>> 24) / 255,
         aridity: ((mat >>> 17) & 15) / 15,
-        farmland:
-          smooth(0.25, 0.45, hab) *
-          (FARMABLE_BIOMES.has(cover) ? 1 : 0) *
-          smooth(0.16, 0.08, steep),
+        farmland,
+        verge,
+        bank: Math.max(riverBank, lakeBank),
+        talus: steep < 0.6 ? talusAt(cx, cy, h) : 0,
       };
       items.length = 0;
       coverInCell(t.x * TILE_TEXELS + sx, t.y * TILE_TEXELS + sy, t.face, seed, site, items);
@@ -750,6 +824,7 @@ export class GroundCoverLayer {
       clear: this.clearings,
       habitability: this.habitability,
       rivers: world.rivers ? (k) => riverStretches(world.rivers!, k, R) : undefined,
+      fieldSeed: canopySeed(world.seed),
     };
     const t0 = performance.now();
     let pending = 0;
