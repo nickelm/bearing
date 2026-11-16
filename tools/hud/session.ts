@@ -199,6 +199,25 @@ async function main(): Promise<void> {
     window.dispatchEvent(new KeyboardEvent('keydown', { code, key: code, bubbles: true }));
     window.dispatchEvent(new KeyboardEvent('keyup', { code, key: code, bubbles: true }));
   };
+  /**
+   * A real key press from the tool (Playwright), for what browsers grant only to a user's
+   * gesture: pointer lock (decision 193). The page asks by its title; the tool answers.
+   */
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+  const press = async (code: string) => {
+    (window as unknown as { pressNow: string }).pressNow = code;
+    document.title = 'press';
+    while (document.title !== 'pressed') await sleep(20);
+    document.title = 'session';
+  };
+  /** Frames until the capture is `want` (a refused grab is retried for up to 4 s). */
+  const captureSettles = async (want: boolean) => {
+    for (let i = 0; i < 50 && ff.capture.captured !== want; i++) {
+      await sleep(100);
+      frame();
+    }
+    return ff.capture.captured === want;
+  };
   const choose = (root: Element, preset: string) => {
     const select = q<HTMLSelectElement>(root, 'select.ff-weather');
     select.value = preset;
@@ -472,6 +491,18 @@ async function main(): Promise<void> {
     check(forward > 3, `${choice}: the mouse flies it forward`);
     check(paused === 'paused' && resumed === 'flying', `${choice}: pause and resume`);
     check(location.search.includes(`aircraft=${choice}`), `${choice}: in the URL`);
+    if (choice === 'scout') {
+      // Tab captures the mouse and frees it, without pausing (decision 193).
+      await press('Tab');
+      const grabbed = (await captureSettles(true)) && ff.heloInput.locked;
+      await press('Tab');
+      const freed = (await captureSettles(false)) && !ff.heloInput.locked;
+      helicopters.capture = { grabbed, freed, state: ff.state };
+      check(
+        grabbed && freed && ff.state === 'flying',
+        `${choice}: Tab captures and frees the mouse`,
+      );
+    }
     key('Escape');
     click(ff.pause.el, 'Change airbase');
     frame();
@@ -484,6 +515,35 @@ async function main(): Promise<void> {
     ff.flight.model !== null && ff.flight.helo === null && ff.state === 'flying',
     'the Kestrel after the helicopters',
   );
+  // The same capture key in the jet; M takes the mouse for the stick at its center; a lock the
+  // browser drops by itself (Escape, focus) pauses (decision 193).
+  {
+    await press('Tab');
+    const grabbed = await captureSettles(true);
+    await press('Tab');
+    const freed = await captureSettles(false);
+    const flyingAfterTab = ff.state;
+    await press('KeyM');
+    const stick = (await captureSettles(true)) && ff.input.mode === 'mouse-stick';
+    const centered = ff.input.cursor.x === 0 && ff.input.cursor.y === 0;
+    document.exitPointerLock();
+    await captureSettles(false);
+    const pausedByLoss = ff.state;
+    // An Escape right after the loss is the one that freed the mouse: it must not resume.
+    key('Escape');
+    const heldPaused = ff.state;
+    click(ff.pause.el, 'Resume');
+    result.capture = { grabbed, freed, flyingAfterTab, stick, centered, pausedByLoss, heldPaused };
+    check(
+      grabbed && freed && flyingAfterTab === 'flying',
+      'Kestrel: Tab captures and frees the mouse',
+    );
+    check(stick && centered, 'Kestrel: M captures the mouse for the stick, centered');
+    check(
+      pausedByLoss === 'paused' && heldPaused === 'paused' && (ff.state as string) === 'flying',
+      'Kestrel: a lock lost to the browser pauses, and its Escape does not resume',
+    );
+  }
   key('Escape');
   click(ff.pause.el, 'Change airbase');
   frame();

@@ -26,7 +26,16 @@ page.on('console', (m) => {
   if (m.type() === 'error') problems.push(`console error: ${m.text().slice(0, 300)}`);
 });
 await page.goto(`${base}/tools/hud/session.html`);
-await page.waitForFunction(() => document.title === 'ready', null, { timeout: 300_000 });
+// The page asks for real key presses (pointer lock needs a user's gesture; decision 193).
+for (;;) {
+  await page.waitForFunction(() => ['ready', 'press'].includes(document.title), null, {
+    timeout: 300_000,
+  });
+  if ((await page.title()) === 'ready') break;
+  await page.keyboard.press(await page.evaluate(() => window.pressNow));
+  await page.waitForTimeout(150);
+  await page.evaluate(() => (document.title = 'pressed'));
+}
 const result = await page.evaluate(() => window.result);
 if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT });
 await browser.close();

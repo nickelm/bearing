@@ -30,8 +30,8 @@ These readings shape the plan; decision 189 lists them for the owner to confirm.
 3. **The throttle readout stays on the HUD.** A keyboard throttle has no feel, so the lever's position and its detent are time-critical while looking outside. The afterburner moves to the strip as a discrete state.
 4. **Fuel leaves the HUD** for the engines and fuel format, with JOKER, BINGO and LOW FUEL on the strip. P2 builds that format early, since Free Flight needs it the day the HUD loses fuel; P3 completes it with engine states, damage and failures.
 5. **Avionics state belongs to the simulation; display state to the UI.** Anything that changes what the aircraft does, senses, emits or releases (master mode, master arm, radar mode and range, the radar cursor, locks, designations, selected stores, fuzing, terrain-following clearance, countermeasure programs) lives in `sim/avionics/`, changed only by avionics commands. Anything that changes only what the screen shows (slot states, pins, the format in a slot, the map's range and orientation, declutter) lives in `ui/displays/`. A bezel button maps to one or the other. The AI crewmate and AI pilots issue the same avionics commands, never touch the UI, and so stay headless and deterministic (rules 5, 6, 12).
-6. **Cursor mode is a software cursor under pointer lock.** Browsers re-grant pointer lock only within a user gesture, and a key release does not count as one, so releasing Left Alt could not reliably re-lock the mouse. The plan keeps pointer lock throughout and draws a cursor that the relative mouse motion moves; a click hit-tests the display chrome under it. The aim point stays where it was, as the proposal asks.
-7. **Key chords are chosen by a spike.** Shift and Ctrl are the throttle, Left Alt is cursor mode, and browsers reserve some chords (Alt plus a digit switches tabs in Chrome on Linux; Ctrl plus a digit does on Windows). P2 starts with a spike on what a page can capture in Chrome, Firefox and Safari, with and without fullscreen Keyboard Lock, before it fixes the bezel and focus bindings.
+6. **One capture key for every aircraft** (decision 193, replacing the software cursor first planned here). Tab grabs and frees the pointer lock in the jet and the helicopters; a click on the view also grabs it, and Escape frees it and pauses. A free mouse is cursor mode: the real cursor clicks the displays, and the flight director holds what the mouse last commanded. The capture toggles on a key press, because a key release is no user gesture and a press's activation lapses after about 5 s.
+7. **Keys only for hot actions** (decision 193). Bezel buttons and strip items work by mouse; single keys go to the actions a pilot needs without looking (master modes, dogfight, slot expand and collapse, master caution, map range, radar lock, step and break, designation, countermeasures, weapon selection, the crew menu with digits while it is open). No modifier-plus-digit scheme for the bezel, which also sidesteps the browsers' reserved digit chords.
 8. **The moving map goes below the strategic zoom floor.** The strategic renderer draws a top-down map in a render target at ranges from 10 to 160 nm, with the region band's content magnified below the floor. It draws no individual trees or buildings (rule 11). Elevation mode reads the simulation view's resident terrain tiles, whose vertices already pass through the one height function (rule 13), and the global grid beyond them.
 9. **Map overlays come from the side's picture.** Terrain, settlements, roads and airbases are a priori map data. The front line, threat rings and contacts come from the side's intelligence picture and the aircraft's sensor and datalink tracks, never from ground truth (rule 12).
 10. **P2 starts in Free Flight before P1 closes**, as H1 did (decision 151): it needs Free Flight's HUD, input and session, not P1's campaign tasks.
@@ -90,7 +90,7 @@ Items are rules over the snapshot: `stripItems(snapshot, mode) → StripItem[]`,
 
 ### Cursor mode and bindings
 
-Holding Left Alt (or toggling with a second key) shows a software cursor at the screen center (reading 6); the flight director holds the aim point, or attitude and altitude in direct control, and hover hold engages in a slow helicopter. The wheel over a display changes its range or zoom. Every display action is a named entry in the binding table, beside `FLIGHT_BINDINGS`; a test enumerates the actions of every format, the strip and the crew menu against the table, so nothing is reachable by mouse only. With a flight stick, the cursor is the plain system pointer.
+`MouseCapture` (`ui/flight/mouseCapture.ts`, decision 193) owns the pointer lock for every input: Tab toggles it, a click on the view grabs it, a lock the browser drops (Escape, lost focus) pauses, and a refused grab is retried four times within the press's activation. While the mouse is free, the jet's mouse stick and aim point hold where they were and the helicopter's mouse commands stop, so hover hold takes over when it is slow (Assisted preset); the HUD shows TAB TO FLY. The wheel over a display changes its range or zoom. Each format lists its hot actions, and those are named entries in the binding table; a test enumerates them against the table. Bezel buttons need no keys. With a flight stick the mouse stays free.
 
 ### Crew (P5)
 
@@ -110,7 +110,7 @@ Each milestone ends with tests, previews, Part I's acceptance checks for what it
 
 ### P2. HUD, displays and status strip
 
-1. Spike: key capture and chords across browsers and systems, with and without fullscreen Keyboard Lock; the software cursor under pointer lock; record the bindings (reading 7).
+1. Spike and capture key (done, decision 193): pointer lock grabbed and freed by Tab in both aircraft kinds, retries, pause on a lost lock; the jet's mouse modes under pointer lock. Open: Firefox and Safari, and Escape in a real browser.
 2. Allocation inventory: every item of Free Flight's HUD classified by the rule (the table below) and recorded with the decision that closes P2.
 3. `layout()` with the slot rects, the UI scale, and the layout snapshot test.
 4. Display model types, `DisplayCommand`, `DisplayState`, the format registry, and the serialization test.
@@ -118,7 +118,7 @@ Each milestone ends with tests, previews, Part I's acceptance checks for what it
 6. The display frame in HTML and CSS: bezel, 20 buttons, labels, owner tag, focus, slot states and transitions; Alliance and Pact skins as CSS variables; the round era bezel.
 7. The status strip: item rules, levels, shapes and labels, clicks and keys, the master caution; the helicopter gauges.
 8. Master modes: the state machine, presets, pins, per-viewer preset edits; HUD declutter levels.
-9. Cursor mode and the display bindings; the bindings-enumeration test; the help overlay lists the new actions.
+9. Cursor mode with the displays (clicks on bezel buttons and strip items with the free cursor; the wheel over a display); the hot-action bindings and their enumeration test; the help overlay lists them.
 10. Messages format in the messages slot (Free Flight's messages move there; session cards stay).
 11. Moving map, strategic mode: the render target, ranges, north-up and track-up, own ship, airbases, the destination runway, range rings.
 12. Engines and fuel format, first version: fuel state, joker and bingo (reading 4).
@@ -189,7 +189,7 @@ Each milestone ends with tests, previews, Part I's acceptance checks for what it
 
 ## Risks
 
-- **Browser input.** Reserved chords and pointer lock differ between browsers and systems; the spike comes first, and keys have fallbacks.
+- **Browser input.** Pointer lock was probed in Chromium only (decision 193); Firefox and Safari may differ in rate limits and in how Escape reaches the page.
 - **GPU budget.** The map and the pod add render passes to a frame already near its budget over forest and in weather; low update rates, reduced quality and the governor contain it, and the browser smoke test measures it.
 - **The strategic map below its floor.** The base map's textures come from the 1.5 km global grid, which may look blocky at 10 nm on a 400-pixel display. If it does, strategic mode stops at 20 nm and elevation mode serves the short ranges.
 - **HTML over the canvas.** The browser smoke test on lavapipe reads the scene back through the device, and its page screenshots show the HTML over an empty canvas; the display checks need both composited.

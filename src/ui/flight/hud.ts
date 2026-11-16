@@ -130,6 +130,8 @@ export interface HudFrame {
   /** Control mode label ("direct", "mouse stick", "mouse aim") and the aim point in NDC for mouse aim. */
   mode: string;
   aim: { x: number; y: number } | null;
+  /** What `aim` is: mouse aim's point (a ring) or the mouse stick's cursor (a cross); default aim. */
+  aimKind?: 'aim' | 'stick';
   debug: {
     cl: number;
     cd: number;
@@ -312,12 +314,23 @@ export class Hud {
     if (f.aim) {
       const x = ((f.aim.x + 1) / 2) * W;
       const y = ((1 - f.aim.y) / 2) * H;
-      this.stroke(() => {
-        c.beginPath();
-        c.arc(x, y, 10 * s, 0, 2 * Math.PI);
-        c.moveTo(x - 4 * s, y);
-        c.lineTo(x + 4 * s, y);
-      });
+      if (f.aimKind === 'stick') {
+        // The mouse stick under pointer lock: a cross where the stick is (decision 193).
+        this.stroke(() => {
+          c.beginPath();
+          c.moveTo(x - 7 * s, y);
+          c.lineTo(x + 7 * s, y);
+          c.moveTo(x, y - 7 * s);
+          c.lineTo(x, y + 7 * s);
+        });
+      } else {
+        this.stroke(() => {
+          c.beginPath();
+          c.arc(x, y, 10 * s, 0, 2 * Math.PI);
+          c.moveTo(x - 4 * s, y);
+          c.lineTo(x + 4 * s, y);
+        });
+      }
     }
   }
 

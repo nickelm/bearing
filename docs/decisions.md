@@ -3105,3 +3105,24 @@ The Kestrel has no downwash and is unaffected.
 **Not done:** arch ribs, viaduct arches and suspension towers (arch and suspension bridges are drawn as beam and truss bridges until then); tunnel portals; ink outlines on bridges; the model viewer's silhouette check (check 6) for the kit; the `bridge` acceptance view at 300 m.
 
 **Reason:** Bridges are where the alignment says rivers are crossed, at the span and height the record gives, so the kit draws them from the record rather than from the network tier; merging per structure keeps one draw call per bridge, and the few dozen within range cost far less than the buildings.
+
+### 193. Owner's answers on proposal 0006; one capture key for every aircraft; keys only for hot display actions
+
+**Date:** 2026-11-16
+**Decision:** The owner answered decision 189's readings, and P2's first step (the input spike) is done with their two changes.
+
+- **Confirmed:** torque and rotor RPM leave the HUD for the strip's gauges (reading 1); warnings that demand an immediate maneuver stay on the HUD (reading 2); fuel leaves the HUD (reading 4); avionics state in the simulation, display state in the UI (reading 5). Readings 3 and 8–14 and the three open questions were not addressed; they stand as the plan's working assumptions until the owner says otherwise.
+- **One capture key instead of a software cursor** (replaces reading 6). Tab grabs and frees the mouse's pointer lock in the jet and the helicopters alike; a click on the view also grabs it, and Escape frees it and pauses, as before. A free mouse is cursor mode: the OS cursor clicks the displays (once they exist), and the flight director holds what the mouse last commanded. One `MouseCapture` (`ui/flight/mouseCapture.ts`) owns the lock for both inputs; `mouseCapture: ['Tab']` is in `FLIGHT_BINDINGS` and `HELO_BINDINGS`, and a test keeps it bound to nothing else in either table.
+- **The jet flies under pointer lock too.** Mouse stick and mouse aim read a cursor moved by the mouse's relative motion (half the view's width or height is full travel, as the free cursor was) and hold while the mouse is free. M or N centers it and captures the mouse; the HUD draws the mouse stick's position as a cross and adds "TAB TO FLY" to the mode while a mouse mode has no mouse (the helicopter's tag, "CLICK TO FLY", reads "TAB TO FLY" too). P1's world-locked aim point is unchanged as a task.
+- **Keys only for hot actions** (replaces reading 7 and the rule that every display action has a key). Bezel buttons and strip items work by mouse in cursor mode, and later by touch on a companion (P6); there is no modifier-plus-digit scheme for the 20 buttons. Single keys go to the actions a pilot needs without looking: master modes and the dogfight override, expanding and collapsing each slot, the master caution, map range, radar lock, step and break, designation, countermeasures, weapon selection, and the crew menu (digits only while it is open). Each format lists its hot actions; the bindings test enumerates those.
+
+**Spike results** (Chromium, headless and new headless, Playwright's trusted input; `tools/freeflight.session.mjs` now drives the real `FreeFlight` through it):
+
+- A key press alone grabs the lock; no click is needed. A key release does not count as a gesture: grabbing on release worked after a 1.5 s hold and failed after 6 s ("a user gesture is required"), because a press's activation lapses after about 5 s. So capture toggles on a press; a hold-to-free mode would strand the mouse after long holds.
+- Chromium refuses requests that come too fast ("too many pointer lock requests in a short window"): 6 of 20 toggles 120 ms apart. A refused grab is retried after 0.4, 0.8, 1.2 and 1.6 s while it is still wanted, inside the press's activation; in the probe every burst ended captured. After the last retry the HUD says to click the view.
+- A lock dropped by the browser itself (Escape, lost focus) pauses Free Flight; an Escape key event that arrives within 0.3 s of that pause is taken as the one that freed the mouse and does not resume. Headless Chromium does not release the lock on a synthetic Escape, so the session tool drops the lock with `exitPointerLock()` outside `MouseCapture` instead.
+- Left Alt, the proposal's default, was not chosen: on Windows a lone Alt press opens Firefox's menu bar, Linux desktops use Alt to drag windows, and Alt+Tab switches windows. Firefox and Safari were not run here.
+
+`docs/plans/displays.md`, `docs/design.md` (*Flying*), `CLAUDE.md` (rule 14) and `TODO.md` change with this decision.
+
+**Reason:** The owner wants one way to take and give back the mouse in every aircraft, and found keyboard control of twenty bezel buttons impractical. A real cursor clicks HTML displays with no hit-testing of our own, and the browser's activation rules favor a toggle on a key press. Keys stay where they pay: actions done many times a minute, eyes outside.

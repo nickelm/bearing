@@ -63,6 +63,7 @@ import {
 import type { SoundSettings } from '../ui/flight/flightCards';
 import { FlightInput } from '../ui/flight/flightInput';
 import type { FlightAction } from '../ui/flight/flightInput';
+import { MouseCapture } from '../ui/flight/mouseCapture';
 import { DEFAULT_OPTIONS, FreeFlightMenu } from '../ui/flight/freeFlightMenu';
 import type {
   AircraftChoice,
@@ -115,7 +116,7 @@ const HELICOPTERS: Record<Exclude<AircraftChoice, 'kestrel'>, string> = {
 };
 /** The help card's note for helicopters. */
 const HELO_HELP = [
-  'Click the view to capture the mouse; Escape gives it back and pauses.',
+  'Tab or a click on the view captures the mouse; Tab frees it again, Escape frees it and pauses.',
   'Takeoff: hold W until clear of the ground, let go to hold the altitude. Move the mouse forward to tilt the nose down and fly forward; back to slow down. Slow and let go: the hover holds (Assisted).',
   'In the hover the mouse turns the nose; above about 40 kt it banks into a coordinated turn. A/D slide sideways in the hover.',
   'Landing: slow to a hover over the spot, then hold S: the descent eases near the ground (VS under the radar altitude turns amber if it is too fast). Keep S held on the ground to lower the collective.',
@@ -152,6 +153,10 @@ export class FreeFlight {
   private readonly laws = new HeloLaws();
   private readonly assists = assistsFor('assisted');
   readonly heloInput: HeloInput;
+  /** The mouse's pointer lock, shared by both inputs and toggled by Tab (decision 193). */
+  readonly capture: MouseCapture;
+  /** When the browser last took the mouse back and paused (ms), so its Escape does not resume. */
+  private lostAt = -Infinity;
   private readonly heloControls = neutralRotorControls();
   /** The views built so far, one per aircraft. */
   private readonly views = new Map<string, AircraftView>();
@@ -233,9 +238,18 @@ export class FreeFlight {
       continueFrom: (id) => this.start(id, 'runway'),
       changeBase: () => this.toMenu(),
     });
-    this.input = new FlightInput(deps.canvas);
+    this.capture = new MouseCapture(deps.canvas);
+    // Escape or a lost focus took the mouse: pause, as Escape does.
+    this.capture.onLost = () => {
+      if (this.state !== 'flying') return;
+      this.lostAt = performance.now();
+      this.setPaused(true);
+    };
+    this.capture.onRefused = () =>
+      this.hud.message('The browser kept the mouse: click the view to capture it', 4);
+    this.input = new FlightInput(deps.canvas, this.capture);
     this.input.onAction = (a) => this.action(a);
-    this.heloInput = new HeloInput(deps.canvas);
+    this.heloInput = new HeloInput(deps.canvas, this.capture);
     this.heloInput.onAction = (a) => this.heloAction(a);
     this.pose = {
       pos: new Vec3d(),
@@ -425,7 +439,7 @@ export class FreeFlight {
     }
     this.helo = null;
     this.heloInput.enabled = false;
-    this.heloInput.release();
+    this.capture.release();
     this.help.refresh();
     const R = this.deps.radius;
     const m = new FlightModel(this.flightSpec, R);
@@ -575,6 +589,7 @@ export class FreeFlight {
     if (!this.helo) return;
     switch (a) {
       case 'pause':
+        if (this.pausedByLoss()) break;
         if (this.help.visible) this.help.visible = false;
         else this.setPaused(this.state === 'flying');
         break;
@@ -587,6 +602,9 @@ export class FreeFlight {
         break;
       case 'recenterView':
         this.deps.globe.chase.recenter();
+        break;
+      case 'mouseCapture':
+        this.toggleCapture();
         break;
       default:
         break;
@@ -653,7 +671,7 @@ export class FreeFlight {
     this.weather.hide();
     this.input.enabled = false;
     this.heloInput.enabled = false;
-    this.heloInput.release();
+    this.capture.release();
     this.summary.visible = false;
     this.pause.visible = false;
     this.help.visible = false;
@@ -676,12 +694,25 @@ export class FreeFlight {
     if (this.state !== 'flying' && this.state !== 'paused') return;
     this.state = p ? 'paused' : 'flying';
     this.pause.visible = p;
-    if (this.helo) {
-      this.heloInput.enabled = !p;
-      if (p) this.heloInput.release();
-    } else {
-      this.input.enabled = !p;
-    }
+    if (p) this.capture.release();
+    if (this.helo) this.heloInput.enabled = !p;
+    else this.input.enabled = !p;
+  }
+
+  /**
+   * Whether the browser took the mouse back a moment ago and paused: some
+   * browsers also deliver the Escape that freed it, which must not resume.
+   */
+  private pausedByLoss(): boolean {
+    return this.state === 'paused' && performance.now() - this.lostAt < 300;
+  }
+
+  /** The capture key (Tab): frees a captured mouse for the displays, or captures a free one. */
+  private toggleCapture(): void {
+    if (this.state !== 'flying') return;
+    const freeing = this.capture.captured;
+    this.capture.toggle();
+    if (freeing) this.hud.message('Mouse free: Tab or a click on the view to fly with it', 2.5);
   }
 
   private action(a: FlightAction): void {
@@ -691,6 +722,7 @@ export class FreeFlight {
     const c = this.input.controls;
     switch (a) {
       case 'pause':
+        if (this.pausedByLoss()) break;
         if (this.help.visible) this.help.visible = false;
         else this.setPaused(this.state === 'flying');
         break;
@@ -703,8 +735,12 @@ export class FreeFlight {
       case 'parkingBrake':
         c.parkingBrake = !c.parkingBrake;
         break;
+      case 'mouseCapture':
+        this.toggleCapture();
+        break;
       case 'mouseStick':
         this.input.mode = this.input.mode === 'mouse-stick' ? 'keyboard' : 'mouse-stick';
+        this.mouseModeChanged();
         this.hud.message(
           this.input.mode === 'mouse-stick' ? 'Mouse as stick' : 'Keyboard stick',
           2,
@@ -712,6 +748,7 @@ export class FreeFlight {
         break;
       case 'mouseAim':
         this.input.mode = this.input.mode === 'mouse-aim' ? 'keyboard' : 'mouse-aim';
+        this.mouseModeChanged();
         this.director.reset();
         this.hud.message(
           this.input.mode === 'mouse-aim'
@@ -729,6 +766,13 @@ export class FreeFlight {
       default:
         break;
     }
+  }
+
+  /** A mouse mode starts from the center (stick neutral, aim ahead) with the mouse captured. */
+  private mouseModeChanged(): void {
+    if (this.input.mode === 'keyboard') return;
+    this.input.centerCursor();
+    this.capture.grab();
   }
 
   /** Copies the model's state into the view's pose. */
@@ -943,7 +987,7 @@ export class FreeFlight {
     this.state = 'summary';
     this.input.enabled = false;
     this.heloInput.enabled = false;
-    this.heloInput.release();
+    this.capture.release();
   }
 
   /** Draws the HUD after the scene has rendered (the camera's matrices are current). */
@@ -977,14 +1021,18 @@ export class FreeFlight {
     }
     const m = this.model;
     if (!m) return;
+    const mouse = this.input.mode !== 'keyboard';
+    const mode = this.pilot
+      ? 'autopilot'
+      : { keyboard: 'direct', 'mouse-stick': 'mouse stick', 'mouse-aim': 'mouse aim' }[
+          this.input.mode
+        ];
     const frame = buildHudFrame(m, this.input.controls, {
       aid: landingAid(m, this.runways, this.deps.globe.chase.eye),
-      mode: this.pilot
-        ? 'autopilot'
-        : { keyboard: 'direct', 'mouse-stick': 'mouse stick', 'mouse-aim': 'mouse aim' }[
-            this.input.mode
-          ],
-      aim: this.input.mode === 'mouse-aim' ? { ...this.input.cursor } : null,
+      // A free mouse holds the stick and the aim point (decision 193).
+      mode: mouse && !this.capture.captured && !this.pilot ? `${mode} · TAB TO FLY` : mode,
+      aim: mouse ? { ...this.input.cursor } : null,
+      aimKind: this.input.mode === 'mouse-stick' ? 'stick' : 'aim',
       timing: this.debug
         ? { frameMs: this.frameMs, physicsMs: this.physicsMs, steps: this.steps }
         : null,

@@ -58,7 +58,8 @@ export function buildHeloHudFrame(
   const modes: string[] = ['ASSISTED'];
   if (laws.hoverHold) modes.push('HOVER HOLD');
   else if (laws.altitudeTarget !== null) modes.push('ALT HOLD');
-  if (!opts.locked) modes.push('CLICK TO FLY');
+  // The mouse is free (cursor mode, decision 193): Tab or a click captures it.
+  if (!opts.locked) modes.push('TAB TO FLY');
   const hazards: string[] = [];
   if (tel.rotorSpeed < 0.95) hazards.push('LOW RPM');
   if (tel.rotorSpeed > 1.07) hazards.push('HIGH RPM');

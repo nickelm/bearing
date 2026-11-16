@@ -101,6 +101,7 @@ export function buildHudFrame(
     aid: HudLandingAid | null;
     mode: string;
     aim: { x: number; y: number } | null;
+    aimKind?: 'aim' | 'stick';
     timing: { frameMs: number; physicsMs: number; steps: number } | null;
     hover?: HoverHud | null;
   },
@@ -136,6 +137,7 @@ export function buildHudFrame(
     aid: opts.aid,
     mode: opts.mode,
     aim: opts.aim,
+    aimKind: opts.aimKind ?? 'aim',
     hover: opts.hover ?? null,
     debug: opts.timing
       ? {

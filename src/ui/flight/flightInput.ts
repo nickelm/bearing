@@ -13,9 +13,15 @@
  *   at the idle and military detents and at the afterburner gate; a new press
  *   (or wheel step) passes a detent.
  * - **Free look.** Hold the right mouse button (or C) and move the mouse.
+ * - **Mouse capture** (decision 193). With a `MouseCapture`, the mouse flies
+ *   under pointer lock: its relative motion moves a cursor that the mouse stick
+ *   and mouse aim read (half the view's width or height is full travel, as the
+ *   free cursor was). Tab or a click on the view captures it; Tab frees it for
+ *   the displays, and the stick and the aim point hold where they were.
  */
 import { AB_GATE, MIL_DETENT, neutralControls } from '../../sim/flight/controlLaws';
 import type { FlightControls } from '../../sim/flight/controlLaws';
+import type { MouseCapture } from './mouseCapture';
 
 export type FlightAction =
   | 'pitchDown'
@@ -33,6 +39,7 @@ export type FlightAction =
   | 'mouseStick'
   | 'mouseAim'
   | 'freeLook'
+  | 'mouseCapture'
   | 'help'
   | 'debug'
   | 'pause';
@@ -54,6 +61,7 @@ export const FLIGHT_BINDINGS: Record<FlightAction, string[]> = {
   mouseStick: ['KeyM'],
   mouseAim: ['KeyN'],
   freeLook: ['KeyC'],
+  mouseCapture: ['Tab'],
   help: ['KeyH'],
   debug: ['F3'],
   pause: ['Escape'],
@@ -76,6 +84,7 @@ export const ACTION_LABELS: Record<FlightAction, string> = {
   mouseStick: 'Mouse as stick on / off',
   mouseAim: 'Mouse aim (flight director) on / off',
   freeLook: 'Free look (hold; or hold the right mouse button)',
+  mouseCapture: 'Capture the mouse to fly with it, or free it (or click the view to capture)',
   help: 'This help',
   debug: 'Flight-model debug panel',
   pause: 'Pause menu',
@@ -88,6 +97,7 @@ const PRESS_ACTIONS = new Set<FlightAction>([
   'parkingBrake',
   'mouseStick',
   'mouseAim',
+  'mouseCapture',
   'help',
   'debug',
   'pause',
@@ -131,7 +141,10 @@ const DETENTS = [0, MIL_DETENT, AB_GATE];
 export class FlightInput {
   readonly controls: FlightControls = neutralControls();
   mode: ControlMode = 'keyboard';
-  /** Cursor position in normalized device coordinates (−1..1, y up). */
+  /**
+   * Cursor position in normalized device coordinates (−1..1, y up). Under mouse
+   * capture it moves by the mouse's relative motion and holds while the mouse is free.
+   */
   readonly cursor = { x: 0, y: 0 };
   /** Free look held, and the mouse movement since the last frame (px). */
   lookHeld = false;
@@ -149,7 +162,10 @@ export class FlightInput {
   private rightDown = false;
   private readonly detach: () => void;
 
-  constructor(el: HTMLElement) {
+  constructor(
+    el: HTMLElement,
+    private readonly capture: MouseCapture | null = null,
+  ) {
     this.rebuild();
     const onKey = (e: KeyboardEvent, down: boolean) => {
       const a = this.keyAction.get(e.code);
@@ -174,12 +190,17 @@ export class FlightInput {
     const ku = (e: KeyboardEvent) => onKey(e, false);
     const blur = () => this.held.clear();
     const move = (e: PointerEvent) => {
-      const r = el.getBoundingClientRect();
-      this.cursor.x = ((e.clientX - r.left) / r.width) * 2 - 1;
-      this.cursor.y = 1 - ((e.clientY - r.top) / r.height) * 2;
       if (this.lookHeld) {
         this.lookDelta.x += e.movementX;
         this.lookDelta.y += e.movementY;
+        if (this.capture) return;
+      }
+      const r = el.getBoundingClientRect();
+      if (!this.capture) {
+        this.cursor.x = ((e.clientX - r.left) / r.width) * 2 - 1;
+        this.cursor.y = 1 - ((e.clientY - r.top) / r.height) * 2;
+      } else if (this.capture.captured && this.enabled) {
+        this.moveCursor(e.movementX, e.movementY, r.width, r.height);
       }
     };
     const down = (e: PointerEvent) => {
@@ -187,6 +208,8 @@ export class FlightInput {
       if (e.button === 2) {
         this.rightDown = true;
         el.setPointerCapture?.(e.pointerId);
+      } else if (e.button === 0 && this.capture && !this.capture.captured) {
+        this.capture.grab();
       }
     };
     const up = (e: PointerEvent) => {
@@ -218,6 +241,22 @@ export class FlightInput {
       el.removeEventListener('wheel', wheel);
       el.removeEventListener('contextmenu', menu);
     };
+  }
+
+  /**
+   * Moves the captured cursor by a relative mouse motion (px) in a view of
+   * `width` × `height` px: half the view is full travel. Tools and tests call it
+   * as if the mouse moved under pointer lock.
+   */
+  moveCursor(dx: number, dy: number, width: number, height: number): void {
+    this.cursor.x = clamp(this.cursor.x + (2 * dx) / Math.max(1, width), -1, 1);
+    this.cursor.y = clamp(this.cursor.y - (2 * dy) / Math.max(1, height), -1, 1);
+  }
+
+  /** Puts the cursor back at the center: the mouse stick at neutral, the aim straight ahead. */
+  centerCursor(): void {
+    this.cursor.x = 0;
+    this.cursor.y = 0;
   }
 
   /** Rebinds `action` to `codes`, e.g. from a settings page. */
@@ -257,6 +296,7 @@ export class FlightInput {
     this.controls.gearDown = onRunway;
     this.controls.throttle = throttle;
     this.held.clear();
+    this.centerCursor();
   }
 
   /** Advances the held keys, mouse and gamepad by `dt` real seconds. */

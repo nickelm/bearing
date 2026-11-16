@@ -6,7 +6,8 @@
  *
  * - **Mouse.** Forward and back move the pitch attitude (forward: nose down);
  *   left and right turn: the nose in the hover, a coordinated bank in cruise.
- *   A click on the view captures the mouse; Escape gives it back and pauses.
+ *   Tab or a click on the view captures the mouse and Tab frees it, as in the
+ *   jet (one `MouseCapture`, decision 193); Escape gives it back and pauses.
  * - **Keys.** W/S collective (climb and descend; let go to hold the altitude),
  *   A/D sideways in the hover and bank at speed, Q/E the pedals, H hover hold.
  * - **Free look.** Hold the right mouse button (or C) and move the mouse; the
@@ -15,6 +16,7 @@
  */
 import { neutralCommand } from '../../sim/flight/rotor/heloLaws';
 import type { HeloCommand } from '../../sim/flight/rotor/heloLaws';
+import type { MouseCapture } from './mouseCapture';
 
 export type HeloAction =
   | 'collectiveUp'
@@ -28,6 +30,7 @@ export type HeloAction =
   | 'parkingBrake'
   | 'freeLook'
   | 'recenterView'
+  | 'mouseCapture'
   | 'help'
   | 'debug'
   | 'pause';
@@ -45,6 +48,7 @@ export const HELO_BINDINGS: Record<HeloAction, string[]> = {
   parkingBrake: ['KeyP'],
   freeLook: ['KeyC'],
   recenterView: ['KeyV'],
+  mouseCapture: ['Tab'],
   help: ['F1'],
   debug: ['F3'],
   pause: ['Escape'],
@@ -62,6 +66,7 @@ export const HELO_LABELS: Record<HeloAction, string> = {
   parkingBrake: 'Parking brake on / off',
   freeLook: 'Free look (hold; or hold the right mouse button); the view stays where you leave it',
   recenterView: 'Recenter the view (or click the middle mouse button); the wheel zooms',
+  mouseCapture: 'Capture the mouse to fly with it, or free it (or click the view to capture)',
   help: 'This help',
   debug: 'Flight-model debug panel',
   pause: 'Pause menu',
@@ -71,6 +76,7 @@ const PRESS_ACTIONS = new Set<HeloAction>([
   'hoverHold',
   'parkingBrake',
   'recenterView',
+  'mouseCapture',
   'help',
   'debug',
   'pause',
@@ -88,8 +94,6 @@ export class HeloInput {
   zoomSteps = 0;
   onAction: ((a: HeloAction) => void) | null = null;
   enabled = false;
-  /** Whether the mouse is captured (pointer lock), and whether it was last frame. */
-  locked = false;
   /** Mouse forward pitches the nose up instead of down. */
   invertPitch = false;
   sensitivity = MOUSE_RATE;
@@ -101,7 +105,10 @@ export class HeloInput {
   private hoverToggle = false;
   private readonly detach: () => void;
 
-  constructor(el: HTMLElement) {
+  constructor(
+    el: HTMLElement,
+    private readonly capture: MouseCapture | null = null,
+  ) {
     this.el = el;
     for (const [a, codes] of Object.entries(HELO_BINDINGS) as [HeloAction, string[]][])
       for (const c of codes) this.keyAction.set(c, a);
@@ -141,8 +148,8 @@ export class HeloInput {
       } else if (e.button === 1) {
         e.preventDefault();
         this.onAction?.('recenterView');
-      } else if (e.button === 0 && !this.locked) {
-        el.requestPointerLock?.();
+      } else if (e.button === 0 && this.capture && !this.capture.captured) {
+        this.capture.grab();
       }
     };
     const wheel = (e: WheelEvent) => {
@@ -155,12 +162,6 @@ export class HeloInput {
     const up = (e: PointerEvent) => {
       if (e.button === 2) this.rightDown = false;
     };
-    const lockChange = () => {
-      const was = this.locked;
-      this.locked = document.pointerLockElement === el;
-      // Escape under pointer lock gives the mouse back without a key event: pause.
-      if (was && !this.locked && this.enabled) this.onAction?.('pause');
-    };
     const menu = (e: Event) => {
       if (this.enabled) e.preventDefault();
     };
@@ -170,7 +171,6 @@ export class HeloInput {
     document.addEventListener('mousemove', move);
     el.addEventListener('pointerdown', down);
     window.addEventListener('pointerup', up);
-    document.addEventListener('pointerlockchange', lockChange);
     el.addEventListener('contextmenu', menu);
     el.addEventListener('wheel', wheel, { passive: false });
     this.detach = () => {
@@ -180,7 +180,6 @@ export class HeloInput {
       document.removeEventListener('mousemove', move);
       el.removeEventListener('pointerdown', down);
       window.removeEventListener('pointerup', up);
-      document.removeEventListener('pointerlockchange', lockChange);
       el.removeEventListener('contextmenu', menu);
       el.removeEventListener('wheel', wheel);
     };
@@ -206,9 +205,14 @@ export class HeloInput {
     this.mouse.y += dy;
   }
 
+  /** Whether the mouse is captured, so its motion flies the helicopter. */
+  get locked(): boolean {
+    return this.capture?.captured ?? false;
+  }
+
   /** Gives the mouse back (a menu opens). */
   release(): void {
-    if (this.locked && typeof document !== 'undefined') document.exitPointerLock?.();
+    this.capture?.release();
   }
 
   /** The command for the next step, from the keys held and the mouse since the last call. */
