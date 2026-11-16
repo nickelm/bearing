@@ -250,12 +250,12 @@ export function coverMix(s: CoverSite): Mix {
 
 /** Each kind's scale range. */
 const SCALE: Readonly<Record<CoverKind, readonly [number, number]>> = {
-  'cover-tuft': [0.8, 1.35],
-  'cover-tuft-dry': [0.8, 1.3],
-  'cover-tussock': [0.75, 1.25],
-  'cover-flowers-cream': [0.85, 1.2],
-  'cover-flowers-yellow': [0.85, 1.2],
-  'cover-flowers-violet': [0.85, 1.2],
+  'cover-tuft': [1.05, 1.75],
+  'cover-tuft-dry': [1.05, 1.7],
+  'cover-tussock': [0.9, 1.5],
+  'cover-flowers-cream': [1.0, 1.45],
+  'cover-flowers-yellow': [1.0, 1.45],
+  'cover-flowers-violet': [1.0, 1.45],
   'cover-reeds': [0.8, 1.25],
   'cover-bush': [0.7, 1.4],
   'cover-bush-dry': [0.7, 1.3],
