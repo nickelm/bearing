@@ -241,7 +241,7 @@ describe('protected river channels', () => {
     expect(e.apply(at(30, 0), carved(30))).toBeCloseTo(90, 6);
   });
 
-  it('holds pads that fill a channel too', () => {
+  it('lets pads fill a channel (airfields, decision 164)', () => {
     const pad: PadEdit = {
       center: at(0, 0),
       heading: 0,
@@ -253,7 +253,7 @@ describe('protected river channels', () => {
       margin: 200,
     };
     const e = new TerrainEdits({ radius: R, pads: [pad], channels: riverSource() });
-    expect(e.apply(at(0, 0), carved(0))).toBe(carved(0));
+    expect(e.apply(at(0, 0), carved(0))).toBe(101);
     expect(e.apply(at(200, 0), carved(200))).toBe(101);
   });
 

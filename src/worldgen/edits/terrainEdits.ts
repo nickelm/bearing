@@ -8,12 +8,15 @@
  *
  * 1. Corridors (roads, railways, canals), blended where they overlap, the
  *    higher priority weighing four times as much per rank.
- * 2. Pads (airfields, later shelves, yards and lock chambers) over them: on a
- *    pad the surface is exactly the pad's elevation. Pads do not overlap in
- *    practice; if they do, the first one wins.
- * 3. Protected river channels last: where 1 and 2 raised the ground inside a
+ * 2. Protected river channels: where the corridors raised the ground inside a
  *    carved channel or its inner banks, it is held at the carved height (the
  *    kernel's carve stays the minimum, so no embankment dams a river).
+ * 3. Pads (airfields, later shelves, yards and lock chambers) over them: on a
+ *    pad the surface is exactly the pad's elevation. Pads do not overlap in
+ *    practice; if they do, the first one wins. Pads are exempt from step 2
+ *    (decision 164): six of seed 1983's 71 airfields lie across a rendered
+ *    river, which the coarse pass that places them cannot see, and a held
+ *    channel would cut their runways.
  *
  * Only land is edited: a height at or below sea level is returned unchanged,
  * so a coastal pad meets the sea at its own edge. Every function here is pure
@@ -211,18 +214,18 @@ export class TerrainEdits {
       }
       if (den > 0) e = h + num / Math.max(den, top);
     }
-    for (const p of pads) {
-      const w = padWeight(p, dir, this.radius);
-      if (w >= 1) continue;
-      e = p.pad.elevation + (e - p.pad.elevation) * w;
-      break;
-    }
     if (e > h && this.channels) {
       const ids = channels();
       if (ids.length > 0) {
         const hold = channelHold(this.channels.segments, ids, dir, this.radius);
         if (hold > 0) e -= hold * (e - h);
       }
+    }
+    for (const p of pads) {
+      const w = padWeight(p, dir, this.radius);
+      if (w >= 1) continue;
+      e = p.pad.elevation + (e - p.pad.elevation) * w;
+      break;
     }
     return e;
   }

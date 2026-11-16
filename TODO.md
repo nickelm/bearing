@@ -896,7 +896,8 @@ Rivers by regime, roads and railways aligned to the terrain with earthworks as a
 - [x] `worldgen/edits/`: corridor and pad records, the clamp form for banks (fill 1:1.5, cut 1:1 or 1:2), priority blending, an index by level-7 tile, `TerrainEdits.apply(dir, base)`
 - [x] Protected channels: inside a river's channel and inner banks, the minimum of the edited and the carved height (distance from the `RiverIndex` segments; no CPU re-run of the carve)
 - [x] Migrate decision 108's airfield pads; tests that every mesh vertex, `heightAt`, `displaySurfaceAt` and Free Flight's ground are unchanged; the Kestrel lockstep passes unchanged (decision 164)
-  - [ ] `tools/edits.preview.ts` on seed 1983: airfield pads over carved channels, where protection now changes the ground; exempt pads or move those airfields if any runway is cut
+  - [x] `tools/edits.preview.ts` on seed 1983: 6 of 71 airfield pads lie across a rendered river, so pads are exempt from channel protection (decision 164)
+  - [ ] Keep airfields off rendered rivers (the coarse pass cannot see them: a check against the eroded rivers after the global pass, or a crossing site's culvert), then remove the pads' exemption
 - [x] One function for meshes, trees, buildings, the camera's clearance and the flight model's ground; `SurfaceGrading` becomes its client
 - [x] Tests per edit type and for the composition order, including a fill corridor across a channel that never raises the channel
 
