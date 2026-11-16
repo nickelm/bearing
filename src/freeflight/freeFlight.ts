@@ -238,6 +238,8 @@ export class FreeFlight {
       afterburner: 0,
       flaps: 1,
       groundHeight: 0,
+      // The drawn ground, so the shadow lies on its slope (decision 170).
+      ground: (d) => this.ground?.height(d) ?? 0,
     };
     deps.strategic.onGroundPick = (dir) => {
       if (this.state !== 'menu') return;

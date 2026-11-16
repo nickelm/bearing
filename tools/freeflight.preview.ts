@@ -37,6 +37,9 @@ import { FlightWeather } from '../src/freeflight/flightWeather';
 import { AirfieldGround, runwaysOf } from '../src/freeflight/ground';
 import { buildHudFrame, landingAid } from '../src/freeflight/hudFrame';
 import { modelSpec } from '../src/render/common/models/library';
+import { helicopterRig } from '../src/render/sim/camera/chaseCamera';
+import { RotorcraftModel } from '../src/sim/flight/rotor/rotorcraftModel';
+import { parseRotorcraftSpec } from '../src/sim/flight/rotor/rotorSpec';
 import { AircraftView } from '../src/render/sim/aircraft/aircraftView';
 import type { AircraftPose } from '../src/render/sim/aircraft/aircraftView';
 import { GlobeScene } from '../src/render/sim/globeScene';
@@ -220,6 +223,7 @@ it('renders Free Flight shots', async () => {
     afterburner: 0,
     flaps: 1,
     groundHeight: 0,
+    ground: (d) => ground.height(d),
   };
   scene.beforeDraw = (eye) => view.update(pose, eye);
   scene.cameraMode = 'chase';
@@ -268,7 +272,95 @@ it('renders Free Flight shots', async () => {
   mkdirSync(outDir, { recursive: true });
   const messages: { t: number; lines: string[] }[] = [];
 
-  for (const shot of SHOTS) {
+  // Helicopters (HELO=scout|utility): hovering beside the runway's middle, or over the
+  // steepest nearby slope (SLOPE=1), at each of HELO_HEIGHTS (m over the ground), rotor
+  // turning, framed by the helicopter rig: the shadow on the ground (decision 170).
+  const heloKind = process.env.HELO;
+  if (heloKind) {
+    const id = heloKind === 'utility' ? 'alliance-utility-helo' : 'alliance-scout-helo';
+    const hs = modelSpec(id);
+    const hf = parseRotorcraftSpec(hs.flight, id);
+    const h = new RotorcraftModel(hf, R);
+    const hview = new AircraftView(hs, hf.cg, scene.lighting);
+    hview.planetRadius = R;
+    view.group.visible = false;
+    view.shadowMesh.visible = false;
+    scene.vehicles.add(hview.group, hview.shadowMesh);
+    const f = runwayFrame(runway);
+    let spot = fromRunway(f, 0, 75, R);
+    if (process.env.SLOPE === '1') {
+      // The steepest ground under 30° within SLOPE_KM (15) of the runway, from the graded
+      // global heights over 200 m.
+      let best = -1;
+      const reach = Number(env('SLOPE_KM', '15')) * 1000;
+      for (let a = -reach; a <= reach; a += 250)
+        for (let c = -reach; c <= reach; c += 250) {
+          const d = fromRunway(f, a, c, R);
+          const hh = (x: number, y: number) => Math.max(0, edits.apply(fromRunway(f, x, y, R), sampler(fromRunway(f, x, y, R))));
+          if (hh(a, c) <= 1) continue;
+          const g = Math.hypot(hh(a + 100, c) - hh(a - 100, c), hh(a, c + 100) - hh(a, c - 100)) / 200;
+          if (g < Math.tan(30 * DEG) && g > best) {
+            best = g;
+            spot = d;
+          }
+        }
+      console.log(`Slope spot: ${(Math.atan(best) / DEG).toFixed(1)}° over 200 m`);
+    }
+    const hpose: AircraftPose = { ...pose, pos: h.pos, q: h.q, flaps: 0 };
+    scene.beforeDraw = (eye) => hview.update(hpose, eye);
+    scene.chase.rig = helicopterRig(hf.main.radius);
+    for (const hover of env('HELO_HEIGHTS', '3,15').split(',').map(Number)) {
+      const gh = ground.height(spot);
+      // The sun on the right (SUN_SIDE=tail: behind), so the shadow falls beside the
+      // helicopter, in the picture.
+      sunDirection(gameTime, params, calendar, scene.sun);
+      const north = new Vec3d(0, 1, 0).addScaled(spot, -spot.y).normalize();
+      const east = north.clone().cross(spot);
+      const away =
+        Math.atan2(scene.sun.dot(east), scene.sun.dot(north)) +
+        (process.env.SUN_SIDE === 'tail' ? Math.PI : -Math.PI / 2);
+      h.place(spot.clone().scale(R + gh + h.gearHeight + hover), new Vec3d(), away, hf.main.shaftTilt);
+      h.updateAttitude(ground);
+      hpose.groundHeight = gh;
+      hpose.rotors = [
+        { azimuth: 0.4, speed: 1, tiltForward: 0, tiltRight: 0 },
+        { azimuth: 0.2, speed: 1, tiltForward: 0, tiltRight: 0 },
+      ];
+      sunDirection(gameTime, params, calendar, scene.sun);
+      hview.sun.copy(scene.sun);
+      scene.terrain.land.seasonPhase.value = seasonPhase(gameTime, params, calendar);
+      scene.gameTime = gameTime;
+      scene.clouds.time.value = gameTime;
+      scene.weatherView = weather.finish(gameTime);
+      scene.resetAtmosphere();
+      followAirframe(scene.chase.target, h);
+      scene.chase.reset();
+      hview.radPerPixel = (60 * DEG) / height;
+      let stable = 0;
+      let last = '';
+      for (let fr = 0; fr < 300 && stable < 3; fr++) {
+        scene.render(1 / 60);
+        await gpu.finish();
+        await new Promise((r) => setTimeout(r, 2));
+        const st = scene.terrain.stats;
+        const sig = `${st.drawn}/${st.deepest}/${st.meshes}`;
+        stable = st.pending === 0 && scene.structures.stats.pending === 0 && sig === last ? stable + 1 : 0;
+        last = sig;
+      }
+      for (let fr = 0; fr < 30; fr++) scene.render(1 / 60);
+      const rgb = await head.readRgb();
+      const name = `helo-${heloKind}-${hover}m${process.env.SLOPE === '1' ? '-slope' : ''}`;
+      const file = join(outDir, `freeflight-${name}${env('OUT', '')}.png`);
+      writeFileSync(file, encodePng(width, height, rgb));
+      console.log(
+        `${name}: sun ${(scene.lighting.sunElevation / DEG).toFixed(1)}°, ground ${gh.toFixed(1)} m, ` +
+          `shadow ${hview.shadowMesh.visible ? 'shown' : 'hidden'} → ${file}`,
+      );
+    }
+    hview.dispose();
+  }
+
+  for (const shot of heloKind ? [] : SHOTS) {
     // Fly to the shot's moment, in the weather's wind and gusts as the app's aircraft does.
     for (let i = 0; i < 1200 / FLIGHT_STEP; i++) {
       const h = pilot.coords(m).h;

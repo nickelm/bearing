@@ -11,34 +11,57 @@
  * as rotor speed rises (blades alone below 0.3 of governed speed, disc alone above
  * 0.7). The disc has no ink outline and casts a faint shadow.
  *
+ * The shadow (decision 170): the posed triangles flattened along the sun onto a
+ * plane fitted to the drawn ground where the shadow falls, on the CPU, as one
+ * mesh in one draw. It darkens the ground once wherever any triangle covers it:
+ * each fragment writes the depth of its pixel's ray against the plane, computed
+ * from the screen position, so every triangle at a pixel writes the same bits
+ * and a strict depth test lets only the first through. It multiplies the ground
+ * by a deep blue-gray (Part I: shadows deep and blue, never black), fading under
+ * cloud, in a mountain's shadow and toward a low sun.
+ *
  * Orientation: the flight model's quaternion turns body axes (x forward, y
  * right, z down) into the world; the model frame is x forward, y up, z right,
  * so the mesh turns by q ⊗ (−90° about x) about the CG.
  */
 import {
+  AddEquation,
   AdditiveBlending,
   BackSide,
   BufferAttribute,
   BufferGeometry,
   ConeGeometry,
+  CustomBlending,
   DoubleSide,
+  DstColorFactor,
   Euler,
   Group,
+  LessDepth,
   Mesh,
   MeshBasicNodeMaterial,
+  OneFactor,
   Quaternion,
   Vector3,
+  ZeroFactor,
 } from 'three/webgpu';
 import {
   attribute,
+  cameraProjectionMatrix,
+  cameraProjectionMatrixInverse,
+  cameraViewMatrix,
+  dot,
   float,
+  getViewPosition,
+  mix,
   normalWorld,
   positionLocal,
   positionWorld,
+  screenUV,
   uniform,
   vec3,
+  vec4,
 } from 'three/tsl';
-import type { Node, UniformNode } from 'three/webgpu';
+import type { UniformNode } from 'three/webgpu';
 import type { Quatd } from '../../../core/quat';
 import { Vec3d } from '../../../core/vec3d';
 import { buildAnimatedModel } from '../../common/models/builder';
@@ -83,6 +106,12 @@ export interface AircraftPose {
   /** Ground height under the aircraft (m above sea level), for the shadow. */
   groundHeight: number;
   /**
+   * The drawn ground's height (m) at a unit direction. With it the shadow lies on a
+   * plane fitted to the ground where it falls (five samples a frame); without it, on
+   * the level plane at `groundHeight`.
+   */
+  ground?: (dir: Readonly<Vec3d>) => number;
+  /**
    * Rotors in spec order (helicopters). Absent: blades stand still at azimuth 0 and
    * no disc shows. Tilt applies to rotors whose axis is within 45° of the model's up
    * (main rotors); tail rotors ignore it.
@@ -102,6 +131,25 @@ export function rotorBlend(speed: number): { blades: number; disc: number } {
 
 /** The disc's shadow strength relative to the body's at the disc's own opacity. */
 const DISC_SHADOW = 0.45;
+
+/**
+ * What the shadow multiplies the ground by at full strength: about 68% darker, a
+ * little less in blue, so it reads deep and blue (Part I, Lighting). A sunlit
+ * ground loses 70–80% of its light in a real shadow; this stays a little lighter.
+ */
+export const SHADOW_TINT: readonly [number, number, number] = [0.3, 0.33, 0.42];
+
+/** Sun height (sine of its elevation) over which the shadow fades in. */
+const SHADOW_SUN = [0.05, 0.2] as const;
+
+/** The shadow plane sits this far above the ground (m), plus a share of its distance from the eye. */
+const SHADOW_LIFT = [0.06, 0.002] as const;
+
+/** 0 below `a`, 1 above `b`, smooth between. */
+function smoothstep(a: number, b: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
 
 /** Model frame → body axes: −90° about x. */
 const MODEL_TO_BODY = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -Math.PI / 2);
@@ -125,19 +173,23 @@ interface RotorMesh {
   disc: Mesh;
   bladeOpacity: FloatUniform;
   discOpacity: FloatUniform;
-  bladeShadow: Mesh;
-  discShadow: Mesh;
-  /** Opacity of the blade and disc shadows (the disc's also scales by its band alpha). */
-  bladeShadowOpacity: FloatUniform;
-  discShadowOpacity: FloatUniform;
 }
 
-/** A source of shadow triangles: a mesh's model-frame positions and where they go in the shadow. */
+/**
+ * A source of shadow triangles: a mesh's model-frame positions, where they start in
+ * the shadow's buffers (vertex index), and its strength: 1 for the body, the
+ * blades' opacity, or the disc's band alpha times its opacity.
+ */
 interface ShadowSource {
   mesh: Mesh;
   position: Float32Array;
-  out: BufferAttribute;
-  offset: number;
+  start: number;
+  kind: 'body' | 'blades' | 'disc';
+  rotor: number;
+  /** Per-vertex band alpha (discs). */
+  alpha: Float32Array | null;
+  /** Its triangles are collapsed to a point (hidden source). */
+  collapsed: boolean;
 }
 
 export class AircraftView {
@@ -154,8 +206,16 @@ export class AircraftView {
   private readonly flameMaterial: MeshBasicNodeMaterial;
   private readonly inkOffset = uniform(0);
   private readonly shadow: Mesh;
-  /** Triangles flattened into the shadow each frame, in order. */
+  /** Triangles flattened into the shadow each frame, in draw order: body, blades, discs. */
   private readonly shadowSources: ShadowSource[] = [];
+  private readonly shadowPos: BufferAttribute;
+  private readonly shadowShade: BufferAttribute;
+  /** Half the width of the ground the shadow's plane is fitted over (m). */
+  private readonly shadowSpan: number;
+  /** The shadow plane (camera-relative point, world normal) and the sun's fade, for the shader. */
+  private readonly planePoint = uniform(new Vector3());
+  private readonly planeNormal = uniform(new Vector3(0, 1, 0));
+  private readonly shadowStrength = uniform(1);
   private readonly material: MeshBasicNodeMaterial;
   private readonly inkMaterial: MeshBasicNodeMaterial;
   private readonly materials: MeshBasicNodeMaterial[] = [];
@@ -254,44 +314,7 @@ export class AircraftView {
       return { rotor, tilt, spin, blades, disc, bladeOpacity, discOpacity };
     });
 
-    // Shadow: the posed triangles flattened onto the ground along the sun, on the CPU.
-    const count = shadowed.reduce((n, s) => n + s.model.position.length, 0);
-    const shadowGeo = new BufferGeometry();
-    const shadowPos = new BufferAttribute(new Float32Array(count), 3);
-    shadowGeo.setAttribute('position', shadowPos);
-    this.geometries.push(shadowGeo);
-    // Overlapping triangles darken twice; a strict depth test streaks (coplanar
-    // depths differ by rounding), so a stencil pass is the later fix (TODO).
-    this.shadow = new Mesh(shadowGeo, this.buildShadowMaterial(lighting, float(1)));
-    this.shadow.frustumCulled = false;
-    let off = 0;
-    for (const s of shadowed) {
-      this.shadowSources.push({
-        mesh: s.mesh,
-        position: s.model.position,
-        out: shadowPos,
-        offset: off,
-      });
-      off += s.model.position.length;
-    }
-    // Blades and discs shadow on their own, at their own opacity, as children of the
-    // shadow (which sits at the camera-relative origin).
-    for (const r of rotorParts) {
-      const shadowOf = (source: Mesh, position: Float32Array, opacity: FloatUniform) => {
-        const g = new BufferGeometry();
-        const out = new BufferAttribute(new Float32Array(position.length), 3);
-        g.setAttribute('position', out);
-        this.geometries.push(g);
-        if (source === r.disc) g.setAttribute('alpha', new BufferAttribute(r.rotor.disc.alpha, 1));
-        const op = source === r.disc ? attribute('alpha', 'float').mul(opacity) : opacity;
-        const m = new Mesh(g, this.buildShadowMaterial(lighting, op));
-        m.frustumCulled = false;
-        this.shadow.add(m);
-        this.shadowSources.push({ mesh: source, position, out, offset: 0 });
-        return m;
-      };
-      const bladeShadowOpacity = uniform(1);
-      const discShadowOpacity = uniform(0);
+    for (const r of rotorParts)
       this.rotors.push({
         rotor: r.rotor,
         tilt: r.tilt,
@@ -304,12 +327,50 @@ export class AircraftView {
         disc: r.disc,
         bladeOpacity: r.bladeOpacity,
         discOpacity: r.discOpacity,
-        bladeShadow: shadowOf(r.blades.mesh, r.rotor.blades.position, bladeShadowOpacity),
-        discShadow: shadowOf(r.disc, r.rotor.disc.position, discShadowOpacity),
-        bladeShadowOpacity,
-        discShadowOpacity,
       });
+
+    // Shadow: one mesh of every shadowing triangle, flattened on the CPU each frame. Body,
+    // pieces and hubs first, then blades, then discs: the first triangle at a pixel wins.
+    const sources: Omit<ShadowSource, 'start' | 'collapsed'>[] = [
+      ...shadowed.map((x) => ({
+        mesh: x.mesh,
+        position: x.model.position,
+        kind: 'body' as const,
+        rotor: -1,
+        alpha: null,
+      })),
+      ...rotorParts.map((r, i) => ({
+        mesh: r.blades.mesh,
+        position: r.rotor.blades.position,
+        kind: 'blades' as const,
+        rotor: i,
+        alpha: null,
+      })),
+      ...rotorParts.map((r, i) => ({
+        mesh: r.disc,
+        position: r.rotor.disc.position,
+        kind: 'disc' as const,
+        rotor: i,
+        alpha: r.rotor.disc.alpha,
+      })),
+    ];
+    let vertices = 0;
+    let reach = 0;
+    for (const src of sources) {
+      this.shadowSources.push({ ...src, start: vertices, collapsed: true });
+      vertices += src.position.length / 3;
+      const p = src.position;
+      for (let i = 0; i < p.length; i += 3) reach = Math.max(reach, Math.hypot(p[i]!, p[i + 2]!));
     }
+    this.shadowSpan = Math.min(12, Math.max(3, reach));
+    const shadowGeo = new BufferGeometry();
+    this.shadowPos = new BufferAttribute(new Float32Array(vertices * 3), 3);
+    this.shadowShade = new BufferAttribute(new Float32Array(vertices), 1);
+    shadowGeo.setAttribute('position', this.shadowPos);
+    shadowGeo.setAttribute('shade', this.shadowShade);
+    this.geometries.push(shadowGeo);
+    this.shadow = new Mesh(shadowGeo, this.buildShadowMaterial(lighting));
+    this.shadow.frustumCulled = false;
   }
 
   /** The shadow, in camera-relative coordinates: add it to a group at the origin. */
@@ -362,25 +423,43 @@ export class AircraftView {
     return m;
   }
 
-  /** Shadow: black at 32% times `opacity`, fading under cloud and in a mountain's shadow. */
-  private buildShadowMaterial(
-    lighting: PlanetLighting,
-    opacity: Node<'float'>,
-  ): MeshBasicNodeMaterial {
-    const sm = new MeshBasicNodeMaterial({
-      transparent: true,
-      depthWrite: false,
-      side: DoubleSide,
-    });
-    sm.colorNode = vec3(0, 0, 0);
+  /**
+   * Shadow: multiplies the ground by SHADOW_TINT at full strength (per-vertex shade
+   * times the sun's fade, cloud and terrain shadow), writing its pixel's depth on the
+   * shadow plane so that overlapping triangles darken once.
+   */
+  private buildShadowMaterial(lighting: PlanetLighting): MeshBasicNodeMaterial {
+    const sm = new MeshBasicNodeMaterial({ transparent: true, side: DoubleSide });
+    // Multiply: result = source × destination; the destination's alpha stays.
+    sm.blending = CustomBlending;
+    sm.blendEquation = sm.blendEquationAlpha = AddEquation;
+    sm.blendSrc = DstColorFactor;
+    sm.blendDst = ZeroFactor;
+    sm.blendSrcAlpha = ZeroFactor;
+    sm.blendDstAlpha = OneFactor;
     // The shadow is the sun's: it fades under cloud and inside a mountain's shadow.
     const onGround = positionWorld.add(lighting.eye) as Vec3Node;
     const cloud = lighting.sunVisibility?.(onGround) ?? float(1);
     const terrain = lighting.terrainShadow?.(onGround) ?? float(1);
-    sm.opacityNode = float(0.32).mul(opacity).mul(cloud).mul(terrain);
-    sm.polygonOffset = true;
-    sm.polygonOffsetFactor = -2;
-    sm.polygonOffsetUnits = -2;
+    const s = attribute('shade', 'float')
+      .mul(this.shadowStrength)
+      .mul(cloud)
+      .mul(terrain)
+      .clamp(0, 1);
+    sm.colorNode = mix(vec3(1, 1, 1), vec3(...SHADOW_TINT), s);
+    sm.opacityNode = float(1);
+    // One layer: the depth of this pixel's ray where it meets the shadow plane, from the
+    // screen position and uniforms only, so every triangle at a pixel writes the same
+    // bits; with a strict test the first triangle shadows the pixel and the rest fail
+    // (interpolated depths differ by rounding and streaked).
+    sm.depthWrite = true;
+    sm.depthFunc = LessDepth;
+    const ray = getViewPosition(screenUV, float(0.5), cameraProjectionMatrixInverse);
+    const g = cameraViewMatrix.mul(vec4(this.planePoint, 1)).xyz;
+    const n = cameraViewMatrix.mul(vec4(this.planeNormal, 0)).xyz;
+    const hit = ray.mul(dot(g, n).div(dot(ray, n)));
+    const clip = cameraProjectionMatrix.mul(vec4(hit, 1));
+    sm.depthNode = clip.z.div(clip.w);
     this.materials.push(sm);
     return sm;
   }
@@ -449,43 +528,99 @@ export class AircraftView {
       r.discOpacity.value = disc;
       r.blades.visible = r.bladeInk.visible = blades > 0.004;
       r.disc.visible = disc > 0.004;
-      r.bladeShadowOpacity.value = blades;
-      r.discShadowOpacity.value = disc * DISC_SHADOW;
-      r.bladeShadow.visible = r.blades.visible;
-      r.discShadow.visible = r.disc.visible;
     });
   }
 
-  /** Flattens the posed model onto the ground plane along the sun. */
+  /** Flattens the posed model along the sun onto the ground where its shadow falls. */
   private updateShadow(pose: Readonly<AircraftPose>, eye: Readonly<Vec3d>): void {
     const up = pose.pos.clone().normalize();
     const sunUp = this.sun.dot(up);
-    const R = this.planetRadius + pose.groundHeight;
-    const agl = pose.pos.length() - R;
-    this.shadow.visible = sunUp > 0.05 && agl < 400;
+    const R0 = this.planetRadius + pose.groundHeight;
+    const agl = pose.pos.length() - R0;
+    const fade = smoothstep(SHADOW_SUN[0], SHADOW_SUN[1], sunUp);
+    const n = new Vec3d();
+    const G = this.shadowPlane(pose, up, agl, sunUp, n);
+    const L = this.sun;
+    const Ln = L.dot(n);
+    this.shadow.visible = fade > 0 && agl < 400 && Ln > 0.05;
     if (!this.shadow.visible) return;
     this.group.updateMatrixWorld(true);
-    // Ground plane through the point under the aircraft, camera-relative.
-    const G = up.clone().scale(R).sub(eye);
-    const L = this.sun;
+    // Camera-relative, lifted off the ground against z-fighting.
+    G.sub(eye);
+    G.addScaled(n, SHADOW_LIFT[0] + SHADOW_LIFT[1] * G.length());
+    this.planePoint.value.set(G.x, G.y, G.z);
+    this.planeNormal.value.set(n.x, n.y, n.z);
+    this.shadowStrength.value = fade;
     const v = new Vector3();
-    const touched = new Set<BufferAttribute>();
+    const arr = this.shadowPos.array as Float32Array;
+    const shade = this.shadowShade.array as Float32Array;
     for (const s of this.shadowSources) {
-      if (!s.mesh.visible) continue;
-      const arr = s.out.array as Float32Array;
+      const r = s.rotor >= 0 ? this.rotors[s.rotor]! : null;
+      const k = !r ? 1 : s.kind === 'blades' ? r.bladeOpacity.value : r.discOpacity.value * DISC_SHADOW;
+      const n3 = s.position.length;
+      if (!s.mesh.visible || k < 0.004) {
+        // A hidden source would still write depth and block what follows: collapse it.
+        if (!s.collapsed) {
+          arr.fill(0, s.start * 3, s.start * 3 + n3);
+          shade.fill(0, s.start, s.start + n3 / 3);
+          s.collapsed = true;
+        }
+        continue;
+      }
+      s.collapsed = false;
       const src = s.position;
       const mw = s.mesh.matrixWorld;
-      for (let i = 0; i < src.length; i += 3) {
+      const o = s.start * 3;
+      for (let i = 0; i < n3; i += 3) {
         v.set(src[i]!, src[i + 1]!, src[i + 2]!).applyMatrix4(mw);
         // p' = p − L ((p − G)·n) / (L·n)
-        const d = ((v.x - G.x) * up.x + (v.y - G.y) * up.y + (v.z - G.z) * up.z) / sunUp;
-        arr[s.offset + i] = v.x - L.x * d;
-        arr[s.offset + i + 1] = v.y - L.y * d;
-        arr[s.offset + i + 2] = v.z - L.z * d;
+        const d = ((v.x - G.x) * n.x + (v.y - G.y) * n.y + (v.z - G.z) * n.z) / Ln;
+        arr[o + i] = v.x - L.x * d;
+        arr[o + i + 1] = v.y - L.y * d;
+        arr[o + i + 2] = v.z - L.z * d;
       }
-      touched.add(s.out);
+      if (s.kind === 'body') shade.fill(1, s.start, s.start + n3 / 3);
+      else if (s.alpha) for (let j = 0; j < n3 / 3; j++) shade[s.start + j] = s.alpha[j]! * k;
+      else shade.fill(k, s.start, s.start + n3 / 3);
     }
-    for (const a of touched) a.needsUpdate = true;
+    this.shadowPos.needsUpdate = true;
+    this.shadowShade.needsUpdate = true;
+  }
+
+  /**
+   * The plane the shadow lies on (world point, returned; unit normal in `n`): through
+   * the drawn ground where the CG's ray along the sun meets it, along the ground's
+   * slope from four samples `shadowSpan` around that point; the level plane at the
+   * ground under the aircraft without `pose.ground`, and on cliffs over 70°.
+   */
+  private shadowPlane(
+    pose: Readonly<AircraftPose>,
+    up: Readonly<Vec3d>,
+    agl: number,
+    sunUp: number,
+    n: Vec3d,
+  ): Vec3d {
+    const R = this.planetRadius;
+    n.copy(up);
+    const level = up.clone().scale(R + pose.groundHeight);
+    if (!pose.ground || sunUp <= 0.01) return level;
+    // Where the shadow falls on the level ground (at most 2 km off).
+    const c = pose.pos.clone().addScaled(this.sun, -Math.min(2000, Math.max(0, agl) / sunUp));
+    const dir = c.normalize();
+    const e1 = Math.abs(dir.y) < 0.9 ? new Vec3d(0, 1, 0) : new Vec3d(1, 0, 0);
+    e1.addScaled(dir, -e1.dot(dir)).normalize();
+    const e2 = dir.clone().cross(e1);
+    const at = (e: Vec3d, s: number): Vec3d => {
+      const d = dir.clone().scale(R).addScaled(e, s).normalize();
+      return d.scale(R + pose.ground!(d));
+    };
+    const span = this.shadowSpan;
+    const a = at(e1, span).sub(at(e1, -span));
+    const b = at(e2, span).sub(at(e2, -span));
+    const fit = a.cross(b).normalize();
+    if (!(fit.dot(dir) > 0.34)) return level;
+    n.copy(fit);
+    return dir.clone().scale(R + pose.ground(dir));
   }
 
   /** Planet radius (m), set by the app. */
