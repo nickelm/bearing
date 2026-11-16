@@ -191,7 +191,7 @@ export interface CoverContext {
   habitability?: (d: Readonly<Vec3d>) => number;
   /** River stretches near a level-10 tile. */
   rivers?: (tile: TileKey) => readonly RiverStretch[];
-  /** The world's canopy seed, for the fields' boundaries (verges, decision 184). */
+  /** The world's canopy seed, for the fields' boundaries (verges, decision 185). */
   fieldSeed?: number;
 }
 
