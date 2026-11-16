@@ -38,7 +38,7 @@ export const RIVER_TUNING = {
   /** Smallest discharge drawn as a river (m³/s). */
   minDischarge: 20,
   /**
-   * Headwaters (decision 176): each river that begins at a source runs on upstream
+   * Headwaters (decision 177): each river that begins at a source runs on upstream
    * along its largest tributary while the discharge stays at least this (m³/s), so
    * rivers start up in the mountains as streams (8 m wide at 4 m³/s) rather than
    * appearing where they first reach `minDischarge`.

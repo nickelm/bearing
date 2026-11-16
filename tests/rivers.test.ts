@@ -34,7 +34,7 @@ describe('extractRivers', () => {
     widthCoefficient: 4,
   });
 
-  it('runs each source up its largest tributary as a headwater (decision 176)', () => {
+  it('runs each source up its largest tributary as a headwater (decision 177)', () => {
     const plain = extractRivers(n, h, dr.receiver, dr.discharge, {
       minDischarge: 30,
       headwaterDischarge: 30,

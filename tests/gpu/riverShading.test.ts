@@ -152,7 +152,7 @@ describe.skipIf(!gpu)('river coverage (TSL on Dawn)', () => {
       left.push(-80 + 0.5 * lo);
       right.push(-80 + 0.5 * hi);
     }
-    // The CPU twin (naturalBanks.ts, decision 176) finds the same banks within a meter.
+    // The CPU twin (naturalBanks.ts, decision 177) finds the same banks within a meter.
     const segs = obliqueIndex.segments;
     const F = segs.fields ?? 12;
     const stretches = Array.from({ length: segs.count }, (_, k) => ({

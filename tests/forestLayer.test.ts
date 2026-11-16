@@ -287,7 +287,7 @@ describe('tree placement (decision 148)', () => {
     expect(n).toBeGreaterThan(expected * 0.6);
     expect(n).toBeLessThan(expected * 1.3);
     // Every tree stands on a bank: out of the water the shader draws, natural banks and
-    // all (decision 176), and the woods within the rows' reach of it.
+    // all (decision 177), and the woods within the rows' reach of it.
     // The rows follow the bank noise at the centerline point; at a tree up to 25 m out it
     // differs by a few meters (the wander's and the ragged edge's change), hence the slack.
     const reach = GALLERY_BANK + GALLERY_ROWS.length * GALLERY_ROW_WIDTH + 10;
@@ -315,7 +315,7 @@ describe('tree placement (decision 148)', () => {
       count(placeTrees(t, tundra, opts, 1, climateOf(10))),
     );
     // No gallery in the desert, and none added to closed forest, whose trees that stood
-    // in the drawn water are gone (decision 176).
+    // in the drawn water are gone (decision 177).
     const dry = placeTrees(t, data(k7, 0), opts, 1, { ...climateOf(10, 0.02), rivers });
     expect(count(dry)).toBe(count(placeTrees(t, data(k7, 0), opts, 1, climateOf(10, 0.02))));
     const forest = (c: TreeContext) => placeTrees(t, data(k7, 1), opts, 1, c);

@@ -146,7 +146,7 @@ export const GALLERY_SPACING = 7;
 export const GALLERY_ROWS = [0.85, 0.6, 0.35, 0.15];
 export const GALLERY_ROW_WIDTH = 7;
 export const GALLERY_BANK = 3;
-/** Trees keep this far from the drawn water's edge (m; decision 176). */
+/** Trees keep this far from the drawn water's edge (m; decision 177). */
 export const TREE_WATER_MARGIN = 1.5;
 /** Landmark trees (decision 166): the chance of one in each part of open land (about 770 m). */
 export const LANDMARK_SHARE = 0.3;
@@ -349,7 +349,7 @@ export function* treePlacer(
     );
 
   // River stretches near the tile: woods along them (below), and every tree keeps out of
-  // the water the shader draws, natural banks included (decision 176).
+  // the water the shader draws, natural banks included (decision 177).
   const stretches = ctx.rivers?.(t) ?? [];
   /** Ground direction and raw height at sample (sx, sy), or null in water, a lake or a clearing. */
   const site = (sx: number, sy: number): number | null => {
@@ -691,7 +691,7 @@ export function* treePlacer(
             .scale(1 - u)
             .addScaled(st.b, u)
             .normalize();
-          // Rows out from the drawn bank, which the shader moves and swells (decision 176):
+          // Rows out from the drawn bank, which the shader moves and swells (decision 177):
           // the bank noise at the centerline point, at its ground height.
           const ouv = projectToCubeFace(on, t.face);
           const h0 = ground(ouv.u * size - t.x * TILE_TEXELS, ouv.v * size - t.y * TILE_TEXELS, on);

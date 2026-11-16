@@ -2835,7 +2835,7 @@ The eroded world's crossing sites, where the alignment snaps bridges (N5), come 
 
 **Reason:** Motion is what turns ground detail into a cue: the rings under a rotor give height and drift at a glance, and grass bending with the flight model's own gusts ties what the pilot sees to what the aircraft feels.
 
-### 176. Trees keep out of the drawn water and line its moved banks; rivers start in the mountains
+### 177. Trees keep out of the drawn water and line its moved banks; rivers start in the mountains
 
 **Date:** 2026-11-16
 **Decision:** Two changes from the owner's look at the natural banks (decision 167): trees stood in the water at the edges, though trees near the water are wanted, and few rivers seemed to start in the mountains.
