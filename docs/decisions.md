@@ -2698,3 +2698,18 @@ Budgets: nothing above 600 m beyond one uniform branch; below 150 m at most 12 d
 **Open for the owner:** flower accents in meadows; boulders over about 0.8 m as landing obstacles in the sim; sprites or a local density in the volumetric march for dust.
 
 **Reason:** Below about 20 m the terrain changes no faster than its 16 m noise cells and 24 m facets, so a hover gives no cue of height or drift (the owner's note of 2026-11-16 in `TODO.md`). Stepped detail and chunky cover extend the existing style downward in scale instead of adding a second, textured style, and gating every layer on the camera's height keeps working altitude as it is.
+
+### 169. Ground detail: the owner's answers
+
+**Date:** 2026-11-16
+**Decision:** The owner accepted the plan of decision 168 and answered its questions:
+
+- **Flowers:** yes, sparse and muted, two or three colors per biome, in meadows.
+- **Boulders block landings:** boulders taller than about 0.8 m are landing obstacles in the sim, through `worldgen/groundCover.ts` (H3).
+- **Dust:** soft sprites through the particle overlay, not a density in the volumetric march.
+- **Snow keeps its sparkle** (decision 139): the micro-facets add only faint shade steps on snow, never a tilted normal.
+- **Glints:** wet ground (by the weather's wetness), ice and smooth rock flash per micro-facet where its normal mirrors the sun toward the camera.
+
+`docs/visual-style.md` (*Terrain*, ground detail) and `docs/plans/ground-detail.md` change with this decision.
+
+**Reason:** The owner's review of the plan, 2026-11-16.

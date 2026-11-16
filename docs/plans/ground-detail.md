@@ -48,12 +48,13 @@ A virtual triangle mesh, finer than the real one, drawn only in the shader. Arou
 | Gravel, river bars, scree | 0.6 m | ±18° | Sharp, high contrast |
 | Rock faces | 3 m | ±20° | Chiseled planes; strata keep their bands (decision 126) |
 | Sand, desert | ripples, 0.8 m | two faces | Windward and lee faces as two shades, aligned across the prevailing wind |
-| Snow | 4 m | ±6° | Wind-carved slabs; the sparkle stays (decision 139) |
+| Snow | 4 m | none | Faint shade steps only; the normal and the sparkle stay as they are (decision 139) |
 | Marsh | 1 m | ±4° | Hummocks around the pools |
 
 - **Coordinates.** The lattice uses the wrapped coordinates of decision 38, projected on a tangent frame fixed per cube face, so the pattern stays nailed to the ground as the camera moves and float32 keeps centimeter precision. The frame changes only at cube-face seams; a short blend hides the switch.
 - **Fade.** Tilt and shade steps fade where a micro-triangle shrinks below about 4 px, so nothing shimmers; the derivatives are taken before any branch (decision 69).
 - **Cost gate.** A uniform switches the whole evaluation off when the camera is more than about 400 m above the ground, and a per-fragment distance test skips it beyond about 600 m. At altitude the cost is one uniform branch.
+- **Glints.** Wet ground, ice and smooth rock take a specular flash per micro-facet when its normal mirrors the sun toward the camera, scaled by wetness for wet ground (decision 169).
 - **Mid scale.** A third octave of the existing detail noise at 4–8 m bridges the gap between the micro-facets and the 16 m cells, faded the same way.
 
 ### 2. Ground cover kit (G2)
@@ -135,11 +136,13 @@ Decision 168 makes these in `docs/visual-style.md`:
 - *Terrain* gains a *Ground detail near the ground* item.
 - *Acceptance checks* gain check 11: hovers at 5 m and 30 m over grassland, scrub and scree, where the ground shows height and drift, without visible repetition, shimmer or pasted-on cover.
 
-## Questions for the owner
+## The owner's answers (decision 169)
 
-1. **Color accents.** WoW-style grass carries flowers. Sparse, muted flower tufts in meadows (two or three colors per biome), or none?
-2. **Boulders as obstacles.** Should the sim treat boulders taller than about 0.8 m as landing obstacles, through the shared placement function (H3's landing zones)? I recommend yes; the alternative lets skids sink into rocks.
-3. **Dust renderer.** Sprites through the particle overlay (recommended: cheap, contained, governed) or a local density in the volumetric march (softer, but it would wake the volumetric stage in clear weather, which decision 144 keeps out of the frame)?
+1. **Flowers: yes.** Sparse, muted flower tufts in meadows, two or three colors per biome, in G2 and G3.
+2. **Boulders block: yes.** The sim treats boulders taller than about 0.8 m as landing obstacles through the shared placement function (H3's landing zones).
+3. **Dust: sprites** through the particle overlay.
+4. **Snow keeps its sparkle.** The micro-facets add only faint shade steps on snow and leave its normal and its sparkle (decision 139) alone.
+5. **Light on wet ground, ice and smooth rock.** Each micro-facet can glint: on wet ground (with the weather's wetness), on ice and on smooth or polished rock, a micro-facet whose tilted normal mirrors the sun toward the camera lights up as one small flat flash, the stepped counterpart of the snow's sparkle.
 
 ## Risks
 

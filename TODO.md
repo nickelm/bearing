@@ -985,25 +985,26 @@ Rivers by regime, roads and railways aligned to the terrain with earthworks as a
 Detail near a low camera for helicopter flight, faceted and slightly cartoony, at no cost at working altitude; the plan is [docs/plans/ground-detail.md](docs/plans/ground-detail.md). Every milestone is a visual milestone and closes after Part I's checks, including check 11.
 
 - [x] Owner direction recorded, plan, decision 168; design doc and style guide updated
-- [ ] Owner: the plan's questions (flower accents, boulders as landing obstacles, sprites or volumetric dust)
+- [x] Owner: the plan's questions (decision 169): flowers yes, boulders block landings, dust as sprites; snow keeps its sparkle; glints on wet ground, ice and smooth rock
 
 ### G1. Micro-facets
 
 - [ ] Triangular lattice on the wrapped coordinates with a tangent frame per cube face; micro-triangle normal and shade step; derivatives before any branch
 - [ ] Land-cover table (grass, scrub, soil, crop furrows by field heading, gravel and scree, rock, sand ripples, snow, marsh) with cell, tilt and shades
 - [ ] Fade below about 4 px per micro-triangle; uniform gate on the camera's height above the ground; distance cutoff
+- [ ] Glints per micro-facet on wet ground (by wetness), ice and smooth rock; snow's normal and sparkle untouched
 - [ ] A 4–8 m octave of the detail noise between the micro-facets and the 16 m cells
 - [ ] Preview views `hover` (5 m), `skid` (20 m) and `nap` (60 m) over grass, scrub, scree, a field and dunes; a cube-face seam view; grazing angles for shimmer
 - [ ] `PERF` at 1 km and at 20 m against the plan's budgets
 
 ### G2. Ground cover kit
 
-- [ ] Model specs: grass tuft, tussock, reed clump, bush (green and dry), boulder in three sizes (with lichen variant), slab, pebble cluster; dark bases, light tips, contact shading on rocks
+- [ ] Model specs: grass tuft, flower tuft (two or three muted colors per biome), tussock, reed clump, bush (green and dry), boulder in three sizes (with lichen variant), slab, pebble cluster; dark bases, light tips, contact shading on rocks
 - [ ] `tools/models.preview.ts` sheets and triangle counts against the plan's table
 
 ### G3. Placement
 
-- [ ] `worldgen/groundCover.ts`: a pure function of the point from cell hashes, biome, moisture, slope and snow; talus below cliffs; tests for determinism and density by biome
+- [ ] `worldgen/groundCover.ts`: a pure function of the point from cell hashes, biome, moisture, slope and snow; talus below cliffs; flowers in meadows; boulders over 0.8 m as landing obstacles for H3; tests for determinism and density by biome
 - [ ] Masks: water and protected channels, roads, runways, taxiways, pads, ballast, built-up patches, the canopy shell, snow; denser verges and field edges; tests
 - [ ] Heights on the drawn triangle of the finest level, with the height exaggeration; a test that the finest level draws throughout the ring under the gate
 - [ ] The ring: one instanced geometry per model, refilled by cells, camera-relative, shrinking into the ground at its edge; ranges by quality tier
