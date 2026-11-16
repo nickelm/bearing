@@ -2818,3 +2818,19 @@ The contact sheet is `docs/reports/screens/ground-g2-kit.png`. `docs/visual-styl
 The eroded world's crossing sites, where the alignment snaps bridges (N5), come later.
 
 **Reason:** Towns grow where a river can be crossed (Oxford, Frankfurt, Maastricht), and roads converge there; scoring the crossings before both lets the settlement pattern and the bridges follow the rivers, as the proposal's generation order asks, with changes local to the river cells.
+
+### 176. G4: ground cover in the wind and under the rotor
+
+**Date:** 2026-11-16
+**Decision:** The cover moves (decisions 168, 174), so a low pilot reads wind, height and drift from the ground.
+
+- **Wind from the flight model.** The gust field (`sim/flight/wind.ts`) has cells of 320 m, so over the cover's ring it is nearly linear. Each frame the layer calls `airVelocity` at the ground under the eye and 50 m east, west, north and south of it, and hands the shader the wind there and its gradient: a gust that bends the grass is the gust the aircraft feels, at no cost per vertex. The wind across the ground leans each plant from its root, the tip most (the square of its height fraction), and the tip drops as it leans. Waves 9 m long run along the wind, and each plant flutters at its own phase. Stiffness by kind: tufts and reeds 1, flowers 0.9, tussocks 0.8, bushes 0.2; rocks do not move. Lean is 0.05 of the plant's height per m/s, at most 0.85.
+- **Downwash** (`sim/flight/rotor/downwash.ts`, pure, for H3 and G5 too). The outwash at the ground is 1.1 times momentum theory's induced velocity √(T/2ρA) from the model's thrust, disc area and air density, at full strength up to a rotor radius of hub height and gone by 1.75 rotor diameters, weaker with the advance ratio (1/(1 + 25μ²)), centered where the disc's axis meets the ground. Free Flight hands it to the layer every frame for a helicopter and clears it for the Kestrel and on exit. Tests: a low hover's outwash lies within 30% of 1.1·v under the hub, weakens with height, is gone above the fade and is stronger under the heavier type.
+- **Flattening.** In the shader the outwash runs outward from that center, rising over half a rotor radius, falling as 1.6R/r and cut off from six to ten radii, in rings spaced 0.8 radii that travel outward at half the outwash speed plus 2 m/s. It leans plants 1.8 times as hard as a wind of its speed (it blows down onto them as well as across), and grass laid past a third of its height shows a paler side (up to 35% lighter). The preview's `WASH=speed[,radius]` and `WASH_AT` place a wash ahead of the observer; at seed 1983's alpine meadow (`docs/reports/screens/ground-g4-wash-*.png`) the tufts within a few radii lie over outward and pale. A still picture of sparse cover shows the ring poorly; the motion is for the browser.
+- **Clock.** The layer's time runs on the scene's effect clock, so the grass stops when the game is paused.
+
+`docs/visual-style.md` (*Helicopters*, downwash) changes with this decision.
+
+**Not done:** near trees swaying under the rotor; a check in Free Flight in the browser (check 11).
+
+**Reason:** Motion is what turns ground detail into a cue: the rings under a rotor give height and drift at a glance, and grass bending with the flight model's own gusts ties what the pilot sees to what the aircraft feels.

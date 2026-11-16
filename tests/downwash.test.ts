@@ -1,4 +1,4 @@
-/** The main rotor's downwash at the ground (decision 175). */
+/** The main rotor's downwash at the ground (decision 176). */
 import { describe, expect, it } from 'vitest';
 import { Vec3d } from '../src/core/vec3d';
 import { FLIGHT_STEP } from '../src/sim/flight/rigidBody';
@@ -36,7 +36,7 @@ function hover(m: RotorcraftModel, height: number, seconds = 15): void {
 
 const fresh = (): Downwash => ({ center: new Vec3d(), speed: 0, radius: 0 });
 
-describe('rotor downwash (decision 175)', () => {
+describe('rotor downwash (decision 176)', () => {
   it('spreads at about the hover induced velocity under a low hover, centered under the hub', () => {
     for (const make of [scout, utility]) {
       const m = make();

@@ -1028,9 +1028,9 @@ Detail near a low camera for helicopter flight, faceted and slightly cartoony, a
 
 ### G4. Motion
 
-- [x] Sway from the flight model's wind and gusts (`airVelocity` at the ground under the eye and 50 m round it, a linear field over the ring), with waves along the wind and a flutter per plant; stiffness by kind, rocks still (decision 175)
-- [x] `sim/flight/rotor/downwash.ts`: the main rotor's outwash at the ground from thrust, disc area and air density, fading with hub height and forward speed, centered down the disc's axis; tests (decision 175)
-- [x] Downwash flattening in travelling rings from that center, the flattened side paler; Free Flight feeds it each frame and clears it on exit (decision 175)
+- [x] Sway from the flight model's wind and gusts (`airVelocity` at the ground under the eye and 50 m round it, a linear field over the ring), with waves along the wind and a flutter per plant; stiffness by kind, rocks still (decision 176)
+- [x] `sim/flight/rotor/downwash.ts`: the main rotor's outwash at the ground from thrust, disc area and air density, fading with hub height and forward speed, centered down the disc's axis; tests (decision 176)
+- [x] Downwash flattening in travelling rings from that center, the flattened side paler; Free Flight feeds it each frame and clears it on exit (decision 176)
 - [ ] Free Flight hover at 5, 15 and 30 m (check 11), in the browser: the ring's size with height, its offset with drift
 - [ ] The trees near a hovering rotor sway too (Part I, Helicopters: "near trees and grass sway in the near field")
 

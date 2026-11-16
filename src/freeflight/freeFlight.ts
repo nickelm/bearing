@@ -747,7 +747,7 @@ export class FreeFlight {
         { azimuth: h.azimuth, speed, tiltForward: h.tiltForward, tiltRight: h.tiltRight },
         { azimuth: h.tailAzimuth, speed, tiltForward: 0, tiltRight: 0 },
       ];
-      // The rotor's wash flattens the grass under it (decision 175).
+      // The rotor's wash flattens the grass under it (decision 176).
       this.deps.globe.groundCover.setDownwash(rotorDownwash(h, this.wash));
       return;
     }

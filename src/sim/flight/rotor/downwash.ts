@@ -1,5 +1,5 @@
 /**
- * A main rotor's downwash at the ground (decision 175): where the wake meets the
+ * A main rotor's downwash at the ground (decision 176): where the wake meets the
  * ground and how fast it spreads out there, for the ground cover's flattening
  * (G4) and later the dust, spray and snow it raises (G5, H3).
  *

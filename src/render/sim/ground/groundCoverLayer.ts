@@ -139,13 +139,15 @@ const STIFFNESS: Partial<Record<CoverKind, number>> = {
 /** Tip lean (fraction of the plant's height) per m/s of wind across it, and its most. */
 const LEAN_PER_SPEED = 0.05;
 const MAX_LEAN = 0.85;
+/** The wash's lean per m/s against the wind's. */
+const WASH_GAIN = 1.8;
 /** Length (m) of the waves a wind drives across a meadow. */
 const WIND_WAVE = 9;
 /** Spacing of the downwash's travelling rings, in rotor radii, and their least spacing (m). */
 const WASH_RING = 0.8;
 
 /**
- * A rotor's downwash at the ground (decision 175): where it meets the ground,
+ * A rotor's downwash at the ground (decision 176): where it meets the ground,
  * the outwash speed there (m/s) and the rotor's radius (m).
  */
 export interface GroundDownwash {
@@ -548,7 +550,7 @@ export class GroundCoverLayer {
       // Shrink into the ground over the last 30% of the range.
       const k = clamp(range.sub(dist).div(max(range.mul(0.3), 1)), 0, 1);
       const s = params.x.mul(k.mul(k).mul(k.mul(-2).add(3))).mul(float(1).sub(buried));
-      // Wind (decision 175): the flight model's air at the ground, a linear field over the
+      // Wind (decision 176): the flight model's air at the ground, a linear field over the
       // ring, across the ground, plus the rotor's outwash in travelling rings.
       const wind = air.at
         .add(air.dEast.mul(dot(foot, air.east)))
@@ -567,21 +569,28 @@ export class GroundCoverLayer {
       )
         .mul(0.35)
         .add(0.65);
-      const reach = smoothstep(0, R.mul(0.5), r).mul(min(float(1), R.mul(1.6).div(max(r, 0.01))));
+      const reach = smoothstep(0, R.mul(0.5), r)
+        .mul(min(float(1), R.mul(1.6).div(max(r, 0.01))))
+        // The wall jet spreads and slows; past about eight rotor radii it is gone.
+        .mul(smoothstep(R.mul(10), R.mul(6), r));
       const wash = outward.mul(air.washSpeed.mul(reach).mul(pulse));
-      const flow = wind.sub(up.mul(dot(wind, up))).add(wash);
-      const speed = length(flow);
-      const along = flow.div(max(speed, 1e-3));
+      const breeze = wind.sub(up.mul(dot(wind, up)));
+      const breezeSpeed = length(breeze);
       // Gusts roll over a meadow as waves along the wind.
       const waves = sin(
-        dot(foot, along)
+        dot(foot, breeze.div(max(breezeSpeed, 1e-3)))
           .div(WIND_WAVE)
           .mul(2 * Math.PI)
-          .sub(air.time.mul(speed.mul(0.25).add(1.2))),
+          .sub(air.time.mul(breezeSpeed.mul(0.25).add(1.2))),
       )
         .mul(0.25)
         .add(0.75);
-      const lean = min(speed.mul(LEAN_PER_SPEED).mul(waves), MAX_LEAN).mul(stiffness);
+      // The rotor's wash lays the grass down harder than a wind of its speed: it blows down
+      // onto the plants as well as across them.
+      const flow = breeze.mul(waves).add(wash.mul(WASH_GAIN));
+      const speed = length(flow);
+      const along = flow.div(max(speed, 1e-3));
+      const lean = min(speed.mul(LEAN_PER_SPEED), MAX_LEAN).mul(stiffness);
       // Each plant flutters at its own phase.
       const flutter = sin(air.time.mul(speed.mul(0.3).add(5)).add(params.y.mul(7)))
         .mul(min(speed, 15).mul(0.012).add(0.03))
@@ -661,7 +670,7 @@ export class GroundCoverLayer {
   }
 
   /** Builds and draws the cover around `eye`. Call once per frame after the terrain. */
-  /** A rotor's downwash this frame, or null (decision 175). */
+  /** A rotor's downwash this frame, or null (decision 176). */
   setDownwash(d: GroundDownwash | null): void {
     this.downwash = d;
   }
