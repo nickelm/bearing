@@ -895,7 +895,7 @@ Skids and wheels, slope and confined-area landings, dynamic rollover, sling load
 - [ ] Sling loads: a cable that can go slack, a load with mass and drag, pickup and release; cable tension and load position on the HUD; test of a load carried 5 km and set down within 3 m
 - [ ] Hook camera: a downward render-target view for pickup and placement, as the hook camera format on P2's display frame with load position and cable tension (decision 189; built here or in P5, whichever comes first)
 - [ ] Hoist and fast-rope as cable-length states with crew figures
-- [ ] Downwash: dust, snow, spray and a water ring under the rotor by surface and power, through the weather's particles; near trees sway once the near trees exist (Part I, _Helicopters_); the dust, snow, spray and flattening are done (decisions 176, 182); the water ring and the near trees are done (decisions 188, 191)
+- [x] Downwash: dust, snow, spray and a water ring under the rotor by surface and power, through the weather's particles; near trees sway once the near trees exist (Part I, _Helicopters_); the dust, snow, spray and flattening are done (decisions 176, 182); the water ring and the near trees are done (decisions 188, 191)
 - [ ] Checkpoint: owner flies slope, confined-area and rooftop landings and a sling-load delivery
 
 ### H4. Hazards and damage
