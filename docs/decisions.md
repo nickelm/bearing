@@ -2679,3 +2679,22 @@ How the plan reads the proposal, for the owner to confirm: no-humps is checked e
 **Not done:** the kernel still carves along the polyline, so on rivers the mesh resolves (wider than about 50 m) the shader's wander can draw water beside the carved channel; the wander is capped at 40 m for that reason. The 17.3% on grid headings is still above an even 11%.
 
 **Reason:** Straight channels with parallel banks read as drawn. Bends at a few kilometers belong in the data, where the carve, the map and later the bridges follow them; bends and frayed edges at tens of meters cost nothing in the data as noise in the shader, which keeps the segment count and the tile synthesis unchanged.
+
+### 168. Ground detail for low flight: stepped micro-facets, chunky cover, soft dust (track G)
+
+**Date:** 2026-11-16
+**Decision:** The owner set the direction for ground detail after the first helicopter flights: keep the faceted look and never pursue photorealism; aim for a comic, slightly cartoony look in the spirit of a painted fantasy MMO; fat, chunky grass tufts rather than thin blades; hefty, flat-shaded, low-poly boulders; wispy, soft dust; little or no overhead at altitude, and interesting ground for helicopter low-level flight. The plan is `docs/plans/ground-detail.md`, in five milestones:
+
+- **G1. Micro-facets.** High-frequency relief as a virtual triangle lattice in the ground shader, 0.6–4 m by land cover, with one normal and one shade per micro-triangle: a bump map that keeps the facet rule instead of a smooth or noisy one. It lies on the wrapped coordinates (decision 38) with a tangent frame per cube face, fades below about 4 px per micro-triangle, and a uniform switches it off when the camera is more than about 400 m above the ground.
+- **G2. Kit.** Grass tufts, tussocks, reed clumps, bushes, boulders, slabs and pebble clusters as model specs (decision 106), 12–40 triangles each, with no part thinner than 10 cm.
+- **G3. Placement.** A pure function in `worldgen/groundCover.ts`, from cell hashes like `canopy.ts`, so the sim can ask it later and no RNG stream changes (rule 5); instances in a ring around the camera, sitting on the triangle the terrain draws, colored from `LandShading` at their ground point, masked off water, pavement, roads, towns and the canopy shell, and switched off above 150–600 m by type.
+- **G4. Motion.** Sway from the flight model's gust field, and downwash flattening the cover in rings, so the ground shows height and drift.
+- **G5. Dust.** Soft sprites through the particle overlay (decision 142), by surface; it closes H3's downwash task.
+
+Budgets: nothing above 600 m beyond one uniform branch; below 150 m at most 12 draws and 0.35 M triangles at the laptop tier.
+
+`docs/visual-style.md` changes with this decision: principle 6 (detail near a low camera serves helicopter flight), *Terrain* (ground detail near the ground), *What to avoid* (smooth or noisy high-frequency texture, rather than all high-frequency texture) and *Acceptance Checks* (check 11, hovers at 5 m and 30 m). `docs/design.md` gains the ground detail track and its dependencies.
+
+**Open for the owner:** flower accents in meadows; boulders over about 0.8 m as landing obstacles in the sim; sprites or a local density in the volumetric march for dust.
+
+**Reason:** Below about 20 m the terrain changes no faster than its 16 m noise cells and 24 m facets, so a hover gives no cue of height or drift (the owner's note of 2026-11-16 in `TODO.md`). Stepped detail and chunky cover extend the existing style downward in scale instead of adding a second, textured style, and gating every layer on the camera's height keeps working altitude as it is.

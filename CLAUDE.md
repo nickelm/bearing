@@ -39,7 +39,7 @@ docs/proposals/     owner proposals (do not reformat); 0001-two-views.md (decisi
                     0002-third-person-flight.md (decision 94), 0003-forests-for-low-flight.md
                     (decision 148), 0004-helicopter-flight.md (decision 149) and
                     0005-terrain-adaptive-networks.md (decision 161) are accepted
-docs/plans/         implementation plans: free-flight.md (decision 134), helicopters.md (track H),
+docs/plans/         implementation plans: free-flight.md (decision 134), helicopters.md (track H), ground-detail.md (track G),
                     terrain-networks.md (track N)
 src/core/           units, float64 Vec3d, coordinates, seeded RNG, invented names, the moon's ephemeris. Leaf layer.
 src/worldgen/       planet generation pipeline stages (may use GPU compute); canopy.ts is the canopy height
@@ -199,7 +199,7 @@ Promotion expands a unit deterministically from its seed and current strength. D
 - Record any architectural decision, or any deviation from `docs/design.md`, in `docs/decisions.md` with the date, the decision and the reason. In the same commit, update whatever `docs/design.md` or `docs/visual-style.md` says on the subject.
 - Run `npm test` and `npm run typecheck` (or `npm run check`) before declaring a task complete.
 - **The Kestrel's flight is pinned bit for bit** by `tests/flightLockstep.test.ts` (decision 154). A change meant to alter it (tuning, a new force) re-records the fixture with `LOCKSTEP_RECORD=1 npx vitest run tests/flightLockstep.test.ts`, once under Node 22 and once under Node 24 (`PATH=/opt/node24/bin:$PATH node node_modules/vitest/vitest.mjs run …` in a cloud session), and says so in its decision. A refactor must pass it unchanged.
-- **Visual milestones close only after the acceptance checks** in `docs/visual-style.md` for the views they touch. A visual milestone is any milestone with rendering, model or UI tasks (all of S1–S4, V1–V4, I1, P1–P5, H1–H5, and N3 and N6–N8).
+- **Visual milestones close only after the acceptance checks** in `docs/visual-style.md` for the views they touch. A visual milestone is any milestone with rendering, model or UI tasks (all of S1–S4, V1–V4, I1, P1–P5, H1–H5, G1–G5, and N3 and N6–N8).
   - Simulation view (Part I): checks 1–5 as `tools/render.preview.ts` views; check 6, the silhouette test, in the model viewer once aircraft models exist; checks 7–10 (HUD and camera rig) as scripted sequences from V4 on.
   - Strategic view (Part II): checks 1, 2, 4 and 5 as preview views (4 through simulated color-vision deficiencies); check 3, the ten-second legibility test, with the owner.
   - Read the PNGs next to the reference board in `docs/style/references/` and report to the owner where they match and where they fall short.

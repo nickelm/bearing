@@ -2,7 +2,7 @@
 
 Tech-demo milestones from [docs/design.md](docs/design.md) (revision 9, decisions 72, 94 and 161): a foundation (F), a strategic track (S), a simulation core track (C), a flight view track (V) and integration (I), after a scaffold, then a post-demo piloting track (P, decision 94) and helicopter track (H, decision 149), and the terrain networks track (N, decision 161). The design doc's _Milestones_ section maps the old M1–M9 onto these. Each task should take a few hours. Check tasks off as they are completed, and add subtasks as you discover them.
 
-Suggested order for the remaining work: S1, V1, S2, V2, the rest of S3 and S4, V3, C2, V4, C3, I1. Visual milestones (all S, V, I, P and H, and N3, N6, N7 and N8) close only after the acceptance checks in [docs/visual-style.md](docs/visual-style.md) for the views they touch: Part I for the simulation view, Part II for the strategic view.
+Suggested order for the remaining work: S1, V1, S2, V2, the rest of S3 and S4, V3, C2, V4, C3, I1. Visual milestones (all S, V, I, P, H and G, and N3, N6, N7 and N8) close only after the acceptance checks in [docs/visual-style.md](docs/visual-style.md) for the views they touch: Part I for the simulation view, Part II for the strategic view.
 
 ## Scaffold (done)
 
@@ -601,7 +601,7 @@ Simulation view (needs S1's `render/sim/` split):
   - [ ] Owner: white water and lake foam in motion in the browser; the GUI's "River white water" and "River banks"
   - [ ] Point bars on the inside of bends: store each bend's side in the river index (the meander code knows it)
   - [ ] Lake foam is about one mesh vertex wide at level 7; a finer shore distance (per fragment from the lake depth) would sharpen it
-- [ ] Ground detail that fades in near the ground (owner, 2026-11-16, after the first helicopter flight; future work, not scheduled): below a few tens of meters the terrain's facets and flat color give no sense of height or drift. Candidates: a detail texture or facet noise in the ground shading by land cover (grass, scrub, gravel, sand, snow), scattered low-poly tufts, rocks and bushes in a ring around the camera, faded in by height above the ground and distance; within Part I's flat-shaded look and its budgets. Wanted for H1's hover work and P1's low flight
+- [x] Ground detail that fades in near the ground (owner, 2026-11-16, after the first helicopter flight): now the ground detail track (decision 168)
 
 ### V3. Models and bases
 
@@ -855,7 +855,7 @@ Skids and wheels, slope and confined-area landings, dynamic rollover, sling load
 - [ ] Sling loads: a cable that can go slack, a load with mass and drag, pickup and release; cable tension and load position on the HUD; test of a load carried 5 km and set down within 3 m
 - [ ] Hook camera: a downward render-target display for pickup and placement (moved from P5)
 - [ ] Hoist and fast-rope as cable-length states with crew figures
-- [ ] Downwash: dust, snow, spray and a water ring under the rotor by surface and power, through the weather's particles; near trees sway once the near trees exist (Part I, _Helicopters_)
+- [ ] Downwash: dust, snow, spray and a water ring under the rotor by surface and power, through the weather's particles; near trees sway once the near trees exist (Part I, _Helicopters_); the dust, spray and flattening are G4 and G5 (decision 168)
 - [ ] Checkpoint: owner flies slope, confined-area and rooftop landings and a sling-load delivery
 
 ### H4. Hazards and damage
@@ -979,6 +979,48 @@ Rivers by regime, roads and railways aligned to the terrain with earthworks as a
 - [ ] Braided channels on steep outwash plains
 - [ ] Canals: level pools, locks as pads with a kit model, numbered ("Lock 7"), aqueducts over rivers
 - [ ] Power lines with pylons on high ground and wire strikes for helicopters, on the corridor framework
+
+## Ground detail track (decision 168)
+
+Detail near a low camera for helicopter flight, faceted and slightly cartoony, at no cost at working altitude; the plan is [docs/plans/ground-detail.md](docs/plans/ground-detail.md). Every milestone is a visual milestone and closes after Part I's checks, including check 11.
+
+- [x] Owner direction recorded, plan, decision 168; design doc and style guide updated
+- [ ] Owner: the plan's questions (flower accents, boulders as landing obstacles, sprites or volumetric dust)
+
+### G1. Micro-facets
+
+- [ ] Triangular lattice on the wrapped coordinates with a tangent frame per cube face; micro-triangle normal and shade step; derivatives before any branch
+- [ ] Land-cover table (grass, scrub, soil, crop furrows by field heading, gravel and scree, rock, sand ripples, snow, marsh) with cell, tilt and shades
+- [ ] Fade below about 4 px per micro-triangle; uniform gate on the camera's height above the ground; distance cutoff
+- [ ] A 4–8 m octave of the detail noise between the micro-facets and the 16 m cells
+- [ ] Preview views `hover` (5 m), `skid` (20 m) and `nap` (60 m) over grass, scrub, scree, a field and dunes; a cube-face seam view; grazing angles for shimmer
+- [ ] `PERF` at 1 km and at 20 m against the plan's budgets
+
+### G2. Ground cover kit
+
+- [ ] Model specs: grass tuft, tussock, reed clump, bush (green and dry), boulder in three sizes (with lichen variant), slab, pebble cluster; dark bases, light tips, contact shading on rocks
+- [ ] `tools/models.preview.ts` sheets and triangle counts against the plan's table
+
+### G3. Placement
+
+- [ ] `worldgen/groundCover.ts`: a pure function of the point from cell hashes, biome, moisture, slope and snow; talus below cliffs; tests for determinism and density by biome
+- [ ] Masks: water and protected channels, roads, runways, taxiways, pads, ballast, built-up patches, the canopy shell, snow; denser verges and field edges; tests
+- [ ] Heights on the drawn triangle of the finest level, with the height exaggeration; a test that the finest level draws throughout the ring under the gate
+- [ ] The ring: one instanced geometry per model, refilled by cells, camera-relative, shrinking into the ground at its edge; ranges by quality tier
+- [ ] Color from `LandShading` at the ground point (season, moisture, snow) under the model's value ramp
+- [ ] `PERF` in a hover at 10 m over grass by a forest edge against the 2 M triangle and 500 draw budgets
+
+### G4. Motion
+
+- [ ] Sway from the flight model's hashed gust field per instance
+- [ ] Downwash flattening in travelling rings from the rotor's ground point, by height, power and disc loading; the flattened side's lighter shade
+- [ ] Free Flight hover at 5, 15 and 30 m (check 11)
+
+### G5. Dust
+
+- [ ] Soft sprites with noise-eroded edges and depth fade, stretched along their motion, through the particle overlay under the quality governor
+- [ ] By surface: dust, grit, snow powder, spray and a water ring, leaves on green ground
+- [ ] Closes H3's downwash task
 
 ## Known issues
 

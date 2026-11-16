@@ -382,9 +382,19 @@ The roadmap splits into a foundation and three tracks that can advance in parall
 - **N7. Structures and names.** The bridge kit and tunnel portals, bridge symbols and labels and dashed tunnels on the map, names for reaches, sections, bridges and tunnels.
 - **N8. Verification.** The proposal's criteria over 20 seeds, screenshots, acceptance checks, report.
 
+### Ground Detail Track (decision 168)
+
+*The plan is `docs/plans/ground-detail.md`. Detail near a low camera for helicopter flight, at no cost at working altitude.*
+
+- **G1. Micro-facets.** A virtual triangle lattice in the ground shader, finer than the mesh, with stepped normals and shades by land cover, gated by the camera's height above the ground.
+- **G2. Ground cover kit.** Chunky grass tufts, tussocks, reeds, bushes, boulders, slabs and pebbles as model specs.
+- **G3. Placement.** A pure placement function shared with the sim, a ring of instances around the camera on the drawn surface, colored from the ground.
+- **G4. Motion.** Sway with the flight model's gusts, and downwash flattening the cover in rings.
+- **G5. Dust.** Soft, wispy sprites of dust, grit, snow and spray by surface; closes H3's downwash task.
+
 ### Dependencies and Order
 
-S1 and V1 both depend on F2. S3 depends on S2 for named corridors. V3 depends on S4 for settlement and base data. C2 depends on C1 and S4. V4 depends on C2 and V2. P1 depends on V4. P2 depends on P1. P3 depends on P2 and S4. P4 and P5 depend on P3. H1 depends on P1's framework (the shared airframe and director interfaces, input) and Free Flight, and may start before P1 closes (decision 151); H5 depends on P4 and on P1's take control and hand back. In track N, N1, N2 and N4 depend on nothing open; N3 depends on N2, N5 on N1, N2 and N4, N6 on N1 and N5, N7 on N4 and N5. The demo needs none of track N, and N1's single height function is worth having before ground vehicles and line of sight (decision 161).
+S1 and V1 both depend on F2. S3 depends on S2 for named corridors. V3 depends on S4 for settlement and base data. C2 depends on C1 and S4. V4 depends on C2 and V2. P1 depends on V4. P2 depends on P1. P3 depends on P2 and S4. P4 and P5 depend on P3. H1 depends on P1's framework (the shared airframe and director interfaces, input) and Free Flight, and may start before P1 closes (decision 151); H5 depends on P4 and on P1's take control and hand back. In track N, N1, N2 and N4 depend on nothing open; N3 depends on N2, N5 on N1, N2 and N4, N6 on N1 and N5, N7 on N4 and N5. The demo needs none of track N, and N1's single height function is worth having before ground vehicles and line of sight (decision 161). In track G, G1 and G2 depend on nothing open, G3 on G2, G4 on G3 and H1's rotor state, G5 on G4; the demo needs none of it (decision 168).
 
 Suggested order: F1, F2, S1, V1, S2, V2, S3, C1, S4, V3, C2, V4, C3, I1. Alternating between the map and the flight view keeps both looking good as the project grows, and each milestone produces something visible.
 

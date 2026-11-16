@@ -22,7 +22,7 @@ Everything in Part I applies to the simulation view: chase, target, weapon, flyb
 3. **Color by face, not by texture.** Models carry color in vertex colors or a small palette texture. We use no photographic textures and no normal maps on models.
 4. **Sturdy and slightly cartoony.** Proportions are chunky: thick trunks, broad canopies, wide stances, blocky people. Nothing is spindly. Thin features that would alias or flicker get thickened or removed.
 5. **Light does the drama.** Scenes look best at low sun angles. Haze, bloom on emissive lights, and long shadows give scale and mood without adding polygons.
-6. **Readable at working distance.** The style must hold at 500 m altitude and 900 km/h, which is where players spend their time. Detail that only reads at 10 m gets cut.
+6. **Readable at working distance.** The style must hold at 500 m altitude and 900 km/h, which is where players spend their time. Detail that only reads at 10 m gets cut, except the ground near a low camera, which serves helicopter flight: it shows height and drift below a few hundred meters and costs nothing above (decision 168).
 
 ## Reference Board
 
@@ -63,6 +63,7 @@ Across all five, edges show slight stair-stepping and the image has faint grain,
 - **Farmland.** Near settlements and on flat lowland, a Voronoi field pattern assigns each cell a crop color (wheat, green crop, fallow, pasture). Field cells are a few hundred meters across with slight color variation. Fields lie where the strategic map puts its farmland (settled land in farmable biomes, decision 80), on flat lowland; each face takes the field at its center, so field edges follow facets, and distant fields draw toward their mean color (decision 127). Fields are cells of a Voronoi diagram on the sea-level sphere with an integer hash the CPU shares, so hedgerows follow their boundaries (decision 162).
 - **Rivers.** Rivers render as bright ribbons that mirror the sky color, with a narrow darker bank. They should be the most visible terrain feature from altitude, since they matter tactically.
 - **Roads and railways.** Thin, muted gray-brown lines from vector data, visible below about 3 km altitude, drawn in the terrain shader with no ribbon geometry. Closer in, roads are asphalt or gravel with shoulders, with center and edge lines below about 1 km, antialiased like the runway markings; railways are a ballast band with two rails below about 1 km. Embankments and cuttings are terrain shaped by analytic edits, their banks a little lighter (fill) or darker (cut) than the ground beside them, and mountain roads climb in switchbacks. Tunnels draw nothing between their portals, and bridges draw nothing on the ground (decision 161).
+- **Ground detail near the ground.** Below a few hundred meters the ground gains detail in the same faceted, slightly cartoony style, never photographic (decision 168; `docs/plans/ground-detail.md`). Fine relief is stepped: virtual micro-facets about 0.6–4 m across by land cover, each with one normal and one shade, as a bump map that keeps the facet rule. Ground cover is fat and chunky: grass in tufts of a few wide, blunt blades with dark bases and light tips, tussocks, reed clumps and lumpy bushes, and hefty low-poly boulders of a dozen to forty faces; each takes its color from the ground under it. Cover sways with the gusts and flattens under a rotor's downwash. Dust, grit and spray kicked up from the ground are wispy and soft, like the rest of the air.
 - **Settlements.** Towns are grids of box buildings with pitched or flat roofs in a narrow palette of plaster and roof colors. Cities add a few taller blocks at the center. Beyond building range, towns are built-up patches in the terrain: blocks of the same roof and wall colors, with no building meshes (decision 71), in the shape of the town's urban extent (decision 111). The strategic view draws settlements its own way (Part II).
 
 ## Vegetation
@@ -312,7 +313,7 @@ Targets for a mid-range laptop in a desktop browser at 1080p:
 ## What to Avoid
 
 - Smooth shading on models or close terrain.
-- Photographic or noisy high-frequency textures.
+- Photographic textures, and smooth or noisy high-frequency texture; fine ground detail is stepped micro-facets and chunky cover (decision 168).
 - Saturated primary colors outside emissives and UI highlights.
 - Cel-shading bands, and ink lines on terrain, trees or clouds (models carry their optional outline, decision 107).
 - Thin geometry such as antennas, pitot tubes, and fine branches that alias at distance; omit them or thicken them.
@@ -333,8 +334,9 @@ Before a visual milestone with simulation-view work closes, capture these views 
 8. The flight path marker and gun pipper stay accurate during hard maneuvers.
 9. The aircraft stays readable and centered in a maximum-rate turn.
 10. The camera never clips terrain during low-level flight through valleys.
+11. Helicopter hovers at 5 m and 30 m over grassland, scrub and scree: the ground shows height and drift, with no visible repetition, shimmer, or cover that floats, sinks or does not match the ground (decision 168).
 
-Checks 1–5 are the views `mixed`, `conifer`, `range`, `dusk` and `beach` in `tools/render.preview.ts` (`VIEWS=checks`), aimed at places the preview finds in each world (decision 128); check 6 runs in the model viewer. Checks 7–10 are scripted flight sequences in `tools/render.preview.ts` and apply from milestone V4 (camera rig and flight path marker); check 9 needs the flight model (P1), and the gun pipper part of check 8 needs guns (P4).
+Checks 1–5 are the views `mixed`, `conifer`, `range`, `dusk` and `beach` in `tools/render.preview.ts` (`VIEWS=checks`), aimed at places the preview finds in each world (decision 128); check 6 runs in the model viewer. Check 11 is the views `hover` and `skid` in `tools/render.preview.ts` and a Free Flight hover, from G1 on. Checks 7–10 are scripted flight sequences in `tools/render.preview.ts` and apply from milestone V4 (camera rig and flight path marker); check 9 needs the flight model (P1), and the gun pipper part of check 8 needs guns (P4).
 
 # Part II: Strategic View
 

@@ -1,0 +1,149 @@
+# Plan: Ground detail for low flight (track G)
+
+_Drafted 2026-11-16 from the owner's direction of the same day (decision 168). The tasks are in `TODO.md` under the ground detail track; later decisions record what each milestone changes._
+
+## Goal
+
+Make the ground within a few hundred meters of a low camera worth looking at, and make it tell a helicopter pilot their height and drift, without adding cost at working altitude. The look stays faceted and slightly cartoony, in the spirit of a painted fantasy MMO rather than a photograph: fat, chunky grass tufts; hefty, flat-shaded, low-poly boulders; soft, wispy dust.
+
+## The owner's direction
+
+1. **Keep the facets; never pursue photorealism.** Fine detail must read as more of the same faceted world, not as a texture laid over it.
+2. **Comic, slightly cartoony.** Chunky shapes, few colors per object, light tips and dark bases, broad value steps.
+3. **Fat tufts, hefty boulders.** Grass comes in clumps of a few wide blades; rocks are a dozen to forty faces, never sculpted.
+4. **Soft air.** Dust, spray and kicked-up snow are wispy and soft, as the clouds and fog are (Part I, principle 1).
+5. **Pay only near the ground.** Above a few hundred meters the frame costs what it costs today.
+
+## What exists
+
+| Area | State | Where |
+| --- | --- | --- |
+| Terrain facets | Face normals from screen-space derivatives; the finest tile level gives 24 m facets | `render/sim/terrain/facets.ts` (decision 123) |
+| Per-face shading | Albedo evaluated at the face's center, one of a few shades per face | `faceShading.ts` (decision 124) |
+| Detail noise | Periodic value noise on the wrapped coordinates at 16–256 m, ±12% brightness, faded by pixel footprint | `landShading.ts` (decisions 38, 124) |
+| Land cover | Biome, moisture, slope (rock), snow, seasons, farmland cells, marsh, sand and gravel bars, roads, pavement | `landShading.ts`, `canopyNode.ts`, `water/`, `infra/` |
+| Instanced placement near the camera | Per quarter of a level-10 tile, deterministic, masked by water, roads, towns and clearings, heights from `surfaceSampler` | `render/sim/forest/forestLayer.ts` (decisions 148, 150, 166) |
+| Shared placement fields | Canopy height and stands as pure functions the sim can call | `worldgen/canopy.ts` |
+| Model kit | JSON specs built in code, baked occlusion, far models | `render/common/models/` (decision 106) |
+| Wind | Hashed gusts, no random numbers, capped near the ground | `sim/flight/wind.ts` (decision 143) |
+| Particles | Rain, snow and dust with wind, lit by the air they fall through | `render/sim/weather/precipitation.ts` (decision 142) |
+| Downwash | Planned for H3: dust, snow, spray and a water ring by surface and power | `TODO.md`, H3 |
+
+Below about 20 m nothing in the terrain changes faster than the 16 m noise cell, and a 24 m facet is one flat color. That is why a hover gives no sense of height or drift today.
+
+## Design
+
+Three layers, each switched off well before it stops paying for itself.
+
+### 1. Micro-facets in the ground shader (G1)
+
+A virtual triangle mesh, finer than the real one, drawn only in the shader. Around the camera, a triangular lattice lies on the ground with a cell size set by land cover; each lattice vertex has a hashed height. A fragment finds its micro-triangle, takes that triangle's plane normal and tilts the face normal by it, and takes a per-triangle shade step. Every fragment of a micro-triangle shares one normal and one shade, so the result is a bump map that obeys the facet rule: stepped, never smooth or noisy.
+
+| Land cover | Cell | Tilt | Character |
+| --- | --- | --- | --- |
+| Grass, pasture | 1.5 m | ±8° | Soft lumps, two or three greens |
+| Scrub, dry grass | 1.2 m | ±10° | Mottled straw and soil |
+| Soil, fallow | 1 m | ±6° | Clods; on fields, stretched across the furrows |
+| Crop fields | 0.75 m rows | stepped ridges | Furrows along each field's own heading (from its Voronoi cell hash, decision 162) |
+| Gravel, river bars, scree | 0.6 m | ±18° | Sharp, high contrast |
+| Rock faces | 3 m | ±20° | Chiseled planes; strata keep their bands (decision 126) |
+| Sand, desert | ripples, 0.8 m | two faces | Windward and lee faces as two shades, aligned across the prevailing wind |
+| Snow | 4 m | ±6° | Wind-carved slabs; the sparkle stays (decision 139) |
+| Marsh | 1 m | ±4° | Hummocks around the pools |
+
+- **Coordinates.** The lattice uses the wrapped coordinates of decision 38, projected on a tangent frame fixed per cube face, so the pattern stays nailed to the ground as the camera moves and float32 keeps centimeter precision. The frame changes only at cube-face seams; a short blend hides the switch.
+- **Fade.** Tilt and shade steps fade where a micro-triangle shrinks below about 4 px, so nothing shimmers; the derivatives are taken before any branch (decision 69).
+- **Cost gate.** A uniform switches the whole evaluation off when the camera is more than about 400 m above the ground, and a per-fragment distance test skips it beyond about 600 m. At altitude the cost is one uniform branch.
+- **Mid scale.** A third octave of the existing detail noise at 4–8 m bridges the gap between the micro-facets and the 16 m cells, faded the same way.
+
+### 2. Ground cover kit (G2)
+
+New model specs, built by the existing builder, flat-shaded with vertex colors:
+
+| Model | Triangles | Size | Notes |
+| --- | --- | --- | --- |
+| Grass tuft | 16–24 | 0.3–0.6 m | Five to seven wide, folded blades (two faces each, so they catch light on one side), blunt tips; dark base, light tip |
+| Tussock | 24–32 | 0.6–1.0 m | Savanna and tundra; a fatter tuft with a drooping crown |
+| Reed clump | 20–28 | 1.0–1.8 m | Marsh, river banks and lake shores |
+| Bush | 24–40 | 0.6–1.4 m | Two or three lumpy lobes, like the far broadleaf but lower; dry variant in desert and scrub |
+| Boulder | 12–40 | 0.4–3 m | A jittered, flattened icosahedron in three sizes; base vertices darkened as contact shading; lichen variant |
+| Slab | 12–20 | 1–4 m | Stratified desert rock, a tilted plate |
+| Pebble cluster | 12–18 | 0.3–0.6 m wide | Three or four small stones as one instance, on gravel and scree |
+
+- **Color from the ground.** Each instance takes the land albedo of its ground point from the same `LandShading` functions the terrain uses, then the model's own value ramp on top. A tuft therefore matches the grass around it, browns with it in autumn and pales with it in drought; a boulder takes the local rock shade. Mismatched cover is the most common reason ground cover looks pasted on.
+- **No thin parts.** Blades are at least 10 cm wide at the base (Part I, principle 4).
+
+### 3. Placement and the ring (G3)
+
+- **A shared, pure placement function** in `worldgen/groundCover.ts`, beside `canopy.ts`: given a point, it returns what grows or lies there from integer cell hashes, biome, moisture, slope, snow and the masks below. No RNG stream is drawn, so no other stage changes (rule 5), and the sim can ask the same question later.
+- **Cells.** A jittered lattice in 8 m cells, each with up to a few instances by cover type and density (grass dense, desert sparse; boulders clustered below cliffs as talus and scattered on alpine ground and scree).
+- **Masks.** None in water or protected channels, on roads, runways, taxiways, pads or rail ballast, in built-up patches, or where the canopy shell covers the ground; tufts thin into snow and vanish under full snow; road verges and field edges get a denser band.
+- **On the drawn surface.** Each instance sits on the triangle the terrain actually draws, interpolated from the finest level's mesh vertices on the mesh's own diagonal, and with the terrain's height exaggeration. A 0.5 m tuft on the smooth height instead of the facet would float or sink visibly. The ring must stay inside the range where the finest level is guaranteed; a test asserts it.
+- **The ring.** Instances live in one instanced geometry per model around the camera, refilled by cells as it moves, camera-relative (rule 4).
+
+| Layer | Full density to | Fades out by | Off above (camera height above ground) |
+| --- | --- | --- | --- |
+| Micro-facets | 300 m | 600 m | 400 m |
+| Tufts, reeds, pebbles | 100 m | 200 m | 150 m |
+| Bushes | 250 m | 450 m | 400 m |
+| Boulders, slabs | 400 m | 800 m | 600 m |
+
+Instances shrink into the ground over the last stretch of their range, as trees do. Ranges scale with the quality tiers of *Performance Budgets*.
+
+### 4. Motion (G4)
+
+Motion is what turns ground detail into a height and drift cue.
+
+- **Wind sway.** Tufts, tussocks, reeds and bushes lean and bob with the wind's gusts, evaluated per instance from the same hashed gust field the flight model uses, so a gust visible in the grass is the gust the aircraft feels.
+- **Downwash.** Under a rotor, cover within about one and a half rotor diameters flattens outward from the rotor's ground point, in rings that travel out and pulse with power. Flattened blades show their lighter side, so the ring is visible in the shading too. The ring's radius and strength follow height and disc loading; a pilot reads height from its size and drift from its offset.
+
+### 5. Dust, spray and snow (G5, with H3's downwash task)
+
+- **Soft sprites.** Wispy, low-opacity sprites with noise-eroded edges, faded against the depth buffer so they never cut a hard line into the ground, and stretched along their motion. They roll outward from the rotor's ground point in a low toroidal billow and drift with the wind.
+- **By surface.** Ochre dust on dry soil and sand, gray grit on gravel, white powder over snow, spray and a ruffled ring over water, and on wet or green ground nothing but a few leaves and blades.
+- **Lit like the air.** The sprites take the light of the air they are in, as rain and dust particles do (decision 142), and go through the weather's particle overlay, which already has the quality governor's control over its count (decision 143).
+- Later sources (wheels on dirt strips, vehicles on gravel roads, impacts) use the same emitter.
+
+## Budgets
+
+| Camera height above ground | Extra draw calls | Extra triangles | Extra GPU time at 1408 × 792 |
+| --- | --- | --- | --- |
+| Above 600 m | 0 | 0 | one uniform branch |
+| 150–600 m | ≤ 6 | ≤ 0.05 M | ≤ 0.3 ms |
+| Below 150 m | ≤ 12 | ≤ 0.35 M (laptop), 0.15 M (tablet) | ≤ 1 ms |
+
+The densest view (hover at 10 m over grass by a forest edge) must still fit the 2 M triangle and 500 draw-call budgets with the trees. `PERF=n` in `tools/render.preview.ts` measures each row.
+
+## Milestones
+
+| Milestone | Steps |
+| --- | --- |
+| G1. Micro-facets | Lattice in the land shader, cover table, mid-scale noise, fades and gate; preview views `hover` (5 m), `skid` (20 m), `nap` (60 m) over grass, scrub, scree, field and dune; `PERF` at 1 km proving no cost |
+| G2. Kit | The model specs above; `tools/models.preview.ts` sheets; triangle counts against the table |
+| G3. Placement | `worldgen/groundCover.ts` with tests (determinism, masks, no cover in channels or on pavement, density by biome); the ring layer; heights on the drawn triangle with a test; color from `LandShading`; budgets |
+| G4. Motion | Wind sway from the gust field; downwash flattening from the helicopter's rotor state; a Free Flight check in a hover at 5, 15 and 30 m |
+| G5. Dust | Soft sprites by surface through the particle overlay; closes H3's downwash task |
+
+Each is a visual milestone: it closes after Part I's acceptance checks and the new check 11 below.
+
+## Changes to the style guide
+
+Decision 168 makes these in `docs/visual-style.md`:
+
+- Principle 6 keeps working distance as the priority, and adds that detail near a low camera serves helicopter flight and must cost nothing above it.
+- *What to avoid* forbids smooth or noisy high-frequency texture and keeps stepped detail.
+- *Terrain* gains a *Ground detail near the ground* item.
+- *Acceptance checks* gain check 11: hovers at 5 m and 30 m over grassland, scrub and scree, where the ground shows height and drift, without visible repetition, shimmer or pasted-on cover.
+
+## Questions for the owner
+
+1. **Color accents.** WoW-style grass carries flowers. Sparse, muted flower tufts in meadows (two or three colors per biome), or none?
+2. **Boulders as obstacles.** Should the sim treat boulders taller than about 0.8 m as landing obstacles, through the shared placement function (H3's landing zones)? I recommend yes; the alternative lets skids sink into rocks.
+3. **Dust renderer.** Sprites through the particle overlay (recommended: cheap, contained, governed) or a local density in the volumetric march (softer, but it would wake the volumetric stage in clear weather, which decision 144 keeps out of the frame)?
+
+## Risks
+
+- **Finest level near the camera.** The placement assumes the finest tile level draws within the ring at every height under the gate. If the quadtree can draw a coarser level there, cover floats or sinks. G3 tests it first.
+- **Repetition.** Hash-based kits repeat if the kit is small. Each model gets scale, rotation, lean and shade jitter, and clusters vary in count.
+- **Cube-face seams.** The lattice's frame switches at seams; the blend must be checked on a seam view.
+- **Shimmer on furrows and ripples.** Regular patterns alias first. They fade earlier than the irregular lattice, and the check views include grazing angles.
