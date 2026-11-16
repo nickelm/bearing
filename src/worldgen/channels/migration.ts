@@ -26,6 +26,11 @@
  */
 import { Vec3d } from '../../core/vec3d';
 
+/** Length of a 2D vector (Math.hypot is several times slower in V8). */
+function len2(x: number, y: number): number {
+  return Math.sqrt(x * x + y * y);
+}
+
 export const MIGRATION_TUNING = {
   /** Rivers at least this wide (m) migrate; narrower lowland rivers keep the procedural train. */
   minWidth: 80,
@@ -114,7 +119,7 @@ export function migrate(
   const au = new Float64Array(n0);
   for (let i = 0; i < n0; i++) {
     [ax[i], ay[i]] = toPlane(pts[i]!);
-    if (i > 0) au[i] = au[i - 1]! + Math.hypot(ax[i]! - ax[i - 1]!, ay[i]! - ay[i - 1]!);
+    if (i > 0) au[i] = au[i - 1]! + len2(ax[i]! - ax[i - 1]!, ay[i]! - ay[i - 1]!);
   }
   const L = au[n0 - 1]!;
   const attrAt = (u: number): number[] => {
@@ -156,7 +161,7 @@ export function migrate(
       const f = l2 > 0 ? Math.min(1, Math.max(0, ((x - ax[i]!) * sx + (y - ay[i]!) * sy) / l2)) : 0;
       const qx = ax[i]! + f * sx;
       const qy = ay[i]! + f * sy;
-      const d = Math.hypot(x - qx, y - qy);
+      const d = len2(x - qx, y - qy);
       if (d < best) {
         best = d;
         bx = qx;
@@ -167,7 +172,8 @@ export function migrate(
     return { d: best, x: bx, y: by, u: bu };
   };
 
-  /** The axis point at valley coordinate u. */
+  /** The axis point at valley coordinate u, into `axisPoint` (no allocation in the hot loop). */
+  const axisPoint: [number, number] = [0, 0];
   const axisAt = (u: number): [number, number] => {
     let lo = 0;
     let hi = n0 - 1;
@@ -177,7 +183,9 @@ export function migrate(
       else hi = m;
     }
     const f = au[hi]! > au[lo]! ? Math.min(1, Math.max(0, (u - au[lo]!) / (au[hi]! - au[lo]!))) : 0;
-    return [ax[lo]! + (ax[hi]! - ax[lo]!) * f, ay[lo]! + (ay[hi]! - ay[lo]!) * f];
+    axisPoint[0] = ax[lo]! + (ax[hi]! - ax[lo]!) * f;
+    axisPoint[1] = ay[lo]! + (ay[hi]! - ay[lo]!) * f;
+    return axisPoint;
   };
 
   // The channel: positions and valley coordinates in typed buffers, resampled to ds
@@ -212,7 +220,7 @@ export function migrate(
     if (sArc.length < count) sArc = new Float64Array(Math.ceil(count * 1.5));
     sArc[0] = 0;
     for (let i = 1; i < count; i++)
-      sArc[i] = sArc[i - 1]! + Math.hypot(sx[i]! - sx[i - 1]!, sy[i]! - sy[i - 1]!);
+      sArc[i] = sArc[i - 1]! + len2(sx[i]! - sx[i - 1]!, sy[i]! - sy[i - 1]!);
     const total = sArc[count - 1]!;
     const out = Math.max(2, Math.round(total / ds) + 1);
     grow(out);
@@ -275,7 +283,7 @@ export function migrate(
       const dy = (ys[i + 1]! - ys[i - 1]!) / 2;
       const ddx = xs[i + 1]! - 2 * xs[i]! + xs[i - 1]!;
       const ddy = ys[i + 1]! - 2 * ys[i]! + ys[i - 1]!;
-      const q = Math.hypot(dx, dy);
+      const q = len2(dx, dy);
       if (q < 1e-9) {
         r0[i] = 0;
         nx[i] = 0;
@@ -291,7 +299,7 @@ export function migrate(
     mx[0] = xs[0]!;
     my[0] = ys[0]!;
     for (let i = 1; i + 1 < m; i++) {
-      s += Math.hypot(xs[i]! - xs[i - 1]!, ys[i]! - ys[i - 1]!);
+      s += len2(xs[i]! - xs[i - 1]!, ys[i]! - ys[i - 1]!);
       let conv = 0;
       let wsum = 0;
       for (let k = 1; k <= K && i - k >= 0; k++) {
@@ -309,7 +317,7 @@ export function migrate(
       // the axis from above, so only nodes beyond the limit from it need the search.
       const own = axisAt(us[i]!);
       const fp = floodplain(us[i]!);
-      if (Math.hypot(x - own[0], y - own[1]) > Math.max(0, fp - t.margin * W)) {
+      if (len2(x - own[0], y - own[1]) > Math.max(0, fp - t.margin * W)) {
         const a = nearestAxis(x, y, us[i]!, Math.max(fp, W) + 20 * W);
         const limit = Math.max(0, floodplain(a.u) - t.margin * W);
         if (a.d > limit && a.d < Infinity) {
@@ -322,7 +330,7 @@ export function migrate(
     }
     mx[m - 1] = xs[m - 1]!;
     my[m - 1] = ys[m - 1]!;
-    resample(mx, my, us.slice(0, m), m);
+    resample(mx, my, us, m);
     // Cutoffs, every third iteration (and on the last): the first neck closer than
     // `cutoff` widths around a loop of at least `minLoop` widths, then the next.
     if (it % 3 !== 2 && it !== t.iterations - 1) continue;
@@ -344,7 +352,7 @@ export function migrate(
           for (let dy = -1; dy <= 1 && ci < 0; dy++)
             for (const j of hash.get(hk(gx + dx, gy + dy)) ?? []) {
               if (j - i < minGap) continue;
-              if (Math.hypot(xs[j]! - xs[i]!, ys[j]! - ys[i]!) < neck) {
+              if (len2(xs[j]! - xs[i]!, ys[j]! - ys[i]!) < neck) {
                 ci = i;
                 cj = j;
                 break;
