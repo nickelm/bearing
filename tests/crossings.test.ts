@@ -70,7 +70,8 @@ describe('crossing sites (decision 175)', () => {
       expect(cr.score[i]).toBeLessThanOrEqual(1);
       expect(cr.riverWidth[i]).toBeGreaterThan(0);
     }
-    for (let i = 1; i < at.length; i++) expect(at[i]! - at[i - 1]!).toBeGreaterThan(CROSSING_TUNING.spacing);
+    for (let i = 1; i < at.length; i++)
+      expect(at[i]! - at[i - 1]!).toBeGreaterThan(CROSSING_TUNING.spacing);
   });
 
   it('score nothing off the river, at the mouth or on flat, soft banks', () => {
