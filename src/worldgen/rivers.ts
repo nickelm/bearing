@@ -37,6 +37,13 @@ export interface Rivers {
 export const RIVER_TUNING = {
   /** Smallest discharge drawn as a river (m³/s). */
   minDischarge: 20,
+  /**
+   * Headwaters (decision 176): each river that begins at a source runs on upstream
+   * along its largest tributary while the discharge stays at least this (m³/s), so
+   * rivers start up in the mountains as streams (8 m wide at 4 m³/s) rather than
+   * appearing where they first reach `minDischarge`.
+   */
+  headwaterDischarge: 4,
   /** Coefficient a in w = a · Q^0.5 (m per (m³/s)^0.5). */
   widthCoefficient: 4,
 };
@@ -60,8 +67,9 @@ export function extractRivers(
   height: Float32Array,
   receiver: Int32Array,
   discharge: Float32Array,
-  tuning = RIVER_TUNING,
+  tuningIn: Partial<typeof RIVER_TUNING> = RIVER_TUNING,
 ): Rivers {
+  const tuning = { ...RIVER_TUNING, ...tuningIn };
   const count = 6 * n * n;
   const isRiver = (c: number) => height[c]! > 0 && discharge[c]! >= tuning.minDischarge;
 
@@ -77,12 +85,30 @@ export function extractRivers(
   for (let c = 0; c < count; c++) if (isRiver(c) && donors[c] !== 1) starts.push(c);
   const startIndex = new Map<number, number>();
   starts.forEach((c, k) => startIndex.set(c, k));
+  // The largest donor of every land cell (ties to the lower cell), for the headwaters.
+  const topDonor = new Int32Array(count).fill(-1);
+  if (tuning.headwaterDischarge < tuning.minDischarge) {
+    for (let c = 0; c < count; c++) {
+      if (height[c]! <= 0 || discharge[c]! < tuning.headwaterDischarge) continue;
+      const r = receiver[c]!;
+      if (r < 0) continue;
+      const t = topDonor[r]!;
+      if (t < 0 || discharge[c]! > discharge[t]! || (discharge[c] === discharge[t] && c < t))
+        topDonor[r] = c;
+    }
+  }
 
   const offsets = new Uint32Array(starts.length + 1);
   const cells: number[] = [];
   const downstream = new Int32Array(starts.length).fill(-1);
   starts.forEach((start, k) => {
     offsets[k] = cells.length;
+    // A source's headwater first: up its largest tributary, then back down to it.
+    if (donors[start] === 0) {
+      const up: number[] = [];
+      for (let x = topDonor[start]!; x >= 0 && up.length < count; x = topDonor[x]!) up.push(x);
+      for (let i = up.length - 1; i >= 0; i--) cells.push(up[i]!);
+    }
     let c = start;
     cells.push(c);
     for (;;) {

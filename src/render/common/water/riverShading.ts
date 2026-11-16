@@ -51,6 +51,7 @@ import {
   vec3,
   vec4,
 } from 'three/tsl';
+import { NATURAL_BANKS } from './naturalBanks';
 import type { RiverTables } from './riverTables';
 
 type F = Node<'float'>;
@@ -71,27 +72,7 @@ export class RiverStyle {
   readonly natural = uniform(1);
 }
 
-/**
- * Bank noise (decision 167): amplitudes as shares of the half-width, wavelengths
- * in half-widths. The blended value noise has a standard deviation of about
- * 0.22 and peaks near ±0.55, so typical displacements are about a quarter of
- * these factors: the course swings about one half-width (at most `wanderMax`
- * times the noise), the width varies by about 13%, the edges by a few percent.
- */
-export const NATURAL_BANKS = {
-  /** Sideways wander: swing (share of the half-width, at most `wanderMax` m), wavelength. */
-  wander: 4,
-  wanderMax: 40,
-  wanderWavelength: 20,
-  /** Swelling and narrowing of the width. */
-  swell: 0.6,
-  swellWavelength: 12,
-  /** Ragged edges, two octaves. */
-  rough: 0.35,
-  roughWavelength: 3,
-  fine: 0.18,
-  fineWavelength: 1,
-};
+export { NATURAL_BANKS };
 
 /** Ashima's permutation polynomial: exact in float32 for integers below 289. */
 function permute(x: F): F {

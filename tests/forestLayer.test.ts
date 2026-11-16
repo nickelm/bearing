@@ -14,6 +14,7 @@ import { Vec3d } from '../src/core/vec3d';
 import { cubeFaceUvToDirection } from '../src/core/coords';
 import {
   GALLERY_BANK,
+  TREE_WATER_MARGIN,
   GALLERY_ROW_WIDTH,
   GALLERY_ROWS,
   INSTANCE_FLOATS,
@@ -24,6 +25,7 @@ import {
   treeGeometry,
 } from '../src/render/sim/forest/forestLayer';
 import type { TreeContext } from '../src/render/sim/forest/forestLayer';
+import { waterDistance } from '../src/render/common/water/naturalBanks';
 import { buildModel } from '../src/render/common/models/builder';
 import { MODEL_SPECS } from '../src/render/common/models/library';
 import {
@@ -284,31 +286,48 @@ describe('tree placement (decision 148)', () => {
     const expected = ((2 * (760 + 370)) / 7) * GALLERY_ROWS.reduce((a, b) => a + b, 0);
     expect(n).toBeGreaterThan(expected * 0.6);
     expect(n).toBeLessThan(expected * 1.3);
-    // Every tree stands on a bank, within the rows' reach of some water and out of all of it.
-    const distance = (p: Vec3d, o: typeof river) => {
-      const ab = o.b.clone().sub(o.a);
-      const k = Math.min(1, Math.max(0, p.clone().sub(o.a).dot(ab) / ab.dot(ab)));
-      return o.a.clone().addScaled(ab, k).distanceTo(p) * PLANET_RADIUS - o.width / 2;
-    };
-    const reach = GALLERY_BANK + GALLERY_ROWS.length * GALLERY_ROW_WIDTH + 1;
+    // Every tree stands on a bank: out of the water the shader draws, natural banks and
+    // all (decision 176), and the woods within the rows' reach of it.
+    // The rows follow the bank noise at the centerline point; at a tree up to 25 m out it
+    // differs by a few meters (the wander's and the ragged edge's change), hence the slack.
+    const reach = GALLERY_BANK + GALLERY_ROWS.length * GALLERY_ROW_WIDTH + 10;
+    let nearWet = 0;
     for (const v of wet.lists.values()) {
       for (let i = 0; i < v.length; i += INSTANCE_FLOATS) {
         const p = new Vec3d(v[i + 3]!, v[i + 4]!, v[i + 5]!);
-        const near = Math.min(distance(p, river), distance(p, stream));
-        expect(near).toBeGreaterThan(GALLERY_BANK - 1);
-        if (v[i + 7]! < 1.5) expect(near).toBeLessThan(reach);
+        const near = waterDistance([river, stream], p, v[i + 6]!, PLANET_RADIUS);
+        expect(near).toBeGreaterThan(TREE_WATER_MARGIN - 0.01);
+        if (near < reach) nearWet++;
       }
     }
+    // The trees the river adds line it: open land's own trees, which the removed ones'
+    // draws reshuffle, are not compared one by one.
+    let nearBare = 0;
+    for (const v of bare.lists.values())
+      for (let i = 0; i < v.length; i += INSTANCE_FLOATS) {
+        const p = new Vec3d(v[i + 3]!, v[i + 4]!, v[i + 5]!);
+        if (waterDistance([river, stream], p, v[i + 6]!, PLANET_RADIUS) < reach) nearBare++;
+      }
+    expect(nearWet - nearBare).toBeGreaterThan(0.9 * n);
     // None above the tree line.
     const tundra = data(k7, 0, Biome.Tundra);
     expect(count(placeTrees(t, tundra, opts, 1, { ...climateOf(10), rivers }))).toBe(
       count(placeTrees(t, tundra, opts, 1, climateOf(10))),
     );
-    // No gallery in the desert, and none added to closed forest.
+    // No gallery in the desert, and none added to closed forest, whose trees that stood
+    // in the drawn water are gone (decision 176).
     const dry = placeTrees(t, data(k7, 0), opts, 1, { ...climateOf(10, 0.02), rivers });
     expect(count(dry)).toBe(count(placeTrees(t, data(k7, 0), opts, 1, climateOf(10, 0.02))));
-    const forest = (c: TreeContext) => count(placeTrees(t, data(k7, 1), opts, 1, c));
-    expect(forest({ ...climateOf(10), rivers })).toBe(forest(climateOf(10)));
+    const forest = (c: TreeContext) => placeTrees(t, data(k7, 1), opts, 1, c);
+    const woods = forest({ ...climateOf(10), rivers });
+    expect(count(woods)).toBeLessThan(count(forest(climateOf(10))));
+    for (const v of woods.lists.values())
+      for (let i = 0; i < v.length; i += INSTANCE_FLOATS) {
+        const p = new Vec3d(v[i + 3]!, v[i + 4]!, v[i + 5]!);
+        expect(waterDistance([river, stream], p, v[i + 6]!, PLANET_RADIUS)).toBeGreaterThan(
+          TREE_WATER_MARGIN - 0.01,
+        );
+      }
   });
 
   it('stands a large lone landmark in about a third of the parts of open land (decision 166)', () => {

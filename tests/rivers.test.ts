@@ -34,6 +34,30 @@ describe('extractRivers', () => {
     widthCoefficient: 4,
   });
 
+  it('runs each source up its largest tributary as a headwater (decision 176)', () => {
+    const plain = extractRivers(n, h, dr.receiver, dr.discharge, {
+      minDischarge: 30,
+      headwaterDischarge: 30,
+    });
+    // The same polylines, sources reaching farther upstream, never below the headwater flow.
+    expect(rivers.count).toBe(plain.count);
+    let longer = 0;
+    for (let k = 0; k < rivers.count; k++) {
+      const a = rivers.offsets[k]!;
+      const extra = rivers.offsets[k + 1]! - a - (plain.offsets[k + 1]! - plain.offsets[k]!);
+      expect(extra).toBeGreaterThanOrEqual(0);
+      if (extra > 0) longer++;
+      for (let p = a; p < a + extra; p++) {
+        expect(dr.discharge[rivers.cells[p]!]).toBeGreaterThanOrEqual(4);
+        expect(dr.discharge[rivers.cells[p]!]).toBeLessThan(30);
+      }
+      // Discharge never falls downstream along the headwater.
+      for (let p = a + 1; p <= a + extra; p++)
+        expect(rivers.discharge[p]).toBeGreaterThanOrEqual(rivers.discharge[p - 1]!);
+    }
+    expect(longer).toBeGreaterThan(0);
+  });
+
   it('finds rivers whose points follow the receivers', () => {
     expect(rivers.count).toBeGreaterThan(3);
     for (let k = 0; k < rivers.count; k++) {

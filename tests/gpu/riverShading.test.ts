@@ -5,6 +5,8 @@ import type { Node } from 'three/webgpu';
 import { latLonToDirection } from '../../src/core/coords';
 import { tileForDirection } from '../../src/core/tiles';
 import { DEG, PLANET_RADIUS } from '../../src/core/units';
+import { Vec3d } from '../../src/core/vec3d';
+import { waterDistance } from '../../src/render/common/water/naturalBanks';
 import { RiverShading } from '../../src/render/common/water/riverShading';
 import { offsetPoint } from '../../src/render/sim/infra/infraScene';
 import { RiverTables } from '../../src/render/common/water/riverTables';
@@ -96,7 +98,8 @@ describe.skipIf(!gpu)('river coverage (TSL on Dawn)', () => {
       const q = offsetPoint(C, H, i * 1200, 0, R);
       river.points.set([q.x, q.y, q.z], i * 3);
     }
-    const tables = new RiverTables(new RiverIndex(river), R);
+    const obliqueIndex = new RiverIndex(river);
+    const tables = new RiverTables(obliqueIndex, R);
     const shading = new RiverShading(tables, R);
     shading.legibility.value = 0;
     shading.minPixels.value = 1;
@@ -148,6 +151,26 @@ describe.skipIf(!gpu)('river coverage (TSL on Dawn)', () => {
       for (let j = lo; j <= hi; j++) expect(out[(k * across + j) * 4]!).toBeGreaterThan(0.2);
       left.push(-80 + 0.5 * lo);
       right.push(-80 + 0.5 * hi);
+    }
+    // The CPU twin (naturalBanks.ts, decision 176) finds the same banks within a meter.
+    const segs = obliqueIndex.segments;
+    const F = segs.fields ?? 12;
+    const stretches = Array.from({ length: segs.count }, (_, k) => ({
+      a: new Vec3d(segs.data[k * F]!, segs.data[k * F + 1]!, segs.data[k * F + 2]!),
+      b: new Vec3d(segs.data[k * F + 3]!, segs.data[k * F + 4]!, segs.data[k * F + 5]!),
+      width: (segs.data[k * F + 6]! + segs.data[k * F + 7]!) / 2,
+    }));
+    for (let k = 0; k < stations; k += 4) {
+      let lo = -1;
+      let hi = -1;
+      for (let j = 0; j < across; j++) {
+        const p = offsetPoint(C, H, 2000 + k * 5, -80 + 0.5 * j, R);
+        if (waterDistance(stretches, p, 50, R, false) >= 0) continue;
+        if (lo < 0) lo = j;
+        hi = j;
+      }
+      expect(Math.abs(-80 + 0.5 * lo - left[k]!)).toBeLessThanOrEqual(1);
+      expect(Math.abs(-80 + 0.5 * hi - right[k]!)).toBeLessThanOrEqual(1);
     }
     const width = left.map((l, k) => right[k]! - l);
     console.log('natural banks', {

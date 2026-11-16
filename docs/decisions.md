@@ -2834,3 +2834,16 @@ The eroded world's crossing sites, where the alignment snaps bridges (N5), come 
 **Not done:** near trees swaying under the rotor; a check in Free Flight in the browser (check 11).
 
 **Reason:** Motion is what turns ground detail into a cue: the rings under a rotor give height and drift at a glance, and grass bending with the flight model's own gusts ties what the pilot sees to what the aircraft feels.
+
+### 176. Trees keep out of the drawn water and line its moved banks; rivers start in the mountains
+
+**Date:** 2026-11-16
+**Decision:** Two changes from the owner's look at the natural banks (decision 167): trees stood in the water at the edges, though trees near the water are wanted, and few rivers seemed to start in the mountains.
+
+- **The bank noise on the CPU** (`render/common/water/naturalBanks.ts`). The shader's bank noise (value noise on Ashima's mod-289 lattice hash, octave bands blended by width) in float64, sharing `NATURAL_BANKS` with the shader, and `waterDistance`: the signed distance from a point to the nearest drawn river water, choosing the river as the shader does (least distance to its bank) and taking the side the same way, with the wander, swelling and both ragged octaves at full strength, as the shader draws them near the camera. By default it is the lesser of the natural and the smooth banks, since a distant river is drawn smooth. A GPU test checks it against the shader: on an oblique 40 m river at 160 stations, the banks agree within the test's 0.5 m sampling step. Points farther from the smooth bank than the noise can move it skip the noise.
+- **Trees** (`forestLayer.ts`). Every tree site within 1.5 m of the drawn water is dropped (`TREE_WATER_MARGIN`): closed forest, open land, the woods along rivers and landmarks (which keep 15 m). The woods along rivers (decision 166) now stand in rows from the drawn bank: the bank noise at the centerline point moves and swells the bank, and the rows are measured from there, so the trees follow the water's actual edge instead of the polyline. On the forest test's synthetic river 413 of 9,216 closed-forest trees stood in the water; none does now.
+- **Headwaters** (`RIVER_TUNING.headwaterDischarge`, `extractRivers`). A river was drawn only where its discharge reached 20 m³/s, which in mountains is well below the ranges' crests. Each river that begins at a source now runs on upstream along its largest tributary while the discharge stays at least 4 m³/s (8 m wide), so it starts high in the mountains as a stream. Only sources are extended: no new polylines, confluences or junctions; the profiles keep their surfaces monotone (the invariant tests over ten seeds pass), and the width tapers with the discharge. `GENERATOR_VERSION` is 20.
+
+**How it was checked.** `npm run check` without the GPU suite: 99 files, 881 tests; the river coverage GPU test with the CPU twin; the forest layer's tests now measure distances to the drawn water. Not yet seen in a render or the browser.
+
+**Reason:** Trees should crowd a river's bank, which is where a low-flying pilot sees them, and must never stand in its water; the only way to do both with banks the shader moves is to place them with the same function. Rivers that appear from nowhere halfway down a valley read as wrong; their real sources are streams near the crests.

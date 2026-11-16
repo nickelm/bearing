@@ -71,6 +71,7 @@ import {
 } from '../../../core/coords';
 import { Biome } from '../../../worldgen/biomes';
 import { RIVER_SEGMENT_FIELDS } from '../../../worldgen/riverIndex';
+import { naturalBank, waterDistance } from '../../common/water/naturalBanks';
 import type { RiverIndex } from '../../../worldgen/riverIndex';
 import { FARMABLE_BIOMES } from '../../common/palette';
 import type { InfraScene, RoadStretch } from '../infra/infraScene';
@@ -145,6 +146,8 @@ export const GALLERY_SPACING = 7;
 export const GALLERY_ROWS = [0.85, 0.6, 0.35, 0.15];
 export const GALLERY_ROW_WIDTH = 7;
 export const GALLERY_BANK = 3;
+/** Trees keep this far from the drawn water's edge (m; decision 176). */
+export const TREE_WATER_MARGIN = 1.5;
 /** Landmark trees (decision 166): the chance of one in each part of open land (about 770 m). */
 export const LANDMARK_SHARE = 0.3;
 const SEED_GALLERY = 0x2f7d61;
@@ -345,6 +348,9 @@ export function* treePlacer(
       scratch,
     );
 
+  // River stretches near the tile: woods along them (below), and every tree keeps out of
+  // the water the shader draws, natural banks included (decision 176).
+  const stretches = ctx.rivers?.(t) ?? [];
   /** Ground direction and raw height at sample (sx, sy), or null in water, a lake or a clearing. */
   const site = (sx: number, sy: number): number | null => {
     cubeFaceUvToDirection(
@@ -357,6 +363,7 @@ export function* treePlacer(
     const level = lake(sx, sy);
     if (h <= 0 || (level > NO_LAKE / 2 && level > h)) return null;
     if (ctx.clear?.(d)) return null;
+    if (stretches.length > 0 && waterDistance(stretches, d, h, R) < TREE_WATER_MARGIN) return null;
     return h;
   };
   let meanT = 0;
@@ -667,17 +674,6 @@ export function* treePlacer(
   // only (forest is already there). Willow-like broadleaf, poplar and birch in temperate
   // land, firs with a few birches in the cold, broadleaf (evergreen) in the tropics and in
   // hot, dry land, where the gallery may be the only trees.
-  const stretches = ctx.rivers?.(t) ?? [];
-  /** Whether unit direction `p` lies within `margin` m of any stretch's water. */
-  const inWater = (p: Vec3d, margin: number): boolean => {
-    for (const o of stretches) {
-      const ab = o.b.clone().sub(o.a);
-      const k = Math.min(1, Math.max(0, p.clone().sub(o.a).dot(ab) / Math.max(ab.dot(ab), 1e-30)));
-      const q = o.a.clone().addScaled(ab, k);
-      if (q.distanceTo(p) * R < o.width / 2 + margin) return true;
-    }
-    return false;
-  };
   for (const st of stretches) {
     const length = st.a.distanceTo(st.b) * R;
     if (length < 1) continue;
@@ -690,20 +686,28 @@ export function* treePlacer(
           const draw = cellHash(st.id, k, side * 8 + row, cSeed ^ SEED_GALLERY);
           if (hashBits(draw, 0) >= GALLERY_ROWS[row]!) continue;
           const u = (k + hashBits(draw, 10) * 0.8) / Math.max(steps + 1, 1);
-          const out =
-            st.width / 2 + GALLERY_BANK + (row + hashBits(draw, 20) * 0.7) * GALLERY_ROW_WIDTH;
           const on = st.a
             .clone()
             .scale(1 - u)
             .addScaled(st.b, u)
             .normalize();
-          const p = on.addScaled(across, (side * out) / R).normalize();
+          // Rows out from the drawn bank, which the shader moves and swells (decision 176):
+          // the bank noise at the centerline point, at its ground height.
+          const ouv = projectToCubeFace(on, t.face);
+          const h0 = ground(ouv.u * size - t.x * TILE_TEXELS, ouv.v * size - t.y * TILE_TEXELS, on);
+          const rr = R + Math.max(h0, 0);
+          const bank = naturalBank(on.x * rr, on.y * rr, on.z * rr, st.width / 2);
+          const out =
+            (st.width / 2) * bank.swell +
+            Math.max(bank.rough, 0) +
+            GALLERY_BANK +
+            (row + hashBits(draw, 20) * 0.7) * GALLERY_ROW_WIDTH;
+          const p = on.addScaled(across, (side * out + bank.offset) / R).normalize();
           const uv = projectToCubeFace(p, t.face);
           const sx = uv.u * size - t.x * TILE_TEXELS;
           const sy = uv.v * size - t.y * TILE_TEXELS;
           if (!(sx >= x0 && sx < x0 + span && sy >= y0 && sy < y0 + span)) continue;
           if (density(sx, sy) >= CANOPY_THRESHOLD - 0.1) continue;
-          if (stretches.length > 1 && inWater(p, GALLERY_BANK - 0.5)) continue;
           if (TREELESS.has(biomeAt(sx, sy))) continue;
           const h = site(sx, sy);
           if (h === null) continue;
@@ -749,10 +753,9 @@ export function* treePlacer(
     if (hashBits(lh, 0) < LANDMARK_SHARE) {
       const sx = x0 + (0.15 + 0.7 * hashBits(lh, 10)) * span;
       const sy = y0 + (0.15 + 0.7 * hashBits(lh, 20)) * span;
-      const h =
-        density(sx, sy) < 0.2 && !TREELESS.has(biomeAt(sx, sy)) && !inWater(scratchDir(sx, sy), 15)
-          ? site(sx, sy)
-          : null;
+      let h = density(sx, sy) < 0.2 && !TREELESS.has(biomeAt(sx, sy)) ? site(sx, sy) : null;
+      // Well clear of the drawn water (site() leaves `d` at the sample's direction).
+      if (h !== null && stretches.length > 0 && waterDistance(stretches, d, h, R) < 15) h = null;
       if (h !== null) {
         climateHere(h);
         const biome = biomeAt(sx, sy);

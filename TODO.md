@@ -910,7 +910,9 @@ Rivers by regime, roads and railways aligned to the terrain with earthworks as a
   - [x] Bed walk of decision 146 with and without the smoothing, recorded in decision 165
   - [x] Wander for every river and natural banks in the shader (owner request, decision 167)
   - [ ] Owner's look at the natural banks in the browser; tune `NATURAL_BANKS` and `WANDER_TUNING`
-  - [ ] Trees and the canopy keep clear of the river's polyline, but the shader's wander draws water up to about 40 m from it: trees can stand at or in the moved water (`treeline` view). A CPU twin of the bank noise for tree placement and the canopy, or a narrower wander where forest grows to the bank
+  - [x] Trees and the canopy keep clear of the river's polyline, but the shader's wander draws water up to about 40 m from it: trees can stand at or in the moved water (`treeline` view). A CPU twin of the bank noise for tree placement and the canopy, or a narrower wander where forest grows to the bank (trees: decision 176)
+  - [ ] The canopy shell over forest beside a river can still cover moved water: lane it from the drawn water too
+  - [x] Rivers start in the mountains: headwaters along each source's largest tributary down to 4 m³/s (owner, decision 176)
   - [ ] The carve follows the polyline, not the shader's wander: a river resolved by the mesh (wider than about 50 m) can show water beside its channel; carry the wander into the kernel's carve if it shows
   - [ ] Eroded worlds of ten seeds through `tools/riverInvariants.preview.ts` (about ten minutes each on lavapipe)
   - [ ] The remaining 21% on grid headings (long straight D8 runs): bend them with the regime and meander work, then tighten the tests' bounds
