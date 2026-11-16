@@ -23,25 +23,33 @@ import {
   alignedPoint,
   alignmentCorridors,
   alignmentStats,
+  linksByLine,
+  matchBridges,
 } from '../src/worldgen/networks/alignments';
 import { buildAlignments } from '../src/worldgen/networks/build';
 import {
   alignLink,
   CLASS_KEYS,
+  CROSSING_FIELDS,
+  groundField,
+  GROUND_TUNING,
   LINK_TUNING,
   NETWORK,
   ROUTE_SPACING,
 } from '../src/worldgen/networks/link';
 import { linkTasks } from '../src/worldgen/networks/tasks';
-import { tileHeightSampler } from '../src/worldgen/networks/tileHeights';
+import { groundCover, tileHeightSampler } from '../src/worldgen/networks/tileHeights';
+import { taskRivers } from '../src/worldgen/networks/riverCrossings';
+import { Vec3d } from '../src/core/vec3d';
 import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
-import { RiverIndex } from '../src/worldgen/riverIndex';
+import { RIVER_SEGMENT_FIELDS, RiverIndex } from '../src/worldgen/riverIndex';
 import { TerrainEdits } from '../src/worldgen/edits';
 import { testGpu } from '../tests/gpu/device';
 import { previewWorld } from './previewWorld';
 
 const env = process.env;
 // ALIGN_TUNING='{"greed":1.5,"spacing":{"secondary":40}}' overrides LINK_TUNING and ROUTE_SPACING.
+if (env.GROUND_TUNING) Object.assign(GROUND_TUNING, JSON.parse(env.GROUND_TUNING));
 if (env.ALIGN_TUNING) {
   const t = JSON.parse(env.ALIGN_TUNING) as Record<string, unknown>;
   Object.assign(ROUTE_SPACING, t.spacing ?? {});
@@ -96,6 +104,12 @@ it('aligns the network of a world', async () => {
   let synthMs = 0;
   let alignMs = 0;
   let missing = 0;
+  let crossings = 0;
+  let chordSum = 0;
+  let lengthSum = 0;
+  const spans: number[] = [];
+  const widths: number[] = [];
+  const field = groundField(params.seed, R);
   const rows: string[] = [];
   let last = 0;
   const al = await buildAlignments({
@@ -104,14 +118,43 @@ it('aligns the network of a world', async () => {
     workers: 1,
     synthesize: async (keys) => {
       const t0 = performance.now();
-      const out = (await synth.generate(keys)).map((t) => t.height);
+      const out = (await synth.generate(keys)).map((t) => ({
+        height: t.height,
+        cover: env.GROUND === '0' ? undefined : groundCover(t.material),
+      }));
       synthMs += performance.now() - t0;
       return out;
     },
-    run: (task, tiles) => {
+    rivers: env.RIVERS === '0' ? undefined : (keys) => taskRivers(index, keys, R),
+    run: (task, tiles, rivers) => {
       const t0 = performance.now();
       const ground = tileHeightSampler(new Map(tiles));
-      const link = alignLink(task, ground.height, R);
+      const link = alignLink(
+        task,
+        {
+          height: ground.height,
+          cover: ground.cover,
+          rivers: rivers ?? undefined,
+          field: env.GROUND === '0' ? undefined : field,
+          seed: env.WANDER === '0' ? undefined : params.seed,
+        },
+        R,
+      );
+      crossings += link.crossings.length / CROSSING_FIELDS;
+      let chord = 0;
+      for (let i = 3; i < task.anchors.length; i += 3)
+        chord +=
+          Math.hypot(
+            task.anchors[i]! - task.anchors[i - 3]!,
+            task.anchors[i + 1]! - task.anchors[i - 2]!,
+            task.anchors[i + 2]! - task.anchors[i - 1]!,
+          ) * R;
+      chordSum += chord;
+      lengthSum += link.length;
+      for (let c = 0; c < link.crossings.length; c += CROSSING_FIELDS) {
+        spans.push(link.crossings[c + 6]!);
+        widths.push(link.crossings[c + 5]!);
+      }
       missing += ground.missing();
       alignMs += performance.now() - t0;
       rows.push(
@@ -146,6 +189,116 @@ it('aligns the network of a world', async () => {
       `${corridors.length} corridors indexed in ${(performance.now() - t0).toFixed(0)} ms, ${missing} lookups off the tiles`,
   );
   console.log('points per class', Object.fromEntries(classes));
+  const m = matchBridges(al, {
+    road: campaign.graph.bridges,
+    rail: campaign.graph.railways.bridges,
+    spur: campaign.infrastructure.spurBridges,
+  });
+  // Network bridges on the links aligned here (LIMIT and NEAR align a part of the network).
+  let onLinks = 0;
+  for (const [net, list] of [
+    [NETWORK.Road, campaign.graph.bridges],
+    [NETWORK.Rail, campaign.graph.railways.bridges],
+    [NETWORK.Spur, campaign.infrastructure.spurBridges],
+  ] as const) {
+    const links = linksByLine(al, net);
+    for (const k of list.road) if (links.has(k)) onLinks++;
+  }
+  if (env.BRIDGES === '1') {
+    // Each unmatched network bridge: its river's width, the nearest crossing on its link,
+    // and the nearest rendered river segment.
+    const seg = index.segments.data;
+    const F = RIVER_SEGMENT_FIELDS;
+    const matchedSet = new Set<string>();
+    al.crossingBridge.forEach((b, c) => {
+      if (b >= 0) matchedSet.add(`${al.network[al.crossingLink[c]!]}/${b}`);
+    });
+    for (const [net, list] of [
+      [NETWORK.Road, campaign.graph.bridges],
+      [NETWORK.Rail, campaign.graph.railways.bridges],
+      [NETWORK.Spur, campaign.infrastructure.spurBridges],
+    ] as const) {
+      const links = linksByLine(al, net);
+      for (let b = 0; b < list.road.length; b++) {
+        const k = links.get(list.road[b]!);
+        if (k === undefined || matchedSet.has(`${net}/${b}`)) continue;
+        const p = new Vec3d(list.points[b * 3]!, list.points[b * 3 + 1]!, list.points[b * 3 + 2]!);
+        let nearCross = Infinity;
+        al.crossingLink.forEach((kk, c) => {
+          if (kk !== k) return;
+          const o = c * CROSSING_FIELDS;
+          nearCross = Math.min(
+            nearCross,
+            p.distanceTo(
+              new Vec3d(al.crossings[o + 1]!, al.crossings[o + 2]!, al.crossings[o + 3]!),
+            ) * R,
+          );
+        });
+        let nearRiver = Infinity;
+        let w = 0;
+        for (let q = 0; q < index.segments.count; q++) {
+          const a = new Vec3d(seg[q * F]!, seg[q * F + 1]!, seg[q * F + 2]!);
+          const d = p.distanceTo(a) * R;
+          if (d < nearRiver) {
+            nearRiver = d;
+            w = seg[q * F + 6]!;
+          }
+        }
+        // The link's nearest approach to the bridge point.
+        let nearLine = Infinity;
+        for (let i = al.offsets[k]!; i < al.offsets[k + 1]!; i++)
+          nearLine = Math.min(nearLine, p.distanceTo(alignedPoint(al, k, i)) * R);
+        console.log(
+          `  unmatched ${['road', 'rail', 'spur'][net]} bridge ${b} (coarse river ${list.riverWidth[b]!.toFixed(0)} m): ` +
+            `crossing ${(nearCross / 1000).toFixed(1)} km, rendered river ${(nearRiver / 1000).toFixed(1)} km (${w.toFixed(0)} m wide), line ${(nearLine / 1000).toFixed(1)} km`,
+        );
+      }
+    }
+  }
+  console.log(
+    `bridges: ${m.matched} of the ${onLinks} network bridges on these links matched; ` +
+      `${m.unmatchedCrossings} of ${m.crossings} crossings unknown to the network`,
+  );
+  const q = (v: number[], f: number) =>
+    [...v].sort((a, b) => a - b)[Math.floor(f * (v.length - 1))] ?? 0;
+  console.log(
+    `${crossings} river crossings (${widths.filter((w) => w < 5).length} under 5 m wide); ` +
+      `width median ${q(widths, 0.5).toFixed(0)} m, max ${q(widths, 1).toFixed(0)} m; ` +
+      `span median ${q(spans, 0.5).toFixed(0)} m, 90% ${q(spans, 0.9).toFixed(0)} m, max ${q(spans, 1).toFixed(0)} m`,
+  );
+  // How straight: the share of length on straights over 2 km (no stored point turning more than 1°).
+  {
+    let straight = 0;
+    let all = 0;
+    const p0 = new Vec3d();
+    const p1 = new Vec3d();
+    const p2 = new Vec3d();
+    for (let k = 0; k < al.count; k++) {
+      let run = 0;
+      for (let i = al.offsets[k]! + 1; i < al.offsets[k + 1]!; i++) {
+        alignedPoint(al, k, i - 1, p0);
+        alignedPoint(al, k, i, p1);
+        const L = p0.distanceTo(p1) * R;
+        all += L;
+        let turn = 0;
+        if (i + 1 < al.offsets[k + 1]!) {
+          alignedPoint(al, k, i + 1, p2);
+          const u = p1.clone().sub(p0).normalize();
+          const v = p2.clone().sub(p1).normalize();
+          turn = Math.acos(Math.min(1, u.dot(v)));
+        }
+        run += L;
+        if (turn > DEG || i + 1 === al.offsets[k + 1]!) {
+          if (run > 2000) straight += run;
+          run = 0;
+        }
+      }
+    }
+    console.log(
+      `straights over 2 km: ${((100 * straight) / Math.max(all, 1)).toFixed(0)}% of the length; ` +
+        `length ×${(lengthSum / Math.max(chordSum, 1)).toFixed(3)} the anchors' chords`,
+    );
+  }
   // Where to look: the 2 km of line with the most points (curves and grade breaks: switchbacks).
   {
     let best = 0;

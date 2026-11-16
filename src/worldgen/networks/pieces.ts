@@ -119,6 +119,8 @@ export function routePiece(
     relax?: number;
     greed?: number;
     anyGrade?: boolean;
+    factor?: (x: number, y: number) => number;
+    extra?: (x0: number, y0: number, x1: number, y1: number) => number;
   },
 ): RoutedPiece | null {
   const mid = new Vec3d(a.x + b.x, a.y + b.y, a.z + b.z).normalize();
@@ -152,6 +154,8 @@ export function routePiece(
     relax: o.relax,
     greed: o.greed,
     anyGrade: o.anyGrade,
+    factor: o.factor,
+    extra: o.extra,
   });
   if (!r) return null;
   // The route ends on lattice nodes: put the anchors back.

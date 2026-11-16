@@ -22,6 +22,10 @@
  *   business (`fitPlan`).
  * - **Earthworks.** The ground's departure at the move's midpoint from the
  *   straight grade between its ends, as an estimate of cut and fill.
+ * - **Ground** (decision 190): a cost per meter at each node from the caller,
+ *   at least 1 (forest, open water, a seeded field that stands for soil and
+ *   field patterns), so a road on level ground wanders instead of running
+ *   dead straight between its anchors.
  * - **Extra costs** (river crossings, attractors) come from the caller, as
  *   does the search's region (a band around the network's link).
  *
@@ -129,6 +133,11 @@ export interface RouteProblem {
   allowed?: (x: number, y: number) => boolean;
   /** Extra cost of a move (river crossings, attractors); none by default. */
   extra?: (x0: number, y0: number, x1: number, y1: number) => number;
+  /**
+   * The ground's cost per meter at a node, at least 1 (decision 190: forest, open
+   * water, the seeded ground field); a move pays the mean of its ends. 1 by default.
+   */
+  factor?: (x: number, y: number) => number;
   /** Search budget in state expansions; the search gives up beyond it. */
   maxExpansions?: number;
   /**
@@ -201,9 +210,11 @@ export function route(p: RouteProblem): Route | null {
   };
   const h = new Float32Array(nodes);
   const ok = new Uint8Array(nodes);
+  const F = p.factor ? new Float32Array(nodes) : null;
   for (let i = 0; i < nodes; i++) {
     ok[i] = !p.allowed || p.allowed(X(i), Y(i)) ? 1 : 0;
     h[i] = ok[i] ? p.height(X(i), Y(i)) : 0;
+    if (F) F[i] = ok[i] ? p.factor!(X(i), Y(i)) : 1;
   }
   const start = snap(p.start);
   const goal = snap(p.goal);
@@ -267,8 +278,12 @@ export function route(p: RouteProblem): Route | null {
       const y1 = Y(next);
       const mid = p.height(0.5 * (x0 + x1), 0.5 * (y0 + y1));
       const earth = Math.abs(mid - 0.5 * (h[node]! + h[next]!));
+      const ground = F ? 0.5 * (F[node]! + F[next]!) : 1;
       let cost =
-        L * (1 + cls.gradeWeight * Math.min(q, 1) ** 2 + STEEP_WEIGHT * Math.max(0, r - 1) ** 2) +
+        L *
+          (ground +
+            cls.gradeWeight * Math.min(q, 1) ** 2 +
+            STEEP_WEIGHT * Math.max(0, r - 1) ** 2) +
         cls.curveWeight * cls.minRadius * turn * turn +
         cls.earthWeight * earth * L;
       if (overMove) cost += L * OVER_WEIGHT * (1 + r - cls.maxOver);

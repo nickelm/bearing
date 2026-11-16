@@ -2,7 +2,10 @@
  * A pool of alignment workers (decision 184): one per core but one, at most
  * eight. `run` hands a task to the least busy worker; `dispose` ends them all.
  */
+import type { WorldSeed } from '../core/rng';
 import type { AlignedLink, LinkTask } from '../worldgen/networks/link';
+import type { TaskRivers } from '../worldgen/networks/riverCrossings';
+import type { TileGround } from '../worldgen/networks/tileHeights';
 import type { AlignRequest, AlignResponse } from './alignment.worker';
 
 interface Slot {
@@ -23,6 +26,7 @@ export class AlignmentPool {
 
   constructor(
     readonly radius: number,
+    readonly seed: WorldSeed,
     size = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 1)),
   ) {
     this.size = size;
@@ -53,13 +57,17 @@ export class AlignmentPool {
     }
   }
 
-  run(task: LinkTask, tiles: [string, Float32Array][]): Promise<AlignedLink> {
+  run(
+    task: LinkTask,
+    tiles: [string, TileGround][],
+    rivers: TaskRivers | null,
+  ): Promise<AlignedLink> {
     const slot = this.slots.reduce((a, b) => (b.busy < a.busy ? b : a));
     const id = this.nextId++;
     slot.busy++;
     return new Promise((resolve, reject) => {
       this.waiting.set(id, { resolve, reject, slot });
-      const msg: AlignRequest = { id, task, radius: this.radius, tiles };
+      const msg: AlignRequest = { id, task, radius: this.radius, seed: this.seed, tiles, rivers };
       // Tiles stay in the stage's cache: copied, not transferred.
       slot.worker.postMessage(msg);
     });

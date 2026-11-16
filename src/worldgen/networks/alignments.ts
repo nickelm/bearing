@@ -12,10 +12,15 @@ import { CORRIDOR_BANKS } from '../edits/corridor';
 import type { CorridorEdit } from '../edits/corridor';
 import { STRUCTURE } from './alignment';
 import type { AlignedLink, ClassKey, Network } from './link';
-import { CLASS_KEYS, UNROUTED } from './link';
+import { CLASS_KEYS, CROSSING_FIELDS, NETWORK, UNROUTED } from './link';
+import type { BridgeList } from '../strategic/graph';
 import { FORMATION_HALF_WIDTH } from './pieces';
 
+/** Version of the stored record and the stage that made it: a stored record of another is aligned anew. */
+export const ALIGNMENT_VERSION = 2;
+
 export interface Alignments {
+  version: number;
   radius: number;
   count: number;
   network: Uint8Array;
@@ -37,6 +42,15 @@ export interface Alignments {
   /** Time the stage took (ms) and the tiles it synthesized. */
   ms: number;
   tiles: number;
+  /**
+   * River crossings (decision 190): CROSSING_FIELDS each (arc length along the
+   * link, point, river index segment, width, span, deck elevation, |sin|), the
+   * link of each, and the network bridge it is (`matchBridges`: index into its
+   * network's bridge list), or −1 for a bridge the network tier does not know.
+   */
+  crossings: Float64Array;
+  crossingLink: Int32Array;
+  crossingBridge: Int32Array;
 }
 
 /** Packs aligned links (in any order) into the stored record, sorted by link id. */
@@ -48,8 +62,13 @@ export function packAlignments(
   const sorted = [...links].sort((a, b) => a.id - b.id);
   const count = sorted.length;
   let n = 0;
-  for (const l of sorted) n += l.design.length;
+  let nc = 0;
+  for (const l of sorted) {
+    n += l.design.length;
+    nc += l.crossings.length / CROSSING_FIELDS;
+  }
   const al: Alignments = {
+    version: ALIGNMENT_VERSION,
     radius,
     count,
     network: new Uint8Array(count),
@@ -66,12 +85,18 @@ export function packAlignments(
     unrouted: new Uint16Array(count),
     ms: stats.ms,
     tiles: stats.tiles,
+    crossings: new Float64Array(nc * CROSSING_FIELDS),
+    crossingLink: new Int32Array(nc),
+    crossingBridge: new Int32Array(nc).fill(-1),
   };
   let o = 0;
+  let c = 0;
   sorted.forEach((l, k) => {
     al.network[k] = l.network;
     al.line[k] = l.line;
     al.offsets[k] = o;
+    al.crossings.set(l.crossings, c * CROSSING_FIELDS);
+    for (let q = 0; q < l.crossings.length / CROSSING_FIELDS; q++) al.crossingLink[c++] = k;
     al.fellBack[k] = l.fellBack;
     al.forced[k] = l.forced;
     al.unrouted[k] = l.unrouted;
@@ -210,5 +235,72 @@ export function alignmentStats(al: Alignments) {
       al.structure.byteLength * 2 +
       al.origin.byteLength +
       al.offsets.byteLength,
+  };
+}
+
+/** The network bridge lists the alignment's crossings are matched to. */
+export interface NetworkBridges {
+  road: BridgeList;
+  rail: BridgeList;
+  spur: BridgeList;
+}
+
+/**
+ * Matches each network bridge to the nearest unmatched crossing of the link
+ * that aligns its polyline, within `reach` m (decision 190, plan conflict 9),
+ * and records it in `al.crossingBridge`. The network's bridges are the campaign's
+ * targets; a crossing left unmatched is drawn but is no target.
+ */
+export function matchBridges(al: Alignments, nb: NetworkBridges, reach = 25_000) {
+  al.crossingBridge.fill(-1);
+  const byLink = new Map<number, number[]>();
+  al.crossingLink.forEach((k, c) => {
+    let l = byLink.get(k);
+    if (!l) byLink.set(k, (l = []));
+    l.push(c);
+  });
+  const p = new Vec3d();
+  const q = new Vec3d();
+  let networkBridges = 0;
+  let matched = 0;
+  for (const [network, list] of [
+    [NETWORK.Road, nb.road],
+    [NETWORK.Rail, nb.rail],
+    [NETWORK.Spur, nb.spur],
+  ] as const) {
+    const links = linksByLine(al, network);
+    const n = list.road.length;
+    networkBridges += n;
+    for (let b = 0; b < n; b++) {
+      const k = links.get(list.road[b]!);
+      if (k === undefined) continue;
+      p.set(list.points[b * 3]!, list.points[b * 3 + 1]!, list.points[b * 3 + 2]!);
+      let best = -1;
+      let bestD = reach;
+      for (const c of byLink.get(k) ?? []) {
+        if (al.crossingBridge[c]! >= 0) continue;
+        const o = c * CROSSING_FIELDS;
+        q.set(al.crossings[o + 1]!, al.crossings[o + 2]!, al.crossings[o + 3]!);
+        const d = p.distanceTo(q) * al.radius;
+        if (d < bestD) {
+          bestD = d;
+          best = c;
+        }
+      }
+      if (best >= 0) {
+        al.crossingBridge[best] = b;
+        matched++;
+      }
+    }
+  }
+  const crossings = al.crossingLink.length;
+  return {
+    networkBridges,
+    matched,
+    /** Network bridges with no crossing on their link within reach. */
+    unmatchedNetwork: networkBridges - matched,
+    /** Crossings the network tier does not know: drawn, no target. */
+    unmatchedCrossings: crossings - matched,
+    crossings,
   };
 }

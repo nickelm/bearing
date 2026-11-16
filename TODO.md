@@ -1003,6 +1003,10 @@ Rivers by regime, roads and railways aligned to the terrain with earthworks as a
   - [x] `alignPiece`: a piece between two anchors on the sphere with its corridor edits (decision 180)
 - [ ] Railways, then major roads, then minor roads; earlier corridors as obstacles and attachment points
 - [ ] Spiral template where a railway cannot meet its grade
+- [x] Rivers in the router: a bridge's cost by span and angle; ground costs (forest, water, a seeded field); a wander for the classes that wind; crossing records with spans and decks, matched to network bridges within 25 km (decision 190)
+  - [ ] Owner decision: network bridges over coarse rivers with no rendered river near (10 of 18 on seed 1983's first 120 links): bridges from the rendered rivers, viaducts over the valley, or no target
+  - [ ] Crossing-site discounts on the rendered rivers
+  - [ ] Viaduct and tunnel records (spans, heights) beside the bridge records
 - [ ] Structure records for every crossing, viaduct and tunnel; strategic bridges snapped to rendered rivers (closes the S4 follow-up); each alignment bridge matched to a network bridge on its link, the unmatched counted (under a tenth, decision 163)
 - [ ] Tracks and minor roads as local detail near the camera, `rng(seed, "tracks")` per region
 - [ ] Tests: grades within 0.5 points, radii, every crossing recorded (link assembly, thinning, packing, task order: `tests/networkLink.test.ts`, decision 184)

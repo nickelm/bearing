@@ -15,7 +15,9 @@ import type { TileKey } from '../../core/tiles';
 import type { Alignments } from './alignments';
 import { packAlignments } from './alignments';
 import type { AlignedLink, LinkTask } from './link';
+import type { TaskRivers } from './riverCrossings';
 import { taskTiles } from './tileHeights';
+import type { TileGround } from './tileHeights';
 
 export class AlignmentCancelled extends Error {
   constructor() {
@@ -26,11 +28,17 @@ export class AlignmentCancelled extends Error {
 export interface AlignmentBuildOptions {
   tasks: readonly LinkTask[];
   radius: number;
-  /** Heights of these tiles, in order (TILE_STRIDE² samples each). */
-  synthesize: (keys: TileKey[]) => Promise<Float32Array[]>;
+  /** The ground of these tiles, in order (TILE_STRIDE² samples each). */
+  synthesize: (keys: TileKey[]) => Promise<TileGround[]>;
+  /** The rivers near these tiles (decision 190); none by default. */
+  rivers?: (keys: TileKey[]) => TaskRivers;
   /** Workers available, and how to run one task on one. */
   workers: number;
-  run: (task: LinkTask, tiles: [string, Float32Array][]) => Promise<AlignedLink>;
+  run: (
+    task: LinkTask,
+    tiles: [string, TileGround][],
+    rivers: TaskRivers | null,
+  ) => Promise<AlignedLink>;
   /** Fraction done (by anchor-chord length) and links done. */
   onProgress?: (fraction: number, done: number, total: number) => void;
   cancelled?: () => boolean;
@@ -50,7 +58,7 @@ function taskLength(t: LinkTask): number {
 
 export async function buildAlignments(o: AlignmentBuildOptions): Promise<Alignments> {
   const t0 = performance.now();
-  const cache = new Map<string, Float32Array>();
+  const cache = new Map<string, TileGround>();
   const capacity = o.cacheTiles ?? 192;
   const batch = o.batch ?? 8;
   let synthesized = 0;
@@ -60,7 +68,7 @@ export async function buildAlignments(o: AlignmentBuildOptions): Promise<Alignme
   // eviction must not drop them in between (it did, with 16 lanes: decision 186).
   const pinned = new Map<string, number>();
   const queued = new Set<string>();
-  const ensure = async (keys: TileKey[]): Promise<[string, Float32Array][]> => {
+  const ensure = async (keys: TileKey[]): Promise<[string, TileGround][]> => {
     const want = keys.map((k) => tileKeyString(k));
     for (const s of want) pinned.set(s, (pinned.get(s) ?? 0) + 1);
     try {
@@ -116,9 +124,10 @@ export async function buildAlignments(o: AlignmentBuildOptions): Promise<Alignme
       if (o.cancelled?.()) throw new AlignmentCancelled();
       const i = next++;
       const task = o.tasks[i]!;
-      const tiles = await ensure(taskTiles(task, o.radius));
+      const keys = taskTiles(task, o.radius);
+      const tiles = await ensure(keys);
       if (o.cancelled?.()) throw new AlignmentCancelled();
-      results.push(await o.run(task, tiles));
+      results.push(await o.run(task, tiles, o.rivers ? o.rivers(keys) : null));
       doneLength += lengths[i]!;
       o.onProgress?.(doneLength / totalLength, results.length, o.tasks.length);
     }

@@ -60,10 +60,17 @@ import {
   restoreGlobalWorld,
 } from './worldgen/globalPipeline';
 import { GENERATOR_VERSION, WorldStore, worldKey } from './worldgen/worldStore';
-import { alignmentCorridors, alignmentStats } from './worldgen/networks/alignments';
+import {
+  ALIGNMENT_VERSION,
+  alignmentCorridors,
+  alignmentStats,
+  matchBridges,
+} from './worldgen/networks/alignments';
 import type { Alignments } from './worldgen/networks/alignments';
 import { AlignmentCancelled, buildAlignments } from './worldgen/networks/build';
 import { linkTasks } from './worldgen/networks/tasks';
+import { taskRivers } from './worldgen/networks/riverCrossings';
+import { groundCover } from './worldgen/networks/tileHeights';
 import { AlignmentPool } from './workers/alignmentPool';
 import { BuildScreen } from './ui/buildScreen';
 import type { World } from './worldgen/pipeline';
@@ -539,7 +546,7 @@ async function main(): Promise<void> {
         return null;
       }
       const tasks = linkTasks(strategic.graph, strategic.infrastructure.spurs, params.radius);
-      const pool = new AlignmentPool(params.radius);
+      const pool = new AlignmentPool(params.radius, params.seed);
       try {
         const al = await buildAlignments({
           tasks,
@@ -547,11 +554,15 @@ async function main(): Promise<void> {
           workers: pool.size,
           synthesize: async (keys) => {
             const byKey = new Map(
-              (await terrain.synth.generate(keys)).map((t) => [tileKeyString(t.key), t.height]),
+              (await terrain.synth.generate(keys)).map((t) => [
+                tileKeyString(t.key),
+                { height: t.height, cover: groundCover(t.material) },
+              ]),
             );
             return keys.map((k) => byKey.get(tileKeyString(k))!);
           },
-          run: (task, tiles) => pool.run(task, tiles),
+          rivers: (keys) => taskRivers(terrain.riverIndex, keys, params.radius),
+          run: (task, tiles, rivers) => pool.run(task, tiles, rivers),
           onProgress: (f, done, total) =>
             status(
               `aligning roads and railways: ${done} of ${total} links`,
@@ -561,6 +572,15 @@ async function main(): Promise<void> {
             ),
           cancelled: () => token !== generation,
         });
+        const m = matchBridges(al, {
+          road: strategic.graph.bridges,
+          rail: strategic.graph.railways.bridges,
+          spur: strategic.infrastructure.spurBridges,
+        });
+        console.info(
+          `Bridges: ${m.crossings} river crossings, ${m.matched} of ${m.networkBridges} network ` +
+            `bridges matched; ${m.unmatchedCrossings} crossings the network does not know`,
+        );
         const s = alignmentStats(al);
         console.info(
           `Alignment: ${s.links} links, ${s.km.toFixed(0)} km in ${(al.ms / 1000).toFixed(1)} s on ` +
@@ -571,7 +591,7 @@ async function main(): Promise<void> {
         );
         buildScreen.done(
           phase,
-          `${s.links} links, ${s.km.toFixed(0)} km on ${pool.size} workers; ` +
+          `${s.links} links, ${s.km.toFixed(0)} km on ${pool.size} workers; ${m.crossings} bridges, ` +
             `viaducts ${s.viaduct.toFixed(0)} km, tunnels ${s.tunnel.toFixed(0)} km`,
         );
         return al;
@@ -704,14 +724,17 @@ async function main(): Promise<void> {
         const storedParams = { ...params, seed: stored.strategic.seed };
         const terrain = terrainOf(restored, storedParams);
         // A world stored before the alignment stage existed is aligned now, and stored again.
-        if (stored.alignments) buildScreen.done(1, 'stored with the world');
+        // A record from an older stage is aligned anew (ALIGNMENT_VERSION).
+        const current =
+          stored.alignments?.version === ALIGNMENT_VERSION ? stored.alignments : undefined;
+        if (current) buildScreen.done(1, 'stored with the world');
         const alignments =
-          stored.alignments ?? (await alignNetworks(stored.strategic, storedParams, terrain, 1));
+          current ?? (await alignNetworks(stored.strategic, storedParams, terrain, 1));
         if (token !== generation) return;
         showGlobal(stored.tectonic, restored, storedParams, stored.strategic, alignments, terrain);
         buildScreen.finish();
         gui.status.generation = `cached (${((performance.now() - t0) / 1000).toFixed(1)} s)`;
-        if (!stored.alignments && alignments)
+        if (!current && alignments)
           store
             .save({ ...stored, alignments })
             .catch((err: unknown) => console.warn('Could not cache the alignments', err));

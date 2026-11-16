@@ -31,6 +31,13 @@ import { Vec3d } from '../../core/vec3d';
 import { CORRIDOR_MAX_SEGMENT } from '../edits/terrainEdits';
 import { designProfile, EARTHWORK_LIMITS, roundCorner, STRUCTURE } from './alignment';
 import { gnomonic, routePiece } from './pieces';
+import { Noise3 } from '../../core/noise';
+import { rng } from '../../core/rng';
+import type { WorldSeed } from '../../core/rng';
+import { crossingCost, CROSSING_TUNING, PlaneRivers, riverSurface, spanOf } from './riverCrossings';
+import { TASK_RIVER_FIELDS } from './riverCrossings';
+import type { TaskRivers } from './riverCrossings';
+import { COVER_WATER, coverForest } from './tileHeights';
 import { ROUTE_CLASSES } from './router';
 
 export type ClassKey = keyof typeof ROUTE_CLASSES;
@@ -101,6 +108,71 @@ export interface LinkTask {
   fallback: readonly ClassKey[];
 }
 
+/**
+ * The ground a link is aligned over (decision 190). Only `height` is needed;
+ * the rest make roads wander and bridge rivers.
+ */
+export interface AlignGround {
+  /** Height (m) at a unit direction. */
+  height: (d: Readonly<Vec3d>) => number;
+  /** Cover byte (tileHeights.ts) at a unit direction. */
+  cover?: (d: Readonly<Vec3d>) => number;
+  /** The rendered rivers near the task. */
+  rivers?: TaskRivers;
+  /** The seeded ground field, 0..1, at a unit direction. */
+  field?: (d: Readonly<Vec3d>) => number;
+  /** The world's seed: with it, roads that wind wander (`WANDER_TUNING`). */
+  seed?: WorldSeed;
+}
+
+/**
+ * The lateral wander of the classes that wind (decision 190): amplitudes (m) and
+ * wavelengths (m) of a seeded 1D noise along the link, a short octave and a long
+ * one, well inside each class's curve radius (amplitude × (2π / wavelength)² is
+ * under a tenth of 1 / radius). Motorways and railways keep their engineered straights.
+ */
+export const WANDER_TUNING: Record<
+  ClassKey,
+  { amp: number; wave: number; long: number; longWave: number }
+> = {
+  mainline: { amp: 0, wave: 1, long: 0, longWave: 1 },
+  mountainRailway: { amp: 0, wave: 1, long: 0, longWave: 1 },
+  motorway: { amp: 0, wave: 1, long: 0, longWave: 1 },
+  trunk: { amp: 14, wave: 1600, long: 120, longWave: 7000 },
+  secondary: { amp: 35, wave: 900, long: 250, longWave: 6000 },
+  mountainRoad: { amp: 8, wave: 500, long: 0, longWave: 1 },
+  track: { amp: 25, wave: 450, long: 40, longWave: 1500 },
+};
+/** Where the wander fades: within this of a link's ends and of a river crossing (m), and on side slopes steeper than `slope`. */
+export const WANDER_FADE = { ends: 400, crossing: 450, slope: 0.08, smooth: 250 };
+
+/** Ground costs per meter on top of 1 (decision 190). */
+export const GROUND_TUNING = {
+  /** At full forest density. */
+  forest: 0.25,
+  /** Open water (lakes, the sea) and river channels, per meter. */
+  water: 60,
+  /** The seeded field's share: 0..`field` on top. */
+  field: 0.3,
+  /** Its wavelengths (m): two octaves. */
+  wavelength: 2500,
+};
+
+/** The seeded ground field (0..1) of a world: soil, field patterns and property lines, in one stream. */
+export function groundField(seed: WorldSeed, radius: number): (d: Readonly<Vec3d>) => number {
+  const noise = new Noise3(rng(seed, 'alignment').fork('ground'));
+  const k = radius / GROUND_TUNING.wavelength;
+  return (d) => {
+    const n =
+      noise.noise(d.x * k, d.y * k, d.z * k) +
+      0.5 * noise.noise(d.x * k * 2.7, d.y * k * 2.7, d.z * k * 2.7);
+    return Math.min(1, Math.max(0, 0.5 + 0.5 * n));
+  };
+}
+
+/** Values per crossing record: s, point xyz, river (index segment id), width, span, deck elevation, |sin|. */
+export const CROSSING_FIELDS = 9;
+
 export interface AlignedLink {
   id: number;
   network: Network;
@@ -121,14 +193,20 @@ export interface AlignedLink {
   expansions: number;
   /** Length (m). */
   length: number;
+  /** The rivers it bridges (CROSSING_FIELDS each), along it. */
+  crossings: Float64Array;
 }
 
-/** Aligns link `task` over ground `height` (m at a unit direction) on a planet of `radius` m. */
+/** Aligns link `task` over `ground` (or a height function) on a planet of `radius` m. */
 export function alignLink(
   task: LinkTask,
-  height: (d: Readonly<Vec3d>) => number,
+  groundIn: AlignGround | ((d: Readonly<Vec3d>) => number),
   radius: number,
 ): AlignedLink {
+  const G: AlignGround = typeof groundIn === 'function' ? { height: groundIn } : groundIn;
+  const height = G.height;
+  /** Crossings the routed pieces made: river index, and a point near it. */
+  const routedCrossings: { river: number; at: Vec3d }[] = [];
   const anchors: Vec3d[] = [];
   for (let i = 0; i < task.anchors.length; i += 3)
     anchors.push(new Vec3d(task.anchors[i]!, task.anchors[i + 1]!, task.anchors[i + 2]!));
@@ -148,6 +226,36 @@ export function alignLink(
     // Each class in turn; where none finds a route, the last over ground of any
     // steepness at a high price (forced: cut and filled).
     const classes = [task.cls, ...task.fallback];
+    // The ground's costs and the rivers in the piece's plane (the frame routePiece uses).
+    const mid = new Vec3d(a.x + b.x, a.y + b.y, a.z + b.z).normalize();
+    const frame = gnomonic(mid, radius);
+    const band = bandFor(chord);
+    const rivers =
+      G.rivers && G.rivers.ids.length
+        ? new PlaneRivers(G.rivers, frame, mid, 0.5 * chord + band + 2000, radius)
+        : null;
+    const at = new Vec3d();
+    const factor =
+      G.cover || G.field || rivers
+        ? (x: number, y: number) => {
+            frame.toSphere(x, y, at);
+            let f = 1;
+            if (G.cover) {
+              const c = G.cover(at);
+              if (c & COVER_WATER) return 1 + GROUND_TUNING.water;
+              f += GROUND_TUNING.forest * coverForest(c);
+            }
+            if (rivers?.inside(x, y)) return 1 + GROUND_TUNING.water;
+            if (G.field) f += GROUND_TUNING.field * G.field(at);
+            return f;
+          }
+        : undefined;
+    const extra = rivers
+      ? (x0: number, y0: number, x1: number, y1: number) => {
+          const c = rivers.crossing(x0, y0, x1, y1);
+          return c ? crossingCost(c) : 0;
+        }
+      : undefined;
     let r: ReturnType<typeof routePiece> = null;
     let code = CLASS_KEYS.indexOf(task.cls);
     let isForced = false;
@@ -161,6 +269,8 @@ export function alignLink(
         relax: LINK_TUNING.relax,
         greed: LINK_TUNING.greed,
         anyGrade: c === classes.length,
+        factor,
+        extra,
       });
       if (!r) continue;
       expansions += r.expansions;
@@ -169,6 +279,26 @@ export function alignLink(
       if (isForced) forced++;
       else if (c > 0) fellBack++;
     }
+    if (r && rivers)
+      for (let i = 1; i < r.plane.length; i++) {
+        const [x0, y0] = r.plane[i - 1]!;
+        const [x1, y1] = r.plane[i]!;
+        // Every river the simplified path crosses between these corners.
+        let from = 0;
+        for (;;) {
+          const fx = x0 + (x1 - x0) * from;
+          const fy = y0 + (y1 - y0) * from;
+          const cr = crossAlong(rivers, fx, fy, x1, y1);
+          if (!cr) break;
+          const t = from + (1 - from) * cr.t;
+          routedCrossings.push({
+            river: cr.river,
+            at: frame.toSphere(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t),
+          });
+          from = t + 1e-6;
+          if (from >= 1) break;
+        }
+      }
     const piece = r ? r.vertices : [a, b];
     if (!r) {
       code = UNROUTED;
@@ -255,6 +385,12 @@ export function alignLink(
     cls.push(dcls[j + 1]!);
     forcedAt.push(dforced[j + 1]!);
   }
+  // 2b. Roads that wind wander a little off the routed line (decision 190).
+  if (G.seed !== undefined) {
+    wander(points, s, cls, routedCrossings, G, task, radius);
+    for (let i = 1; i < points.length; i++)
+      s[i] = s[i - 1]! + points[i]!.distanceTo(points[i - 1]!) * radius;
+  }
   // 3. Profile and earthworks along the whole link.
   const ground = points.map((p) => height(p));
   const grade = cls.map((c) => (c === UNROUTED ? 10 : ROUTE_CLASSES[CLASS_KEYS[c]!].maxGrade));
@@ -262,8 +398,64 @@ export function alignLink(
     startZ: ground[0],
     endZ: ground[ground.length - 1],
   });
+  // Bridges: the crossings the pieces made, found again on the plan, with their decks.
+  const bridge = new Uint8Array(points.length);
+  const crossings: number[] = [];
+  if (G.rivers)
+    for (const rc of routedCrossings) {
+      const found = crossingOnPlan(points, s, rc.river, rc.at, G.rivers, radius);
+      if (!found) continue;
+      // Two pieces can report one crossing at their shared anchor.
+      if (
+        crossings.some((_, q) => q % CROSSING_FIELDS === 0 && Math.abs(crossings[q]! - found.s) < 1)
+      )
+        continue;
+      const c = cls[found.i]!;
+      const key = c === UNROUTED ? task.cls : CLASS_KEYS[c]!;
+      const half = 0.5 * found.span;
+      const sAt = (target: number) => {
+        let k = found.i;
+        while (k > 0 && s[k]! > target) k--;
+        while (k + 1 < s.length && s[k + 1]! <= target) k++;
+        return k;
+      };
+      const lo = sAt(found.s - half);
+      const hi = Math.min(points.length - 1, sAt(found.s + half) + 1);
+      const banks = Math.max(ground[lo]!, ground[hi]!);
+      let floor = Infinity;
+      for (let k = lo; k <= hi; k++) floor = Math.min(floor, ground[k]!);
+      const surface = riverSurface(G.rivers, rc.river, found.u) ?? floor;
+      const deck = Math.max(surface + CROSSING_TUNING.clearance[key], banks + 1);
+      for (let k = lo; k <= hi; k++) {
+        design[k] = Math.max(design[k]!, deck);
+        bridge[k] = 1;
+      }
+      // The approaches climb to the deck within the grade (an embankment, or a viaduct).
+      for (let k = hi + 1; k < points.length; k++) {
+        const z = design[k - 1]! - grade[k]! * (s[k]! - s[k - 1]!);
+        if (design[k]! >= z) break;
+        design[k] = z;
+      }
+      for (let k = lo - 1; k >= 0; k--) {
+        const z = design[k + 1]! - grade[k]! * (s[k + 1]! - s[k]!);
+        if (design[k]! >= z) break;
+        design[k] = z;
+      }
+      crossings.push(
+        found.s,
+        found.point.x,
+        found.point.y,
+        found.point.z,
+        G.rivers.ids[rc.river]!,
+        found.width,
+        found.span,
+        deck,
+        found.sin,
+      );
+    }
   const structure = design.map((z, i) => {
     const c = cls[i]!;
+    if (bridge[i]) return STRUCTURE.Bridge;
     if (c === UNROUTED) return STRUCTURE.Corridor;
     const lim = forcedAt[i] ? LINK_TUNING.forcedLimits : EARTHWORK_LIMITS[CLASS_KEYS[c]!];
     const d = z - ground[i]!;
@@ -294,7 +486,8 @@ export function alignLink(
     unrouted,
     violations,
     expansions,
-    length: total,
+    length: s[s.length - 1]!,
+    crossings: sortCrossings(crossings),
   };
   keep.forEach((i, k) => {
     out.points[k * 3] = points[i]!.x;
@@ -366,4 +559,211 @@ export function thin(
   const out: number[] = [];
   for (let i = 0; i < n; i++) if (keep[i]) out.push(i);
   return out;
+}
+
+/** The first crossing from (x0, y0) toward (x1, y1), split into moves of at most a bucket. */
+function crossAlong(rivers: PlaneRivers, x0: number, y0: number, x1: number, y1: number) {
+  const L = Math.hypot(x1 - x0, y1 - y0);
+  const n = Math.max(1, Math.ceil(L / (0.5 * CROSSING_TUNING.cell)));
+  for (let k = 0; k < n; k++) {
+    const ax = x0 + ((x1 - x0) * k) / n;
+    const ay = y0 + ((y1 - y0) * k) / n;
+    const bx = x0 + ((x1 - x0) * (k + 1)) / n;
+    const by = y0 + ((y1 - y0) * (k + 1)) / n;
+    const c = rivers.crossing(ax, ay, bx, by);
+    if (c) return { ...c, t: (k + c.t) / n };
+  }
+  return null;
+}
+
+/**
+ * Where the plan crosses task river `river` near `at`: the sample before it, the
+ * arc length and point of the crossing, where along the river, its width, |sin|
+ * and span. Searches the plan within 800 m of `at`, against that river segment
+ * and its neighbors in the task's list; null if the plan no longer crosses there.
+ */
+function crossingOnPlan(
+  points: readonly Vec3d[],
+  s: readonly number[],
+  river: number,
+  at: Readonly<Vec3d>,
+  rivers: TaskRivers,
+  radius: number,
+) {
+  const frame = gnomonic(at, radius);
+  const near = Math.cos(800 / radius);
+  const d = rivers.data;
+  const F = TASK_RIVER_FIELDS;
+  let best: {
+    i: number;
+    s: number;
+    point: Vec3d;
+    u: number;
+    width: number;
+    sin: number;
+    span: number;
+    dist: number;
+  } | null = null;
+  const ra = new Vec3d();
+  const rb = new Vec3d();
+  for (const q of [river - 1, river, river + 1]) {
+    if (q < 0 || q >= rivers.ids.length) continue;
+    // Neighbors in the list only count if they continue the same river.
+    if (q !== river && Math.abs(rivers.ids[q]! - rivers.ids[river]!) !== 1) continue;
+    ra.set(d[q * F]!, d[q * F + 1]!, d[q * F + 2]!);
+    rb.set(d[q * F + 3]!, d[q * F + 4]!, d[q * F + 5]!);
+    const [ax, ay] = frame.toPlane(ra);
+    const [bx, by] = frame.toPlane(rb);
+    const ex = bx - ax;
+    const ey = by - ay;
+    let prev: [number, number] | null = null;
+    for (let i = 0; i < points.length; i++) {
+      if (points[i]!.dot(at) < near) {
+        prev = null;
+        continue;
+      }
+      const cur = frame.toPlane(points[i]!);
+      if (prev && i > 0) {
+        const mx = cur[0] - prev[0];
+        const my = cur[1] - prev[1];
+        const den = mx * ey - my * ex;
+        if (den !== 0) {
+          const qx = ax - prev[0];
+          const qy = ay - prev[1];
+          const t = (qx * ey - qy * ex) / den;
+          const u = (qx * my - qy * mx) / den;
+          if (t >= 0 && t <= 1 && u >= 0 && u <= 1) {
+            const px = prev[0] + mx * t;
+            const py = prev[1] + my * t;
+            const dist = Math.hypot(px, py);
+            if (!best || dist < best.dist) {
+              const width = d[q * F + 6]! + (d[q * F + 7]! - d[q * F + 6]!) * u;
+              const sin = Math.abs(den) / (Math.hypot(mx, my) * Math.hypot(ex, ey));
+              best = {
+                i: i - 1,
+                s: s[i - 1]! + (s[i]! - s[i - 1]!) * t,
+                point: frame.toSphere(px, py),
+                u,
+                width,
+                sin,
+                span: spanOf(width, sin),
+                dist,
+              };
+            }
+          }
+        }
+      }
+      prev = cur;
+    }
+  }
+  return best;
+}
+
+/** Crossing records sorted by arc length. */
+function sortCrossings(flat: number[]): Float64Array {
+  const recs: number[][] = [];
+  for (let i = 0; i < flat.length; i += CROSSING_FIELDS)
+    recs.push(flat.slice(i, i + CROSSING_FIELDS));
+  recs.sort((a, b) => a[0]! - b[0]!);
+  return Float64Array.from(recs.flat());
+}
+
+/**
+ * Displaces the plan sideways by a seeded noise per link (WANDER_TUNING), faded
+ * at the link's ends, near river crossings (bridges stay square), on side slopes
+ * (the routed shelf stays where the slope put it) and where it would go into
+ * open water. The fade is smoothed over WANDER_FADE.smooth m, so it bends nothing sharply.
+ */
+function wander(
+  points: Vec3d[],
+  s: readonly number[],
+  cls: readonly number[],
+  crossings: readonly { at: Vec3d }[],
+  G: AlignGround,
+  task: LinkTask,
+  radius: number,
+): void {
+  const n = points.length;
+  if (n < 3) return;
+  const total = s[n - 1]!;
+  const r = rng(G.seed!, 'alignment').fork(`wander/${task.network}/${task.line}`);
+  // Two octaves of 1D gradient noise, by arc length over the class's wavelength.
+  const grads = Array.from({ length: 3 }, () =>
+    Float64Array.from({ length: Math.ceil(total / 200) + 4 }, () => r.range(-1, 1)),
+  );
+  const noise1 = (g: Float64Array, x: number) => {
+    const i = Math.floor(x);
+    const f = x - i;
+    const a = g[i % g.length]! * f;
+    const b = g[(i + 1) % g.length]! * (f - 1);
+    const t = f * f * (3 - 2 * f);
+    return 2 * (a + (b - a) * t);
+  };
+  const normal = (i: number, out: Vec3d) => {
+    const a = points[Math.max(0, i - 1)]!;
+    const b = points[Math.min(n - 1, i + 1)]!;
+    return out
+      .set(b.x - a.x, b.y - a.y, b.z - a.z)
+      .cross(points[i]!)
+      .normalize();
+  };
+  const nrm = new Vec3d();
+  const q = new Vec3d();
+  const side = (p: Readonly<Vec3d>, d: Readonly<Vec3d>, m: number) =>
+    q.set(p.x + (d.x * m) / radius, p.y + (d.y * m) / radius, p.z + (d.z * m) / radius).normalize();
+  // The mask: 1 where the road may wander.
+  const mask = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    const c = cls[i]!;
+    const tw = c === UNROUTED ? null : WANDER_TUNING[CLASS_KEYS[c]!];
+    const w = tw ? tw.amp + tw.long : 0;
+    if (w === 0) continue;
+    let m = smooth(0, WANDER_FADE.ends, Math.min(s[i]!, total - s[i]!));
+    for (const cr of crossings)
+      m = Math.min(m, smooth(150, WANDER_FADE.crossing, cr.at.distanceTo(points[i]!) * radius));
+    if (m > 0) {
+      normal(i, nrm);
+      const hl = G.height(side(points[i]!, nrm, -60));
+      const hr = G.height(side(points[i]!, nrm, 60));
+      m *= Math.max(0, 1 - Math.abs(hr - hl) / 120 / WANDER_FADE.slope);
+      if (m > 0 && G.cover) {
+        if (G.cover(side(points[i]!, nrm, w)) & COVER_WATER) m = 0;
+        else if (G.cover(side(points[i]!, nrm, -w)) & COVER_WATER) m = 0;
+      }
+    }
+    mask[i] = m;
+  }
+  // Smooth the mask (a running mean over the fade length), so it never kinks the line.
+  const k = Math.max(1, Math.round(WANDER_FADE.smooth / Math.max(1, s[1]! - s[0]!)));
+  const sm = new Float64Array(n);
+  let acc = 0;
+  for (let i = 0; i < n + k; i++) {
+    if (i < n) acc += mask[i]!;
+    if (i - 2 * k - 1 >= 0) acc -= mask[i - 2 * k - 1]!;
+    const c = i - k;
+    if (c >= 0 && c < n) sm[c] = acc / (Math.min(n - 1, i) - Math.max(0, i - 2 * k) + 1);
+  }
+  const shifted: Vec3d[] = [];
+  for (let i = 0; i < n; i++) {
+    const c = cls[i]!;
+    const t = c === UNROUTED ? null : WANDER_TUNING[CLASS_KEYS[c]!];
+    const m = sm[i]!;
+    if (!t || t.amp + t.long === 0 || m <= 0 || i === 0 || i === n - 1) {
+      shifted.push(points[i]!);
+      continue;
+    }
+    const x = s[i]! / t.wave;
+    const off =
+      m *
+      (t.amp * (noise1(grads[0]!, x) + 0.35 * noise1(grads[1]!, 2.3 * x)) +
+        t.long * noise1(grads[2]!, s[i]! / t.longWave));
+    normal(i, nrm);
+    shifted.push(side(points[i]!, nrm, off).clone());
+  }
+  for (let i = 0; i < n; i++) points[i] = shifted[i]!;
+}
+
+function smooth(e0: number, e1: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0)));
+  return t * t * (3 - 2 * t);
 }
