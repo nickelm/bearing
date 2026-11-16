@@ -22,6 +22,8 @@ describe.skipIf(!gpu)('river coverage (TSL on Dawn)', () => {
     // Physical coverage for the checks (the app draws thin rivers more legibly).
     shading.legibility.value = 0;
     shading.minPixels.value = 1;
+    // Smooth banks for exact edges; natural banks are tested below.
+    shading.natural.value = 0;
     const range = tables.rangeFor(tileForDirection(latLonToDirection(0, 10.25 * DEG), 9));
     // Points north of the river (at lon 10.25°), at these distances (m), with footprints (m/px).
     const cases: [number, number][] = [
@@ -80,5 +82,138 @@ describe.skipIf(!gpu)('river coverage (TSL on Dawn)', () => {
     expect(cover[5]).toBeLessThan(0.2);
     // Under a pixel from the river: only the antialiasing ramp's tail.
     expect(cover[6]).toBeLessThan(0.05);
+  });
+
+  it('draws natural banks: wandering, swelling and ragged, smooth along the river (decision 167)', async () => {
+    const R = PLANET_RADIUS;
+    const tables = new RiverTables(new RiverIndex(straightRiver(40)), R);
+    const shading = new RiverShading(tables, R);
+    shading.legibility.value = 0;
+    shading.minPixels.value = 1;
+    const range = tables.rangeFor(tileForDirection(latLonToDirection(0, 10.25 * DEG), 9));
+    // 160 stations 5 m apart along the river, each sampled across it every 0.5 m.
+    const stations = 160;
+    const across = 181;
+    const input = new Float32Array(stations * across * 4);
+    for (let k = 0; k < stations; k++) {
+      for (let j = 0; j < across; j++) {
+        const lon = 10.25 * DEG + (k * 5) / R;
+        const d = latLonToDirection((-45 + 0.5 * j) / R, lon).scale(R + 50);
+        input.set([d.x, d.y, d.z, 0.25], (k * across + j) * 4);
+      }
+    }
+    const head = await headlessRenderer(gpu!.device, 64, 64);
+    const inBuf = instancedArray(input, 'vec4');
+    const run = async () => {
+      const outBuf = instancedArray(stations * across, 'vec4');
+      const kernel = Fn(() => {
+        const p = inBuf.element(instanceIndex);
+        const c = shading.coverage(
+          p.xyz,
+          float(range.start) as Node<'float'>,
+          float(range.count) as Node<'float'>,
+          p.w,
+        );
+        outBuf.element(instanceIndex).assign(vec4(c.x, c.w, 0, 0));
+      })().compute(stations * across);
+      await head.renderer.computeAsync(kernel);
+      return new Float32Array(await head.renderer.getArrayBufferAsync(outBuf.value));
+    };
+    const out = await run();
+    head.dispose();
+    expect(gpu!.errors).toEqual([]);
+    // Each station's banks: the first and last samples drawn as water.
+    const left: number[] = [];
+    const right: number[] = [];
+    for (let k = 0; k < stations; k++) {
+      let lo = -1;
+      let hi = -1;
+      for (let j = 0; j < across; j++) {
+        if (out[(k * across + j) * 4]! < 0.5) continue;
+        if (lo < 0) lo = j;
+        hi = j;
+      }
+      expect(lo).toBeGreaterThan(0);
+      left.push(-45 + 0.5 * lo);
+      right.push(-45 + 0.5 * hi);
+    }
+    const width = left.map((l, k) => right[k]! - l);
+    console.log('natural banks', {
+      width: [Math.min(...width), Math.max(...width)],
+      center: [
+        Math.min(...left.map((l, k) => 0.5 * (l + right[k]!))),
+        Math.max(...left.map((l, k) => 0.5 * (l + right[k]!))),
+      ],
+    });
+    const center = left.map((l, k) => 0.5 * (l + right[k]!));
+    const sd = (xs: number[]) => {
+      const m = xs.reduce((a, x) => a + x, 0) / xs.length;
+      return Math.sqrt(xs.reduce((a, x) => a + (x - m) ** 2, 0) / xs.length);
+    };
+    // Within the bounds the noise allows (it stays within about ±0.6): half-width 20 m,
+    // swell 0.6, wander 40 m, rough 0.35 + 0.18 of the half-width.
+    for (let k = 0; k < stations; k++) {
+      expect(width[k]).toBeGreaterThan(2 * (20 * (1 - 0.36) - 6.4) - 1);
+      expect(width[k]).toBeLessThan(2 * (20 * (1 + 0.36) + 6.4) + 1);
+      expect(Math.abs(center[k]!)).toBeLessThan(0.6 * 40 + 6.4 + 1);
+    }
+    // It does vary: the width and the course both move along the river.
+    expect(sd(width)).toBeGreaterThan(2);
+    expect(sd(center)).toBeGreaterThan(3);
+    // And smoothly: banks 5 m apart along the river move by little.
+    for (let k = 1; k < stations; k++) {
+      expect(Math.abs(left[k]! - left[k - 1]!)).toBeLessThan(5);
+      expect(Math.abs(right[k]! - right[k - 1]!)).toBeLessThan(5);
+    }
+    // A dark bank band lies outside the water at some stations on each side.
+    let banked = 0;
+    for (let k = 0; k < stations; k++) {
+      const j = Math.round((left[k]! - 2 + 45) / 0.5);
+      if (j >= 0 && out[(k * across + j) * 4 + 1]! > 0.5) banked++;
+    }
+    expect(banked).toBeGreaterThan(stations / 2);
+  });
+
+  it('keeps distant and widened rivers smooth', async () => {
+    const R = PLANET_RADIUS;
+    const tables = new RiverTables(new RiverIndex(straightRiver(40)), R);
+    const shading = new RiverShading(tables, R);
+    const range = tables.rangeFor(tileForDirection(latLonToDirection(0, 10.25 * DEG), 9));
+    // A 40 m river seen at 30 m per pixel, at points across it along 1 km.
+    const n = 400;
+    const input = new Float32Array(n * 4);
+    for (let i = 0; i < n; i++) {
+      const d = latLonToDirection(
+        ((i % 20) * 6 - 57) / R,
+        10.25 * DEG + (Math.floor(i / 20) * 50) / R,
+      );
+      d.scale(R + 50);
+      input.set([d.x, d.y, d.z, 30], i * 4);
+    }
+    const head = await headlessRenderer(gpu!.device, 64, 64);
+    const inBuf = instancedArray(input, 'vec4');
+    const run = async () => {
+      const outBuf = instancedArray(n, 'vec4');
+      const kernel = Fn(() => {
+        const p = inBuf.element(instanceIndex);
+        outBuf
+          .element(instanceIndex)
+          .assign(
+            shading.coverage(
+              p.xyz,
+              float(range.start) as Node<'float'>,
+              float(range.count) as Node<'float'>,
+              p.w,
+            ),
+          );
+      })().compute(n);
+      await head.renderer.computeAsync(kernel);
+      return new Float32Array(await head.renderer.getArrayBufferAsync(outBuf.value));
+    };
+    const natural = await run();
+    shading.natural.value = 0;
+    const smooth = await run();
+    head.dispose();
+    for (let i = 0; i < n * 4; i++) expect(natural[i]).toBeCloseTo(smooth[i]!, 5);
   });
 });

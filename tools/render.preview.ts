@@ -1452,6 +1452,8 @@ it('renders preview views', async () => {
     scene.clouds.enabled.value = process.env.CLOUDS === '0' ? 0 : 1;
     // RIVERS=x sets how strongly sub-pixel rivers are drawn (0 = their true pixel fraction).
     if (process.env.RIVERS) scene.terrain.riverStyle.legibility.value = Number(process.env.RIVERS);
+    // NATURAL=0 draws rivers with smooth banks (decision 167).
+    if (process.env.NATURAL === '0') scene.terrain.riverStyle.natural.value = 0;
     // FACETS=0 shades the terrain smoothly, to compare with the flat facets (decision 123).
     scene.terrain.land.facets.value = process.env.FACETS === '0' ? 0 : 1;
     // TEMP_OFFSET (°C) shifts every surface temperature: −30 puts snow on most ground.

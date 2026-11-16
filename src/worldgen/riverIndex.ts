@@ -182,6 +182,7 @@ export interface MeanderOptions {
   profile?: Partial<typeof PROFILE_TUNING>;
   tuning?: Partial<typeof MEANDER_TUNING>;
   planform?: Partial<typeof PLANFORM_TUNING>;
+  wander?: Partial<typeof WANDER_TUNING>;
 }
 
 /** Deterministic hash of two integers to [0, 1). */
@@ -260,6 +261,136 @@ export function meander(
       .addScaled(side, y / radius)
       .normalize();
     out.push([d.x, d.y, d.z, ...attrs]);
+  }
+  return out;
+}
+
+/**
+ * Wander (decision 167): every river winds a little, not only the lowland
+ * rivers that meander. Long runs of D8 steps straight along one axis survive
+ * the planform smoothing (decision 165), and a natural channel is never
+ * straight for kilometers. Each polyline is displaced sideways by two octaves
+ * of smooth noise along its arc length, wavelengths `wavelengths` point
+ * spacings (about a global cell each), amplitudes `amplitudes` spacings, and
+ * by a third, finer octave at `fineWidths` channel widths with `fineAmplitude`
+ * widths of swing. Gradient noise, so headings never linger on the axis they
+ * should leave. Polylines with few points are subdivided first, so short
+ * tributaries between confluences bend too. Steep rivers keep `steepShare` of it, so mountain streams
+ * stay on their valley floors: full wander below a bed gradient of
+ * `flatGradient`, the steep share above `steepGradient`. The displacement
+ * tapers to zero over the longest wavelength at both ends (half the polyline
+ * if it is shorter), so confluences and mouths stay where they are, and is
+ * clamped to `maxShift` spacings.
+ */
+export const WANDER_TUNING = {
+  wavelengths: [5.5, 2.3] as [number, number],
+  amplitudes: [0.3, 0.14] as [number, number],
+  fineWidths: 14,
+  fineAmplitude: 1.2,
+  maxShift: 0.35,
+  flatGradient: 0.004,
+  steepGradient: 0.03,
+  steepShare: 0.5,
+};
+
+/**
+ * Smooth 1D gradient noise, about [-1, 1], on an integer lattice keyed by (id,
+ * salt). Gradient noise, not value noise: value noise with eased interpolation
+ * is flat at every lattice point, where a river's heading would linger on the
+ * grid's axis it was meant to leave.
+ */
+function noise1(x: number, id: number, salt: number): number {
+  const i = Math.floor(x);
+  const f = x - i;
+  const u = f * f * f * (f * (f * 6 - 15) + 10);
+  const g0 = 2 * hash2(id * 7919 + salt, i) - 1;
+  const g1 = 2 * hash2(id * 7919 + salt, i + 1) - 1;
+  return 2 * (g0 * f + (g1 * (f - 1) - g0 * f) * u);
+}
+
+/**
+ * A polyline (unit vectors + attributes, attribute 0 the width in m) wandering
+ * sideways (WANDER_TUNING). `spacing` is the network's point spacing (m) and
+ * `gradient` the polyline's bed gradient. Points are moved, not added; the
+ * fine octave is skipped where the points are too sparse to carry it.
+ */
+export function wander(
+  pts: number[][],
+  id: number,
+  radius: number,
+  spacing: number,
+  gradient: number,
+  t: typeof WANDER_TUNING = WANDER_TUNING,
+): number[][] {
+  if (pts.length < 2 || !(spacing > 0)) return pts;
+  // Short polylines get points to bend at: at least eight pieces.
+  if (pts.length < 9) pts = subdivide(pts, Math.ceil(8 / (pts.length - 1)));
+  const n = pts.length;
+  const s = new Float64Array(n);
+  for (let i = 1; i < n; i++) {
+    const a = pts[i - 1]!;
+    const b = pts[i]!;
+    s[i] =
+      s[i - 1]! + Math.acos(Math.min(1, a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!)) * radius;
+  }
+  const L = s[n - 1]!;
+  const longest = t.wavelengths[0] * spacing;
+  if (L < 0.5 * spacing) return pts;
+  const taperLength = Math.min(longest, 0.5 * L);
+  const flat =
+    t.steepShare + (1 - t.steepShare) * (1 - smoothstep(t.flatGradient, t.steepGradient, gradient));
+  // The points' own spacing, for the fine octave's Nyquist limit.
+  const step = L / (n - 1);
+  const out = pts.map((q) => [...q]);
+  const p = new Vec3d();
+  const tangent = new Vec3d();
+  const side = new Vec3d();
+  for (let i = 1; i + 1 < n; i++) {
+    const e = Math.min(s[i]!, L - s[i]!) / taperLength;
+    const taper = e >= 1 ? 1 : e * e * (3 - 2 * e);
+    if (taper <= 0) continue;
+    let y = 0;
+    for (let o = 0; o < 2; o++) {
+      const lambda = t.wavelengths[o] * spacing;
+      y += t.amplitudes[o] * spacing * noise1(s[i]! / lambda, id, o);
+    }
+    const w = pts[i]![3]!;
+    const fineLambda = t.fineWidths * w;
+    if (fineLambda > 6 * step) y += t.fineAmplitude * w * noise1(s[i]! / fineLambda, id, 2);
+    const cap = t.maxShift * spacing;
+    y = Math.max(-cap, Math.min(cap, y)) * flat * taper;
+    const a = pts[i - 1]!;
+    const b = pts[i + 1]!;
+    p.set(pts[i]![0]!, pts[i]![1]!, pts[i]![2]!);
+    tangent.set(b[0]! - a[0]!, b[1]! - a[1]!, b[2]! - a[2]!);
+    tangent.addScaled(p, -tangent.dot(p));
+    if (tangent.length() < 1e-15) continue;
+    tangent.normalize();
+    side.copy(p).cross(tangent);
+    p.addScaled(side, y / radius).normalize();
+    out[i]![0] = p.x;
+    out[i]![1] = p.y;
+    out[i]![2] = p.z;
+  }
+  return out;
+}
+
+/** Each segment of a polyline split into `k` (directions renormalized, attributes linear). */
+function subdivide(pts: number[][], k: number): number[][] {
+  if (k <= 1) return pts;
+  const out: number[][] = [pts[0]!];
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const a = pts[i]!;
+    const b = pts[i + 1]!;
+    for (let j = 1; j <= k; j++) {
+      const f = j / k;
+      const q = a.map((x, c) => x + (b[c]! - x) * f);
+      const l = Math.hypot(q[0]!, q[1]!, q[2]!);
+      q[0]! /= l;
+      q[1]! /= l;
+      q[2]! /= l;
+      out.push(j === k ? b : q);
+    }
   }
   return out;
 }
@@ -460,6 +591,7 @@ export class RiverIndex {
     // Planform smoothing (decision 165) needs the network's point spacing: the
     // median distance between consecutive points, about a global cell.
     let sigmaM = 0;
+    let spacing = 0;
     if (meanders) {
       const gaps: number[] = [];
       for (let k = 0; k < rivers.count; k++) {
@@ -473,7 +605,7 @@ export class RiverIndex {
         }
       }
       gaps.sort((x, y) => x - y);
-      const spacing = gaps.length ? gaps[gaps.length >> 1]! : 0;
+      spacing = gaps.length ? gaps[gaps.length >> 1]! : 0;
       sigmaM = spacing * { ...PLANFORM_TUNING, ...meanders.planform }.sigma;
     }
     for (let k = 0; k < rivers.count; k++) {
@@ -501,6 +633,11 @@ export class RiverIndex {
             Math.acos(Math.min(1, a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!)) * meanders.radius;
         }
         const gradient = Math.max(0, drop) / Math.max(len, 1);
+        // Every river wanders a little (decision 167); lowland rivers then meander.
+        sm = wander(sm, k, meanders.radius, spacing, gradient, {
+          ...WANDER_TUNING,
+          ...meanders.wander,
+        });
         const strength =
           (1 - smoothstep(mt.fullGradient, mt.maxGradient, gradient)) *
           smoothstep(mt.minWidth, 2 * mt.minWidth, Math.max(...pts.map((p) => p[3]!)));

@@ -13,7 +13,7 @@ import type { RiverInvariants } from '../src/worldgen/channels/invariants';
 import { computeDrainage } from '../src/worldgen/drainage';
 import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
 import { generateWorld } from '../src/worldgen/pipeline';
-import { RiverIndex, smoothPlanform } from '../src/worldgen/riverIndex';
+import { RiverIndex, smoothPlanform, wander, WANDER_TUNING } from '../src/worldgen/riverIndex';
 import { extractRivers } from '../src/worldgen/rivers';
 
 const N = Number(process.env.RIVER_N ?? 96);
@@ -118,5 +118,51 @@ describe('planform smoothing (decision 165)', () => {
     const two = stairs(1);
     expect(smoothPlanform(two, cell, R)).toBe(two);
     expect(smoothPlanform(stairs(10), 0, R)).toEqual(stairs(10));
+  });
+});
+
+describe('wander (decision 167)', () => {
+  const cell = 1500;
+  // A straight river 40 cells long along the equator, 30 m wide, at 4 points per cell.
+  const straight = (): number[][] => {
+    const pts: number[][] = [];
+    for (let i = 0; i <= 160; i++) {
+      const d = latLonToDirection(0, (i * cell) / 4 / R);
+      pts.push([d.x, d.y, d.z, 30, 200 - i]);
+    }
+    return pts;
+  };
+  const offsets = (pts: number[][]) => pts.map((p) => Math.asin(p[1]!) * R);
+
+  it('bends a straight river within its cap and keeps its ends', () => {
+    const raw = straight();
+    const w = wander(raw, 5, R, cell, 0);
+    expect(w[0]).toEqual(raw[0]);
+    expect(w[w.length - 1]).toEqual(raw[raw.length - 1]);
+    const y = offsets(w);
+    const cap = WANDER_TUNING.maxShift * cell;
+    for (const v of y) expect(Math.abs(v)).toBeLessThanOrEqual(cap + 1e-6);
+    expect(Math.max(...y.map(Math.abs))).toBeGreaterThan(0.1 * cell);
+    // Attributes untouched.
+    for (let i = 0; i < raw.length; i++) expect(w[i]!.slice(3)).toEqual(raw[i]!.slice(3));
+    // Deterministic per river, different between rivers.
+    expect(wander(straight(), 5, R, cell, 0)).toEqual(w);
+    expect(offsets(wander(straight(), 6, R, cell, 0))).not.toEqual(y);
+  });
+
+  it('lets steep rivers wander less', () => {
+    const flat = offsets(wander(straight(), 5, R, cell, 0));
+    const steep = offsets(wander(straight(), 5, R, cell, 0.05));
+    for (let i = 0; i < flat.length; i++)
+      expect(steep[i]!).toBeCloseTo(flat[i]! * WANDER_TUNING.steepShare, 3);
+  });
+
+  it('bends short polylines too', () => {
+    const two = [straight()[0]!, straight()[12]!];
+    const w = wander(two, 9, R, cell, 0);
+    expect(w.length).toBeGreaterThan(2);
+    expect(w[0]).toEqual(two[0]);
+    expect(w[w.length - 1]).toEqual(two[1]);
+    expect(Math.max(...offsets(w).map(Math.abs))).toBeGreaterThan(1);
   });
 });

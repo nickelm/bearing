@@ -905,7 +905,10 @@ Rivers by regime, roads and railways aligned to the terrain with earthworks as a
 
 - [x] Invariant metrics first, over at least 10 seeds: monotone surface (1 mm), no maxima in the vector bed, the tile walk of decision 146 (2 m), headings mod 45° and short alternating segments (`tests/riverInvariants.test.ts`, `tools/riverInvariants.preview.ts`; decision 165)
   - [x] Planform smoothing: the ladder failed (51% of seed 1983's channel on grid headings); a Gaussian of one point spacing before Chaikin brings it to 21% (decision 165)
-  - [ ] Bed walk of decision 146 with and without the smoothing, recorded in decision 165
+  - [x] Bed walk of decision 146 with and without the smoothing, recorded in decision 165
+  - [x] Wander for every river and natural banks in the shader (owner request, decision 167)
+  - [ ] Owner's look at the natural banks in the browser; tune `NATURAL_BANKS` and `WANDER_TUNING`
+  - [ ] The carve follows the polyline, not the shader's wander: a river resolved by the mesh (wider than about 50 m) can show water beside its channel; carry the wander into the kernel's carve if it shows
   - [ ] Eroded worlds of ten seeds through `tools/riverInvariants.preview.ts` (about ten minutes each on lavapipe)
   - [ ] The remaining 21% on grid headings (long straight D8 runs): bend them with the regime and meander work, then tighten the tests' bounds
 - [ ] Regimes per reach (mountain, lowland meandering, small lowland; braided as stretch) from bed gradient, discharge and floodplain width
