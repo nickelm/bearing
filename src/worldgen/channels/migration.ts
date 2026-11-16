@@ -31,8 +31,13 @@ export const MIGRATION_TUNING = {
   minWidth: 80,
   /** ...whose bed gradient over the polyline is below this (m/m). */
   maxGradient: 0.001,
-  /** ...and whose floodplain is at least this many widths across at the median point. */
-  minFloodplainWidths: 8,
+  /**
+   * The channel's room on either side of its original line, in widths: the measured
+   * floodplain clamped to this range (the tile kernel's floodplain is 8 widths, and the
+   * floodplain edit flattens the meander belt).
+   */
+  floodplainMin: 3,
+  floodplainMax: 8,
   /** Node spacing, in widths. */
   spacing: 1.5,
   /** Iterations. */

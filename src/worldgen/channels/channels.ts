@@ -169,18 +169,10 @@ export function computeChannels(rivers: Rivers, opts: ChannelOptions): Channels 
     for (const p of line) w += p[3]!;
     w /= line.length;
     if (w < t.minWidth) continue;
-    const fp = floodplainOf(line, height, opts.radius);
-    // The median floodplain must hold `minFloodplainWidths` widths.
-    let L = 0;
-    for (let i = 1; i < line.length; i++) {
-      const a = line[i - 1]!;
-      const b = line[i]!;
-      L += Math.acos(Math.min(1, a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!)) * opts.radius;
-    }
-    const mid: number[] = [];
-    for (let i = 0; i <= 20; i++) mid.push(fp((i / 20) * L));
-    mid.sort((x, y) => x - y);
-    if (2 * mid[10]! < t.minFloodplainWidths * w) continue;
+    // Room to migrate: the measured floodplain, clamped to a few widths either side.
+    const measured = floodplainOf(line, height, opts.radius);
+    const fp = (u: number) =>
+      Math.min(t.floodplainMax * w, Math.max(t.floodplainMin * w, measured(u)));
     const r = migrate(line, opts.radius, fp, t);
     ids.push(k);
     for (const p of r.line) points.push(p[0]!, p[1]!, p[2]!, p[3]!, p[4]!);

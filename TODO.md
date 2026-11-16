@@ -919,7 +919,7 @@ Rivers by regime, roads and railways aligned to the terrain with earthworks as a
 - [x] Meander migration (Howard and Knutson) with resampling, cutoffs within about a width and oxbow polylines; `rng(seed, "meanders")` forked per river; endpoints fixed; caps on iterations and time; fallback to the procedural train (decision 173: no random numbers, the train seeds the bends; run once per world in the worker and stored)
   - [ ] Move the migration off the worker's critical path or speed it further if the stage costs more than about 10 s on a real GPU's world
 - [x] Profiles recomputed on the final planform; carve segments from it (decision 173)
-- [ ] Floodplain edit in the kernel (lowers and smooths, never raises, before the carve)
+- [x] Floodplain edit in the kernel (lowers and smooths, never raises, before the carve) (in the carve itself, as its profile beyond the bank, so the carve stays the minimum; decision 173)
 - [ ] Distributaries that bifurcate in deltas, with a build-up edit to just above sea level
 - [ ] Sinuosity (lowland 1.5–2.5, mountain 1.0–1.3), wavelength (10–14 widths) and bend radius (2–3 widths) tests; carry the meander phase across confluences (the V1 item below)
 

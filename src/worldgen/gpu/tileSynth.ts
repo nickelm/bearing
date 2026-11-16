@@ -109,6 +109,17 @@ export const TILE_SYNTH_TUNING = {
   floodplainMin: 250,
   /** Rise of the valley floor away from the bank (m per m). */
   bankSlope: 0.04,
+  /**
+   * Floodplain edit (decision 173): around channels at least `floodplainMinWidth` m
+   * wide with a surface gradient under `floodplainGradient`, and oxbows, the ground
+   * is lowered to `floodplainRise` m above the water out to `floodplainBelt` widths,
+   * then rises at `floodplainBluff` m per m.
+   */
+  floodplainMinWidth: 60,
+  floodplainGradient: 0.002,
+  floodplainRise: 2,
+  floodplainBelt: 3,
+  floodplainBluff: 0.08,
   /** Distance (m) beyond which a river no longer shapes the terrain. */
   riverReach: 2500,
   /** Forest clumping: noise wavelengths (m) and strength. */
@@ -489,6 +500,16 @@ fn carveRivers(d: vec3f, h: f32, tile: Tile, stepped: f32) -> f32 {
       // The steps cut a gorge a few widths across; the valley beyond keeps its slope.
       let banks = mix(surf, smoothSurf, smoothstep(half, half + ${f(t.fallGorge)} * w + 60.0, dist));
       c = banks + (dist - half) * ${f(t.bankSlope)};
+      // Floodplain (decision 173): wide, slow rivers and oxbows lie in a flat meander
+      // belt, the ground lowered to a little above the water out to a few widths and
+      // rising at the bluffs beyond. It only lowers, as the carve does.
+      let segLen = max(length(ab) * R, 1.0);
+      let grad = max(0.0, sA - segs[o + 9u]) / segLen;
+      let plain = smoothstep(${f(0.75 * t.floodplainMinWidth)}, ${f(t.floodplainMinWidth)}, w)
+        * (1.0 - smoothstep(${f(t.floodplainGradient)}, ${f(2 * t.floodplainGradient)}, grad));
+      let floor = smoothSurf + ${f(t.floodplainRise)}
+        + max(0.0, dist - ${f(t.floodplainBelt)} * w) * ${f(t.floodplainBluff)};
+      c = min(c, mix(c, floor, plain));
     }
     let reach = 1.0 - smoothstep(0.6 * RIVER_REACH, RIVER_REACH, dist);
     cut = max(cut, reach * max(h - c, 0.0));
