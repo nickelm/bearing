@@ -2625,3 +2625,28 @@ How the plan reads the proposal, for the owner to confirm: no-humps is checked e
 - **`tools/edits.preview.ts`** lists the campaign world's airfield pads that reach a carved channel, with the samples in the channels' hold and on the pad itself (seed 1983: the six above, 592 s on lavapipe including the world's generation). The full CPU suite passes (92 files, 835 tests).
 
 **Reason:** Rule 13 asks for one function that every height query uses, with rivers always last; building it before any corridor exists lets the airfields prove it unchanged and gives N5 and N6 a tested target.
+
+### 165. River invariants measured over many seeds; planform smoothing takes rivers off the grid's axes
+
+**Date:** 2026-11-16
+**Decision:** N2's first task (decision 161): measure what decisions 146 and 147 promise about the vector rivers before the planform changes, and fix the one invariant that failed.
+
+- **Measurements** (`worldgen/channels/invariants.ts`, `riverInvariants`): on a `RiverIndex`, per polyline, rises of the smooth and stepped water surfaces (1 mm tolerance), tributaries that end lower than the river they join starts or away from its first point, interior maxima of the bed (the surface less the kernel's depth, 1 + 0.02 w), the share of channel length with a heading within 2.5° of a multiple of 45° in the face's own (u, v) frame (where D8 steps lie; 11.1% for an even spread), stair-steps (alternating turns of at least 20° around a segment shorter than two cells) per 1,000 km, and the sinuosity of polylines at least 20 cells long. `RiverIndex.lines` now records each polyline's segment range; nothing else in its output changes from that.
+- **Where they run.** `tests/riverInvariants.test.ts` builds ten seeds' networks on the CPU (tectonic heights at 96² per face, CPU drainage, the real `RiverIndex`; 40 s) and asserts no rises, no junction gaps or rises and no bed maxima on any seed, with regression bounds on grid headings and stair-steps. `tools/riverInvariants.preview.ts` measures the eroded worlds as the app builds them (`SEEDS`, `GRES`, `SIGMA`).
+- **What they found.** Surfaces, junctions and beds are clean on all ten CPU seeds and on the eroded seed 1983 (71,463 km of channel). The ladder is not: on seed 1983, 51.1% of the channel length lay on grid headings, with 36.7 stair-steps per 1,000 km. Two Chaikin passes over a staircase of cell centers keep its edges' directions.
+- **Planform smoothing** (`smoothPlanform`, `PLANFORM_TUNING.sigma`). Before the Chaikin passes, each polyline is smoothed by a Gaussian over arc length, one point spacing wide (the network's median spacing, about a global cell), its displacement tapering to zero over two sigmas at both ends so confluences and mouths stay exactly where they were. On seed 1983 at 1,024²:
+
+  | Sigma (spacings) | On grid headings | Stair-steps / 1,000 km | Displacement p99 (cells) |
+  | --- | --- | --- | --- |
+  | 0 (before) | 51.1% | 36.7 | – |
+  | 0.5 | 35.3% | 30.6 | 0.16 |
+  | 1 (chosen) | 21.1% | 18.0 | 0.49 |
+  | 1.5 | 17.6% | 16.0 | 0.74 |
+
+  One spacing keeps 99% of the points within half a cell of the cell they drain (at most 0.58), so the river stays on its valley floor; 1.5 halves the remaining gain for half again the displacement. Surfaces stay monotone at every sigma. On the CPU seeds the share fell from 31–58% to 26–45%, the uneroded 16 km cells having long straight D8 runs.
+- **What is left.** 21% against an even 11%: long runs of D8 steps straight along one axis, which smoothing cannot bend. The regime and meander work of N2 bends them; the tests' bounds then tighten.
+- **Bed walk** (decision 146's `tools/rivers.preview.ts`, now with `SIGMA`): pending at the time of this entry.
+
+`docs/design.md` (*World Generation Pipeline*, step 6) changes with this decision.
+
+**Reason:** The proposal's constraint 3 asks for no ladder patterns, and a river that runs along the grid in straight 45° runs reads as generated. Measuring first showed the other invariants hold, so the fix could stay in the planform, ahead of the profile, which recomputes the surface on whatever line it is given.

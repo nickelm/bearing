@@ -9,7 +9,8 @@
  *   npx vitest run --config vitest.tools.config.ts tools/rivers.preview.ts
  *
  * Env: GRES (global grid, default 1024), COUNT (rivers, default 24), KM (length of
- * each river walked, default 12), MIN_DROP (m over the polyline, default 80).
+ * each river walked, default 12), MIN_DROP (m over the polyline, default 80),
+ * SIGMA (planform smoothing in point spacings, decision 165; 0 turns it off).
  */
 import { it } from 'vitest';
 import { directionToCubeFace } from '../src/core/coords';
@@ -43,6 +44,8 @@ it('walks river beds', async () => {
     height: global.height,
     radius: R,
     lakeDepth: global.finish.drainage.lakeDepth,
+    // SIGMA overrides the planform smoothing (decision 165), in point spacings; 0 turns it off.
+    planform: env.SIGMA === undefined ? {} : { sigma: Number(env.SIGMA) },
   });
   const synth = new TileSynthesizer(global.grid, {
     seed: params.seed,

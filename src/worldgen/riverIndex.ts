@@ -69,6 +69,65 @@ export const PROFILE_TUNING = {
   strata: 75,
 };
 
+/**
+ * Planform smoothing (decision 165): D8 drainage runs along the grid's axes
+ * and diagonals, so a polyline through cell centers is a staircase, and two
+ * Chaikin passes alone leave about half its length on grid headings (seed
+ * 1983: 51% within 2.5° of a multiple of 45°, against 11% for headings spread
+ * evenly). A Gaussian over arc length, `sigma` point spacings wide (the
+ * median spacing of the network's points), turns the steps into the line they
+ * approximate before Chaikin rounds it. The displacement tapers to zero over
+ * two sigmas at both ends, so confluences and mouths stay exactly in place.
+ */
+export const PLANFORM_TUNING = {
+  sigma: 1,
+};
+
+/** A polyline of unit vectors with attributes, smoothed in plan by a Gaussian of `sigmaM` m. */
+export function smoothPlanform(pts: number[][], sigmaM: number, radius: number): number[][] {
+  const n = pts.length;
+  if (n < 3 || !(sigmaM > 0)) return pts;
+  const s = new Float64Array(n);
+  for (let i = 1; i < n; i++) {
+    const a = pts[i - 1]!;
+    const b = pts[i]!;
+    s[i] =
+      s[i - 1]! + Math.acos(Math.min(1, a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!)) * radius;
+  }
+  const L = s[n - 1]!;
+  const reach = 3 * sigmaM;
+  const k = -1 / (2 * sigmaM * sigmaM);
+  const out = pts.map((q) => [...q]);
+  let lo = 0;
+  for (let i = 1; i + 1 < n; i++) {
+    const taper = Math.min(1, Math.min(s[i]!, L - s[i]!) / (2 * sigmaM));
+    if (taper <= 0) continue;
+    while (s[lo]! < s[i]! - reach) lo++;
+    let x = 0;
+    let y = 0;
+    let z = 0;
+    let w = 0;
+    for (let j = lo; j < n && s[j]! <= s[i]! + reach; j++) {
+      const dj = s[j]! - s[i]!;
+      const wj = Math.exp(k * dj * dj);
+      x += wj * pts[j]![0]!;
+      y += wj * pts[j]![1]!;
+      z += wj * pts[j]![2]!;
+      w += wj;
+    }
+    const p = pts[i]!;
+    const q = out[i]!;
+    q[0] = p[0]! + taper * (x / w - p[0]!);
+    q[1] = p[1]! + taper * (y / w - p[1]!);
+    q[2] = p[2]! + taper * (z / w - p[2]!);
+    const l = Math.hypot(q[0], q[1]!, q[2]!);
+    q[0] /= l;
+    q[1]! /= l;
+    q[2]! /= l;
+  }
+  return out;
+}
+
 /** Two Chaikin corner-cutting passes on a polyline of unit vectors with attributes. */
 export function chaikin(pts: number[][], passes: number): number[][] {
   let p = pts;
@@ -122,6 +181,7 @@ export interface MeanderOptions {
   lakeDepth?: Float32Array;
   profile?: Partial<typeof PROFILE_TUNING>;
   tuning?: Partial<typeof MEANDER_TUNING>;
+  planform?: Partial<typeof PLANFORM_TUNING>;
 }
 
 /** Deterministic hash of two integers to [0, 1). */
@@ -373,6 +433,11 @@ export function riverProfiles(
 
 export class RiverIndex {
   readonly segments: RiverSegments;
+  /**
+   * Segment range of polyline k (the rivers' order): [lines[k], lines[k + 1]).
+   * Each polyline runs downstream; `rivers.downstream` says which it joins.
+   */
+  readonly lines: Uint32Array;
   /** River mouths that build deltas, DELTA_FIELDS per record. */
   readonly deltas: Float64Array;
   private readonly byTile = new Map<string, number[]>();
@@ -392,6 +457,25 @@ export class RiverIndex {
     };
     // Smoothed polylines: [x, y, z, width, surface].
     const lines: number[][][] = [];
+    // Planform smoothing (decision 165) needs the network's point spacing: the
+    // median distance between consecutive points, about a global cell.
+    let sigmaM = 0;
+    if (meanders) {
+      const gaps: number[] = [];
+      for (let k = 0; k < rivers.count; k++) {
+        for (let p = rivers.offsets[k]! + 1; p < rivers.offsets[k + 1]!; p++) {
+          const q = p - 1;
+          const dot =
+            rivers.points[p * 3]! * rivers.points[q * 3]! +
+            rivers.points[p * 3 + 1]! * rivers.points[q * 3 + 1]! +
+            rivers.points[p * 3 + 2]! * rivers.points[q * 3 + 2]!;
+          gaps.push(Math.acos(Math.min(1, dot)) * meanders.radius);
+        }
+      }
+      gaps.sort((x, y) => x - y);
+      const spacing = gaps.length ? gaps[gaps.length >> 1]! : 0;
+      sigmaM = spacing * { ...PLANFORM_TUNING, ...meanders.planform }.sigma;
+    }
     for (let k = 0; k < rivers.count; k++) {
       const pts: number[][] = [];
       for (let p = rivers.offsets[k]!; p < rivers.offsets[k + 1]!; p++) {
@@ -403,7 +487,7 @@ export class RiverIndex {
           cellSurface(rivers.cells[p]!),
         ]);
       }
-      let sm = chaikin(pts, 2);
+      let sm = chaikin(sigmaM > 0 ? smoothPlanform(pts, sigmaM, meanders!.radius) : pts, 2);
       if (meanders && pts.length >= 2) {
         // Bed gradient over the polyline, from the global grid.
         const first = rivers.offsets[k]!;
@@ -429,7 +513,9 @@ export class RiverIndex {
       ? riverProfiles(lines, rivers.downstream, radius, pt)
       : lines.map((l) => l.map((q) => [...q, NO_SURFACE]));
     const segs: number[] = [];
+    const lineStarts: number[] = [];
     for (const sm of profiled) {
+      lineStarts.push(segs.length / FIELDS);
       for (let i = 0; i + 1 < sm.length; i++) {
         const a = sm[i]!;
         const b = sm[i + 1]!;
@@ -450,6 +536,8 @@ export class RiverIndex {
       }
     }
     this.segments = { count: segs.length / FIELDS, data: Float64Array.from(segs), fields: FIELDS };
+    lineStarts.push(segs.length / FIELDS);
+    this.lines = Uint32Array.from(lineStarts);
     // Deltas at mouths of wide rivers: the last land point and the sea point after it.
     const deltas: number[] = [];
     for (let k = 0; k < rivers.count; k++) {

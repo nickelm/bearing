@@ -903,7 +903,11 @@ Rivers by regime, roads and railways aligned to the terrain with earthworks as a
 
 ### N2. River planform
 
-- [ ] Invariant metrics first, over at least 10 seeds: monotone surface (1 mm), no maxima in the vector bed, the tile walk of decision 146 (2 m), headings mod 45° and short alternating segments (`tests/riverInvariants.test.ts`, extended `tools/rivers.preview.ts`)
+- [x] Invariant metrics first, over at least 10 seeds: monotone surface (1 mm), no maxima in the vector bed, the tile walk of decision 146 (2 m), headings mod 45° and short alternating segments (`tests/riverInvariants.test.ts`, `tools/riverInvariants.preview.ts`; decision 165)
+  - [x] Planform smoothing: the ladder failed (51% of seed 1983's channel on grid headings); a Gaussian of one point spacing before Chaikin brings it to 21% (decision 165)
+  - [ ] Bed walk of decision 146 with and without the smoothing, recorded in decision 165
+  - [ ] Eroded worlds of ten seeds through `tools/riverInvariants.preview.ts` (about ten minutes each on lavapipe)
+  - [ ] The remaining 21% on grid headings (long straight D8 runs): bend them with the regime and meander work, then tighten the tests' bounds
 - [ ] Regimes per reach (mountain, lowland meandering, small lowland; braided as stretch) from bed gradient, discharge and floodplain width
 - [ ] Floodplain mask from `valleyFloor` and the height above the river's surface
 - [ ] Meander migration (Howard and Knutson) with resampling, cutoffs within about a width and oxbow polylines; `rng(seed, "meanders")` forked per river; endpoints fixed; caps on iterations and time; fallback to the procedural train
