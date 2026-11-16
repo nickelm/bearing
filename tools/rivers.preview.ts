@@ -44,6 +44,7 @@ it('walks river beds', async () => {
     height: global.height,
     radius: R,
     lakeDepth: global.finish.drainage.lakeDepth,
+    channels: global.finish.channels,
     // SIGMA overrides the planform smoothing (decision 165), in point spacings; 0 turns it off.
     planform: env.SIGMA === undefined ? {} : { sigma: Number(env.SIGMA) },
   });

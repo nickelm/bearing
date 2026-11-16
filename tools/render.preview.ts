@@ -886,6 +886,7 @@ it('renders preview views', async () => {
     height: global.height,
     radius: params.radius,
     lakeDepth: global.finish.drainage.lakeDepth,
+    channels: global.finish.channels,
   });
   const synth = new TileSynthesizer(global.grid, {
     seed: params.seed,
@@ -2122,6 +2123,7 @@ async function renderStrategic(
     height: global.height,
     radius: params.radius,
     lakeDepth: global.finish.drainage.lakeDepth,
+    channels: global.finish.channels,
   });
   // The relief mesh (decision 77) from the same synthesizer as the terrain.
   const synth = new TileSynthesizer(global.grid, {

@@ -294,6 +294,7 @@ it('relief at a point', { timeout: 1_800_000 }, async () => {
       height: global.height,
       radius: R,
       lakeDepth: global.finish.drainage.lakeDepth,
+      channels: global.finish.channels,
     }),
     // TUNING='{"gullies":0.2}' overrides tile-synthesis tuning, for experiments.
     tuning: env.TUNING ? (JSON.parse(env.TUNING) as Record<string, number>) : undefined,

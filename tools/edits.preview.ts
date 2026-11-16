@@ -35,6 +35,7 @@ it('lists airfield pads over carved river channels', async () => {
     height: global.height,
     radius: R,
     lakeDepth: global.finish.drainage.lakeDepth,
+    channels: global.finish.channels,
   });
   const infra = new InfraScene(campaign.graph, campaign.infrastructure, R);
   const pads = airfieldPads(infra, globalMapSampler(global.height, global.n));

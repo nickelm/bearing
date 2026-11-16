@@ -35,6 +35,7 @@ it('measures river invariants on eroded worlds', async () => {
       height: global.height,
       radius: R,
       lakeDepth: global.finish.drainage.lakeDepth,
+      channels: global.finish.channels,
       planform: process.env.SIGMA === undefined ? {} : { sigma: Number(process.env.SIGMA) },
     });
     const r = riverInvariants(index, global.finish.rivers.downstream, {
@@ -48,7 +49,13 @@ it('measures river invariants on eroded worlds', async () => {
         `${pct(r.gridAligned)} (${pct(r.gridAlignedUniform)}) | ${r.stairStepsPer1000Km.toFixed(1)} | ` +
         `${median(r.sinuosity).toFixed(2)} (${r.sinuosity.length}) |`,
     );
-    console.log(`seed ${s}: index and measures in ${Math.round(performance.now() - t0)} ms`);
+    const ch = global.finish.channels;
+    console.log(
+      `seed ${s}: index and measures in ${Math.round(performance.now() - t0)} ms; ` +
+        (ch
+          ? `channel stage: ${ch.rivers.length} rivers migrated, ${ch.oxbowRiver.length} oxbows, ${Math.round(ch.ms)} ms`
+          : 'no channel stage in this world'),
+    );
   }
   console.log(rows.join('\n'));
 }, 7_200_000);

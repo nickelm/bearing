@@ -118,6 +118,7 @@ it('renders Free Flight shots', async () => {
     height: global.height,
     radius: R,
     lakeDepth: global.finish.drainage.lakeDepth,
+    channels: global.finish.channels,
   });
   const synth = new TileSynthesizer(global.grid, {
     seed: params.seed,

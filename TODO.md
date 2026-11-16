@@ -914,17 +914,19 @@ Rivers by regime, roads and railways aligned to the terrain with earthworks as a
   - [ ] The carve follows the polyline, not the shader's wander: a river resolved by the mesh (wider than about 50 m) can show water beside its channel; carry the wander into the kernel's carve if it shows
   - [ ] Eroded worlds of ten seeds through `tools/riverInvariants.preview.ts` (about ten minutes each on lavapipe)
   - [ ] The remaining 21% on grid headings (long straight D8 runs): bend them with the regime and meander work, then tighten the tests' bounds
-- [ ] Regimes per reach (mountain, lowland meandering, small lowland; braided as stretch) from bed gradient, discharge and floodplain width
-- [ ] Floodplain mask from `valleyFloor` and the height above the river's surface
-- [ ] Meander migration (Howard and Knutson) with resampling, cutoffs within about a width and oxbow polylines; `rng(seed, "meanders")` forked per river; endpoints fixed; caps on iterations and time; fallback to the procedural train
-- [ ] Profiles recomputed on the final planform; carve segments from it
+- [ ] Regimes per reach (mountain, lowland meandering, small lowland; braided as stretch) from bed gradient, discharge and floodplain width (per polyline so far: migration for lowland rivers at least 80 m wide with a floodplain of eight widths, the train below, wander for all; decisions 167, 173)
+- [x] Floodplain mask from `valleyFloor` and the height above the river's surface (as a half-width along each river, from the global heights within a few meters of its surface; decision 173)
+- [x] Meander migration (Howard and Knutson) with resampling, cutoffs within about a width and oxbow polylines; `rng(seed, "meanders")` forked per river; endpoints fixed; caps on iterations and time; fallback to the procedural train (decision 173: no random numbers, the train seeds the bends; run once per world in the worker and stored)
+  - [ ] Move the migration off the worker's critical path or speed it further if the stage costs more than about 10 s on a real GPU's world
+- [x] Profiles recomputed on the final planform; carve segments from it (decision 173)
 - [ ] Floodplain edit in the kernel (lowers and smooths, never raises, before the carve)
 - [ ] Distributaries that bifurcate in deltas, with a build-up edit to just above sea level
 - [ ] Sinuosity (lowland 1.5–2.5, mountain 1.0–1.3), wavelength (10–14 widths) and bend radius (2–3 widths) tests; carry the meander phase across confluences (the V1 item below)
 
 ### N3. River rendering
 
-- [ ] Oxbows and abandoned channels as standing water at the floodplain's water table (no white water, decision 155)
+- [x] Oxbows and abandoned channels as standing water at the floodplain's water table (no white water, decision 155): segments after the network's at the river's surface at the cut, 0.3 m lower, level; carved and drawn like rivers (decision 173)
+  - [ ] Oxbows silt up: older ones narrower and marshier (needs an age per oxbow)
 - [ ] The bank band on oxbows and distributaries
 - [ ] Map: per-band generalization of river polylines, width exaggeration kept
 - [ ] Spray at knickpoints, if cheap

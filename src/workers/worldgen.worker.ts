@@ -92,5 +92,15 @@ function finishBuffers(r: FinishResult): ArrayBuffer[] {
     r.treeline.buffer,
     ...Object.values(r.display).map((a: ArrayBufferView) => a.buffer),
     ...riverBuffers(r.rivers),
+    ...(r.channels
+      ? [
+          r.channels.rivers.buffer,
+          r.channels.offsets.buffer,
+          r.channels.points.buffer,
+          r.channels.oxbowRiver.buffer,
+          r.channels.oxbowOffsets.buffer,
+          r.channels.oxbowPoints.buffer,
+        ]
+      : []),
   ] as ArrayBuffer[];
 }

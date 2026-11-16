@@ -504,6 +504,7 @@ async function main(): Promise<void> {
         height: global.height,
         radius: params.radius,
         lakeDepth: global.finish.drainage.lakeDepth,
+        channels: global.finish.channels,
       });
       synth = new TileSynthesizer(global.grid, {
         seed: params.seed,

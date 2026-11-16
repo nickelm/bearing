@@ -9,6 +9,8 @@ import { earthElevation, LAPSE_RATE, potentialEvapotranspiration } from './clima
 import { computeDrainage } from './drainage';
 import type { Drainage } from './drainage';
 import { forestMaps } from './forest';
+import { computeChannels } from './channels/channels';
+import type { Channels } from './channels/channels';
 import { extractRivers } from './rivers';
 import type { Rivers } from './rivers';
 
@@ -49,6 +51,8 @@ export interface DisplayMaps {
 export interface FinishResult {
   drainage: Drainage;
   rivers: Rivers;
+  /** Migrated large lowland rivers and their oxbows (decision 173); absent in worlds stored before it. */
+  channels?: Channels;
   /** Biome per global cell. */
   biome: Uint8Array;
   /** Forest base density per global cell, 0..255 (decision 44). */
@@ -135,6 +139,13 @@ export function finishWorld(input: FinishInput): FinishResult {
   const rivers = time('rivers', () =>
     extractRivers(input.n, input.height, drainage.receiver, drainage.discharge),
   );
+  const channels = time('channels', () =>
+    computeChannels(rivers, {
+      height: input.height,
+      lakeDepth: drainage.lakeDepth,
+      radius: input.radius,
+    }),
+  );
   const biome = time('global biomes', () => globalBiomes(input, drainage.lakeDepth));
   const display = time('display downsample', () =>
     downsampleForDisplay(
@@ -148,5 +159,5 @@ export function finishWorld(input: FinishInput): FinishResult {
     ),
   );
   const { forest, treeline } = time('forest', () => forestMaps(input, biome));
-  return { drainage, rivers, biome, forest, treeline, display, timings };
+  return { drainage, rivers, channels, biome, forest, treeline, display, timings };
 }

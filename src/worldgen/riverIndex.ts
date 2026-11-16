@@ -24,6 +24,7 @@ import {
 } from '../core/tiles';
 import type { TileKey } from '../core/tiles';
 import { Vec3d } from '../core/vec3d';
+import type { Channels } from './channels/channels';
 import type { Rivers } from './rivers';
 
 export const RIVER_INDEX_LEVEL = 4;
@@ -183,6 +184,8 @@ export interface MeanderOptions {
   tuning?: Partial<typeof MEANDER_TUNING>;
   planform?: Partial<typeof PLANFORM_TUNING>;
   wander?: Partial<typeof WANDER_TUNING>;
+  /** Migrated rivers and their oxbows from the channel stage (decision 173); none migrates without. */
+  channels?: Channels | null;
 }
 
 /** Deterministic hash of two integers to [0, 1). */
@@ -562,6 +565,102 @@ export function riverProfiles(
   return out;
 }
 
+/** Oxbow lakes (decision 173): their level below the river's surface at the cut (m), and their width as a share of the river's. */
+export const OXBOW_TUNING = { drop: 0.3, widthShare: 0.8 };
+
+/** The planform stage's result: smoothed, wandering and meandering polylines (see `riverPlanforms`). */
+export interface RiverPlanforms {
+  /** Per polyline, its points: [x, y, z, width, water surface of the cell]. */
+  lines: number[][][];
+  /** Per polyline, its bed gradient from the global grid (m/m; 0 without heights). */
+  gradients: Float64Array;
+  /** The network's point spacing (m): the median distance between consecutive points. */
+  spacing: number;
+}
+
+/**
+ * The planform of every polyline (decisions 126, 165, 167): smoothed in plan,
+ * corner-cut, wandering, and meandering where lowland, each point with its width
+ * and its cell's water surface. Shared by `RiverIndex` and the channel stage
+ * (decision 173), which migrates some of them.
+ */
+export function riverPlanforms(rivers: Rivers, meanders?: MeanderOptions): RiverPlanforms {
+  const mt = { ...MEANDER_TUNING, ...meanders?.tuning };
+  const pt = { ...PROFILE_TUNING, ...meanders?.profile };
+  const height = meanders?.height;
+  const lakeDepth = meanders?.lakeDepth;
+  // The water surface at a global cell: its lake's level in a lake, sea level at the mouth.
+  const cellSurface = (c: number): number => {
+    if (!height) return NO_SURFACE;
+    const h = height[c]!;
+    const lake = lakeDepth ? lakeDepth[c]! : 0;
+    return (lake > 0 ? h + lake : Math.max(h, 0)) - pt.drop;
+  };
+  // Smoothed polylines: [x, y, z, width, surface].
+  const lines: number[][][] = [];
+  const gradients = new Float64Array(rivers.count);
+  // Planform smoothing (decision 165) needs the network's point spacing: the
+  // median distance between consecutive points, about a global cell.
+  let sigmaM = 0;
+  let spacing = 0;
+  if (meanders) {
+    const gaps: number[] = [];
+    for (let k = 0; k < rivers.count; k++) {
+      for (let p = rivers.offsets[k]! + 1; p < rivers.offsets[k + 1]!; p++) {
+        const q = p - 1;
+        const dot =
+          rivers.points[p * 3]! * rivers.points[q * 3]! +
+          rivers.points[p * 3 + 1]! * rivers.points[q * 3 + 1]! +
+          rivers.points[p * 3 + 2]! * rivers.points[q * 3 + 2]!;
+        gaps.push(Math.acos(Math.min(1, dot)) * meanders.radius);
+      }
+    }
+    gaps.sort((x, y) => x - y);
+    spacing = gaps.length ? gaps[gaps.length >> 1]! : 0;
+    sigmaM = spacing * { ...PLANFORM_TUNING, ...meanders.planform }.sigma;
+  }
+  for (let k = 0; k < rivers.count; k++) {
+    const pts: number[][] = [];
+    for (let p = rivers.offsets[k]!; p < rivers.offsets[k + 1]!; p++) {
+      pts.push([
+        rivers.points[p * 3]!,
+        rivers.points[p * 3 + 1]!,
+        rivers.points[p * 3 + 2]!,
+        rivers.width[p]!,
+        cellSurface(rivers.cells[p]!),
+      ]);
+    }
+    let sm = chaikin(sigmaM > 0 ? smoothPlanform(pts, sigmaM, meanders!.radius) : pts, 2);
+    let gradient = 0;
+    if (meanders && pts.length >= 2) {
+      // Bed gradient over the polyline, from the global grid.
+      const first = rivers.offsets[k]!;
+      const last = rivers.offsets[k + 1]! - 1;
+      const drop = meanders.height[rivers.cells[first]!]! - meanders.height[rivers.cells[last]!]!;
+      let len = 0;
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1]!;
+        const b = pts[i]!;
+        len +=
+          Math.acos(Math.min(1, a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!)) * meanders.radius;
+      }
+      gradient = Math.max(0, drop) / Math.max(len, 1);
+      // Every river wanders a little (decision 167); lowland rivers then meander.
+      sm = wander(sm, k, meanders.radius, spacing, gradient, {
+        ...WANDER_TUNING,
+        ...meanders.wander,
+      });
+      const strength =
+        (1 - smoothstep(mt.fullGradient, mt.maxGradient, gradient)) *
+        smoothstep(mt.minWidth, 2 * mt.minWidth, Math.max(...pts.map((p) => p[3]!)));
+      if (strength > 0) sm = meander(sm, k, meanders.radius, mt, strength);
+    }
+    gradients[k] = gradient;
+    lines.push(sm);
+  }
+  return { lines, gradients, spacing };
+}
+
 export class RiverIndex {
   readonly segments: RiverSegments;
   /**
@@ -569,81 +668,29 @@ export class RiverIndex {
    * Each polyline runs downstream; `rivers.downstream` says which it joins.
    */
   readonly lines: Uint32Array;
+  /**
+   * Oxbow lakes (decision 173), after the network's segments: oxbow o is the segment
+   * range [oxbows[o], oxbows[o + 1]), level water that belongs to no polyline.
+   */
+  readonly oxbows: Uint32Array;
   /** River mouths that build deltas, DELTA_FIELDS per record. */
   readonly deltas: Float64Array;
   private readonly byTile = new Map<string, number[]>();
 
   /** With `meanders`, lowland rivers wind across their floodplains (decision 126). */
   constructor(rivers: Rivers, meanders?: MeanderOptions) {
-    const mt = { ...MEANDER_TUNING, ...meanders?.tuning };
     const pt = { ...PROFILE_TUNING, ...meanders?.profile };
     const height = meanders?.height;
-    const lakeDepth = meanders?.lakeDepth;
-    // The water surface at a global cell: its lake's level in a lake, sea level at the mouth.
-    const cellSurface = (c: number): number => {
-      if (!height) return NO_SURFACE;
-      const h = height[c]!;
-      const lake = lakeDepth ? lakeDepth[c]! : 0;
-      return (lake > 0 ? h + lake : Math.max(h, 0)) - pt.drop;
-    };
-    // Smoothed polylines: [x, y, z, width, surface].
-    const lines: number[][][] = [];
-    // Planform smoothing (decision 165) needs the network's point spacing: the
-    // median distance between consecutive points, about a global cell.
-    let sigmaM = 0;
-    let spacing = 0;
-    if (meanders) {
-      const gaps: number[] = [];
-      for (let k = 0; k < rivers.count; k++) {
-        for (let p = rivers.offsets[k]! + 1; p < rivers.offsets[k + 1]!; p++) {
-          const q = p - 1;
-          const dot =
-            rivers.points[p * 3]! * rivers.points[q * 3]! +
-            rivers.points[p * 3 + 1]! * rivers.points[q * 3 + 1]! +
-            rivers.points[p * 3 + 2]! * rivers.points[q * 3 + 2]!;
-          gaps.push(Math.acos(Math.min(1, dot)) * meanders.radius);
-        }
+    const { lines } = riverPlanforms(rivers, meanders);
+    // Migrated rivers (decision 173) replace their planform with the channel stage's.
+    const ch = meanders?.channels;
+    if (ch) {
+      for (let m = 0; m < ch.rivers.length; m++) {
+        const line: number[][] = [];
+        for (let p = ch.offsets[m]!; p < ch.offsets[m + 1]!; p++)
+          line.push(Array.from(ch.points.subarray(p * 5, p * 5 + 5)));
+        if (line.length >= 2) lines[ch.rivers[m]!] = line;
       }
-      gaps.sort((x, y) => x - y);
-      spacing = gaps.length ? gaps[gaps.length >> 1]! : 0;
-      sigmaM = spacing * { ...PLANFORM_TUNING, ...meanders.planform }.sigma;
-    }
-    for (let k = 0; k < rivers.count; k++) {
-      const pts: number[][] = [];
-      for (let p = rivers.offsets[k]!; p < rivers.offsets[k + 1]!; p++) {
-        pts.push([
-          rivers.points[p * 3]!,
-          rivers.points[p * 3 + 1]!,
-          rivers.points[p * 3 + 2]!,
-          rivers.width[p]!,
-          cellSurface(rivers.cells[p]!),
-        ]);
-      }
-      let sm = chaikin(sigmaM > 0 ? smoothPlanform(pts, sigmaM, meanders!.radius) : pts, 2);
-      if (meanders && pts.length >= 2) {
-        // Bed gradient over the polyline, from the global grid.
-        const first = rivers.offsets[k]!;
-        const last = rivers.offsets[k + 1]! - 1;
-        const drop = meanders.height[rivers.cells[first]!]! - meanders.height[rivers.cells[last]!]!;
-        let len = 0;
-        for (let i = 1; i < pts.length; i++) {
-          const a = pts[i - 1]!;
-          const b = pts[i]!;
-          len +=
-            Math.acos(Math.min(1, a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!)) * meanders.radius;
-        }
-        const gradient = Math.max(0, drop) / Math.max(len, 1);
-        // Every river wanders a little (decision 167); lowland rivers then meander.
-        sm = wander(sm, k, meanders.radius, spacing, gradient, {
-          ...WANDER_TUNING,
-          ...meanders.wander,
-        });
-        const strength =
-          (1 - smoothstep(mt.fullGradient, mt.maxGradient, gradient)) *
-          smoothstep(mt.minWidth, 2 * mt.minWidth, Math.max(...pts.map((p) => p[3]!)));
-        if (strength > 0) sm = meander(sm, k, meanders.radius, mt, strength);
-      }
-      lines.push(sm);
     }
     const radius = meanders?.radius ?? 1;
     const profiled = height
@@ -672,9 +719,60 @@ export class RiverIndex {
         );
       }
     }
-    this.segments = { count: segs.length / FIELDS, data: Float64Array.from(segs), fields: FIELDS };
     lineStarts.push(segs.length / FIELDS);
     this.lines = Uint32Array.from(lineStarts);
+    // Oxbow lakes (decision 173): standing water after the network's segments, at the
+    // river's surface where the loop was cut off, a little lower, and level.
+    const oxStarts: number[] = [];
+    if (ch && ch.oxbowRiver.length > 0) {
+      for (let o = 0; o < ch.oxbowRiver.length; o++) {
+        const river = profiled[ch.oxbowRiver[o]!];
+        const a0 = ch.oxbowOffsets[o]!;
+        const a1 = ch.oxbowOffsets[o + 1]!;
+        if (!river || a1 - a0 < 2) continue;
+        // The surface at the river's points nearest the oxbow's two ends.
+        let level = NO_SURFACE;
+        for (const e of [a0, a1 - 1]) {
+          let best = Infinity;
+          let surf = NO_SURFACE;
+          for (const q of river) {
+            const d =
+              (q[0]! - ch.oxbowPoints[e * 4]!) ** 2 +
+              (q[1]! - ch.oxbowPoints[e * 4 + 1]!) ** 2 +
+              (q[2]! - ch.oxbowPoints[e * 4 + 2]!) ** 2;
+            if (d < best) {
+              best = d;
+              surf = q[4]!;
+            }
+          }
+          level = Math.min(level, surf);
+        }
+        if (level < NO_SURFACE * 0.5) level -= OXBOW_TUNING.drop;
+        oxStarts.push(segs.length / FIELDS);
+        for (let p = a0; p + 1 < a1; p++) {
+          const o4 = p * 4;
+          const w0 = ch.oxbowPoints[o4 + 3]! * OXBOW_TUNING.widthShare;
+          const w1 = ch.oxbowPoints[o4 + 7]! * OXBOW_TUNING.widthShare;
+          segs.push(
+            ch.oxbowPoints[o4]!,
+            ch.oxbowPoints[o4 + 1]!,
+            ch.oxbowPoints[o4 + 2]!,
+            ch.oxbowPoints[o4 + 4]!,
+            ch.oxbowPoints[o4 + 5]!,
+            ch.oxbowPoints[o4 + 6]!,
+            w0,
+            w1,
+            level,
+            level,
+            level,
+            level,
+          );
+        }
+      }
+    }
+    oxStarts.push(segs.length / FIELDS);
+    this.oxbows = Uint32Array.from(oxStarts);
+    this.segments = { count: segs.length / FIELDS, data: Float64Array.from(segs), fields: FIELDS };
     // Deltas at mouths of wide rivers: the last land point and the sea point after it.
     const deltas: number[] = [];
     for (let k = 0; k < rivers.count; k++) {
