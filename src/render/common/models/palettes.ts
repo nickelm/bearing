@@ -37,6 +37,14 @@ export const SCHEMES: Record<string, CamoScheme> = {
     patch: 4,
   },
   'pact-bomber': { name: 'Pact bomber', colors: ['#A7ABAE'], patch: 10 },
+  // Ground cover (decision 172): rock shades per face, and gray rock with lichen.
+  rock: { name: 'Rock', colors: ['#6E665E', '#857B70', '#5C554F'], patch: 0.35 },
+  'rock-lichen': {
+    name: 'Rock with lichen',
+    colors: ['#6E665E', '#857B70', '#8C8A5A', '#5C554F'],
+    patch: 0.3,
+  },
+  sandstone: { name: 'Sandstone', colors: ['#B8693C', '#C98D58', '#A65A36'], patch: 0.5 },
   // Ships: haze gray over a darker waterline, per side (decision 106).
   'alliance-ship': { name: 'Alliance ship', colors: ['#8C949B'], patch: 20 },
   'pact-ship': { name: 'Pact ship', colors: ['#7E8A86'], patch: 20 },
@@ -81,6 +89,18 @@ export const MODEL_COLORS: Record<string, string> = {
   'bark-dark': '#3A2E24',
   'bark-pale': '#BDB8AA',
   'bark-dead': '#6A625A',
+  // Ground cover (decision 172): grass from Part I's grassland shades, dry grass from
+  // savanna's, reeds, and muted flowers; the cover takes the ground's color in the scene.
+  'grass-dark': '#6B7C40',
+  grass: '#7A8C4A',
+  'grass-light': '#8A9A55',
+  'grass-dry': '#A89A5A',
+  'grass-dry-light': '#B8AA68',
+  reed: '#7F8A4A',
+  'reed-head': '#5A3E28',
+  'flower-cream': '#E3D9B8',
+  'flower-yellow': '#D4B04A',
+  'flower-violet': '#9A86AE',
   // Ships.
   deck: '#5A5C5E',
   'flight-deck': '#4A4C4E',

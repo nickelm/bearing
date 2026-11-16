@@ -58,17 +58,18 @@ A virtual mesh, finer than the real one, drawn only in the shader. Each octave i
 
 ### 2. Ground cover kit (G2)
 
-New model specs, built by the existing builder, flat-shaded with vertex colors:
+As built (decision 172; `tools/models/cover.py` writes the specs, class `cover`, 8–40 triangles):
 
-| Model          | Triangles | Size           | Notes                                                                                                                 |
-| -------------- | --------- | -------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Grass tuft     | 16–24     | 0.3–0.6 m      | Five to seven wide, folded blades (two faces each, so they catch light on one side), blunt tips; dark base, light tip |
-| Tussock        | 24–32     | 0.6–1.0 m      | Savanna and tundra; a fatter tuft with a drooping crown                                                               |
-| Reed clump     | 20–28     | 1.0–1.8 m      | Marsh, river banks and lake shores                                                                                    |
-| Bush           | 24–40     | 0.6–1.4 m      | Two or three lumpy lobes, like the far broadleaf but lower; dry variant in desert and scrub                           |
-| Boulder        | 12–40     | 0.4–3 m        | A jittered, flattened icosahedron in three sizes; base vertices darkened as contact shading; lichen variant           |
-| Slab           | 12–20     | 1–4 m          | Stratified desert rock, a tilted plate                                                                                |
-| Pebble cluster | 12–18     | 0.3–0.6 m wide | Three or four small stones as one instance, on gravel and scree                                                       |
+| Model                                  | Triangles | Size       | Notes                                                                                                    |
+| -------------------------------------- | --------- | ---------- | -------------------------------------------------------------------------------------------------------- |
+| Grass tuft, dry tuft                   | 21        | 0.3–0.5 m  | Seven fat blades, each a three-sided spike 20 cm wide at the base, leaning out; dark base, light tip     |
+| Flower tufts (cream, yellow, violet)   | 31–39     | 0.4 m      | Five blades with two or three flat heads nestled among them (decision 169)                               |
+| Tussock                                | 36        | 0.7 m      | Eight wide blades round a low dome                                                                       |
+| Reed clump                             | 40        | 1.1–1.4 m  | Eight tall blades and two cattails                                                                       |
+| Bush, dry bush                         | 36        | 1–1.2 m    | Three faceted domes in three leaf shades                                                                 |
+| Boulder (small, medium, large, lichen) | 20–40     | 0.8–3.4 m  | Jittered, flattened icosahedra, sunk a little; per-face shades from the `rock` and `rock-lichen` schemes |
+| Slab                                   | 24        | 2.6 m      | Two stacked sandstone strata, the upper set back                                                         |
+| Pebbles                                | 36        | 0.5 m wide | Three low four-sided stones                                                                              |
 
 - **Color from the ground.** Each instance takes the land albedo of its ground point from the same `LandShading` functions the terrain uses, then the model's own value ramp on top. A tuft therefore matches the grass around it, browns with it in autumn and pales with it in drought; a boulder takes the local rock shade. Mismatched cover is the most common reason ground cover looks pasted on.
 - **No thin parts.** Blades are at least 10 cm wide at the base (Part I, principle 4).

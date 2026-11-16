@@ -1,0 +1,80 @@
+{
+  "name": "Dry grass tuft",
+  "class": "cover",
+  "groups": {
+    "mid": "grass-dry",
+    "light": "grass-dry-light"
+  },
+  "parts": [
+    {
+      "type": "cylinder",
+      "group": "mid",
+      "from": [0.059, -0.04, 0.013],
+      "to": [0.305, 0.46, 0.069],
+      "radius": 0.1,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "light",
+      "from": [0.037, -0.04, 0.047],
+      "to": [0.175, 0.4, 0.219],
+      "radius": 0.1,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "mid",
+      "from": [-0.02, -0.04, 0.057],
+      "to": [-0.081, 0.34, 0.233],
+      "radius": 0.1,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "light",
+      "from": [-0.058, -0.04, 0.014],
+      "to": [-0.208, 0.28, 0.048],
+      "radius": 0.1,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "mid",
+      "from": [-0.054, -0.04, -0.026],
+      "to": [-0.267, 0.43, -0.129],
+      "radius": 0.1,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "light",
+      "from": [-0.007, -0.04, -0.06],
+      "to": [-0.03, 0.37, -0.262],
+      "radius": 0.1,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "mid",
+      "from": [0.047, -0.04, -0.038],
+      "to": [0.18, 0.31, -0.144],
+      "radius": 0.1,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    }
+  ]
+}

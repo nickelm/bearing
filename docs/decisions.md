@@ -2749,3 +2749,19 @@ Budgets: nothing above 600 m beyond one uniform branch; below 150 m at most 12 d
 **Not done:** crop furrows, sand ripples, scree and marsh (each needs a direction or a mask the shader does not have yet); timing on a real GPU; ice glints.
 
 **Reason:** Stepped cells extend the faceted style down in scale (the owner's direction, decision 168), and a field on a lattice in space is the cheapest way to get them without seams or a second parameterization of the ground.
+
+### 172. G2: the ground cover kit
+
+**Date:** 2026-11-16
+**Decision:** Fifteen model specs of a new class `cover` (8–40 triangles; Part I, *Polygon Budgets*), built by the existing builder with no new part type (decisions 106, 168, 169):
+
+- **Blades** are three-sided cylinders that taper to a point and lean out from a small ring, 18–26 cm wide at the base: three triangles each, so a tuft of seven is 21 triangles and stays fat and chunky in silhouette. A second blade shape (folded, blunt tips) would double the count for little gain at the sizes the ring draws.
+- **The kit:** grass tuft and dry tuft (21 triangles), flower tufts in cream, yellow and violet (31–39, flat heads nestled among the blades), tussock (36), reed clump with cattails (40), bush and dry bush (36, three faceted domes), boulders small, medium and large and with lichen (20–40, jittered and flattened icosahedra), a sandstone slab (24) and pebbles (36).
+- **Dark bases, light tips.** The builder's ground occlusion darkened the lowest 2.5 m of a model, which would darken a whole tuft; for class `cover` it reaches over 80% of the model's own height.
+- **Rock by face.** Boulders, slabs and pebbles color their faces through camouflage schemes (`rock`, `rock-lichen`, `sandstone` in `palettes.ts`), one of three or four shades per face over a 0.3–0.5 m pattern, so they read faceted without extra geometry.
+- **Generated specs.** `tools/models/cover.py` writes `specs/cover-*.json` from a fixed layout, as `tools/models/carrier.py` does for the carrier.
+- **New model colors:** `grass-dark`, `grass`, `grass-light` (Part I's grassland shades), `grass-dry`, `grass-dry-light`, `reed`, `reed-head`, `flower-cream`, `flower-yellow`, `flower-violet`. In the scene (G3) each instance takes the ground's color under the model's value ramp, so these colors matter mainly in the model viewer.
+
+The contact sheet is `docs/reports/screens/ground-g2-kit.png`. `docs/visual-style.md` (*Polygon Budgets*) and `docs/plans/ground-detail.md` change with this decision.
+
+**Reason:** The owner asked for fat, chunky tufts and hefty, low-poly boulders (decision 168). Built from the existing primitives, the kit needs no new builder code beyond the occlusion's reach, and stays within a budget that lets the ring draw thousands of instances.

@@ -1,0 +1,18 @@
+{
+  "name": "Boulder (small)",
+  "class": "cover",
+  "scheme": "rock",
+  "groups": {
+    "rock": "camo"
+  },
+  "parts": [
+    {
+      "type": "blob",
+      "group": "rock",
+      "center": [0, 0.12, 0],
+      "radius": [0.42, 0.27, 0.36],
+      "jitter": 0.38,
+      "seed": 31
+    }
+  ]
+}

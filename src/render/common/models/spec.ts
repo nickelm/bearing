@@ -59,6 +59,8 @@ export const MODEL_BUDGETS = {
   building: [12, 200],
   /** Part I, Tree Kit: 12 (shrub) to 80 (broadleaf) triangles. */
   tree: [12, 80],
+  /** Ground cover (decision 172): tufts, reeds, bushes, boulders, slabs, pebbles. */
+  cover: [8, 40],
   carrier: [2000, 5000],
   ship: [400, 2000],
 } as const satisfies Record<string, readonly [number, number]>;

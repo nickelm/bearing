@@ -15,8 +15,9 @@
  *   Faces stay single-colored (no gradients within a face, Part I).
  * - **Ambient occlusion.** Per vertex: eight rays in a cone about the face normal,
  *   up to a quarter of the model's radius; each ray that hits another face darkens
- *   the vertex. Models standing on the ground (`ground`, default for buildings)
- *   also darken toward y = 0.
+ *   the vertex. Models standing on the ground (`ground`, default for buildings,
+ *   trees and ground cover) also darken toward y = 0: over the lowest 2.5 m, and
+ *   ground cover over most of its own height (decision 172).
  * - **Rotors** (decision 157). Each rotor builds a hub (a six-sided drum along its
  *   axis) and flat plank blades at azimuth 0, which the static model includes and
  *   counts in its budget, and a translucent disc for the flown view (`buildRotors`):
@@ -511,7 +512,13 @@ function rayHits(o: V, d: V, tri: Tri, maxT: number): boolean {
   return t > 0 && t < maxT;
 }
 
-function bakeAo(tris: Tri[], normals: V[], range: number, ground: boolean): Float32Array {
+function bakeAo(
+  tris: Tri[],
+  normals: V[],
+  range: number,
+  ground: boolean,
+  groundReach = 2.5,
+): Float32Array {
   const out = new Float32Array(tris.length * 3);
   const centers = tris.map((t) => scale(add(add(t.a, t.b), t.c), 1 / 3));
   const radii = tris.map((t, i) =>
@@ -555,7 +562,7 @@ function bakeAo(tris: Tri[], normals: V[], range: number, ground: boolean): Floa
       let ao = 1 - (AO_STRENGTH * hits) / AO_RAYS;
       if (ground) {
         const y = Math.max(0, verts[k]![1]);
-        const g = Math.min(1, y / 2.5);
+        const g = Math.min(1, y / groundReach);
         ao *= 0.7 + 0.3 * g * g * (3 - 2 * g);
       }
       out[i * 3 + k] = ao;
@@ -639,10 +646,14 @@ function finish(spec: ModelSpec, tris: Tri[], options: BuildOptions): BuiltModel
     });
   });
   const size = count ? len(sub(max, min)) : 1;
-  const ground = spec.ground ?? (spec.class === 'building' || spec.class === 'tree');
+  const ground =
+    spec.ground ?? (spec.class === 'building' || spec.class === 'tree' || spec.class === 'cover');
+  // Ground cover darkens over most of its own height, so a tuft is dark at its base and
+  // light at its tips (decision 172); everything else over the lowest 2.5 m.
+  const groundReach = spec.class === 'cover' ? Math.max(0.05, 0.8 * max[1]) : 2.5;
   const ao = options.noAo
     ? new Float32Array(count * 3).fill(1)
-    : bakeAo(tris, normals, size / 4, ground);
+    : bakeAo(tris, normals, size / 4, ground, groundReach);
   const emissives: Emissive[] = [];
   for (const e of spec.emissives ?? []) {
     const c = hexToLinear(EMISSIVE_COLORS[e.kind]!);

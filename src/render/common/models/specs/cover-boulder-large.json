@@ -1,0 +1,26 @@
+{
+  "name": "Boulder (large)",
+  "class": "cover",
+  "scheme": "rock",
+  "groups": {
+    "rock": "camo"
+  },
+  "parts": [
+    {
+      "type": "blob",
+      "group": "rock",
+      "center": [0, 0.55, 0],
+      "radius": [1.7, 1.05, 1.4],
+      "jitter": 0.38,
+      "seed": 33
+    },
+    {
+      "type": "blob",
+      "group": "rock",
+      "center": [1.2, 0.35, 0.6],
+      "radius": [0.85, 0.55, 0.7],
+      "jitter": 0.38,
+      "seed": 34
+    }
+  ]
+}

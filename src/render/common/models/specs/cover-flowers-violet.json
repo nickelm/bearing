@@ -1,0 +1,77 @@
+{
+  "name": "Flower tuft (violet)",
+  "class": "cover",
+  "groups": {
+    "dark": "grass-dark",
+    "mid": "grass",
+    "flower": "flower-violet"
+  },
+  "parts": [
+    {
+      "type": "cylinder",
+      "group": "mid",
+      "from": [0.06, -0.04, 0.0],
+      "to": [0.235, 0.35, 0.0],
+      "radius": 0.09,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "dark",
+      "from": [0.01, -0.04, 0.059],
+      "to": [0.037, 0.35, 0.232],
+      "radius": 0.09,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "mid",
+      "from": [-0.057, -0.04, 0.019],
+      "to": [-0.223, 0.35, 0.074],
+      "radius": 0.09,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "dark",
+      "from": [-0.049, -0.04, -0.035],
+      "to": [-0.19, 0.35, -0.138],
+      "radius": 0.09,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "mid",
+      "from": [0.027, -0.04, -0.054],
+      "to": [0.106, 0.35, -0.21],
+      "radius": 0.09,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "flower",
+      "from": [0.08, 0.2, 0.03],
+      "to": [0.08, 0.23500000000000001, 0.03],
+      "radius": 0.085,
+      "sides": 3
+    },
+    {
+      "type": "cylinder",
+      "group": "flower",
+      "from": [-0.06, 0.17, -0.07],
+      "to": [-0.06, 0.20500000000000002, -0.07],
+      "radius": 0.085,
+      "sides": 3
+    }
+  ]
+}

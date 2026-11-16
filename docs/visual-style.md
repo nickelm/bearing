@@ -142,6 +142,7 @@ Beyond the shell's range, forests are dark canopy masses in the terrain shading 
 | Truck, light vehicle | 80–200 |
 | Person | 60–150 |
 | Building | 12–200 |
+| Ground cover (tufts, reeds, bushes, boulders, slabs, pebbles) | 8–40 (decision 172) |
 | Bridge, viaduct | About 300 (short beam) to 1,500 (long truss or viaduct) |
 | Tunnel portal | 100–200 |
 | Carrier | 2,000–5,000 including deck details |

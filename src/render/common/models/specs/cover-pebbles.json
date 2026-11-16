@@ -1,0 +1,37 @@
+{
+  "name": "Pebbles",
+  "class": "cover",
+  "scheme": "rock",
+  "groups": {
+    "rock": "camo"
+  },
+  "parts": [
+    {
+      "type": "frustum",
+      "group": "rock",
+      "center": [0, -0.02, 0],
+      "base": [0.22, 0.18],
+      "top": [0.1, 0.08],
+      "height": 0.12,
+      "yaw": 20
+    },
+    {
+      "type": "frustum",
+      "group": "rock",
+      "center": [0.24, -0.02, 0.12],
+      "base": [0.16, 0.14],
+      "top": [0.07, 0.06],
+      "height": 0.09,
+      "yaw": 65
+    },
+    {
+      "type": "frustum",
+      "group": "rock",
+      "center": [-0.18, -0.02, 0.2],
+      "base": [0.14, 0.12],
+      "top": [0.05, 0.05],
+      "height": 0.08,
+      "yaw": -30
+    }
+  ]
+}

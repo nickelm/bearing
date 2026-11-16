@@ -1,0 +1,107 @@
+{
+  "name": "Reed clump",
+  "class": "cover",
+  "groups": {
+    "mid": "reed",
+    "light": "grass-light",
+    "head": "reed-head"
+  },
+  "parts": [
+    {
+      "type": "cylinder",
+      "group": "mid",
+      "from": [0.1, -0.04, 0.01],
+      "to": [0.333, 1.171, 0.032],
+      "radius": 0.09,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "light",
+      "from": [0.056, -0.04, 0.083],
+      "to": [0.165, 0.979, 0.245],
+      "radius": 0.09,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "mid",
+      "from": [0.0, -0.04, 0.1],
+      "to": [0.0, 1.3, 0.36],
+      "radius": 0.09,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "light",
+      "from": [-0.077, -0.04, 0.064],
+      "to": [-0.248, 1.107, 0.204],
+      "radius": 0.09,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "mid",
+      "from": [-0.098, -0.04, -0.019],
+      "to": [-0.278, 0.914, -0.054],
+      "radius": 0.09,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "light",
+      "from": [-0.071, -0.04, -0.071],
+      "to": [-0.245, 1.236, -0.245],
+      "radius": 0.09,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "mid",
+      "from": [0.01, -0.04, -0.1],
+      "to": [0.03, 1.043, -0.307],
+      "radius": 0.09,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "light",
+      "from": [0.083, -0.04, -0.056],
+      "to": [0.224, 0.85, -0.151],
+      "radius": 0.09,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "head",
+      "from": [0.05, 1.0, 0.08],
+      "to": [0.07, 1.24, 0.08],
+      "radius": 0.07,
+      "sides": 3
+    },
+    {
+      "type": "cylinder",
+      "group": "head",
+      "from": [-0.09, 1.12, -0.02],
+      "to": [-0.06999999999999999, 1.36, -0.02],
+      "radius": 0.07,
+      "sides": 3
+    }
+  ]
+}

@@ -1,0 +1,100 @@
+{
+  "name": "Tussock",
+  "class": "cover",
+  "groups": {
+    "dark": "grass-dark",
+    "mid": "grass-dry",
+    "light": "grass-dry-light"
+  },
+  "parts": [
+    {
+      "type": "blob",
+      "group": "dark",
+      "center": [0, 0.02, 0],
+      "radius": [0.38, 0.3, 0.36],
+      "half": true,
+      "jitter": 0.2,
+      "seed": 5
+    },
+    {
+      "type": "cylinder",
+      "group": "mid",
+      "from": [0.14, -0.04, 0.0],
+      "to": [0.485, 0.531, 0.0],
+      "radius": 0.13,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "light",
+      "from": [0.089, -0.04, 0.108],
+      "to": [0.373, 0.689, 0.454],
+      "radius": 0.13,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "mid",
+      "from": [-0.027, -0.04, 0.137],
+      "to": [-0.101, 0.594, 0.516],
+      "radius": 0.13,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "light",
+      "from": [-0.099, -0.04, 0.099],
+      "to": [-0.329, 0.5, 0.329],
+      "radius": 0.13,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "mid",
+      "from": [-0.139, -0.04, -0.014],
+      "to": [-0.564, 0.657, -0.055],
+      "radius": 0.13,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "light",
+      "from": [-0.078, -0.04, -0.116],
+      "to": [-0.282, 0.563, -0.42],
+      "radius": 0.13,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "mid",
+      "from": [-0.0, -0.04, -0.14],
+      "to": [-0.0, 0.72, -0.608],
+      "radius": 0.13,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    },
+    {
+      "type": "cylinder",
+      "group": "light",
+      "from": [0.108, -0.04, -0.089],
+      "to": [0.422, 0.626, -0.347],
+      "radius": 0.13,
+      "radius2": 0,
+      "sides": 3,
+      "caps": false
+    }
+  ]
+}
