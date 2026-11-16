@@ -198,6 +198,8 @@ export interface PreviewView {
   /** With observer: face the sun's or the moon's azimuth, or away from the sun's. */
   face?: 'sun' | 'moon' | 'antisun';
   /** With observer: pitch (rad) and height above the ground (m) instead of the station's. */
+  /** The weather this view shows unless WEATHER is set (default: the sim's live weather). */
+  weather?: WeatherPreset;
   pitch?: number;
   eyeHeight?: number;
   /**
@@ -429,6 +431,8 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     // Ground detail (decision 168, check 11): a helicopter's hover at 5 m over open, unsettled
     // grassland or shrubland (target `meadow`), the sun from the side. TARGET=peak puts it on a mountain.
     name: 'hover',
+    // Judged in sunlight: the live weather put the meadow under an overcast deck.
+    weather: 'clear',
     dLat: 0,
     dLon: 0,
     altitude: 0,
@@ -445,6 +449,7 @@ export const PREVIEW_VIEWS: PreviewView[] = [
   {
     // Ground detail at 20 m (decision 168, check 11).
     name: 'skid',
+    weather: 'clear',
     dLat: 0,
     dLon: 0,
     altitude: 0,
@@ -461,6 +466,7 @@ export const PREVIEW_VIEWS: PreviewView[] = [
   {
     // Ground detail at 60 m over the farmland (decision 168): where the micro-facets fade.
     name: 'nap',
+    weather: 'clear',
     dLat: 0,
     dLon: 0,
     altitude: 0,
@@ -1543,7 +1549,7 @@ it('renders preview views', async () => {
     // HOURS shifts only the clouds' clock (to see them move with the sun held fixed).
     const cloudTime = t + Number(process.env.HOURS ?? 0) * HOUR;
     scene.clouds.time.value = cloudTime;
-    weatherAt(cloudTime);
+    weatherAt(cloudTime, process.env.WEATHER ? preset : (v.weather ?? preset));
     scene.volumetrics.reset();
     scene.clouds.enabled.value = process.env.CLOUDS === '0' ? 0 : 1;
     // RIVERS=x sets how strongly sub-pixel rivers are drawn (0 = their true pixel fraction).
