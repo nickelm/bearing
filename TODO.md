@@ -948,9 +948,10 @@ Rivers by regime, roads and railways aligned to the terrain with earthworks as a
 
 - [ ] Spike N5.0: level-6 tiles along every link's band for seeds 1, 2, 3 and 1983, synthesis time on Dawn; eager after the global pass or lazy per piece
 - [ ] Anchors: settlements, junctions, strategic bridges, points every 10–30 km by class, with elevations
-- [ ] Router: tangent-plane lattice by class, state (node, heading of 16), Galin's k = 2 neighborhood, long viaduct and tunnel edges; grade, curvature, earthwork, crossing, pass and corridor terms; tests on synthetic slopes (switchbacks on a steep face, a valley detour for a railway)
+- [x] Router: tangent-plane lattice by class, state (node, heading of 16), Galin's k = 2 neighborhood, long viaduct and tunnel edges; grade, curvature, earthwork, crossing, pass and corridor terms; tests on synthetic slopes (switchbacks on a steep face, a valley detour for a railway) (decision 180: state also counts the straight run; structures from the profile instead of long edges; crossing, pass and corridor terms through the caller's extra cost, not yet used)
 - [ ] Class switches: mountain railway where a piece cannot meet 2%; mountain road for secondary roads in mountains
-- [ ] Plan fitting (straights and arcs, hairpins with a shelf pad), profile (slope-limited passes, vertical curves, fixed decks and anchors), earthworks (cut, fill, viaduct, tunnel by class thresholds)
+- [x] Plan fitting (straights and arcs, hairpins with a shelf pad), profile (slope-limited passes, vertical curves, fixed decks and anchors), earthworks (cut, fill, viaduct, tunnel by class thresholds) (decision 180; hairpin shelves and bridge decks as fixed points still to come)
+  - [x] `alignPiece`: a piece between two anchors on the sphere with its corridor edits (decision 180)
 - [ ] Railways, then major roads, then minor roads; earlier corridors as obstacles and attachment points
 - [ ] Spiral template where a railway cannot meet its grade
 - [ ] Structure records for every crossing, viaduct and tunnel; strategic bridges snapped to rendered rivers (closes the S4 follow-up); each alignment bridge matched to a network bridge on its link, the unmatched counted (under a tenth, decision 163)
