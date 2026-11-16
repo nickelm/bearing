@@ -2895,6 +2895,19 @@ The eroded world's crossing sites, where the alignment snaps bridges (N5), come 
 
 **Reason:** These are the parts every road and railway goes through; building and testing them on ground whose answers are known (a face too steep, a ridge with a gap, a valley too deep to fill) before the world's ground makes failures there legible.
 
+### 181. Spike N5.0: router v2 (the node as state, soft grades, radius-weighted turns); alignment is lazy, near the camera, on the terrain's own tiles
+
+**Date:** 2026-11-16
+**Decision:** `tools/networks.preview.ts` aligned 34 pieces (about 12 km each) of seed 1983's roads and railways (the steepest by relief, and a spread of the rest) over the global grid and over level-6 tiles. It changed the router, and settles where alignment runs.
+
+- **Router v1 failed on real ground.** 22 of 34 pieces routed on the global grid and 19 on tiles, at 0.5 and 1.4 s per km, up to 2.9 million expansions per piece: a state per node, heading and straight run is about a hundred per node, and forbidding any move steeper than the class's grade boxed anchors in among mountain slopes of 30–60%.
+- **Router v2** (`router.ts`). The state is the node alone, which keeps its best parent's heading for the turn cost (Galin et al.); ground steeper than the class's maximum costs 30 × (excess over maximum)² (the cut and fill the profile will need) up to the class's `maxOver` × the maximum (3 for railways and motorways, 2.5 trunk roads, 2 secondary roads, 2.2 mountain roads and tracks: classes without structures must keep near the ground); a turn costs `curveWeight` × the class's minimum radius × its angle² (the arc it needs), so motorways stop zigzagging (8 switchbacks on one piece before, 0–2 now) while mountain roads still switch back; turns over 90° are forbidden except where the radius is below the lattice spacing. The radius is the plan's: `fitPlan` now simplifies the path to ¾ of a lattice spacing (Douglas–Peucker) before rounding its corners, so the lattice's wiggles become bends. Each class falls back to its mountain class (secondary → mountain road, mainline → mountain railway) where it finds no route.
+- **Result** on the same 34 pieces: global grid 32 routed, 16 ms per km, ×1.29 the straight length, 16 switchbacks, 26 km of viaduct and 19 km of tunnel, deepest corridor cut or fill 48 m, 55 corners tighter than their class's radius; level-6 tiles 32 routed, 35 ms per km, ×1.45, 128 switchbacks (19–27 on each steep secondary road taken as a mountain road), 18 km of viaduct and 16 km of tunnel, deepest corridor cut or fill 30 m, 391 tight corners. Tiles take 0.2 s each on lavapipe (39 for the run).
+- **Where alignment runs.** At 16–35 ms per km, a world's 50,000 km of roads and railways would take 15–30 minutes: too slow for generation. It runs lazily, near the camera, on the level-6 tiles the terrain renderer has already cached (about 100 km of network within a view's reach is 2–4 s, on a worker), with pieces anchored so results do not depend on order (decision 161, plan conflict 8; decision 163 accepted lazy alignment). The global grid misses the relief that makes switchbacks, so tiles it is.
+- **Still wrong.** Mountain railways put too much on viaducts (up to 12–18 km in a 21–27 km piece) where a real line would spiral (the template is a TODO); two secondary pieces of one road found no route either way; corners tighter than the radius remain on rough tiles.
+
+**Reason:** The spike was the plan's gate before wiring alignment into the world; it showed the first router could not be used and gave the numbers for the eager-or-lazy choice.
+
 ### 182. G5: dust, grit, snow and spray under the rotor
 
 **Date:** 2026-11-16

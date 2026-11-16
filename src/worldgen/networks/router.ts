@@ -11,12 +11,15 @@
  *   Galin et al.
  * - **Grade** along the move: free up to a quarter of the class's maximum,
  *   then (grade over maximum)² × `gradeWeight`; above the maximum the ground
- *   must be cut or filled, costing `steepWeight` × the excess squared, and
- *   above `maxOver` × the maximum a move is forbidden. On a face steeper than
+ *   must be cut or filled, costing STEEP_WEIGHT × the excess squared, and
+ *   above the class's `maxOver` × the maximum a move is forbidden. On a face steeper than
  *   the maximum the cheapest way up is a zigzag: switchbacks emerge.
- * - **Curvature.** A turn costs its angle² × `curveWeight`; turns sharper than
- *   90° are forbidden unless the class's minimum radius is under the lattice
- *   spacing (hairpins). The radius itself is the plan's business (`fitPlan`).
+ * - **Curvature.** A turn costs `curveWeight` × the class's minimum radius ×
+ *   its angle² (the arc it needs is radius × angle long), so a motorway's
+ *   700 m radius makes zigzags dear and a mountain road's 12 m leaves them
+ *   cheap; turns sharper than 90° are forbidden unless the minimum radius is
+ *   under the lattice spacing (hairpins). The radius itself is the plan's
+ *   business (`fitPlan`).
  * - **Earthworks.** The ground's departure at the move's midpoint from the
  *   straight grade between its ends, as an estimate of cut and fill.
  * - **Extra costs** (river crossings, attractors) come from the caller, as
@@ -35,10 +38,15 @@ export interface RouteClass {
   minRadius: number;
   /** Cost multiplier of a move at the maximum grade, beyond its length. */
   gradeWeight: number;
-  /** Cost per radian² of turn, in lattice spacings. */
+  /** Cost per radian² of turn, in multiples of the minimum radius (m). */
   curveWeight: number;
   /** Cost per meter of the ground's departure from the move's straight grade, per meter of move. */
   earthWeight: number;
+  /**
+   * Steepest ground taken, as a multiple of `maxGrade` (decision 181): classes with
+   * viaducts and tunnels can cut and fill hard; the rest must keep near the ground.
+   */
+  maxOver: number;
 }
 
 export const ROUTE_CLASSES = {
@@ -49,6 +57,7 @@ export const ROUTE_CLASSES = {
     gradeWeight: 4,
     curveWeight: 2,
     earthWeight: 0.15,
+    maxOver: 3,
   },
   mountainRailway: {
     name: 'mountain railway',
@@ -57,6 +66,7 @@ export const ROUTE_CLASSES = {
     gradeWeight: 4,
     curveWeight: 1.5,
     earthWeight: 0.12,
+    maxOver: 3,
   },
   motorway: {
     name: 'motorway',
@@ -65,6 +75,7 @@ export const ROUTE_CLASSES = {
     gradeWeight: 3,
     curveWeight: 2,
     earthWeight: 0.06,
+    maxOver: 3,
   },
   trunk: {
     name: 'trunk road',
@@ -73,6 +84,7 @@ export const ROUTE_CLASSES = {
     gradeWeight: 3,
     curveWeight: 1,
     earthWeight: 0.08,
+    maxOver: 2.5,
   },
   secondary: {
     name: 'secondary road',
@@ -81,6 +93,7 @@ export const ROUTE_CLASSES = {
     gradeWeight: 2,
     curveWeight: 0.5,
     earthWeight: 0.15,
+    maxOver: 2,
   },
   mountainRoad: {
     name: 'mountain road',
@@ -89,6 +102,7 @@ export const ROUTE_CLASSES = {
     gradeWeight: 2,
     curveWeight: 0.2,
     earthWeight: 0.2,
+    maxOver: 2.2,
   },
   track: {
     name: 'track',
@@ -97,6 +111,7 @@ export const ROUTE_CLASSES = {
     gradeWeight: 1.5,
     curveWeight: 0.1,
     earthWeight: 0.3,
+    maxOver: 2.2,
   },
 } satisfies Record<string, RouteClass>;
 
@@ -147,9 +162,8 @@ function gcd(a: number, b: number): number {
 const ANGLE = MOVES.map(([x, y]) => Math.atan2(y, x));
 const LENGTH = MOVES.map(([x, y]) => Math.hypot(x, y));
 
-/** Cost of cut and fill per (excess grade over maximum)², and the largest ground grade taken. */
+/** Cost of cut and fill per (excess grade over maximum)². */
 export const STEEP_WEIGHT = 30;
-export const MAX_OVER = 3;
 
 /** The cheapest path from start to goal, or null if there is none within the budget. */
 export function route(p: RouteProblem): Route | null {
@@ -211,7 +225,7 @@ export function route(p: RouteProblem): Route | null {
       const L = LENGTH[m]! * s;
       const grade = Math.abs(h[next]! - h[node]!) / L;
       const r = grade / cls.maxGrade;
-      if (r > MAX_OVER) continue;
+      if (r > cls.maxOver) continue;
       let turn = 0;
       if (dIn >= 0) {
         turn = Math.abs(ANGLE[m]! - ANGLE[dIn]!);
@@ -225,7 +239,7 @@ export function route(p: RouteProblem): Route | null {
       const earth = Math.abs(mid - 0.5 * (h[node]! + h[next]!));
       let cost =
         L * (1 + cls.gradeWeight * Math.min(q, 1) ** 2 + STEEP_WEIGHT * Math.max(0, r - 1) ** 2) +
-        cls.curveWeight * turn * turn * s +
+        cls.curveWeight * cls.minRadius * turn * turn +
         cls.earthWeight * earth * L;
       if (p.extra) cost += p.extra(x0, y0, x1, y1);
       const ng = Math.fround(g[node]! + cost);

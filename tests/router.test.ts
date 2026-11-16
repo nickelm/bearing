@@ -5,7 +5,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { designProfile, fitPlan } from '../src/worldgen/networks/alignment';
-import { MAX_OVER, MOVES, ROUTE_CLASSES, route } from '../src/worldgen/networks/router';
+import { MOVES, ROUTE_CLASSES, route } from '../src/worldgen/networks/router';
 import type { RouteClass } from '../src/worldgen/networks/router';
 
 type Path = [number, number][];
@@ -60,7 +60,7 @@ describe('the alignment router (decision 180)', () => {
     })!;
     expect(r).not.toBeNull();
     // The ground may be cut and filled (decision 181), but no move climbs straight at the face's 30%.
-    expect(maxGrade(r.path, h)).toBeLessThanOrEqual(MAX_OVER * cls.maxGrade + 1e-9);
+    expect(maxGrade(r.path, h)).toBeLessThanOrEqual(cls.maxOver * cls.maxGrade + 1e-9);
     expect(length(r.path)).toBeGreaterThan(0.8 * (180 / cls.maxGrade));
     // Switchbacks: the eastward component of travel changes sign several times.
     let turns = 0;
@@ -100,7 +100,7 @@ describe('the alignment router (decision 180)', () => {
       cls,
     })!;
     expect(r).not.toBeNull();
-    expect(maxGrade(r.path, h)).toBeLessThanOrEqual(MAX_OVER * cls.maxGrade + 1e-9);
+    expect(maxGrade(r.path, h)).toBeLessThanOrEqual(cls.maxOver * cls.maxGrade + 1e-9);
     // Through the gap: the line passes the ridge's crest well south of the direct route.
     const atCrest = r.path.reduce((best, q) => (Math.abs(q[0]) < Math.abs(best[0]) ? q : best));
     expect(Math.abs(atCrest[1])).toBeLessThan(700);

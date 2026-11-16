@@ -52,23 +52,18 @@ export interface Plan {
   violations: number[];
 }
 
-/** Rounds the corners of `path` with arcs of at least `minRadius` where they fit. */
+/**
+ * Rounds the corners of `path` with arcs of at least `minRadius` where they fit,
+ * after simplifying it to within `tolerance` m (Douglas–Peucker), so the lattice's
+ * small wiggles merge into the bends they make (decision 181).
+ */
 export function fitPlan(
   path: readonly (readonly [number, number])[],
   minRadius: number,
   step: number,
+  tolerance = 0,
 ): Plan {
-  // Merge collinear runs: corners only where the heading changes.
-  const pts: [number, number][] = [[path[0]![0], path[0]![1]]];
-  for (let i = 1; i + 1 < path.length; i++) {
-    const a = pts[pts.length - 1]!;
-    const b = path[i]!;
-    const c = path[i + 1]!;
-    const cross = (b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]);
-    if (Math.abs(cross) > 1e-6) pts.push([b[0], b[1]]);
-  }
-  const last = path[path.length - 1]!;
-  pts.push([last[0], last[1]]);
+  const pts = simplify(path, tolerance);
   // The dense line: straights and arcs.
   const dense: [number, number][] = [pts[0]!];
   const violations: number[] = [];
@@ -132,6 +127,45 @@ export function fitPlan(
     s.push(sk);
   }
   return { points, s, violations };
+}
+
+/** Douglas–Peucker simplification to within `tol` m, keeping both ends; collinear points go at 0. */
+export function simplify(
+  path: readonly (readonly [number, number])[],
+  tol: number,
+): [number, number][] {
+  const n = path.length;
+  if (n <= 2) return path.map((p) => [p[0], p[1]]);
+  const keep = new Uint8Array(n);
+  keep[0] = 1;
+  keep[n - 1] = 1;
+  const stack: [number, number][] = [[0, n - 1]];
+  while (stack.length) {
+    const [a, b] = stack.pop()!;
+    const [ax, ay] = path[a]!;
+    const [bx, by] = path[b]!;
+    const dx = bx - ax;
+    const dy = by - ay;
+    const L = Math.hypot(dx, dy);
+    let worst = -1;
+    let at = -1;
+    for (let i = a + 1; i < b; i++) {
+      const [px, py] = path[i]!;
+      const d =
+        L > 0 ? Math.abs((px - ax) * dy - (py - ay) * dx) / L : Math.hypot(px - ax, py - ay);
+      if (d > worst) {
+        worst = d;
+        at = i;
+      }
+    }
+    if (at >= 0 && worst > Math.max(tol, 1e-6)) {
+      keep[at] = 1;
+      stack.push([a, at], [at, b]);
+    }
+  }
+  const out: [number, number][] = [];
+  for (let i = 0; i < n; i++) if (keep[i]) out.push([path[i]![0], path[i]![1]]);
+  return out;
 }
 
 /**

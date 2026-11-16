@@ -134,7 +134,8 @@ export function alignPiece(
   const path = r.path.slice();
   path[0] = [pa[0], pa[1]];
   path[path.length - 1] = [pb[0], pb[1]];
-  const plan = fitPlan(path, o.cls.minRadius, o.step ?? 10);
+  // Simplified to within ¾ of a lattice spacing before its corners are rounded.
+  const plan = fitPlan(path, o.cls.minRadius, o.step ?? 10, 0.75 * o.spacing);
   const ground = plan.points.map(([x, y]) => h(x, y));
   const design = designProfile(ground, plan.s, o.cls.maxGrade, {
     startZ: o.startZ ?? ground[0],

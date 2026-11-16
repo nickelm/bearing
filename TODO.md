@@ -947,7 +947,9 @@ Rivers by regime, roads and railways aligned to the terrain with earthworks as a
 
 ### N5. Router and alignment
 
-- [ ] Spike N5.0: level-6 tiles along every link's band for seeds 1, 2, 3 and 1983, synthesis time on Dawn; eager after the global pass or lazy per piece
+- [x] Spike N5.0: level-6 tiles along every link's band for seeds 1, 2, 3 and 1983, synthesis time on Dawn; eager after the global pass or lazy per piece (decision 181: router v2; lazy near the camera on the renderer's tiles)
+  - [ ] Why road 2219 of seed 1983 finds no route on either height source
+  - [ ] Fewer corners tighter than their radius on rough tiles
 - [ ] Anchors: settlements, junctions, strategic bridges, points every 10–30 km by class, with elevations
 - [x] Router: tangent-plane lattice by class, state (node, heading of 16), Galin's k = 2 neighborhood, long viaduct and tunnel edges; grade, curvature, earthwork, crossing, pass and corridor terms; tests on synthetic slopes (switchbacks on a steep face, a valley detour for a railway) (decision 180: state also counts the straight run; structures from the profile instead of long edges; crossing, pass and corridor terms through the caller's extra cost, not yet used)
 - [ ] Class switches: mountain railway where a piece cannot meet 2%; mountain road for secondary roads in mountains
