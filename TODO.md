@@ -1,8 +1,8 @@
 # TODO
 
-Tech-demo milestones from [docs/design.md](docs/design.md) (revision 8, decisions 72 and 94): a foundation (F), a strategic track (S), a simulation core track (C), a flight view track (V) and integration (I), after a scaffold, then a post-demo piloting track (P, decision 94) and helicopter track (H, decision 149). The design doc's _Milestones_ section maps the old M1–M9 onto these. Each task should take a few hours. Check tasks off as they are completed, and add subtasks as you discover them.
+Tech-demo milestones from [docs/design.md](docs/design.md) (revision 9, decisions 72, 94 and 161): a foundation (F), a strategic track (S), a simulation core track (C), a flight view track (V) and integration (I), after a scaffold, then a post-demo piloting track (P, decision 94) and helicopter track (H, decision 149), and the terrain networks track (N, decision 161). The design doc's _Milestones_ section maps the old M1–M9 onto these. Each task should take a few hours. Check tasks off as they are completed, and add subtasks as you discover them.
 
-Suggested order for the remaining work: S1, V1, S2, V2, the rest of S3 and S4, V3, C2, V4, C3, I1. Visual milestones (all S, V, I, P and H) close only after the acceptance checks in [docs/visual-style.md](docs/visual-style.md) for the views they touch: Part I for the simulation view, Part II for the strategic view.
+Suggested order for the remaining work: S1, V1, S2, V2, the rest of S3 and S4, V3, C2, V4, C3, I1. Visual milestones (all S, V, I, P and H, and N3, N6, N7 and N8) close only after the acceptance checks in [docs/visual-style.md](docs/visual-style.md) for the views they touch: Part I for the simulation view, Part II for the strategic view.
 
 ## Scaffold (done)
 
@@ -271,7 +271,7 @@ Civilian geography (settlements, roads, bridges) joins the strategic graph befor
 
 #### S4 follow-ups (not blocking)
 
-- [ ] Snap bridges to the rendered (eroded) rivers, which can run a few kilometers from the coarse ones (decision 65)
+- [ ] Snap bridges to the rendered (eroded) rivers, which can run a few kilometers from the coarse ones (decision 65); track N's alignment does this (N5, decision 161)
 - [ ] Keep civilian roads off airfields (a road may cross a taxiway; route around airbase footprints or end them at the gate)
 - [ ] Island campaigns can leave the Alliance under 15 airbases (seed 11: 9), since its islands have little flat land; tied to the lopsided island split noted under S3
 - [ ] Tune routes across seeds: seed 1983 numbers 33 motorway and 86 trunk chains, many short pieces between junctions; consider merging through junctions across classes
@@ -424,7 +424,7 @@ Simulation view (needs S1's `render/sim/` split):
 - [x] Memorable landforms (owner request; decision 126): landform masks, a branching erosion filter, alpine crests, glacial troughs and lakes, layered dry rock with buttes and mesas, meanders, deltas, green corridors, falls and skerries; `SPOTS=all` in `tools/render.preview.ts` renders a spot for each
   - [ ] Owner: fly to the spots in the browser (`npx vitest run --config vitest.tools.config.ts tools/spots.preview.ts --silent=false` lists them for seed 1983) and judge each against its Earth reference
   - [ ] Cliffs sharper than the 48 m baked samples stair-step along the mesh grid; a finer baked level near the observer, or vertex jitter (above), would allow sharper cliffs and falls
-  - [ ] Meanders end at every confluence (they taper to zero there); on rivers with many tributaries the bends come in short trains. Carry the phase across confluences of the main stem
+  - [ ] Meanders end at every confluence (they taper to zero there); on rivers with many tributaries the bends come in short trains. Carry the phase across confluences of the main stem (with N2's meander work, decision 161)
   - [ ] Tune the landforms across more seeds (buttes are sparse on seed 1983; skerries need cold, low coasts)
   - [ ] Buttes, terraces and skerries come from tile noise that knows nothing of roads and towns placed by the coarse pass: a road can run into a 320 m butte cliff or a skerry inlet. Suppress the landforms within a few hundred meters of roads and urban extents (as airfield grading does), or let roads cut through
   - [x] Owner review (2026-11-13): archipelagos showed light-blue, raised patches. Two causes (decision 129): lakes spilled over gully-cut ground to the blocky edge of the lake level's reach, and land the tiles raise over global sea or lake cells took the water's biome color. Also asked for lighter shallow water and reefs (decision 129)
@@ -876,6 +876,91 @@ Fixed and turreted weapons, gunner mode from proposal 0002, AI nap-of-the-earth 
 - [ ] Campaign: helicopter missions' jump-in window over their ground phases, handback on the ground (with P1's take control and hand back)
 - [ ] New helicopter types and mission types in the order of battle, with their own decision, since they change every world's cast. Roles (decision 151): Little Bird for close air support and small-unit warfare (troop drops), Cobra as a marine attack helicopter (close air support), Black Hawk, Huey and Mi-8 as troop and cargo transports; whether the transports also fly fire support is open
 - [ ] Checkpoint: owner flies a CAS sortie with pop-up attacks and a troop insertion in the campaign
+
+## Terrain networks track (decision 161)
+
+Rivers by regime, roads and railways aligned to the terrain with earthworks as analytic edits, and a bridge or culvert at every crossing ([docs/proposals/0005-terrain-adaptive-networks.md](docs/proposals/0005-terrain-adaptive-networks.md)); the plan is [docs/plans/terrain-networks.md](docs/plans/terrain-networks.md). The network tier stays on the coarse pass; the alignment tier runs on the eroded world. N1, N2 and N4 can start in any order; N3, N6, N7 and N8 touch rendering and close only after the acceptance checks (Part I, and Part II for the map work). Protect decisions 146, 147 and 155: keep their tests passing and port a test before replacing what it tests.
+
+- [x] Proposal saved, plan, decision 161; design doc, style guide, proposal 0001, `CLAUDE.md` (rule 13) updated
+- [ ] Owner: the plan's open questions (feature branch or `main`; accept seeds changing with the settlement pull; scenery structures as targets; lazy alignment if eager is slow) and the readings in decision 161
+
+### N1. Edit framework
+
+- [ ] `worldgen/edits/`: corridor and pad records, the clamp form for banks (fill 1:1.5, cut 1:1 or 1:2), priority blending, an index by level-7 tile, `TerrainEdits.apply(dir, base)`
+- [ ] Protected channels: inside a river's channel and inner banks, the minimum of the edited and the carved height (distance from the `RiverIndex` segments; no CPU re-run of the carve)
+- [ ] Migrate decision 108's airfield pads; tests that every mesh vertex, `heightAt`, `displaySurfaceAt` and Free Flight's ground are unchanged; the Kestrel lockstep passes unchanged
+- [ ] One function for meshes, trees, buildings, the camera's clearance and the flight model's ground; `SurfaceGrading` becomes its client
+- [ ] Tests per edit type and for the composition order, including a fill corridor across a channel that never raises the channel
+
+### N2. River planform
+
+- [ ] Invariant metrics first, over at least 10 seeds: monotone surface (1 mm), no maxima in the vector bed, the tile walk of decision 146 (2 m), headings mod 45° and short alternating segments (`tests/riverInvariants.test.ts`, extended `tools/rivers.preview.ts`)
+- [ ] Regimes per reach (mountain, lowland meandering, small lowland; braided as stretch) from bed gradient, discharge and floodplain width
+- [ ] Floodplain mask from `valleyFloor` and the height above the river's surface
+- [ ] Meander migration (Howard and Knutson) with resampling, cutoffs within about a width and oxbow polylines; `rng(seed, "meanders")` forked per river; endpoints fixed; caps on iterations and time; fallback to the procedural train
+- [ ] Profiles recomputed on the final planform; carve segments from it
+- [ ] Floodplain edit in the kernel (lowers and smooths, never raises, before the carve)
+- [ ] Distributaries that bifurcate in deltas, with a build-up edit to just above sea level
+- [ ] Sinuosity (lowland 1.5–2.5, mountain 1.0–1.3), wavelength (10–14 widths) and bend radius (2–3 widths) tests; carry the meander phase across confluences (the V1 item below)
+
+### N3. River rendering
+
+- [ ] Oxbows and abandoned channels as standing water at the floodplain's water table (no white water, decision 155)
+- [ ] The bank band on oxbows and distributaries
+- [ ] Map: per-band generalization of river polylines, width exaggeration kept
+- [ ] Spray at knickpoints, if cheap
+- [ ] Acceptance checks: Part I (`mixed`, `beach`, new `oxbow` spot from 2 km), Part II (Region band)
+
+### N4. Crossings and settlements
+
+- [ ] Crossing sites on the coarse rivers and on the eroded rivers: narrow, straight, firm banks, off knickpoints
+- [ ] Settlement pull: a habitability term for coarse crossing sites; worlds without sites unchanged bit for bit (test); `GENERATOR_VERSION` up; tell the owner which seeds' casts changed
+- [ ] Bridges as nodes: road and rail polylines cut at bridges; type on the coarse pass (beam, truss, arch, viaduct, suspension), span, traffic carried, detour if it falls
+- [ ] `names/bridges` (after the river, the nearest town or the feature), `names/lines`, `names/reaches`, `names/sections`, in id order; existing streams unchanged (test)
+
+### N5. Router and alignment
+
+- [ ] Spike N5.0: level-6 tiles along every link's band for seeds 1, 2, 3 and 1983, synthesis time on Dawn; eager after the global pass or lazy per piece
+- [ ] Anchors: settlements, junctions, strategic bridges, points every 10–30 km by class, with elevations
+- [ ] Router: tangent-plane lattice by class, state (node, heading of 16), Galin's k = 2 neighborhood, long viaduct and tunnel edges; grade, curvature, earthwork, crossing, pass and corridor terms; tests on synthetic slopes (switchbacks on a steep face, a valley detour for a railway)
+- [ ] Class switches: mountain railway where a piece cannot meet 2%; mountain road for secondary roads in mountains
+- [ ] Plan fitting (straights and arcs, hairpins with a shelf pad), profile (slope-limited passes, vertical curves, fixed decks and anchors), earthworks (cut, fill, viaduct, tunnel by class thresholds)
+- [ ] Railways, then major roads, then minor roads; earlier corridors as obstacles and attachment points
+- [ ] Spiral template where a railway cannot meet its grade
+- [ ] Structure records for every crossing, viaduct and tunnel; strategic bridges snapped to rendered rivers (closes the S4 follow-up)
+- [ ] Tracks and minor roads as local detail near the camera, `rng(seed, "tracks")` per region
+- [ ] Tests: grades within 0.5 points, radii, every crossing recorded, eager and lazy pieces byte-identical
+
+### N6. Corridors in the terrain
+
+- [ ] Spike N6.0: the error between mesh and edits on the formation at level-10 spacing (24 m)
+- [ ] Corridor edits from the alignments, through N1's function
+- [ ] Segment tables: a third vec4 per corridor segment (design elevations, kind and flags, bank width)
+- [ ] Shading: asphalt or gravel, shoulders, center and edge lines, ballast and rails below about 1 km, lighter fill and darker cut banks; nothing in tunnels or under bridges
+- [ ] Corridor-aware refinement (levels 11–12 within 2 km of the camera) if N6.0 needs it; triangle count in the standard views at most 10% up (`PERF`)
+- [ ] Clearings and canopy lanes follow the aligned corridors
+- [ ] Acceptance checks: Part I checks 1–5 and new spots `switchbacks`, `viaduct`
+
+### N7. Structures and names
+
+- [ ] Bridge kit specs (abutments, piers, beam decks, truss panels, arch ribs, viaduct arches, suspension towers) and tunnel portals within the budgets; silhouettes in the model viewer (check 6)
+- [ ] Assembly per structure record and instancing in `structureLayer.ts`
+- [ ] Map: bridge labels in the Region band, dashed tunnels, aligned routes generalized where they exist
+- [ ] Alignment-tier names from per-piece forks (tunnels, minor bridges, spirals and inclines); names in briefings and mission names
+- [ ] Acceptance checks: Part I (`bridge` spot at 300 m), Part II checks 1, 2, 4, 5 in the Region band and check 3 with the owner
+
+### N8. Verification and report
+
+- [ ] `tools/networks.preview.ts`: every criterion of the proposal over 20 seeds, generation time per stage → `docs/reports/terrain-networks-metrics.md`
+- [ ] Screenshots on lavapipe: oxbows from 2 km, a delta, switchbacks, a viaduct, a bridge at 300 m, the Region band with bridges → `docs/reports/screens/`; the browser smoke test once
+- [ ] `docs/reports/terrain-networks-report.md`: what works, metrics, simplifications, decisions and deviations, known issues, times per stage, next steps
+- [ ] Checkpoint: owner flies low over a river valley with a railway and a mountain road
+
+### Stretch and later
+
+- [ ] Braided channels on steep outwash plains
+- [ ] Canals: level pools, locks as pads with a kit model, numbered ("Lock 7"), aqueducts over rivers
+- [ ] Power lines with pylons on high ground and wire strikes for helicopters, on the corridor framework
 
 ## Known issues
 

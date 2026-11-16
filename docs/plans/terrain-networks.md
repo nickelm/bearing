@@ -1,0 +1,193 @@
+# Plan: Terrain-adaptive networks (track N)
+
+_Drafted 2026-11-16 for [proposal 0005](../proposals/0005-terrain-adaptive-networks.md) (decision 161). The tasks are in `TODO.md` under the terrain networks track; later decisions record what each milestone changes. Where this plan and the proposal differ, the plan says why, and decision 161 lists the readings for the owner to confirm._
+
+## Goal
+
+Rivers, roads and railways that fit the terrain they cross, and terrain that fits them: meanders, oxbows and floodplains on lowland rivers; switchbacks, cuttings, embankments, viaducts and tunnels where the grade demands them; a bridge or culvert at every crossing. The proposal's principle is that these emerge from each feature's design regime. This plan keeps that principle and fits it to three facts of the code: campaign facts come from the CPU coarse pass, the fine terrain exists only as GPU tiles, and rivers already carry a monotone water surface.
+
+## What exists
+
+| Area                        | State                                                                                                                                                                                                                                                                                        | Where                                                                                                            |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| River extraction            | Priority flood and D8 on the eroded 1024² grid; polylines through cell centers, cut at sources, confluences and mouths; width 4·√Q                                                                                                                                                           | `worldgen/drainage.ts`, `rivers.ts` (design step 6)                                                              |
+| River planform              | Two Chaikin passes per polyline, endpoints kept; a procedural meander train on lowland rivers (bed gradient under 0.12%, at least 25 m wide; 11 widths long, 0.32 wavelengths wide, third harmonic, tapered at both ends)                                                                    | `RiverIndex`, `chaikin`, `meander` (decisions 126, 146)                                                          |
+| River profile               | Water surface from the cells drained through, 0.5 m below, smoothed, made non-increasing downstream; upstream first so tributaries end on the main river's surface; a stepped surface of pools and drops on steep reaches                                                                    | `riverProfiles`, `PROFILE_TUNING` (decision 146)                                                                 |
+| Deltas                      | Fans at mouths of rivers at least 140 m wide, seven distributaries, built in the tile kernel                                                                                                                                                                                                 | `DELTA_TUNING`, `tileSynth.ts` (decision 126)                                                                    |
+| Carving                     | In the tile kernel, after coastal noise, deltas, skerries and reefs; per segment, deepest cut wins, never raises; reach 2.5 km                                                                                                                                                               | `carveRivers` in `worldgen/gpu/tileSynth.ts` (decision 146)                                                      |
+| River invariants            | Surfaces never rise along a polyline; tributaries end on the main surface; steps never rise; on the GPU the longest river's water floor rises at most 4 m; the hump walk of 24 rivers (0.23% of channel more than 2 m above the bed upstream)                                                | `tests/landforms.test.ts`, `tests/gpu/tileSynth.test.ts`, `tools/rivers.preview.ts`                              |
+| River drawing               | Exact per-fragment distance over per-tile segment lists (fine lists per level-7 tile, coarse chords per level-4 tile); legibility widening; true-width reflection; bank band (72%, an eighth of the width, at true width only); white water from an encoded gradient; none on standing water | `render/common/water/riverTables.ts`, `riverShading.ts` (decisions 54, 120, 147, 155)                            |
+| Marshes, bars               | Tile covers from a water table near rivers, lakes and low coasts; sand and gravel bars                                                                                                                                                                                                       | `TileCover.Marsh`, `TileCover.Gravel` (decisions 146, 147)                                                       |
+| Map rivers                  | Two tables by band (major ≥ 60 m in 25 km chords, regional ≥ 15 m in 3 km chords); lines by discharge, at least 1 px; wide rivers as water                                                                                                                                                   | `render/strategic/mapRivers.ts` (decision 84)                                                                    |
+| Settlements                 | Coarse pass (256², about 6 km cells, CPU); habitability already rewards rivers and confluences                                                                                                                                                                                               | `worldgen/strategic/settlements.ts` (decisions 65, 66)                                                           |
+| Roads                       | A* over the coarse grid's 8-neighbors with movement cost; reuse discount; bridge cost; gravity-model classes (motorway, trunk, secondary); spur roads after casting                                                                                                                          | `worldgen/strategic/roads.ts`, `infrastructure.ts` (decisions 65, 71, 103)                                       |
+| Railways                    | Same search over `railCost`, after roads; stations, yards, rail bridges                                                                                                                                                                                                                      | `worldgen/strategic/railways.ts` (decision 103)                                                                  |
+| Bridges                     | Coarse cells where a road or railway crosses a coarse river at least 25 m wide; targetable; `BridgeList` with the polyline carried                                                                                                                                                           | `graph.ts`, `movement.ts`                                                                                        |
+| Road drawing                | Coarse polylines smoothed like rivers, in the river machinery's segment lists; concrete by negative width; no earthworks, no bridge geometry                                                                                                                                                 | `render/sim/infra/infraScene.ts`, `roadShading.ts` (decision 65)                                                 |
+| Grading                     | Flat pads with a smootherstep margin, a pure function of direction and the ungraded height; applied after the render detail in `surfaceSampler`, in `heightAt`, and by Free Flight's ground                                                                                                  | `render/common/terrain/grading.ts`, `render/sim/infra/airfieldGrading.ts`, `freeflight/ground.ts` (decision 108) |
+| Terrain heights             | Level-7 tiles at 48 m from the GPU kernel; mesh levels 8–10 add CPU render detail; level-10 vertices 24 m apart; the CPU global grid (1.5 km) as fallback                                                                                                                                    | `tileSynth.ts`, `tileMesh.ts`, `terrainRenderer.ts`                                                              |
+| Map roads                   | Ribbons with casing by class, bridge marks, rail ticks, route numbers and pass and coast road names                                                                                                                                                                                          | `render/strategic/infra/infraModel.ts` (decision 104)                                                            |
+| Names                       | `names/features`, `names/settlements`, `names/corridors`, `names/roads`, each its own stream                                                                                                                                                                                                 | `worldgen/names/` (decision 96)                                                                                  |
+| Bridge, tunnel, lock models | None                                                                                                                                                                                                                                                                                         | –                                                                                                                |
+
+Most of the proposal's river work exists in some form. The new parts are the regime split, meander migration with cutoffs and oxbows, the floodplain edit, and making every invariant a metric over many seeds. Roads and railways are the larger change: today they are coarse-grid paths with no grade, no earthworks and no structures.
+
+## Where the proposal meets the code
+
+Each conflict below has a resolution that decision 161 records.
+
+1. **Two river networks and two road worlds.** Campaign facts (settlements, roads, railways, bridges) come from the coarse pass on the CPU, because GPU erosion is not bit-identical across GPUs (decision 65). The rivers the player sees come from the eroded 1024² world, and the fine terrain exists only as GPU tiles. Routing roads with grades on the fine terrain inside the coarse pass is therefore impossible, and the proposal's single generation order cannot hold for both.
+   _Resolution: two tiers._ The **network tier** stays on the coarse pass: which places a road or railway links, its class, its route number, and the strategic bridges. The **alignment tier** runs on the eroded world: where exactly the road runs, its profile, earthworks and structures. The alignment follows each network link between fixed anchors and snaps each strategic bridge to a crossing of the rendered river, which closes the S4 follow-up "snap bridges to the rendered rivers". Campaign logic reads only the network tier (rule 9). The proposal's generation order applies within each tier.
+2. **Settlement pull changes every cast.** Crossing sites exist on almost every world, so pulling settlements toward them moves settlements, then roads, corridors and the cast, on nearly every seed.
+   _Resolution:_ the pull is a habitability term on the coarse pass, from crossing sites on the coarse rivers; `GENERATOR_VERSION` rises, and the change is announced to the owner, whose known seeds will change. Worlds whose coarse rivers offer no crossing site keep their settlements bit for bit (a test).
+3. **Railways before roads.** On the coarse pass roads run first and railways reuse the road search.
+   _Resolution:_ the network tier keeps its order (reordering changes every cast for no visible gain); the alignment tier aligns railways first, then major roads, then minor roads, as the proposal asks, and later classes treat earlier corridors as obstacles or attachment points.
+4. **Where the edits run.** River carving runs in the GPU tile kernel, and grading runs on the CPU after the render detail, so today a pad is applied _after_ the rivers, the opposite of the proposal's rule 3.
+   _Resolution:_ carve, floodplain and build-up stay in the kernel (they belong to the base terrain and need the 48 m samples); corridors and pads run on the CPU after the render detail, as grading does now, because they are narrower than the samples. Rivers stay last by a **protected channel**: inside a river's channel and inner banks (the CPU knows them from the `RiverIndex` segments), the result is the minimum of the edited height and the carved tile height. Carving is not idempotent in its fade band, so the CPU never re-runs the carve; the minimum against the already-carved surface needs only a distance test, and it makes "no embankment dams a river" exact.
+5. **One sampler.** The headless simulation has no tiles; the main thread has them once loaded.
+   _Resolution:_ one edit function, `TerrainEdits.apply(dir, base)`, in `worldgen/edits/` so `sim/` may use it. Its base is whatever height the caller has (the finest loaded tile data on the main thread; the global grid in the worker, as Free Flight's ground already falls back). Mesh vertices, trees, buildings, the camera's clearance, the flight model's ground and later line of sight and ground movement all call it. `SurfaceGrading` becomes a client of it.
+6. **"Per-chunk feature distance field generated on the GPU."** Decision 54 rejected per-tile offset textures in favor of exact per-fragment distance over per-tile segment lists, which already serve rivers and roads.
+   _Resolution:_ the feature field _is_ the segment lists, extended with a kind and a profile per segment. No textures.
+7. **Routing surface.** The global grid misses level-7 relief by 406 m RMS in the highest ranges; level-6 tile heights miss it by 12 m (decision 139). A road aligned on the global grid would cut hundreds of meters.
+   _Resolution:_ the router reads level-6 tile heights (96 m) synthesized by the existing kernel along each link's search band, bilinearly, with the global grid as the fallback in tests. Spike N5.0 measures how many tiles that takes per world and decides whether alignment runs eagerly after the global pass or lazily per piece.
+8. **Order-independent alignment.** A 350 km link is too large for one fine search, and lazy evaluation must not depend on the order in which pieces are asked for.
+   _Resolution:_ each network polyline is cut at fixed **anchors** (settlements, junctions, strategic bridges, and points every 10–30 km by class), whose positions and elevations come from the network tier and the eroded world before any search. A piece's alignment depends only on its anchors, the terrain in its band and the earlier-class corridors in its band, so eager and lazy runs give the same result.
+9. **Spirals do not emerge from a planar search.** A spiral crosses itself at another height; a search over the plane cannot represent that. Horseshoe curves and switchbacks do emerge.
+   _Resolution:_ where a railway piece cannot meet its grade within its detour budget, the aligner inserts a helix from a template (radius from the class, a tunnel or bridge where it crosses itself) and searches again. The proposal's "emerge, not drawn by hand" holds for everything except spirals; decision 161 records the exception.
+10. **"Every crossing has a bridge or culvert record"** versus targets that must be the same on every machine.
+    _Resolution:_ the alignment tier creates a structure record for every crossing and every viaduct and tunnel; only those tied to a network-tier bridge are campaign targets. A network-tier bridge's type (beam, truss, arch, viaduct, suspension) is decided on the coarse pass from the coarse river's width, the class and the coarse relief, so names and briefings agree everywhere ("Oskel Viaduct"); the alignment builds that type. Minor bridges, culverts and tunnels are not targets until a later decision.
+11. **Bridges as nodes.** Today a bridge points at the polyline it carries.
+    _Resolution:_ road and rail polylines are cut at bridges, so each bridge is a node of the network; its record gains type, span, traffic carried and the detour if it falls (shortest path without it).
+12. **No humps** along "any river" at "every sample". The 48 m samples leave ±1–2 m of bilinear noise across a narrower channel (decision 146).
+    _Resolution:_ two checks. On the vector profile (surface and bed), exact: never rises, no local maxima. On the tile surface, decision 146's walk with its 2 m tolerance, over more seeds.
+13. **Surface agreement under 0.5 m.** Level-10 vertices are 24 m apart; a 7 m road on a fill with 1:1.5 banks is not representable at that spacing, and the error at a bank crest is several meters.
+    _Resolution:_ spike N6.0 measures it, then corridor-aware refinement (levels 11–12, 12 and 6 m vertices) for tiles within 2 km of the camera that a corridor crosses, within the 10% triangle allowance. The criterion is measured on the formation (the road surface), where vehicles drive.
+14. **Generator determinism.** "Same seed, same output" holds across machines for the network tier and on one machine for the alignment tier, which depends on GPU erosion (decision 65). New stages draw from new streams; earlier stages' outputs stay byte-identical, except the settlement pull, which is a deliberate change (item 2).
+15. **Names in two tiers.** Names drawn from a stream in order cannot serve lazily built structures.
+    _Resolution:_ network-tier names (bridges, rail lines, river reaches, pass and gorge roads) draw in id order from new streams forked from `names`: `names/bridges`, `names/lines`, `names/reaches`, `names/sections`. Alignment-tier names (tunnels, minor bridges, spirals and inclines) come from `rng(seed, "names").fork("tunnels").fork(pieceKey)` and similar, so the order of building does not matter. `names/roads` and the existing streams are unchanged.
+16. **Branch and pull request.** The owner's session brief asks for a branch `feature/terrain-networks` and a pull request; `CLAUDE.md` says to commit and push to `main` only. An open question for the owner; until answered, sessions follow `CLAUDE.md`.
+
+## Architecture
+
+### Layers
+
+```
+coarse pass (CPU, every machine)       eroded world (GPU global pass + tiles)
+  coarse rivers ─► crossing sites          rendered rivers ─► regimes, migration, oxbows,
+  settlements (pulled)                       floodplains, deltas ─► RiverIndex (kernel edits)
+  roads, railways (network tier)  ──────►  anchors ─► router ─► plan, profile ─► earthworks,
+  strategic bridges (typed, named)           structures (alignment tier) ─► corridor edits,
+                                             feature segments, structure records
+                         TerrainEdits.apply(dir, base): corridors, pads, protected channels
+              ▲ mesh vertices, trees, buildings, camera, flight ground, later LOS and ground movement
+```
+
+New code:
+
+- `src/worldgen/edits/`: edit records (corridor, pad; carve, floodplain and build-up as descriptions of the kernel's work, for the index and the tests), a spatial index by level-7 tile, `TerrainEdits.apply`, the protected-channel minimum. No `three`, no `render`.
+- `src/worldgen/channels/`: regime classification, meander migration, cutoffs and oxbows, the floodplain mask, distributaries. It feeds `RiverIndex`, which keeps profiles, carving segments and its tests.
+- `src/worldgen/networks/`: crossing sites (both tiers), anchors, the router, plan fitting, profiles, earthworks classification, structure records, the spiral template.
+- `src/render/common/models/specs/`: the bridge kit and portals as specs; `render/sim/infra/structureLayer.ts` instances them.
+
+### Edits and the one sampler (N1)
+
+A **corridor** segment carries its centerline endpoints, the design elevation at each end, the formation half-width, and the bank slopes (fill 1:1.5; cut 1:1 in rock, 1:2 in soil by biome and glaciation). Outside the formation the ground is clamped between the fill slope below and the cut slope above, `h' = clamp(h, z − (d − w)/s_fill, z + (d − w)/s_cut)`, with a small fillet at the toe and crest, so a corridor is a single closed-form function with no case split between cut and fill. A **pad** is decision 108's rectangle. Overlaps blend by priority (pad over corridor, then class). Tunnel and bridge segments carry no edit. Then, inside every protected channel, `min(edited, carved tile height)`.
+
+The index lists edits per level-7 tile with their reach, like `SurfaceGrading.forTile`, so tiles without edits build byte-identical meshes. The airfield pads migrate first, with a test that every mesh vertex and the flight model's ground are unchanged.
+
+### Rivers (N2, N3)
+
+- **Regimes.** Per reach, from the profile's bed gradient, the discharge and the floodplain width: mountain (steep or confined: nearly straight, the current Chaikin line), lowland meandering (large rivers on wide floodplains: migration), small lowland (the current procedural train, amplitude scaled by flatness and available width), and later braided.
+- **Floodplain mask** from the eroded grid's `valleyFloor` map and the height above the river's surface: the band where the ground lies within a few meters of the surface between the valley walls.
+- **Migration** (Howard and Knutson 1984). Nodes at about half a width; lateral velocity from upstream-weighted curvature; resampling; cutoff when two non-adjacent nodes come within about a width; the cut loop becomes an oxbow polyline with a standing-water flag. The mask confines it; the endpoints stay fixed, so confluences and mouths do not move. Iterations run until sinuosity reaches its target band or a cap; the result is a pure function of the seed (`rng(seed, "meanders")`, forked per river).
+- **Profiles** are recomputed on the final planform with `riverProfiles` as now.
+- **Floodplain edit** in the kernel: lowers and smooths toward the floodplain surface, never raises, applied before the carve. Oxbows sit on it as standing water at the floodplain's water table, drawn through the lake machinery or as standing segments (decision 155 keeps white water off them).
+- **Deltas** keep decision 126's fans, with distributaries that bifurcate from the network itself and a build-up edit to just above sea level; marsh covers from decision 146.
+- **Knickpoints** are where the stepped surface drops; they already foam (decision 147). Spray is optional.
+- **Map.** Each band's table simplifies its polylines (Visvalingam to a tolerance of a fraction of a pixel at the band's scale) and keeps the existing width exaggeration, so major meanders stay legible.
+
+### Crossing sites (N4)
+
+Scored per river reach on both tiers: narrow, straight (low curvature over three widths), firm banks (slope and no marsh or floodplain cover), and not on a knickpoint. On the coarse pass they feed habitability and the road search's bridge cost; on the eroded world they are where the aligner snaps strategic bridges and prefers new crossings.
+
+### Router and alignment (N5)
+
+- **Search.** A* over a lattice on the piece's local tangent plane, state (node, incoming heading among 16), edges to the 16 directions of Galin et al.'s k = 2 neighborhood, plus long straight edges for viaducts and tunnels. Spacing by class: 50 m for railways and motorways, 25 m for trunk and secondary roads, refined to 12.5 m in a band around mountain pieces for hairpins. The band follows the network polyline, widened by relief, and is up to 15 km for mainline railways in mountains.
+- **Cost** per edge: length × (1 + a steep term in grade over the class's maximum, prohibitive above it) + a curvature term from the heading change over the class's minimum radius + earthwork volume estimated against a constant-grade chord + crossings (bridge cost by span, discounted at crossing sites) + attraction to earlier corridors and to passes (saddles between drainage basins on the global grid).
+- **Class switches.** A railway piece whose required mean grade exceeds 2% within its detour budget takes the mountain railway's parameters; a secondary road in a mountain piece takes the mountain road's. That is how the proposal's mountain classes arise from the network's three road classes and one rail class.
+- **Plan.** Straights and circular arcs no tighter than the class's radius, fitted to the searched path; hairpins at the tight radius with a pad edit for the shelf.
+- **Profile.** Forward and backward slope-limited passes against the terrain (the river profile's running minimum, generalized to a grade bound in both directions), then parabolic vertical curves at grade breaks. Fixed points: anchors, junctions, bridge decks (water surface plus clearance by class).
+- **Earthworks.** Cut and fill from design minus terrain; segments past the class thresholds become viaducts or tunnels; then corridor edit records.
+- **Minor roads and tracks.** Local detail, not network facts: tracks into forests and fields and minor roads up valleys, generated per level-4 region near the camera from `rng(seed, "tracks")` forked per region, attached to aligned roads. Last in N5.
+
+### Shading (N3, N6)
+
+Corridor segments join the segment tables with a third vec4: design elevations at both ends, kind and flags (road class, rail, tunnel, bridge), bank width. The terrain shader draws asphalt or gravel, shoulders, center and edge lines below about 1 km (antialiased like the runway markings, fading to their duty cycle), ballast with two rails below about 1 km, and embankment and cutting faces lighter or darker by the sign of the fragment's height minus the design elevation. Tunnels draw nothing between their portals; bridges and viaducts draw nothing on the ground. The bank band extends to oxbows and distributaries.
+
+### Structures (N7)
+
+A kit of model specs (decision 106): abutment, pier (wall and column), beam deck segment, truss panel, arch rib, viaduct arch, suspension tower and cable, portal. A bridge is assembled per record from span, deck elevation, type and class, instanced in `structureLayer.ts` within its range. Budgets: about 300 triangles for a short beam bridge, up to about 1,500 for a long truss or viaduct, 100–200 per portal. Culverts below about 5 m add nothing. The map gets bridge labels in the Region band and dashed tunnels.
+
+## Milestones
+
+Each milestone ends with `npm run check`, its tests and a decision. N3, N6, N7 and N8 touch rendering and close only after Part I's acceptance checks (and Part II's for the map work).
+
+| Milestone                     | Proposal phase | Content                                                                                                                                                                                              | Depends on |
+| ----------------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| N1. Edit framework            | 1              | `worldgen/edits/`, the airfield pads migrated, protected channels, one sampler for meshes, trees, buildings, camera and flight ground; composition tests including a fill across a channel           | –          |
+| N2. River planform            | 2, 3           | Invariant metrics over at least 10 seeds first (vector and tile), then regimes, floodplain mask, migration with cutoffs and oxbows, floodplain edit, distributaries, sinuosity and wavelength checks | –          |
+| N3. River rendering           | 4              | Oxbows as water, bank band on oxbows and distributaries, map generalization, optional spray                                                                                                          | N2         |
+| N4. Crossings and settlements | 5              | Crossing sites on both tiers, settlement pull (generator version), bridges as nodes with type, span, traffic and detour, `names/bridges`                                                             | –          |
+| N5. Router and alignment      | 6              | Spike N5.0; anchors; router; railways, major roads, minor roads; class switches; plan, profile, earthworks, structure records; spirals; tracks                                                       | N1, N2, N4 |
+| N6. Corridors in the terrain  | 7              | Spike N6.0; corridor edits; feature segments and shading; LOD refinement if needed; triangle budget                                                                                                  | N1, N5     |
+| N7. Structures and names      | 8              | Bridge kit and portals, instancing, map symbols, labels and dashed tunnels, all name streams                                                                                                         | N4, N5     |
+| N8. Verification and report   | 9, 10          | Metrics over 20 seeds, screenshots, acceptance checks, documents, the report                                                                                                                         | all        |
+| Stretch                       | –              | Braided channels (N2), canals with locks and aqueducts (after N7), power lines with pylons and wire strikes (later, corridor framework)                                                              | –          |
+
+N1, N2 and N4 are independent and can run in any order. The demo needs none of the track; N1's single sampler is worth having before ground vehicles (C3's entity level) and line of sight (P3).
+
+## Verification
+
+| Criterion          | How it is measured                                                                                                                                                                            | Where                                                                                     |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| River monotonicity | Vector profile at every point, 1 mm, all rivers of 10 (N2) and 20 (N8) seeds                                                                                                                  | `tests/riverInvariants.test.ts` (new), coarse and global passes on the CPU where possible |
+| No humps           | Vector bed: no local maxima; tile surface: decision 146's walk, more than 2 m above the bed upstream under 0.5% of channel length                                                             | same, `tools/rivers.preview.ts`                                                           |
+| No ladders         | Heading histogram of the smoothed polylines mod 45° against uniform (a chi-square bound); no alternating turns on segments under two cells                                                    | same                                                                                      |
+| Sinuosity          | Channel length over the valley axis (the centerline low-passed at five wavelengths) per regime: lowland meandering 1.5–2.5, mountain 1.0–1.3; wavelength 10–14 widths, bend radius 2–3 widths | `tests/meanders.test.ts`, metrics script                                                  |
+| No dams            | For every corridor segment within a protected channel, the edited height never exceeds the carved height (sampled densely)                                                                    | `tests/terrainEdits.test.ts`                                                              |
+| Crossings          | Every intersection of an aligned centerline with a river polyline has a structure record                                                                                                      | `tests/alignment.test.ts`, metrics                                                        |
+| Grades, radii      | Final profiles within 0.5 percentage points of the class's maximum; arcs no tighter than its radius                                                                                           | same                                                                                      |
+| Switchbacks        | At least one piece with three or more hairpins per mountainous seed                                                                                                                           | metrics                                                                                   |
+| Surface agreement  | Mesh vertices and midpoints against `TerrainEdits.apply` on the formation within 2 km of the camera                                                                                           | `tests/gpu/` or the render preview's `PERF` path                                          |
+| Triangle budget    | `PERF=n` in the standard views at `W=1408 H=792 DETAIL=1`, before and after                                                                                                                   | `tools/render.preview.ts`                                                                 |
+| Determinism        | Network tier stage by stage (`firstDifference`) with and without the new stages; alignment twice on one machine; eager and lazy orders give byte-identical pieces                             | existing determinism tests, new ones                                                      |
+| Generation time    | Per stage, printed by the metrics script and the Campaign GUI folder; total at most twice today's                                                                                             | `tools/networks.preview.ts` (new) → `docs/reports/terrain-networks-metrics.md`            |
+
+Screenshots for the report come from `tools/render.preview.ts` with new spots in `tools/landscapeSpots.ts` (`oxbow` from 2 km, `delta`, `switchbacks`, `viaduct`, `bridge` at 300 m) and `SCENE=strategic` in the Region band, on lavapipe in a cloud session. The browser smoke test runs the app once at the end.
+
+## Risks
+
+- **Routing cost.** Thousands of level-6 tiles per world if eager. Spike N5.0 decides; lazy pieces are the fallback, at the price of the map drawing network-tier roads until a region's pieces exist.
+- **Migration stability.** Howard–Knutson migration can blow up without resampling and a curvature filter. Cap iterations and time per world; fall back to the procedural train per river.
+- **Floodplains and the campaign.** None: floodplains, oxbows and alignments are eroded-world data; the barrier lines read coarse rivers.
+- **Mesh agreement.** If levels 11–12 along corridors exceed the triangle allowance, vertex snapping to the formation's edges is the alternative.
+- **Bridges beside rivers.** A strategic bridge whose coarse river has no rendered counterpart within the snapping radius keeps its position and gets a culvert-sized structure; the metrics count them.
+
+## Session rules
+
+From the owner's session brief, for whoever implements this:
+
+- Read `CLAUDE.md`, `TODO.md`, `docs/design.md`, `docs/visual-style.md`, `docs/decisions.md` and every proposal before writing code.
+- Generation code stays headless in `src/worldgen/`; the edit framework stays usable from `src/sim/`; rendering goes in `src/render/`.
+- Run the type check, lint and tests before every commit; never leave the branch broken; do not break the strategic view, the simulation view or Free Flight. The Kestrel's lockstep test must pass unchanged (the ground query changes only where edits apply, and no lockstep scenario crosses a corridor; check this first).
+- Protect the river decisions: before changing river generation, read the code and tests above and keep them passing; port a test before replacing what it tests.
+- When a phase stalls, ship the simplest version that meets the verification criteria, record the simplification, and move on. Stretch items come last.
+- Unattended sessions take the most reasonable option consistent with the documents, record it in `docs/decisions.md`, and continue.
+- At the end, `docs/reports/terrain-networks-report.md`: what works (with screenshots), the metrics against every criterion, what is simplified or deferred, decisions and deviations, known issues by severity, generation time per stage, and the three most valuable next steps.
+
+## Open questions for the owner
+
+1. **Branch.** A feature branch and a pull request, as the brief asks, or `main`, as `CLAUDE.md` says?
+2. **Seeds change.** The settlement pull changes the cast of nearly every seed. Accept, or keep settlements as they are and nudge only their drawn centers toward crossings in the alignment tier?
+3. **Minor bridges as targets.** Should bridges, viaducts and tunnels that only the alignment tier knows become targets later (which needs a coarse-pass prediction of them), or stay scenery?
+4. **Eager or lazy alignment.** If spike N5.0 shows eager alignment costs more than about 30 s per world, is a map that shows network-tier roads until pieces exist acceptable?

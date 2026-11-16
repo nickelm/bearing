@@ -37,12 +37,19 @@ docs/visual-style.md  visual style guide (source of truth for the look; do not r
 docs/style/references/  reference screenshots: local only, gitignored, never shipped (decision 70)
 docs/proposals/     owner proposals (do not reformat); 0001-two-views.md (decision 72),
                     0002-third-person-flight.md (decision 94), 0003-forests-for-low-flight.md
-                    (decision 148) and 0004-helicopter-flight.md (decision 149) are accepted
-docs/plans/         implementation plans: free-flight.md (decision 134), helicopters.md (track H)
+                    (decision 148), 0004-helicopter-flight.md (decision 149) and
+                    0005-terrain-adaptive-networks.md (decision 161) are accepted
+docs/plans/         implementation plans: free-flight.md (decision 134), helicopters.md (track H),
+                    terrain-networks.md (track N)
 src/core/           units, float64 Vec3d, coordinates, seeded RNG, invented names, the moon's ephemeris. Leaf layer.
 src/worldgen/       planet generation pipeline stages (may use GPU compute); canopy.ts is the canopy height
                     field with its stands (decision 148), shared by the renderer and later the sim
   coarsePass.ts     the design's pipeline at 256² on the CPU; campaignWorld.ts adds the validity retries
+  edits/            (track N, planned) terrain edits: corridors and pads, their index by tile, protected
+                    river channels and TerrainEdits.apply, the one height function (rule 13)
+  channels/         (track N, planned) river regimes, meander migration with oxbows, floodplain mask
+  networks/         (track N, planned) crossing sites, anchors, the router, plans, profiles, earthworks,
+                    structure records: the alignment tier (decision 161)
   strategic/        strategic graph types and builder (settlements, roads, bridges), and infrastructure
                     placed after casting: the only world view campaign logic gets. Road hierarchy,
                     railways and urban extents go here too, and the types of named features (decision 72)
@@ -115,7 +122,7 @@ tests/              Vitest unit tests (node); tests/gpu/ runs WGSL kernels on a 
 tools/              offline previews (npm run maps; terrain/bench *.preview.ts), output in tools/out/;
                     hud/ (pages that draw Free Flight's HUD, cards, session and the software-adapter notice without WebGPU);
                     browser.smoke.mjs runs the built app in Chromium (browser/: launch, page probe, lavapipe shim)
-TODO.md             task list by milestone (F, S, C, V, I tracks, then P and H after the demo; design.md, Milestones)
+TODO.md             task list by milestone (F, S, C, V, I tracks, then P and H after the demo, and N; design.md, Milestones)
 ```
 
 ## Rules
@@ -165,6 +172,11 @@ These are the project conventions. Lint enforces some of them (marked ⚙).
     - AI pilots and the player share one flight director (desired direction and speed → control inputs) and one flight model. The player's input only replaces where the aim point or stick input comes from. Never give the player's aircraft its own physics path or the AI a shortcut around the flight model.
     - Fixed-wing and rotary-wing aircraft share one flight director interface and one airframe interface (decision 149, Proposal 0004). Helicopter physics live in `src/sim/flight/` beside the fixed-wing model, headless and deterministic at the same 120 Hz step. Assists and envelope protection belong to the control layer, never to the physics.
     - Displays show only what the aircraft's sensor model knows, which is the same filtered picture the AI uses, never ground truth.
+13. **Terrain edits and one height function** (decision 161, Proposal 0005).
+    - Every change to the terrain surface beyond the tile kernel's own synthesis (airfield pads, road and rail corridors with their banks, hairpin shelves, rail yards, lock chambers) is an analytic edit, a pure function of direction and the unedited height, applied after the render detail. Edits live in `src/worldgen/edits/`, so `sim/` can use them; until track N's N1 lands, `SurfaceGrading` in `render/common/terrain/grading.ts` is that function and holds the airfield pads.
+    - Everything that asks for the terrain's height (mesh vertices, trees, buildings, the camera's clearance, the flight model's ground, and later line of sight, ground movement and the AI) goes through that one function. Never add an edit's effect to tile data or the global grid yourself.
+    - River channels stay last. Carving, floodplains and delta build-up belong to the tile kernel; no edit may raise the ground inside a river's protected channel, and a road or railway crosses a river on a bridge or culvert, never on terrain.
+    - Roads and railways have two tiers: the network tier (coarse pass, strategic graph) is what campaign logic reads (rule 9); the alignment tier (routes aligned on the eroded world, earthworks, structures) is execution and presentation data only.
 
 ## Fidelity as level of detail
 
@@ -187,7 +199,7 @@ Promotion expands a unit deterministically from its seed and current strength. D
 - Record any architectural decision, or any deviation from `docs/design.md`, in `docs/decisions.md` with the date, the decision and the reason. In the same commit, update whatever `docs/design.md` or `docs/visual-style.md` says on the subject.
 - Run `npm test` and `npm run typecheck` (or `npm run check`) before declaring a task complete.
 - **The Kestrel's flight is pinned bit for bit** by `tests/flightLockstep.test.ts` (decision 154). A change meant to alter it (tuning, a new force) re-records the fixture with `LOCKSTEP_RECORD=1 npx vitest run tests/flightLockstep.test.ts`, once under Node 22 and once under Node 24 (`PATH=/opt/node24/bin:$PATH node node_modules/vitest/vitest.mjs run …` in a cloud session), and says so in its decision. A refactor must pass it unchanged.
-- **Visual milestones close only after the acceptance checks** in `docs/visual-style.md` for the views they touch. A visual milestone is any milestone with rendering, model or UI tasks (all of S1–S4, V1–V4, I1, P1–P5 and H1–H5).
+- **Visual milestones close only after the acceptance checks** in `docs/visual-style.md` for the views they touch. A visual milestone is any milestone with rendering, model or UI tasks (all of S1–S4, V1–V4, I1, P1–P5, H1–H5, and N3 and N6–N8).
   - Simulation view (Part I): checks 1–5 as `tools/render.preview.ts` views; check 6, the silhouette test, in the model viewer once aircraft models exist; checks 7–10 (HUD and camera rig) as scripted sequences from V4 on.
   - Strategic view (Part II): checks 1, 2, 4 and 5 as preview views (4 through simulated color-vision deficiencies); check 3, the ten-second legibility test, with the owner.
   - Read the PNGs next to the reference board in `docs/style/references/` and report to the owner where they match and where they fall short.
