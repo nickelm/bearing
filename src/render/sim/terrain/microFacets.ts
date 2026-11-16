@@ -36,12 +36,15 @@
  * branch (decision 69): it takes none itself.
  */
 import type { Node } from 'three/webgpu';
+import { Vector3 } from 'three/webgpu';
 import {
   abs,
   dot,
   float,
   floor,
+  fract,
   If,
+  length,
   ivec3,
   max,
   mix,
@@ -123,6 +126,36 @@ export const MICRO_OCTAVES: readonly Octave[] = [
 /** Octaves fade in between these many pixels per cell: finer cells would speckle. */
 const VISIBLE_PIXELS = [4, 9] as const;
 
+/**
+ * Headings of furrows and ripples: integer directions on the lattice's plane,
+ * so that rows along them repeat with the wave period (decision 183).
+ */
+const HEADINGS: readonly (readonly [number, number])[] = [
+  [1, 0],
+  [0, 1],
+  [1, 1],
+  [1, -1],
+  [2, 1],
+  [1, 2],
+  [2, -1],
+  [1, -2],
+];
+/** Row spacing (m) and ridge slope of each crop: wheat, fallow (plowed), green crop; pasture has none. */
+const FURROW_SPACING = [0.8, 1.1, 0.7] as const;
+const FURROW_SLOPE = [0.4, 0.6, 0.45] as const;
+/** Sand ripples: spacing (m), the windward slope over the windward share, the lee slope. */
+const RIPPLE_SPACING = 0.9;
+const RIPPLE_WINDWARD = 0.75;
+const RIPPLE_SLOPE = 0.12;
+
+/**
+ * Rows along integer direction `v` with `k` rows per wave period of
+ * `dot(uv, v)`: the phase within a row, 0..1, which repeats with the period.
+ */
+function rows(uv: V2, v: V2, k: F): F {
+  return fract(dot(uv, v).mul(k).div(WAVE_PERIOD)) as F;
+}
+
 /** Glints light between these cosines of the angle between a cell's normal and the half vector (4° to 2°). */
 const GLINT_COS = [0.9976, 0.9994] as const;
 
@@ -144,6 +177,10 @@ export interface MicroInputs {
   dry: F;
   /** Snow cover 0..1. */
   snow: F;
+  /** Farmland 0..1, the field's crop (0 wheat, 1 fallow, 2 green crop, 3 pasture) and a hash for its rows' heading. */
+  farm?: F;
+  crop?: F;
+  heading?: F;
 }
 
 /** What `evaluate` returns. */
@@ -201,6 +238,16 @@ export class MicroFacets {
   readonly glint = uniform(1);
   /** The world's hash seed. */
   readonly seed = uniform(0, 'uint');
+  /** Sand ripples' direction on the plane (integer x, y) and rows per wave period (z). */
+  readonly ripple = uniform(new Vector3(1, 2, 2035));
+
+  /** Sets the world's hash seed and, from it, the prevailing heading of sand ripples. */
+  setSeed(seed: number): void {
+    this.seed.value = seed >>> 0;
+    const [x, y] = HEADINGS[seed % HEADINGS.length]!;
+    const k = Math.round(WAVE_PERIOD / (RIPPLE_SPACING * Math.hypot(x, y)));
+    this.ripple.value.set(x, y, k);
+  }
 
   /** Sets `active` from the camera's height above the ground (m). */
   setCamera(aboveGround: number): void {
@@ -233,6 +280,13 @@ export class MicroFacets {
         const g = vec3(0).toVar();
         const s = float(0).toVar();
         const seen = float(0).toVar();
+        const farm = (i.farm ?? float(0)) as F;
+        const desert = smoothstep(0.6, 0.9, i.dry)
+          .mul(float(1).sub(i.rock))
+          .mul(float(1).sub(farm))
+          .mul(bare);
+        // Rows and ripples carry fields and dunes: the lumps step back there.
+        const calm = float(1).sub(max(farm, desert).mul(0.6));
         MICRO_OCTAVES.forEach((o, k) => {
           const vis = smoothstep(
             VISIBLE_PIXELS[0],
@@ -251,7 +305,8 @@ export class MicroFacets {
             .mul(o.slope[0])
             .add(dry.mul(o.slope[1]))
             .add(i.rock.mul(o.slope[2]))
-            .mul(bare);
+            .mul(bare)
+            .mul(calm);
           const amp = mix(
             grass.mul(o.shade[0]).add(dry.mul(o.shade[1])).add(i.rock.mul(o.shade[2])),
             float(o.shade[3]),
@@ -260,6 +315,64 @@ export class MicroFacets {
           g.addAssign(grad.mul(slope.mul(vis)));
           s.addAssign(value.mul(2).mul(amp).mul(vis));
           seen.assign(max(seen, vis.mul(step(1e-3, slope))));
+        });
+        // Fields: ridged rows along the field's own heading, two faces per row, by crop
+        // (decision 183). Rows along an integer direction repeat with the wave period.
+        If(farm.greaterThan(0.01), () => {
+          const crop = (i.crop ?? float(3)) as F;
+          const index = floor((i.heading ?? float(0)).mul(HEADINGS.length - 0.001));
+          let v = vec2(...HEADINGS[0]!) as V2;
+          for (let h = 1; h < HEADINGS.length; h++) {
+            v = select(index.greaterThanEqual(h), vec2(...HEADINGS[h]!), v) as V2;
+          }
+          const spacing = select(
+            crop.lessThan(0.5),
+            float(FURROW_SPACING[0]),
+            select(crop.lessThan(1.5), float(FURROW_SPACING[1]), float(FURROW_SPACING[2])),
+          );
+          const ridge = select(
+            crop.lessThan(0.5),
+            float(FURROW_SLOPE[0]),
+            select(
+              crop.lessThan(1.5),
+              float(FURROW_SLOPE[1]),
+              select(crop.lessThan(2.5), float(FURROW_SLOPE[2]), float(0)),
+            ),
+          );
+          const len = length(v);
+          const k = floor(float(WAVE_PERIOD).div(spacing.mul(len)).add(0.5));
+          const phase = rows(uv, v, k);
+          const dir = v.div(len);
+          const side = select(phase.lessThan(0.5), float(1), float(-1));
+          const vis = smoothstep(
+            VISIBLE_PIXELS[0],
+            VISIBLE_PIXELS[1],
+            spacing.div(max(i.footprint, 1e-4)),
+          )
+            .mul(near)
+            .mul(farm)
+            .mul(bare);
+          g.addAssign(axisA.mul(dir.x).add(axisB.mul(dir.y)).mul(side.mul(ridge).mul(vis)));
+          seen.assign(max(seen, vis.mul(step(1e-3, ridge))));
+        });
+        // Dunes: asymmetric ripples across the prevailing wind, a long windward face and a
+        // short lee face (decision 183).
+        If(desert.greaterThan(0.01), () => {
+          const v = vec2(this.ripple.x, this.ripple.y) as V2;
+          const len = length(v);
+          const phase = rows(uv, v, this.ripple.z as F);
+          const dir = v.div(len);
+          const lee = (RIPPLE_SLOPE * RIPPLE_WINDWARD) / (1 - RIPPLE_WINDWARD);
+          const slope = select(phase.lessThan(RIPPLE_WINDWARD), float(RIPPLE_SLOPE), float(-lee));
+          const vis = smoothstep(
+            VISIBLE_PIXELS[0],
+            VISIBLE_PIXELS[1],
+            float(RIPPLE_SPACING).div(max(i.footprint, 1e-4)),
+          )
+            .mul(near)
+            .mul(desert);
+          g.addAssign(axisA.mul(dir.x).add(axisB.mul(dir.y)).mul(slope.mul(vis)));
+          seen.assign(max(seen, vis));
         });
         // Tilt the facet by the field's gradient across it.
         const across = g.sub(i.normal.mul(dot(i.normal, g)));

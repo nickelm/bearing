@@ -438,6 +438,9 @@ export class TerrainRenderer {
         rock: ground.rock,
         dry: ground.dry,
         snow,
+        farm: ground.farm,
+        crop: ground.crop,
+        heading: ground.heading,
       });
       const landAlbedo = mix(
         ground.albedo.mul(micro.shade),
@@ -643,7 +646,7 @@ export class TerrainRenderer {
     old.dispose();
     oldShell.dispose();
     this.canopy.seed.value = world ? canopySeed(world.seed) : 0;
-    this.micro.seed.value = (this.canopy.seed.value ^ 0x6d1c_7a05) >>> 0;
+    this.micro.setSeed((this.canopy.seed.value ^ 0x6d1c_7a05) >>> 0);
     // Fields share the canopy's hash and seed, so hedgerows follow them (decision 162).
     this.land.fieldSeed.value = this.canopy.seed.value;
     this.land.radius.value = world?.radius ?? 1e6;

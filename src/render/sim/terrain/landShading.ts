@@ -360,11 +360,22 @@ export class LandShading {
    * toward their mean, so distant faces do not speckle.
    */
   fieldColor(p: V3, moisture: F, footprint: F): V3 {
+    return this.field(p, moisture, footprint).color;
+  }
+
+  /**
+   * The field at wrapped position `p`: its crop color (`fieldColor`), its crop
+   * as an index (0 wheat, 1 fallow, 2 green crop, 3 pasture) and a second hash
+   * in [0, 1] for the heading of its rows (decision 183).
+   */
+  field(p: V3, moisture: F, footprint: F): { color: V3; crop: F; heading: F } {
     // The field at sea-level point p, with the integer hash the CPU's hedgerows share
     // (decision 162): fields are cells of a Voronoi diagram on the sea-level sphere.
     const seed = this.fieldSeed as unknown as Node<'uint'>;
     const cell = fieldCellNode(p, seed);
-    const r = hashBitsNode(cellHashNode(cell, seed.bitXor(uint(SEED_CROP)) as Node<'uint'>), 0);
+    const h = cellHashNode(cell, seed.bitXor(uint(SEED_CROP)) as Node<'uint'>).toVar();
+    const r = hashBitsNode(h as unknown as Node<'uint'>, 0);
+    const heading = hashBitsNode(h as unknown as Node<'uint'>, 10);
     const wheatShare = mix(float(0.45), float(0.2), clamp(moisture.mul(1.5), 0, 1));
     const fallowEnd = wheatShare.add(0.15);
     const greenEnd = fallowEnd.add(0.25);
@@ -381,7 +392,12 @@ export class LandShading {
     const crops = [this.wheat, this.fallow, this.greenCrop, this.pasture] as unknown as V3[];
     const mean = crops[0]!.add(crops[1]!).add(crops[2]!).add(crops[3]!).mul(0.25);
     const blur = smoothstep(FIELD_CELL * 0.5, FIELD_CELL * 3, footprint).mul(0.6);
-    return mix(varied, mean, blur) as V3;
+    const index = select(
+      r.lessThan(wheatShare),
+      float(0),
+      select(r.lessThan(fallowEnd), float(1), select(r.lessThan(greenEnd), float(2), float(3))),
+    );
+    return { color: mix(varied, mean, blur) as V3, crop: index as F, heading: heading as F };
   }
 
   /** Surface temperature (°C) today at a height (m) and direction, from the climate sample. */
@@ -479,7 +495,16 @@ export class LandShading {
    * canopy cover 0..1 (a forest's crowns take no sheen from the rain), and its
    * rock cover and dryness 0..1 (for the micro-facets, decision 168).
    */
-  surface(i: LandInputs): { albedo: V3; snow: F; canopy: F; rock: F; dry: F } {
+  surface(i: LandInputs): {
+    albedo: V3;
+    snow: F;
+    canopy: F;
+    rock: F;
+    dry: F;
+    farm: F;
+    crop: F;
+    heading: F;
+  } {
     // Per face, noise finer than a few facets would only speckle (decision 124).
     const footprint = i.face
       ? (mix(length(fwidth(i.wrapped)), i.face.spacing, this.facets) as F)
@@ -507,6 +532,10 @@ export class LandShading {
     const jitter = (i.face ? i.face.jitter : float(0.5)) as F;
     const steep = length(i.slope);
 
+    // The field's crop and the heading of its rows, for the micro-facets' furrows (decision 183).
+    let farmed: F = float(0);
+    const crop = float(3).toVar();
+    const heading = float(0).toVar();
     // Farmland (decision 127): a patchwork of crop colors on settled, flat lowland,
     // a field per Voronoi cell, faintly shaded per face. Only farmed points pay for
     // the cell search.
@@ -517,9 +546,13 @@ export class LandShading {
       const fieldFootprint = (footprint ?? length(fwidth(i.wrapped))) as F;
       const field = vec3(0).toVar();
       If(farm.greaterThan(0), () => {
-        field.assign(this.fieldColor(i.up.mul(this.radius) as V3, moisture, fieldFootprint));
+        const f = this.field(i.up.mul(this.radius) as V3, moisture, fieldFootprint);
+        field.assign(f.color);
+        crop.assign(f.crop);
+        heading.assign(f.heading);
       });
       a = mix(a, field.mul(mix(vec3(1), shadeMul, 0.35)), farm) as V3;
+      farmed = farm;
     }
 
     // Forest as dark canopy masses with a crisp edge (decision 71): the density
@@ -607,6 +640,9 @@ export class LandShading {
       canopy: cover.mul(this.enabled) as F,
       rock: rock.mul(this.enabled) as F,
       dry: dryRock.mul(this.enabled) as F,
+      farm: farmed.mul(this.enabled) as F,
+      crop: crop as unknown as F,
+      heading: heading as unknown as F,
     };
   }
 }
