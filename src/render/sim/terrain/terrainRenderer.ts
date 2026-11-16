@@ -607,6 +607,9 @@ export class TerrainRenderer {
     old.dispose();
     oldShell.dispose();
     this.canopy.seed.value = world ? canopySeed(world.seed) : 0;
+    // Fields share the canopy's hash and seed, so hedgerows follow them (decision 162).
+    this.land.fieldSeed.value = this.canopy.seed.value;
+    this.land.radius.value = world?.radius ?? 1e6;
     oldHabitability.dispose();
     this.detail = new Noise3(rng(world?.seed ?? 0, 'render-detail'));
     this.data.clear();

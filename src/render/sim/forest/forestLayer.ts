@@ -64,7 +64,15 @@ import { sphereOutsideView } from '../../common/terrain/quadtree';
 import type { CullView } from '../../common/terrain/quadtree';
 import { instanceExtent, instanceSphere } from '../instanceBounds';
 import type { InstanceExtent } from '../instanceBounds';
-import { cubeFaceUvToDirection, directionToCubeFace } from '../../../core/coords';
+import {
+  cubeFaceUvToDirection,
+  directionToCubeFace,
+  projectToCubeFace,
+} from '../../../core/coords';
+import { Biome } from '../../../worldgen/biomes';
+import { FARMABLE_BIOMES } from '../../common/palette';
+import type { InfraScene, RoadStretch } from '../infra/infraScene';
+import { habitabilityAt } from '../../common/habitabilityTexture';
 import { rng } from '../../../core/rng';
 import type { WorldSeed } from '../../../core/rng';
 import {
@@ -80,6 +88,12 @@ import { Vec3d } from '../../../core/vec3d';
 import {
   CANOPY_THRESHOLD,
   canopySeed,
+  cellHash,
+  edgeDraw,
+  fieldAt,
+  hashBits,
+  hedgeShare,
+  regionalTerm,
   coniferShare,
   EDGE_TREES,
   edgeRise,
@@ -114,6 +128,14 @@ export const TREE_SPLIT = 2;
 export const CROWN_SPACING = 8;
 /** Lattice of open-land and fringe trees (m). */
 export const OPEN_SPACING = 18;
+/** Hedgerows (decision 162): lattice (m), half-width of the band along a field boundary (m), share of trees. */
+export const HEDGE_SPACING = 3.5;
+export const HEDGE_HALF_WIDTH = 1.6;
+export const HEDGE_TREES = 0.1;
+/** Tree rows along roads (decision 162): spacing (m) and the share of roads with rows, by class. */
+export const ROW_SPACING = 11;
+export const ROW_SHARE = [0.08, 0.2, 0.3];
+export const SEED_ROW = 0x4ac215;
 /** Level whose mesh surface the trees stand on. */
 const GROUND_LEVEL = 10;
 /** How far around a tree its neighborhood must be closed forest for a crown-only tree (m). */
@@ -179,6 +201,12 @@ export interface TreeContext {
   climate: (d: Readonly<Vec3d>, out: Float32Array) => Float32Array;
   /** Directions where no tree may stand (towns, airfields, roads; decision 65). */
   clear?: (d: Readonly<Vec3d>) => boolean;
+  /** The strategic graph's habitability 0..1 at a direction: hedges grow on farmland (decision 162). */
+  habitability?: (d: Readonly<Vec3d>) => number;
+  /** Road stretches through a level-10 tile (by key string): rows of trees (decision 162). */
+  roads?: (tile: string) => readonly RoadStretch[];
+  /** A fixed share of hedged field boundaries in place of the climate's (previews, the GUI). */
+  hedgeShare?: number;
 }
 
 /** Bilinear forest density (0..1) at fractional sample coordinates of a data tile. */
@@ -270,6 +298,23 @@ export function* treePlacer(
     const [fx, fy] = mapSample(t, data.key, sx, sy);
     return forestAt(data, fx, fy);
   };
+
+  /** The biome at the data sample nearest (sx, sy). */
+  const biomeAt = (sx: number, sy: number): number => {
+    const [fx, fy] = mapSample(t, data.key, sx, sy);
+    const x = Math.min(TILE_TEXELS + TILE_BORDER, Math.max(-TILE_BORDER, Math.round(fx)));
+    const y = Math.min(TILE_TEXELS + TILE_BORDER, Math.max(-TILE_BORDER, Math.round(fy)));
+    return data.material[(y + TILE_BORDER) * TILE_STRIDE + x + TILE_BORDER]! & 0xff;
+  };
+  const scratch = new Vec3d();
+  /** The direction of sample (sx, sy), in a scratch vector. */
+  const scratchDir = (sx: number, sy: number): Vec3d =>
+    cubeFaceUvToDirection(
+      t.face,
+      (t.x * TILE_TEXELS + sx) / size,
+      (t.y * TILE_TEXELS + sy) / size,
+      scratch,
+    );
 
   /** Ground direction and raw height at sample (sx, sy), or null in water, a lake or a clearing. */
   const site = (sx: number, sy: number): number | null => {
@@ -411,14 +456,176 @@ export function* treePlacer(
         continue;
       }
       let kind: TreeKind;
+      const biome = biomeAt(sx, sy);
       if (pick < 0.4) kind = 'tree-shrub';
-      else if (meanT > 18 && moisture < 0.45)
+      // Acacias in savanna only, not before other forest (decision 162).
+      else if (biome === Biome.Savanna)
         kind = pick < 0.95 || f > 0.15 ? 'tree-acacia' : 'tree-dead';
+      else if (meanT > 18 && moisture < 0.3) kind = 'tree-shrub';
       // The cold is all conifer: firs and shrubs, no birch (decision 153).
       else if (conifers > 0.9) kind = 'tree-fir';
       else if (conifers > 0.5) kind = pick < 0.75 ? 'tree-fir' : 'tree-birch';
       else kind = pick < 0.6 ? 'tree-birch' : pick < 0.85 ? 'tree-broadleaf' : 'tree-oak';
       push(kind, 'whole', h, scale, angle, tone * (tropicalShare(meanT) > 0.5 ? -1 : 1));
+    }
+    yield;
+  }
+
+  // Hedgerows (decision 162): along the boundaries of the fields the terrain paints, on a
+  // jittered lattice, in the share of boundaries the climate and the region hedge. Parts
+  // without settled, farmable land or without hedges skip the lattice.
+  const hedgeIndex = (sx: number, sy: number): number => {
+    cubeFaceUvToDirection(
+      t.face,
+      (t.x * TILE_TEXELS + sx) / size,
+      (t.y * TILE_TEXELS + sy) / size,
+      d,
+    );
+    if ((ctx.habitability?.(d) ?? 0) < 0.3) return 0;
+    if (ctx.hedgeShare !== undefined) return ctx.hedgeShare;
+    ctx.climate(d, climate);
+    return hedgeShare(
+      climate[1]!,
+      climate[2]!,
+      climate[0]! -
+        earthElevation(Math.max(0, climate[3]!), climate[3]!, opts.reliefScale) * LAPSE_RATE,
+      0.05,
+      regionalTerm(d.x * R, d.y * R, d.z * R, cSeed),
+    );
+  };
+  const probes = [0.15, 0.5, 0.85].flatMap((u) =>
+    [0.15, 0.5, 0.85].map((v) => hedgeIndex(x0 + u * span, y0 + v * span)),
+  );
+  if (ctx.habitability && Math.max(...probes) > 0) {
+    const hedgeStep = HEDGE_SPACING / sampleM;
+    const hedgeCells = Math.ceil(span / hedgeStep);
+    for (let b = 0; b < hedgeCells; b++) {
+      for (let a = 0; a < hedgeCells; a++) {
+        const jx = r.nextFloat();
+        const jy = r.nextFloat();
+        const pick = r.nextFloat();
+        const size01 = r.nextFloat();
+        const angle = r.range(0, 2 * Math.PI);
+        const tone = r.range(0.88, 1.12);
+        const sx = x0 + (a + jx) * hedgeStep;
+        const sy = y0 + (b + jy) * hedgeStep;
+        if (sx >= x0 + span || sy >= y0 + span) continue;
+        cubeFaceUvToDirection(
+          t.face,
+          (t.x * TILE_TEXELS + sx) / size,
+          (t.y * TILE_TEXELS + sy) / size,
+          d,
+        );
+        const field = fieldAt(d.x * R, d.y * R, d.z * R, cSeed);
+        if (field.edge > HEDGE_HALF_WIDTH) continue;
+        if (density(sx, sy) >= CANOPY_THRESHOLD - 0.1) continue;
+        if (!FARMABLE_BIOMES.has(biomeAt(sx, sy))) continue;
+        const hab = ctx.habitability(d);
+        if (hab < 0.35) continue;
+        const h = site(sx, sy);
+        if (h === null) continue;
+        climateHere(h);
+        // Farmland is flat lowland (decision 127): about 7° and 1.5 km at most.
+        const step1 = 1;
+        const hx = ground(sx + step1, sy, scratchDir(sx + step1, sy));
+        const hy = ground(sx, sy + step1, scratchDir(sx, sy + step1));
+        cubeFaceUvToDirection(
+          t.face,
+          (t.x * TILE_TEXELS + sx) / size,
+          (t.y * TILE_TEXELS + sy) / size,
+          d,
+        );
+        const slope = Math.hypot(hx - h, hy - h) / (step1 * sampleM);
+        if (slope > 0.12) continue;
+        if (earthElevation(h, climate[3]!, opts.reliefScale) > 1500) continue;
+        const share =
+          ctx.hedgeShare ??
+          hedgeShare(
+            climate[1]!,
+            climate[2]!,
+            meanT,
+            slope,
+            regionalTerm(d.x * R, d.y * R, d.z * R, cSeed),
+          );
+        if (edgeDraw(field.cell, field.cell2, cSeed) >= share) continue;
+        const tropical = tropicalShare(meanT);
+        const evergreen = tropical > 0.5 ? -1 : 1;
+        if (pick < HEDGE_TREES) {
+          // A tree standing out of the hedge: oak, broadleaf, birch; firs in the cold.
+          const conifers = coniferShare(meanT);
+          const k = pick / HEDGE_TREES;
+          const kind: TreeKind =
+            conifers > 0.9
+              ? 'tree-fir'
+              : k < 0.5
+                ? 'tree-oak'
+                : k < 0.8
+                  ? 'tree-broadleaf'
+                  : 'tree-birch';
+          push(kind, 'whole', h, 0.6 + 0.4 * size01, angle, tone * evergreen);
+        } else {
+          push('tree-shrub', 'whole', h, 1.2 + 0.5 * size01, angle, tone * evergreen);
+        }
+      }
+      yield;
+    }
+  }
+
+  // Rows of trees along roads (decision 162): a share of roads, on one side or both, just
+  // outside the road's clearing, poplars in temperate land, birches in the cold.
+  for (const st of ctx.roads?.(tileKeyString(t)) ?? []) {
+    const roadHash = cellHash(st.road, 0, 0, cSeed ^ SEED_ROW);
+    if (hashBits(roadHash, 0) >= ROW_SHARE[st.roadClass]!) continue;
+    const length = st.a.distanceTo(st.b) * R;
+    const sides = hashBits(roadHash, 10) < 0.5 ? [1, -1] : [hashBits(roadHash, 10) < 0.75 ? 1 : -1];
+    const first = Math.ceil(st.along / ROW_SPACING);
+    const last = Math.floor((st.along + length) / ROW_SPACING);
+    const ab = st.b.clone().sub(st.a);
+    for (let k = first; k <= last; k++) {
+      const u = (k * ROW_SPACING - st.along) / Math.max(length, 1e-6);
+      const on = st.a
+        .clone()
+        .scale(1 - u)
+        .addScaled(st.b, u)
+        .normalize();
+      const across = on.clone().cross(ab).normalize();
+      for (const side of sides) {
+        const draw = cellHash(st.road, k, side, cSeed ^ SEED_ROW);
+        const p = on
+          .clone()
+          .addScaled(across, (side * (st.clearing + 2.5)) / R)
+          .normalize();
+        const uv = projectToCubeFace(p, t.face);
+        const sx = uv.u * size - t.x * TILE_TEXELS;
+        const sy = uv.v * size - t.y * TILE_TEXELS;
+        if (!(sx >= x0 && sx < x0 + span && sy >= y0 && sy < y0 + span)) continue;
+        if (density(sx, sy) >= CANOPY_THRESHOLD - 0.1) continue;
+        // A few gaps: field gates and lanes.
+        if (hashBits(draw, 0) < 0.08) continue;
+        const h = site(sx, sy);
+        if (h === null) continue;
+        climateHere(h);
+        // No rows in arid land; dry farmland keeps its lines of poplars.
+        if (climate[2]! < 0.12) continue;
+        const tropical = tropicalShare(meanT);
+        const kind: TreeKind =
+          tropical > 0.5 || meanT > 18
+            ? 'tree-broadleaf'
+            : coniferShare(meanT) > 0.6
+              ? 'tree-birch'
+              : hashBits(roadHash, 20) < 0.65
+                ? 'tree-poplar'
+                : 'tree-broadleaf';
+        const scale = 0.9 + 0.25 * hashBits(draw, 10);
+        push(
+          kind,
+          'whole',
+          h,
+          scale,
+          hashBits(draw, 20) * 2 * Math.PI,
+          (0.9 + 0.2 * hashBits(draw, 5)) * (tropical > 0.5 ? -1 : 1),
+        );
+      }
     }
     yield;
   }
@@ -494,6 +701,8 @@ export class ForestLayer {
   readonly nearRange = uniform(600);
   /** Whole trees (edges, fringe, open land) show within this distance (m). */
   readonly edgeRange = uniform(1200);
+  /** A fixed share of hedged field boundaries in place of the climate's, or null (decision 162). */
+  hedgeShareOverride: number | null = null;
   /** Beyond this distance trees take their far model (m). */
   readonly lodDistance = uniform(350);
 
@@ -515,6 +724,8 @@ export class ForestLayer {
   private readonly center = new Vec3d();
   private lastWorld: unknown = null;
   private clearings: ((d: Readonly<Vec3d>) => boolean) | undefined;
+  private habitability: ((d: Readonly<Vec3d>) => number) | undefined;
+  private roads: ((key: string) => readonly RoadStretch[]) | undefined;
   /** The season the parts were last compacted for: phase (years) and temperature offset. */
   private compactedSeason = [NaN, NaN];
 
@@ -624,6 +835,20 @@ export class ForestLayer {
   }
 
   /**
+   * The infrastructure trees follow (decision 162): its clearings, the habitability
+   * that places farmland and its hedgerows, and the roads that carry rows of trees.
+   * Rebuilds the trees.
+   */
+  setInfrastructure(scene: InfraScene | null): void {
+    this.clearings = scene ? (d) => scene.isClear(d) : undefined;
+    this.habitability = scene
+      ? (d) => habitabilityAt(scene.habitability, scene.habitabilityResolution, d)
+      : undefined;
+    this.roads = scene ? (key) => scene.roadsInTile(key) : undefined;
+    this.clear();
+  }
+
+  /**
    * Builds and places the tree tiles around `eye`. With `view`, tiles whose
    * bounding sphere lies outside its frustum are not drawn (decision 131).
    * Call once per frame after the terrain.
@@ -698,6 +923,9 @@ export class ForestLayer {
     const ctx: TreeContext = {
       climate: (dir, out) => this.climate.sampleAt(dir, out),
       clear: this.clearings,
+      habitability: this.habitability,
+      roads: this.roads,
+      hedgeShare: this.hedgeShareOverride ?? undefined,
     };
     for (const [s, { tile: k, part }] of missing) {
       const data = this.terrain.dataTile(treeDataTile(k));

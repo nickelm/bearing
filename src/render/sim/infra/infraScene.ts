@@ -29,6 +29,24 @@ import type { Infrastructure } from '../../../worldgen/strategic/infrastructure'
 
 export type SiteKind = 'town' | 'airbase' | 'industry';
 
+/** Tile level of the road index (the trees' tiles, decision 162). */
+export const ROAD_TILE_LEVEL = 10;
+
+/** A stretch of road for placing tree rows along it (decision 162). */
+export interface RoadStretch {
+  /** Unit directions of its ends. */
+  a: Vec3d;
+  b: Vec3d;
+  /** Half the road's width plus its tree clearing (m): rows stand just outside. */
+  clearing: number;
+  /** The road's index, the same for all its stretches. */
+  road: number;
+  /** Distance (m) along the road to `a`. */
+  along: number;
+  /** Road class (0 motorway, 1 trunk, 2 secondary; spurs are 2). */
+  roadClass: number;
+}
+
 export interface BuiltSite {
   kind: SiteKind;
   /** Unit direction. */
@@ -67,6 +85,8 @@ export function townRadiusToward(site: BuiltSite, d: Readonly<Vec3d>): number {
 }
 
 /** Runway, taxiway and apron dimensions (m). */
+/** Trees stay this far beyond a road's edge (m); rows of trees stand just outside (decision 162). */
+export const ROAD_CLEARING = 8;
 export const RUNWAY_WIDTH = 45;
 export const TAXIWAY_WIDTH = 23;
 export const TAXIWAY_OFFSET = 190;
@@ -152,6 +172,7 @@ export class InfraScene {
   readonly habitability: Uint8Array;
   readonly habitabilityResolution: number;
   private readonly clearings = new Map<string, Clearing[]>();
+  private readonly roadTiles = new Map<string, RoadStretch[]>();
 
   constructor(
     graph: StrategicGraph,
@@ -161,9 +182,12 @@ export class InfraScene {
     this.habitability = graph.habitability;
     this.habitabilityResolution = graph.resolution;
     const segs: number[] = [];
-    const addRoads = (r: RoadNetwork) => {
+    let roadIndex = 0;
+    const addRoads = (r: RoadNetwork, spur: boolean) => {
       for (let k = 0; k < r.count; k++) {
         const w = ROAD_WIDTH[r.roadClass[k]!]!;
+        const road = roadIndex++;
+        let along = 0;
         const pts: number[][] = [];
         for (let p = r.offsets[k]!; p < r.offsets[k + 1]!; p++) {
           pts.push([r.points[p * 3]!, r.points[p * 3 + 1]!, r.points[p * 3 + 2]!, w]);
@@ -173,17 +197,48 @@ export class InfraScene {
           const a = sm[i]!;
           const b = sm[i + 1]!;
           segs.push(a[0]!, a[1]!, a[2]!, b[0]!, b[1]!, b[2]!, w, w);
-          this.clear(
-            new Vec3d(a[0]!, a[1]!, a[2]!),
-            new Vec3d(b[0]!, b[1]!, b[2]!),
-            w / 2 + 8,
-            true,
-          );
+          const va = new Vec3d(a[0]!, a[1]!, a[2]!);
+          const vb = new Vec3d(b[0]!, b[1]!, b[2]!);
+          this.clear(va, vb, w / 2 + ROAD_CLEARING, true);
+          const stretch: RoadStretch = {
+            a: va,
+            b: vb,
+            clearing: w / 2 + ROAD_CLEARING,
+            road,
+            along,
+            roadClass: spur ? 2 : r.roadClass[k]!,
+          };
+          const length = va.distanceTo(vb) * radius;
+          along += length;
+          // The tiles the road and its rows reach: along it, and 40 m to either side, since a
+          // road on a tile's edge has a row in the tile next door.
+          const keys = new Set<string>();
+          const steps = Math.max(1, Math.ceil(length / 300));
+          const across = va.clone().cross(vb.clone().sub(va)).normalize();
+          for (let q = 0; q <= steps; q++) {
+            const d = va
+              .clone()
+              .scale(1 - q / steps)
+              .addScaled(vb, q / steps)
+              .normalize();
+            for (const side of [-1, 0, 1]) {
+              const e = d
+                .clone()
+                .addScaled(across, (side * 40) / radius)
+                .normalize();
+              keys.add(tileKeyString(tileForDirection(e, ROAD_TILE_LEVEL)));
+            }
+          }
+          for (const key of keys) {
+            let l = this.roadTiles.get(key);
+            if (!l) this.roadTiles.set(key, (l = []));
+            l.push(stretch);
+          }
         }
       }
     };
-    addRoads(graph.roads);
-    addRoads(infra.spurs);
+    addRoads(graph.roads, false);
+    addRoads(infra.spurs, true);
 
     const pave = (
       p: Vec3d,
@@ -325,6 +380,11 @@ export class InfraScene {
       if (!l) this.clearings.set(key, (l = []));
       l.push({ a, b, r, paved });
     }
+  }
+
+  /** The road stretches that pass through a level-ROAD_TILE_LEVEL tile (by its key string). */
+  roadsInTile(key: string): readonly RoadStretch[] {
+    return this.roadTiles.get(key) ?? [];
   }
 
   /** True if a unit direction lies in a clearing: no trees; with `pavedOnly`, no buildings. */

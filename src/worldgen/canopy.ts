@@ -135,6 +135,68 @@ export function tropicalShare(meanT: number): number {
  * The stand at point `p` on the sea-level sphere (planet-centered m: the unit
  * direction times the radius), given the conifer and tropical shares there.
  */
+/** The nearest site of a jittered-lattice Voronoi diagram, and how far the boundary is. */
+export interface VoronoiCell {
+  /** The nearest site's lattice cell. */
+  cell: [number, number, number];
+  /** The second-nearest site's lattice cell. */
+  cell2: [number, number, number];
+  /** Distance (m) from the point to the bisector between the two sites: 0 on a boundary. */
+  edge: number;
+}
+
+/**
+ * The cell of point (x, y, z) (m) in a 3D Voronoi diagram with one site per
+ * lattice cell of `size` m, jittered within its cell by `cellHash` (seed
+ * `seed`). Points on the sea-level sphere cut it into irregular polygons. The
+ * TSL twin `voronoiCellNode` finds the same nearest site.
+ */
+export function voronoi(x: number, y: number, z: number, size: number, seed: number): VoronoiCell {
+  const qx = x / size;
+  const qy = y / size;
+  const qz = z / size;
+  const ix = Math.floor(qx);
+  const iy = Math.floor(qy);
+  const iz = Math.floor(qz);
+  const fx = qx - ix;
+  const fy = qy - iy;
+  const fz = qz - iz;
+  let best = Infinity;
+  let second = Infinity;
+  const b = [0, 0, 0, 0, 0, 0];
+  const b2 = [0, 0, 0, 0, 0, 0];
+  for (let dz = -1; dz <= 1; dz++) {
+    for (let dy = -1; dy <= 1; dy++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const h = cellHash(ix + dx, iy + dy, iz + dz, seed);
+        const sx = dx + 0.1 + 0.8 * hashBits(h, 0);
+        const sy = dy + 0.1 + 0.8 * hashBits(h, 10);
+        const sz = dz + 0.1 + 0.8 * hashBits(h, 20);
+        const rx = sx - fx;
+        const ry = sy - fy;
+        const rz = sz - fz;
+        const d = rx * rx + ry * ry + rz * rz;
+        if (d < best) {
+          second = best;
+          b2.splice(0, 6, ...b);
+          best = d;
+          b.splice(0, 6, dx, dy, dz, sx, sy, sz);
+        } else if (d < second) {
+          second = d;
+          b2.splice(0, 6, dx, dy, dz, sx, sy, sz);
+        }
+      }
+    }
+  }
+  // The bisector's distance: (|p − s2|² − |p − s1|²) / (2 |s2 − s1|), in cells, then meters.
+  const gap = Math.hypot(b2[3]! - b[3]!, b2[4]! - b[4]!, b2[5]! - b[5]!);
+  return {
+    cell: [ix + b[0]!, iy + b[1]!, iz + b[2]!],
+    cell2: [ix + b2[0]!, iy + b2[1]!, iz + b2[2]!],
+    edge: ((second - best) / (2 * Math.max(gap, 1e-9))) * size,
+  };
+}
+
 export function standAt(
   x: number,
   y: number,
@@ -143,37 +205,7 @@ export function standAt(
   tropical: number,
   seed: number,
 ): Stand {
-  const qx = x / STAND_CELL;
-  const qy = y / STAND_CELL;
-  const qz = z / STAND_CELL;
-  const ix = Math.floor(qx);
-  const iy = Math.floor(qy);
-  const iz = Math.floor(qz);
-  const fx = qx - ix;
-  const fy = qy - iy;
-  const fz = qz - iz;
-  let best = Infinity;
-  let bx = 0;
-  let by = 0;
-  let bz = 0;
-  for (let dz = -1; dz <= 1; dz++) {
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const h = cellHash(ix + dx, iy + dy, iz + dz, seed ^ SEED_SITE);
-        const rx = dx + 0.1 + 0.8 * hashBits(h, 0) - fx;
-        const ry = dy + 0.1 + 0.8 * hashBits(h, 10) - fy;
-        const rz = dz + 0.1 + 0.8 * hashBits(h, 20) - fz;
-        const d = rx * rx + ry * ry + rz * rz;
-        if (d < best) {
-          best = d;
-          bx = dx;
-          by = dy;
-          bz = dz;
-        }
-      }
-    }
-  }
-  const cell: [number, number, number] = [ix + bx, iy + by, iz + bz];
+  const { cell } = voronoi(x, y, z, STAND_CELL, seed ^ SEED_SITE);
   const h = cellHash(cell[0], cell[1], cell[2], seed ^ SEED_STAND);
   const isConifer = hashBits(h, 0) < conifer ? 1 : 0;
   const age = hashBits(h, 10);
@@ -189,9 +221,14 @@ export function standAt(
 
 /** Canopy lumps: value noise in [-1, 1] with a lattice of LUMP_CELL m. */
 export function canopyLump(x: number, y: number, z: number, seed: number): number {
-  const qx = x / LUMP_CELL;
-  const qy = y / LUMP_CELL;
-  const qz = z / LUMP_CELL;
+  return canopyLumpAt(x, y, z, LUMP_CELL, seed ^ SEED_LUMP);
+}
+
+/** Value noise in [-1, 1] on a lattice of `cell` m, hashed with `seed` as given. */
+export function canopyLumpAt(x: number, y: number, z: number, cell: number, seed: number): number {
+  const qx = x / cell;
+  const qy = y / cell;
+  const qz = z / cell;
   const ix = Math.floor(qx);
   const iy = Math.floor(qy);
   const iz = Math.floor(qz);
@@ -200,7 +237,7 @@ export function canopyLump(x: number, y: number, z: number, seed: number): numbe
   const uy = s(qy - iy);
   const uz = s(qz - iz);
   const at = (dx: number, dy: number, dz: number) =>
-    hashBits(cellHash(ix + dx, iy + dy, iz + dz, seed ^ SEED_LUMP), 0);
+    hashBits(cellHash(ix + dx, iy + dy, iz + dz, seed), 0);
   const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
   const x0 = lerp(lerp(at(0, 0, 0), at(1, 0, 0), ux), lerp(at(0, 1, 0), at(1, 1, 0), ux), uy);
   const x1 = lerp(lerp(at(0, 0, 1), at(1, 0, 1), ux), lerp(at(0, 1, 1), at(1, 1, 1), ux), uy);
@@ -228,4 +265,56 @@ export function canopyHeight(
   if (forest < CANOPY_THRESHOLD) return 0;
   const stand = standAt(x, y, z, coniferShare(meanT), tropicalShare(meanT), seed);
   return standTop(stand, x, y, z, seed) * (EDGE_TREES + (1 - EDGE_TREES) * edgeRise(forest));
+}
+
+// ---- Fields, hedgerows and tree rows (decision 162) ----
+
+/** Field lattice (m): one Voronoi site per cell, so fields are about this wide (decision 127). */
+export const FIELD_CELL = 256;
+export const SEED_FIELD = 0x3f1a77;
+export const SEED_CROP = 0x5b2e19;
+export const SEED_HEDGE = 0x6d40c3;
+export const SEED_REGION = 0x1e9b55;
+
+/** The field (decision 127) at sea-level point p, and how far its boundary is (m). */
+export function fieldAt(x: number, y: number, z: number, seed: number): VoronoiCell {
+  return voronoi(x, y, z, FIELD_CELL, seed ^ SEED_FIELD);
+}
+
+/** A field boundary's draw in [0, 1], the same seen from either field. */
+export function edgeDraw(a: readonly number[], b: readonly number[], seed: number): number {
+  const ha = cellHash(a[0]!, a[1]!, a[2]!, seed ^ SEED_HEDGE);
+  const hb = cellHash(b[0]!, b[1]!, b[2]!, seed ^ SEED_HEDGE);
+  return hashBits(cellHash(ha ^ hb, (ha + hb) | 0, 0, seed ^ SEED_HEDGE), 0);
+}
+
+/** Regions over which field traditions differ (m): the lattice of `regionalTerm`. */
+export const REGION_CELL = 400_000;
+
+/** A smooth regional term in [0, 1] (value noise on a lattice of REGION_CELL m). */
+export function regionalTerm(x: number, y: number, z: number, seed: number): number {
+  return canopyLumpAt(x, y, z, REGION_CELL, seed ^ SEED_REGION) * 0.5 + 0.5;
+}
+
+/**
+ * The share of field boundaries hedged (decisions 148, 162). Hedgerows follow
+ * the climate, not the biome: temperate maritime climates (a seasonal half-range
+ * under about 6.5–11 K, wet: Normandy's is about 6 K) are hedged like bocage, more
+ * on rolling ground, by a regional term so similar climates differ; continental
+ * plains (the Midwest's half-range is about 14 K) keep a few shelterbelts.
+ */
+export function hedgeShare(
+  halfRange: number,
+  moisture: number,
+  meanT: number,
+  slope: number,
+  region: number,
+): number {
+  // Temperate only: tropical climates have small seasonal ranges too (annual mean 4–16 °C).
+  const temperate = smooth(2, 6, meanT) * smooth(18, 14, meanT);
+  const maritime = smooth(11, 6.5, halfRange) * smooth(0.3, 0.55, moisture) * temperate;
+  const rolling = 0.6 + 0.4 * smooth(0.01, 0.06, slope);
+  const bocage = maritime * rolling * smooth(0.4, 0.6, region);
+  const shelterbelts = 0.12 * smooth(10, 13, halfRange) * smooth(0.15, 0.3, moisture);
+  return Math.max(bocage, shelterbelts);
 }

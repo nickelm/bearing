@@ -491,7 +491,9 @@ Simulation view (needs S1's `render/sim/` split):
   - [x] Canopy shell from the terrain tiles: lifted by H, cut at the edge and along roads and towns, stand shades, the understory near the camera; preview views `treeline` (25 m) and `canopy` (100 m) (decision 150)
   - [ ] The shell's edge is notched where its ramp crosses mesh triangles: visible beyond the edge trees' 1.2 km
   - [x] Near trees from the kit on quarters of level-10 tiles: closed-canopy spacing, crowns only inside stands, whole edge trees, per-instance variation, far models beyond 350 m, culling per tree; the clumps of decision 45 retired (decision 150)
-  - [ ] Edge trees and linear features: gallery woods, tree rows along roads, lone trees; hedgerows by climate (seasonal half-range, moisture, relief, a regional term) and shelterbelts on continental plains
+  - [x] Hedgerows by climate along the painted fields and shelterbelts on continental plains; rows of trees along roads; acacias in savanna only (decision 162)
+  - [ ] Gallery woods along rivers and lone landmark trees in open land
+  - [ ] Hedges and rows for the line of sight and the AI's firing positions (with step 7)
   - [ ] Measure on the owner's laptop and tablet; near and edge radii as quality-governor steps (tablet 400 m and 1 km, desktop 1 km and 2 km); aerial perspective per instance or from a froxel volume if the per-vertex march dominates; GPU culling with indirect draws if the CPU re-sort costs show
   - [ ] Owner: fly Free Flight low over forest (seed 1983 near −45.5, −28.0 has a river through dense forest) and judge the look, the stands and the frame rate
   - [ ] Line of sight from H (opaque for any sight line from or to an aircraft) and tree strikes in the ground model (with P3 and P1)

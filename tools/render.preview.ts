@@ -82,6 +82,7 @@ import {
   withLocalTime,
 } from '../src/core/calendar';
 import { cubeFaceUvToDirection, directionToCubeFace, latLonToDirection } from '../src/core/coords';
+import { Biome } from '../src/worldgen/biomes';
 import { moonAge, moonDirection, SYNODIC_MONTH_DAYS } from '../src/core/moon';
 import {
   tileForDirection,
@@ -130,6 +131,11 @@ import type { WeatherPreset } from '../src/sim/weather/presets';
 import { createSimWorld } from '../src/sim/world';
 import { campaignInput } from '../src/sim/command/campaignInput';
 import { findCheckTargets } from './checkViews';
+import { canopySeed, cellHash, hashBits, hedgeShare, regionalTerm } from '../src/worldgen/canopy';
+import { ROW_SHARE, SEED_ROW } from '../src/render/sim/forest/forestLayer';
+import { ROAD_TILE_LEVEL } from '../src/render/sim/infra/infraScene';
+import { habitabilityAt } from '../src/render/common/habitabilityTexture';
+import { earthElevation, LAPSE_RATE } from '../src/worldgen/climate';
 import { findSpots, SPOT_KINDS } from './landscapeSpots';
 import type { LandscapeSpot } from './landscapeSpots';
 
@@ -162,7 +168,9 @@ export interface PreviewView {
     | 'mixed'
     | 'conifer'
     | 'beach'
-    | 'ocean';
+    | 'ocean'
+    | 'hedges'
+    | 'roadrow';
   /**
    * With a target: face this far clockwise of the sun's azimuth (rad; 0 looks into
    * the sun, π puts it behind), standing back from the target along that heading.
@@ -381,6 +389,37 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     observerBack: 600,
     eyeHeight: 55,
     pitch: -10 * DEG,
+    detail: true,
+  },
+  {
+    // 60 m over the farmland whose climate hedges the most field boundaries (decision 162):
+    // hedgerows, tree rows along roads.
+    name: 'hedgerows',
+    dLat: 0,
+    dLon: 0,
+    altitude: 0,
+    tilt: 0,
+    heading: 0,
+    localTime: 15,
+    target: 'hedges',
+    observerBack: 150,
+    eyeHeight: 60,
+    pitch: -14 * DEG,
+    detail: true,
+  },
+  {
+    // 120 m over a rural road with a row of trees (decision 162), looking down at it.
+    name: 'roadrow',
+    dLat: 0,
+    dLon: 0,
+    altitude: 0,
+    tilt: 0,
+    heading: 0,
+    localTime: 15,
+    target: 'roadrow',
+    observerBack: 200,
+    eyeHeight: 120,
+    pitch: -30 * DEG,
     detail: true,
   },
   {
@@ -932,24 +971,43 @@ it('renders preview views', async () => {
     city: sp.cells.length ? new Vec3d(...settlementPoint(sp, biggest)) : null,
     airbase: base ? new Vec3d(...base.point) : null,
     ocean: null,
+    hedges: null,
+    roadrow: null,
   };
-  // Open sea (decision 146): the cell deeper than 150 m nearest the check-5 coast (or
-  // the main continent), away from the ice caps.
+  // Hedgerow country (decision 162): the settled, farmable open cell anywhere whose
+  // climate and region hedge the largest share of field boundaries.
   {
-    const from = checks.beach ?? main;
-    let bestDot = -2;
-    const od = new Vec3d();
-    for (let c = 0; c < global.height.length; c += 2) {
-      if (global.height[c]! > -150) continue;
+    const cseed = canopySeed(params.seed);
+    const hd = new Vec3d();
+    const climate = new Float32Array(4);
+    let best = 0;
+    for (let c = 0; c < global.height.length; c++) {
+      if (global.height[c]! < 20 || !FARMABLE_BIOMES.has(global.finish.biome[c]!)) continue;
+      // Open farmland, not woods.
+      if (global.finish.forest[c]! > 60) continue;
       const face = Math.floor(c / (n * n)) as CubeFace;
-      cubeFaceUvToDirection(face, ((c % n) + 0.5) / n, ((Math.floor(c / n) % n) + 0.5) / n, od);
-      if (Math.abs(od.y) > 0.75) continue;
-      const dot = od.dot(from);
-      if (dot > bestDot) {
-        bestDot = dot;
-        targets.ocean = od.clone();
+      cubeFaceUvToDirection(face, ((c % n) + 0.5) / n, ((Math.floor(c / n) % n) + 0.5) / n, hd);
+      const hab = habitabilityAt(campaign.graph.habitability, campaign.graph.resolution, hd);
+      if (hab < 0.45) continue;
+      scene.climate.sampleAt(hd, climate);
+      const meanT =
+        climate[0]! -
+        earthElevation(Math.max(0, global.height[c]!), climate[3]!, params.reliefScale) *
+          LAPSE_RATE;
+      const R = params.radius;
+      const share = hedgeShare(
+        climate[1]!,
+        climate[2]!,
+        meanT,
+        0.03,
+        regionalTerm(hd.x * R, hd.y * R, hd.z * R, cseed),
+      );
+      if (share * hab > best) {
+        best = share * hab;
+        targets.hedges = hd.clone();
       }
     }
+    console.log(`hedges: best share × habitability ${best.toFixed(2)}`);
   }
   let deepest = 0;
   let nearest = -2;
@@ -1003,6 +1061,59 @@ it('renders preview views', async () => {
       if (!open || !FARMABLE_BIOMES.has(global.finish.biome[g]!)) continue;
       best = infra.habitability[h]!;
       targets.farmland = cellDir.clone();
+    }
+  }
+  // A rural road with a row of trees (decision 162), 4–60 km from the hedgerow target,
+  // the farmland target or the check-1 town: wet, not savanna, away from towns.
+  for (const from of [targets.hedges, targets.farmland, checks.mixed]) {
+    if (!from || targets.roadrow) continue;
+    const cseed = canopySeed(params.seed);
+    const seen = new Set<string>();
+    const rp = campaign.graph.roads.points;
+    for (let p = 0; p < rp.length / 3 && !targets.roadrow; p++) {
+      const pd = new Vec3d(rp[p * 3]!, rp[p * 3 + 1]!, rp[p * 3 + 2]!).normalize();
+      const km = (Math.acos(Math.min(1, pd.dot(from))) * params.radius) / 1000;
+      if (km < 4 || km > 60) continue;
+      const key = tileKeyString(tileForDirection(pd, ROAD_TILE_LEVEL));
+      if (seen.has(key)) continue;
+      seen.add(key);
+      for (const st of infra.roadsInTile(key)) {
+        const h = cellHash(st.road, 0, 0, cseed ^ SEED_ROW);
+        const mid = st.a.clone().add(st.b).normalize();
+        const uvm = directionToCubeFace(mid);
+        const cellm =
+          uvm.face * n * n +
+          Math.min(n - 1, Math.floor(uvm.v * n)) * n +
+          Math.min(n - 1, Math.floor(uvm.u * n));
+        if (
+          hashBits(h, 0) < ROW_SHARE[st.roadClass]! &&
+          scene.climate.sampleAt(mid)[2]! > 0.3 &&
+          global.finish.biome[cellm] !== Biome.Savanna &&
+          global.finish.forest[cellm]! < 40 &&
+          infra.sitesNear(mid, 2000).length === 0
+        ) {
+          targets.roadrow = mid;
+          break;
+        }
+      }
+    }
+  }
+  // Open sea (decision 146): the cell deeper than 150 m nearest the check-5 coast (or
+  // the main continent), away from the ice caps.
+  {
+    const from = checks.beach ?? main;
+    let bestDot = -2;
+    const od = new Vec3d();
+    for (let c = 0; c < global.height.length; c += 2) {
+      if (global.height[c]! > -150) continue;
+      const face = Math.floor(c / (n * n)) as CubeFace;
+      cubeFaceUvToDirection(face, ((c % n) + 0.5) / n, ((Math.floor(c / n) % n) + 0.5) / n, od);
+      if (Math.abs(od.y) > 0.75) continue;
+      const dot = od.dot(from);
+      if (dot > bestDot) {
+        bestDot = dot;
+        targets.ocean = od.clone();
+      }
     }
   }
   // OUT=dir writes the images there instead of tools/out (several sessions rendering at once).
@@ -1092,6 +1203,10 @@ it('renders preview views', async () => {
     // TARGET=<name> moves a targeted view to another target (decision 153).
     const targetName = (process.env.TARGET as typeof view.target | undefined) ?? view.target;
     const target = view.target && targetName ? targets[targetName] : null;
+    if (view.target && !target) {
+      console.log(`${view.name}: no ${targetName} target in this world; skipped`);
+      continue;
+    }
     // Midwinter: about 150 days after the campaign's mid-August start in the main
     // continent's hemisphere, mid-July of the next year in the other.
     const v =
@@ -1276,6 +1391,8 @@ it('renders preview views', async () => {
     scene.terrain.canopy.enabled.value = process.env.SHELL === '0' ? 0 : 1;
     if (process.env.TREE_NEAR) scene.forest.nearRange.value = Number(process.env.TREE_NEAR);
     if (process.env.TREE_EDGE) scene.forest.edgeRange.value = Number(process.env.TREE_EDGE);
+    // HEDGES=x hedges that share of field boundaries wherever there are fields (decision 162).
+    if (process.env.HEDGES) scene.forest.hedgeShareOverride = Number(process.env.HEDGES);
     // DETAIL=1 adds the instanced trees and buildings (off in the strategic view, decision 71).
     // A view's own detail flag turns them on unless DETAIL=0.
     scene.forest.enabled = scene.structures.enabled =

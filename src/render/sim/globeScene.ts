@@ -294,7 +294,7 @@ export class GlobeScene {
    */
   setInfrastructure(scene: InfraScene | null): void {
     this.structures.setScene(scene);
-    this.forest.setClearings(scene ? (d) => scene.isClear(d) : undefined);
+    this.forest.setInfrastructure(scene);
   }
 
   resize(width: number, height: number): void {

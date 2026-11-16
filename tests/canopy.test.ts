@@ -6,6 +6,9 @@ import {
   canopyLump,
   canopySeed,
   cellHash,
+  edgeDraw,
+  fieldAt,
+  hedgeShare,
   CONIFER_T,
   coniferShare,
   EDGE_RISE,
@@ -128,5 +131,33 @@ describe('canopy height field', () => {
     expect(coniferShare(CONIFER_T[0])).toBe(0);
     expect(pineShare(2)).toBe(0);
     expect(pineShare(10)).toBeCloseTo(0.4, 9);
+  });
+
+  it('hedges temperate maritime farmland, not continental plains or the tropics (decision 162)', () => {
+    // Normandy: half-range about 6 K, wet, mean 11 °C, rolling. The Midwest: 14.5 K.
+    expect(hedgeShare(6, 0.7, 11, 0.04, 0.7)).toBeGreaterThan(0.8);
+    expect(hedgeShare(14.5, 0.45, 10, 0.01, 0.7)).toBeLessThanOrEqual(0.12);
+    expect(hedgeShare(14.5, 0.45, 10, 0.01, 0.7)).toBeGreaterThan(0);
+    // The tropics have small seasonal ranges too, and no bocage.
+    expect(hedgeShare(2, 0.8, 26, 0.04, 0.7)).toBe(0);
+    // A region of the same climate with another tradition.
+    expect(hedgeShare(6, 0.7, 11, 0.04, 0.2)).toBe(0);
+  });
+
+  it('finds field boundaries, the same seen from either field (decision 162)', () => {
+    const pts = line(3000, 1);
+    let near = 0;
+    let prev: string | null = null;
+    for (const [x, y, z] of pts) {
+      const f = fieldAt(x, y, z, seed);
+      expect(f.edge).toBeGreaterThanOrEqual(-1e-6);
+      const key = f.cell.join(',');
+      // Where the field changes, the point is on (within a step of) the boundary.
+      if (prev !== null && key !== prev) expect(f.edge).toBeLessThan(1.5);
+      if (f.edge < 1) near++;
+      prev = key;
+      expect(edgeDraw(f.cell, f.cell2, seed)).toBe(edgeDraw(f.cell2, f.cell, seed));
+    }
+    expect(near).toBeGreaterThan(0);
   });
 });

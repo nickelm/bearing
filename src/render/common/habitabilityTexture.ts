@@ -15,6 +15,8 @@ import {
 import type { Node } from 'three/webgpu';
 import { int, texture } from 'three/tsl';
 import { cubeFaceUv } from './climateTexture';
+import { directionToCubeFace } from '../../core/coords';
+import type { Vec3d } from '../../core/vec3d';
 
 type V3 = Node<'vec3'>;
 
@@ -57,4 +59,26 @@ export class HabitabilityTexture {
   dispose(): void {
     this.texture.dispose();
   }
+}
+
+/**
+ * `HabitabilityTexture.sample` on the CPU (decision 162): habitability 0..1 at a
+ * direction, bilinear between cell centers and clamped at face edges as the GPU
+ * filters it. `cells` holds 6 · n² bytes, cell index = face · n² + j · n + i.
+ */
+export function habitabilityAt(cells: Uint8Array, n: number, dir: Readonly<Vec3d>): number {
+  if (cells.length !== 6 * n * n) return 0;
+  const { face, u, v } = directionToCubeFace(dir);
+  const x = Math.min(n - 1, Math.max(0, u * n - 0.5));
+  const y = Math.min(n - 1, Math.max(0, v * n - 0.5));
+  const x0 = Math.min(Math.max(n - 2, 0), Math.floor(x));
+  const y0 = Math.min(Math.max(n - 2, 0), Math.floor(y));
+  const tx = n > 1 ? x - x0 : 0;
+  const ty = n > 1 ? y - y0 : 0;
+  const at = (i: number, j: number) =>
+    cells[face * n * n + Math.min(j, n - 1) * n + Math.min(i, n - 1)]! / 255;
+  return (
+    (at(x0, y0) * (1 - tx) + at(x0 + 1, y0) * tx) * (1 - ty) +
+    (at(x0, y0 + 1) * (1 - tx) + at(x0 + 1, y0 + 1) * tx) * ty
+  );
 }

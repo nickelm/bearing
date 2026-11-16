@@ -12,6 +12,8 @@ import type { Node } from 'three/webgpu';
 import { Fn, float, floor, ivec3, select, smoothstep, uint, vec3, vec4 } from 'three/tsl';
 import {
   CONIFER_T,
+  FIELD_CELL,
+  SEED_FIELD,
   LUMP,
   LUMP_CELL,
   SEED_LUMP,
@@ -64,8 +66,13 @@ const seeded = (seed: U, k: number) => seed.bitXor(uint(k)) as U;
  * The stand at sea-level point `p` given the conifer and tropical shares:
  * vec4(mature height m, conifer 0/1, shade, stand hash's low 24 bits / 2²⁴).
  */
-export const standNode = Fn(([p, conifer, tropical, seed]: [V3, F, F, U]) => {
-  const q = p.div(STAND_CELL);
+/**
+ * `voronoi` of worldgen/canopy.ts: the lattice cell of the nearest site to `p`
+ * (m) in a 3D Voronoi diagram with one jittered site per cell of `size` m.
+ * Inlined: call it inside a `Fn`.
+ */
+export function voronoiCellNode(p: V3, size: number, seed: U): I3 {
+  const q = p.div(size);
   const i = ivec3(floor(q)).toVar();
   const f = q.sub(floor(q)).toVar();
   const best = float(1e9).toVar();
@@ -74,7 +81,7 @@ export const standNode = Fn(([p, conifer, tropical, seed]: [V3, F, F, U]) => {
     for (let dy = -1; dy <= 1; dy++) {
       for (let dx = -1; dx <= 1; dx++) {
         const c = i.add(ivec3(dx, dy, dz));
-        const h = cellHashNode(c as I3, seeded(seed, SEED_SITE));
+        const h = cellHashNode(c as I3, seed);
         const r = vec3(
           float(dx).add(hashBitsNode(h, 0).mul(0.8)).add(0.1),
           float(dy).add(hashBitsNode(h, 10).mul(0.8)).add(0.1),
@@ -86,6 +93,16 @@ export const standNode = Fn(([p, conifer, tropical, seed]: [V3, F, F, U]) => {
       }
     }
   }
+  return cell as unknown as I3;
+}
+
+/** The field's lattice cell at sea-level point `p` (decisions 127, 162), as `fieldAt`. */
+export function fieldCellNode(p: V3, seed: U): I3 {
+  return voronoiCellNode(p, FIELD_CELL, seeded(seed, SEED_FIELD));
+}
+
+export const standNode = Fn(([p, conifer, tropical, seed]: [V3, F, F, U]) => {
+  const cell = voronoiCellNode(p, STAND_CELL, seeded(seed, SEED_SITE));
   const h = cellHashNode(cell as unknown as I3, seeded(seed, SEED_STAND)).toVar();
   const isConifer = select(hashBitsNode(h, 0).lessThan(conifer), float(1), float(0));
   const age = hashBitsNode(h, 10);

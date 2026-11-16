@@ -52,11 +52,13 @@ import {
   smoothstep,
   sin,
   step,
+  uint,
   uniform,
   vec3,
 } from 'three/tsl';
 import { LAPSE_RATE } from '../../../worldgen/climate';
-import { CONIFER_T } from '../../../worldgen/canopy';
+import { CONIFER_T, FIELD_CELL, SEED_CROP } from '../../../worldgen/canopy';
+import { cellHashNode, fieldCellNode, hashBitsNode } from '../../common/canopyNode';
 import { earthElevationNode } from '../../common/seasons';
 import { WAVE_PERIOD } from '../water/waterShading';
 import { WARMEST_PHASE } from '../../common/seasons';
@@ -182,43 +184,8 @@ export function periodicValueNoise(p: V3, cell: number): F {
   return mix(y0, y1, u.z).mul(2).sub(1) as F;
 }
 
-/** Field lattice (m): one Voronoi site per cell, so fields are about this wide (decision 127). */
-export const FIELD_CELL = 256;
-
-/**
- * The Voronoi field containing wrapped position `p`: its site's lattice cell,
- * wrapped like the detail noise, so neighboring fragments of one field agree
- * and the pattern tiles with WAVE_PERIOD. 3D cells cut by the ground read as
- * irregular polygons, some smaller where the ground slices a cell's corner.
- */
-function fieldCell(p: V3): V3 {
-  const period = WAVE_PERIOD / FIELD_CELL;
-  const q = p.div(FIELD_CELL);
-  const i = floor(q);
-  const f = fract(q);
-  const best = float(1e9).toVar();
-  const cell = vec3(0).toVar();
-  for (let dz = -1; dz <= 1; dz++) {
-    for (let dy = -1; dy <= 1; dy++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const d = vec3(dx, dy, dz);
-        const c = i.add(d);
-        const w = c.sub(floor(c.div(period)).mul(period));
-        const h = hash3(w as V3);
-        const site = d.add(
-          vec3(h, fract(h.mul(7.13)), fract(h.mul(13.71)))
-            .mul(0.8)
-            .add(0.1),
-        );
-        const r = site.sub(f);
-        const dist = dot(r, r);
-        cell.assign(select(dist.lessThan(best), w, cell));
-        best.assign(min(best, dist));
-      }
-    }
-  }
-  return cell as unknown as V3;
-}
+/** Field lattice (m), from worldgen/canopy.ts since hedgerows follow the fields (decision 162). */
+export { FIELD_CELL };
 
 export class LandShading {
   /** 1 applies rock, snow, seasons and detail; 0 in debug color modes. */
@@ -258,6 +225,9 @@ export class LandShading {
   readonly greenCrop = uniform(linearHex(0x6e8b3d));
   readonly fallow = uniform(linearHex(0x8a6a45));
   readonly pasture = uniform(linearHex(0x7f944f));
+  /** Planet radius (m) and the world's canopy seed: fields on the sea-level sphere (decision 162). */
+  readonly radius = uniform(1e6);
+  readonly fieldSeed = uniform(0, 'uint');
   /** Ground wetness 0..1 (WeatherState.wetness; the scene copies it each frame). */
   readonly wetness = uniform(0);
   /** Snow sparkle strength (0 = off, 1 = default). */
@@ -390,8 +360,11 @@ export class LandShading {
    * toward their mean, so distant faces do not speckle.
    */
   fieldColor(p: V3, moisture: F, footprint: F): V3 {
-    const cell = fieldCell(p);
-    const r = hash3(cell.add(vec3(3.1, 5.7, 1.3)) as V3);
+    // The field at sea-level point p, with the integer hash the CPU's hedgerows share
+    // (decision 162): fields are cells of a Voronoi diagram on the sea-level sphere.
+    const seed = this.fieldSeed as unknown as Node<'uint'>;
+    const cell = fieldCellNode(p, seed);
+    const r = hashBitsNode(cellHashNode(cell, seed.bitXor(uint(SEED_CROP)) as Node<'uint'>), 0);
     const wheatShare = mix(float(0.45), float(0.2), clamp(moisture.mul(1.5), 0, 1));
     const fallowEnd = wheatShare.add(0.15);
     const greenEnd = fallowEnd.add(0.25);
@@ -543,7 +516,7 @@ export class LandShading {
       const fieldFootprint = (footprint ?? length(fwidth(i.wrapped))) as F;
       const field = vec3(0).toVar();
       If(farm.greaterThan(0), () => {
-        field.assign(this.fieldColor(i.wrapped, moisture, fieldFootprint));
+        field.assign(this.fieldColor(i.up.mul(this.radius) as V3, moisture, fieldFootprint));
       });
       a = mix(a, field.mul(mix(vec3(1), shadeMul, 0.35)), farm) as V3;
     }

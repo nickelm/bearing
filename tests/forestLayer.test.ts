@@ -3,6 +3,7 @@ import { Noise3 } from '../src/core/noise';
 import { rng } from '../src/core/rng';
 import {
   tileKey,
+  tileKeyString,
   tileSampleDirection,
   TILE_BORDER,
   TILE_STRIDE,
@@ -10,6 +11,7 @@ import {
 } from '../src/core/tiles';
 import { PLANET_RADIUS } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
+import { cubeFaceUvToDirection } from '../src/core/coords';
 import {
   INSTANCE_FLOATS,
   placeTrees,
@@ -23,6 +25,7 @@ import { MODEL_SPECS } from '../src/render/common/models/library';
 import {
   CANOPY_THRESHOLD,
   canopySeed,
+  regionalTerm,
   standAt,
   STAND_HEIGHTS,
   LUMP,
@@ -131,8 +134,17 @@ describe('tree placement (decision 148)', () => {
     expect(count(warm, 'tree-fir') + count(warm, 'tree-pine')).toBe(0);
     expect(count(warm, 'tree-oak')).toBeGreaterThan(0);
     expect(count(warm, 'tree-birch')).toBeGreaterThan(0);
-    const savanna = placeTrees(t, data(k7, 0.2), opts, 1, climateOf(24, 0.3));
+    const savanna = placeTrees(t, data(k7, 0.2, Biome.Savanna), opts, 1, climateOf(24, 0.3));
     expect(count(savanna, 'tree-acacia')).toBeGreaterThan(0);
+    // Acacias grow in savanna only (decision 162), not in other dry, warm land.
+    const dryForestLand = placeTrees(
+      t,
+      data(k7, 0.2, Biome.TemperateForest),
+      opts,
+      1,
+      climateOf(24, 0.3),
+    );
+    expect(count(dryForestLand, 'tree-acacia')).toBe(0);
   });
 
   it('stands each forest tree with its top at the canopy height of its stand', () => {
@@ -178,5 +190,64 @@ describe('tree placement (decision 148)', () => {
     );
     expect(count(cold, 'tree-birch') + count(cold, 'tree-pine')).toBe(0);
     expect(count(cold, 'tree-fir')).toBeGreaterThan(0);
+  });
+
+  it('hedges field boundaries by climate: bocage in maritime farmland, none on continental plains (decision 162)', () => {
+    const farm = data(k7, 0.05, Biome.TemperateGrassland);
+    const settled = { habitability: () => 0.6 };
+    // A maritime climate: small seasonal range, wet. Continental: a large range.
+    const maritime = (_d: unknown, out: Float32Array) => (out.set([12, 6, 0.6, 100]), out);
+    const continental = (_d: unknown, out: Float32Array) => (out.set([12, 15, 0.4, 100]), out);
+    // A world whose regional term favors hedges here (it varies over hundreds of km).
+    const c = tileSampleDirection(t, TILE_TEXELS / 2, TILE_TEXELS / 2, new Vec3d()).scale(
+      opts.radius,
+    );
+    const world = Array.from({ length: 400 }, (_, k) => k + 1).find(
+      (w) => regionalTerm(c.x, c.y, c.z, canopySeed(w)) > 0.65,
+    )!;
+    let hedged = 0;
+    let plain = 0;
+    for (let i = 0; i < 2; i++)
+      for (let j = 0; j < 2; j++) {
+        hedged += count(
+          placeTrees(t, farm, opts, world, { climate: maritime, ...settled }, { i, j }),
+          'tree-shrub',
+        );
+        plain += count(
+          placeTrees(t, farm, opts, world, { climate: continental, ...settled }, { i, j }),
+          'tree-shrub',
+        );
+      }
+    expect(hedged).toBeGreaterThan(plain * 3);
+    // Unsettled land has no fields and no hedges.
+    const wild = placeTrees(t, farm, opts, world, { climate: maritime, habitability: () => 0.1 });
+    const open = placeTrees(t, farm, opts, world, { climate: maritime });
+    expect(count(wild)).toBe(count(open));
+  });
+
+  it('lines a share of roads with trees outside their clearing (decision 162)', () => {
+    const k = tileKeyString(t);
+    // A straight road across the part, east–west through its middle row.
+    const size = TILE_TEXELS * (1 << t.level);
+    const at = (sx: number, sy: number) =>
+      cubeFaceUvToDirection(
+        t.face,
+        (t.x * TILE_TEXELS + sx) / size,
+        (t.y * TILE_TEXELS + sy) / size,
+      );
+    const roads = Array.from({ length: 40 }, (_, road) => ({
+      a: at(2, 4 + road * 0.2),
+      b: at(TILE_TEXELS / 2 - 2, 4 + road * 0.2),
+      clearing: 11.5,
+      road,
+      along: 0,
+      roadClass: 2,
+    }));
+    const ctx = { ...climateOf(10), roads: (key: string) => (key === k ? roads : []) };
+    const lined = placeTrees(t, data(k7, 0), opts, 1, ctx);
+    const rows = count(lined);
+    // About 30% of 40 roads, ~370 m each, a tree every 11 m on one or both sides.
+    expect(rows).toBeGreaterThan(100);
+    expect(count(placeTrees(t, data(k7, 0), opts, 1, climateOf(10)))).toBe(0);
   });
 });
