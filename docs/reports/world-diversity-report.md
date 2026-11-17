@@ -127,7 +127,6 @@ The full tables are in [world-diversity-metrics.md](world-diversity-metrics.md);
 - Eroded peaks reach 10.0 km on seed 2, above the proposal's 8–9 km, from young collisions × 1.25 under the shared soft limit.
 - Tundra covers 16.5% of land on the coarse pass (baseline 9.6%), because cold plateaus are tundra below −12 °C. Alpine meadow rose from 5% to 7%.
 - Eroded wetland and mangrove shares were measured before decision 213's fix; the eroded run that would confirm it is still to do.
-
 - Moorland's heather (`#8A6A7A`) covers wide tracts of seed 1's lowland in the `mixed` view and reads pink rather than purple-brown from 5 km. Its share (2.6% of land) is modest, but its color and the acid-rock rule (any granite, sandstone or till that is cool and wet) need tuning against the reference board.
 
 **Minor**
