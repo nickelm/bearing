@@ -14,13 +14,14 @@ import { deserialize } from 'node:v8';
 import { it } from 'vitest';
 import type { StoredWorld } from '../src/worldgen/worldStore';
 import { segmentZones } from '../src/worldgen/zones';
+import { zoneBands } from '../src/render/strategic/labels/labelModel';
 
 it('recomputes zones on cached worlds', () => {
   const dir = join(tmpdir(), 'bearing-tools-worlds');
   const want = process.env.SEEDS?.split(',').map((s) => s.trim());
   const rows = [
-    '| world | zones | 16–63 km | median km | > 63 km | islets left |',
-    '| --- | --- | --- | --- | --- | --- |',
+    '| world | zones | 16–63 km | median km | > 63 km | islets left | theater labels | region labels |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- |',
   ];
   for (const file of readdirSync(dir).sort()) {
     const seed = file.split('-')[0]!;
@@ -40,8 +41,11 @@ it('recomputes zones on cached worlds', () => {
     );
     const d = z.records.map((r) => r.diameter / 1000).sort((a, b) => a - b);
     const inRange = d.filter((x) => x >= 16 && x <= 63).length;
+    // Zone names the map could show per band (decision 220), before collisions.
+    const bands = zoneBands(z.records, 1e6);
+    const inBand = (b: string) => bands.filter((x) => x.includes(b as never)).length;
     rows.push(
-      `| ${file} | ${z.records.length} | ${((100 * inRange) / d.length).toFixed(1)}% | ${d[Math.floor(d.length / 2)]!.toFixed(0)} | ${d.filter((x) => x > 63).length} | ${d.filter((x) => x < 16).length} |`,
+      `| ${file} | ${z.records.length} | ${((100 * inRange) / d.length).toFixed(1)}% | ${d[Math.floor(d.length / 2)]!.toFixed(0)} | ${d.filter((x) => x > 63).length} | ${d.filter((x) => x < 16).length} | ${inBand('theater')} | ${inBand('region')} |`,
     );
   }
   console.log(rows.join('\n'));

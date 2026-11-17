@@ -215,10 +215,10 @@ export class LandShading {
   readonly shadePale = uniform(new Color(1.14, 1.09, 0.97));
   readonly rockColor = uniform(new Color(0.13, 0.12, 0.105));
   /** Dry rock: the cliff-forming sandstones and the slope-forming shales between them (decision 126). */
-  readonly cliffRock = [0xb8693c, 0xc98d58, 0x9c4b2c, 0xd9bb8c, 0xa65a36].map((h) =>
+  readonly cliffRock = [0xb06a3a, 0xc4925c, 0x965532, 0xd6bc8e, 0xa0603a].map((h) =>
     uniform(linearHex(h)),
   );
-  readonly slopeRock = uniform(linearHex(0xa8664a));
+  readonly slopeRock = uniform(linearHex(0xa06a48));
   readonly snowColor = uniform(new Color(0.82, 0.85, 0.9));
   readonly autumnColor = uniform(new Color(0.24, 0.13, 0.04));
   /** Canopy shades from docs/visual-style.md: conifer, temperate broadleaf, rainforest (decision 71). */
@@ -628,7 +628,7 @@ export class LandShading {
     }
     const banded = mix(this.slopeRock, cliff, smoothstep(0.08, 0.2, inLayer));
     // Dry ground below the cliffs takes the rock's tint too: talus and red sand.
-    a = mix(a, a.mul(mix(vec3(1), vec3(1.12, 0.86, 0.72), dryRock.mul(0.6))), dryRock) as V3;
+    a = mix(a, a.mul(mix(vec3(1), vec3(1.08, 0.9, 0.74), dryRock.mul(0.6))), dryRock) as V3;
     a = mix(a, mix(this.rockColor, banded, dryRock).mul(rockTone), rock) as V3;
     // Rain darkens the ground, the rock and the canopy; snow stays as it is.
     a = this.wet(a);

@@ -19,6 +19,11 @@
  *     Its lake stands at the balance level, where evaporation meets inflow,
  *     as a salt lake, or dries to a playa; steps 1–3 run again with the
  *     basin's floor as a sink, so its rivers end there and nothing leaves it.
+ *  6. Small lakes silt up (decision 220), where asked: an open lake of fewer
+ *     than `fillLakesBelow` connected cells is filled to its surface,
+ *     which step 1 has already graded toward the outlet. On the eroded grid such
+ *     lakes are erosion pits a cell or two across; drawn, they were round ponds
+ *     strung along the rivers. The river now crosses a flat floor instead.
  *
  * Memory is lean typed arrays, about 21 bytes per cell plus the heap.
  */
@@ -43,6 +48,8 @@ export interface Drainage {
   basinLevel?: Float32Array;
   /** Closed basins, with climate (decision 210). */
   basins?: ClosedBasin[];
+  /** Cells whose height step 6 raised (decision 220), and their new heights (m); absent without it. */
+  fills?: { cells: Int32Array; heights: Float32Array };
 }
 
 /** Climate maps give rates per 365-day year (mm/yr). */
@@ -133,6 +140,8 @@ export function lakeEvaporation(t: number): number {
  * @param radius planet radius (m)
  * @param climate if given, closed basins keep their water where evaporation
  *   beats inflow (decision 210); without it every depression drains to the sea
+ * @param fillLakesBelow if given, open lakes of fewer cells silt up: `height` is
+ *   raised in place to their surface (step 6, decision 220)
  */
 export function computeDrainage(
   n: number,
@@ -140,6 +149,7 @@ export function computeDrainage(
   runoff: Float32Array,
   radius: number,
   climate?: DrainageClimate,
+  fillLakesBelow = 0,
 ): Drainage {
   const count = 6 * n * n;
   if (height.length !== count || runoff.length !== count) {
@@ -150,7 +160,7 @@ export function computeDrainage(
 
   // 1–3 with every depression open: filled surface, receivers, discharge.
   const open = route(n, height, runoff, cellArea, null);
-  if (!climate) return open.drainage;
+  if (!climate) return withFills(n, height, open, null, fillLakesBelow);
 
   // 4. Water balance per depression; closed basins become sinks, and routing runs again.
   const sink = new Float64Array(count).fill(NaN);
@@ -222,7 +232,13 @@ export function computeDrainage(
   }
   const basinLevel = new Float32Array(count);
   for (let c = 0; c < count; c++) if (basinCell[c]) basinLevel[c] = sink[c]!;
-  if (basins.length === 0) return { ...open.drainage, basinCell, basinLevel, basins };
+  if (basins.length === 0)
+    return {
+      ...withFills(n, height, open, basinCell, fillLakesBelow),
+      basinCell,
+      basinLevel,
+      basins,
+    };
   const closed = route(n, height, runoff, cellArea, sink);
   // Lakes: open depressions as before; closed basins hold water only below their balance.
   const lakeDepth = closed.drainage.lakeDepth;
@@ -231,7 +247,69 @@ export function computeDrainage(
       lakeDepth[c] = Math.max(MIN_LAKE_DEPTH, sink[c]! - height[c]!);
     else if (basinCell[c] === BasinCell.Playa) lakeDepth[c] = 0;
   }
-  return { ...closed.drainage, basinCell, basinLevel, basins };
+  return {
+    ...withFills(n, height, closed, basinCell, fillLakesBelow),
+    basinCell,
+    basinLevel,
+    basins,
+  };
+}
+
+/**
+ * Step 6 (decision 220): fills each open lake (8-connected cells of lake depth) of
+ * fewer than `below` cells to the filled surface, in `height` and the routing's lake depths.
+ * Receivers and discharge stand: they were computed on that surface.
+ */
+function withFills(
+  n: number,
+  height: Float32Array,
+  routed: { drainage: Drainage; filled: Float64Array },
+  basinCell: Uint8Array | null,
+  below: number,
+): Drainage {
+  const d = routed.drainage;
+  if (below <= 0) return d;
+  const count = 6 * n * n;
+  const filled = routed.filled;
+  const lakeDepth = d.lakeDepth;
+  const seen = new Uint8Array(count);
+  const stack = new Int32Array(count);
+  const nb = new Int32Array(8);
+  const members: number[] = [];
+  const cells: number[] = [];
+  const heights: number[] = [];
+  for (let s = 0; s < count; s++) {
+    if (seen[s] || lakeDepth[s]! <= 0) continue;
+    // The lake as drawn: its connected cells of lake depth. A wide shallow hollow can hold
+    // several; each is a pond of its own on the ground, so each is judged by its own size.
+    members.length = 0;
+    let sp = 0;
+    stack[sp++] = s;
+    seen[s] = 1;
+    let lake = 0;
+    let closed = false;
+    while (sp > 0) {
+      const c = stack[--sp]!;
+      members.push(c);
+      if (lakeDepth[c]! > 0) lake++;
+      if (basinCell && basinCell[c]) closed = true;
+      neighbors8(n, c, nb);
+      for (let k = 0; k < 8; k++) {
+        const m = nb[k]!;
+        if (m < 0 || seen[m] || lakeDepth[m]! <= 0) continue;
+        seen[m] = 1;
+        stack[sp++] = m;
+      }
+    }
+    if (closed || lake >= below) continue;
+    for (const c of members) {
+      height[c] = filled[c]!;
+      lakeDepth[c] = 0;
+      cells.push(c);
+      heights.push(height[c]!);
+    }
+  }
+  return { ...d, fills: { cells: Int32Array.from(cells), heights: Float32Array.from(heights) } };
 }
 
 /**

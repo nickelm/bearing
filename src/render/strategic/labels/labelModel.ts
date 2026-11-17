@@ -13,6 +13,7 @@
  * | bay, strait, lake | – | ≥ 0.45 | all |
  * | range | – | all | all |
  * | desert, forest, plateau, plain | – | ≥ 0.55 | all |
+ * | zone (decision 220; replaces desert, forest, plateau, plain, wetland) | – | ≥ 50 km, 250 km apart | ≥ 25 km, 75 km apart |
  * | hills, wetland | – | – | all |
  * | river | – | ≥ 0.5 | all |
  * | peak (with its height) | – | ≥ 0.58 | all |
@@ -87,8 +88,8 @@ export const BAND_TABLE: Record<string, Row> = {
   saltflat: { theater: 0.5, region: 0 },
   // Natural wonders the cast selected (decision 214), from the Theater band.
   wonder: { theater: 0, region: 0 },
-  // Zones (decision 213): those over about 40 km from the Theater band, all in the Region band.
-  zone: { theater: 0.65, region: 0 },
+  // Zones (decisions 213, 220): importance from size (zoneImportance), thinned by ZONE_SPACING.
+  zone: { theater: 0.54, region: 0.33 },
   river: { theater: 0.5, region: 0 },
   peak: { theater: 0.58, region: 0 },
   capital: { theater: 0, region: 0 },
@@ -109,6 +110,51 @@ const BANDS: readonly ZoomBand[] = ['globe', 'theater', 'region'];
 export function bandsFor(cls: string, importance: number): ZoomBand[] {
   const row = BAND_TABLE[cls] ?? {};
   return BANDS.filter((b) => row[b] !== undefined && importance >= row[b]!);
+}
+
+/**
+ * A zone's label importance from its size (decision 220): 0.25 at 16 km to 0.65 at
+ * 63 km and above, below cities, ranges and named peaks of the same rank, so area
+ * names give way to the places pilots navigate by. The band rows above admit zones
+ * of about 50 km to the Theater band and 25 km to the Region band.
+ */
+export function zoneImportance(diameter: number): number {
+  return 0.25 + 0.4 * Math.min(1, Math.max(0, (diameter - 16_000) / 47_000));
+}
+
+/**
+ * Least distance (m) between the anchors of two zone labels in a band (decision 220):
+ * the larger zone keeps the name, so a band shows at most one zone name per such
+ * stretch however finely the land is divided.
+ */
+export const ZONE_SPACING: Partial<Record<ZoomBand, number>> = {
+  theater: 250_000,
+  region: 75_000,
+};
+
+/** Bands per zone after the size rows and the spacing, largest zones first. */
+export function zoneBands(zones: readonly ZoneRecord[], radius: number): ZoomBand[][] {
+  const out: ZoomBand[][] = zones.map((z) => bandsFor('zone', zoneImportance(z.diameter)));
+  const order = zones
+    .map((_, i) => i)
+    .sort((a, b) => zones[b]!.diameter - zones[a]!.diameter || a - b);
+  for (const band of BANDS) {
+    const gap = ZONE_SPACING[band];
+    if (gap === undefined) continue;
+    const minDot = Math.cos(gap / radius);
+    const kept: number[] = [];
+    for (const i of order) {
+      if (!out[i]!.includes(band)) continue;
+      const a = zones[i]!.anchor;
+      const close = kept.some((k) => {
+        const b = zones[k]!.anchor;
+        return a[0] * b[0] + a[1] * b[1] + a[2] * b[2] > minDot;
+      });
+      if (close) out[i] = out[i]!.filter((x) => x !== band);
+      else kept.push(i);
+    }
+  }
+  return out;
 }
 
 const ZONE_REPLACES: ReadonlySet<FeatureKind> = new Set([
@@ -218,10 +264,11 @@ export function buildLabels(
       bands,
     });
   }
-  for (const z of zones ?? []) {
-    // Importance from size: 0.35 at 16 km to 0.95 at 63 km and above.
-    const importance = 0.35 + 0.6 * Math.min(1, Math.max(0, (z.diameter - 16_000) / 47_000));
-    const bands = bandsFor('zone', importance);
+  const zoneBandList = zones ? zoneBands(zones, graph.radius) : [];
+  for (let zi = 0; zi < (zones?.length ?? 0); zi++) {
+    const z = zones![zi]!;
+    const importance = zoneImportance(z.diameter);
+    const bands = zoneBandList[zi]!;
     if (bands.length === 0) continue;
     const anchor: Point = [z.anchor[0], z.anchor[1], z.anchor[2]];
     out.push({

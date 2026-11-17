@@ -189,3 +189,37 @@ export function climateBuffers(c: WeatherClimate): ArrayBuffer[] {
 function clamp01(x: number): number {
   return x < 0 ? 0 : x > 1 ? 1 : x;
 }
+
+/**
+ * Mean ground height above sea level (m; sea counts 0) over each weather sample's
+ * footprint, of any height field `heightAt` (unit direction → m). The renderer gives
+ * it the eroded global grid, so cloud bases stand on the ground as drawn: the tectonic
+ * map's ranges are some five times lower than the eroded ones (decision 220).
+ */
+export function meanGround(
+  grid: WeatherGrid,
+  heightAt: (d: Readonly<Vec3d>) => number,
+): Float32Array {
+  const out = new Float32Array(grid.count);
+  const m = grid.m;
+  const n = grid.n;
+  const d = new Vec3d();
+  const k = 1 / (FOOTPRINT * FOOTPRINT);
+  for (let f = 0; f < 6; f++) {
+    for (let j = 0; j < m; j++) {
+      for (let i = 0; i < m; i++) {
+        let ground = 0;
+        for (let b = 0; b < FOOTPRINT; b++) {
+          for (let a = 0; a < FOOTPRINT; a++) {
+            const u = (i - 1 + (a + 0.5) / FOOTPRINT) / n;
+            const v = (j - 1 + (b + 0.5) / FOOTPRINT) / n;
+            faceDirection(f as CubeFace, u, v, d);
+            ground += Math.max(0, heightAt(d));
+          }
+        }
+        out[grid.index(f, i, j)] = ground * k;
+      }
+    }
+  }
+  return out;
+}

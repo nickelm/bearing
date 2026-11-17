@@ -1162,13 +1162,21 @@ Terrain provinces and rock from tectonic history, a richer climate with twenty l
 
 The owner flew the branch before the merge: erosion and the vistas are intact and the track is good to merge. Open points:
 
-- [ ] Red rock reads a little too pink: tune the red rock shades (`#B8553A`, `#C9673F`, `#D98552`) toward rust and ochre, and check them under the grade
-- [ ] Round lakes linked by rivers make an odd pattern: find which depressions they are (closed-basin salt lakes, filled intermontane basins, hotspot craters) and break up their outlines
+- [x] Red rock reads a little too pink (decision 220): sienna and burnt-orange shades (hue 21–24°, was 17°), a more orange dry-ground tint, and zone hue shifts that turn warm hues only toward orange
+  - [ ] Check the new shades under the grade in the `buttes` spot view and in the browser
+- [x] Round lakes linked by rivers make an odd pattern (decision 220): they were erosion pits of one to five global cells (1,475 of seed 1983's 1,889 open lakes), filled into lakes by the drainage and drawn as round ponds along the rivers. Open lakes under 6 cells now silt up to their spill level, leaving 414 (`SILTED_LAKE_CELLS`, `GENERATOR_VERSION` 34). Lake cells that meet only at a corner were drawn as lobes on a thin neck; the kernel's lake share now bridges diagonal pairs
+  - [ ] Owner check: glaciated lowland lost most of its small lakes; if the lake districts look too dry, keep small lakes there with outlines warped harder
 - [ ] Airbases are hard to spot from the air: a dark outline along the runway's edges (runway shoulders or edge paint)
-- [ ] Seed 1983: Free Flight's first location was not at the selected airbase, and Vaureko airbase lies over water. Check airfields against the eroded world's water (fjords, closed-basin lakes, the new coasts) and the start position
-- [ ] Wonders are hard to find in the simulation view: add the selected wonders to the observer stations' dropdown, beside the switchbacks
-- [ ] Clouds never seem to reach the tallest mountains: check the cloud layer's heights and the weather's deck tops against peaks of 9–10 km
-- [ ] The strategic map shows too many zone names: raise the zones' importance threshold, Theater band only for the largest, fewer in the Region band
+- [x] Seed 1983: the first observer station (Vaureko, the Alliance main base of lowest id) lay in the sea, and other coastal fields on mountainsides (decision 220). Airfields are sited on the eroded world (`worldgen/edits/siting.ts`): dry, least-graded ground within 6 km (15 km where nothing nearer grades fairly), turned at most 45°; the infra scene, Free Flight and the observer use the sited runways. The pad's blend margin must be dry too: edits leave the sea alone, so a high pad beside the sea stood on vertical walls (the owner's Kredoth screenshots)
+  - [ ] Spur roads still end at the coarse point: route each spur's last leg to the sited field in the alignment stage
+  - [ ] The sim's air operations and the strategic map still use the coarse points; give P1's full-fidelity takeoffs and landings the sited runway
+  - [ ] Fields that siting cannot keep fair (grading RMS over 60 m on steep islands): let the coarse pass avoid coastal cells with sea on most sides for main bases
+- [x] Wonders are hard to find in the simulation view (decision 220): the selected wonders are observer stations ("Wonders · name (kind)"), 7 km out on the low side, 600 m up, before the switchbacks
+  - [ ] Most wonders are not shaped yet (tepui walls, falls, calderas, mineral bands; W8's shaping task): the station shows the place, not yet the landmark
+- [x] Clouds never seem to reach the tallest mountains (decision 220): cloud bases stood on the tectonic map's ground (ranges about 2 km, five times lower than drawn); they now stand on the eroded ground's mean per weather sample
+  - [ ] The sim's weather view (ceiling for the AI and the HUD) still reads the tectonic ground
+  - [ ] Owner check in the browser: cloud among the peaks in overcast and storm over a high range
+- [x] The strategic map shows too many zone names (decision 220): of about 3,700 zones per world, about 20 are named in the Theater band (≥ 50 km, 250 km apart) and about 470 in the Region band (≥ 25 km, 75 km apart), ranked below cities, peaks and ranges
 - [ ] The strategic map runs at 10–15 fps: profile it (separate task; labels and the zone list are suspects)
 - [ ] The frame rate falls over a session (25–40 to 10–15 fps): look for leaks (tile and mesh caches, geometries or textures not disposed, label rebuilds)
 

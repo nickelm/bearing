@@ -85,4 +85,36 @@ describe('computeDrainage', () => {
       if (h[c]! > 0 && h[r]! > 0) expect(dr.discharge[r]!).toBeGreaterThan(dr.discharge[c]!);
     }
   });
+
+  it('silts up small lakes and keeps large ones (decision 220)', () => {
+    // A one-cell-scale pit and a wide crater on the same island.
+    const small = latLonToDirection(14 * DEG, 30 * DEG);
+    const { h: base } = island(25 * DEG, 1000, {
+      at: latLonToDirection(20 * DEG, 38 * DEG),
+      radius: 5 * DEG,
+      depth: 600,
+    });
+    const smallCell = grid.cellOfDirection(small);
+    base[smallCell] = base[smallCell]! - 300;
+    const runoff = new Float32Array(grid.cellCount).fill(500);
+    const kept = computeDrainage(n, base.slice(), runoff, R);
+    expect(kept.lakeDepth[smallCell]!).toBeGreaterThan(50);
+    expect(kept.fills).toBeUndefined();
+    let craterCells = 0;
+    for (let c = 0; c < grid.cellCount; c++)
+      if (kept.lakeDepth[c]! > 0 && c !== smallCell) craterCells++;
+    expect(craterCells).toBeGreaterThan(2);
+
+    const h = base.slice();
+    const dr = computeDrainage(n, h, runoff, R, undefined, craterCells);
+    // The pit is filled to its spill level: no lake, raised ground, routing as before.
+    expect(dr.lakeDepth[smallCell]).toBe(0);
+    expect(h[smallCell]!).toBeGreaterThan(base[smallCell]! + 50);
+    expect(dr.fills!.cells).toContain(smallCell);
+    expect(Array.from(dr.receiver)).toEqual(Array.from(kept.receiver));
+    // The crater's lake (many cells) stays.
+    const crater = grid.cellOfDirection(latLonToDirection(20 * DEG, 38 * DEG));
+    expect(dr.lakeDepth[crater]!).toBeGreaterThan(100);
+    expect(h[crater]).toBe(base[crater]);
+  });
 });

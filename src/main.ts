@@ -24,8 +24,18 @@ import { StrategicScene } from './render/strategic/strategicScene';
 import { OVERLAY_LAYERS } from './render/strategic/overlays/militaryModel';
 import { INFRA_LAYERS } from './render/strategic/infra/infraModel';
 import { InfraScene } from './render/sim/infra/infraScene';
-import { airfieldGrading, globalMapSampler } from './render/sim/infra/airfieldGrading';
-import { observerStations, roadStations } from './render/sim/camera/observerStations';
+import {
+  AIRFIELD_FOOTPRINT,
+  airfieldGrading,
+  globalMapSampler,
+  globalMaskSampler,
+} from './render/sim/infra/airfieldGrading';
+import { siteAirfields } from './worldgen/edits';
+import {
+  observerStations,
+  roadStations,
+  wonderStations,
+} from './render/sim/camera/observerStations';
 import type { ObserverStation } from './render/sim/camera/observerStations';
 import { VIEW_MODES } from './render/common/globeMesh';
 import type { ViewMode } from './render/common/globeMesh';
@@ -97,7 +107,7 @@ import type { StrategicWorld } from './worldgen/campaignWorld';
 import { SimClient } from './workers/simClient';
 import { campaignInput } from './sim/command/campaignInput';
 import { SnapshotField } from './workers/protocol';
-import { buildWeatherClimate } from './sim/weather/climate';
+import { buildWeatherClimate, meanGround } from './sim/weather/climate';
 import { WeatherView } from './sim/weather/frame';
 import { WeatherGrid } from './sim/weather/grid';
 import { applyPreset } from './sim/weather/presets';
@@ -617,14 +627,20 @@ async function main(): Promise<void> {
       const oldSynth = synth;
       const { riverIndex } = terrain;
       synth = terrain.synth;
-      // Roads, airfields, lights and buildings from the coarse pass (decision 65), roads
-      // and railways along their alignments (decision 184).
-      const infra = new InfraScene(
-        strategic.graph,
+      // Airfields sited on the eroded ground: the coarse cell may be sea or a mountainside
+      // there (decision 220). What is drawn, flown and stood beside uses the sited runways.
+      const sited = siteAirfields(
         strategic.infrastructure,
         params.radius,
-        alignments,
+        AIRFIELD_FOOTPRINT,
+        globalMapSampler(global.height, global.n),
+        globalMaskSampler(global.finish.drainage.lakeDepth, global.n),
       );
+      if (sited.wet.length) console.warn('Airbases left without a dry site:', sited.wet);
+      const airbases = sited.infrastructure;
+      // Roads, airfields, lights and buildings from the coarse pass (decision 65), roads
+      // and railways along their alignments (decision 184).
+      const infra = new InfraScene(strategic.graph, airbases, params.radius, alignments);
       const edits = airfieldGrading(
         infra,
         global.height,
@@ -646,12 +662,14 @@ async function main(): Promise<void> {
       });
       // Mountain shadows are baked from the global heights (decision 139).
       globe.shadows.setHeights(global.height, global.n);
+      // Cloud bases, fog and dust now stand on the eroded ground, as drawn (decision 220).
+      globe.weather.setGround(meanGround(weatherGrid, globalMapSampler(global.height, global.n)));
       freeFlight?.setTerrain({
         infra,
         edits,
         height: global.height,
         n: global.n,
-        airbases: strategic.infrastructure,
+        airbases,
       });
       globe.setInfrastructure(infra);
       globe.bridges.setAlignments(alignments, {
@@ -664,9 +682,18 @@ async function main(): Promise<void> {
       governor.warmUp(performance.now());
       // Observer stations at every airbase and port; ports face the sea (decision 112).
       stations = observerStations(
-        strategic.infrastructure,
+        airbases,
         params.radius,
         globalMapSampler(global.height, global.n),
+      );
+      // The war's natural wonders, to find them (decision 220).
+      stations.push(
+        ...wonderStations(
+          strategic.graph.features,
+          strategic.campaign.cast.wonders ?? [],
+          params.radius,
+          globalMapSampler(global.height, global.n),
+        ),
       );
       // The aligned roads' most winding stretches, to find them (decision 186).
       if (alignments) stations.push(...roadStations(alignments, params.radius));

@@ -16,6 +16,8 @@ import {
   TOWER_ALONG,
   TOWER_AIM_ACROSS,
   TOWER_EYE_HEIGHT,
+  WONDER_VIEW_DISTANCE,
+  wonderStations,
 } from '../src/render/sim/camera/observerStations';
 import type { ObserverStation } from '../src/render/sim/camera/observerStations';
 import { APRON_OFFSET, localFrame, offsetPoint } from '../src/render/sim/infra/infraScene';
@@ -215,5 +217,30 @@ describe('observer stations', () => {
     const heightAt = (d: Readonly<Vec3d>) => -d.clone().sub(p).dot(east) * R;
     const st = observerStations(infra, R, heightAt).find((x) => x.key === `port-${port.id}`)!;
     expect(st.facing).toBeCloseTo(90 * DEG, 6);
+  });
+
+  it('frames each selected wonder from its low side (decision 220)', () => {
+    const f = w.graph.features;
+    const ids = w.campaign.cast.wonders ?? [];
+    const st = wonderStations(f, ids, R);
+    expect(st.length).toBe(ids.length);
+    for (const [k, s] of st.entries()) {
+      const i = ids[k]!;
+      const anchor = new Vec3d(f.anchor[3 * i]!, f.anchor[3 * i + 1]!, f.anchor[3 * i + 2]!);
+      expect(s.kind).toBe('wonder');
+      expect(s.label).toContain(f.names[i]!);
+      expect(s.point.distanceTo(anchor) * R).toBeCloseTo(WONDER_VIEW_DISTANCE, -1);
+      expect(Math.abs(s.facing - bearingTo(s.point, anchor))).toBeLessThan(1e-9);
+      expect(s.pitch).toBeLessThan(0);
+    }
+    // Low ground to the east: the observer stands east of the wonder.
+    if (ids.length) {
+      const i = ids[0]!;
+      const a = new Vec3d(f.anchor[3 * i]!, f.anchor[3 * i + 1]!, f.anchor[3 * i + 2]!);
+      const { east } = localFrame(a);
+      const heightAt = (d: Readonly<Vec3d>) => 2000 - d.clone().sub(a).dot(east) * R * 0.1;
+      const s = wonderStations(f, [i], R, heightAt)[0]!;
+      expect(s.point.clone().sub(a).dot(east)).toBeGreaterThan(0);
+    }
   });
 });

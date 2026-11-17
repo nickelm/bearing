@@ -127,8 +127,14 @@ import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
 import { settlementPoint } from '../src/worldgen/strategic/graph';
 import { InfraScene, offsetPoint } from '../src/render/sim/infra/infraScene';
 import { observerStations } from '../src/render/sim/camera/observerStations';
-import { airfieldGrading } from '../src/render/sim/infra/airfieldGrading';
-import { buildWeatherClimate } from '../src/sim/weather/climate';
+import {
+  AIRFIELD_FOOTPRINT,
+  airfieldGrading,
+  globalMapSampler,
+  globalMaskSampler,
+} from '../src/render/sim/infra/airfieldGrading';
+import { siteAirfields } from '../src/worldgen/edits';
+import { buildWeatherClimate, meanGround } from '../src/sim/weather/climate';
 import { WeatherGrid } from '../src/sim/weather/grid';
 import { WeatherView } from '../src/sim/weather/frame';
 import { applyPreset, WEATHER_PRESETS } from '../src/sim/weather/presets';
@@ -831,7 +837,15 @@ it('renders preview views', async () => {
   const alignments = process.env.ALIGNMENTS
     ? (deserialize(readFileSync(process.env.ALIGNMENTS)) as Alignments)
     : null;
-  const infra = new InfraScene(campaign.graph, campaign.infrastructure, params.radius, alignments);
+  // Airfields sited on the eroded ground, as the app does (decision 220).
+  const sited = siteAirfields(
+    campaign.infrastructure,
+    params.radius,
+    AIRFIELD_FOOTPRINT,
+    globalMapSampler(global.height, global.n),
+    globalMaskSampler(global.finish.drainage.lakeDepth, global.n),
+  ).infrastructure;
+  const infra = new InfraScene(campaign.graph, sited, params.radius, alignments);
 
   if (strategic) {
     await renderStrategic(gpu, {
@@ -1040,8 +1054,8 @@ it('renders preview views', async () => {
     throw new RangeError(`WEATHER must be one of ${WEATHER_PRESETS.join(', ')}`);
   }
   const presetView = new WeatherView(new WeatherGrid());
-  // Cloud bases stand on the mean ground of each weather sample.
-  scene.weather.setGround(climate.ground);
+  // Cloud bases stand on the mean eroded ground of each weather sample, as in the app (decision 220).
+  scene.weather.setGround(meanGround(new WeatherGrid(), globalMapSampler(global.height, global.n)));
   const weatherAt = (t: number, shown: WeatherPreset = preset) => {
     if (t < simWorld.sim.time) simWorld = createSimWorld(weatherConfig);
     simWorld.sim.advanceTo(t);
@@ -1066,7 +1080,7 @@ it('renders preview views', async () => {
   let biggest = 0;
   for (let i = 1; i < sp.cells.length; i++)
     if (sp.population[i]! > sp.population[biggest]!) biggest = i;
-  const base = campaign.infrastructure.airbases.find((a) => a.kind === 'main');
+  const base = sited.airbases.find((a) => a.kind === 'main');
   // Check targets (decision 128); tiles judge the conifer candidates only when a view needs them.
   const needsTiles = views.some((v) => v.target === 'conifer');
   const { notes: checkNotes, ...checks } = await findCheckTargets(
@@ -1330,7 +1344,7 @@ it('renders preview views', async () => {
   const outDir = process.env.OUT ?? join(import.meta.dirname, 'out');
   mkdirSync(outDir, { recursive: true });
 
-  const stations = observerStations(campaign.infrastructure, params.radius);
+  const stations = observerStations(sited, params.radius);
   // SPOTS=all or a comma list of landscape kinds: observer views at landscape spots.
   if (process.env.SPOTS) {
     const kinds =

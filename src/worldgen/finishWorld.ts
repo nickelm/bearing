@@ -185,6 +185,13 @@ export function downsampleForDisplay(
   return out;
 }
 
+/**
+ * Open lakes of fewer global cells than this silt up (decision 220): about 14 km² at
+ * 1024², a lake some 4 km across. `drainage.fills` lists the raised cells, which the
+ * global pass writes back into its height map.
+ */
+export const SILTED_LAKE_CELLS = 6;
+
 export function finishWorld(input: FinishInput): FinishResult {
   const timings: { stage: string; ms: number }[] = [];
   const time = <T>(stage: string, fn: () => T): T => {
@@ -194,10 +201,15 @@ export function finishWorld(input: FinishInput): FinishResult {
     return r;
   };
   const drainage = time('drainage', () =>
-    computeDrainage(input.n, input.height, input.runoff, input.radius, {
-      temperature: cellTemperature(input),
-      precipitation: input.precipitation,
-    }),
+    computeDrainage(
+      input.n,
+      input.height,
+      input.runoff,
+      input.radius,
+      { temperature: cellTemperature(input), precipitation: input.precipitation },
+      // Lakes of a few cells are erosion pits: they silt up (decision 220).
+      SILTED_LAKE_CELLS,
+    ),
   );
   const rivers = time('rivers', () =>
     extractRivers(input.n, input.height, drainage.receiver, drainage.discharge),

@@ -13,6 +13,7 @@ import type { CubeFaceUv } from '../../../core/coords';
 import type { Vec3d } from '../../../core/vec3d';
 import { TerrainEdits } from '../../../worldgen/edits';
 import type { ChannelSource, CorridorEdit, PadEdit } from '../../../worldgen/edits';
+import type { PadFootprint } from '../../../worldgen/edits/siting';
 import { APRON_OFFSET, APRON_WIDTH, offsetPoint, RUNWAY_WIDTH } from './infraScene';
 import type { InfraScene } from './infraScene';
 
@@ -24,6 +25,14 @@ export const AIRFIELD_BEYOND_APRON = 200;
 export const AIRFIELD_MARGIN = 400;
 /** Lowest field elevation (m above the sea). */
 export const AIRFIELD_MIN_ELEVATION = 3;
+
+/** The graded pad around each runway (siting.ts samples the same footprint, decision 220). */
+export const AIRFIELD_FOOTPRINT: PadFootprint = {
+  overrun: AIRFIELD_OVERRUN,
+  across0: -RUNWAY_WIDTH / 2 - 80,
+  across1: APRON_OFFSET + APRON_WIDTH / 2 + AIRFIELD_BEYOND_APRON,
+  margin: AIRFIELD_MARGIN,
+};
 
 /**
  * Bilinear sampler of a global cube-grid map (n × n cells per face, cell
@@ -48,6 +57,17 @@ export function globalMapSampler(map: Float32Array, n: number): (d: Readonly<Vec
   };
 }
 
+/** True where a global cube-grid map (n per face) is above zero in the cell under a unit direction. */
+export function globalMaskSampler(map: Float32Array, n: number): (d: Readonly<Vec3d>) => boolean {
+  const uv: CubeFaceUv = { face: 0, u: 0, v: 0 };
+  return (d) => {
+    directionToCubeFace(d, uv);
+    const i = Math.min(n - 1, Math.max(0, Math.floor(uv.u * n)));
+    const j = Math.min(n - 1, Math.max(0, Math.floor(uv.v * n)));
+    return map[(uv.face * n + j) * n + i]! > 0;
+  };
+}
+
 /** One graded pad per airbase in `infra`, at the mean global height over the pad. */
 export function airfieldPads(
   infra: InfraScene,
@@ -58,10 +78,9 @@ export function airfieldPads(
   for (const site of infra.sites) {
     if (site.kind !== 'airbase') continue;
     const L = site.runwayLength;
-    const along0 = -L / 2 - AIRFIELD_OVERRUN;
-    const along1 = L / 2 + AIRFIELD_OVERRUN;
-    const across0 = -RUNWAY_WIDTH / 2 - 80;
-    const across1 = APRON_OFFSET + APRON_WIDTH / 2 + AIRFIELD_BEYOND_APRON;
+    const along0 = -L / 2 - AIRFIELD_FOOTPRINT.overrun;
+    const along1 = L / 2 + AIRFIELD_FOOTPRINT.overrun;
+    const { across0, across1 } = AIRFIELD_FOOTPRINT;
     let sum = 0;
     let count = 0;
     for (let a = 0; a <= 8; a++) {

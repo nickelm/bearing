@@ -11,3 +11,13 @@ export {
   TerrainEdits,
 } from './terrainEdits';
 export type { EditFn, TerrainEditsOptions } from './terrainEdits';
+export {
+  SITING_DRY,
+  SITING_FAIR,
+  SITING_GOOD,
+  SITING_RADIUS,
+  SITING_TURN,
+  SITING_WIDE_RADIUS,
+  siteAirfields,
+} from './siting';
+export type { PadFootprint, SitingResult } from './siting';

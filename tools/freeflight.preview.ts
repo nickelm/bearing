@@ -44,10 +44,13 @@ import { AircraftView } from '../src/render/sim/aircraft/aircraftView';
 import type { AircraftPose } from '../src/render/sim/aircraft/aircraftView';
 import { GlobeScene } from '../src/render/sim/globeScene';
 import {
+  AIRFIELD_FOOTPRINT,
   airfieldGrading,
   airfieldPads,
   globalMapSampler,
+  globalMaskSampler,
 } from '../src/render/sim/infra/airfieldGrading';
+import { siteAirfields } from '../src/worldgen/edits';
 import { InfraScene } from '../src/render/sim/infra/infraScene';
 import { neutralControls } from '../src/sim/flight/controlLaws';
 import { followAirframe } from '../src/render/sim/camera/chaseCamera';
@@ -59,7 +62,7 @@ import type { Runway } from '../src/sim/flight/runway';
 import { spawnOnRunway } from '../src/sim/flight/spawn';
 import { TestPilot } from '../src/sim/flight/testPilot';
 import { airVelocity } from '../src/sim/flight/wind';
-import { buildWeatherClimate } from '../src/sim/weather/climate';
+import { buildWeatherClimate, meanGround } from '../src/sim/weather/climate';
 import { WeatherGrid } from '../src/sim/weather/grid';
 import { WEATHER_PRESETS } from '../src/sim/weather/presets';
 import type { WeatherPreset } from '../src/sim/weather/presets';
@@ -104,7 +107,15 @@ it('renders Free Flight shots', async () => {
   const params = { ...DEFAULT_PLANET_PARAMS, seed: campaign.seed };
   const R = params.radius;
   const { world, global } = await previewWorld(gpu, params, 256, gres);
-  const infra = new InfraScene(campaign.graph, campaign.infrastructure, R);
+  // Airfields sited on the eroded ground, as the app does (decision 220).
+  const sited = siteAirfields(
+    campaign.infrastructure,
+    R,
+    AIRFIELD_FOOTPRINT,
+    globalMapSampler(global.height, global.n),
+    globalMaskSampler(global.finish.drainage.lakeDepth, global.n),
+  ).infrastructure;
+  const infra = new InfraScene(campaign.graph, sited, R);
   // The app antialiases with four samples (`antialias: true`); the previews draw one unless asked.
   const head = await headlessRenderer(gpu.device, width, height, Number(env('MSAA', '0')));
   const scene = new GlobeScene(head.renderer, { radius: R, grid: new CubeGrid(256), input: false });
@@ -155,7 +166,7 @@ it('renders Free Flight shots', async () => {
     new WeatherGrid(),
     R,
   );
-  scene.weather.setGround(climate.ground.slice());
+  scene.weather.setGround(meanGround(new WeatherGrid(), globalMapSampler(global.height, global.n)));
   if (process.env.POST === '0') scene.postEnabled = false;
   // The atmosphere's settings as the app applies them, with the governor's step if asked for.
   const settings = readAtmosphere(scene, { volume: 0, muted: true }, DEFAULT_OPTIONS.weather);
@@ -172,7 +183,7 @@ it('renders Free Flight shots', async () => {
 
   // Runways and the ground, as the app builds them.
   const sampler = globalMapSampler(global.height, global.n);
-  const runways = runwaysOf(campaign.infrastructure, airfieldPads(infra, sampler));
+  const runways = runwaysOf(sited, airfieldPads(infra, sampler));
   const ground = new AirfieldGround(
     runways,
     edits,
@@ -195,8 +206,7 @@ it('renders Free Flight shots', async () => {
   const runway =
     (baseEnv !== undefined ? runways.find((r) => r.id === Number(baseEnv)) : undefined) ??
     runways.find(
-      (r, i) =>
-        campaign.infrastructure.airbases[i]!.kind === 'main' && r.side === 'alliance' && clear(r),
+      (r, i) => sited.airbases[i]!.kind === 'main' && r.side === 'alliance' && clear(r),
     ) ??
     runways[0]!;
   const end = runwayEnds(runway)[0];
@@ -300,9 +310,11 @@ it('renders Free Flight shots', async () => {
       for (let a = -reach; a <= reach; a += 250)
         for (let c = -reach; c <= reach; c += 250) {
           const d = fromRunway(f, a, c, R);
-          const hh = (x: number, y: number) => Math.max(0, edits.apply(fromRunway(f, x, y, R), sampler(fromRunway(f, x, y, R))));
+          const hh = (x: number, y: number) =>
+            Math.max(0, edits.apply(fromRunway(f, x, y, R), sampler(fromRunway(f, x, y, R))));
           if (hh(a, c) <= 1) continue;
-          const g = Math.hypot(hh(a + 100, c) - hh(a - 100, c), hh(a, c + 100) - hh(a, c - 100)) / 200;
+          const g =
+            Math.hypot(hh(a + 100, c) - hh(a - 100, c), hh(a, c + 100) - hh(a, c - 100)) / 200;
           if (g < Math.tan(30 * DEG) && g > best) {
             best = g;
             spot = d;
@@ -323,7 +335,12 @@ it('renders Free Flight shots', async () => {
       const away =
         Math.atan2(scene.sun.dot(east), scene.sun.dot(north)) +
         (process.env.SUN_SIDE === 'tail' ? Math.PI : -Math.PI / 2);
-      h.place(spot.clone().scale(R + gh + h.gearHeight + hover), new Vec3d(), away, hf.main.shaftTilt);
+      h.place(
+        spot.clone().scale(R + gh + h.gearHeight + hover),
+        new Vec3d(),
+        away,
+        hf.main.shaftTilt,
+      );
       h.updateAttitude(ground);
       hpose.groundHeight = gh;
       hpose.rotors = [
@@ -348,14 +365,20 @@ it('renders Free Flight shots', async () => {
         await new Promise((r) => setTimeout(r, 2));
         const st = scene.terrain.stats;
         const sig = `${st.drawn}/${st.deepest}/${st.meshes}`;
-        stable = st.pending === 0 && scene.structures.stats.pending === 0 && sig === last ? stable + 1 : 0;
+        stable =
+          st.pending === 0 && scene.structures.stats.pending === 0 && sig === last ? stable + 1 : 0;
         last = sig;
       }
       // The drawn ground has loaded now: measure the hover height from it, not from the
       // coarse global heights the first query fell back to.
       const drawn = ground.height(spot);
       if (Math.abs(drawn - gh) > 0.01) {
-        h.place(spot.clone().scale(R + drawn + h.gearHeight + hover), new Vec3d(), away, hf.main.shaftTilt);
+        h.place(
+          spot.clone().scale(R + drawn + h.gearHeight + hover),
+          new Vec3d(),
+          away,
+          hf.main.shaftTilt,
+        );
         h.updateAttitude(ground);
         hpose.groundHeight = drawn;
         followAirframe(scene.chase.target, h);

@@ -30,6 +30,7 @@ Guidance for Claude Code sessions in this repository. `docs/design.md` is the so
 | Alignment stage          | `npx vitest run --config vitest.tools.config.ts tools/alignment.preview.ts` (env: `LIMIT`, `NEAR=lat,lon,km`, `SAVE`, `ALIGN_TUNING`); `ALIGNMENTS=<saved>` in the render preview draws it (decision 184) |
 | Displays, checks 12–13   | `node tools/displays.screens.mjs` with `npm run dev` up: every master mode, both skins, 1366 × 768 and 1920 × 1080, color-vision views (env: `MODES`, `SIZES`, `CVD=0`, `OUT_DIR`) → `tools/out/displays/` (decision 200) |
 | World diversity metrics  | `npx vitest run --config vitest.tools.config.ts tools/diversity.preview.ts` (env: `SEEDS` or `FROM`/`COUNT`, `GLOBAL=1` for eroded worlds, `GLOBAL_SEEDS`, `GRES`, `OUT`) → `tools/out/diversity.md`: proposal 0007's criteria over 20 seeds (decision 204) |
+| Airfield siting          | `npx vitest run --config vitest.tools.config.ts tools/airbaseWater.preview.ts --disable-console-intercept` (env: `SEEDS`, `GRES`, `ALL=1`): each airbase's pad on the eroded world before and after siting (decision 220) |
 | Browser smoke test       | `npm run build && npm run preview`, then `node tools/browser.smoke.mjs` (env: `MODE`, `WORLD`, `ONLY`, `SCENES`, `OUT`) → `tools/out/browser/` (decision 144) |
 
 ## Directory map
@@ -58,7 +59,8 @@ src/worldgen/       planet generation pipeline stages (may use GPU compute); can
                     closed basins in drainage.ts; wonder candidates in strategic/wonders.ts (decision 204)
   coarsePass.ts     the design's pipeline at 256² on the CPU; campaignWorld.ts adds the validity retries
   edits/            terrain edits (decision 164): pads and corridors, their index by tile, protected
-                    river channels and TerrainEdits.apply, the one height function (rule 13)
+                    river channels and TerrainEdits.apply, the one height function (rule 13);
+                    siting.ts sites airfields on the eroded world (decision 220)
   channels/         (track N, planned) river regimes, meander migration with oxbows, floodplain mask
   networks/         the alignment tier (decisions 161, 180, 184): the router, plans, profiles, earthworks,
                     link tasks and anchors, links aligned whole, the stage (build.ts, run once per world

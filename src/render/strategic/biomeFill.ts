@@ -60,7 +60,7 @@ export const STRATEGIC_BIOME_FILL: readonly (number | null)[] = (() => {
   f[Biome.CloudForest] = 0x7fae8b;
   f[Biome.Mangrove] = 0x73998a;
   f[Biome.RockyDesert] = 0xd0a98a;
-  f[Biome.RedRockDesert] = 0xd99a77;
+  f[Biome.RedRockDesert] = 0xd09a6c;
   f[Biome.FogDesert] = 0xd8cdbb;
   f[Biome.Moorland] = 0xb09ca3;
   f[Biome.Wetland] = 0x8fa083;

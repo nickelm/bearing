@@ -153,6 +153,12 @@ export async function buildGlobalWorld(
 
     opts.onProgress?.('drainage, rivers, biomes', 0);
     const finish = await opts.finish(input);
+    // Silted lakes raised the ground (decision 220): the tiles synthesize from it too.
+    const fills = finish.drainage.fills;
+    if (fills && fills.cells.length) {
+      for (let k = 0; k < fills.cells.length; k++) height[fills.cells[k]!] = fills.heights[k]!;
+      grid.upload('height', height);
+    }
     lap('drainage, rivers, biomes (worker)');
     check();
     opts.onProgress?.('done', 1);

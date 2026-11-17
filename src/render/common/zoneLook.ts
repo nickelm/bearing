@@ -64,8 +64,11 @@ export function makeZoneShift(zones: Zones, n: number): ZoneShift {
     const w = Math.min(1, (zones.edge[c]! + 0.5) / E);
     const [h, s, v] = rgbToHsv(rgb);
     const r = rec.recipe;
+    // Warm hues (red rock, sand) shift only toward orange: toward magenta they read pink
+    // (decision 220).
+    const hue = h < 50 || h > 330 ? Math.abs(r.hue) : r.hue;
     const out = hsvToRgb(
-      (h + w * r.hue + 360) % 360,
+      (h + w * hue + 360) % 360,
       Math.min(1, s * (1 + w * (r.saturation - 1))),
       Math.min(1, v * (1 + w * (r.value - 1))),
     );

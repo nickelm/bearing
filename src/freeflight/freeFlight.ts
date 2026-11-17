@@ -164,6 +164,7 @@ export class FreeFlight {
   readonly summary: SummaryCard;
   private readonly options: FreeFlightOptions;
   private bases: BaseEntry[] = [];
+  private graph: StrategicWorld['graph'] | null = null;
   /** Airbase positions (unit directions) from the coarse pass, known before the terrain is. */
   private basePoints = new Map<number, Vec3d>();
   private runways: Runway[] = [];
@@ -365,13 +366,24 @@ export class FreeFlight {
     this.menu.setReady(false);
     if (!s) {
       this.bases = [];
+      this.graph = null;
       this.menu.setBases([]);
       return;
     }
-    const g = s.graph;
-    for (const b of s.infrastructure.airbases)
-      this.basePoints.set(b.id, new Vec3d(...b.point).normalize());
-    this.bases = s.infrastructure.airbases.map((b) => {
+    this.graph = s.graph;
+    this.listBases(s.infrastructure);
+  }
+
+  /**
+   * The start screen's bases and their map points: from the coarse record at first, then
+   * from the sited runways once the terrain is ready (decision 220).
+   */
+  private listBases(infra: StrategicWorld['infrastructure']): void {
+    const g = this.graph;
+    if (!g) return;
+    this.basePoints.clear();
+    for (const b of infra.airbases) this.basePoints.set(b.id, new Vec3d(...b.point).normalize());
+    this.bases = infra.airbases.map((b) => {
       const node = b.node >= 0 ? g.nodes[b.node] : undefined;
       const region = node && node.feature >= 0 ? (g.features.names[node.feature] ?? '') : '';
       const ends = runwayEnds({
@@ -418,6 +430,8 @@ export class FreeFlight {
     const sampler = globalMapSampler(t.height, t.n);
     const pads = airfieldPads(t.infra, sampler);
     this.runways = runwaysOf(t.airbases, pads);
+    // The sited runways (decision 220): their points and designators on the start screen.
+    this.listBases(t.airbases);
     const terrain = this.deps.globe.terrain;
     this.ground = new AirfieldGround(
       this.runways,

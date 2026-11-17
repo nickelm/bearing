@@ -54,7 +54,7 @@ export const BIOME_COLORS: readonly Rgb[] = (() => {
   c[Biome.CloudForest] = hex(0x3e8c5a);
   c[Biome.Mangrove] = hex(0x2f6e4a);
   c[Biome.RockyDesert] = hex(0xb9825a);
-  c[Biome.RedRockDesert] = hex(0xc9673f);
+  c[Biome.RedRockDesert] = hex(0xb46a3c);
   c[Biome.FogDesert] = hex(0xc8b9a0);
   c[Biome.Moorland] = hex(0x8a6a7a);
   c[Biome.Wetland] = hex(0x5e8a55);

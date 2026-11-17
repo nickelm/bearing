@@ -11,15 +11,20 @@
  *   coarse pass (decision 65), so they can sit a little inland or offshore.
  * - **Switchbacks** (`roadStations`, decision 186): the aligned roads' most
  *   winding stretches, 700 m to the side and 350 m up, looking at them.
+ * - **Wonders** (`wonderStations`, decision 220): the war's natural wonders,
+ *   from WONDER_VIEW_DISTANCE out on the side with the lowest ground, 600 m up,
+ *   looking at the wonder's anchor.
  */
 import { Vec3d } from '../../../core/vec3d';
 import type { Infrastructure } from '../../../worldgen/strategic/infrastructure';
+import { FeatureKind, WONDER_KIND_NAMES } from '../../../worldgen/strategic/graph';
+import type { FeatureList } from '../../../worldgen/strategic/graph';
 import { alignedPoint } from '../../../worldgen/networks/alignments';
 import type { Alignments } from '../../../worldgen/networks/alignments';
 import { CLASS_KEYS } from '../../../worldgen/networks/link';
 import { APRON_LENGTH, APRON_OFFSET, localFrame, offsetPoint } from '../infra/infraScene';
 
-export type StationKind = 'airbase' | 'port' | 'road';
+export type StationKind = 'airbase' | 'port' | 'road' | 'wonder';
 
 export interface ObserverStation {
   /** Stable identifier, e.g. "airbase-3". */
@@ -27,7 +32,7 @@ export interface ObserverStation {
   /** For pickers: "Alliance · Name (main airbase)". */
   label: string;
   kind: StationKind;
-  /** The side whose site it is; null for roads. */
+  /** The side whose site it is; null for roads and wonders. */
   side: 'alliance' | 'pact' | null;
   /** Unit direction of the spot the observer stands over. */
   point: Vec3d;
@@ -192,6 +197,58 @@ export function roadStations(al: Alignments, radius: number, count = 8): Observe
       facing: bearingTo(eye, mid),
       height: 350,
       pitch: -25 * (Math.PI / 180),
+    });
+  }
+  return out;
+}
+
+/** How far out the wonder observer stands (m): a coarse cell and a half, so the anchor's cell is in view. */
+export const WONDER_VIEW_DISTANCE = 7000;
+export const WONDER_EYE_HEIGHT = 600;
+
+/**
+ * Stations at the war's natural wonders (decision 220), `ids` being the
+ * features the cast selected (`cast.wonders`). The wonder's anchor is a coarse
+ * cell's center, so the observer stands back far enough to frame the cell: on
+ * the bearing whose ground is lowest (open view, usually across a valley or the
+ * sea), looking down at the anchor's ground.
+ */
+export function wonderStations(
+  f: FeatureList,
+  ids: readonly number[],
+  radius: number,
+  heightAt?: (d: Readonly<Vec3d>) => number,
+): ObserverStation[] {
+  const out: ObserverStation[] = [];
+  for (const i of ids) {
+    if (f.kind[i] !== FeatureKind.Wonder) continue;
+    const anchor = new Vec3d(f.anchor[3 * i]!, f.anchor[3 * i + 1]!, f.anchor[3 * i + 2]!);
+    let from = 0;
+    if (heightAt) {
+      let lowest = Infinity;
+      for (let k = 0; k < 8; k++) {
+        const h = (k / 8) * 2 * Math.PI;
+        const g = heightAt(offsetPoint(anchor, h, WONDER_VIEW_DISTANCE, 0, radius));
+        if (g < lowest) {
+          lowest = g;
+          from = h;
+        }
+      }
+    }
+    const eye = offsetPoint(anchor, from, WONDER_VIEW_DISTANCE, 0, radius);
+    const drop = heightAt
+      ? Math.max(0, heightAt(eye)) + WONDER_EYE_HEIGHT - Math.max(0, heightAt(anchor))
+      : WONDER_EYE_HEIGHT;
+    const kind = WONDER_KIND_NAMES[f.measure[i]!] ?? 'wonder';
+    out.push({
+      key: `wonder-${i}`,
+      label: `Wonders · ${f.names[i] ?? 'unnamed'} (${kind})`,
+      kind: 'wonder',
+      side: null,
+      point: eye,
+      facing: bearingTo(eye, anchor),
+      height: WONDER_EYE_HEIGHT,
+      pitch: -Math.max(2 * (Math.PI / 180), Math.min(0.6, Math.atan2(drop, WONDER_VIEW_DISTANCE))),
     });
   }
   return out;

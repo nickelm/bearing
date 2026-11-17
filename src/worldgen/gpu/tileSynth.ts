@@ -398,7 +398,10 @@ fn lakeLevelAt(d: vec3f) -> f32 {
   return level;
 }
 
-// Bilinear share of lake cells around d (the lake bit of the global material).
+// Share of lake cells around d (the lake bit of the global material): bilinear, with
+// diagonal pairs bridged (decision 220). Bilinear alone pinches two lake cells that
+// touch only at a corner to a neck a fifth of a cell wide, so a lake along a diagonal
+// valley drew as round ponds strung on a thread; the bridge keeps it a ribbon.
 fn lakeFraction(d: vec3f) -> f32 {
   let face = dirFace(d);
   let uv = projectToFace(d, face);
@@ -412,7 +415,9 @@ fn lakeFraction(d: vec3f) -> f32 {
   let b = f32((gMaterial[wrapCellSafe(face, i0 + 1, j0)].x >> 16u) & 1u);
   let c = f32((gMaterial[wrapCellSafe(face, i0, j0 + 1)].x >> 16u) & 1u);
   let e = f32((gMaterial[wrapCellSafe(face, i0 + 1, j0 + 1)].x >> 16u) & 1u);
-  return mix(mix(a, b, tx), mix(c, e, tx), ty);
+  let bilinear = mix(mix(a, b, tx), mix(c, e, tx), ty);
+  let bridge = max(a * e * (1.0 - 0.7 * abs(tx - ty)), b * c * (1.0 - 0.7 * abs(tx + ty - 1.0)));
+  return max(bilinear, bridge);
 }
 
 // The biome of the nearest land cell among the 5×5 around d; with none, one by
