@@ -154,7 +154,7 @@ describe('the capture key and the inputs', () => {
     input.dispose();
   });
 
-  it('rotates on the wheels with the ring in mouse aim, and with the stick in direct (decision 207)', () => {
+  it('rotates on the wheels with the ring in mouse aim, and with the stick in direct (decision 217)', () => {
     vi.stubGlobal('window', new EventTarget());
     const f = fakeLock();
     const cap = new MouseCapture(f.el, f.doc, f.schedule);

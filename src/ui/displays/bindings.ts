@@ -11,7 +11,9 @@ export type DisplayHotAction =
   | 'slotThreat'
   | 'masterMode'
   | 'dogfight'
-  | 'masterCaution';
+  | 'masterCaution'
+  | 'radarLock'
+  | 'radarBreak';
 
 /** Key codes per hot action (KeyboardEvent.code). */
 export const DISPLAY_BINDINGS: Record<DisplayHotAction, string[]> = {
@@ -22,6 +24,8 @@ export const DISPLAY_BINDINGS: Record<DisplayHotAction, string[]> = {
   masterMode: ['KeyM'],
   dogfight: ['KeyF'],
   masterCaution: ['KeyK'],
+  radarLock: ['KeyL'],
+  radarBreak: ['KeyU'],
 };
 
 export const DISPLAY_LABELS: Record<DisplayHotAction, string> = {
@@ -32,4 +36,6 @@ export const DISPLAY_LABELS: Record<DisplayHotAction, string> = {
   masterMode: 'Master mode by hand (steps through, then back to automatic)',
   dogfight: 'Dogfight override on / off',
   masterCaution: 'Acknowledge the master caution',
+  radarLock: 'Radar: lock the nearest contact, again for the next (decision 218)',
+  radarBreak: 'Radar: break the lock',
 };

@@ -25,6 +25,7 @@
  *            extension (tools/out/browser/world-1983): it is put into the browser's world
  *            cache before the app loads, which spares a machine without a GPU the global pass
  *   ONLY     comma list of parts to run: flight, takeoff, helicopter, campaign (default all)
+ *   TRAFFIC  1: Free Flight with its traffic and ground radars (decision 218)
  *   HELO     the helicopter the helicopter part flies: scout (default) or utility
  *   SCENES   comma list of the flight's scenes: fair, storm, snow, fog, night, dust
  *   ALIGN    1 runs the alignment stage (decision 184); by default the run passes align=0
@@ -77,6 +78,7 @@ const software =
   (process.env.ALIGN === '1' || (mode === 'gpu' && process.env.ALIGN !== '0') ? '' : '&align=0');
 const flashSeconds = Number(env('FLASH', '20'));
 const verbose = env('VERBOSE', '') === '1';
+const traffic = env('TRAFFIC', '') === '1' ? '&traffic=on' : '';
 mkdirSync(out, { recursive: true });
 
 /** The flight's scenes: weather preset, time of day, and what must show. */
@@ -210,7 +212,7 @@ const fixScale = async () => {
 
 /** Free Flight, from the start screen through the scenes. */
 async function flight() {
-  await open(`mode=freeflight&seed=${seed}`);
+  await open(`mode=freeflight&seed=${seed}${traffic}`);
   // The start screen: the bases are listed once the coarse pass is done, "Fly" is enabled
   // once the terrain is (the global pass, or the cached world).
   await until(() => document.querySelectorAll('.ff-bases tbody tr').length > 0, 240);
@@ -317,7 +319,7 @@ async function storm() {
 /** A takeoff with the keyboard, on a clear day in its wind, without touching the pedals. */
 async function takeoff() {
   if (!(await page.evaluate(() => Boolean(window.bearing?.freeFlight)))) {
-    await open(`mode=freeflight&seed=${seed}`);
+    await open(`mode=freeflight&seed=${seed}${traffic}`);
     await until(() => document.querySelectorAll('.ff-bases tbody tr').length > 0, 240);
     await page.evaluate(() => document.querySelector('.ff-bases tbody tr').click());
     await until(() => !document.querySelector('.ff-fly').disabled, 900);

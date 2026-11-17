@@ -43,8 +43,13 @@ export interface FreeFlightOptions {
   microFacets: boolean;
   /** The displays' and the strip's size, 0.75–1.5 (Proposal 0006, decision 200). */
   uiScale: number;
-  /** The frame-rate gauge at the screen's top center while flying (decision 207). */
+  /** The frame-rate gauge at the screen's top center while flying (decision 217). */
   showFps: boolean;
+  /**
+   * A few aircraft and two ground radars near the base, for the sensors and their
+   * displays to find (decision 218). Off by default.
+   */
+  traffic: boolean;
 }
 
 /** The jet's mouse modes: `aim`, the flight director flies to the ring; `direct`, the cursor is the stick. */
@@ -141,6 +146,7 @@ export const DEFAULT_OPTIONS: FreeFlightOptions = {
   microFacets: false,
   uiScale: 1,
   showFps: true,
+  traffic: false,
 };
 
 /** The weather option of a card: the list of presets by name, and what the chosen one is like. */
@@ -268,6 +274,7 @@ export class FreeFlightMenu {
       <div class="ff-row ff-weather-about"></div>
       <div class="ff-row">
         <label><input type="checkbox" class="ff-fuel"> Unlimited fuel</label>
+        <label title="Aircraft circling near the base and two ground radars, for the radar and the threat display"><input type="checkbox" class="ff-traffic"> Traffic and radars</label>
       </div>
       <div class="ff-row">
         <label title="Fine faceted relief on the ground near a low camera; costly on some graphics cards"><input type="checkbox" class="ff-micro"> Ground micro-facets (graphics)</label>
@@ -303,6 +310,8 @@ export class FreeFlightMenu {
     wind.addEventListener('change', () => (this.options.wind = wind.checked));
     const fuel = q<HTMLInputElement>('.ff-fuel');
     fuel.addEventListener('change', () => (this.options.unlimitedFuel = fuel.checked));
+    const traffic = q<HTMLInputElement>('.ff-traffic');
+    traffic.addEventListener('change', () => (this.options.traffic = traffic.checked));
     const micro = q<HTMLInputElement>('.ff-micro');
     micro.addEventListener('change', () => (this.options.microFacets = micro.checked));
     const aircraft = q<HTMLSelectElement>('.ff-aircraft');
@@ -345,6 +354,7 @@ export class FreeFlightMenu {
       this.weatherList.show(this.options.weather);
       wind.checked = this.options.wind;
       fuel.checked = this.options.unlimitedFuel;
+      traffic.checked = this.options.traffic;
       micro.checked = this.options.microFacets;
       for (const r of spawns) r.checked = r.value === this.options.spawn;
       showAircraft();

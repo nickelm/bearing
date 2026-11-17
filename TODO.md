@@ -772,14 +772,21 @@ The allocation rule, the display frame, slots and slot states, the status strip,
 
 ### P3. Sensors and formats
 
-The sensor model, avionics profiles with display complements, datalink tracks, the elevation mode of the moving map, and the air-to-air radar, air-to-ground radar, threat warning, stores, engines and fuel, and comms formats; the Su-27 analogue's HUD-integrated radar. May split into P3a (sensor model, radar, threat warning) and P3b (the rest).
+The sensor model, avionics profiles with display complements, datalink tracks, the elevation mode of the moving map, and the air-to-air radar, air-to-ground radar, threat warning, stores, engines and fuel, and comms formats; the Su-27 analogue's HUD-integrated radar. Split into P3a (sensor model, Free Flight traffic, radar, threat warning; decision 218) and P3b (the rest).
 
-- [ ] Sensor model in `sim/sensors/`, per aircraft: radar detection by radar type (none, ranging only, pulse, pulse-Doppler with look-down), mode, range, radar cross-section, aspect, terrain masking and clutter; RWR (emitting radars by bearing and type); visual detection (range, size, aspect, contrast, light); datalink and AWACS tracks with lower precision and a delay (Pact leaning on ground control, Alliance on AWACS); targeting pods and terrain-following radar; deterministic, with tests
+- [x] Sensor model in `sim/sensors/`, per aircraft: radar detection by radar type (none, ranging only, pulse, pulse-Doppler with look-down), mode, range, radar cross-section, aspect, terrain masking and clutter; RWR (emitting radars by bearing and type); visual detection (range, size, aspect, contrast, light); datalink and AWACS tracks with lower precision and a delay (Pact leaning on ground control, Alliance on AWACS); deterministic, with tests (decision 218)
+  - [ ] Targeting pods and terrain-following radar (P3b)
+  - [ ] Ground clutter by terrain rather than the local horizontal; the datalink's source as a real aircraft (AWACS, ground control) with its own radar, not a notional feed
+  - [ ] Emitters' launch state, with P4's missiles
 - [ ] The AI uses the same filtered picture as the player
 - [ ] Avionics profiles for every type of the air war's table, with display complements (the proposal's examples as the first cases)
-- [ ] Free Flight targets: scripted traffic and emitters as a start-screen option, so the formats have something to sense
-- [ ] Air-to-air radar format: B-scope with range-while-search, track-while-scan, single-target track and dogfight sub-modes; designation cursor with keys and mouse; elevation and azimuth coverage; contact altitude and aspect; datalink tracks marked
-- [ ] Threat warning format: RWR symbols by bearing and type, lock and launch indications
+- [x] Free Flight targets: scripted traffic and emitters as a start-screen option, so the formats have something to sense (decision 218)
+  - [ ] Traffic on the moving map (datalink tracks and threat rings, with the map's overlays)
+- [x] Air-to-air radar format: B-scope with range-while-search, track-while-scan and single-target track; contact altitude and heading; datalink tracks marked; LOCK, BRK and the hot keys L and U; the HUD's target box (decision 218)
+  - [ ] Dogfight sub-mode, a designation cursor with the mouse, the elevation coverage and scan bars
+  - [ ] Pact skins: the radar's ranges in round kilometers (20, 40, 80, 150), not converted nautical miles
+- [x] Threat warning format: RWR symbols by bearing and type, lock and launch indications (decision 218)
+  - [ ] A new threat's audio tone and a message call
 - [ ] Air-to-ground radar format: ground map, moving-target mode; the terrain-following scope for the F-111 and Su-24 analogues
 - [ ] Stores format: pylons and weapons, selection, fuzing, release mode (CCIP or CCRP), quantity and ripple, jettison, countermeasure programs
 - [ ] Engines and fuel format, complete: engine states, damage and failures

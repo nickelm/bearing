@@ -14,6 +14,46 @@ export interface SnapshotMessage {
   warn: boolean;
 }
 
+/** A contact as the displays draw it: relative to the aircraft (decision 218). */
+export interface SnapshotContact {
+  id: string;
+  source: 'radar' | 'datalink' | 'visual';
+  /** Slant range (m); azimuth and elevation off the nose (rad, + right and up). */
+  range: number;
+  azimuth: number;
+  elevation: number;
+  altitude: number;
+  /** Its heading (true, rad) and speed (m/s); closing speed (m/s, + closing). */
+  heading: number;
+  speed: number;
+  closing: number;
+  side: 'alliance' | 'pact' | null;
+  locked: boolean;
+}
+
+export interface SnapshotThreat {
+  id: string;
+  kind: string;
+  /** Bearing off the nose (rad, + right). */
+  azimuth: number;
+  state: 'search' | 'track' | 'launch';
+  ground: boolean;
+}
+
+export interface SnapshotSensors {
+  /** The air-to-air radar, if carried: power, mode, display range (nm), scan limits (rad). */
+  radar: {
+    on: boolean;
+    mode: 'rws' | 'tws' | 'stt';
+    rangeNm: number;
+    lock: string | null;
+    azimuth: number;
+    elevation: number;
+  } | null;
+  contacts: SnapshotContact[];
+  threats: SnapshotThreat[];
+}
+
 export interface AircraftSnapshot {
   /** Seconds since the flight began. */
   time: number;
@@ -65,4 +105,6 @@ export interface AircraftSnapshot {
   /** The mouse is free (cursor mode) while flying. */
   mouseFree: boolean;
   messages: SnapshotMessage[];
+  /** The sensor picture (decision 218); null where nothing is sensed (no traffic). */
+  sensors: SnapshotSensors | null;
 }

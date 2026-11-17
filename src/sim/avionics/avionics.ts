@@ -12,6 +12,10 @@
  * touch-and-go or a hover at 20 kt does not flicker between modes.
  */
 import { FOOT, KNOT } from '../../core/units';
+import type { RadarMode } from '../sensors/sensors';
+
+/** The air-to-air radar's display ranges, nose to the scope's top (nautical miles; decision 218). */
+export const RADAR_RANGES_NM = [10, 20, 40, 80] as const;
 
 export type MasterMode =
   'ground' | 'navigation' | 'air-to-air' | 'dogfight' | 'air-to-ground' | 'approach' | 'hover';
@@ -35,6 +39,8 @@ export interface AvionicsState {
   masterArm: boolean;
   /** Cautions the pilot has acknowledged with the master caution (strip item ids). */
   acknowledged: readonly string[];
+  /** The air-to-air radar (decision 218): on, its mode, its range (an index), the contact locked. */
+  radar: { on: boolean; mode: RadarMode; range: number; lock: string | null };
 }
 
 export type AvionicsCommand =
@@ -42,7 +48,12 @@ export type AvionicsCommand =
   | { type: 'dogfight' }
   | { type: 'auto-mode' }
   | { type: 'master-arm'; on: boolean }
-  | { type: 'acknowledge'; ids: readonly string[] };
+  | { type: 'acknowledge'; ids: readonly string[] }
+  | { type: 'radar-power'; on: boolean }
+  | { type: 'radar-mode'; mode: 'rws' | 'tws' }
+  | { type: 'radar-range'; delta: 1 | -1 }
+  /** Locks a contact (single-target track), or breaks the lock with null. */
+  | { type: 'radar-lock'; id: string | null };
 
 export function initialAvionics(onGround: boolean): AvionicsState {
   return {
@@ -51,6 +62,7 @@ export function initialAvionics(onGround: boolean): AvionicsState {
     beforeDogfight: 'navigation',
     masterArm: false,
     acknowledged: [],
+    radar: { on: true, mode: 'rws', range: 2, lock: null },
   };
 }
 
@@ -70,6 +82,25 @@ export function applyCommand(s: AvionicsState, c: AvionicsCommand): AvionicsStat
       return { ...s, masterArm: c.on };
     case 'acknowledge':
       return { ...s, acknowledged: [...new Set([...s.acknowledged, ...c.ids])] };
+    case 'radar-power':
+      return { ...s, radar: { ...s.radar, on: c.on, lock: c.on ? s.radar.lock : null } };
+    case 'radar-mode':
+      return { ...s, radar: { ...s.radar, mode: c.mode, lock: null } };
+    case 'radar-range': {
+      const range = Math.max(0, Math.min(RADAR_RANGES_NM.length - 1, s.radar.range + c.delta));
+      return { ...s, radar: { ...s.radar, range } };
+    }
+    case 'radar-lock':
+      if (!s.radar.on) return s;
+      return {
+        ...s,
+        radar: {
+          ...s.radar,
+          lock: c.id,
+          // A lock is single-target track; breaking it returns to the search it came from.
+          mode: c.id ? 'stt' : s.radar.mode === 'stt' ? 'tws' : s.radar.mode,
+        },
+      };
   }
 }
 

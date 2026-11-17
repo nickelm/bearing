@@ -647,7 +647,7 @@ async function main(): Promise<void> {
       'Kestrel: a lock lost to the browser pauses, and its Escape does not resume',
     );
   }
-  // A takeoff with the mouse in mouse aim (decision 207): on the runway with the mouse
+  // A takeoff with the mouse in mouse aim (decision 217): on the runway with the mouse
   // captured, raising the ring rotates the jet, and the flight director climbs away with it.
   {
     key('Escape');
@@ -747,6 +747,67 @@ async function main(): Promise<void> {
     check(byKey, 'Kestrel: I inverts the mouse, and the URL keeps it');
     check(shown && byBox, "Kestrel: the pause menu's box shows and switches the inversion");
     if (realMouse) check(forwardLowers === true, 'Kestrel: inverted, mouse forward lowers the aim');
+  }
+  // Traffic and the sensors (decision 218): the pause menu's box, then an air start; the
+  // datalink shows the circling aircraft, the threat warning hears the ground radars, and
+  // L locks the nearest hostile the radar sees, with a box on the HUD.
+  {
+    key('Escape');
+    const box = q<HTMLInputElement>(ff.pause.el, '.ff-traffic');
+    box.checked = true;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    const inUrl = location.search.includes('traffic=on');
+    click(ff.pause.el, 'Air start');
+    for (let i = 0; i < 30; i++) frame();
+    if ((ff.state as string) !== 'flying') click(ff.pause.el, 'Resume');
+    type Snap = {
+      contacts: { id: string; source: string; side: string | null }[];
+      threats: unknown[];
+    };
+    const internals = ff as unknown as {
+      sensorSnap: Snap | null;
+      trafficViews: Map<string, { group: { visible: boolean } }>;
+      hudTarget(m: unknown, eye: unknown): { label: string } | null;
+    };
+    let locked: string | null = null;
+    let boxed: string | null = null;
+    let lockable = false;
+    for (let i = 0; i < 1200 && !locked; i++) {
+      frame();
+      if (i % 30 !== 0) continue;
+      lockable = (internals.sensorSnap?.contacts ?? []).some(
+        (c) => c.source === 'radar' && c.side !== 'alliance',
+      );
+      if (!lockable) continue;
+      key('KeyL');
+      for (let k = 0; k < 12; k++) frame();
+      locked = ff.displays.avionics.radar.lock;
+      boxed = internals.hudTarget(ff.flight.model, globe.chase.eye)?.label ?? null;
+    }
+    const snapNow = internals.sensorSnap;
+    const datalink = (snapNow?.contacts ?? []).filter((c) => c.source === 'datalink').length;
+    const views = [...internals.trafficViews.values()].filter((v) => v.group.visible).length;
+    result.traffic = {
+      inUrl,
+      views,
+      contacts: snapNow?.contacts.length ?? 0,
+      datalink,
+      threats: snapNow?.threats.length ?? 0,
+      lockable,
+      locked,
+      boxed,
+    };
+    check(inUrl, 'traffic: the pause menu turns it on, in the URL');
+    check(views === 4, 'traffic: four aircraft drawn');
+    check((snapNow?.contacts.length ?? 0) >= 2, 'traffic: the sensors show the circling aircraft');
+    check((snapNow?.threats.length ?? 0) >= 1, 'traffic: the threat warning hears a radar');
+    if (lockable)
+      check(locked !== null && boxed !== null, 'traffic: L locks a contact, boxed on the HUD');
+    key('Escape');
+    const off = q<HTMLInputElement>(ff.pause.el, '.ff-traffic');
+    off.checked = false;
+    off.dispatchEvent(new Event('change', { bubbles: true }));
+    click(ff.pause.el, 'Resume');
   }
   key('Escape');
   click(ff.pause.el, 'Change airbase');

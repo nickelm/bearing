@@ -46,7 +46,7 @@ These readings shape the plan; decision 189 lists them for the owner to confirm.
 
 ```
 sim/avionics/   AvionicsState per aircraft, AvionicsCommand, apply(state, cmd), avionics profiles
-sim/sensors/    (P3) the sensor model: per-aircraft SensorPicture (radar, RWR, visual, datalink)
+sim/sensors/    (P3a, decision 218) the sensor model: per-aircraft SensorPicture (radar, RWR, visual, datalink)
 sim/crew/       (P5) crewmates: role, owned formats, tasks, callouts; act through AvionicsCommand
       │
       ▼  AircraftSnapshot: own ship + avionics + stores + systems + sensor picture (plain data)
@@ -128,6 +128,8 @@ Each milestone ends with tests, previews, Part I's acceptance checks for what it
 16. Acceptance checks 7, 12 and 13; owner checkpoint. (12 and 13 as `tools/displays.screens.mjs`, decision 200, with the UI scale and saved layouts; the moving map, step 11, is what remains.)
 
 ### P3. Sensors and formats
+
+Split by decision 218: P3a (steps 1, 3, 4 and 5, done) and P3b (the rest). Step 4's dogfight sub-mode and designation cursor moved to P3b.
 
 1. Sensor model in `sim/sensors/`: radar by type, mode, range, radar cross-section, aspect, terrain masking and clutter; RWR; visual detection; datalink and AWACS tracks with lower precision and a delay; deterministic, with tests. The AI reads the same picture.
 2. Avionics profiles for every type of the air war's table, with their display complements (the proposal's examples as the first cases).

@@ -287,3 +287,15 @@ describe("Free Flight's weather", () => {
     );
   });
 });
+
+describe('traffic in the URL (decision 218)', () => {
+  it('is off by default and named only when on', () => {
+    const q = new URLSearchParams();
+    writeFreeFlightParams(q, { ...DEFAULT_OPTIONS, traffic: true }, null);
+    expect(q.get('traffic')).toBe('on');
+    expect(parseFreeFlightUrl(q, '1').options.traffic).toBe(true);
+    writeFreeFlightParams(q, DEFAULT_OPTIONS, null);
+    expect(q.has('traffic')).toBe(false);
+    expect(DEFAULT_OPTIONS.traffic).toBe(false);
+  });
+});

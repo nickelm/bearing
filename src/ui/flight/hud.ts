@@ -172,6 +172,11 @@ export interface HudFrame {
   speedCues?: HudSpeedCues | null;
   /** Control mode label ("direct", "mouse stick", "mouse aim") and the aim point in NDC for mouse aim. */
   mode: string;
+  /**
+   * The radar's locked contact (decision 218): its position relative to the camera (m)
+   * and a label (its range), drawn as a world-anchored target box.
+   */
+  target?: { point: [number, number, number]; label: string } | null;
   /** The mouse's control cursor, drawn in its own color (controlCursor.ts, decision 198). */
   control?: ControlCursor | null;
   debug: {
@@ -370,7 +375,25 @@ export class Hud {
     this.messagesAndWarnings(f, cx, 130 * s, s);
     // Below the app's frame-time readout.
     if (f.debug) this.debugPanel(f, 16, 64, s);
+    if (f.target) this.targetBox(f.target, project, s);
     if (f.control) drawControlCursor(c, f.control, project, W, H, s);
+  }
+
+  /** The locked contact's box, world-anchored, with its range under it (decision 218). */
+  private targetBox(
+    t: { point: [number, number, number]; label: string },
+    project: Projector,
+    s: number,
+  ): void {
+    const p = project(t.point[0], t.point[1], t.point[2], true);
+    if (!p) return;
+    const c = this.ctx;
+    const h = 14 * s;
+    this.stroke(() => {
+      c.beginPath();
+      c.rect(p.x - h, p.y - h, 2 * h, 2 * h);
+    });
+    this.text(t.label, p.x, p.y + h + 16 * s, 'center');
   }
 
   // ---- Drawing helpers ----

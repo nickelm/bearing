@@ -75,6 +75,7 @@ if (process.env.SHOT) await page.screenshot({ path: process.env.SHOT });
 await browser.close();
 
 if (process.env.VERBOSE) console.log(JSON.stringify(result, null, 1));
+if (result.traffic) console.log('traffic', JSON.stringify(result.traffic));
 for (const [preset, r] of Object.entries(result.perPreset ?? {})) {
   const f = r.first;
   console.log(

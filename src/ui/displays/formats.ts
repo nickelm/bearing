@@ -40,6 +40,7 @@ const FORMATS: Partial<Record<FormatId, Format>> = {
   engines: enginesFormat,
   messages: messagesFormat,
   threat: threatFormat,
+  'radar-aa': radarFormat,
 };
 
 /** The moving map's ranges, center to edge (nautical miles; decision 201). */
@@ -94,6 +95,37 @@ export function displayModel(
       label: d.map.northUp ? 'N-UP' : 'TRK',
       active: false,
       command: { to: 'ui', command: { type: 'map-orient', slot } },
+    };
+  }
+  if (format === 'radar-aa' && s.sensors?.radar) {
+    const r = s.sensors.radar;
+    const av = (command: import('../../sim/avionics/avionics').AvionicsCommand) => ({
+      to: 'avionics' as const,
+      command,
+    });
+    // Top row: the search mode and the power; left: the range; right: lock and break.
+    buttons[0] = {
+      label: r.mode.toUpperCase(),
+      active: false,
+      command: av({ type: 'radar-mode', mode: r.mode === 'rws' ? 'tws' : 'rws' }),
+    };
+    buttons[1] = {
+      label: r.on ? 'ON' : 'OFF',
+      active: !r.on,
+      command: av({ type: 'radar-power', on: !r.on }),
+    };
+    buttons[19] = { label: 'RNG▲', active: false, command: av({ type: 'radar-range', delta: 1 }) };
+    buttons[18] = { label: 'RNG▼', active: false, command: av({ type: 'radar-range', delta: -1 }) };
+    const next = lockCandidate(s);
+    buttons[5] = {
+      label: 'LOCK',
+      active: false,
+      command: next ? av({ type: 'radar-lock', id: next }) : null,
+    };
+    buttons[6] = {
+      label: 'BRK',
+      active: false,
+      command: r.lock ? av({ type: 'radar-lock', id: null }) : null,
     };
   }
   if (large(slot)) {
@@ -294,6 +326,163 @@ function destinationMark(
   ];
 }
 
+/**
+ * The contact LOCK takes (and the L key): the nearest radar contact in the scope, or
+ * with a lock, the next one out by range after it, back to the nearest after the last.
+ */
+export function lockCandidate(s: AircraftSnapshot): string | null {
+  const r = s.sensors?.radar;
+  if (!r || !r.on) return null;
+  const inScope = s
+    .sensors!.contacts.filter(
+      (c) =>
+        c.source === 'radar' &&
+        Math.abs(c.azimuth) <= r.azimuth &&
+        c.range <= r.rangeNm * NM &&
+        c.side !== 'alliance',
+    )
+    .sort((a, b) => a.range - b.range);
+  if (inScope.length === 0) return null;
+  const at = inScope.findIndex((c) => c.id === r.lock);
+  return inScope[(at + 1) % inScope.length]!.id;
+}
+
+/**
+ * The air-to-air radar (decision 218): a B-scope, azimuth across and range up, over
+ * the radar's scan limits and the display range. Radar contacts are filled squares,
+ * datalink tracks hollow ones, visual contacts small circles; a friend (by datalink)
+ * is a circle, a known hostile a diamond. Each has a stick along its heading as seen
+ * from the nose, and its altitude in thousands of feet (hundreds of meters for the
+ * Pact); the locked contact is ringed and its range, altitude, speed and closing speed
+ * are written along the top.
+ */
+function radarFormat(s: AircraftSnapshot): ScreenItem[] {
+  const sens = s.sensors;
+  const r = sens?.radar;
+  if (!sens || !r) return [text(0.5, 0.5, 'NO RADAR', 'normal', 'center', 'dim')];
+  const pact = s.profile.skin === 'pact';
+  const x0 = 0.14;
+  const x1 = 0.86;
+  const y0 = 0.16;
+  // The scope ends above two lines for the locked contact, clear of the side buttons' labels.
+  const y1 = 0.78;
+  const scale = r.rangeNm * NM;
+  const items: ScreenItem[] = [
+    {
+      kind: 'line',
+      points: [
+        [x0, y1],
+        [x1, y1],
+      ],
+      tone: 'dim',
+    },
+    {
+      kind: 'line',
+      points: [
+        [0.5, y1],
+        [0.5, y1 + 0.02],
+      ],
+      tone: 'dim',
+    },
+    text(
+      0.04,
+      0.42,
+      pact ? `${Math.round((r.rangeNm * NM) / 1000)} KM` : `${r.rangeNm} NM`,
+      'small',
+      'left',
+      'normal',
+    ),
+  ];
+  for (const f of [0.25, 0.5, 0.75]) {
+    const y = y1 - (y1 - y0) * f;
+    items.push({
+      kind: 'line',
+      points: [
+        [x0, y],
+        [x0 + 0.025, y],
+      ],
+      tone: 'dim',
+    });
+    items.push({
+      kind: 'line',
+      points: [
+        [x1 - 0.025, y],
+        [x1, y],
+      ],
+      tone: 'dim',
+    });
+  }
+  if (!r.on) {
+    items.push(text(0.5, 0.5, 'RADAR OFF', 'normal', 'center', 'dim'));
+    return items;
+  }
+  let locked: (typeof sens.contacts)[number] | null = null;
+  for (const c of sens.contacts) {
+    if (Math.abs(c.azimuth) > r.azimuth || c.range > scale) continue;
+    const x = x0 + ((x1 - x0) * (c.azimuth + r.azimuth)) / (2 * r.azimuth);
+    const y = y1 - ((y1 - y0) * c.range) / scale;
+    const q = 0.018;
+    const tone: Tone = c.source === 'datalink' ? 'dim' : 'normal';
+    if (c.side === 'alliance') items.push({ kind: 'arc', x, y, r: q, tone });
+    else if (c.side === 'pact')
+      items.push({
+        kind: 'line',
+        points: [
+          [x, y - q * 1.3],
+          [x + q * 1.3, y],
+          [x, y + q * 1.3],
+          [x - q * 1.3, y],
+          [x, y - q * 1.3],
+        ],
+        tone,
+        width: 2,
+      });
+    else if (c.source === 'visual') items.push({ kind: 'arc', x, y, r: q * 0.6, tone });
+    else
+      items.push({
+        kind: 'bar',
+        x: x - q,
+        y: y - q,
+        w: 2 * q,
+        h: 2 * q,
+        fill: c.source === 'radar' ? 1 : 0,
+        vertical: false,
+        tone,
+      });
+    // The heading stick, as seen from the nose (up the scope is the nose's direction).
+    const rel = c.heading - s.heading;
+    items.push({
+      kind: 'line',
+      points: [
+        [x, y],
+        [x + 0.05 * Math.sin(rel), y - 0.05 * Math.cos(rel)],
+      ],
+      tone,
+    });
+    const alt = pact ? Math.round(c.altitude / 100) : Math.round(c.altitude / 0.3048 / 1000);
+    items.push(text(x, y + 0.055, String(Math.max(0, alt)), 'small', 'center', tone));
+    if (c.locked) {
+      items.push({ kind: 'arc', x, y, r: 0.04, tone: 'normal' });
+      locked = c;
+    }
+  }
+  if (locked) {
+    const rng = pact
+      ? `${(locked.range / 1000).toFixed(0)} KM`
+      : `${(locked.range / NM).toFixed(0)} NM`;
+    const alt = pact
+      ? `${Math.round(locked.altitude / 10) * 10} M`
+      : `${(Math.round(locked.altitude / 0.3048 / 100) * 100).toLocaleString('en-US')} FT`;
+    const spd = pact
+      ? `${Math.round(locked.speed * 3.6)} KMH`
+      : `${Math.round(locked.speed / 0.514_444)} KT`;
+    const vc = pact ? Math.round(locked.closing * 3.6) : Math.round(locked.closing / 0.514_444);
+    items.push(text(0.5, 0.845, `${rng}  VC ${vc}`, 'small', 'center', 'normal'));
+    items.push(text(0.5, 0.905, `${alt}  ${spd}`, 'small', 'center', 'normal'));
+  }
+  return items;
+}
+
 /** The log of calls and events, newest at the bottom; older lines dim. */
 function messagesFormat(s: AircraftSnapshot): ScreenItem[] {
   const lines: { t: string; warn: boolean; age: number }[] = [];
@@ -318,9 +507,14 @@ const clock = (t: number) => {
   return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
 };
 
-/** The threat warning's scope: rings, the aircraft at the center; emitters come with P3's sensor model. */
-function threatFormat(): ScreenItem[] {
-  return [
+/**
+ * The threat warning (decision 218): the aircraft at the center, its nose up; each
+ * emitter heard by its kind at its bearing, close in when it tracks the aircraft
+ * (boxed) or launches (inverse), farther out while it searches; ground radars carry
+ * a short bar beneath.
+ */
+function threatFormat(s: AircraftSnapshot): ScreenItem[] {
+  const items: ScreenItem[] = [
     text(0.04, 0.1, 'RWR', 'small', 'left', 'dim'),
     { kind: 'arc', x: 0.5, y: 0.55, r: 0.4, tone: 'dim' },
     { kind: 'arc', x: 0.5, y: 0.55, r: 0.22, tone: 'dim', dashed: true },
@@ -341,4 +535,36 @@ function threatFormat(): ScreenItem[] {
       tone: 'normal',
     },
   ];
+  // Symbols that would overlap move outward, the tracking and launching ones placed first.
+  const placed: [number, number][] = [];
+  const order = [...(s.sensors?.threats ?? [])].sort(
+    (a, b) => (a.state === 'search' ? 1 : 0) - (b.state === 'search' ? 1 : 0),
+  );
+  for (const t of order) {
+    let rr = t.state === 'search' ? 0.31 : 0.15;
+    let x = 0.5 + rr * Math.sin(t.azimuth);
+    let y = 0.55 - rr * Math.cos(t.azimuth);
+    while (
+      rr < 0.4 &&
+      placed.some(([px, py]) => Math.abs(px - x) < 0.13 && Math.abs(py - y) < 0.07)
+    ) {
+      rr += 0.05;
+      x = 0.5 + rr * Math.sin(t.azimuth);
+      y = 0.55 - rr * Math.cos(t.azimuth);
+    }
+    placed.push([x, y]);
+    const tone: Tone =
+      t.state === 'launch' ? 'warning' : t.state === 'track' ? 'caution' : 'normal';
+    items.push(text(x, y + 0.03, t.kind, 'small', 'center', tone));
+    if (t.ground)
+      items.push({
+        kind: 'line',
+        points: [
+          [x - 0.03, y + 0.06],
+          [x + 0.03, y + 0.06],
+        ],
+        tone,
+      });
+  }
+  return items;
 }

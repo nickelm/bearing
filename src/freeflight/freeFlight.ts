@@ -68,7 +68,12 @@ import { MouseCapture } from '../ui/flight/mouseCapture';
 import { clearPresetEdits, DisplaySystem } from '../ui/displays/system';
 import type { ControlsAction } from '../ui/displays/model';
 import { AVIONICS_PROFILES } from '../sim/avionics/profiles';
-import { snapshotFromHud } from './snapshot';
+import { relativePicture, snapshotFromHud } from './snapshot';
+import type { SnapshotSensors } from '../ui/displays/snapshot';
+import { SensorModel } from '../sim/sensors/sensors';
+import { lineOfSight } from '../sim/sensors/lineOfSight';
+import type { DatalinkFeed, SensorEnv, SensorTarget } from '../sim/sensors/sensors';
+import { buildTraffic, trafficState, trafficTargets } from './traffic';
 import { MovingMap } from '../render/strategic/movingMap';
 import { MAP_RANGES_NM } from '../ui/displays/formats';
 import {
@@ -193,6 +198,12 @@ export class FreeFlight {
   /** Whether the page shows a sortie (the body's `ff-flying` class). */
   private sortieShown = false;
   private mapAt = -Infinity;
+  /** The traffic near the base and its views, while the option is on (decision 218). */
+  private traffic: ReturnType<typeof buildTraffic> | null = null;
+  private readonly trafficViews = new Map<string, AircraftView>();
+  /** The flown aircraft's sensors and their picture, relative to it, for the displays. */
+  private readonly sensors = new SensorModel();
+  private sensorSnap: SnapshotSensors | null = null;
   /** The mouse's pointer lock, shared by both inputs and toggled by Tab (decision 193). */
   readonly capture: MouseCapture;
   /** When the browser last took the mouse back and paused (ms), so its Escape does not resume. */
@@ -339,6 +350,7 @@ export class FreeFlight {
     deps.globe.beforeDraw = (eye) => {
       if (this.view && (this.model || this.helo) && this.state !== 'menu')
         this.view.update(this.pose, eye);
+      this.poseTraffic(eye);
     };
     window.addEventListener('beforeunload', this.unload);
     deps.setView('strategic');
@@ -908,7 +920,7 @@ export class FreeFlight {
   /** Advances the mode by `dt` real seconds; call before the scene renders. */
   frame(dt: number, frameMs: number): void {
     this.frameMs = frameMs;
-    // The frame-rate gauge moves to the top center while a sortie is on (decision 207).
+    // The frame-rate gauge moves to the top center while a sortie is on (decision 217).
     const sortie = this.state !== 'menu';
     if (sortie !== this.sortieShown && typeof document !== 'undefined') {
       this.sortieShown = sortie;
@@ -1138,6 +1150,7 @@ export class FreeFlight {
       );
       frame.panels = true;
       this.updateDisplays(frame);
+      frame.target = this.hudTarget(this.helo, eye);
       this.hud.draw(frame, project);
       return;
     }
@@ -1183,6 +1196,7 @@ export class FreeFlight {
     });
     frame.panels = true;
     this.updateDisplays(frame);
+    frame.target = this.hudTarget(m, this.deps.globe.chase.eye);
     this.hud.draw(frame, project);
   }
 
@@ -1195,6 +1209,147 @@ export class FreeFlight {
     this.sortieAt = performance.now();
     this.fuelCapacity = (this.helo ?? this.model)?.fuel ?? 0;
     this.displaysAt = -Infinity;
+    this.startTraffic();
+  }
+
+  /** The traffic and the sensors for a new sortie: traffic only with the option on (decision 218). */
+  private startTraffic(): void {
+    this.sensors.reset();
+    this.sensorSnap = null;
+    const base = this.baseId !== null ? this.basePoints.get(this.baseId) : undefined;
+    this.traffic =
+      this.options.traffic && base
+        ? buildTraffic(base, `base-${this.baseId}`, this.deps.radius)
+        : null;
+    for (const a of this.traffic?.aircraft ?? []) {
+      if (this.trafficViews.has(a.id)) continue;
+      const v = new AircraftView(modelSpec(a.model), [0, 0, 0], this.deps.globe.lighting);
+      v.planetRadius = this.deps.radius;
+      v.shadowMesh.visible = false;
+      this.deps.globe.vehicles.add(v.group, v.shadowMesh);
+      this.trafficViews.set(a.id, v);
+    }
+  }
+
+  /** Places the traffic's views for the frame about to be drawn (camera-relative, rule 4). */
+  private poseTraffic(eye: Readonly<Vec3d>): void {
+    const on = this.traffic !== null && this.state !== 'menu';
+    for (const [id, v] of this.trafficViews) {
+      const a = on ? this.traffic!.aircraft.find((x) => x.id === id) : undefined;
+      v.group.visible = a !== undefined;
+      v.shadowMesh.visible = false;
+      if (!a) continue;
+      const st = trafficState(a, this.gameTime, this.deps.radius);
+      const up = st.pos.clone().normalize();
+      const fwd = st.vel.clone().normalize();
+      const right0 = fwd.clone().cross(up).normalize();
+      // Banked about the velocity: the lift leans into the turn.
+      const down0 = up.clone().scale(-1);
+      const c = Math.cos(st.bank);
+      const sn = Math.sin(st.bank);
+      const right = right0.clone().scale(c).addScaled(down0, sn);
+      const down = down0.clone().scale(c).addScaled(right0, -sn);
+      v.update(
+        {
+          pos: st.pos,
+          q: Quatd.fromAxes(fwd, right, down),
+          elevator: 0,
+          aileron: 0,
+          rudder: 0,
+          gear: 0,
+          speedbrake: 0,
+          afterburner: 0,
+          flaps: 0,
+          groundHeight: 0,
+        },
+        eye,
+      );
+    }
+  }
+
+  /**
+   * The sensors' update (decision 218): the traffic as targets, the weather's visibility,
+   * daylight from the sun, the terrain's line of sight and a datalink feed from a notional
+   * airborne early-warning aircraft; then the picture relative to the aircraft, and a lost
+   * lock said once.
+   */
+  private updateSensors(m: Airframe, profile: (typeof AVIONICS_PROFILES)[string]): void {
+    const ground = this.ground;
+    if (!ground) return;
+    const R = this.deps.radius;
+    const own = { id: 'player', pos: m.pos };
+    const targets: SensorTarget[] = this.traffic
+      ? trafficTargets(this.traffic, this.gameTime, R, (d) => ground.height(d), own)
+      : [];
+    const up = m.pos.clone().normalize();
+    const sunUp = up.dot(this.deps.globe.sun);
+    const report = this.weather.view?.report(up, this.gameTime);
+    const env: SensorEnv = {
+      time: this.gameTime,
+      // Visibility near the ground; above the cloud base the air is clear.
+      visibility:
+        report && m.pos.length() - R < report.cloudBase
+          ? report.visibility
+          : Math.max(30_000, report?.visibility ?? 30_000),
+      daylight: Math.min(1, Math.max(0, (sunUp + 0.1) / 0.2)),
+      lineOfSight: (a, b) => lineOfSight(a, b, R, ground),
+    };
+    const av = this.displays.avionics;
+    const sys = profile.systems;
+    const feed: DatalinkFeed | null = sys.includes('datalink')
+      ? {
+          delay: 5,
+          error: 400,
+          targets: targets.filter((x) => x.airborne && x.pos.clone().sub(m.pos).length() < 250_000),
+        }
+      : null;
+    const forward = m.bodyAxis(0);
+    const upBody = m.bodyAxis(2).scale(-1);
+    this.sensors.update(
+      {
+        id: own.id,
+        side: 'alliance',
+        pos: m.pos,
+        vel: m.vel,
+        forward,
+        up: upBody,
+        radar: sys.includes('radar-aa') ? (profile.radar ?? null) : null,
+        radarOn: av.radar.on,
+        radarMode: av.radar.mode,
+        lock: av.radar.lock,
+        rwr: sys.includes('rwr'),
+        datalink: feed !== null,
+      },
+      targets,
+      env,
+      feed,
+    );
+    const pic = this.sensors.picture;
+    // The lock holds while the radar still tracks the contact; else it breaks, said once.
+    const lock = av.radar.lock;
+    if (lock && !pic.contacts.some((c) => c.id === lock && c.source === 'radar')) {
+      this.displays.command({ to: 'avionics', command: { type: 'radar-lock', id: null } });
+      this.hud.message('Lock lost', 3, true);
+    }
+    this.sensorSnap = relativePicture(
+      pic,
+      { pos: m.pos, vel: m.vel, forward, up: upBody },
+      R,
+      sys.includes('radar-aa') ? (profile.radar ?? null) : null,
+      this.displays.avionics,
+    );
+  }
+
+  /** The locked contact as the HUD's target box: relative to the camera, with its range. */
+  private hudTarget(m: Airframe, eye: Readonly<Vec3d>): HudFrame['target'] {
+    const lock = this.displays.avionics.radar.lock;
+    const c = lock ? this.sensors.picture.contacts.find((x) => x.id === lock) : undefined;
+    if (!c) return null;
+    const range = Math.hypot(c.pos[0] - m.pos.x, c.pos[1] - m.pos.y, c.pos[2] - m.pos.z);
+    return {
+      point: [c.pos[0] - eye.x, c.pos[1] - eye.y, c.pos[2] - eye.z],
+      label: `${(range / NAUTICAL_MILE).toFixed(1)}`,
+    };
   }
 
   /** The master mode's triggers every frame; the displays and the strip at 10 Hz (decision 199). */
@@ -1233,6 +1388,7 @@ export class FreeFlight {
       radius: this.deps.radius,
     };
     this.requestMap(position);
+    this.updateSensors(m, profile);
     const snap = snapshotFromHud(f, {
       position,
       track,
@@ -1246,6 +1402,7 @@ export class FreeFlight {
       fixedGear: this.helo !== null,
       control,
       mouseFree: this.state === 'flying' && !this.capture.captured && !this.pilot,
+      sensors: this.sensorSnap,
       messages: this.hud.log.map((l) => ({
         at: (l.at - this.sortieAt) / 1000,
         text: l.text,

@@ -4,11 +4,17 @@
  * draws the real `DisplaySystem` with a made-up snapshot in master mode `mode`, for
  * `aircraft` (`kestrel`, `utility`) in `skin` (`alliance`, `pact`). The HUD under it is
  * the helicopter's (the stand-in scene is a hover); for the Kestrel it is left out.
+ * The Kestrel's radar and threat warning show a made-up picture (decision 218);
+ * `&sensors=0` leaves it out.
  */
 import type { MasterMode } from '../../src/sim/avionics/avionics';
 import { initialAvionics } from '../../src/sim/avionics/avionics';
 import { AVIONICS_PROFILES } from '../../src/sim/avionics/profiles';
-import type { AircraftSnapshot } from '../../src/ui/displays/snapshot';
+import type {
+  AircraftSnapshot,
+  SnapshotContact,
+  SnapshotSensors,
+} from '../../src/ui/displays/snapshot';
 import { DisplaySystem } from '../../src/ui/displays/system';
 
 export async function drawDisplays(q: URLSearchParams): Promise<void> {
@@ -31,6 +37,7 @@ export async function drawDisplays(q: URLSearchParams): Promise<void> {
     avionics: initialAvionics(ground),
     position: { lat: 0.8, lon: 0.3, radius: 1_000_000 },
     destination: { label: 'RWY 07', bearing: 1.2, distance: 30_000 },
+    sensors: helo || q.get('sensors') === '0' ? null : picture(ground),
     track: 0.6,
     heading: 0.6,
     onGround: ground,
@@ -89,4 +96,61 @@ export async function drawDisplays(q: URLSearchParams): Promise<void> {
     });
   }
   sys.update(snap);
+}
+
+/** A made-up sensor picture: every kind of contact on the radar, one locked, and three emitters. */
+function picture(ground: boolean): SnapshotSensors {
+  const c = (id: string, over: Partial<SnapshotContact>): SnapshotContact => ({
+    id,
+    source: 'radar',
+    range: 40_000,
+    azimuth: 0,
+    elevation: 0,
+    altitude: 6000,
+    heading: 3.4,
+    speed: 240,
+    closing: 400,
+    side: null,
+    locked: false,
+    ...over,
+  });
+  const lock = ground ? null : 'bandit-1';
+  return {
+    radar: {
+      on: !ground,
+      mode: ground ? 'rws' : 'stt',
+      rangeNm: 40,
+      lock,
+      azimuth: Math.PI / 3,
+      elevation: Math.PI / 3,
+    },
+    contacts: [
+      c('bandit-1', { range: 33_000, azimuth: -0.2, side: 'pact', locked: !ground }),
+      c('bandit-2', { range: 52_000, azimuth: 0.45, altitude: 8200, heading: 2.1, side: 'pact' }),
+      c('unknown', { range: 61_000, azimuth: -0.7, altitude: 3100, heading: 1.3 }),
+      c('strike-1', {
+        source: 'datalink',
+        range: 45_000,
+        azimuth: 0.85,
+        altitude: 1500,
+        heading: 4.4,
+        side: 'pact',
+      }),
+      c('friend-1', {
+        source: 'datalink',
+        range: 22_000,
+        azimuth: 0.3,
+        altitude: 4500,
+        heading: 0.6,
+        side: 'alliance',
+      }),
+      c('visual', { source: 'visual', range: 6_000, azimuth: -0.9, altitude: 3500, heading: 5.2 }),
+    ],
+    threats: [
+      { id: 'sam-1', kind: 'SA6', azimuth: 1.9, state: 'track', ground: true },
+      { id: 'sam-2', kind: 'SA6', azimuth: -2.4, state: 'search', ground: true },
+      { id: 'bandit-1', kind: '29', azimuth: -0.2, state: 'track', ground: false },
+      { id: 'bandit-2', kind: '29', azimuth: 0.45, state: 'launch', ground: false },
+    ],
+  };
 }

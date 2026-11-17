@@ -17,10 +17,14 @@ import {
 import type { AvionicsState, ModeInputs } from '../src/sim/avionics/avionics';
 import { AVIONICS_PROFILES, profileProblems } from '../src/sim/avionics/profiles';
 import { DISPLAY_BINDINGS } from '../src/ui/displays/bindings';
-import { displayModel, slotFormats } from '../src/ui/displays/formats';
+import { displayModel, lockCandidate, slotFormats } from '../src/ui/displays/formats';
 import { BEZEL_BUTTONS, SMALL_BUTTONS } from '../src/ui/displays/model';
 import { applyPreset, applyUi, initialDisplayState, recordEdit } from '../src/ui/displays/presets';
-import type { AircraftSnapshot } from '../src/ui/displays/snapshot';
+import type {
+  AircraftSnapshot,
+  SnapshotContact,
+  SnapshotSensors,
+} from '../src/ui/displays/snapshot';
 import { cautionIds, stripModel } from '../src/ui/displays/strip';
 import { FLIGHT_BINDINGS } from '../src/ui/flight/flightInput';
 import { HELO_BINDINGS } from '../src/ui/flight/heloInput';
@@ -42,6 +46,7 @@ function snap(over: Partial<AircraftSnapshot> = {}, avionics?: AvionicsState): A
     avionics: avionics ?? { ...initialAvionics(false) },
     position: { lat: 0.8, lon: 0.3, radius: 1_000_000 },
     destination: { label: 'RWY 07', bearing: 1.2, distance: 30_000 },
+    sensors: null,
     track: 0.6,
     heading: 0.6,
     onGround: false,
@@ -118,8 +123,8 @@ describe('display presets', () => {
   it('show a built format in each used slot, and never the same one twice', () => {
     const d = initialDisplayState(snap());
     expect(d.slots.leftMfd).toMatchObject({ format: 'moving-map', state: 'expanded' });
-    // Navigation keeps the right display collapsed; it offers engines and fuel beside the map.
-    expect(d.slots.rightMfd).toMatchObject({ format: 'engines', state: 'collapsed' });
+    // Navigation keeps the right display collapsed, on the radar since it is built (decision 218).
+    expect(d.slots.rightMfd).toMatchObject({ format: 'radar-aa', state: 'collapsed' });
     expect(d.slots.messages).toMatchObject({ format: 'messages', state: 'expanded' });
     expect(d.slots.threat).toMatchObject({ format: 'threat', state: 'expanded' });
   });
@@ -269,7 +274,7 @@ describe('display models', () => {
     }
     // The bottom row selects the slot's formats; the format shown is highlighted.
     expect(left.buttons[14]).toMatchObject({ label: 'MAP', active: true });
-    // Every display minimizes to its tab and pins (decision 207).
+    // Every display minimizes to its tab and pins (decision 217).
     expect(left.buttons[3]).toMatchObject({ label: 'MIN' });
     expect(msgs.buttons[3]).toMatchObject({ label: 'MIN' });
     expect(left.buttons[13]).toMatchObject({ label: 'ENG', active: false });
@@ -319,5 +324,99 @@ describe('the moving map (decision 201)', () => {
       d = applyUi(d, s, { type: 'map-range', slot: 'leftMfd', delta: -1 });
     // 5 nm (9.3 km): beyond, with its distance.
     expect(marks()[0]!.text).toBe('RWY 07 16 NM');
+  });
+});
+
+describe('the radar and the threat warning (decision 218)', () => {
+  const contact = (over: Partial<SnapshotContact>): SnapshotContact => ({
+    id: 'a',
+    source: 'radar',
+    range: 20_000,
+    azimuth: 0.1,
+    elevation: 0,
+    altitude: 5000,
+    heading: 0,
+    speed: 250,
+    closing: 300,
+    side: null,
+    locked: false,
+    ...over,
+  });
+  const sensors = (contacts: SnapshotContact[], lock: string | null = null): SnapshotSensors => ({
+    radar: { on: true, mode: 'rws', rangeNm: 40, lock, azimuth: 1, elevation: 1 },
+    contacts,
+    threats: [
+      { id: 's', kind: 'SA6', azimuth: Math.PI / 2, state: 'track', ground: true },
+      { id: 'f', kind: '29', azimuth: -0.3, state: 'search', ground: false },
+    ],
+  });
+
+  it('locks the nearest hostile radar contact in the scan, then steps to the next', () => {
+    const c = [
+      contact({ id: 'far', range: 50_000 }),
+      contact({ id: 'near', range: 15_000 }),
+      contact({ id: 'friend', range: 5_000, side: 'alliance' }),
+      contact({ id: 'linked', range: 8_000, source: 'datalink' }),
+      contact({ id: 'wide', range: 9_000, azimuth: 1.5 }),
+      contact({ id: 'beyond', range: 90_000 }),
+    ];
+    expect(lockCandidate(snap({ sensors: sensors(c) }))).toBe('near');
+    expect(lockCandidate(snap({ sensors: sensors(c, 'near') }))).toBe('far');
+    expect(lockCandidate(snap({ sensors: sensors(c, 'far') }))).toBe('near');
+    expect(lockCandidate(snap({ sensors: { ...sensors(c), radar: null } }))).toBeNull();
+  });
+
+  it('draws contacts inside the scope only, and the threats by kind', () => {
+    const s = snap({
+      sensors: sensors([contact({ id: 'in' }), contact({ id: 'out', azimuth: 1.4 })]),
+    });
+    const d = initialDisplayState(s);
+    const radar = displayModel(
+      s,
+      { ...d, slots: { ...d.slots, rightMfd: { ...d.slots.rightMfd, format: 'radar-aa' } } },
+      'rightMfd',
+    )!;
+    // One filled square for the radar contact in the scope.
+    expect(radar.items.filter((i) => i.kind === 'bar' && i.fill === 1)).toHaveLength(1);
+    expect(radar.buttons[5]).toMatchObject({ label: 'LOCK' });
+    expect(radar.buttons[5]!.command).not.toBeNull();
+    const threat = displayModel(s, d, 'threat')!;
+    const kinds = threat.items
+      .filter((i) => i.kind === 'text')
+      .map((i) => (i as { text: string }).text);
+    expect(kinds).toEqual(expect.arrayContaining(['SA6', '29']));
+    expect(structuredClone(radar)).toEqual(radar);
+  });
+
+  it('says NO RADAR without one and RADAR OFF when off', () => {
+    const s = snap();
+    const d = initialDisplayState(s);
+    const at = {
+      ...d,
+      slots: { ...d.slots, rightMfd: { ...d.slots.rightMfd, format: 'radar-aa' as const } },
+    };
+    const texts = (x: AircraftSnapshot) =>
+      displayModel(x, at, 'rightMfd')!
+        .items.filter((i) => i.kind === 'text')
+        .map((i) => (i as { text: string }).text);
+    expect(texts(s)).toContain('NO RADAR');
+    const off = sensors([]);
+    off.radar!.on = false;
+    expect(texts(snap({ sensors: off }))).toContain('RADAR OFF');
+  });
+
+  it('locks into single-target track and breaks back to track-while-scan', () => {
+    let a = initialAvionics(false);
+    a = applyCommand(a, { type: 'radar-lock', id: 'x' });
+    expect(a.radar).toMatchObject({ lock: 'x', mode: 'stt' });
+    a = applyCommand(a, { type: 'radar-lock', id: null });
+    expect(a.radar).toMatchObject({ lock: null, mode: 'tws' });
+    a = applyCommand(a, { type: 'radar-lock', id: 'x' });
+    a = applyCommand(a, { type: 'radar-power', on: false });
+    expect(a.radar).toMatchObject({ on: false, lock: null });
+    // No lock with the radar off; the range steps stop at the ends.
+    expect(applyCommand(a, { type: 'radar-lock', id: 'x' }).radar.lock).toBeNull();
+    for (let i = 0; i < 6; i++) a = applyCommand(a, { type: 'radar-range', delta: 1 });
+    expect(a.radar.range).toBe(3);
   });
 });

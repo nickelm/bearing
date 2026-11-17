@@ -42,7 +42,7 @@ export class FrameTimeOverlay {
     }
     const avg = sum / Math.max(1, this.filled);
     const fps = avg > 0 ? 1000 / avg : 0;
-    // In flight, a compact gauge (decision 207).
+    // In flight, a compact gauge (decision 217).
     if (typeof document !== 'undefined' && document.body.classList.contains('ff-flying'))
       return `${fps.toFixed(0)} fps · ${avg.toFixed(1)} ms (max ${max.toFixed(0)})`;
     return `frame ${avg.toFixed(2)} ms avg · ${max.toFixed(2)} ms max · ${fps.toFixed(0)} fps`;

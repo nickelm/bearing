@@ -16,7 +16,7 @@ import { applyCommand, autoMode, initialAvionics } from '../../sim/avionics/avio
 import type { AvionicsState, MasterMode, ModeInputs } from '../../sim/avionics/avionics';
 import type { SlotId } from '../../sim/avionics/profiles';
 import { DisplaysView } from './draw/displaysView';
-import { displayModel } from './formats';
+import { displayModel, lockCandidate } from './formats';
 import type { ControlsAction, DisplayCommand, DisplayModel, DisplayState } from './model';
 import { applyPreset, applyUi, initialDisplayState, recordEdit } from './presets';
 import type { PresetEdits } from './presets';
@@ -142,6 +142,13 @@ export class DisplaySystem {
     const slot = SLOT_KEYS[a];
     if (slot) return this.command({ to: 'ui', command: { type: 'toggle-slot', slot } });
     if (a === 'dogfight') return this.command({ to: 'avionics', command: { type: 'dogfight' } });
+    if (a === 'radarLock' || a === 'radarBreak') {
+      if (!this.last) return;
+      const id =
+        a === 'radarLock' ? lockCandidate({ ...this.last, avionics: this.avionics }) : null;
+      if (a === 'radarLock' && !id) return;
+      return this.command({ to: 'avionics', command: { type: 'radar-lock', id } });
+    }
     if (a === 'masterCaution') {
       if (!this.last) return;
       const ids = cautionIds(stripModel({ ...this.last, avionics: this.avionics }));

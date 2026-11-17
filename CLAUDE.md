@@ -82,7 +82,8 @@ src/sim/            headless simulation; runs in a worker: event queue + fixed t
   avionics/         avionics state per aircraft (master mode and its triggers, master arm, acknowledged cautions; later
                     radar mode, locks, designations, stores) changed only by avionics commands, and avionics profiles
                     (decisions 189, 199)
-  sensors/          (P3, planned) the sensor model: the filtered picture per aircraft that displays and AI read
+  sensors/          the sensor model (P3a, decision 218): radar, RWR, visual and datalink contacts per aircraft,
+                    the filtered picture that displays and AI read; lineOfSight.ts over the ground
   crew/             (P5, planned) AI crewmates: roles, format ownership, tasks, callouts; act through avionics commands
   command/          per-side command layer (graph and cast only): campaign input from the main thread, the interim
                     tasker (until the ATO), later the intelligence picture and the ATO
@@ -137,7 +138,8 @@ src/ui/             displays/ (P2, decisions 195, 199): layout.ts (the slots' re
                     rain and wind, no files; decision 142)
 src/freeflight/     the Free Flight mode's glue on the main thread: world and runways, ground query, clock,
                     session flow (?mode=freeflight; decision 134), its weather (a StandaloneWeather feed and
-                    presets) and URL options (decision 143)
+                    presets), URL options (decision 143) and traffic.ts, scripted traffic and ground radars
+                    for the sensors (decision 218)
 src/viewer/         the model viewer page (viewer.html, a second Vite page; decision 106)
 src/workers/        worker entry points and message protocols
 src/main.ts         app entry: WebGPU checks, renderer, scene, GUI

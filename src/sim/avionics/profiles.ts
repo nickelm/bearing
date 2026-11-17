@@ -35,7 +35,11 @@ export type SystemId =
   | 'stores-management'
   | 'hook';
 
+import type { RadarSpec } from '../sensors/sensors';
+
 export interface AvionicsProfile {
+  /** The air-to-air radar, where the aircraft carries one (decision 218). */
+  radar?: RadarSpec;
   skin: 'alliance' | 'pact';
   /** Scope formats in a round, analog-styled bezel (older types). */
   roundScopes: boolean;
@@ -58,6 +62,14 @@ export const FORMAT_SYSTEM: Partial<Record<FormatId, SystemId>> = {
 };
 
 const KESTREL: AvionicsProfile = {
+  // An F-16C's pulse-Doppler set: about 70 km against a fighter, ±60°.
+  radar: {
+    kind: 'pulse-doppler',
+    range: 70_000,
+    azimuth: Math.PI / 3,
+    elevation: Math.PI / 3,
+    notch: 40,
+  },
   skin: 'alliance',
   roundScopes: false,
   // The F-16C analogue: the full complement; Free Flight has no weapons or sensor model yet.

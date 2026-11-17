@@ -183,7 +183,7 @@ export class FlightInput {
   enabled = false;
   /**
    * On the wheels with mouse aim engaged and the mouse captured, the ring's height above the
-   * screen's center pulls the stick (decision 207): raising the ring rotates the jet, and in
+   * screen's center pulls the stick (decision 217): raising the ring rotates the jet, and in
    * the air the flight director flies toward it. Set by the app each frame.
    */
   aimRotates = false;

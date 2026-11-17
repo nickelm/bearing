@@ -45,6 +45,8 @@ export function parseFreeFlightUrl(q: URLSearchParams, seed: string): FreeFlight
   if (micro === 'off') options.microFacets = false;
   if (q.get('fps') === 'off') options.showFps = false;
   if (q.get('fps') === 'on') options.showFps = true;
+  if (q.get('traffic') === 'on') options.traffic = true;
+  if (q.get('traffic') === 'off') options.traffic = false;
   const ui = Number(q.get('ui'));
   if (q.has('ui') && Number.isFinite(ui)) options.uiScale = Math.min(1.5, Math.max(0.75, ui));
   const aircraft = q.get('aircraft');
@@ -86,9 +88,12 @@ export function writeFreeFlightParams(
   // The displays' scale: named only when not 1 (decision 200).
   if (options.uiScale !== 1) q.set('ui', String(options.uiScale));
   else q.delete('ui');
-  // The frame-rate gauge is on by default (decision 207).
+  // The frame-rate gauge is on by default (decision 217).
   if (options.showFps) q.delete('fps');
   else q.set('fps', 'off');
+  // Traffic is off by default (decision 218).
+  if (options.traffic) q.set('traffic', 'on');
+  else q.delete('traffic');
   q.set('spawn', options.spawn);
   q.set('fuel', options.unlimitedFuel ? 'unlimited' : 'limited');
   q.set('aircraft', options.aircraft);

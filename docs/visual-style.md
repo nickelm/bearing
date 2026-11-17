@@ -349,7 +349,7 @@ Multifunction displays docked at the screen edges and a status strip carry what 
 
 - **One frame.** A square screen in a bezel with 20 option-select buttons, five per side. Each format labels its buttons on the screen beside them, in the format's type, and grays the ones that do nothing now; the format shown is highlighted among the bottom row's format buttons, and small displays name their format at the screen's top left. The owner (a crewmate's role, such as `WSO`) is a short tag on the bezel's top edge (decision 199).
 - **Same format, same look.** A format has the same layout and buttons in every aircraft that carries it.
-- **Scopes** (radar, threat warning, stores, engines and fuel, comms, mission, crew, messages): phosphor vector graphics on a near-black screen, one color with a dimmer second level for secondary items, at device pixel ratio. Datalink tracks draw hollow, own-sensor tracks solid.
+- **Scopes** (radar, threat warning, stores, engines and fuel, comms, mission, crew, messages): phosphor vector graphics on a near-black screen, one color with a dimmer second level for secondary items, at device pixel ratio. Datalink tracks draw hollow, own-sensor tracks solid. A track whose side the datalink names takes the side's symbol instead (a diamond for a hostile, a circle for a friend), in the dimmer level while only the datalink has it (decision 218).
 - **Era bezels.** Older types may draw scope formats in a round, analog-styled scope bezel with the same content and buttons.
 
 ### Skins

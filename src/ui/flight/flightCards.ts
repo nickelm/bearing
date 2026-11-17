@@ -68,6 +68,7 @@ export class PauseMenu {
     const opts = document.createElement('div');
     opts.innerHTML = `<h2>Options</h2>
       <label><input type="checkbox" class="ff-fuel"> Unlimited fuel</label><br>
+      <label title="Aircraft circling near the base and two ground radars"><input type="checkbox" class="ff-traffic"> Traffic and radars (on restart)</label><br>
       <label class="ff-weather-row">Weather </label> <span class="ff-weather-about"></span><br>
       <label><input type="checkbox" class="ff-wind"> Wind and turbulence</label><br>
       <label title="Fine faceted relief on the ground near a low camera; costly on some graphics cards"><input type="checkbox" class="ff-micro"> Ground micro-facets (graphics)</label><br>
@@ -96,6 +97,11 @@ export class PauseMenu {
     const micro = opts.querySelector('.ff-micro') as HTMLInputElement;
     micro.addEventListener('change', () => {
       this.options.microFacets = micro.checked;
+      events.optionsChanged(this.options);
+    });
+    const traffic = opts.querySelector('.ff-traffic') as HTMLInputElement;
+    traffic.addEventListener('change', () => {
+      this.options.traffic = traffic.checked;
       events.optionsChanged(this.options);
     });
     const fps = opts.querySelector('.ff-fps') as HTMLInputElement;
@@ -134,6 +140,7 @@ export class PauseMenu {
       micro.checked = this.options.microFacets;
       mouse.sync();
       fps.checked = this.options.showFps;
+      traffic.checked = this.options.traffic;
       ui.value = String(this.options.uiScale);
       uiLabel.textContent = `${Math.round(this.options.uiScale * 100)}%`;
       if (sound) {
