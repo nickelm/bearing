@@ -73,15 +73,31 @@ Provinces, lithology, zones and wonders do not exist yet, so their criteria have
 
 The total includes graph, casting and infrastructure, and the retries of seed 9. The stages track W touches or adds between `boundaries` and `biomes` cost about 3.4 s today; the 50% allowance on the whole pass is about 6 s.
 
-## Eroded global grid
+## Eroded global grid, seeds 1–10
 
-The eroded worlds (1024² per face) for peak heights and the eroded biomes were still building on lavapipe when this baseline was committed; `GLOBAL=1 npx vitest run --config vitest.tools.config.ts tools/diversity.preview.ts` produces them (about ten minutes per world, cached afterwards). Decision 122 measured heights of −897 to 8,239 m on the eroded world of seed 1983. W2's first task records the 20-seed peaks here before it changes the uplift.
+The eroded worlds (1024² per face) of seeds 1–10 ran on lavapipe, 9–19 minutes of erosion each, before the run was stopped to free the machine for track W's own worlds. Entropy here uses the proposal's windows scaled to the planet (16 km, decision 205), over biomes alone; the dry share counts the highest 5% of land.
+
+| seed       | max height (m) | > 4 km (km²) | > 6 km (km²) | land ≥ 0.5 bit | land ≥ 1 bit | JSD two largest (bits)              | strata | buttes | dry share of highest 5% |
+| ---------- | -------------- | ------------ | ------------ | -------------- | ------------ | ----------------------------------- | ------ | ------ | ----------------------- |
+| 1          | 8565           | 42483        | 6571         | 28.5%          | 8.7%         | 0.12                                | 21.0%  | 17.0%  | 0.1%                    |
+| 2          | 9205           | 70424        | 16007        | 34.3%          | 11.2%        | 0.28                                | 31.4%  | 26.0%  | 0.1%                    |
+| 3          | 7225           | 27023        | 1808         | 33.8%          | 12.5%        | 0.05                                | 25.6%  | 20.6%  | 0.6%                    |
+| 4          | 6861           | 15358        | 691          | 30.3%          | 9.4%         | 0.13                                | 31.5%  | 28.1%  | 1.6%                    |
+| 5          | 7699           | 53667        | 7053         | 32.1%          | 10.5%        | 0.36                                | 25.4%  | 21.9%  | 0.3%                    |
+| 6          | 6945           | 24339        | 1260         | 28.5%          | 8.2%         | 0.84                                | 25.5%  | 21.6%  | 0.2%                    |
+| 7          | 7570           | 18061        | 1287         | 34.8%          | 12.4%        | 0.43                                | 30.4%  | 24.7%  | 1.3%                    |
+| 8          | 6800           | 34241        | 848          | 31.2%          | 10.3%        | 0.42                                | 28.2%  | 22.6%  | 0.1%                    |
+| 9          | 7231           | 21122        | 2214         | 31.5%          | 9.2%         | 0.09                                | 30.4%  | 26.4%  | 0.5%                    |
+| 10         | 7045           | 19906        | 936          | 27.4%          | 8.0%         | 0.42                                | 21.8%  | 18.7%  | 2.6%                    |
+| **median** | 7231           | 27023        | 1808         | 31.5%          | 10.3%        | 0.36 (10 seeds with two landmasses) | 28.2%  | 22.6%  | 0.5%                    |
+
+Every one of these worlds already has peaks above 6 km (6.8 to 9.2 km), so the proposal's height criterion holds before track W; what the baseline lacks is high ground in quantity and variety, not peak height. Over 16 km windows only about a third of land reaches 0.5 bit of biome entropy.
 
 ## What the baseline says
 
 - **Terracing is everywhere dry.** The kernel would layer a median of 33% of all land into benches, and nearly as much carries buttes: every desert, most shrubland and part of the grassland. The proposal's complaint that mesas and buttes appear too widely is measurable: after W2 the share outside layered dry rock must be zero.
 - **Desert mountains are rare.** In 13 of 20 seeds none of the highest 5% of land is desert or shrubland, and the median is 0%. High ground is cold, so it becomes alpine, tundra or ice; dry ranges need provinces (basin and range, high plateaus) and the rain-shadow and continentality modifiers.
-- **Local variety is moderate.** A 100 km window holds a median of 0.95 bit of biome entropy, and 61–80% of land (median 70%) reaches 0.5 bit. The proposal's 90% needs the joint classes of the plan (altitude zones, provinces, surface character), not more biome noise.
+- **Local variety is moderate, and low at the planet's scale.** A 100 km window holds a median of 0.95 bit of biome entropy, and 61–80% of land (median 70%) reaches 0.5 bit. Over the scaled 16 km windows on the eroded grid, about a third of land reaches 0.5 bit. The proposal's 90% needs the joint classes of the plan (altitude zones, provinces, surface character), not more biome noise.
 - **Continents often look alike.** The two largest landmasses differ by a median of 0.35 bit; 9 of 20 seeds fall under 0.25 bit and 5 under 0.12.
 - **Every current biome appears** in most seeds; the ice sheet is missing in two. The twenty-biome table must be checked the same way.
 - **Salt pans exist** on about 1% of land as arid lakes, without a water balance; closed basins do not.
