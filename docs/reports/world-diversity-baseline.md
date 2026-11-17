@@ -6,7 +6,7 @@ _Measured 2026-11-17 for [proposal 0007](../proposals/0007-world-diversity.md) (
 
 Seeds 1–20 run as the app runs them: the campaign world with its validity retries (seed 9 became `6409045966207312319`). The coarse pass is the CPU pass at 256² per face (cells of about 6 km), without erosion; its heights are tectonic reference heights × 0.157, so peak heights need the eroded global grid (1024² per face, about 1.5 km), which runs on the GPU (Dawn on lavapipe here, about ten minutes per world).
 
-- **Entropy:** Shannon entropy (bits) of the biome distribution of the land within 50 km of each land cell, so over windows of 100 km.
+- **Entropy:** Shannon entropy (bits) of the biome distribution of the land within 50 km of each land cell, so over windows of 100 km. Decision 205 scales the proposal's windows to the planet (about 16 km); the eroded section below uses the scaled windows, the coarse table the unscaled ones, which on 6 km cells is the only window with enough cells.
 - **JSD:** Jensen–Shannon divergence (bits, 0 to 1) between the biome distributions of the two largest landmasses.
 - **Strata and buttes:** the land the tile kernel would layer into 75 m benches (aridity mask past 0.35 after its blur, decision 126) and raise buttes on (aridity times flatness past 0.25), from a CPU copy of the mask.
 - **Dry share of the highest 5%:** the share of the highest 5% of land, by area, whose biome is desert or shrubland: how often mountains are desert mountains.

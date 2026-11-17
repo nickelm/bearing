@@ -1,6 +1,6 @@
 # Proposal 0007: World Diversity
 
-*Drafted 2026-11-17. Status: accepted (decision 204). Affects `docs/design.md`, `docs/visual-style.md`, `docs/proposals/0001-two-views.md`, `docs/proposals/0005-terrain-adaptive-networks.md`, `TODO.md`, and `CLAUDE.md`. The implementation plan is [docs/plans/world-diversity.md](../plans/world-diversity.md).*
+*Drafted 2026-11-17. Status: accepted (decision 204). Affects `docs/design.md`, `docs/visual-style.md`, `docs/proposals/0001-two-views.md`, `docs/proposals/0005-terrain-adaptive-networks.md`, `TODO.md`, and `CLAUDE.md`. The implementation plan is [docs/plans/world-diversity.md](../plans/world-diversity.md). Regional distances below (zones, blends, windows) are Earth figures; on Bearing's planet they scale by R / R_Earth ≈ 0.157, while landforms and heights keep Earth's values (decision 205).*
 
 ## Goals
 

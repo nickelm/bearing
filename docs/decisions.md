@@ -3318,3 +3318,26 @@ The verification criteria's open thresholds are set in the plan from the baselin
 `docs/design.md` (*Decisions So Far*, *Demo Goals*, *Scale and Range*, *World Generation Pipeline*, *Reading the World*, *Rendering*, *Milestones*, *Open Questions*), Part I (*Principles* preamble, *Terrain*, *Models*, *Palette*, *Performance Budgets*, *What to Avoid*, *Acceptance Checks*, and a new *Zones*), Part II (*Strategic Principles*, *Base Map*, *Geographic Glyphs*, *Labels*, *Strategic Palette*), proposals 0001 and 0005, `CLAUDE.md` (rules 10 and 15) and `TODO.md` change with this decision.
 
 **Reason:** The terrain and erosion already make good ground; what the worlds lack is a reason for one place to differ from another. Tying landforms to tectonic history and rock, biomes to a richer climate, and both to named zones gives each region a cause and an identity, which serves the strategic map, the briefings and the flying alike. Keeping every new stage a pure function on both grids keeps campaign facts the same on every machine, and feeding the existing erosion and kernel new inputs keeps what works.
+
+### 205. Owner's answers on proposal 0007: regional distances scaled to the planet
+
+**Date:** 2026-11-17
+**Decision:** The owner accepts decision 204's readings 2–21 and answers reading 1 with "use the appropriate scaling". The appropriate scaling is decision 121's split:
+
+- **Regional extents scale with the landmasses**, by R / R_Earth ≈ 0.157: zones of 100–400 km become **16–63 km**, blends of 5–15 km about **1–2.5 km**, and the local-variety windows of 100 km about **16 km** (radius 8 km).
+- **Landforms and heights keep Earth's values**: peaks of 8–9 km, fault-block spacing of 15–30 km, canyons, gullies and props.
+- **Counts per world** stay as written: 5–15 wonders.
+
+Consequences:
+
+- A world has a few thousand zones instead of about a hundred.
+- **Zones become presentation data.** A 16–63 km zone is three to ten coarse cells across, too coarse to segment or to follow a ridge. Zones are segmented once per world on the eroded global grid in the worker's finish and stored with the world, like the alignment tier (decision 184). Campaign logic never reads them, briefings name wonders rather than zones, and the weather's tendencies come from biome and province. This replaces decision 204's item 15 (zones on the coarse pass, upsampled).
+- **Zone labels.** The map shows zones over about 40 km from the Theater band and all of them in the Region band.
+- **Measuring local variety.** The entropy is measured on the eroded grid, where a 16 km window holds about 90 cells.
+- **Salt-flat airstrips** need a straight run of at least 4 km, because runways keep their real length.
+
+The owner also asked for decision 204's prep commit on `main` (done), and for the track to proceed.
+
+`docs/design.md` (*Scale and Range*, *World Generation Pipeline*, *Reading the World*, *Casting*, *Open Questions*), Part I (*Zones*, check 15), proposal 0007's header, the plan, `TODO.md`, the baseline report and `tools/diversity.preview.ts` change with this decision.
+
+**Reason:** Bearing's continents are Earth's scaled by 0.157 (decision 121), so a region that is a given share of a continent on Earth is the same share here. Landforms and heights are what a pilot sees at working altitude, and they keep Earth's size.

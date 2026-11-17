@@ -15,8 +15,8 @@
  * where built):
  *
  *   - land share per biome;
- *   - biome entropy (bits) of the land within 50 km of each land cell, i.e.
- *     over 100 km windows; the median and the land shares above 0.5 and 1 bit;
+ *   - biome entropy (bits) of the land within about 8 km of each land cell,
+ *     i.e. over the proposal's 100 km windows scaled to the planet (decision 205); the median and the land shares above 0.5 and 1 bit;
  *   - Jensen–Shannon divergence (bits) between the biome distributions of the
  *     two largest landmasses;
  *   - the highest point and the land area above 4 and 6 km;
@@ -36,6 +36,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { it } from 'vitest';
 import { CubeGrid } from '../src/core/cubeGrid';
+import { EARTH_RADIUS } from '../src/core/units';
 import { Biome, BIOME_COUNT, BIOME_NAMES } from '../src/worldgen/biomes';
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
 import { LANDFORM_MASK_TUNING } from '../src/worldgen/gpu/landformMasks';
@@ -43,8 +44,11 @@ import { TILE_SYNTH_TUNING } from '../src/worldgen/gpu/tileSynth';
 import { labelLandmasses } from '../src/worldgen/landmasses';
 import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
 
-/** Window radius for the entropy (m): the proposal's 100 km windows. */
-const WINDOW_RADIUS = 50e3;
+/**
+ * Window radius for the entropy (m): the proposal's 100 km windows, scaled to
+ * the planet like every regional extent (decision 205): about 16 km across.
+ */
+const WINDOW_RADIUS = 50e3 * (DEFAULT_PLANET_PARAMS.radius / EARTH_RADIUS);
 /** The highest share of land that counts as mountain for the dry-mountain share. */
 const MOUNTAIN_SHARE = 0.05;
 const DRY_BIOMES: ReadonlySet<number> = new Set([
@@ -218,8 +222,8 @@ function measure(
   const entropies: number[] = [];
   let e05 = 0;
   let e1 = 0;
-  // Sample every land cell on coarse grids; every 16th on fine ones (the median barely moves).
-  const stride = grid.n > 256 ? 16 : 1;
+  // Sample every land cell on coarse grids; every 4th on fine ones (the median barely moves).
+  const stride = grid.n > 256 ? 4 : 1;
   let sampledArea = 0;
   for (let s = 0; s < n; s += stride) {
     if (!isLand(s)) continue;
