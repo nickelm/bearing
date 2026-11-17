@@ -76,6 +76,30 @@ describe('InfraScene from a generated world', () => {
     expect(scene.isClear(latLonToDirection(-89 * DEG, 0))).toBe(false);
   });
 
+  it('answers as isClear from the clearings gathered near a point (decision 194)', () => {
+    const base = new Vec3d(...bases[0]!.point);
+    const { east, north } = localFrame(base);
+    const test = scene.clearTester(base, 1300);
+    let checked = 0;
+    let cleared = 0;
+    for (let i = -20; i <= 20; i++) {
+      for (let j = -20; j <= 20; j++) {
+        const d = base
+          .clone()
+          .addScaled(east, (i * 60) / R)
+          .addScaled(north, (j * 60) / R)
+          .normalize();
+        for (const extra of [0, 1, 6]) {
+          expect(test(d, extra)).toBe(scene.isClear(d, false, extra));
+          checked++;
+          if (test(d, extra)) cleared++;
+        }
+      }
+    }
+    expect(cleared).toBeGreaterThan(0);
+    expect(cleared).toBeLessThan(checked);
+  });
+
   it("knows each town's built-up patch on the CPU, out to its outline (decision 166)", () => {
     const towns = scene.sites.filter((x) => x.kind === 'town');
     for (const t of towns.slice(0, 20)) {

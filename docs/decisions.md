@@ -3126,3 +3126,18 @@ The Kestrel has no downwash and is unaffected.
 `docs/plans/displays.md`, `docs/design.md` (*Flying*), `CLAUDE.md` (rule 14) and `TODO.md` change with this decision.
 
 **Reason:** The owner wants one way to take and give back the mouse in every aircraft, and found keyboard control of twenty bezel buttons impractical. A real cursor clicks HTML displays with no hit-testing of our own, and the browser's activation rules favor a toggle on a key press. Keys stay where they pay: actions done many times a minute, eyes outside.
+
+### 194. The ground cover's clearing test gathered per chunk; no micro-facets under pavement
+
+**Date:** 2026-11-17
+**Decision:** The owner found the Kestrel's frame rate very low on the ground, better once airborne (after decision 191 fixed the helicopter's dust).
+
+- **Cause, on the CPU.** The ground cover's placement (decision 174) asks for each of a chunk's thousand cells, and for each item near one, whether it lies in a clearing (`InfraScene.isClear`). Clearings are indexed by level-7 tile, about 12 km, so each call looped over every road, runway and taxiway segment in it, and one placement slice of four rows could run far past its 3 ms budget near an airbase or along roads: where a jet sits and rolls, and where new chunks keep coming into range until it climbs above the cover's range.
+- **Fix.** `InfraScene.clearTester(center, reach)` gathers the clearings within `reach` of a point once and tests against those alone; the placement asks it for each chunk (`CoverContext.clearNear`), with the chunk's half-diagonal as the reach. A test checks that it answers exactly as `isClear` round an airbase. At the small test world's airbase (seed 7, 64² grid) a chunk's cell tests fell from 1.6 ms to 0.3 ms; the campaign world has many more roads per tile. Placement now yields after every row of cells (was four), so no slice holds a frame for long.
+- **On the GPU.** With the camera a few meters over a runway most of the screen is ground within the micro-facets' range (decision 171), and they were evaluated under pavement, which draws over them. Fully paved fragments now skip them (the road coverage moved ahead of them in the terrain shader).
+
+The forest's placement asks `isClear` per tree the same way (decision 148); it has not been changed here.
+
+**Not done:** the frame time on the ground measured in the browser, and with the debug panel's switches, which layer costs what (Tiles → Ground cover, Lighting → Micro-facets, Tiles → Trees).
+
+**Reason:** The owner's report: a parked or rolling jet is where the ground cover's placement works hardest, at an airfield full of clearings.

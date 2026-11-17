@@ -435,12 +435,19 @@ export class TerrainRenderer {
       const distance = length(positionWorld).toVar();
       // Micro-facets on bare dry land near a low camera (decisions 168, 169): water,
       // towns and the canopy keep the facet's normal, and roads draw over them.
+      // Roads and pavement over dry land and rivers (a road over a river reads as a bridge).
+      const paved = roads.coverage(planet, roadStart, roadCount, footprint, isDry).toVar();
       const micro = this.micro.evaluate({
         wrapped,
         normal,
         footprint,
         distance,
-        mask: dry.mul(float(1).sub(river)).mul(float(1).sub(builtCover)).mul(float(1).sub(canopy)),
+        // Pavement draws over the ground: no micro-facets under it (decision 194).
+        mask: dry
+          .mul(float(1).sub(river))
+          .mul(float(1).sub(builtCover))
+          .mul(float(1).sub(canopy))
+          .mul(step(paved.x, 0.99)),
         rock: ground.rock,
         dry: ground.dry,
         snow,
@@ -484,8 +491,6 @@ export class TerrainRenderer {
         planet,
         light: at,
       });
-      // Roads and pavement over dry land and rivers (a road over a river reads as a bridge).
-      const paved = roads.coverage(planet, roadStart, roadCount, footprint, isDry).toVar();
       // Habitability peaks near 0.6 and is under 0.1 on half the land: 0.4 and up count as fully settled.
       const hab = clamp(this.habitability.sample(radial).div(0.4), 0, 1).toVar();
       // Road color from docs/visual-style.md (#7A7062, linear).

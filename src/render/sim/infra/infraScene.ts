@@ -227,7 +227,7 @@ export class InfraScene {
             alignedPoint(alignments, link, o + i, p);
             sm.push([p.x, p.y, p.z, w]);
           }
-          // Bridges and viaducts carry the road on the kit's decks (decision 192).
+          // Bridges and viaducts carry the road on the kit's decks (decision 194).
           onGround = (i) => alignments.structure[o + i + 1] === STRUCTURE.Corridor;
         } else if (kind === 'rail') {
           continue;
@@ -491,26 +491,72 @@ export class InfraScene {
   isClear(d: Readonly<Vec3d>, pavedOnly = false, extra = 0): boolean {
     const list = this.clearings.get(tileKeyString(tileForDirection(d, CLEARING_LEVEL)));
     if (!list) return false;
-    const R = this.radius;
     for (const c of list) {
       if (pavedOnly && !c.paved) continue;
-      // Distance to the segment in the tangent approximation (clearings are small).
-      const abx = c.b.x - c.a.x;
-      const aby = c.b.y - c.a.y;
-      const abz = c.b.z - c.a.z;
-      const len2 = abx * abx + aby * aby + abz * abz;
-      let t = 0;
-      if (len2 > 0) {
-        t = ((d.x - c.a.x) * abx + (d.y - c.a.y) * aby + (d.z - c.a.z) * abz) / len2;
-        t = Math.min(1, Math.max(0, t));
-      }
-      const dx = d.x - (c.a.x + abx * t);
-      const dy = d.y - (c.a.y + aby * t);
-      const dz = d.z - (c.a.z + abz * t);
-      const r = c.r + extra;
-      if ((dx * dx + dy * dy + dz * dz) * R * R < r * r) return true;
+      if (this.inClearing(c, d, extra)) return true;
     }
     return false;
+  }
+
+  /**
+   * `isClear` for many directions near `center`: the clearings within `reach` m of it
+   * (plus their own width and `maxExtra`), gathered once (decision 194). A level-7 tile
+   * holds every road, runway and taxiway segment for about 12 km, and the ground cover
+   * asked `isClear` for each of a chunk's thousand cells: millions of segment tests per
+   * chunk near an airbase or along roads, which stalled the frame.
+   */
+  clearTester(
+    center: Readonly<Vec3d>,
+    reach: number,
+    pavedOnly = false,
+    maxExtra = 10,
+  ): (d: Readonly<Vec3d>, extra?: number) => boolean {
+    const keys = new Set<string>([tileKeyString(tileForDirection(center, CLEARING_LEVEL))]);
+    const { east, north } = localFrame(center);
+    const angle = reach / this.radius;
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * 2 * Math.PI;
+      const q = center
+        .clone()
+        .addScaled(east, angle * Math.cos(a))
+        .addScaled(north, angle * Math.sin(a))
+        .normalize();
+      keys.add(tileKeyString(tileForDirection(q, CLEARING_LEVEL)));
+    }
+    const near: Clearing[] = [];
+    const seen = new Set<Clearing>();
+    for (const key of keys) {
+      for (const c of this.clearings.get(key) ?? []) {
+        if (seen.has(c) || (pavedOnly && !c.paved)) continue;
+        seen.add(c);
+        if (this.inClearing(c, center, reach + maxExtra)) near.push(c);
+      }
+    }
+    if (near.length === 0) return () => false;
+    return (d, extra = 0) => {
+      for (const c of near) if (this.inClearing(c, d, extra)) return true;
+      return false;
+    };
+  }
+
+  /** Whether unit direction `d` lies within clearing `c`'s width plus `extra` m. */
+  private inClearing(c: Clearing, d: Readonly<Vec3d>, extra: number): boolean {
+    // Distance to the segment in the tangent approximation (clearings are small).
+    const R = this.radius;
+    const abx = c.b.x - c.a.x;
+    const aby = c.b.y - c.a.y;
+    const abz = c.b.z - c.a.z;
+    const len2 = abx * abx + aby * aby + abz * abz;
+    let t = 0;
+    if (len2 > 0) {
+      t = ((d.x - c.a.x) * abx + (d.y - c.a.y) * aby + (d.z - c.a.z) * abz) / len2;
+      t = Math.min(1, Math.max(0, t));
+    }
+    const dx = d.x - (c.a.x + abx * t);
+    const dy = d.y - (c.a.y + aby * t);
+    const dz = d.z - (c.a.z + abz * t);
+    const r = c.r + extra;
+    return (dx * dx + dy * dy + dz * dz) * R * R < r * r;
   }
 
   /** Sites whose footprint reaches within `margin` m of direction `d`'s cap of angle `angle`. */

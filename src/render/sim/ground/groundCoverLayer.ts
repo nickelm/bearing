@@ -189,6 +189,14 @@ export interface CoverContext {
   climate: (d: Readonly<Vec3d>, out: Float32Array) => Float32Array;
   /** Directions where nothing may stand (towns, airfields, roads), widened by `extra` m. */
   clear?: (d: Readonly<Vec3d>, extra?: number) => boolean;
+  /**
+   * `clear` for the directions within `reach` m of `center`, with the clearings near it
+   * gathered once (decision 194); used per chunk when given.
+   */
+  clearNear?: (
+    center: Readonly<Vec3d>,
+    reach: number,
+  ) => (d: Readonly<Vec3d>, extra?: number) => boolean;
   /** Habitability 0..1: fields on settled, farmable, flat land (decision 127). */
   habitability?: (d: Readonly<Vec3d>) => number;
   /** River stretches near a level-10 tile. */
@@ -232,7 +240,7 @@ export function placeCoverChunk(
 }
 
 /** Rows of cells `coverPlacer` places between yields. */
-const PLACER_ROWS = 4;
+const PLACER_ROWS = 1;
 
 /**
  * `placeCoverChunk` a few rows at a time: yields after every PLACER_ROWS rows of
@@ -355,6 +363,10 @@ export function* coverPlacer(
     return best;
   };
 
+  // The clearings near the chunk, gathered once: a level-7 tile's list holds every road and
+  // runway segment for about 12 km (decision 194).
+  const half = (span * sampleM) / Math.SQRT2 + 2 * sampleM;
+  const clear = ctx.clearNear ? ctx.clearNear(origin.clone().normalize(), half) : ctx.clear;
   const stretches = ctx.rivers?.(t) ?? [];
   /** Distance (m) from unit direction `p` to the nearest river's water, or Infinity. */
   const waterGap = (p: Vec3d): number => {
@@ -433,7 +445,7 @@ export function* coverPlacer(
       coverInCell(t.x * TILE_TEXELS + sx, t.y * TILE_TEXELS + sy, t.face, seed, site, items);
       if (items.length === 0) continue;
       // Near a clearing or water, test each item; elsewhere the cell is clear.
-      const nearClear = ctx.clear?.(d, cellM) ?? false;
+      const nearClear = clear?.(d, cellM) ?? false;
       const nearWater = stretches.length > 0 && inWater(d, cellM);
       // The open ground's color here, with the land shader's moisture tint (landShading.ts).
       const rgb = colorFor('biome', h, mat, t.level, false, opts.reliefScale);
@@ -443,7 +455,7 @@ export function* coverPlacer(
         const isx = sx + it.u;
         const isy = sy + it.v;
         dirAt(isx, isy, p);
-        if (nearClear && ctx.clear!(p, 1)) continue;
+        if (nearClear && clear!(p, 1)) continue;
         if (nearWater && inWater(p, 1)) continue;
         const { k, w } = triangleAt(isx, isy);
         let bx = 0;
@@ -567,6 +579,7 @@ export class GroundCoverLayer {
   private filledAt: Vec3d | null = null;
   private readonly filledForward = new Vec3d();
   private clearings: ((d: Readonly<Vec3d>, extra?: number) => boolean) | undefined;
+  private clearNear: CoverContext['clearNear'];
   private habitability: ((d: Readonly<Vec3d>) => number) | undefined;
 
   constructor(
@@ -742,6 +755,7 @@ export class GroundCoverLayer {
   /** The infrastructure the cover keeps off (towns, airfields, roads) and the fields. */
   setInfrastructure(scene: InfraScene | null): void {
     this.clearings = scene ? (d, extra = 0) => scene.isClear(d, false, extra) : undefined;
+    this.clearNear = scene ? (c, reach) => scene.clearTester(c, reach) : undefined;
     this.habitability = scene
       ? (d) => habitabilityAt(scene.habitability, scene.habitabilityResolution, d)
       : undefined;
@@ -825,6 +839,7 @@ export class GroundCoverLayer {
     const ctx: CoverContext = {
       climate: (dir, out) => this.climate.sampleAt(dir, out),
       clear: this.clearings,
+      clearNear: this.clearNear,
       habitability: this.habitability,
       rivers: world.rivers ? (k) => riverStretches(world.rivers!, k, R) : undefined,
       fieldSeed: canopySeed(world.seed),

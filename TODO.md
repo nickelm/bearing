@@ -1114,6 +1114,9 @@ Detail near a low camera for helicopter flight, faceted and slightly cartoony, a
 - [ ] Owner: the wash in Free Flight in the browser over desert, snow, water and a runway
 - [x] Slowdown over roads (owner): pavement raised up to 700 large sprites; dust only below 30–50 kt, at most 240 sprites, capped size, fade near the lens, ground read when the wash moves (decision 191)
 - [ ] Owner: frame rate in a slow hover over a runway and a desert; trees swaying beside a hover
+- [x] The Kestrel's frame rate on the ground (owner): the clearing test gathered per chunk, one row per slice, no micro-facets under pavement (decision 194)
+- [ ] Owner: the Kestrel parked and rolling at an airbase, with the debug panel's Ground cover, Micro-facets and Trees switches, to see which layer costs what
+- [ ] The forest's placement asks `isClear` per tree too: gather per part as the cover does
 - [ ] Wheels on dirt strips, vehicles on gravel roads and impacts through the same emitter
 - [x] Closes H3's downwash task for dust, snow and spray (the water ring stays open)
 
