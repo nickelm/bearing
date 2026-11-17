@@ -9,6 +9,8 @@ import type { Touchdown } from '../../sim/flight/outcomes';
 import { ACTION_LABELS, FLIGHT_BINDINGS } from './flightInput';
 import type { FlightAction } from './flightInput';
 import { mouseRow, weatherSelect } from './freeFlightMenu';
+import { DISPLAY_BINDINGS, DISPLAY_LABELS } from '../displays/bindings';
+import type { DisplayHotAction } from '../displays/bindings';
 import type { FreeFlightOptions, SpawnKind } from './freeFlightMenu';
 
 function card(className = ''): HTMLDivElement {
@@ -296,9 +298,12 @@ export class HelpOverlay {
       return `<tr><td>${keys}</td><td>${ACTION_LABELS[a]}</td></tr>`;
     });
     rows.push(
-      '<tr><td>Mouse wheel</td><td>Throttle, stopping at idle, military and the afterburner gate</td></tr>',
+      '<tr><td>Mouse wheel</td><td>Throttle, stopping at idle, military and the afterburner gate; zoom while looking around</td></tr>',
     );
-    rows.push('<tr><td>Right drag</td><td>Free look; the camera springs back on release</td></tr>');
+    rows.push(
+      '<tr><td>Right drag</td><td>Free look; the view stays where you leave it (V recenters)</td></tr>',
+    );
+    rows.push(...displayRows());
     this.el.innerHTML = `<h1>Controls</h1><table>${rows.join('')}</table>
       <div class="ff-note">Ctrl+W closes the browser tab; the page asks first while you fly. The throttle also moves with = and −.</div>
       <div class="ff-note">Takeoff: release the parking brake (P), full throttle; at about 150 kt hold the stick back until about 9° of pitch and let go: with the gear down the stick commands pitch rate (5°/s) and the attitude holds. Gear up (G) once climbing; the stick then commands g. Landing: gear down below 300 kt, fly the approach at 13° angle of attack, 3° glide path, brake (Space) after the nosewheel is down.</div>`;
@@ -321,6 +326,7 @@ export class HelpOverlay {
       '<tr><td>Right drag</td><td>Free look; the view stays where you leave it (V or the middle button recenters it)</td></tr>',
     );
     rows.push('<tr><td>Wheel</td><td>Camera closer or farther</td></tr>');
+    rows.push(...displayRows());
     this.el.innerHTML = `<h1>Controls</h1><table>${rows.join('')}</table>${notes
       .map((n) => `<div class="ff-note">${n}</div>`)
       .join('')}`;
@@ -333,4 +339,12 @@ export class HelpOverlay {
   set visible(v: boolean) {
     this.el.hidden = !v;
   }
+}
+
+/** The displays' hot keys for the help card (decision 199). */
+function displayRows(): string[] {
+  return (Object.keys(DISPLAY_BINDINGS) as DisplayHotAction[]).map((a) => {
+    const keys = [...new Set(DISPLAY_BINDINGS[a].map(keyName))].join(' / ');
+    return `<tr><td>${keys}</td><td>${DISPLAY_LABELS[a]}</td></tr>`;
+  });
 }

@@ -6,7 +6,8 @@
  *
  *   node tools/freeflight.session.mjs [http://localhost:5173]
  *
- * Env: HEADED=1 runs a headed browser (needs an X server, e.g. `xvfb-run`, and xdotool) and
+ * Env: SHOT_DIR=<dir> saves the screenshots the page asks for (the displays in flight);
+ * HEADED=1 runs a headed browser (needs an X server, e.g. `xvfb-run`, and xdotool) and
  * moves the real pointer, so the jet's mouse checks run; VERBOSE=1 prints everything the page found; SHOT=<file.png> saves the start screen
  * as the session leaves it. Playwright is no dependency of the repo (as for
  * freeflight.screens.mjs): tools/browser/launch.mjs says where it is looked for. The page
@@ -53,7 +54,11 @@ for (;;) {
   });
   if ((await page.title()) === 'ready') break;
   const what = await page.evaluate(() => window.pressNow);
-  if (what.startsWith('mouse:')) {
+  if (what.startsWith('shot:')) {
+    // A screenshot the page asks for (SHOT_DIR; decision 199).
+    if (process.env.SHOT_DIR)
+      await page.screenshot({ path: `${process.env.SHOT_DIR}/${what.slice(5)}.png` });
+  } else if (what.startsWith('mouse:')) {
     const [dx, dy] = what.slice(6).split(',').map(Number);
     // Small steps, as a hand moves a mouse.
     for (let i = 0; i < 10; i++) {

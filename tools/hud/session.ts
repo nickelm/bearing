@@ -501,6 +501,7 @@ async function main(): Promise<void> {
     check(forward > 3, `${choice}: the mouse flies it forward`);
     check(paused === 'paused' && resumed === 'flying', `${choice}: pause and resume`);
     check(location.search.includes(`aircraft=${choice}`), `${choice}: in the URL`);
+    if (choice === 'utility') await press('shot:session-utility-hover');
     if (choice === 'scout') {
       // Tab captures the mouse and frees it, without pausing (decision 193).
       await press('Tab');
@@ -525,6 +526,34 @@ async function main(): Promise<void> {
     ff.flight.model !== null && ff.flight.helo === null && ff.state === 'flying',
     'the Kestrel after the helicopters',
   );
+  await press('shot:session-kestrel');
+  // The displays and the strip (decision 199): shown in flight, a strip item works the
+  // control it shows, and 1 collapses and expands the left display.
+  {
+    for (let i = 0; i < 12; i++) frame();
+    const root = document.querySelector<HTMLElement>('.dsp-root');
+    const slots = [...document.querySelectorAll<HTMLElement>('.dsp-slot')];
+    const open = slots.filter((el) => !el.classList.contains('dsp-closed')).length;
+    const items = [...document.querySelectorAll('.dsp-item')].map((e) => e.textContent ?? '');
+    const pb0 = ff.input.controls.parkingBrake;
+    document.querySelector<HTMLElement>('.dsp-item[data-cmd="item-park"]')?.click();
+    const strip = ff.input.controls.parkingBrake !== pb0;
+    if (strip) key('KeyP');
+    const left = slots[0]!;
+    key('Digit1');
+    const collapsed = left.classList.contains('dsp-closed');
+    key('Digit1');
+    const expanded = !left.classList.contains('dsp-closed');
+    result.displays = { shown: !!root && !root.hidden, open, items, strip, collapsed, expanded };
+    // On the ground the preset collapses the threat display (Proposal 0006's table).
+    check(!!root && !root.hidden && open === 2, 'displays: shown on the ground (left, messages)');
+    check(
+      items.includes('PARK BRK') && items.includes('GEAR DN'),
+      'displays: the strip shows the brake and the gear',
+    );
+    check(strip, "displays: the strip's PARK BRK works the brake");
+    check(collapsed && expanded, 'displays: 1 collapses and expands the left display');
+  }
   // The jet's two mouse modes (decisions 193, 195, 198): mouse aim flies toward the ring and
   // holds it while the mouse is free; direct makes the captured mouse's offset from the
   // center the stick, a held key wins on its axis, and freeing the mouse centers it. A lock

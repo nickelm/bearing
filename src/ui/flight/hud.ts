@@ -146,6 +146,12 @@ export interface HudFrame {
     physicsMs: number;
     steps: number;
   } | null;
+  /**
+   * The displays and the status strip carry the states, fuel, torque and rotor speed and
+   * the messages (decision 199): the HUD keeps the throttle and the warnings that demand
+   * a maneuver. Off (absent) in the tools that draw the first HUD.
+   */
+  panels?: boolean;
   /** Helicopters: the hover symbology; absent or null for fixed-wing aircraft. */
   hover?: HoverHud | null;
 }
@@ -249,8 +255,18 @@ export class Hud {
   }
 
   /** Shows a message for `seconds` (real time). */
+  /**
+   * Every message, with when it came (ms, `performance.now()`): the messages display
+   * shows the log (decision 199); the newest 40 are kept.
+   */
+  readonly log: { at: number; text: string[]; warn: boolean }[] = [];
+
   message(text: string | string[], seconds = 4, warn = false): void {
     const lines = Array.isArray(text) ? text : [text];
+    const last = this.log[this.log.length - 1];
+    if (!last || last.text.join() !== lines.join() || performance.now() - last.at > 1500)
+      this.log.push({ at: performance.now(), text: lines, warn });
+    if (this.log.length > 40) this.log.splice(0, this.log.length - 40);
     this.messages = this.messages.filter((m) => m.text.join() !== lines.join());
     this.messages.push({ text: lines, until: performance.now() + seconds * 1000, warn });
     if (this.messages.length > 4) this.messages.shift();
@@ -258,6 +274,7 @@ export class Hud {
 
   clearMessages(): void {
     this.messages = [];
+    this.log.length = 0;
   }
 
   private resize(): void {
@@ -301,7 +318,7 @@ export class Hud {
     this.headingTape(f, cx, 70 * s, s);
     if (hv) {
       this.hoverAltitude(hv, cx + tx, cy, s);
-      this.rotor(hv, cx - tx - 28 * s, cy + span + 44 * s, s);
+      this.rotor(hv, cx - tx - 28 * s, cy + span + 44 * s, s, f.panels === true);
     } else {
       this.numbers(f, cx - tx - 28 * s, cy + span + 44 * s, s);
     }
@@ -611,6 +628,10 @@ export class Hud {
             ? 'IDLE'
             : `${Math.round(60 + 40 * (lever / 0.8))}%`;
     lines.push([`THR ${thr}`]);
+    if (f.panels) {
+      this.text(lines[0]![0], x - 28 * s, y, 'left');
+      return;
+    }
     lines.push(this.fuelLine(f));
     lines.push([
       f.gear >= 0.999 ? 'GEAR DOWN' : f.gear <= 0.001 ? 'GEAR UP' : 'GEAR ▒ TRANSIT',
@@ -681,6 +702,8 @@ export class Hud {
       row += 1.7;
     }
     for (const w of f.warnings) {
+      // The strip carries the gear's speed limit (decision 199).
+      if (f.panels && w === 'gear-speed') continue;
       if (w === 'pull-up' && !blink) {
         row++;
         continue;
@@ -688,7 +711,7 @@ export class Hud {
       this.text(WARNING_TEXT[w], x, y + row * 20 * s, 'center', WARN_COLOR);
       row++;
     }
-    for (const m of this.messages) {
+    for (const m of f.panels ? [] : this.messages) {
       for (const line of m.text) {
         this.text(line, x, y + row * 20 * s, 'center', m.warn ? WARN_COLOR : HUD_COLOR);
         row++;
@@ -870,7 +893,9 @@ export class Hud {
   }
 
   /** Torque and rotor RPM; RPM larger, both amber outside their limits (torque over 100 %, RPM outside 95–105 %). */
-  private rotor(hv: HoverHud, x: number, y: number, s: number): void {
+  private rotor(hv: HoverHud, x: number, y: number, s: number, panels = false): void {
+    // With the strip, torque and rotor speed are its gauges (decision 199).
+    if (panels) return;
     this.text(
       `TRQ ${Math.round(hv.torque * 100)}%`,
       x,
@@ -892,6 +917,7 @@ export class Hud {
 
   /** Fuel, gear when it is not down and locked (skids never show), brakes, the mode tags and the control mode. */
   private hoverStatus(f: HudFrame, hv: HoverHud, x: number, y: number, s: number): void {
+    if (f.panels) return;
     const lines: [string, string?][] = [this.fuelLine(f)];
     if (f.gear < 0.999)
       lines.push([

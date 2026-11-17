@@ -70,8 +70,9 @@ src/sim/            headless simulation; runs in a worker: event queue + fixed t
   air/              the air war (C2, decision 132): aircraft type table, order of battle, missions,
                     analytic routes (great-circle legs, racetracks, fuel) and AirOps (live missions, phase events)
   naval/            carrier groups on their patrol tracks (analytic position); convoys and amphibious groups in C3
-  avionics/         (P2, planned) avionics state per aircraft (master mode, master arm, radar mode, locks, designations,
-                    stores selection) changed only by avionics commands, and avionics profiles (decision 189)
+  avionics/         avionics state per aircraft (master mode and its triggers, master arm, acknowledged cautions; later
+                    radar mode, locks, designations, stores) changed only by avionics commands, and avionics profiles
+                    (decisions 189, 199)
   sensors/          (P3, planned) the sensor model: the filtered picture per aircraft that displays and AI read
   crew/             (P5, planned) AI crewmates: roles, format ownership, tasks, callouts; act through avionics commands
   command/          per-side command layer (graph and cast only): campaign input from the main thread, the interim
@@ -117,8 +118,9 @@ src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Bo
     infra/          settlements and infrastructure (decision 104): urban fill texture, building
                     glyph placement, the model of roads, railways, bridges and site symbols
                     (overlays/airModel.ts draws flights, trails, routes and carrier groups; decision 132)
-src/ui/             displays/ (P2, begun): layout.ts (the slots' rects, decision 195); planned: display models, formats, master modes, the status strip's rules,
-                    cursor mode and display bindings, with the HTML, CSS and Canvas 2D that draw them in draw/ (decision 189);
+src/ui/             displays/ (P2, decisions 195, 199): layout.ts (the slots' rects), model.ts and snapshot.ts (display models,
+                    commands, the aircraft snapshot), formats.ts, presets.ts (master modes' presets), strip.ts, bindings.ts
+                    (hot keys), system.ts (the controller) and draw/ (the HTML, CSS and Canvas 2D view);
                     lil-gui debug panel (atmosphereSettings.ts maps its Atmosphere folder to the scene),
                     overlays, time controls, the time bar's weather line; flight/ (Free Flight's start screen, input
                     bindings, HUD, pause menu and cards; decisions 134, 135); audio/ (synthesized thunder,

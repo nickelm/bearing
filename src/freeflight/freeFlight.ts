@@ -65,6 +65,10 @@ import { FlightInput, STICK_DEADZONE, STICK_FULL } from '../ui/flight/flightInpu
 import type { ControlCursor } from '../ui/flight/controlCursor';
 import type { ControlMode, FlightAction } from '../ui/flight/flightInput';
 import { MouseCapture } from '../ui/flight/mouseCapture';
+import { DisplaySystem } from '../ui/displays/system';
+import type { ControlsAction } from '../ui/displays/model';
+import { AVIONICS_PROFILES } from '../sim/avionics/profiles';
+import { snapshotFromHud } from './snapshot';
 import {
   DEFAULT_OPTIONS,
   FreeFlightMenu,
@@ -79,6 +83,7 @@ import type {
   SpawnKind,
 } from '../ui/flight/freeFlightMenu';
 import { Hud, matrixProjector } from '../ui/flight/hud';
+import type { HudFrame } from '../ui/flight/hud';
 import { flightStartTime } from './clock';
 import { writeFreeFlightParams } from './url';
 import type { FreeFlightUrl } from './url';
@@ -166,6 +171,13 @@ export class FreeFlight {
   private readonly laws = new HeloLaws();
   private readonly assists = assistsFor('assisted');
   readonly heloInput: HeloInput;
+  /** The displays and the status strip (Proposal 0006, decision 199). */
+  readonly displays: DisplaySystem;
+  private displayModel = AIRCRAFT;
+  private displayName = 'F-21 Kestrel';
+  private sortieAt = 0;
+  private fuelCapacity = 0;
+  private displaysAt = -Infinity;
   /** The mouse's pointer lock, shared by both inputs and toggled by Tab (decision 193). */
   readonly capture: MouseCapture;
   /** When the browser last took the mouse back and paused (ms), so its Escape does not resume. */
@@ -253,6 +265,8 @@ export class FreeFlight {
       continueFrom: (id) => this.start(id, 'runway'),
       changeBase: () => this.toMenu(),
     });
+    this.displays = new DisplaySystem();
+    this.displays.onControls = (a) => this.displayControl(a);
     this.capture = new MouseCapture(deps.canvas);
     // Escape or a lost focus took the mouse: pause, as Escape does.
     this.capture.onLost = () => {
@@ -517,6 +531,8 @@ export class FreeFlight {
         : [`Air start over ${r.name}`, 'Tab or a click: fly with the mouse, H for help'],
       7,
     );
+    this.displayName = 'F-21 Kestrel';
+    this.startDisplays(AIRCRAFT, spawn === 'runway');
     this.state = 'flying';
     this.input.enabled = true;
   }
@@ -602,11 +618,13 @@ export class FreeFlight {
         spawn === 'air'
           ? `${spec.model.name} hovering over ${r.name}`
           : `${spec.model.name} beside runway ${end.designator}, ${r.name}`,
-        'Click the view to capture the mouse. W climbs, S descends, the mouse flies',
+        'Tab or a click captures the mouse. W climbs, S descends, the mouse flies',
         'A/D slide, Q/E pedals, H hover hold, F1 help, Esc pause',
       ],
       9,
     );
+    this.displayName = spec.model.name;
+    this.startDisplays(HELICOPTERS[choice], spawn !== 'air');
     this.state = 'flying';
     this.heloInput.enabled = true;
   }
@@ -705,6 +723,8 @@ export class FreeFlight {
     this.pause.visible = false;
     this.help.visible = false;
     this.hud.show(false);
+    this.displays.enabled = false;
+    this.displays.visible = false;
     if (this.view) {
       this.view.group.visible = false;
       this.view.shadowMesh.visible = false;
@@ -1044,6 +1064,7 @@ export class FreeFlight {
     this.state = 'summary';
     this.input.enabled = false;
     this.heloInput.enabled = false;
+    this.displays.enabled = false;
     this.capture.release();
   }
 
@@ -1073,6 +1094,8 @@ export class FreeFlight {
             : null,
         },
       );
+      frame.panels = true;
+      this.updateDisplays(frame);
       this.hud.draw(frame, project);
       return;
     }
@@ -1116,7 +1139,78 @@ export class FreeFlight {
         ? { frameMs: this.frameMs, physicsMs: this.physicsMs, steps: this.steps }
         : null,
     });
+    frame.panels = true;
+    this.updateDisplays(frame);
     this.hud.draw(frame, project);
+  }
+
+  /** Starts the displays for a sortie in the aircraft of model spec `model` (decision 199). */
+  private startDisplays(model: string, onGround: boolean): void {
+    this.displays.reset(onGround);
+    this.displays.enabled = true;
+    this.displays.visible = true;
+    this.displayModel = model;
+    this.sortieAt = performance.now();
+    this.fuelCapacity = (this.helo ?? this.model)?.fuel ?? 0;
+    this.displaysAt = -Infinity;
+  }
+
+  /** The master mode's triggers every frame; the displays and the strip at 10 Hz (decision 199). */
+  private updateDisplays(f: HudFrame): void {
+    const m: Airframe | null = this.helo ?? this.model;
+    const profile = AVIONICS_PROFILES[this.displayModel];
+    if (!m || !profile) return;
+    const t = m.telemetry;
+    const changed = this.displays.triggers({
+      onGround: m.onGround,
+      gearDown: !this.helo && this.input.controls.gearDown,
+      radarAltitude: t.radarAltitude,
+      groundSpeed: t.groundSpeed,
+      helicopter: this.helo !== null,
+    });
+    const now = performance.now();
+    if (!changed && now - this.displaysAt < 100) return;
+    this.displaysAt = now;
+    const control = this.pilot
+      ? 'autopilot'
+      : this.helo
+        ? 'fly-by-mouse'
+        : this.input.mode === 'mouse-aim'
+          ? 'mouse aim'
+          : 'direct';
+    const snap = snapshotFromHud(f, {
+      time: (now - this.sortieAt) / 1000,
+      name: this.displayName,
+      profile,
+      avionics: this.displays.avionics,
+      capacity: this.fuelCapacity,
+      groundSpeed: t.groundSpeed,
+      fixedGear: this.helo !== null,
+      control,
+      mouseFree: this.state === 'flying' && !this.capture.captured && !this.pilot,
+      messages: this.hud.log.map((l) => ({
+        at: (l.at - this.sortieAt) / 1000,
+        text: l.text,
+        warn: l.warn,
+      })),
+    });
+    this.displays.update(snap);
+  }
+
+  /** A strip item's click: the flight control it stands for (decision 199). */
+  private displayControl(a: ControlsAction): void {
+    if (this.state !== 'flying') return;
+    if (a === 'mouseCapture') {
+      this.toggleCapture();
+      return;
+    }
+    if (this.helo) {
+      if (a === 'hoverHold') this.heloInput.command.toggleHover = true;
+      else if (a === 'parkingBrake')
+        this.heloInput.command.parkingBrake = !this.heloInput.command.parkingBrake;
+      return;
+    }
+    if (a === 'gear' || a === 'speedbrake' || a === 'parkingBrake') this.action(a);
   }
 
   /** Whether the terrain and runways are ready to fly. */

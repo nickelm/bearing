@@ -113,7 +113,7 @@ Each milestone ends with tests, previews, Part I's acceptance checks for what it
 1. Spike and capture key (done, decision 193): pointer lock grabbed and freed by Tab in both aircraft kinds, retries, pause on a lost lock; the jet's mouse modes under pointer lock. Open: Firefox and Safari, and Escape in a real browser.
 2. Allocation inventory: every item of Free Flight's HUD classified by the rule (the table below) and recorded with the decision that closes P2.
 3. `layout()` with the slot rects, the UI scale, and the layout snapshot test (done, decision 195; the slots over the HUD in `docs/reports/screens/hover-transition-slots-*.png`). Before it, decision 195 also made a captured mouse fly the jet.
-4. Display model types, `DisplayCommand`, `DisplayState`, the format registry, and the serialization test.
+4. Display model types, `DisplayCommand`, `DisplayState`, the format registry, and the serialization test (done, decision 199; steps 5–10, 12 and 13 too, with the notes there).
 5. `sim/avionics/`: state, commands, `apply`, and avionics profiles in the specs of the Kestrel, the Wren and the Buzzard, with validation.
 6. The display frame in HTML and CSS: bezel, 20 buttons, labels, owner tag, focus, slot states and transitions; Alliance and Pact skins as CSS variables; the round era bezel.
 7. The status strip: item rules, levels, shapes and labels, clicks and keys, the master caution; the helicopter gauges.

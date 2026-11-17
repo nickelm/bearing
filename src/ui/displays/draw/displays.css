@@ -1,0 +1,210 @@
+/*
+ * The displays and the status strip (Proposal 0006; Part I, Displays and Status Strip;
+ * decision 199). Skins are CSS variables; layout comes from layout.ts as inline rects.
+ */
+.dsp-root {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 12;
+  font-family: ui-monospace, 'JetBrains Mono', 'Share Tech Mono', Consolas, monospace;
+  --bezel: #2b2e31;
+  --bezel-edge: #1a1c1e;
+  --screen: #050a07;
+  --phosphor: #6cff8a;
+  --phosphor-dim: rgba(108, 255, 138, 0.45);
+  --alert: #ffb347;
+  --green: #34c759;
+  --amber: #ffb347;
+  --red: #ff3b30;
+}
+.dsp-root.dsp-pact {
+  --bezel: #3a4650;
+  --bezel-edge: #25303a;
+  --screen: #06090c;
+  --phosphor: #ffb04a;
+  --phosphor-dim: rgba(255, 176, 74, 0.45);
+}
+.dsp-slot {
+  position: absolute;
+  box-sizing: border-box;
+  background: var(--bezel);
+  border: 2px solid var(--bezel-edge);
+  pointer-events: auto;
+  transition:
+    opacity 300ms ease,
+    transform 300ms ease;
+  transform-origin: bottom left;
+}
+.dsp-slot.dsp-top {
+  transform-origin: top left;
+}
+.dsp-slot.dsp-right {
+  transform-origin: bottom right;
+}
+.dsp-slot.dsp-top.dsp-right {
+  transform-origin: top right;
+}
+.dsp-slot.dsp-closed {
+  opacity: 0;
+  transform: scale(0.6);
+  pointer-events: none;
+}
+.dsp-slot.dsp-alert {
+  border-color: var(--alert);
+}
+.dsp-screen {
+  position: absolute;
+  background: var(--screen);
+}
+.dsp-title {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  text-align: center;
+  color: var(--phosphor-dim);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  pointer-events: none;
+}
+.dsp-osb {
+  position: absolute;
+  box-sizing: border-box;
+  background: #3a3e42;
+  border: 1px solid var(--bezel-edge);
+  border-radius: 2px;
+  padding: 0;
+  cursor: pointer;
+}
+.dsp-osb:hover {
+  background: #4a4f54;
+}
+.dsp-osb:disabled {
+  background: #2f3236;
+  cursor: default;
+}
+.dsp-tab {
+  position: absolute;
+  box-sizing: border-box;
+  background: var(--bezel);
+  border: 1px solid var(--bezel-edge);
+  color: var(--phosphor);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: opacity 300ms ease;
+}
+.dsp-tab.dsp-closed {
+  opacity: 0;
+  pointer-events: none;
+}
+/* The status strip: dark unless something matters. */
+.dsp-strip {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  pointer-events: none;
+}
+.dsp-item {
+  pointer-events: auto;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  padding: 3px 9px;
+  border: 1px solid;
+  background: rgba(0, 0, 0, 0.6);
+  cursor: default;
+  white-space: nowrap;
+}
+.dsp-item[data-cmd] {
+  cursor: pointer;
+}
+.dsp-item.dsp-normal {
+  color: var(--green);
+  border-color: var(--green);
+  border-radius: 9px;
+}
+.dsp-item.dsp-caution {
+  color: var(--amber);
+  border-color: var(--amber);
+  clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+  padding: 3px 12px;
+}
+.dsp-item.dsp-warning {
+  color: #fff;
+  background: rgba(150, 20, 14, 0.85);
+  border-color: var(--red);
+}
+.dsp-item.dsp-warning::before {
+  content: '▲ ';
+}
+.dsp-item.dsp-caution.dsp-fresh {
+  background: rgba(255, 179, 71, 0.22);
+}
+.dsp-item.dsp-warning.dsp-fresh {
+  animation: dsp-flash 0.5s steps(1) infinite;
+}
+@keyframes dsp-flash {
+  50% {
+    background: rgba(0, 0, 0, 0.6);
+    color: var(--red);
+  }
+}
+.dsp-master {
+  pointer-events: auto;
+  white-space: nowrap;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  color: var(--amber);
+  background: rgba(255, 179, 71, 0.25);
+  border: 1px solid var(--amber);
+  cursor: pointer;
+}
+.dsp-master[hidden] {
+  display: none;
+}
+.dsp-mode {
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.45);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  padding: 0 4px;
+}
+.dsp-gauge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--green);
+  background: rgba(0, 0, 0, 0.55);
+  padding: 2px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+.dsp-gauge.dsp-caution {
+  color: var(--amber);
+}
+.dsp-gauge.dsp-warning {
+  color: var(--red);
+}
+.dsp-gauge i {
+  display: block;
+  width: 46px;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.15);
+  position: relative;
+}
+.dsp-gauge i b {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: currentColor;
+}

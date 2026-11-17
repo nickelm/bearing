@@ -22,7 +22,9 @@
  *   strip has no tab: it is shown or hidden.
  */
 
-export type SlotId = 'leftMfd' | 'rightMfd' | 'threat' | 'messages' | 'strip';
+import type { SlotId } from '../../sim/avionics/profiles';
+
+export type { SlotId };
 
 /** The slots in a fixed order: left to right along the bottom, then the upper corners. */
 export const SLOT_IDS: readonly SlotId[] = ['leftMfd', 'strip', 'rightMfd', 'messages', 'threat'];
