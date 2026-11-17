@@ -203,7 +203,8 @@ export function flightWarnings(model: FlightModel): FlightWarning[] {
   const t = model.telemetry;
   const out: FlightWarning[] = [];
   if (model.crashed) return out;
-  if (model.gear > 0.01 && t.cas > model.spec.gear.maxSpeed) out.push('gear-speed');
+  // Extending, down or retracting above the gear's limit: a warning, never a refusal (decision 207).
+  if (model.gear > 0.01 && t.cas > model.gearSpeedLimit) out.push('gear-speed');
   if (model.onGround && t.pitch + 0.4 * model.omega.y > TAIL_WARNING_PITCH) out.push('tail-strike');
   const airborne = !model.onGround && t.radarAltitude > 3;
   if (airborne && t.alpha > model.spec.controls.maxAlpha - 1.5 * DEG && t.cas < 100)

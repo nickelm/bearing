@@ -9,7 +9,10 @@
  *   was recorded on.
  * - **Close.** On every version, the samples every 5 s must agree within a
  *   micrometer and the steps, crash and event kinds exactly. Node 22 and Node 24
- *   part by at most 4·10⁻⁹ m over the 519 s circuit.
+ *   part by at most 4·10⁻⁹ m over the 519 s circuit. Two scenarios amplify V8's
+ *   last-bit differences, the tumbling tail slide and the slide in a gale, and are
+ *   compared within a hundred times the tolerance (decision 207: since the drag
+ *   retune the tail slide parts by 10⁻⁵ m in 35 s).
  *
  * A change meant to alter the Kestrel's flight re-records the fixture and
  * says so in its decision:
@@ -42,6 +45,9 @@ const V8 = process.versions.v8.split('.')[0]!;
 
 /** Most difference allowed between versions, per sample quantity: position and velocity, attitude, rates, time. */
 const TOLERANCE = [1e-6, 1e-6, 1e-6, 1e-6, 1e-6, 1e-6, 1e-9, 1e-9, 1e-9, 1e-9, 1e-8, 1e-8, 1e-8, 0];
+/** Scenarios whose dynamics amplify the versions' last-bit differences, and the factor on their tolerance. */
+const CHAOTIC: Readonly<Record<string, number>> = { 'tail-slide': 100, 'stand-gale': 100 };
+const toleranceFor = (name: string) => TOLERANCE.map((t) => t * (CHAOTIC[name] ?? 1));
 
 function load(): Fixture {
   try {
@@ -89,7 +95,7 @@ describe('the Kestrel in lockstep with its recorded flight', () => {
             stored.steps,
           );
           expect(kinds(run.events)).toEqual(kinds(stored.events));
-          expect(difference(run.samples, stored.samples, TOLERANCE)).toBeNull();
+          expect(difference(run.samples, stored.samples, toleranceFor(name))).toBeNull();
         } else {
           fixture.runs[name] = run;
         }
@@ -102,7 +108,7 @@ describe('the Kestrel in lockstep with its recorded flight', () => {
       expect(now.steps).toBe(ref!.steps);
       expect(now.crashed).toBe(ref!.crashed);
       expect(kinds(now.events)).toEqual(kinds(ref!.events));
-      expect(difference(now.samples, ref!.samples, TOLERANCE)).toBeNull();
+      expect(difference(now.samples, ref!.samples, toleranceFor(name))).toBeNull();
       const hash = fixture.hashes[V8]?.[name];
       // The hash covers the events' text too (their times in full).
       if (hash !== undefined) {

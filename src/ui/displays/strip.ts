@@ -6,7 +6,7 @@
  * any caution or warning is unacknowledged; acknowledging it stops the glow
  * and the flashing, not the items.
  */
-import { KNOT } from '../../core/units';
+import { DEG, KNOT } from '../../core/units';
 import type { DisplayCommand, StripGauge, StripItem, StripLevel, StripModel } from './model';
 import type { AircraftSnapshot } from './snapshot';
 
@@ -49,6 +49,8 @@ export function stripModel(s: AircraftSnapshot): StripModel {
   )
     add('gear-up-low', 'GEAR UP', 'warning', gearCmd);
   if (g.overspeed) add('gear-speed', 'GEAR SPEED', 'warning', gearCmd);
+  // Doors failed in an overspeed: the gear stays down whatever the handle (decision 207).
+  if (g.damaged) add('gear-doors', 'GEAR DOORS', 'caution');
   if (!s.fuel.unlimited) {
     if (s.fuel.mass < s.fuel.bingo) add('bingo', 'BINGO', 'warning');
     else if (s.fuel.mass < s.fuel.joker) add('joker', 'JOKER', 'caution');
@@ -67,8 +69,16 @@ export function stripModel(s: AircraftSnapshot): StripModel {
   if (s.parkingBrake && !items.some((i) => i.id === 'park-thr'))
     add('park', 'PARK BRK', 'normal', { to: 'controls', action: 'parkingBrake' });
   else if (s.brakes) add('brakes', 'BRAKES', 'normal');
+  // The speedbrake with its position: 60° out, 43° with the gear down (decision 207).
   if (s.speedbrake > 0.02 && !items.some((i) => i.id === 'sb-ab'))
-    add('sb', 'SPD BRK', 'normal', { to: 'controls', action: 'speedbrake' });
+    add(
+      'sb',
+      s.speedbrakeAngle === undefined
+        ? 'SPD BRK'
+        : `SPD BRK ${Math.round(s.speedbrakeAngle / DEG)}°`,
+      'normal',
+      { to: 'controls', action: 'speedbrake' },
+    );
   if (s.engine.afterburner > 0) add('ab', `AB ${s.engine.afterburner}`, 'normal');
   for (const h of s.holds)
     add(

@@ -49,8 +49,11 @@ export interface AircraftSnapshot {
     afterburner: number;
   };
   /** `fixed`: gear that does not retract (skids, a helicopter's wheels). */
-  gear: { position: number; down: boolean; fixed: boolean; overspeed: boolean };
+  /** `damaged`: the doors failed in an overspeed, the gear stuck down (decision 207). */
+  gear: { position: number; down: boolean; fixed: boolean; overspeed: boolean; damaged?: boolean };
   speedbrake: number;
+  /** The speedbrake's deflection (rad), shown on its strip item (decision 207). */
+  speedbrakeAngle?: number;
   brakes: boolean;
   parkingBrake: boolean;
   /** Helicopters: torque and rotor speed (fractions of their 100%), power margin (−1..1). */

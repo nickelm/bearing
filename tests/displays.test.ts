@@ -216,6 +216,26 @@ describe('the status strip', () => {
     expect(after.items.map((i) => i.id)).toEqual(['joker']);
   });
 
+  it('shows the gear speed, damaged gear doors and the speedbrake with its position (decision 207)', () => {
+    const DEG_ = Math.PI / 180;
+    const m = stripModel(
+      snap({
+        cas: 330 * KNOT,
+        gear: { position: 1, down: false, fixed: false, overspeed: true, damaged: true },
+        speedbrake: 43 / 60,
+        speedbrakeAngle: 43 * DEG_,
+      }),
+    );
+    expect(m.items.map((i) => [i.id, i.label, i.level])).toEqual([
+      ['gear-speed', 'GEAR SPEED', 'warning'],
+      ['gear-doors', 'GEAR DOORS', 'caution'],
+      ['gear', 'GEAR DN', 'normal'],
+      ['sb', 'SPD BRK 43°', 'normal'],
+    ]);
+    const out = stripModel(snap({ speedbrake: 1, speedbrakeAngle: 60 * DEG_ }));
+    expect(out.items.map((i) => i.label)).toEqual(['SPD BRK 60°']);
+  });
+
   it("ends with a helicopter's torque and rotor gauges, and shows no fixed gear", () => {
     const m = stripModel(
       snap({

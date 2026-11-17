@@ -88,3 +88,19 @@ export function calibratedAirspeed(tas: number, air: Readonly<AirState>): number
   }
   return v;
 }
+
+/**
+ * True airspeed (m/s) for calibrated airspeed `cas` (m/s) in air `air`: the inverse of
+ * `calibratedAirspeed`, by bisection (to well under a millimeter per second).
+ */
+export function trueAirspeed(cas: number, air: Readonly<AirState>): number {
+  if (cas <= 0) return 0;
+  let lo = 0;
+  let hi = cas * Math.sqrt(SEA_LEVEL_DENSITY / Math.max(air.density, 1e-4)) * 1.5 + 10;
+  for (let i = 0; i < 50; i++) {
+    const mid = 0.5 * (lo + hi);
+    if (calibratedAirspeed(mid, air) < cas) lo = mid;
+    else hi = mid;
+  }
+  return 0.5 * (lo + hi);
+}

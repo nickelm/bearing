@@ -695,7 +695,11 @@ A sandbox outside the campaign: pick a seed and an airbase, take off in the F-21
 - [ ] The Kestrel at the controlled-aircraft detail level (1,500–4,000 triangles) with navigation lights and a blinking beacon at night (V4)
 - [ ] Shadow without double darkening where triangles overlap (a stencil or a max-blend pass)
 - [x] Weather in Free Flight: run the weather model without the war, so clouds and winds show (`StandaloneWeather`, decisions 137, 143)
-- [ ] Initial fuel option: with unlimited fuel the Kestrel always weighs 13.3 t and approaches at about 164 kt; a landing at 1,000 kg of fuel comes in near 145 kt
+- [ ] Initial fuel option: with unlimited fuel the Kestrel always weighs 13.3 t and approaches at about 164 kt; a landing at 1,000 kg of fuel comes in near 150 kt (decision 207 measured both)
+- [x] The Kestrel slows down and lands straight in: drag polar, idle thrust, spool, speedbrake degrees and its 43° limit, gear overspeed with door damage, speed tape cues, the approach energy cue, the straight-in acceptance test (decision 207)
+- [x] The angle-of-attack bracket on the flight path marker, replacing the side indexer (decision 208)
+- [ ] Owner: fly a straight-in in Free Flight from about 25 km at 450 KIAS (idle, speedbrake, gear under 300) and judge the trend vector, the gear marker, the approach bug, the energy cue and the angle-of-attack bracket, and whether the speedbrake now feels like it works
+- [ ] The energy cue's plan takes the engine at idle and the gear and speedbrake at their stops at once; it reads a little optimistic in the first seconds after the throttle comes back (spool-down 2.9 s, gear 4 s)
 - [ ] Nosewheel steering switch (castoring nosewheel without it), so differential braking alone can turn the aircraft
 - [ ] Key remapping in the UI (the table exists; there is no settings page), and gamepad buttons for gear, brakes and throttle detents
 - [ ] Browser check on a machine with a GPU: run `node tools/browser.smoke.mjs` with `MODE=gpu` (never run; headless Chromium may need `HEADED=1` for the real adapter). In the cloud session the app flies end to end in Chromium on lavapipe (decision 144)
@@ -1145,6 +1149,20 @@ Terrain provinces and rock from tectonic history, a richer climate with twenty l
 - [x] W0: proposal saved, plan, decision 204; design doc, style guide, proposals 0001 and 0005, `CLAUDE.md` (rules 10 and 15) updated
 - [x] W0: `tools/diversity.preview.ts` and the baseline over 20 seeds → `docs/reports/world-diversity-baseline.md`
 - [x] Owner: the plan's readings in decision 204 (decision 205: regional distances scaled to the planet; the rest accepted)
+
+### W follow-ups (owner's review of the branch, 2026-11-17)
+
+The owner flew the branch before the merge: erosion and the vistas are intact and the track is good to merge. Open points:
+
+- [ ] Red rock reads a little too pink: tune the red rock shades (`#B8553A`, `#C9673F`, `#D98552`) toward rust and ochre, and check them under the grade
+- [ ] Round lakes linked by rivers make an odd pattern: find which depressions they are (closed-basin salt lakes, filled intermontane basins, hotspot craters) and break up their outlines
+- [ ] Airbases are hard to spot from the air: a dark outline along the runway's edges (runway shoulders or edge paint)
+- [ ] Seed 1983: Free Flight's first location was not at the selected airbase, and Vaureko airbase lies over water. Check airfields against the eroded world's water (fjords, closed-basin lakes, the new coasts) and the start position
+- [ ] Wonders are hard to find in the simulation view: add the selected wonders to the observer stations' dropdown, beside the switchbacks
+- [ ] Clouds never seem to reach the tallest mountains: check the cloud layer's heights and the weather's deck tops against peaks of 9–10 km
+- [ ] The strategic map shows too many zone names: raise the zones' importance threshold, Theater band only for the largest, fewer in the Region band
+- [ ] The strategic map runs at 10–15 fps: profile it (separate task; labels and the zone list are suspects)
+- [ ] The frame rate falls over a session (25–40 to 10–15 fps): look for leaks (tile and mesh caches, geometries or textures not disposed, label rebuilds)
 
 ### W1. Provinces and lithology
 

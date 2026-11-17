@@ -132,7 +132,8 @@ describe('flight spec and tables', () => {
 
   it('has a transonic drag rise and a lift curve with a stall break', () => {
     const a = spec.aero;
-    expect(lookup(a.cd0, 1.1) / lookup(a.cd0, 0.5)).toBeGreaterThan(3);
+    // Subsonic CD0 is 0.020 (decision 207): the rise to the supersonic peak is near threefold.
+    expect(lookup(a.cd0, 1.1) / lookup(a.cd0, 0.5)).toBeGreaterThan(2.5);
     expect(lookup(a.cd0, 0.85)).toBeLessThan(lookup(a.cd0, 0.95));
     // CL rises to a maximum near 30° and falls beyond it.
     const clMax = Math.max(...a.cl.y);
@@ -284,10 +285,11 @@ describe('ground model', () => {
     const ctl = neutralControls();
     ctl.throttle = 0.3;
     ctl.gearDown = true;
-    run(m, ctl, 3);
+    // A 4 s transit (decision 207).
+    run(m, ctl, 2);
     expect(m.gear).toBeGreaterThan(0.4);
     expect(m.gear).toBeLessThan(0.6);
-    run(m, ctl, 4);
+    run(m, ctl, 2.5);
     expect(m.gear).toBe(1);
   });
 });
@@ -873,7 +875,8 @@ describe('plausibility (F-16 analogue)', () => {
     ctl.throttle = 0;
     m.gear = 1;
     const fd = new FlightDirector();
-    const target = m.telemetry.altitude;
+    // Level at the spawn height (the telemetry has no altitude before the first step).
+    const target = runway.elevation + 1500;
     let stall = 0;
     for (let i = 0; i < 120 / FLIGHT_STEP && !stall; i++) {
       const t = m.telemetry;
