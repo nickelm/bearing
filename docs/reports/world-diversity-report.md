@@ -1,6 +1,6 @@
 # World diversity: report (track W, proposal 0007)
 
-_Branch `feature/world-diversity`, 2026-11-17. Proposal: [docs/proposals/0007-world-diversity.md](../proposals/0007-world-diversity.md). Plan: [docs/plans/world-diversity.md](../plans/world-diversity.md). Decisions 204–212. Baseline: [world-diversity-baseline.md](world-diversity-baseline.md). Metrics: [world-diversity-metrics.md](world-diversity-metrics.md)._
+_Branch `feature/world-diversity`, 2026-11-17. Proposal: [docs/proposals/0007-world-diversity.md](../proposals/0007-world-diversity.md). Plan: [docs/plans/world-diversity.md](../plans/world-diversity.md). Decisions 204, 205 and 207–213 (206 is another track's). Baseline: [world-diversity-baseline.md](world-diversity-baseline.md). Metrics: [world-diversity-metrics.md](world-diversity-metrics.md)._
 
 ## Summary
 
@@ -74,7 +74,7 @@ The full tables are in [world-diversity-metrics.md](world-diversity-metrics.md);
 | Zones                    | All land zoned; 97.6–98.4% of zones within 16–63 km on eroded worlds; all named, with recipes                                                                                                                                                                              | Yes     |
 | Wonders                  | 5–15 per world in every seed, named, conditions tested                                                                                                                                                                                                                     | Yes     |
 | Props                    | W7 not started                                                                                                                                                                                                                                                             | Not run |
-| Existing invariants      | Every test passes; one network-stage test times out only under load                                                                                                                                                                                                        | Yes     |
+| Existing invariants      | All 1,018 tests outside `tests/gpu/` pass (one network-stage test times out only under load); on the GPU, 95 of 97 pass: the face-seam and river-hump tolerances fail on the new worlds (see _Known issues_)                                                               | No      |
 | Determinism              | Tested per stage; plates, crust and boundaries byte-identical                                                                                                                                                                                                              | Yes     |
 | Generation time          | Coarse pass +20% (14.3 s against 11.9 s); global finish +15 s on 15–25 minutes of erosion                                                                                                                                                                                  | Yes     |
 
@@ -107,6 +107,13 @@ The full tables are in [world-diversity-metrics.md](world-diversity-metrics.md);
   - The proposal's per-province soft limit was not needed for the height criterion.
 
 ## Known issues
+
+**High**
+
+- Two GPU tests fail on the new worlds (decision 213).
+  - `tests/gpu/tileSynth.test.ts` "agrees across a cube-face seam": 0.13 m against 0.05 m, on the sea floor at −487 m near a new coast. It is unchanged with the fault blocks, provinces and rock switched off, which points to the masks' sampling across faces under the skerry and coastal sea floor.
+  - "lets river beds fall downstream without humps": 6.5 m against 4 m on the longest river's first 16 km.
+  - Neither tolerance was loosened. Both need a look at the kernel with these worlds before merging.
 
 **Moderate**
 

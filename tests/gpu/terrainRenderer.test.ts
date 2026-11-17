@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { directionToCubeFace } from '../../src/core/coords';
 import { DEG, KM } from '../../src/core/units';
 import { OrbitCamera } from '../../src/render/common/orbitCamera';
 import { TerrainRenderer } from '../../src/render/sim/terrain/terrainRenderer';
@@ -79,7 +80,13 @@ describe.skipIf(!gpu)('TerrainRenderer (Dawn synthesis, no drawing)', () => {
     const orbit = await deepestAt(5000 * KM, 6);
     expect(terrain.stats.drawn).toBeGreaterThan(0);
     const mid = await deepestAt(100 * KM, 30);
-    const low = await deepestAt(3 * KM, 60);
+    // 3 km above the ground (decision 208): the main continent's interior may be a raised
+    // plateau, and the relief here is exaggerated tenfold.
+    const uv = directionToCubeFace(main);
+    const gi = Math.min(g.n - 1, Math.floor(uv.u * g.n));
+    const gj = Math.min(g.n - 1, Math.floor(uv.v * g.n));
+    const ground = Math.max(0, g.height[(uv.face * g.n + gj) * g.n + gi]!) * 10;
+    const low = await deepestAt(3 * KM + ground, 60);
     expect(gpu!.errors).toEqual([]);
     expect(orbit).toBeLessThanOrEqual(3);
     expect(mid).toBeGreaterThan(orbit);

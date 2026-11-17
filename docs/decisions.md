@@ -3565,4 +3565,13 @@ The owner also asked for decision 204's prep commit on `main` (done), and for th
 - **Not yet measured on the eroded grid.** The eroded metrics in `docs/reports/world-diversity-metrics.md` were measured before this fix. Their wetland and mangrove shares predate it.
 - **Version.** `GENERATOR_VERSION` is 28.
 
+**GPU tests on the final generator** (32 files on lavapipe). Two needed updating for the new worlds, and two still fail.
+
+- **Updated: the lake shoreline test.** It took the deepest lake's tile; that lake is now a closed basin's salt lake wider than a tile, so it had no dry margin. It now takes the deepest lake cell on a shore.
+- **Updated: the renderer's descent test.** It flew 3 km above sea level over the main continent, whose interior is now a raised plateau (7 km under the test's 10× relief). It now flies 3 km above the eroded ground.
+- **Updated: both tests' synthesizers** now take rock and closed basins as the app does.
+- **Still failing: "agrees across a cube-face seam"** (0.13 m against 0.05 m). The worst sample lies on the sea floor at −487 m. It is identical with the fault blocks, the provinces and the rock switched off, so it comes from the new world's coast near that seam (the masks' bilinear sampling across faces drives the skerry and coastal sea floor), not from a kernel change.
+- **Still failing: "lets river beds fall downstream without humps"** (6.5 m against 4 m on the longest river's first 16 km, with the new, steeper relief).
+- Both are left failing for the owner rather than loosening their tolerances; the report lists them as high-severity issues.
+
 **Reason:** Both criteria the zones and the biome table must meet are measured where the player flies, on the eroded grid; thresholds that only made sense at the coarse grid's scale had to follow the cell size.

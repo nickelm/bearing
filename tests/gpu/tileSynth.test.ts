@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { neighbors8 } from '../../src/worldgen/drainage';
 import { cubeFaceUvToDirection, projectToCubeFace } from '../../src/core/coords';
 import type { CubeFace } from '../../src/core/coords';
 import {
@@ -49,6 +50,10 @@ describe.skipIf(!gpu)('tile synthesis (GPU)', async () => {
         height: g.height,
         forest: g.finish.forest,
         treeline: g.finish.treeline,
+        // As the app builds it: rock and closed basins (decisions 207, 208).
+        lithology: g.finish.lithology,
+        basinCell: g.finish.drainage.basinCell,
+        basinLevel: g.finish.drainage.basinLevel,
         index: index!,
       })
     : null;
@@ -237,11 +242,20 @@ describe.skipIf(!gpu)('tile synthesis (GPU)', async () => {
   });
 
   it('floods lakes to their level with a shoreline from the fine terrain', async () => {
-    // The deepest lake cell of the global grid.
+    // The deepest lake cell of the global grid on a shore (a dry cell beside it), so
+    // the tile holds both water and a margin: closed basins' salt lakes can be wider
+    // than a tile (decision 208).
     const n = g!.n;
     const depth = g!.finish.drainage.lakeDepth;
+    const nb = new Int32Array(8);
+    const shore = (c: number) => {
+      neighbors8(n, c, nb);
+      for (const m of nb) if (m >= 0 && depth[m]! <= 0 && g!.height[m]! > 0) return true;
+      return false;
+    };
     let best = -1;
-    for (let c = 0; c < depth.length; c++) if (depth[c]! > (best < 0 ? 0 : depth[best]!)) best = c;
+    for (let c = 0; c < depth.length; c++)
+      if (depth[c]! > (best < 0 ? 0 : depth[best]!) && shore(c)) best = c;
     expect(best).toBeGreaterThanOrEqual(0);
     const dir = cubeFaceUvToDirection(
       Math.floor(best / (n * n)) as CubeFace,
