@@ -35,6 +35,7 @@ import {
   surfaceDistance,
 } from '../worldgen/strategic/graph';
 import { writeBriefing } from './briefing';
+import { selectWonders } from './wonders';
 import { castCarrierGroups } from './carriers';
 import type {
   Cast,
@@ -302,6 +303,8 @@ export function castCampaign(graph: StrategicGraph, detection: Detection, seed: 
     nodeNames,
     briefing: '',
   };
+  // 8. Natural wonders for this war, from their own stream (decision 211).
+  cast.wonders = selectWonders(graph, cast, seed);
   cast.briefing = writeBriefing(graph, cast, names);
   return cast;
 }

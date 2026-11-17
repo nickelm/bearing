@@ -103,5 +103,7 @@ export interface Cast {
   carriers: CarrierGroupCast[];
   /** Generated names: node names by id, plus theater names. */
   nodeNames: string[];
+  /** Feature ids of the natural wonders selected for this war (decision 211); absent in older casts. */
+  wonders?: number[];
   briefing: string;
 }

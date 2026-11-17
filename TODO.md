@@ -1216,11 +1216,12 @@ Terrain provinces and rock from tectonic history, a richer climate with twenty l
 
 ### W8. Natural wonders (stretch)
 
-- [ ] Detectors for the proposal's twelve kinds; candidates in the graph (`strategic/wonders.ts`)
-- [ ] Selection of 5–15 after casting's territory, weighted toward fronts, lanes and airbases (`rng(seed, "wonders")`); names (`names/wonders`); mentions in briefings
+- [x] Detectors for the proposal's twelve kinds; candidates in the graph (`geography/wonders.ts`, decision 211)
+- [x] Selection of 5–15 after casting's territory, weighted toward fronts and lanes (`rng(seed, "wonders")`); names (`names/wonders`); mentions in briefings (decision 211)
 - [ ] Shaping in the tile kernel (tepui, falls, caldera, travertine, mineral bands) or by props (karst bay, pillar forest, basalt columns)
 - [ ] Protection from earthworks in the router (N5's extra cost), scenic routes allowed in sight
-- [ ] Map glyphs and labels; acceptance check 16's wonder view
+- [x] Map labels for the selected wonders (decision 211)
+  - [ ] The wonder glyph; acceptance check 16's wonder view
 
 ### W9. Verification and report
 

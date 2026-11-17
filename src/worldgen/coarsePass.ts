@@ -66,6 +66,8 @@ export function coarsePass(params: PlanetParams, options: CoarseOptions = {}): C
     lakeDepth: drainage.lakeDepth,
     receiver: drainage.receiver,
     basinCell: drainage.basinCell,
+    province: m.province,
+    lithology: m.lithology,
     reliefScale: params.reliefScale,
     radius: params.radius,
     seed: params.seed,

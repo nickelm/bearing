@@ -19,6 +19,7 @@ import { extractLand } from './land';
 import { extractRelief } from './relief';
 import { extractRivers } from './riverStems';
 import { extractSaltFlats } from './saltFlats';
+import { extractWonders } from './wonders';
 import { extractWater } from './water';
 import type { SaltFlatSite } from '../strategic/graph';
 
@@ -45,6 +46,8 @@ export function extractFeatures(
   const flats = extractSaltFlats(input, fb, region);
   if (out) out.saltFlats = flats;
   lap('salt flats');
+  extractWonders(input, fb, region);
+  lap('wonders');
   return fb.pack();
 }
 

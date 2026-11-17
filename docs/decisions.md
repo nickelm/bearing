@@ -3509,3 +3509,36 @@ The owner also asked for decision 204's prep commit on `main` (done), and for th
 `TODO.md` changes with this decision.
 
 **Reason:** Zones are presentation data at a scale only the eroded grid resolves (decision 205); a growth whose costs follow the barriers puts boundaries where the proposal asks, and a vertex-color shift is the cheapest way to give the faceted terrain each zone's palette without a new texture.
+
+### 211. W8: natural wonders as graph candidates, selected after casting, named, labeled and briefed; landform props (W7) deferred
+
+**Date:** 2026-11-17
+**Decision:**
+
+- **Candidates** (`geography/wonders.ts`, in feature extraction on the coarse pass). The detectors read the province, rock, biome, relief, slope, drainage and closed basins that the strategic input now carries:
+  - tepui: tropical sandstone with 250 m of local relief;
+  - giant waterfall: a river of 300 m³/s dropping 120 m to its receiver;
+  - drowned karst bay: a tropical karst coast;
+  - sandstone pillar forest: forested sandstone on a slope over 0.04;
+  - salt lake on a playa: a closed basin's salt lake beside a desert;
+  - travertine terraces: limestone next to a rift, arc or hotspot;
+  - caldera crater lake: a lake in a volcanic arc or hotspot;
+  - calving glacier: an icy, high-relief coast in a young range or glaciated lowland;
+  - rainbow mineral hills: desert slopes on ash, shale or loess;
+  - monolith: 200 m of relief alone on a desert or savanna plain;
+  - blue hole: a drowned hotspot edifice in warm, shallow water;
+  - basalt causeway: a basalt coast.
+  - The three best of each kind, 150 km apart, become point features of the new kind `Wonder`, whose `measure` holds the kind. Names come from their own fork, `names/wonders`, so every other name is unchanged: "the Greind Falls", "the Kor Towers", "Kran Crater", "the Painted Hills of Grevith", "the Blue Hole of Debopru".
+- **Selection** (`campaign/wonders.ts`, casting's step 8, `rng(seed, "wonders")`). It reads only the graph and the cast (rule 9) and draws a target of 5–15, at most the number of candidates. Weights are importance × (1 + 2 · e^(−d/300 km)), with d the distance to the nearest front start line or sea lane in play. Draws are without replacement, keeping at most two of a kind and 120 km between picks. `Cast.wonders` holds the feature ids. Seeds 1–4 select 13, 15, 11 and 8.
+- **Briefing and map.** The briefing ends with the landmarks ("Pilots navigate by the world's landmarks: …"). The map labels only the selected wonders, as point labels in the landform style from the Theater band.
+- **Left for later.**
+  - **Shaping in the tiles:** tepui walls, a knickpoint for the falls, a caldera, travertine steps, mineral bands.
+  - **Protection from earthworks:** the router's extra cost around a wonder's footprint, with scenic routes allowed in sight.
+  - **The map's own wonder glyph.**
+  - **W7, landform props.** A prop kit of specs, a placement function shared with the sim, an instanced layer with LOD, collision shapes for contact, the camera and line of sight, and budgets in the views. That is a milestone's work and was not started in this session. The karst bay and pillar forest wonders are named and selected, but until W7 they have no towers in the simulation view.
+- **Tests.** `tests/wonders.test.ts`: 5–15 named wonders per world, at most two of a kind, the briefing mentions them, and the karst bay, crater lake and blue hole stand where their conditions hold.
+- **Version.** `GENERATOR_VERSION` is 27.
+
+`TODO.md` changes with this decision.
+
+**Reason:** As graph facts, wonders reach the briefing and the map on every machine. Selecting them after the territory is cast puts them where the war will be flown, and their own streams leave casting and every other name unchanged.

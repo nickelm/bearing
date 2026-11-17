@@ -388,9 +388,11 @@ export const FeatureKind = {
   River: 16,
   /** A playa of a closed basin (decision 207): also a natural airstrip site. */
   SaltFlat: 17,
+  /** A natural wonder candidate (decision 211); its `measure` is the `WonderKind`. */
+  Wonder: 18,
 } as const;
 export type FeatureKind = (typeof FeatureKind)[keyof typeof FeatureKind];
-export const FEATURE_KIND_COUNT = 18;
+export const FEATURE_KIND_COUNT = 19;
 export const FEATURE_KIND_NAMES: readonly string[] = [
   'continent',
   'island',
@@ -410,6 +412,7 @@ export const FEATURE_KIND_NAMES: readonly string[] = [
   'wetland',
   'river',
   'salt flat',
+  'wonder',
 ];
 
 export type FeatureGeometry = 'point' | 'polyline' | 'polygon';
@@ -440,6 +443,7 @@ export const FEATURE_GEOMETRY: readonly FeatureGeometry[] = [
   'polygon', // wetland
   'polyline', // river
   'point', // salt flat
+  'point', // wonder
 ];
 
 /** Raster layers of polygon features; each cell belongs to at most one feature per layer. */
@@ -461,6 +465,7 @@ export const FEATURE_LAYER: readonly (FeatureLayer | null)[] = [
   'cover',
   'cover',
   'cover',
+  null,
   null,
   null,
 ];
@@ -506,6 +511,37 @@ export interface FeatureList {
   layers: Record<FeatureLayer, Int16Array>;
   names: string[];
 }
+
+/** Kinds of natural wonder (decision 211), heightened versions of Earth features. */
+export const WonderKind = {
+  Tepui: 0,
+  GiantFalls: 1,
+  KarstBay: 2,
+  PillarForest: 3,
+  SaltLake: 4,
+  Travertine: 5,
+  CraterLake: 6,
+  CalvingGlacier: 7,
+  MineralHills: 8,
+  Monolith: 9,
+  BlueHole: 10,
+  BasaltCauseway: 11,
+} as const;
+export type WonderKind = (typeof WonderKind)[keyof typeof WonderKind];
+export const WONDER_KIND_NAMES: readonly string[] = [
+  'tepui',
+  'giant waterfall',
+  'drowned karst bay',
+  'sandstone pillar forest',
+  'salt lake on a playa',
+  'travertine terraces',
+  'caldera crater lake',
+  'calving glacier',
+  'rainbow mineral hills',
+  'monolith',
+  'blue hole',
+  'basalt causeway',
+];
 
 /** A salt flat (decision 207): a closed basin's playa, and an airstrip site where long enough. */
 export interface SaltFlatSite {

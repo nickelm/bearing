@@ -15,7 +15,13 @@
  */
 import { rng } from '../../core/rng';
 import type { WorldSeed } from '../../core/rng';
-import { BridgeKind, FeatureKind, RouteKind, STRAIT_MAX_WIDTH } from '../strategic/graph';
+import {
+  BridgeKind,
+  FeatureKind,
+  RouteKind,
+  STRAIT_MAX_WIDTH,
+  WonderKind,
+} from '../strategic/graph';
 import type { BridgeList, SettlementList, StrategicGraph } from '../strategic/graph';
 import { ISLAND_FLAVOR, LAND_FLAVORS } from './flavors';
 import { Toponymy } from './toponymy';
@@ -95,6 +101,41 @@ export function featureName(
       return `the ${t.proper(flavor)} River`;
     case FeatureKind.SaltFlat:
       return info.size >= 1_000e6 ? `the ${t.proper(flavor)} Salt Flat` : `${t.proper(flavor)} Pan`;
+    case FeatureKind.Wonder:
+      return wonderName(t, info.measure as WonderKind, flavor);
+  }
+}
+
+/** A natural wonder's name by its kind (decision 211). */
+export function wonderName(t: Toponymy, kind: WonderKind, flavor: number): string {
+  const p = t.proper(flavor);
+  switch (kind) {
+    case WonderKind.Tepui:
+      return `Mount ${p}`;
+    case WonderKind.GiantFalls:
+      return `the ${p} Falls`;
+    case WonderKind.KarstBay:
+      return `the ${p} Towers`;
+    case WonderKind.PillarForest:
+      return `the ${p} Pillars`;
+    case WonderKind.SaltLake:
+      return `the Pink Lake of ${p}`;
+    case WonderKind.Travertine:
+      return `the ${p} Terraces`;
+    case WonderKind.CraterLake:
+      return `${p} Crater`;
+    case WonderKind.CalvingGlacier:
+      return `the ${p} Glacier`;
+    case WonderKind.MineralHills:
+      return `the Painted Hills of ${p}`;
+    case WonderKind.Monolith:
+      return `${p} Rock`;
+    case WonderKind.BlueHole:
+      return `the Blue Hole of ${p}`;
+    case WonderKind.BasaltCauseway:
+      return `the ${p} Causeway`;
+    default:
+      return `the ${p} Wonder`;
   }
 }
 
@@ -155,11 +196,18 @@ export function nameWorld(graph: StrategicGraph, seed: WorldSeed): void {
   const f = graph.features;
   const tf = new Toponymy(base.fork('features'));
   for (let i = 0; i < f.count; i++) {
+    if (f.kind[i] === FeatureKind.Wonder) continue;
     f.names[i] = featureName(tf, f.kind[i] as FeatureKind, flavorOf(f.region[i]!), {
       size: f.size[i]!,
       measure: f.measure[i]!,
       parent: f.parent[i]!,
     });
+  }
+  // Natural wonders from their own stream (decision 211), so the others keep their names.
+  const tw = new Toponymy(base.fork('wonders'));
+  for (let i = 0; i < f.count; i++) {
+    if (f.kind[i] !== FeatureKind.Wonder) continue;
+    f.names[i] = wonderName(tw, f.measure[i] as WonderKind, flavorOf(f.region[i]!));
   }
 
   const s = graph.settlements;

@@ -85,6 +85,8 @@ export const BAND_TABLE: Record<string, Row> = {
   hills: { region: 0 },
   wetland: { region: 0 },
   saltflat: { theater: 0.5, region: 0 },
+  // Natural wonders the cast selected (decision 211), from the Theater band.
+  wonder: { theater: 0, region: 0 },
   // Zones (decision 210): those over about 40 km from the Theater band, all in the Region band.
   zone: { theater: 0.65, region: 0 },
   river: { theater: 0.5, region: 0 },
@@ -136,6 +138,7 @@ const CLASS: Record<FeatureKind, string> = {
   [FeatureKind.Wetland]: 'wetland',
   [FeatureKind.River]: 'river',
   [FeatureKind.SaltFlat]: 'saltflat',
+  [FeatureKind.Wonder]: 'wonder',
 };
 
 const STYLE: Record<FeatureKind, LabelStyleId> = {
@@ -157,6 +160,7 @@ const STYLE: Record<FeatureKind, LabelStyleId> = {
   [FeatureKind.Wetland]: 'landformSmall',
   [FeatureKind.River]: 'river',
   [FeatureKind.SaltFlat]: 'landformSmall',
+  [FeatureKind.Wonder]: 'landform',
 };
 
 /** "Mount Seir 1,036 m": peaks carry their height (physical meters). */
@@ -166,7 +170,12 @@ export function peakText(name: string, height: number): string {
 
 function placementOf(kind: FeatureKind): LabelPlacement {
   if (kind === FeatureKind.River || kind === FeatureKind.Range) return 'line';
-  if (kind === FeatureKind.Peak || kind === FeatureKind.Strait || kind === FeatureKind.SaltFlat)
+  if (
+    kind === FeatureKind.Peak ||
+    kind === FeatureKind.Strait ||
+    kind === FeatureKind.SaltFlat ||
+    kind === FeatureKind.Wonder
+  )
     return 'point';
   return 'area';
 }
@@ -189,6 +198,8 @@ export function buildLabels(
     const kind = f.kind[i] as FeatureKind;
     // Zone names replace the area labels of the cover and plains inside them (decision 204).
     if (zones && ZONE_REPLACES.has(kind)) continue;
+    // Only the wonders the cast selected (decision 211).
+    if (kind === FeatureKind.Wonder && !(cast?.wonders ?? []).includes(i)) continue;
     const bands = bandsFor(CLASS[kind], f.importance[i]!);
     if (bands.length === 0 || !f.names[i]) continue;
     const anchor = featureAnchor(f, i);

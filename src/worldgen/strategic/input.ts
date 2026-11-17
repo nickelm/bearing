@@ -30,6 +30,9 @@ export interface StrategicInput {
   seed?: WorldSeed;
   /** `BasinCell` per cell from drainage (decision 207): salt lakes and playas; optional. */
   basinCell?: Uint8Array;
+  /** Terrain province and rock per cell (decision 204), for natural wonders; optional. */
+  province?: Uint8Array;
+  lithology?: Uint8Array;
 }
 
 /** Derived per-cell fields shared by the builder's stages. */

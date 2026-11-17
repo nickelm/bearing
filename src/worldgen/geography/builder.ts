@@ -46,6 +46,8 @@ export const IMPORTANCE_SCALE: Record<FeatureKind, [number, number, number]> = {
   [FeatureKind.River]: [0.75, 1, 60],
   // Salt flats: area of the playa (decision 207).
   [FeatureKind.SaltFlat]: [0.5, 100e6, 5_000e6],
+  // Wonders: the detector's score, 0..1 (decision 211).
+  [FeatureKind.Wonder]: [0.85, 0.05, 1],
 };
 
 export function importanceOf(kind: FeatureKind, magnitude: number): number {
