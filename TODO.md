@@ -743,7 +743,7 @@ The allocation rule, the display frame, slots and slot states, the status strip,
   - [ ] Owner: the bezel, the buttons and the screens in a browser, both skins
 - [x] Status strip: `stripItems(snapshot, mode)` rules for GEAR, PARK BRK, BRAKES, SPD BRK, AB, the control mode, HOVER HOLD, ALT HOLD, JOKER, BINGO, LOW FUEL, GEAR SPEED and the proposal's conflicts; levels, shapes and labels; clicks and keys; the master caution; the helicopter's torque, rotor RPM and power margin gauges (decision 199)
 - [x] Master modes: `nextMode` with the triggers (ground, navigation, approach, hover; air-to-air, dogfight and air-to-ground by key until P4), hysteresis, presets, pins, HUD declutter levels; preset edits saved per viewer in browser storage with the defaults as fallback (decision 199: `autoMode` in sim/avionics, presets in ui/displays)
-  - [ ] Preset edits saved per viewer in browser storage
+  - [x] Preset edits saved per viewer in browser storage, with a reset in the pause menu (decision 200)
 - [ ] Cursor mode with the displays: the free cursor clicks bezel buttons and strip items, the wheel over a display sets range or zoom; the director holds the aim point, or attitude and altitude in direct control; hover hold in a slow helicopter
 - [x] Hot-action bindings (master modes, dogfight, slot states, master caution, map range; later radar, designation, countermeasures, weapons, crew menu) in the binding tables and the help overlay; each format lists its hot actions and a test enumerates them against the bindings; no keys for bezel buttons (decision 193) (decision 199: 1–4, M, F, K; radar, designation, countermeasures, weapons and the crew menu come with their formats)
 - [x] Messages format in the messages slot: Free Flight's messages move there (summary and crash cards stay) (decision 199)
@@ -753,9 +753,12 @@ The allocation rule, the display frame, slots and slot states, the status strip,
 - [x] Retrofit Free Flight: states, fuel, messages, torque and rotor RPM leave the HUD (`hud.ts`, `hudFrame.ts`, `heloHud.ts`); the HUD follows the master mode; the helicopter's hover symbology stays (decision 199: `HudFrame.panels`)
 - [x] Tests: master mode transitions and pins; strip items in scripted Free Flight scenarios (gear up slow and low, speedbrake with afterburner, parking brake with throttle, hover hold); display model snapshots (decision 199: tests/displays.test.ts, the session tool)
 - [ ] Previews (in-flight screenshots done: `SHOT_DIR` in the session tool, decision 199): `tools/hud/` composites of displays and strip for the Kestrel and a helicopter in each master mode; `tools/freeflight.screens.mjs` shots; the browser smoke test checks that displays and strip exist and measures their CPU time (under 2 ms per frame) and the map's GPU pass
-- [ ] UI scale setting in the pause menu (0.75–1.5; `DisplayState.uiScale` and `layout()` take it already)
+- [x] UI scale setting in the pause menu (0.75–1.5) and the URL (decision 200)
 - [ ] HUD color: tune the values and record them in `docs/visual-style.md`
 - [ ] Acceptance checks 7, 12 and 13 (Part I)
+  - [x] Checks 12 and 13 as a tool, `tools/displays.screens.mjs` (decision 200): no slot in the column, at most two large and two small expanded, both skins and the three deficiencies; four color-only cues fixed
+  - [ ] Checks 12 and 13 again with the moving map, and over real renders when a GPU is at hand
+  - [ ] Check 7 with the full HUD
 - [ ] Checkpoint: owner review of the HUD, displays and strip in Free Flight in both aircraft kinds, with mouse and keyboard
 
 ### P3. Sensors and formats

@@ -408,6 +408,10 @@ export async function drawHover(name: string): Promise<void> {
       full: STICK_FULL,
       deadzone: STICK_DEADZONE,
     };
+  // `&displays=…` (decision 200): the HUD as the displays leave it; none for the Kestrel.
+  const q = new URLSearchParams(location.search);
+  if (q.get('displays')) f.panels = true;
+  if (q.get('displays') && q.get('aircraft') !== 'utility') return;
   const hud = new Hud();
   hud.show(true);
   hud.draw(f, project);

@@ -18,7 +18,8 @@ import type { SlotId } from '../../sim/avionics/profiles';
 import { DisplaysView } from './draw/displaysView';
 import { displayModel } from './formats';
 import type { ControlsAction, DisplayCommand, DisplayModel, DisplayState } from './model';
-import { applyPreset, applyUi, initialDisplayState } from './presets';
+import { applyPreset, applyUi, initialDisplayState, recordEdit } from './presets';
+import type { PresetEdits } from './presets';
 import type { AircraftSnapshot } from './snapshot';
 import { cautionIds, stripModel } from './strip';
 import { DISPLAY_BINDINGS } from './bindings';
@@ -44,6 +45,10 @@ export class DisplaySystem {
   onControls: ((a: ControlsAction) => void) | null = null;
   /** Keys act only while flying. */
   enabled = false;
+  /** The displays' scale (0.75–1.5), from the options (decision 200). */
+  uiScale = 1;
+  /** The player's edits to the master modes' presets, kept per viewer (decision 200). */
+  edits: PresetEdits = loadEdits();
   readonly view: DisplaysView;
   private last: AircraftSnapshot | null = null;
   private readonly keyAction = new Map<string, DisplayHotAction>();
@@ -82,9 +87,11 @@ export class DisplaySystem {
   /** Builds the models from `snap` (whose `avionics` is replaced by this system's) and draws them. */
   update(snap: AircraftSnapshot, width?: number, height?: number): void {
     const s = { ...snap, avionics: this.avionics };
-    if (!this.display) this.display = initialDisplayState(s);
+    if (!this.display) this.display = initialDisplayState(s, this.edits);
+    if (this.display.uiScale !== this.uiScale)
+      this.display = { ...this.display, uiScale: this.uiScale };
     else if (this.last && this.last.avionics.masterMode !== s.avionics.masterMode)
-      this.display = applyPreset(this.display, s);
+      this.display = applyPreset(this.display, s, this.edits);
     this.last = s;
     const models: Partial<Record<SlotId, DisplayModel | null>> = {};
     for (const id of ['leftMfd', 'rightMfd', 'messages', 'threat'] as const)
@@ -102,11 +109,27 @@ export class DisplaySystem {
       const before = this.avionics.masterMode;
       this.avionics = applyCommand(this.avionics, c.command);
       if (this.last && this.display && before !== this.avionics.masterMode)
-        this.display = applyPreset(this.display, { ...this.last, avionics: this.avionics });
+        this.display = applyPreset(
+          this.display,
+          { ...this.last, avionics: this.avionics },
+          this.edits,
+        );
       this.redraw();
       return;
     }
-    if (this.display && this.last) this.display = applyUi(this.display, this.last, c.command);
+    if (this.display && this.last) {
+      this.display = applyUi(this.display, this.last, c.command);
+      // A format chosen or a slot opened or closed edits the mode's preset (decision 200).
+      if (c.command.type !== 'pin') {
+        this.edits = recordEdit(
+          this.edits,
+          this.avionics.masterMode,
+          c.command.slot,
+          this.display.slots[c.command.slot],
+        );
+        saveEdits(this.edits);
+      }
+    }
     this.redraw();
   }
 
@@ -143,4 +166,31 @@ export class DisplaySystem {
     this.detach();
     this.view.dispose();
   }
+}
+
+const EDITS_KEY = 'bearing.displays.presets';
+
+/** The saved preset edits; none where storage is blocked or empty (a private window). */
+function loadEdits(): PresetEdits {
+  try {
+    const raw = globalThis.localStorage?.getItem(EDITS_KEY);
+    const v: unknown = raw ? JSON.parse(raw) : {};
+    return v && typeof v === 'object' ? (v as PresetEdits) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveEdits(e: PresetEdits): void {
+  try {
+    globalThis.localStorage?.setItem(EDITS_KEY, JSON.stringify(e));
+  } catch {
+    /* storage blocked: the edits last for this visit */
+  }
+}
+
+/** Forgets the saved preset edits (the pause menu's reset). */
+export function clearPresetEdits(system: DisplaySystem): void {
+  system.edits = {};
+  saveEdits({});
 }

@@ -27,6 +27,7 @@ Guidance for Claude Code sessions in this repository. `docs/design.md` is the so
 | Free Flight session      | `node tools/freeflight.session.mjs` with `npm run dev` up: the real `FreeFlight` class in headless Chromium without WebGPU, through every weather preset, pause, restart, a crash and a takeoff roll with free pedals in clear, storm and blizzard |
 | River beds               | `npx vitest run tools/rivers.preview.ts --config vitest.tools.config.ts --disable-console-intercept` (env: `COUNT`, `KM`, `MIN_DROP`, `GRES`): walks rivers' channels on level-7 tiles and prints where the bed climbs (decision 146) |
 | Alignment stage          | `npx vitest run --config vitest.tools.config.ts tools/alignment.preview.ts` (env: `LIMIT`, `NEAR=lat,lon,km`, `SAVE`, `ALIGN_TUNING`); `ALIGNMENTS=<saved>` in the render preview draws it (decision 184) |
+| Displays, checks 12–13   | `node tools/displays.screens.mjs` with `npm run dev` up: every master mode, both skins, 1366 × 768 and 1920 × 1080, color-vision views (env: `MODES`, `SIZES`, `CVD=0`, `OUT_DIR`) → `tools/out/displays/` (decision 200) |
 | Browser smoke test       | `npm run build && npm run preview`, then `node tools/browser.smoke.mjs` (env: `MODE`, `WORLD`, `ONLY`, `SCENES`, `OUT`) → `tools/out/browser/` (decision 144) |
 
 ## Directory map

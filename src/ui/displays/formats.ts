@@ -128,8 +128,9 @@ function enginesFormat(s: AircraftSnapshot): ScreenItem[] {
   ];
   if (!f.unlimited && f.capacity > 0) {
     for (const [v, name] of [
-      [f.joker, 'JOKER'],
-      [f.bingo, 'BINGO'],
+      // Short marks: the two sit close (35% and 20%), and full words collided.
+      [f.joker, 'J'],
+      [f.bingo, 'B'],
     ] as const) {
       const x = 0.08 + 0.5 * (v / f.capacity);
       items.push({
@@ -182,7 +183,8 @@ function messagesFormat(s: AircraftSnapshot): ScreenItem[] {
     {
       kind: 'log',
       lines: lines.slice(-12).map((l) => ({
-        text: `${clock(s.time - l.age)} ${l.t}`,
+        // A warning carries a mark as well as its color (check 13: color is never the only cue).
+        text: `${clock(s.time - l.age)} ${l.warn ? '▲ ' : ''}${l.t}`,
         tone: l.warn ? 'caution' : l.age > 20 ? 'dim' : 'normal',
       })),
     },

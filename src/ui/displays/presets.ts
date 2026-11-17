@@ -57,15 +57,29 @@ export const PRESETS: Record<MasterMode, Partial<Record<SlotId, Want>>> = {
 const SLOTS: SlotId[] = ['leftMfd', 'rightMfd', 'threat', 'messages', 'strip'];
 
 /** A fresh display state: every slot unpinned, then the mode's preset. */
-export function initialDisplayState(s: AircraftSnapshot): DisplayState {
+export function initialDisplayState(s: AircraftSnapshot, edits: PresetEdits = {}): DisplayState {
   const slots = {} as Record<SlotId, SlotDisplayState>;
   for (const id of SLOTS) slots[id] = { format: null, state: 'hidden', pinned: false };
-  return applyPreset({ slots, uiScale: 1 }, s);
+  return applyPreset({ slots, uiScale: 1 }, s, edits);
 }
 
-/** Applies the snapshot's master mode's preset to every unpinned slot. */
-export function applyPreset(d: DisplayState, s: AircraftSnapshot): DisplayState {
+/**
+ * The player's edits to the presets (decision 200): per master mode and slot, the
+ * format and whether it is expanded. An edit applies to every aircraft where the
+ * format exists; elsewhere the preset's own choice stands.
+ */
+export type PresetEdits = Partial<
+  Record<MasterMode, Partial<Record<SlotId, { format: FormatId; expanded: boolean }>>>
+>;
+
+/** Applies the snapshot's master mode's preset, and the player's edits, to every unpinned slot. */
+export function applyPreset(
+  d: DisplayState,
+  s: AircraftSnapshot,
+  edits: PresetEdits = {},
+): DisplayState {
   const preset = PRESETS[s.avionics.masterMode];
+  const mine = edits[s.avionics.masterMode] ?? {};
   const slots = { ...d.slots };
   for (const id of SLOTS) {
     const cur = slots[id];
@@ -75,6 +89,16 @@ export function applyPreset(d: DisplayState, s: AircraftSnapshot): DisplayState 
       continue;
     }
     const allowed = slotFormats(s, id);
+    const taken = id === 'rightMfd' ? slots.leftMfd.format : null;
+    const edit = mine[id];
+    if (edit && allowed.includes(edit.format) && edit.format !== taken) {
+      slots[id] = {
+        format: edit.format,
+        state: edit.expanded ? 'expanded' : 'collapsed',
+        pinned: false,
+      };
+      continue;
+    }
     if (id === 'messages') {
       slots[id] = {
         format: allowed[0] ?? null,
@@ -83,7 +107,6 @@ export function applyPreset(d: DisplayState, s: AircraftSnapshot): DisplayState 
       };
       continue;
     }
-    const taken = id === 'rightMfd' ? slots.leftMfd.format : null;
     // A slot that could only repeat its neighbor's format stays hidden.
     if (allowed.filter((f) => f !== taken).length === 0) {
       slots[id] = { format: null, state: 'hidden', pinned: false };
@@ -98,6 +121,20 @@ export function applyPreset(d: DisplayState, s: AircraftSnapshot): DisplayState 
     };
   }
   return { ...d, slots };
+}
+
+/** Records a slot's format and state as the player's edit of the mode's preset. */
+export function recordEdit(
+  edits: PresetEdits,
+  mode: MasterMode,
+  slot: SlotId,
+  st: SlotDisplayState,
+): PresetEdits {
+  if (!st.format || st.state === 'hidden' || slot === 'strip') return edits;
+  return {
+    ...edits,
+    [mode]: { ...edits[mode], [slot]: { format: st.format, expanded: st.state === 'expanded' } },
+  };
 }
 
 /** Applies a UI command; `null` for commands that are not the UI's. */

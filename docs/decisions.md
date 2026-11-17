@@ -3217,3 +3217,22 @@ Not yet: the moving map, the UI scale setting in the pause menu, saving preset e
 `docs/visual-style.md` (*Displays and Status Strip*), `docs/plans/displays.md`, `CLAUDE.md` (directory map) and `TODO.md` change with this decision.
 
 **Reason:** The frame, the strip and the master modes are the structure every later format plugs into; building them on the two formats Free Flight can feed (fuel and messages) proves the model–view split, the commands and the presets before the costly formats arrive, and moves the states off the HUD as the owner asked.
+
+### 200. The displays' size and saved layouts; acceptance checks 12 and 13 as a tool, and what they found
+
+**Date:** 2026-11-17
+**Decision:** P2's remaining work short of the moving map.
+
+- **Displays size.** `uiScale` (0.75–1.5) in Free Flight's options: a slider in the pause menu, `ui=` in the URL (named only when not 1); `layout()` already took it (decision 195).
+- **Saved layouts.** Choosing a format or expanding or collapsing a slot edits the current master mode's preset (Proposal 0006: edited once, it applies to every aircraft); an edit that names a format the aircraft lacks is passed over. Pins do not count as edits. The edits are kept per viewer in browser storage (`bearing.displays.presets`), read and written in try/catch, so a private window or blocked storage just starts from the presets; the pause menu's "Reset the displays' layouts" forgets them.
+- **Checks 12 and 13** (`tools/displays.screens.mjs` with `npm run dev` up): the real `DisplaySystem` over the stand-in scene (`composite.html?hover=transition&displays=<mode>`, made-up snapshots in `tools/hud/displays.ts`) in every master mode for the Kestrel (ground, navigation, approach, air-to-air, dogfight, air-to-ground) and the Buzzard (ground, navigation, hover), both skins, at 1366 × 768 and 1920 × 1080, the smaller size also as seen with protanopia, deuteranopia and tritanopia through Chromium's own emulation, and a strip with a caution and a warning. It fails a shot with more than two large or two small displays expanded or a slot in the central column; none did. Air-to-air and air-to-ground show no large display yet, since their formats come with P3 and P4. A selection is in `docs/reports/screens/displays/`.
+- **What the views found, and the fixes:**
+  - The fuel bar's JOKER and BINGO labels collided (the marks sit at 35% and 20%): they are J and B now.
+  - With deuteranopia, a warning message and a normal one were both yellow: warning messages carry ▲.
+  - With protanopia, the fuel figure in warning red went dark olive on the black screen: warning-tone text on a screen is now inverse video (white on red).
+  - In the Pact skin the screens' normal amber is the caution color: caution-tone text on a screen is boxed.
+  - The strip already held up: shapes (rounded, notched, ▲) and labels separate its levels under every deficiency.
+
+`docs/visual-style.md` (*Displays and Status Strip*), `docs/plans/displays.md`, `CLAUDE.md` (commands) and `TODO.md` change with this decision.
+
+**Reason:** The owner asked for the rest of the displays up to where their eyes are needed; a scale and saved layouts finish the slots, and running the checks as a tool turned up four places where color was the only cue, which the style guide forbids.

@@ -41,6 +41,8 @@ export interface FreeFlightOptions {
   invertHelo: boolean;
   /** The ground's micro-facets near a low camera: costly on some GPUs, off by default (decision 197). */
   microFacets: boolean;
+  /** The displays' and the strip's size, 0.75–1.5 (Proposal 0006, decision 200). */
+  uiScale: number;
 }
 
 /** The jet's mouse modes: `aim`, the flight director flies to the ring; `direct`, the cursor is the stick. */
@@ -135,6 +137,7 @@ export const DEFAULT_OPTIONS: FreeFlightOptions = {
   invertStick: false,
   invertHelo: false,
   microFacets: false,
+  uiScale: 1,
 };
 
 /** The weather option of a card: the list of presets by name, and what the chosen one is like. */

@@ -88,6 +88,16 @@ describe('Free Flight URL', () => {
     expect({ ...DEFAULT_OPTIONS, ...parseFreeFlightUrl(q, '42').options }.wind).toBe(true);
   });
 
+  it("keeps the displays' scale, named only when not 1 (decision 200)", () => {
+    const q = new URLSearchParams();
+    writeFreeFlightParams(q, { ...DEFAULT_OPTIONS, uiScale: 1.25 }, null);
+    expect(q.get('ui')).toBe('1.25');
+    expect(parseFreeFlightUrl(q, '1').options.uiScale).toBe(1.25);
+    writeFreeFlightParams(q, DEFAULT_OPTIONS, null);
+    expect(q.has('ui')).toBe(false);
+    expect(parse('ui=9').options.uiScale).toBe(1.5);
+  });
+
   it('keeps the mouse inversion per aircraft kind (decision 196)', () => {
     const q = new URLSearchParams();
     writeFreeFlightParams(q, { ...DEFAULT_OPTIONS, invertAim: true }, null);

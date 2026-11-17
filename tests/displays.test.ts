@@ -19,7 +19,7 @@ import { AVIONICS_PROFILES, profileProblems } from '../src/sim/avionics/profiles
 import { DISPLAY_BINDINGS } from '../src/ui/displays/bindings';
 import { displayModel, slotFormats } from '../src/ui/displays/formats';
 import { BEZEL_BUTTONS, SMALL_BUTTONS } from '../src/ui/displays/model';
-import { applyPreset, applyUi, initialDisplayState } from '../src/ui/displays/presets';
+import { applyPreset, applyUi, initialDisplayState, recordEdit } from '../src/ui/displays/presets';
 import type { AircraftSnapshot } from '../src/ui/displays/snapshot';
 import { cautionIds, stripModel } from '../src/ui/displays/strip';
 import { FLIGHT_BINDINGS } from '../src/ui/flight/flightInput';
@@ -138,6 +138,27 @@ describe('display presets', () => {
     const d = initialDisplayState(s);
     expect(applyUi(d, s, { type: 'select-format', slot: 'leftMfd', format: 'radar-aa' })).toBe(d);
     expect(slotFormats(s, 'leftMfd')).toEqual(['engines']);
+  });
+});
+
+describe("the player's preset edits (decision 200)", () => {
+  it('apply in their master mode, to every aircraft where the format exists', () => {
+    const s = snap();
+    let d = initialDisplayState(s);
+    d = applyUi(d, s, { type: 'toggle-slot', slot: 'threat' });
+    const edits = recordEdit({}, 'navigation', 'threat', d.slots.threat);
+    expect(edits).toEqual({ navigation: { threat: { format: 'threat', expanded: false } } });
+    // A fresh sortie in navigation keeps the edit; approach keeps its own preset.
+    expect(initialDisplayState(s, edits).slots.threat.state).toBe('collapsed');
+    const appr = snap({}, { ...s.avionics, masterMode: 'approach' });
+    expect(applyPreset(initialDisplayState(s, edits), appr, edits).slots.threat.state).toBe(
+      'collapsed',
+    );
+    const helo = snap({ kind: 'helicopter', profile: AVIONICS_PROFILES['alliance-scout-helo']! });
+    expect(initialDisplayState(helo, edits).slots.threat.state).toBe('collapsed');
+    // An edit naming a format the aircraft lacks is passed over.
+    const odd = { navigation: { leftMfd: { format: 'radar-aa' as const, expanded: true } } };
+    expect(initialDisplayState(s, odd).slots.leftMfd.format).toBe('engines');
   });
 });
 

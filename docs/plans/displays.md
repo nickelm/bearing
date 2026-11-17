@@ -125,7 +125,7 @@ Each milestone ends with tests, previews, Part I's acceptance checks for what it
 13. Retrofit Free Flight: states, fuel, messages, torque and rotor RPM leave the HUD; the HUD follows the master mode.
 14. Tests: master mode transitions and pins; strip items in scripted Free Flight scenarios (gear up slow and low, speedbrake with afterburner, parking brake with throttle, hover hold); display model snapshots.
 15. Previews: `tools/hud/` composites with the displays and strip for the Kestrel and a helicopter in each master mode; `tools/freeflight.screens.mjs` shots; the browser smoke test checks that displays and strip exist and measures their CPU time.
-16. Acceptance checks 7, 12 and 13; owner checkpoint.
+16. Acceptance checks 7, 12 and 13; owner checkpoint. (12 and 13 as `tools/displays.screens.mjs`, decision 200, with the UI scale and saved layouts; the moving map, step 11, is what remains.)
 
 ### P3. Sensors and formats
 

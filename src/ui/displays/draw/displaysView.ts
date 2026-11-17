@@ -327,6 +327,31 @@ function drawItem(
       c.font = `${Math.round(sizes[it.size])}px ui-monospace, 'JetBrains Mono', Consolas, monospace`;
       c.textAlign = it.align;
       c.textBaseline = 'alphabetic';
+      if (it.tone === 'warning') {
+        // Warnings in inverse video: red alone turns dark for protanopes (check 13).
+        const tw = c.measureText(it.text).width;
+        const fs = sizes[it.size];
+        const x0 =
+          it.align === 'center'
+            ? it.x * w - tw / 2
+            : it.align === 'right'
+              ? it.x * w - tw
+              : it.x * w;
+        c.fillRect(x0 - 3, it.y * h - fs * 0.85, tw + 6, fs * 1.1);
+        c.fillStyle = '#FFFFFF';
+      } else if (it.tone === 'caution') {
+        // Cautions boxed: on the Pact's amber screens their color alone is the text's own.
+        const tw = c.measureText(it.text).width;
+        const fs = sizes[it.size];
+        const x0 =
+          it.align === 'center'
+            ? it.x * w - tw / 2
+            : it.align === 'right'
+              ? it.x * w - tw
+              : it.x * w;
+        c.lineWidth = 1;
+        c.strokeRect(x0 - 3, it.y * h - fs * 0.85, tw + 6, fs * 1.1);
+      }
       c.fillText(it.text, it.x * w, it.y * h);
       break;
     case 'line':

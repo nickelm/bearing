@@ -65,7 +65,7 @@ import { FlightInput, STICK_DEADZONE, STICK_FULL } from '../ui/flight/flightInpu
 import type { ControlCursor } from '../ui/flight/controlCursor';
 import type { ControlMode, FlightAction } from '../ui/flight/flightInput';
 import { MouseCapture } from '../ui/flight/mouseCapture';
-import { DisplaySystem } from '../ui/displays/system';
+import { clearPresetEdits, DisplaySystem } from '../ui/displays/system';
 import type { ControlsAction } from '../ui/displays/model';
 import { AVIONICS_PROFILES } from '../sim/avionics/profiles';
 import { snapshotFromHud } from './snapshot';
@@ -248,6 +248,10 @@ export class FreeFlight {
         exit: () => {
           this.deps.globe.groundCover.setDownwash(null);
           this.deps.exit();
+        },
+        resetDisplays: () => {
+          clearPresetEdits(this.displays);
+          this.hud.message("The displays' layouts are back to their presets", 3);
         },
         optionsChanged: (o) => {
           this.applyInvert();
@@ -759,6 +763,7 @@ export class FreeFlight {
   /** The graphics options: the ground's micro-facets on or off (decision 197). */
   private applyGraphics(): void {
     this.deps.globe.terrain.micro.strength.value = this.options.microFacets ? 1 : 0;
+    this.displays.uiScale = this.options.uiScale;
   }
 
   /** Gives both inputs the mouse inversion the options hold (decision 196). */

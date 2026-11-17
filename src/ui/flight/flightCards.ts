@@ -35,6 +35,8 @@ export interface PauseEvents {
   changeBase(): void;
   exit(): void;
   optionsChanged(o: FreeFlightOptions): void;
+  /** Forget the displays' saved layouts (decision 200). */
+  resetDisplays?(): void;
 }
 
 /** The weather's sound as the pause menu sets it (ui/audio/weatherAudio.ts has this shape). */
@@ -70,6 +72,7 @@ export class PauseMenu {
       <label><input type="checkbox" class="ff-wind"> Wind and turbulence</label><br>
       <label title="Fine faceted relief on the ground near a low camera; costly on some graphics cards"><input type="checkbox" class="ff-micro"> Ground micro-facets (graphics)</label><br>
       <span class="ff-mouse-row"></span><br>
+      <label title="The displays and the status strip, all together">Displays size <input type="range" class="ff-ui" min="0.75" max="1.5" step="0.05"> <span class="ff-ui-label"></span></label><br>
       <label>Time of day <input type="range" class="ff-tod" min="0" max="24" step="0.25"> <span class="ff-tod-label"></span></label>
       <div class="ff-note">The weather changes at once; the time of day applies on the next restart.</div>
       <div class="ff-sound"><h2>Sound</h2>
@@ -94,6 +97,18 @@ export class PauseMenu {
       this.options.microFacets = micro.checked;
       events.optionsChanged(this.options);
     });
+    const ui = opts.querySelector('.ff-ui') as HTMLInputElement;
+    const uiLabel = opts.querySelector('.ff-ui-label') as HTMLSpanElement;
+    ui.addEventListener('input', () => {
+      this.options.uiScale = Number(ui.value);
+      uiLabel.textContent = `${Math.round(this.options.uiScale * 100)}%`;
+      events.optionsChanged(this.options);
+    });
+    const reset = document.createElement('button');
+    reset.textContent = "Reset the displays' layouts";
+    reset.title = 'Each master mode back to its own preset';
+    reset.addEventListener('click', () => events.resetDisplays?.());
+    ui.parentElement?.after(reset);
     const mouse = mouseRow(this.options, () => events.optionsChanged(this.options));
     (opts.querySelector('.ff-mouse-row') as HTMLSpanElement).append(mouse.el);
     const soundBox = opts.querySelector('.ff-sound') as HTMLDivElement;
@@ -112,6 +127,8 @@ export class PauseMenu {
       wind.checked = this.options.wind;
       micro.checked = this.options.microFacets;
       mouse.sync();
+      ui.value = String(this.options.uiScale);
+      uiLabel.textContent = `${Math.round(this.options.uiScale * 100)}%`;
       if (sound) {
         volume.value = String(sound.volume);
         mute.checked = sound.muted;

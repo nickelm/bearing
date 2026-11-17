@@ -28,6 +28,10 @@ async function main(): Promise<void> {
     const { drawHover } = await import('./hover');
     await drawHover(hover);
     await slots(query);
+    if (query.get('displays')) {
+      const { drawDisplays } = await import('./displays');
+      drawDisplays(query);
+    }
     document.title = 'ready';
     return;
   }

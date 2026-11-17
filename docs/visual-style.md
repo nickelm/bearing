@@ -353,7 +353,7 @@ The targeting pod and the hook camera show grayscale thermal (white-hot or black
 
 ### Legibility
 
-All displays and the strip pass the color-vision check of Part II (check 4's simulated deficiencies) and stay legible at 1366 × 768 with the default UI scale.
+All displays and the strip pass the color-vision check of Part II (check 4's simulated deficiencies) and stay legible at 1366 × 768 with the default UI scale. On the screens, warning-tone text is inverse video (white on red), caution-tone text is boxed, and warning messages carry ▲, so color is never the only cue (decision 200); `tools/displays.screens.mjs` draws every master mode in both skins with the three deficiencies.
 
 ## Performance Budgets
 
