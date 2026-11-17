@@ -30,7 +30,7 @@ async function main(): Promise<void> {
     await slots(query);
     if (query.get('displays')) {
       const { drawDisplays } = await import('./displays');
-      drawDisplays(query);
+      await drawDisplays(query);
     }
     document.title = 'ready';
     return;

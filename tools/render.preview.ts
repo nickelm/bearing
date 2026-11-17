@@ -96,7 +96,7 @@ import type { TileKey } from '../src/core/tiles';
 import type { TileData } from '../src/worldgen/gpu/tileSynth';
 import type { CubeFace } from '../src/core/coords';
 import { CubeGrid } from '../src/core/cubeGrid';
-import { DAY, DEG, HOUR, KM } from '../src/core/units';
+import { DAY, DEG, HOUR, KM, NAUTICAL_MILE } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
 import { FARMABLE_BIOMES } from '../src/render/common/palette';
 import { GlobeScene } from '../src/render/sim/globeScene';
@@ -105,6 +105,7 @@ import { buildFontAtlas, FONT_IDS } from '../src/render/strategic/labels/fontAtl
 import type { FontId } from '../src/render/strategic/labels/fontAtlas';
 import { LABEL_FONT_FILES } from '../src/render/strategic/labels/fontFiles';
 import { StrategicScene } from '../src/render/strategic/strategicScene';
+import { MovingMap } from '../src/render/strategic/movingMap';
 import { CloudLayer } from '../src/render/sim/clouds/cloudLayer';
 import { WeatherTexture } from '../src/render/sim/clouds/weatherTexture';
 import { PlanetLighting } from '../src/render/sim/lighting/planetLighting';
@@ -2355,6 +2356,34 @@ async function renderStrategic(
         `strategic ${v.name} (${width}×${height}): ${s.drawn} tiles, deepest L${s.deepest}, ` +
           `${ms.toFixed(1)} ms/frame → ${base}.png`,
       );
+      // MAP=1: the moving map's pictures over this view's center (decision 201), at the
+      // ranges in MAP_NM (center to edge, nautical miles), MAP_SIZE pixels square.
+      if (process.env.MAP === '1') {
+        const map = new MovingMap(scene, head.renderer, Number(env('MAP_SIZE', '512')));
+        for (const nm of env('MAP_NM', '10,40').split(',').map(Number)) {
+          let pic = null;
+          let lastSig = '';
+          for (let f = 0, still = 0; f < 200 && still < 3; f++) {
+            pic = await map.picture(cam.lat, cam.lon, nm * NAUTICAL_MILE);
+            await gpu.finish();
+            const st = scene.relief.stats;
+            const sig = `${st.drawn}/${st.deepest}/${st.meshes}`;
+            still = st.pending === 0 && sig === lastSig ? still + 1 : 0;
+            lastSig = sig;
+          }
+          if (!pic) continue;
+          const rgbMap = new Uint8Array(pic.width * pic.height * 3);
+          for (let i = 0; i < pic.width * pic.height; i++) {
+            rgbMap[i * 3] = pic.pixels[i * 4]!;
+            rgbMap[i * 3 + 1] = pic.pixels[i * 4 + 1]!;
+            rgbMap[i * 3 + 2] = pic.pixels[i * 4 + 2]!;
+          }
+          const file = `${base}-map-${nm}nm.png`;
+          writeFileSync(file, encodePng(pic.width, pic.height, rgbMap));
+          console.log(`strategic ${v.name}: map at ${nm} nm → ${file}`);
+        }
+        map.dispose();
+      }
     }
     scene.dispose();
     clouds.dispose();

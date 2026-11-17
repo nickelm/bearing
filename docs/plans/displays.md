@@ -120,7 +120,7 @@ Each milestone ends with tests, previews, Part I's acceptance checks for what it
 8. Master modes: the state machine, presets, pins, per-viewer preset edits; HUD declutter levels.
 9. Cursor mode with the displays (clicks on bezel buttons and strip items with the free cursor; the wheel over a display); the hot-action bindings and their enumeration test; the help overlay lists them.
 10. Messages format in the messages slot (Free Flight's messages move there; session cards stay).
-11. Moving map, strategic mode: the render target, ranges, north-up and track-up, own ship, airbases, the destination runway, range rings.
+11. Moving map, strategic mode: the render target, ranges, north-up and track-up, own ship, airbases, the destination runway, range rings. (Done but the overlays, decision 201: the picture is read back into the display's canvas instead of drawn into the WebGPU canvas under the slot.)
 12. Engines and fuel format, first version: fuel state, joker and bingo (reading 4).
 13. Retrofit Free Flight: states, fuel, messages, torque and rotor RPM leave the HUD; the HUD follows the master mode.
 14. Tests: master mode transitions and pins; strip items in scripted Free Flight scenarios (gear up slow and low, speedbrake with afterburner, parking brake with throttle, hover hold); display model snapshots.

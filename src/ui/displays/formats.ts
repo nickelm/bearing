@@ -36,10 +36,15 @@ export const FORMAT_TITLES: Record<FormatId, string> = {
 type Format = (s: AircraftSnapshot, d: DisplayState, slot: SlotId) => ScreenItem[];
 
 const FORMATS: Partial<Record<FormatId, Format>> = {
+  'moving-map': movingMapFormat,
   engines: enginesFormat,
   messages: messagesFormat,
   threat: threatFormat,
 };
+
+/** The moving map's ranges, center to edge (nautical miles; decision 201). */
+export const MAP_RANGES_NM = [5, 10, 20, 40, 80, 160] as const;
+const NM = 1852;
 
 /** Whether a format is built yet. */
 export function implemented(f: FormatId): boolean {
@@ -72,6 +77,20 @@ export function displayModel(
     active: st.pinned,
     command: { to: 'ui', command: { type: 'pin', slot, pinned: !st.pinned } },
   };
+  if (format === 'moving-map') {
+    // Left side, top: the range up and down; right side, top: north-up or track-up.
+    const pic = (delta: 1 | -1) => ({
+      to: 'ui' as const,
+      command: { type: 'map-range' as const, slot, delta },
+    });
+    buttons[19] = { label: 'RNG▲', active: false, command: pic(1) };
+    buttons[18] = { label: 'RNG▼', active: false, command: pic(-1) };
+    buttons[6] = {
+      label: d.map.northUp ? 'N-UP' : 'TRK',
+      active: false,
+      command: { to: 'ui', command: { type: 'map-orient', slot } },
+    };
+  }
   if (large(slot)) {
     // Bottom row, left to right (positions 14 down to 10): the slot's formats.
     slotFormats(s, slot)
@@ -171,6 +190,43 @@ function enginesFormat(s: AircraftSnapshot): ScreenItem[] {
       ),
     );
   return items;
+}
+
+/**
+ * The moving map (decision 201): the strategic view's picture under the aircraft,
+ * north-up or track-up, the aircraft at the center, a ring at half the range with
+ * its figure, and the range and orientation in the corners. Ranges in nautical miles
+ * for the Alliance, kilometers for the Pact.
+ */
+function movingMapFormat(s: AircraftSnapshot, d: DisplayState): ScreenItem[] {
+  const nm = MAP_RANGES_NM[Math.max(0, Math.min(MAP_RANGES_NM.length - 1, d.map.range))]!;
+  const half = nm * NM;
+  const rotation = d.map.northUp ? 0 : s.track;
+  const pact = s.profile.skin === 'pact';
+  const fig = (m: number) => (pact ? `${Math.round(m / 1000)} KM` : `${Math.round(m / NM)} NM`);
+  // The aircraft: pointing along its track on a north-up map, straight up on a track-up one.
+  const a = d.map.northUp ? s.track : 0;
+  const pt = (fwd: number, right: number): [number, number] => [
+    0.5 + (Math.sin(a) * fwd + Math.cos(a) * right) * 0.035,
+    0.5 - (Math.cos(a) * fwd - Math.sin(a) * right) * 0.035,
+  ];
+  return [
+    {
+      kind: 'map',
+      lat: s.position.lat,
+      lon: s.position.lon,
+      halfExtent: half,
+      rotation,
+      radius: s.position.radius,
+    },
+    { kind: 'arc', x: 0.5, y: 0.5, r: 0.25, tone: 'normal', dashed: true },
+    text(0.5 + 0.25 * 0.72, 0.5 + 0.25 * 0.72 + 0.06, fig(half / 2), 'small', 'left', 'normal'),
+    { kind: 'line', points: [pt(1, 0), pt(-1, 0)], tone: 'normal', width: 2 },
+    { kind: 'line', points: [pt(0.2, -0.8), pt(0.2, 0.8)], tone: 'normal', width: 2 },
+    { kind: 'line', points: [pt(-0.8, -0.35), pt(-0.8, 0.35)], tone: 'normal', width: 2 },
+    // The range under the range buttons; the orientation is the TRK / N-UP button's label.
+    text(0.04, 0.42, fig(half), 'small', 'left', 'normal'),
+  ];
 }
 
 /** The log of calls and events, newest at the bottom; older lines dim. */

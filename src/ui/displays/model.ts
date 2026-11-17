@@ -24,6 +24,8 @@ export interface SlotDisplayState {
 export interface DisplayState {
   slots: Record<SlotId, SlotDisplayState>;
   uiScale: number;
+  /** The moving map's range (an index into MAP_RANGES_NM) and orientation (decision 201). */
+  map: { range: number; northUp: boolean };
 }
 
 /** Commands to the flight controls the strip's items toggle (gear, brakes), by the inputs' action names. */
@@ -32,7 +34,9 @@ export type ControlsAction = 'gear' | 'speedbrake' | 'parkingBrake' | 'hoverHold
 export type UiCommand =
   | { type: 'select-format'; slot: SlotId; format: FormatId }
   | { type: 'toggle-slot'; slot: SlotId }
-  | { type: 'pin'; slot: SlotId; pinned: boolean };
+  | { type: 'pin'; slot: SlotId; pinned: boolean }
+  | { type: 'map-range'; slot: SlotId; delta: 1 | -1 }
+  | { type: 'map-orient'; slot: SlotId };
 
 export type DisplayCommand =
   | { to: 'avionics'; command: AvionicsCommand }
@@ -53,6 +57,20 @@ export type ScreenItem =
     }
   | { kind: 'line'; points: [number, number][]; tone: Tone; width?: number }
   | { kind: 'arc'; x: number; y: number; r: number; tone: Tone; dashed?: boolean }
+  /**
+   * The moving map's picture (decision 201): the strategic view's rendering around
+   * (`lat`, `lon`), `halfExtent` m from the screen's center to its edges, turned by
+   * `rotation` (rad, clockwise: the track in track-up). The view supplies the picture.
+   */
+  | {
+      kind: 'map';
+      lat: number;
+      lon: number;
+      halfExtent: number;
+      rotation: number;
+      /** The planet's radius (m), to place the aircraft on a picture drawn a moment ago. */
+      radius: number;
+    }
   /** A log of lines, wrapped to the screen's width and stacked up from the bottom, newest last. */
   | { kind: 'log'; lines: { text: string; tone: Tone }[] }
   /** A bar of `fill` (0..1) in a frame, filling up (vertical) or right. */

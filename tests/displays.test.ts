@@ -40,6 +40,9 @@ function snap(over: Partial<AircraftSnapshot> = {}, avionics?: AvionicsState): A
     name: 'F-21 Kestrel',
     profile: AVIONICS_PROFILES['alliance-fighter']!,
     avionics: avionics ?? { ...initialAvionics(false) },
+    position: { lat: 0.8, lon: 0.3, radius: 1_000_000 },
+    track: 0.6,
+    heading: 0.6,
     onGround: false,
     cas: 220,
     groundSpeed: 220,
@@ -113,8 +116,9 @@ describe('avionics profiles', () => {
 describe('display presets', () => {
   it('show a built format in each used slot, and never the same one twice', () => {
     const d = initialDisplayState(snap());
-    expect(d.slots.leftMfd).toMatchObject({ format: 'engines', state: 'expanded' });
-    expect(d.slots.rightMfd.state).toBe('hidden');
+    expect(d.slots.leftMfd).toMatchObject({ format: 'moving-map', state: 'expanded' });
+    // Navigation keeps the right display collapsed; it offers engines and fuel beside the map.
+    expect(d.slots.rightMfd).toMatchObject({ format: 'engines', state: 'collapsed' });
     expect(d.slots.messages).toMatchObject({ format: 'messages', state: 'expanded' });
     expect(d.slots.threat).toMatchObject({ format: 'threat', state: 'expanded' });
   });
@@ -137,7 +141,7 @@ describe('display presets', () => {
     const s = snap();
     const d = initialDisplayState(s);
     expect(applyUi(d, s, { type: 'select-format', slot: 'leftMfd', format: 'radar-aa' })).toBe(d);
-    expect(slotFormats(s, 'leftMfd')).toEqual(['engines']);
+    expect(slotFormats(s, 'leftMfd')).toEqual(['moving-map', 'engines']);
   });
 });
 
@@ -158,7 +162,7 @@ describe("the player's preset edits (decision 200)", () => {
     expect(initialDisplayState(helo, edits).slots.threat.state).toBe('collapsed');
     // An edit naming a format the aircraft lacks is passed over.
     const odd = { navigation: { leftMfd: { format: 'radar-aa' as const, expanded: true } } };
-    expect(initialDisplayState(s, odd).slots.leftMfd.format).toBe('engines');
+    expect(initialDisplayState(s, odd).slots.leftMfd.format).toBe('moving-map');
   });
 });
 
@@ -243,8 +247,8 @@ describe('display models', () => {
       expect(JSON.parse(JSON.stringify(m))).toEqual(m);
     }
     // The bottom row selects the slot's formats; the format shown is highlighted.
-    expect(left.buttons[14]).toMatchObject({ label: 'ENG', active: true });
-    expect(displayModel(s, d, 'rightMfd')).toBeNull();
+    expect(left.buttons[14]).toMatchObject({ label: 'MAP', active: true });
+    expect(left.buttons[13]).toMatchObject({ label: 'ENG', active: false });
   });
 });
 
@@ -255,5 +259,24 @@ describe('hot keys', () => {
     );
     for (const [a, codes] of Object.entries(DISPLAY_BINDINGS))
       for (const c of codes) expect(used.has(c), `${a}: ${c}`).toBe(false);
+  });
+});
+
+describe('the moving map (decision 201)', () => {
+  it('turns with the track in track-up, not in north-up, and steps through its ranges', () => {
+    const s = snap();
+    let d = initialDisplayState(s);
+    const mapItem = () => displayModel(s, d, 'leftMfd')!.items.find((i) => i.kind === 'map')!;
+    expect(mapItem()).toMatchObject({ rotation: 0.6, halfExtent: 20 * 1852, lat: 0.8 });
+    d = applyUi(d, s, { type: 'map-orient', slot: 'leftMfd' });
+    expect(mapItem()).toMatchObject({ rotation: 0 });
+    for (let i = 0; i < 9; i++) d = applyUi(d, s, { type: 'map-range', slot: 'leftMfd', delta: 1 });
+    expect(mapItem()).toMatchObject({ halfExtent: 160 * 1852 });
+    for (let i = 0; i < 9; i++)
+      d = applyUi(d, s, { type: 'map-range', slot: 'leftMfd', delta: -1 });
+    expect(mapItem()).toMatchObject({ halfExtent: 5 * 1852 });
+    const m = displayModel(s, d, 'leftMfd')!;
+    expect(m.buttons[19]?.label).toBe('RNG▲');
+    expect(m.buttons[6]?.label).toBe('N-UP');
   });
 });

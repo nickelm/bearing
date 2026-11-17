@@ -8,7 +8,7 @@
  */
 import type { MasterMode } from '../../sim/avionics/avionics';
 import type { FormatId, SlotId } from '../../sim/avionics/profiles';
-import { slotFormats } from './formats';
+import { MAP_RANGES_NM, slotFormats } from './formats';
 import type { DisplayState, SlotDisplayState } from './model';
 import type { AircraftSnapshot } from './snapshot';
 
@@ -60,7 +60,7 @@ const SLOTS: SlotId[] = ['leftMfd', 'rightMfd', 'threat', 'messages', 'strip'];
 export function initialDisplayState(s: AircraftSnapshot, edits: PresetEdits = {}): DisplayState {
   const slots = {} as Record<SlotId, SlotDisplayState>;
   for (const id of SLOTS) slots[id] = { format: null, state: 'hidden', pinned: false };
-  return applyPreset({ slots, uiScale: 1 }, s, edits);
+  return applyPreset({ slots, uiScale: 1, map: { range: 2, northUp: false } }, s, edits);
 }
 
 /**
@@ -157,6 +157,12 @@ export function applyUi(
     case 'pin':
       slots[c.slot] = { ...cur, pinned: c.pinned };
       break;
+    case 'map-range': {
+      const range = Math.max(0, Math.min(MAP_RANGES_NM.length - 1, d.map.range + c.delta));
+      return { ...d, map: { ...d.map, range } };
+    }
+    case 'map-orient':
+      return { ...d, map: { ...d.map, northUp: !d.map.northUp } };
   }
   return { ...d, slots };
 }

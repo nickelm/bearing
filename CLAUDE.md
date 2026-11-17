@@ -116,6 +116,7 @@ src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Bo
     labels/         label engine: SDF font atlas, styles, band content tables, placement, LabelLayer
     overlays/       military overlays (decision 101): territory tint texture, the overlay model
                     (front, defensive lines, corridors, sea lanes, chokepoints) and MilitaryLayer
+    movingMap.ts    the moving map's picture: renderMap into a render target, read back (decision 201)
     infra/          settlements and infrastructure (decision 104): urban fill texture, building
                     glyph placement, the model of roads, railways, bridges and site symbols
                     (overlays/airModel.ts draws flights, trails, routes and carrier groups; decision 132)

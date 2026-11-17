@@ -20,6 +20,9 @@ export interface SnapshotExtras {
   /** The internal fuel load (kg). */
   capacity: number;
   groundSpeed: number;
+  position: { lat: number; lon: number; radius: number };
+  track: number;
+  heading: number;
   /** The gear does not retract (the helicopters'). */
   fixedGear: boolean;
   control: string;
@@ -47,6 +50,9 @@ export function snapshotFromHud(f: HudFrame, x: SnapshotExtras): AircraftSnapsho
     profile: x.profile,
     avionics: x.avionics,
     onGround: f.onGround,
+    position: x.position,
+    track: x.track,
+    heading: x.heading,
     cas: f.cas,
     groundSpeed: x.groundSpeed,
     radarAltitude: f.radarAltitude,

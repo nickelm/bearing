@@ -22,6 +22,11 @@ export interface AircraftSnapshot {
   profile: AvionicsProfile;
   avionics: AvionicsState;
   onGround: boolean;
+  /** Where the aircraft is (its navigation system knows it): latitude and longitude (rad). */
+  position: { lat: number; lon: number; radius: number };
+  /** Track over the ground and heading (rad from north, clockwise). */
+  track: number;
+  heading: number;
   /** Calibrated airspeed, ground speed (m/s), radar altitude (m). */
   cas: number;
   groundSpeed: number;

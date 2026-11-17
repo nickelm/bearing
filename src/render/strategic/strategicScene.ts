@@ -19,7 +19,7 @@ import {
   Scene,
   Vector3,
 } from 'three/webgpu';
-import type { WebGPURenderer } from 'three/webgpu';
+import type { RenderTarget, WebGPURenderer } from 'three/webgpu';
 import { uniform } from 'three/tsl';
 import type { Cast } from '../../campaign/cast';
 import type { CubeGrid } from '../../core/cubeGrid';
@@ -32,7 +32,7 @@ import { placePlanetCentered } from '../common/cameraRelative';
 import { GlobeMesh } from '../common/globeMesh';
 import type { ViewMode } from '../common/globeMesh';
 import { attachOrbitInput } from '../common/orbitCamera';
-import { StrategicCamera } from './strategicCamera';
+import { STRATEGIC_CAMERA_LIMITS, StrategicCamera } from './strategicCamera';
 import { STRATEGIC_EXAGGERATION, StrategicRelief } from './strategicRelief';
 import type { StrategicReliefWorld } from './strategicRelief';
 import { StrategicOverlay } from './strategicOverlay';
@@ -66,6 +66,7 @@ const PICK_SLOP = 6;
 import type { Mission } from '../../sim/air/mission';
 import { carrierTrack } from '../../sim/naval/carrierGroup';
 import type { CarrierTrack } from '../../sim/naval/carrierGroup';
+import { KM } from '../../core/units';
 import type { GameTime } from '../../core/units';
 
 export interface StrategicSceneOptions {
@@ -77,11 +78,19 @@ export interface StrategicSceneOptions {
   weather?: WeatherField;
 }
 
+/** The moving map shows the mountain, forest and city glyphs from this half extent (m) up (decision 201). */
+export const MAP_GLYPHS_FROM = 150 * KM;
+
 export class StrategicScene {
   readonly scene = new Scene();
   readonly camera: PerspectiveCamera;
   /** Focus, altitude, heading; tilt follows the altitude (decision 75). */
-  readonly orbit: StrategicCamera;
+  /** The view's camera; `renderMap` lends the scene a top-down one for a moment. */
+  orbit: StrategicCamera;
+  /** The moving map's camera: straight down, allowed below the zoom floor (decision 201). */
+  private mapOrbit: StrategicCamera | null = null;
+  /** The map's render places its labels at once (it never stays still). */
+  private forceSettle = false;
   /** Tiled relief mesh at 4× (decision 77); drawn once a terrain world is set. */
   readonly relief: StrategicRelief;
   private readonly weather: WeatherField | null;
@@ -696,7 +705,7 @@ export class StrategicScene {
       this.bands.band,
       (b) => this.bands.fade(b),
       dt,
-      this.stillTime >= SETTLE_TIME,
+      this.forceSettle || this.stillTime >= SETTLE_TIME,
     );
     // Weather moves with game time: re-bake the cloud field while the map is on screen.
     this.weather?.bake(this.renderer, performance.now());
@@ -711,6 +720,65 @@ export class StrategicScene {
     }
     if (this.showLabels && this.labels.hasFonts)
       drawOverlay(this.renderer, this.overlayScene, this.camera);
+  }
+
+  /**
+   * The moving map (Proposal 0006, decision 201): the scene drawn straight down over
+   * (`lat`, `lon`), `halfExtent` m from the center to the target's edges, into `target`,
+   * with the region band's content, labels placed at once and fades settled; then the
+   * view's own camera, viewport and render target are put back. Below the zoom floor
+   * the map shows the region band magnified: no trees or buildings (rule 11).
+   */
+  renderMap(target: RenderTarget, lat: number, lon: number, halfExtent: number): void {
+    const main = this.orbit;
+    const map = (this.mapOrbit ??= new StrategicCamera(main.radius, {
+      ...STRATEGIC_CAMERA_LIMITS,
+      floor: 1 * KM,
+      maxTilt: 0,
+    }));
+    const fovY = (this.camera.fov * Math.PI) / 180;
+    map.lat = lat;
+    map.lon = lon;
+    map.heading = 0;
+    map.altitude = map.targetAltitude = halfExtent / Math.tan(fovY / 2);
+    const saved = {
+      w: this.viewportWidth,
+      h: this.viewportHeight,
+      aspect: this.camera.aspect,
+      target: this.renderer.getRenderTarget(),
+    };
+    const ratio = this.renderer.getPixelRatio();
+    this.orbit = map;
+    this.viewportWidth = target.width / ratio;
+    this.viewportHeight = target.height / ratio;
+    this.camera.aspect = target.width / Math.max(1, target.height);
+    this.camera.updateProjectionMatrix();
+    this.forceSettle = true;
+    // The map view's glyphs are sized for the zoom floor: below about 80 nm (a picture
+    // 150 km from center to edge) they would cover the map, so it shows the relief alone.
+    const glyphs = this.showGlyphs;
+    this.showGlyphs = glyphs && halfExtent >= MAP_GLYPHS_FROM;
+    this.labels.invalidate();
+    this.renderer.setRenderTarget(target);
+    try {
+      // A long step settles the zoom bands' fades for the map's altitude.
+      this.render(10);
+    } finally {
+      this.renderer.setRenderTarget(saved.target);
+      this.orbit = main;
+      this.viewportWidth = saved.w;
+      this.viewportHeight = saved.h;
+      this.camera.aspect = saved.aspect;
+      this.camera.updateProjectionMatrix();
+      this.forceSettle = false;
+      this.showGlyphs = glyphs;
+      this.labels.invalidate();
+    }
+  }
+
+  /** The renderer, for the moving map's render target and read-back (decision 201). */
+  get gpu(): WebGPURenderer {
+    return this.renderer;
   }
 
   /** Screen projection for labels (CSS px), matching the camera this frame. */

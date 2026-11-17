@@ -120,7 +120,7 @@ export class DisplaySystem {
     if (this.display && this.last) {
       this.display = applyUi(this.display, this.last, c.command);
       // A format chosen or a slot opened or closed edits the mode's preset (decision 200).
-      if (c.command.type !== 'pin') {
+      if (c.command.type === 'select-format' || c.command.type === 'toggle-slot') {
         this.edits = recordEdit(
           this.edits,
           this.avionics.masterMode,

@@ -14,7 +14,7 @@
  */
 import type { PerspectiveCamera } from 'three/webgpu';
 import type { CampaignCalendar, OrbitParams } from '../core/calendar';
-import { DEG } from '../core/units';
+import { DEG, NAUTICAL_MILE } from '../core/units';
 import { Quatd } from '../core/quat';
 import { Vec3d } from '../core/vec3d';
 import type { GlobeScene } from '../render/sim/globeScene';
@@ -69,6 +69,8 @@ import { clearPresetEdits, DisplaySystem } from '../ui/displays/system';
 import type { ControlsAction } from '../ui/displays/model';
 import { AVIONICS_PROFILES } from '../sim/avionics/profiles';
 import { snapshotFromHud } from './snapshot';
+import { MovingMap } from '../render/strategic/movingMap';
+import { MAP_RANGES_NM } from '../ui/displays/formats';
 import {
   DEFAULT_OPTIONS,
   FreeFlightMenu,
@@ -140,6 +142,8 @@ const MOUSE_MODE_MESSAGE: Record<ControlMode, string> = {
   direct: 'Direct: the mouse is the stick, its offset from the center. N for mouse aim',
 };
 const CONTROL_MODE: Record<JetControl, ControlMode> = { aim: 'mouse-aim', direct: 'direct' };
+/** Whether the map's read-back runs from the bottom row (settled by the lavapipe preview). */
+const MAP_FLIP_Y = false;
 /** Where a helicopter starts on the ground: beside the runway's middle (m across, to the right). */
 const HELO_SPOT_ACROSS = 75;
 
@@ -178,6 +182,8 @@ export class FreeFlight {
   private sortieAt = 0;
   private fuelCapacity = 0;
   private displaysAt = -Infinity;
+  private movingMap: MovingMap | null = null;
+  private mapAt = -Infinity;
   /** The mouse's pointer lock, shared by both inputs and toggled by Tab (decision 193). */
   readonly capture: MouseCapture;
   /** When the browser last took the mouse back and paused (ms), so its Escape does not resume. */
@@ -1183,7 +1189,23 @@ export class FreeFlight {
         : this.input.mode === 'mouse-aim'
           ? 'mouse aim'
           : 'direct';
+    // Where the aircraft is, its track over the ground and its heading (rad from north).
+    const up = m.pos.clone().normalize();
+    const east = new Vec3d(0, 1, 0).cross(up).normalize();
+    const north = up.clone().cross(east);
+    const vg = m.vel.clone().addScaled(up, -m.vel.dot(up));
+    const heading = t.heading;
+    const track = vg.length() > 5 ? Math.atan2(vg.dot(east), vg.dot(north)) : heading;
+    const position = {
+      lat: Math.asin(Math.max(-1, Math.min(1, up.y))),
+      lon: Math.atan2(up.x, up.z),
+      radius: this.deps.radius,
+    };
+    this.requestMap(position);
     const snap = snapshotFromHud(f, {
+      position,
+      track,
+      heading,
       time: (now - this.sortieAt) / 1000,
       name: this.displayName,
       profile,
@@ -1200,6 +1222,32 @@ export class FreeFlight {
       })),
     });
     this.displays.update(snap);
+  }
+
+  /**
+   * The moving map's picture (decision 201): every half second while a display shows the
+   * map, the strategic scene drawn straight down over the aircraft, √2 wider than the
+   * map's range so a turned picture still fills the screen.
+   */
+  private requestMap(at: { lat: number; lon: number }): void {
+    const d = this.displays.display;
+    if (!d || this.state !== 'flying') return;
+    const shows = (['leftMfd', 'rightMfd'] as const).some(
+      (s) => d.slots[s].format === 'moving-map' && d.slots[s].state === 'expanded',
+    );
+    const now = performance.now();
+    if (!shows || now - this.mapAt < 500) return;
+    this.mapAt = now;
+    const nm = MAP_RANGES_NM[d.map.range] ?? 20;
+    this.movingMap ??= new MovingMap(this.deps.strategic, this.deps.strategic.gpu, 512);
+    void this.movingMap
+      .picture(at.lat, at.lon, nm * NAUTICAL_MILE * Math.SQRT2)
+      .then((pic) => {
+        if (pic) this.displays.view.setMapPicture({ ...pic, flipY: MAP_FLIP_Y });
+      })
+      .catch(() => {
+        /* a lost device or a resize: the next picture tries again */
+      });
   }
 
   /** A strip item's click: the flight control it stands for (decision 199). */

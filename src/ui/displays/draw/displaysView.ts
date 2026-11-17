@@ -41,6 +41,8 @@ export class DisplaysView {
   private stripDrawn = '';
   private lay: DisplayLayout | null = null;
   private commands = new Map<string, DisplayCommand>();
+  /** The moving map's latest picture (decision 201). */
+  private map: MapImage | null = null;
 
   constructor(parent: HTMLElement = document.body) {
     this.root.className = 'dsp-root';
@@ -78,6 +80,38 @@ export class DisplaysView {
 
   get visible(): boolean {
     return !this.root.hidden;
+  }
+
+  /**
+   * A new map picture: RGBA rows from the top (`flipY` when the read-back's rows run from the
+   * bottom). Screens showing the map redraw with it.
+   */
+  setMapPicture(p: {
+    width: number;
+    height: number;
+    pixels: Uint8ClampedArray;
+    lat: number;
+    lon: number;
+    halfExtent: number;
+    flipY?: boolean;
+  }): void {
+    const canvas = document.createElement('canvas');
+    canvas.width = p.width;
+    canvas.height = p.height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const data = new ImageData(new Uint8ClampedArray(p.pixels), p.width, p.height);
+    if (p.flipY) {
+      ctx.translate(0, p.height);
+      ctx.scale(1, -1);
+      const tmp = document.createElement('canvas');
+      tmp.width = p.width;
+      tmp.height = p.height;
+      tmp.getContext('2d')?.putImageData(data, 0, 0);
+      ctx.drawImage(tmp, 0, 0);
+    } else ctx.putImageData(data, 0, 0);
+    this.map = { image: canvas, size: p.width, lat: p.lat, lon: p.lon, halfExtent: p.halfExtent };
+    for (const el of this.slots.values()) el.drawn = '';
   }
 
   /** The current layout (after `draw`), for tools and tests. */
@@ -146,7 +180,7 @@ export class DisplaysView {
     el.drawn = key;
     // The owner's tag on the bezel's top edge (P5's crew); the format names itself on its screen.
     el.title.textContent = m.owner ?? '';
-    drawScreen(el.screen, m, getComputedStyle(this.root));
+    drawScreen(el.screen, m, getComputedStyle(this.root), this.map);
   }
 
   /** Places the screen inside the bezel and the buttons on its edges. */
@@ -241,10 +275,26 @@ function place(el: HTMLElement, r: Rect): void {
   el.style.height = `${r.height}px`;
 }
 
+/** The moving map's latest picture, as the view keeps it (decision 201). */
+export interface MapImage {
+  image: CanvasImageSource;
+  size: number;
+  lat: number;
+  lon: number;
+  halfExtent: number;
+}
+
+const wrap = (a: number) => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
+
 const TONE_ALPHA: Record<Tone, number> = { normal: 1, dim: 0.5, caution: 1, warning: 1 };
 
 /** Draws a model's screen: its items, and its buttons' labels beside them. */
-function drawScreen(canvas: HTMLCanvasElement, m: DisplayModel, css: CSSStyleDeclaration): void {
+function drawScreen(
+  canvas: HTMLCanvasElement,
+  m: DisplayModel,
+  css: CSSStyleDeclaration,
+  map: MapImage | null,
+): void {
   const dpr = window.devicePixelRatio || 1;
   const w = canvas.clientWidth || parseFloat(canvas.style.width);
   const h = canvas.clientHeight || parseFloat(canvas.style.height);
@@ -263,7 +313,9 @@ function drawScreen(canvas: HTMLCanvasElement, m: DisplayModel, css: CSSStyleDec
         : phosphor;
   const base = Math.max(9, Math.min(w, h) / 16);
   const sizes = { small: base * 0.85, normal: base, large: base * 1.5 };
-  for (const it of m.items) drawItem(c, it, w, h, sizes, color);
+  // Over the map's picture, symbology and labels get a dark halo (Part I, Moving Map).
+  halo = m.items.some((i) => i.kind === 'map');
+  for (const it of m.items) drawItem(c, it, w, h, sizes, color, map);
   // Button labels on the screen's edges, beside their buttons.
   c.globalAlpha = 1;
   c.font = `${Math.round(base * 0.8)}px ui-monospace, 'JetBrains Mono', Consolas, monospace`;
@@ -305,8 +357,41 @@ function drawScreen(canvas: HTMLCanvasElement, m: DisplayModel, css: CSSStyleDec
       c.fillRect(bx, by, tw + 4, base * 0.9);
       c.fillStyle = css.getPropertyValue('--screen').trim() || '#000';
     } else c.fillStyle = phosphor;
+    if (halo && !b.active) haloText(c, b.label, x, y);
     c.fillText(b.label, x, y);
   });
+}
+
+/** Whether the screen being drawn shows the map (its symbology then gets a halo). */
+let halo = false;
+
+function haloText(c: CanvasRenderingContext2D, t: string, x: number, y: number): void {
+  const fill = c.fillStyle;
+  c.save();
+  c.globalAlpha = 1;
+  c.strokeStyle = 'rgba(0, 12, 4, 0.85)';
+  c.lineWidth = 3;
+  c.lineJoin = 'round';
+  c.strokeText(t, x, y);
+  c.restore();
+  c.fillStyle = fill;
+}
+
+/** Strokes the current path, with a dark halo under it over the map. */
+function haloStroke(c: CanvasRenderingContext2D): void {
+  if (halo) {
+    const color = c.strokeStyle;
+    const width = c.lineWidth;
+    c.save();
+    c.globalAlpha = 1;
+    c.strokeStyle = 'rgba(0, 12, 4, 0.85)';
+    c.lineWidth = width + 2.5;
+    c.stroke();
+    c.restore();
+    c.strokeStyle = color;
+    c.lineWidth = width;
+  }
+  c.stroke();
 }
 
 function drawItem(
@@ -316,8 +401,9 @@ function drawItem(
   h: number,
   sizes: Record<'small' | 'normal' | 'large', number>,
   color: (t: Tone) => string,
+  map: MapImage | null,
 ): void {
-  const tone: Tone = it.kind === 'log' ? 'normal' : it.tone;
+  const tone: Tone = 'tone' in it ? it.tone : 'normal';
   c.globalAlpha = TONE_ALPHA[tone];
   c.strokeStyle = c.fillStyle = color(tone);
   c.lineWidth = 1.5;
@@ -352,20 +438,46 @@ function drawItem(
         c.lineWidth = 1;
         c.strokeRect(x0 - 3, it.y * h - fs * 0.85, tw + 6, fs * 1.1);
       }
+      if (halo && it.tone !== 'warning') haloText(c, it.text, it.x * w, it.y * h);
       c.fillText(it.text, it.x * w, it.y * h);
       break;
     case 'line':
       c.lineWidth = it.width ?? 1.5;
       c.beginPath();
       it.points.forEach(([x, y], i) => (i ? c.lineTo(x * w, y * h) : c.moveTo(x * w, y * h)));
-      c.stroke();
+      haloStroke(c);
       break;
     case 'arc':
       if (it.dashed) c.setLineDash([4, 4]);
       c.beginPath();
       c.arc(it.x * w, it.y * h, it.r * Math.min(w, h), 0, 2 * Math.PI);
-      c.stroke();
+      haloStroke(c);
       break;
+    case 'map': {
+      // The latest picture, centered on the aircraft and turned for track-up (decision 201).
+      const pic = map;
+      if (!pic) {
+        c.font = `${Math.round(sizes.small)}px ui-monospace, 'JetBrains Mono', Consolas, monospace`;
+        c.textAlign = 'center';
+        c.fillText('MAP LOADING', w / 2, h * 0.8);
+        break;
+      }
+      const mPerScreenPx = (2 * it.halfExtent) / w;
+      const mPerPicPx = (2 * pic.halfExtent) / pic.size;
+      const east = it.radius * Math.cos(it.lat) * wrap(it.lon - pic.lon);
+      const north = it.radius * (it.lat - pic.lat);
+      c.save();
+      c.globalAlpha = 1;
+      c.beginPath();
+      c.rect(0, 0, w, h);
+      c.clip();
+      c.translate(w / 2, h / 2);
+      c.rotate(-it.rotation);
+      c.scale(mPerPicPx / mPerScreenPx, mPerPicPx / mPerScreenPx);
+      c.drawImage(pic.image, -pic.size / 2 - east / mPerPicPx, -pic.size / 2 + north / mPerPicPx);
+      c.restore();
+      break;
+    }
     case 'log': {
       // Wrapped to the width, stacked up from the bottom, newest last.
       const size = sizes.small;

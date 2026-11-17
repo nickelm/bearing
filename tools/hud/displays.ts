@@ -11,7 +11,7 @@ import { AVIONICS_PROFILES } from '../../src/sim/avionics/profiles';
 import type { AircraftSnapshot } from '../../src/ui/displays/snapshot';
 import { DisplaySystem } from '../../src/ui/displays/system';
 
-export function drawDisplays(q: URLSearchParams): void {
+export async function drawDisplays(q: URLSearchParams): Promise<void> {
   const mode = (q.get('displays') ?? 'navigation') as MasterMode;
   const helo = q.get('aircraft') === 'utility';
   const base = AVIONICS_PROFILES[helo ? 'alliance-utility-helo' : 'alliance-fighter']!;
@@ -29,6 +29,9 @@ export function drawDisplays(q: URLSearchParams): void {
     name: helo ? 'UH-68 Buzzard' : 'F-21 Kestrel',
     profile,
     avionics: initialAvionics(ground),
+    position: { lat: 0.8, lon: 0.3, radius: 1_000_000 },
+    track: 0.6,
+    heading: 0.6,
     onGround: ground,
     cas: ground ? 0 : approach ? 75 : 210,
     groundSpeed: ground ? 0 : 210,
@@ -63,5 +66,26 @@ export function drawDisplays(q: URLSearchParams): void {
   sys.uiScale = Number(q.get('scale') ?? 1);
   sys.avionics = { ...sys.avionics, masterMode: mode, manual: !ground };
   sys.visible = true;
+  // `&mapimg=<file in tools/out>&mapnm=<range it was drawn for>`: a moving-map picture from the
+  // strategic render preview (MAP=1) as the map's picture, centered on the aircraft (decision 201).
+  const img = q.get('mapimg');
+  if (img) {
+    const el = new Image();
+    el.src = `../out/${img}`;
+    await el.decode();
+    const c = document.createElement('canvas');
+    c.width = el.width;
+    c.height = el.height;
+    const ctx = c.getContext('2d')!;
+    ctx.drawImage(el, 0, 0);
+    sys.view.setMapPicture({
+      width: el.width,
+      height: el.height,
+      pixels: ctx.getImageData(0, 0, el.width, el.height).data,
+      lat: snap.position.lat,
+      lon: snap.position.lon,
+      halfExtent: Number(q.get('mapnm') ?? 40) * 1852 * Math.SQRT2,
+    });
+  }
   sys.update(snap);
 }
