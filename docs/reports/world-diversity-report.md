@@ -59,6 +59,12 @@ Globe maps (coarse pass, equirectangular above both polar caps) of three contras
 - **Seed 9** (young mountains and dry extension): `seed9-biome.png`, `seed9-provinces.png`.
 - **Seed 16** (two old shields and dry extension): `seed16-biome.png`, `seed16-provinces.png`.
 
+Simulation-view renders of seed 1 from `tools/render.preview.ts` on lavapipe, with the brighter palette and the zones' shift (generator version 27, before decision 213):
+
+- `sim-seed1-range.png`: a range at low sun.
+- `sim-seed1-alpine.png`: the highest summit near the main continent from 10 km, a cold plateau rising to a snowy crest.
+- `sim-seed1-mixed.png`: the check-1 landscape from 5 km. Forest, steppe, a town, roads, and wide tracts of moorland in heather pink.
+
 ## Metrics against the criteria
 
 The full tables are in [world-diversity-metrics.md](world-diversity-metrics.md); the baseline is [world-diversity-baseline.md](world-diversity-baseline.md).
@@ -121,6 +127,8 @@ The full tables are in [world-diversity-metrics.md](world-diversity-metrics.md);
 - Eroded peaks reach 10.0 km on seed 2, above the proposal's 8–9 km, from young collisions × 1.25 under the shared soft limit.
 - Tundra covers 16.5% of land on the coarse pass (baseline 9.6%), because cold plateaus are tundra below −12 °C. Alpine meadow rose from 5% to 7%.
 - Eroded wetland and mangrove shares were measured before decision 213's fix; the eroded run that would confirm it is still to do.
+
+- Moorland's heather (`#8A6A7A`) covers wide tracts of seed 1's lowland in the `mixed` view and reads pink rather than purple-brown from 5 km. Its share (2.6% of land) is modest, but its color and the acid-rock rule (any granite, sandstone or till that is cool and wet) need tuning against the reference board.
 
 **Minor**
 
