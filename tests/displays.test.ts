@@ -41,6 +41,7 @@ function snap(over: Partial<AircraftSnapshot> = {}, avionics?: AvionicsState): A
     profile: AVIONICS_PROFILES['alliance-fighter']!,
     avionics: avionics ?? { ...initialAvionics(false) },
     position: { lat: 0.8, lon: 0.3, radius: 1_000_000 },
+    destination: { label: 'RWY 07', bearing: 1.2, distance: 30_000 },
     track: 0.6,
     heading: 0.6,
     onGround: false,
@@ -278,5 +279,22 @@ describe('the moving map (decision 201)', () => {
     const m = displayModel(s, d, 'leftMfd')!;
     expect(m.buttons[19]?.label).toBe('RNG▲');
     expect(m.buttons[6]?.label).toBe('N-UP');
+  });
+
+  it('marks the destination inside the range, and points to it at the edge beyond (decision 202)', () => {
+    const s = snap();
+    let d = initialDisplayState(s);
+    const marks = () =>
+      displayModel(s, d, 'leftMfd')!.items.filter(
+        (i) => i.kind === 'text' && i.text.startsWith('RWY 07'),
+      ) as { x: number; y: number; text: string }[];
+    // 30 km at 20 nm (37 km): inside, along the bearing relative to the track (1.2 − 0.6 rad).
+    const [inside] = marks();
+    expect(inside!.text).toBe('RWY 07');
+    expect(inside!.x).toBeGreaterThan(0.5);
+    for (let i = 0; i < 2; i++)
+      d = applyUi(d, s, { type: 'map-range', slot: 'leftMfd', delta: -1 });
+    // 5 nm (9.3 km): beyond, with its distance.
+    expect(marks()[0]!.text).toBe('RWY 07 16 NM');
   });
 });

@@ -41,6 +41,8 @@ export class DisplaysView {
   private stripDrawn = '';
   private lay: DisplayLayout | null = null;
   private commands = new Map<string, DisplayCommand>();
+  /** The model each slot shows now. */
+  private readonly shown = new Map<SlotId, DisplayModel | null>();
   /** The moving map's latest picture (decision 201). */
   private map: MapImage | null = null;
 
@@ -62,6 +64,24 @@ export class DisplaysView {
         this.send({ to: 'ui', command: { type: 'toggle-slot', slot: id } }),
       );
       box.append(screen, title);
+      // The wheel over the map steps its range in cursor mode (Proposal 0006; decision 202).
+      let wheel = 0;
+      box.addEventListener(
+        'wheel',
+        (e) => {
+          const m = this.shown.get(id);
+          if (m?.format !== 'moving-map') return;
+          e.preventDefault();
+          const px =
+            e.deltaMode === 1 ? e.deltaY * 33 : e.deltaMode === 2 ? e.deltaY * 800 : e.deltaY;
+          wheel += px;
+          if (Math.abs(wheel) < 80) return;
+          const delta = wheel > 0 ? 1 : -1;
+          wheel = 0;
+          this.send({ to: 'ui', command: { type: 'map-range', slot: id, delta } });
+        },
+        { passive: false },
+      );
       this.root.append(box, tab);
       this.slots.set(id, { box, screen, title, buttons: [], tab, drawn: '', rect: '' });
     }
@@ -146,6 +166,7 @@ export class DisplaysView {
     L: DisplayLayout,
   ): void {
     const el = this.slots.get(id)!;
+    this.shown.set(id, m);
     const st = d.slots[id];
     const { rect, tab } = L.slots[id];
     const open = m !== null && st.state === 'expanded';

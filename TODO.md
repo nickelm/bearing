@@ -749,7 +749,8 @@ The allocation rule, the display frame, slots and slot states, the status strip,
 - [x] Messages format in the messages slot: Free Flight's messages move there (summary and crash cards stay) (decision 199)
 - [x] Moving map, strategic mode (decision 201): `StrategicScene.renderMap` from a straight-down camera into a render target every 0.5 s, read back into the display's canvas, √2 wider than the range so track-up and the aircraft's motion are a 2D transform; 5–160 nm; north-up and track-up; the aircraft, a ring at half the range; `MAP=1` in the strategic render preview writes the pictures
   - [ ] Owner: the map in a browser with a GPU: legibility at 10 nm, the cost of a picture every half second (the label pass runs each time), whether 2 Hz motion between pictures reads smoothly
-  - [ ] The destination runway, route and waypoints, and the side's front and threat rings as the format's overlays
+  - [x] The destination runway on the map, and the wheel for its range (decision 202)
+  - [ ] Route and waypoints, and the side's front and threat rings as the format's overlays (with missions and P3's sensor model)
   - [ ] Judge the base map at 10 nm on a 400-pixel display; if the 1.5 km grid looks blocky, strategic mode stops at 20 nm
 - [x] Engines and fuel format, first version: fuel state, joker and bingo (pulled forward from P3 so fuel can leave the HUD) (decision 199)
 - [x] Retrofit Free Flight: states, fuel, messages, torque and rotor RPM leave the HUD (`hud.ts`, `hudFrame.ts`, `heloHud.ts`); the HUD follows the master mode; the helicopter's hover symbology stays (decision 199: `HudFrame.panels`)

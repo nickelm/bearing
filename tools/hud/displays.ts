@@ -30,6 +30,7 @@ export async function drawDisplays(q: URLSearchParams): Promise<void> {
     profile,
     avionics: initialAvionics(ground),
     position: { lat: 0.8, lon: 0.3, radius: 1_000_000 },
+    destination: { label: 'RWY 07', bearing: 1.2, distance: 30_000 },
     track: 0.6,
     heading: 0.6,
     onGround: ground,

@@ -224,8 +224,68 @@ function movingMapFormat(s: AircraftSnapshot, d: DisplayState): ScreenItem[] {
     { kind: 'line', points: [pt(1, 0), pt(-1, 0)], tone: 'normal', width: 2 },
     { kind: 'line', points: [pt(0.2, -0.8), pt(0.2, 0.8)], tone: 'normal', width: 2 },
     { kind: 'line', points: [pt(-0.8, -0.35), pt(-0.8, 0.35)], tone: 'normal', width: 2 },
+    ...destinationMark(s, half, rotation, fig),
     // The range under the range buttons; the orientation is the TRK / N-UP button's label.
     text(0.04, 0.42, fig(half), 'small', 'left', 'normal'),
+  ];
+}
+
+/**
+ * The destination on the map (decision 202): a diamond at its bearing and distance with its
+ * label, or a caret at the map's edge pointing to it with its distance when it lies beyond.
+ */
+function destinationMark(
+  s: AircraftSnapshot,
+  half: number,
+  rotation: number,
+  fig: (m: number) => string,
+): ScreenItem[] {
+  const d = s.destination;
+  if (!d) return [];
+  const rel = d.bearing - rotation;
+  const edge = 0.44;
+  const r = (d.distance / half) * 0.5;
+  const inside = r <= edge;
+  const k = inside ? r : edge;
+  const x = 0.5 + k * Math.sin(rel);
+  const y = 0.5 - k * Math.cos(rel);
+  const q = 0.022;
+  if (inside)
+    return [
+      {
+        kind: 'line',
+        points: [
+          [x, y - q],
+          [x + q, y],
+          [x, y + q],
+          [x - q, y],
+          [x, y - q],
+        ],
+        tone: 'normal',
+        width: 2,
+      },
+      text(x + 0.035, y + 0.012, d.label, 'small', 'left', 'normal'),
+    ];
+  // A caret at the edge, pointing out along the bearing.
+  const tip = (a: number, l: number): [number, number] => [
+    x + l * Math.sin(rel + a),
+    y - l * Math.cos(rel + a),
+  ];
+  return [
+    {
+      kind: 'line',
+      points: [tip(2.6, 0.035), tip(0, 0), tip(-2.6, 0.035)],
+      tone: 'normal',
+      width: 2,
+    },
+    text(
+      x,
+      y + (Math.cos(rel) > 0 ? 0.07 : -0.045),
+      `${d.label} ${fig(d.distance)}`,
+      'small',
+      'center',
+      'normal',
+    ),
   ];
 }
 

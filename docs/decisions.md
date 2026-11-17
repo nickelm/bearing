@@ -3254,3 +3254,16 @@ Not yet: the destination runway, route and waypoints, the front and threat rings
 `docs/visual-style.md` (*Moving Map*), `docs/plans/displays.md`, `CLAUDE.md` (directory map) and `TODO.md` change with this decision.
 
 **Reason:** The proposal's moving map is the strategic view's own rendering, and the scene could draw it with a borrowed camera at little code cost; reading the picture back trades a fraction of a frame every half second for a display that stays plain HTML and data.
+
+### 202. The destination on the moving map; the wheel over the map steps its range
+
+**Date:** 2026-11-17
+**Decision:** Two of decision 201's open items.
+
+- **The destination.** The snapshot carries where the aircraft is going (in Free Flight, the landing aid's runway: `RWY 07`, its true bearing and distance). The map draws a diamond there with the label when it lies inside the range, and a caret at the map's edge pointing to it with the label and the distance (nm or km by skin) when it lies beyond; the bearing turns with the map in track-up. Routes and waypoints, the front and threat rings wait for missions and the sensor model (P3).
+- **The wheel.** Over a display showing the map, the wheel steps the range (down widens it), accumulated so a trackpad's small steps do not race through the ranges; it works in cursor mode, since a captured mouse's wheel goes to the view (the throttle, or the zoom while looking around).
+- **Checks.** A unit test of the mark inside and beyond the range; the session tool turns the wheel over the map; `docs/reports/screens/displays/map-navigation-*.png` redrawn with the mark.
+
+`docs/visual-style.md` (*Moving Map*) and `TODO.md` change with this decision.
+
+**Reason:** The runway the landing aid already knows is the one place in Free Flight the map can point to, and the proposal names the wheel for the map's range.

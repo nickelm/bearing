@@ -51,6 +51,9 @@ export function snapshotFromHud(f: HudFrame, x: SnapshotExtras): AircraftSnapsho
     avionics: x.avionics,
     onGround: f.onGround,
     position: x.position,
+    destination: f.aid
+      ? { label: `RWY ${f.aid.designator}`, bearing: f.aid.bearing, distance: f.aid.distance }
+      : null,
     track: x.track,
     heading: x.heading,
     cas: f.cas,

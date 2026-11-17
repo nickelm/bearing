@@ -24,6 +24,8 @@ export interface AircraftSnapshot {
   onGround: boolean;
   /** Where the aircraft is (its navigation system knows it): latitude and longitude (rad). */
   position: { lat: number; lon: number; radius: number };
+  /** Where the aircraft is going: a label, the true bearing (rad) and the distance (m); null if nowhere. */
+  destination: { label: string; bearing: number; distance: number } | null;
   /** Track over the ground and heading (rad from north, clockwise). */
   track: number;
   heading: number;

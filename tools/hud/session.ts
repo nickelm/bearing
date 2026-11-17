@@ -540,6 +540,12 @@ async function main(): Promise<void> {
     const strip = ff.input.controls.parkingBrake !== pb0;
     if (strip) key('KeyP');
     const left = slots[0]!;
+    // The wheel over the map steps its range (decision 202).
+    const range0 = ff.displays.display?.map.range ?? -1;
+    left.dispatchEvent(new WheelEvent('wheel', { deltaY: 120, bubbles: true, cancelable: true }));
+    const wheel = (ff.displays.display?.map.range ?? -1) === range0 + 1;
+    left.dispatchEvent(new WheelEvent('wheel', { deltaY: -120, bubbles: true, cancelable: true }));
+    check(wheel, 'displays: the wheel over the map steps its range');
     key('Digit1');
     const collapsed = left.classList.contains('dsp-closed');
     key('Digit1');
