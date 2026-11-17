@@ -3542,3 +3542,15 @@ The owner also asked for decision 204's prep commit on `main` (done), and for th
 `TODO.md` changes with this decision.
 
 **Reason:** As graph facts, wonders reach the briefing and the map on every machine. Selecting them after the territory is cast puts them where the war will be flown, and their own streams leave casting and every other name unchanged.
+
+### 212. W9 fixes: islets join a zone; flatness and mangroves at the eroded grid's resolution
+
+**Date:** 2026-11-17
+**Decision:** Two fixes the eroded verification found.
+
+- **Islets.** On seed 1's eroded world, 822 of 4,459 zones were under 16 km, and all but two touched no other zone: islets (5,824 cells in all). A zone still under the minimum after the merges now joins the nearest large zone across up to 30 km of water (`ZONE_TUNING.isletReach`), so an archipelago shares its coast's zone. Seed 1 then has 3,728 zones, 97.6% of them 16–63 km across (`tools/zones.preview.ts`, which recomputes zones on cached eroded worlds without the GPU).
+- **Flatness and mangroves.** Wetland and mangrove came out at 0% on the eroded grid, though the coarse pass had them in every seed. The level-ground test (reference slope under 0.004) and the mangrove's coastal height (under 40 reference m) were tuned to 6 km cells. The 1.5 km grid resolves the relief the coarse cells average out, and its Earth elevation counts the landform above the valley floor at Earth's scale. The flat threshold now scales as (6 km / cell)^0.8, so 0.004 at 6 km and 0.012 at 1.5 km. Mangroves need physical height under 12 m. On the coarse pass, seeds 1–8 keep both biomes in every seed (mangrove 0.7%, wetland 2.8%).
+- **Not yet measured on the eroded grid.** The eroded metrics in `docs/reports/world-diversity-metrics.md` were measured before this fix. Their wetland and mangrove shares predate it.
+- **Version.** `GENERATOR_VERSION` is 28.
+
+**Reason:** Both criteria the zones and the biome table must meet are measured where the player flies, on the eroded grid; thresholds that only made sense at the coarse grid's scale had to follow the cell size.

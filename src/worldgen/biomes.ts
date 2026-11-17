@@ -248,7 +248,7 @@ export function classifyBiome(
     return Biome.TemperateRainforest;
   }
   if (moisture < 0.18) return desert(true);
-  if (ctx.coastal && moisture >= 0.5 && referenceHeightM < 40) return Biome.Mangrove;
+  if (ctx.coastal && moisture >= 0.5 && heightM < 12) return Biome.Mangrove;
   if (moisture < 0.32) return winterWet ? Biome.Shrubland : Biome.Savanna;
   if (moisture < 0.5) return Biome.Savanna;
   if (moisture < 0.75) return Biome.TropicalSeasonalForest;
@@ -292,6 +292,14 @@ export function computeBiomes(
 
 /** Reference slope below which ground counts as level for wetlands. */
 const FLAT_SLOPE = 0.004;
+/**
+ * The same flatness on finer grids: a cell-to-cell slope grows as cells shrink,
+ * since the eroded grid resolves the relief the coarse cells average out
+ * (about 0.004 at 6 km, 0.012 at 1.5 km; decision 212).
+ */
+function flatSlope(cellSize: number): number {
+  return FLAT_SLOPE * Math.max(1, 6_000 / cellSize) ** 0.8;
+}
 
 /**
  * The context of land cell `c` on an n-per-face grid (decision 208): the rock,
@@ -323,7 +331,7 @@ export function biomeContext(
     seasonality: m.seasonality[c]!,
     fog: m.fog[c]!,
     coastal,
-    flat: steepest < FLAT_SLOPE,
+    flat: steepest < flatSlope(cellRef * reliefScale),
     ecotone: m.ecotone[c]!,
     plateau: province === Province.HighPlateau,
     moistureBias: m.moistureBias?.[c] ?? 0,
