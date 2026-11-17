@@ -190,6 +190,8 @@ export class FreeFlight {
    * keys fly, so a keyboard takeoff is never taken over at liftoff (decision 206).
    */
   private aimEngaged = false;
+  /** Whether the page shows a sortie (the body's `ff-flying` class). */
+  private sortieShown = false;
   private mapAt = -Infinity;
   /** The mouse's pointer lock, shared by both inputs and toggled by Tab (decision 193). */
   readonly capture: MouseCapture;
@@ -780,6 +782,7 @@ export class FreeFlight {
   private applyGraphics(): void {
     this.deps.globe.terrain.micro.strength.value = this.options.microFacets ? 1 : 0;
     this.displays.uiScale = this.options.uiScale;
+    document.body.classList.toggle('ff-no-fps', !this.options.showFps);
   }
 
   /** Gives both inputs the mouse inversion the options hold (decision 196). */
@@ -905,6 +908,12 @@ export class FreeFlight {
   /** Advances the mode by `dt` real seconds; call before the scene renders. */
   frame(dt: number, frameMs: number): void {
     this.frameMs = frameMs;
+    // The frame-rate gauge moves to the top center while a sortie is on (decision 207).
+    const sortie = this.state !== 'menu';
+    if (sortie !== this.sortieShown && typeof document !== 'undefined') {
+      this.sortieShown = sortie;
+      document.body.classList.toggle('ff-flying', sortie);
+    }
     if (this.state === 'menu') {
       this.menu.setStatus(this.deps.status());
       // Ahead of the flight: the weather at the hour it would start, a few milliseconds a frame.
@@ -934,6 +943,7 @@ export class FreeFlight {
     // Mouse aim flies only in the air, and only once the mouse has been captured this sortie
     // (decision 206); on the wheels, and until then, the keys steer and rotate.
     this.input.directOnGround = m.onGround || !this.aimEngaged;
+    this.input.aimRotates = m.onGround && this.aimEngaged;
     this.input.update(this.state === 'flying' ? dt : 0);
     chase.lookHeld = this.input.lookHeld;
     if (this.input.lookHeld) {

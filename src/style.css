@@ -16,6 +16,21 @@ body {
   touch-action: none;
 }
 
+/* In flight the frame rate is a small gauge at the top center, clear of the display slots
+   and above the heading tape (decision 207); the pause menu turns it off. */
+body.ff-flying .frame-overlay {
+  top: 2px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 1px 8px;
+  font-size: 11px;
+  color: rgb(255 255 255 / 0.8);
+  background: rgb(0 0 0 / 0.4);
+  z-index: 13;
+}
+body.ff-flying.ff-no-fps .frame-overlay {
+  display: none;
+}
 .frame-overlay {
   position: fixed;
   top: 8px;

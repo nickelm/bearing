@@ -71,7 +71,12 @@ export function displayModel(
   const buttons: (BezelButton | null)[] = new Array<BezelButton | null>(
     large(slot) ? BEZEL_BUTTONS : SMALL_BUTTONS,
   ).fill(null);
-  // Top row, right end: the pin.
+  // Top row, right end: minimize (to the slot's tab) and the pin.
+  buttons[3] = {
+    label: 'MIN',
+    active: false,
+    command: { to: 'ui', command: { type: 'toggle-slot', slot } },
+  };
   buttons[4] = {
     label: st.pinned ? 'PIN' : 'pin',
     active: st.pinned,

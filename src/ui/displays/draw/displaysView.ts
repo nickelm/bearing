@@ -332,14 +332,15 @@ function drawScreen(
       : t === 'warning'
         ? css.getPropertyValue('--red').trim()
         : phosphor;
-  const base = Math.max(9, Math.min(w, h) / 16);
-  const sizes = { small: base * 0.85, normal: base, large: base * 1.5 };
+  // Floors so the smallest screens stay readable (the owner could not read the messages at 8 px).
+  const base = Math.max(12, Math.min(w, h) / 16);
+  const sizes = { small: Math.max(11, base * 0.85), normal: base, large: base * 1.5 };
   // Over the map's picture, symbology and labels get a dark halo (Part I, Moving Map).
   halo = m.items.some((i) => i.kind === 'map');
   for (const it of m.items) drawItem(c, it, w, h, sizes, color, map);
   // Button labels on the screen's edges, beside their buttons.
   c.globalAlpha = 1;
-  c.font = `${Math.round(base * 0.8)}px ui-monospace, 'JetBrains Mono', Consolas, monospace`;
+  c.font = `${Math.round(Math.max(10, base * 0.8))}px ui-monospace, 'JetBrains Mono', Consolas, monospace`;
   const n = m.buttons.length;
   m.buttons.forEach((b, i) => {
     if (!b) return;

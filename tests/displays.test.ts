@@ -269,6 +269,9 @@ describe('display models', () => {
     }
     // The bottom row selects the slot's formats; the format shown is highlighted.
     expect(left.buttons[14]).toMatchObject({ label: 'MAP', active: true });
+    // Every display minimizes to its tab and pins (decision 207).
+    expect(left.buttons[3]).toMatchObject({ label: 'MIN' });
+    expect(msgs.buttons[3]).toMatchObject({ label: 'MIN' });
     expect(left.buttons[13]).toMatchObject({ label: 'ENG', active: false });
   });
 });

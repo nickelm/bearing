@@ -43,6 +43,8 @@ export interface FreeFlightOptions {
   microFacets: boolean;
   /** The displays' and the strip's size, 0.75–1.5 (Proposal 0006, decision 200). */
   uiScale: number;
+  /** The frame-rate gauge at the screen's top center while flying (decision 207). */
+  showFps: boolean;
 }
 
 /** The jet's mouse modes: `aim`, the flight director flies to the ring; `direct`, the cursor is the stick. */
@@ -138,6 +140,7 @@ export const DEFAULT_OPTIONS: FreeFlightOptions = {
   invertHelo: false,
   microFacets: false,
   uiScale: 1,
+  showFps: true,
 };
 
 /** The weather option of a card: the list of presets by name, and what the chosen one is like. */

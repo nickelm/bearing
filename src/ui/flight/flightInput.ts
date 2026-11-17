@@ -181,6 +181,12 @@ export class FlightInput {
   /** Called on a press of a toggle action (gear, help, pause...). */
   onAction: ((a: FlightAction) => void) | null = null;
   enabled = false;
+  /**
+   * On the wheels with mouse aim engaged and the mouse captured, the ring's height above the
+   * screen's center pulls the stick (decision 207): raising the ring rotates the jet, and in
+   * the air the flight director flies toward it. Set by the app each frame.
+   */
+  aimRotates = false;
   /** On the wheels mouse aim hands the stick to the keys (set by the app each frame). */
   directOnGround = false;
 
@@ -364,13 +370,17 @@ export class FlightInput {
     };
     if (this.mode === 'direct' || this.directOnGround) {
       // The captured mouse is the stick in direct mode; a held key wins on its axis.
-      const mouse = this.mode === 'direct' && this.capture?.captured === true;
+      const captured = this.capture?.captured === true;
+      const mouse = this.mode === 'direct' && captured;
+      const rotate = this.mode === 'mouse-aim' && this.aimRotates && captured;
       const keysPitch = this.isHeld('pitchDown') || this.isHeld('pitchUp');
       const keysRoll = this.isHeld('rollLeft') || this.isHeld('rollRight');
       c.pitch =
         mouse && !keysPitch
           ? stickFromCursor(-this.cursor.y)
-          : axis(c.pitch, 'pitchDown', 'pitchUp');
+          : rotate && !keysPitch
+            ? stickFromCursor(this.cursor.y)
+            : axis(c.pitch, 'pitchDown', 'pitchUp');
       c.roll =
         mouse && !keysRoll ? stickFromCursor(this.cursor.x) : axis(c.roll, 'rollLeft', 'rollRight');
     }

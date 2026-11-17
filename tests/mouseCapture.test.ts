@@ -154,6 +154,27 @@ describe('the capture key and the inputs', () => {
     input.dispose();
   });
 
+  it('rotates on the wheels with the ring in mouse aim, and with the stick in direct (decision 207)', () => {
+    vi.stubGlobal('window', new EventTarget());
+    const f = fakeLock();
+    const cap = new MouseCapture(f.el, f.doc, f.schedule);
+    const input = new FlightInput(new EventTarget() as unknown as HTMLElement, cap);
+    input.enabled = true;
+    cap.grab();
+    input.directOnGround = true;
+    input.mode = 'mouse-aim';
+    input.aimRotates = true;
+    input.cursor.y = 0.5;
+    input.update(1 / 60);
+    // The ring above the center pulls the stick back.
+    expect(input.controls.pitch).toBeGreaterThan(0.6);
+    input.mode = 'direct';
+    input.update(1 / 60);
+    // The direct stick above the center is forward.
+    expect(input.controls.pitch).toBeLessThan(-0.6);
+    input.dispose();
+  });
+
   it("moves the jet's cursor by relative motion, half the view for full travel", () => {
     vi.stubGlobal('window', new EventTarget());
     const f = fakeLock();

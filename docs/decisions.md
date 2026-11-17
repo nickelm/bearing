@@ -3627,3 +3627,19 @@ Fixes:
 `docs/reports/world-diversity-report.md` (*Terrain character*) has the before-and-after numbers.
 
 **Reason:** Track W is meant to add variety on top of the terrain that worked, not to replace it. Each artifact was a sharp threshold or a smooth analytic shape where the old generator had noise and erosion; blending the thresholds and roughening the shapes gives the erosion pass the same kind of input it carved well before.
+
+### 217. A mouse takeoff in mouse aim; readable messages; a minimize button; a frame-rate gauge
+
+**Date:** 2026-11-17
+**Decision:** The owner's review of P2 in the browser: they could not take off with the mouse (once airborne it flew), could not read the messages display, wanted a minimize button beside the pin, saw something hidden behind the upper-left display, and asked for a frame-rate gauge.
+
+- **Mouse takeoff.** On the wheels, mouse aim gave the stick to the keys (decision 206), so the mouse could not rotate. Now, with the mouse captured in mouse aim, the ring's height above the screen's center pulls the stick on the wheels (`FlightInput.aimRotates`; a held key still wins): raising the ring rotates the jet, and at liftoff the flight director takes over toward the raised ring and climbs away. Direct mode already flew the stick on the wheels. The session tool now takes off with the mouse in mouse aim (rotation at about 195 kt, 748 m ten seconds later), updating the chase camera itself, since its page draws nothing and mouse aim reads the camera's rest view.
+- **Readable screens.** The messages display drew its log at about 8 px. Screen text now has floors: 12 px for normal text, 11 px for small text and log lines, 10 px for button labels; the log wraps and keeps fewer lines on small displays.
+- **MIN.** Every display has MIN beside the pin (top row), collapsing it to its tab; the tab or the hot key brings it back.
+- **The frame-rate gauge.** What hid behind the upper-left display was the app's frame-time readout. In Free Flight (`body.ff-flying` while a sortie is on) it becomes a compact gauge at the top center, clear of the slots and above the heading tape: frames per second, the average and the worst frame time. A pause-menu checkbox, "Frame rate", turns it off; the URL keeps that as `fps=off`.
+
+Seen on a clean `main` while checking this, from other work and left to it: `tests/gpu/tileSynth.test.ts` fails its cube-face seam test on lavapipe (0.10 m against 0.05 m), and the Free Flight session's "drizzle: wet at once" check fails. Both are in `TODO.md`'s known issues.
+
+`TODO.md` changes with this decision.
+
+**Reason:** The owner's review.

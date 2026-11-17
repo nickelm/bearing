@@ -647,6 +647,58 @@ async function main(): Promise<void> {
       'Kestrel: a lock lost to the browser pauses, and its Escape does not resume',
     );
   }
+  // A takeoff with the mouse in mouse aim (decision 207): on the runway with the mouse
+  // captured, raising the ring rotates the jet, and the flight director climbs away with it.
+  {
+    key('Escape');
+    click(ff.pause.el, 'Restart on the runway');
+    for (let i = 0; i < 20; i++) frame();
+    if ((ff.state as string) !== 'flying') click(ff.pause.el, 'Resume');
+    ff.input.mode = 'mouse-aim';
+    await press('Tab');
+    await captureSettles(true);
+    const m = ff.flight.model!;
+    key('KeyP');
+    ff.input.controls.throttle = 0.99;
+    for (let i = 0; i < 4000 && m.telemetry.cas < 80; i++) frame();
+    const rollKnots = Math.round(m.telemetry.cas / 0.5144);
+    ff.input.moveCursor(0, -180, innerWidth, innerHeight);
+    // This page draws nothing, so the chase camera (whose rest view mouse aim reads) is
+    // updated here as the scene's render does.
+    const fly = () => {
+      frame();
+      globe.chase.update(1 / 60);
+    };
+    for (let i = 0; i < 120; i++) fly();
+    const trace: number[][] = [];
+    for (let i = 0; i < 1500 && m.telemetry.radarAltitude < 30 && !m.crashed; i++) {
+      fly();
+      if (i % 15 === 0)
+        trace.push([
+          Math.round(m.telemetry.radarAltitude * 10) / 10,
+          Math.round((m.telemetry.pitch * 180) / Math.PI),
+          Math.round(m.telemetry.cas / 0.5144),
+          m.onGround ? 1 : 0,
+          Math.round(ff.input.controls.pitch * 100) / 100,
+        ]);
+    }
+    (result as Record<string, unknown>).takeoffTrace = trace;
+    const off = m.telemetry.radarAltitude;
+    for (let i = 0; i < 600; i++) fly();
+    const later = m.telemetry.radarAltitude;
+    result.mouseTakeoff = {
+      rollKnots,
+      off: Math.round(off),
+      later: Math.round(later),
+      crashed: m.crashed,
+    };
+    check(
+      off >= 30 && later > off && !m.crashed && !m.onGround,
+      `Kestrel: the mouse takes off in mouse aim (${JSON.stringify(result.mouseTakeoff)})`,
+    );
+    await press('Tab');
+    await captureSettles(false);
+  }
   // The right button's free look and V reach the camera (decision 198); how it eases back is
   // tested in tests/freeFlightView.test.ts, since this page draws nothing.
   {

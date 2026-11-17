@@ -96,6 +96,9 @@ describe('Free Flight URL', () => {
     writeFreeFlightParams(q, DEFAULT_OPTIONS, null);
     expect(q.has('ui')).toBe(false);
     expect(parse('ui=9').options.uiScale).toBe(1.5);
+    writeFreeFlightParams(q, { ...DEFAULT_OPTIONS, showFps: false }, null);
+    expect(q.get('fps')).toBe('off');
+    expect(parseFreeFlightUrl(q, '1').options.showFps).toBe(false);
   });
 
   it('keeps the mouse inversion per aircraft kind (decision 196)', () => {
