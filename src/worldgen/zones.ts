@@ -44,6 +44,8 @@ export const ZONE_TUNING = {
   riverDischarge: 150,
   /** Cells of boundary distance kept (beyond, the zone's own look). */
   edgeCells: 4,
+  /** Islets too small for a zone join the nearest zone within this distance across water (m). */
+  isletReach: 30_000,
 };
 
 /** Limits of a zone's palette shift (docs/visual-style.md, *Zones*). */
@@ -392,6 +394,51 @@ export function segmentZones(
       merged++;
     }
     if (merged === 0) break;
+  }
+  // Islets: a zone still under the minimum with no zone beside it joins the nearest
+  // large zone across the water, within `isletReach` (decision 210).
+  {
+    const reach = Math.max(1, Math.round(T.isletReach / cellSize));
+    const near = new Int32Array(count).fill(-1);
+    const dist = new Uint16Array(count).fill(0xffff);
+    let frontier: number[] = [];
+    for (let c = 0; c < count; c++) {
+      if (zone[c]! < 0) continue;
+      const root = find(zone[c]!);
+      if (size[root]! < minCells) continue;
+      near[c] = root;
+      dist[c] = 0;
+      frontier.push(c);
+    }
+    for (let step = 1; step <= reach && frontier.length > 0; step++) {
+      const next: number[] = [];
+      for (const c of frontier) {
+        neighbors8(n, c, nb);
+        for (let k = 0; k < 8; k++) {
+          const m = nb[k]!;
+          if (m < 0 || dist[m]! <= step) continue;
+          dist[m] = step;
+          near[m] = near[c]!;
+          next.push(m);
+        }
+      }
+      frontier = next;
+    }
+    const best = new Map<number, { d: number; to: number }>();
+    for (let c = 0; c < count; c++) {
+      if (zone[c]! < 0) continue;
+      const root = find(zone[c]!);
+      if (size[root]! >= minCells || near[c]! < 0) continue;
+      const b = best.get(root);
+      if (!b || dist[c]! < b.d || (dist[c] === b.d && near[c]! < b.to))
+        best.set(root, { d: dist[c]!, to: near[c]! });
+    }
+    for (const [root, b] of [...best].sort((x, y) => x[0] - y[0])) {
+      const to = find(b.to);
+      if (to === root) continue;
+      parent[root] = to;
+      size[to]! += size[root]!;
+    }
   }
   // Compact ids in order of first cell.
   const remap = new Int32Array(zones).fill(-1);

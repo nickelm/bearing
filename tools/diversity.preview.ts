@@ -43,6 +43,7 @@ import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
 import { LANDFORM_MASK_TUNING } from '../src/worldgen/gpu/landformMasks';
 import { PROVINCE_COUNT, PROVINCE_NAMES } from '../src/worldgen/provinces';
 import { CHARACTER_NAMES } from '../src/worldgen/characters';
+import { FeatureKind } from '../src/worldgen/strategic/graph';
 import { isLayered } from '../src/worldgen/lithology';
 import { TILE_SYNTH_TUNING } from '../src/worldgen/gpu/tileSynth';
 import { labelLandmasses } from '../src/worldgen/landmasses';
@@ -393,7 +394,18 @@ it('measures world diversity', async () => {
         .slice(0, 3)
         .map((k) => `${CHARACTER_NAMES[k.character]} (${Math.round(k.area / 1e9)}k km²)`)
         .join(', ');
-      characterRows.push(`| ${s} | ${top} | ${info.characterRedraws ?? 0} |`);
+      const f = w.graph.features;
+      let candidates = 0;
+      for (let i = 0; i < f.count; i++) if (f.kind[i] === FeatureKind.Wonder) candidates++;
+      const sel = w.campaign.cast.wonders ?? [];
+      const flats = w.graph.saltFlats ?? [];
+      characterRows.push(
+        `| ${s} | ${top} | ${info.characterRedraws ?? 0} | ${candidates} | ${sel.length} | ` +
+          `${sel
+            .slice(0, 3)
+            .map((i) => f.names[i])
+            .join(', ')} | ${flats.length} (${flats.filter((x) => x.airstrip).length}) |`,
+      );
     }
     const m = w.world.maps;
     const grid =
@@ -427,10 +439,10 @@ it('measures world diversity', async () => {
     ...provinceTable(coarse),
     ...(characterRows.length
       ? [
-          '### Continental characters (decision 209)',
+          '### Continental characters, wonders and salt flats (decisions 207, 209, 211)',
           '',
-          '| seed | three largest continents | redraws |',
-          '| --- | --- | --- |',
+          '| seed | three largest continents | redraws | wonder candidates | wonders selected | first wonders | salt flats (airstrips) |',
+          '| --- | --- | --- | --- | --- | --- | --- |',
           ...characterRows,
           '',
         ]
