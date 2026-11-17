@@ -241,8 +241,10 @@ describe('labels on a generated world (acceptance check 2 in Node)', () => {
       const t0 = performance.now();
       const placed = placeLabels(atlas, active, view);
       const ms = performance.now() - t0;
+      // The globe band shows only oceans, continents and theaters: over an island world's
+      // main landmass one may be all that fits (decision 214 moved seed 7 to islands).
       expect(placed.size, `labels at ${altitude / KM} km`).toBeGreaterThan(
-        band === 'region' ? 3 : 1,
+        band === 'region' ? 3 : band === 'globe' ? 0 : 1,
       );
       assertNoOverlap(placed, labels);
       // Part II: the placement pass within a few milliseconds (generous for CI machines).

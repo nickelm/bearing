@@ -387,14 +387,25 @@ export function assignProvinces(
     else if (continental && dist(rift) < T.riftWidth * wob) pv = Province.Rift;
     else if (dist(hot) < T.hotspotRadius) pv = Province.Hotspot;
     else if (continental) {
-      const pd = dist(plateau);
+      // One side only: the plate the run's first cell lies on, as Tibet lies behind the Himalaya.
+      const ps = plateau.nearest[c]!;
+      const behind = ps >= 0 && run[ps]! >= 0 ? plate[firstCell[run[ps]!]!] : -1;
+      const pd = behind === plate[c] ? dist(plateau) : Infinity;
       const bd = dist(backArc);
-      if (pd >= T.plateauBand[0] * wob && pd < T.plateauBand[1] * wob) pv = Province.HighPlateau;
-      else if (dist(oldColl) < T.collisionWidth * wob || dist(suture) < T.sutureWidth * wob)
+      // Regions reach out from their boundary, never a ring at a fixed distance band: a
+      // curved boundary drew concentric scarps (decision 214). Their outer edges wander widely.
+      const reach = 1 + 0.4 * noise.fbm(x.x * 6 + 17, x.y * 6, x.z * 6, 3);
+      if (pd < T.plateauBand[1] * reach) pv = Province.HighPlateau;
+      // Sutures swell and pinch along their length (decision 214).
+      else if (
+        dist(oldColl) < T.collisionWidth * wob ||
+        dist(suture) <
+          T.sutureWidth * (0.6 + 0.6 * (0.5 + 0.5 * noise.noise(x.x * 22, x.y * 22, x.z * 22)))
+      )
         pv = Province.OldMountains;
       else if (
         dist(rift) < T.riftExtension * fx.riftExtension * wob ||
-        (bd >= T.backArcBand[0] * wob && bd < T.backArcBand[1] * wob)
+        bd < T.backArcBand[1] * reach
       )
         pv = Province.BasinAndRange;
       else if (

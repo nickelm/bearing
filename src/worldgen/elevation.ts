@@ -50,15 +50,23 @@ const STRENGTH_SATURATION = 1.2;
 export const PROVINCE_RELIEF = {
   /** Amplitude factor of collision and cordillera uplift from young and old runs. */
   youngFactor: 1.25,
-  oldFactor: 0.45,
+  /**
+   * Old ranges stay continental spines, lower and softer (decision 214: 0.45 broke
+   * the spines into rings and boxes).
+   */
+  oldFactor: 0.75,
   /** Old ranges are rounded: the ridged modulation keeps this much of its range. */
-  oldRidging: 0.3,
-  /** High plateaus: uplift on top of the interior crust (about 4.5 km reference in all). */
-  plateau: 3700,
+  oldRidging: 0.7,
+  /**
+   * High plateaus: rugged highland uplift, ridged like a range (decision 214). A
+   * smooth table of 3,700 m became, at the planet's relief scale (decision 121), a
+   * flat basin some 700 m high inside its taller rim.
+   */
+  plateau: 1900,
   /** Fossil sutures: worn ranges of 1–2.5 km reference. */
   suture: 1500,
   /** Hotspot shields at full strength, as a dome over the edifice's radius. */
-  hotspot: 4200,
+  hotspot: 3200,
   /**
    * Basin and range and shields sink a little; more would push them under the
    * sea level quantile and flood the interiors. The basins' depth comes from
@@ -66,9 +74,33 @@ export const PROVINCE_RELIEF = {
    */
   basinAndRange: -200,
   shield: -150,
-  /** Blur passes on each province mask, so changes come over a few cells. */
-  blur: 3,
+  /** Blur passes on each province mask, so changes come over several cells, never along an edge. */
+  blur: 6,
+  /** Blur passes on the runs' youth, so young and old ranges meet gradually. */
+  ageBlur: 8,
 };
+
+/** `v` blurred over `passes` 8-neighbor passes (center weight 2). */
+function blurField(grid: CubeGrid, v: Float32Array, passes: number): Float32Array {
+  let a: Float32Array = v;
+  let b: Float32Array = new Float32Array(v.length);
+  for (let k = 0; k < passes; k++) {
+    for (let c = 0; c < grid.cellCount; c++) {
+      let sum = 2 * a[c]!;
+      let w = 2;
+      for (let q = 0; q < 8; q++) {
+        const nb = grid.neighbors8[c * 8 + q]!;
+        if (nb >= 0) {
+          sum += a[nb]!;
+          w++;
+        }
+      }
+      b[c] = sum / w;
+    }
+    [a, b] = [b, a];
+  }
+  return a;
+}
 
 /** 1 on cells of province `p`, 0 elsewhere, blurred over `passes` 8-neighbor passes. */
 export function provinceWeight(
@@ -111,6 +143,17 @@ export function computeUplift(
   const ridges = new Noise3(r.fork('ridges'));
   const x = new Vec3d();
   const sources = new Uint8Array(n);
+  // Youth of the nearest convergent run, 1 young … 0 old, blended over several cells
+  // (decision 214): a per-run switch stepped the uplift along the bisector between runs.
+  let youth: Float32Array | null = null;
+  if (provinces) {
+    youth = new Float32Array(n);
+    for (let c = 0; c < n; c++) {
+      const a = provinces.boundaryAge[c]!;
+      youth[c] = a === 1 ? 1 : a === 2 ? 0 : 0.5;
+    }
+    youth = blurField(grid, youth, PROVINCE_RELIEF.ageBlur);
+  }
   for (const prof of UPLIFT_PROFILES) {
     let any = false;
     for (let c = 0; c < n; c++) {
@@ -128,16 +171,18 @@ export function computeUplift(
       const src = field.nearest[c];
       const s = Math.min(1, boundaries.strength[src] / STRENGTH_SATURATION);
       let v = prof.amplitude * (0.35 + 0.65 * s) * Math.exp(-d * d);
-      // Young collisions rise higher, old ones are worn and rounded (decision 208).
-      const age = provinces ? provinces.boundaryAge[src]! : 0;
+      // Young collisions rise higher, old ones are worn and rounded (decisions 208, 214).
       const ranged = prof.type === BoundaryType.Collision || prof.type === BoundaryType.Cordillera;
-      const old = ranged && age === 2;
-      if (ranged && age === 1) v *= PROVINCE_RELIEF.youngFactor;
-      if (old) v *= PROVINCE_RELIEF.oldFactor;
+      const y = ranged && youth ? youth[c]! : 1;
+      if (ranged && youth) {
+        const P = PROVINCE_RELIEF;
+        v *= P.oldFactor + (P.youngFactor - P.oldFactor) * y;
+      }
       if (prof.ridged) {
         grid.center(c, x);
         const rr = 0.45 + 0.9 * ridges.ridged(x.x * 9, x.y * 9, x.z * 9, 4);
-        v *= old ? 1 + PROVINCE_RELIEF.oldRidging * (rr - 1) : rr;
+        const ridging = PROVINCE_RELIEF.oldRidging + (1 - PROVINCE_RELIEF.oldRidging) * y;
+        v *= 1 + ridging * (rr - 1);
       }
       uplift[c] += v;
     }
@@ -161,11 +206,20 @@ function addProvinceRelief(
   const basin = provinceWeight(grid, provinces.province, Province.BasinAndRange, P.blur);
   const shield = provinceWeight(grid, provinces.province, Province.Shield, P.blur);
   for (let c = 0; c < n; c++) {
-    let v = P.plateau * plateau[c]! + P.basinAndRange * basin[c]! + P.shield * shield[c]!;
+    let v = P.basinAndRange * basin[c]! + P.shield * shield[c]!;
+    if (plateau[c]! > 0 || oldMtn[c]! > 0) grid.center(c, x);
+    if (plateau[c]! > 0) {
+      // Highland relief: ridges and basins like a worn range, never a flat table.
+      // Half ridged, half broad swells, so the highland drains instead of filling bowls.
+      const r = ridges.ridged(x.x * 9, x.y * 9, x.z * 9, 4);
+      const swell = 0.5 + 0.5 * ridges.fbm(x.x * 4, x.y * 4, x.z * 4, 3);
+      v += P.plateau * plateau[c]! * (0.35 + 0.5 * r + 0.5 * swell);
+    }
     if (oldMtn[c]! > 0) {
-      grid.center(c, x);
-      // Rounded ranges: soft ridges, no sharp crests.
-      v += P.suture * oldMtn[c]! * (0.55 + 0.45 * ridges.fbm(x.x * 11, x.y * 11, x.z * 11, 3));
+      // Worn ranges: ridged but softer than young ones, with saddles along the crest (decision 214).
+      const rr = ridges.ridged(x.x * 11, x.y * 11, x.z * 11, 4);
+      const saddle = 0.5 + 0.5 * ridges.fbm(x.x * 5, x.y * 5, x.z * 5, 2);
+      v += P.suture * oldMtn[c]! * (0.2 + 0.7 * rr) * (0.5 + 0.8 * saddle);
     }
     uplift[c] += v;
   }
@@ -183,7 +237,9 @@ function addProvinceRelief(
       if (dot < cosReach) continue;
       const t = Math.acos(Math.min(1, dot)) / reach;
       const k = 1 - t * t;
-      uplift[c] += P.hotspot * s.strength * k * k;
+      // Craggy, not a perfect dome: ridged noise breaks the shield into flanks and rifts.
+      const rug = 0.55 + 0.8 * ridges.ridged(cx * 40, cy * 40, cz * 40, 3);
+      uplift[c] += P.hotspot * s.strength * k * k * rug;
     }
   }
 }

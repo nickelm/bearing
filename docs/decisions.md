@@ -3575,3 +3575,30 @@ The owner also asked for decision 204's prep commit on `main` (done), and for th
 - Both are left failing for the owner rather than loosening their tolerances; the report lists them as high-severity issues.
 
 **Reason:** Both criteria the zones and the biome table must meet are measured where the player flies, on the eroded grid; thresholds that only made sense at the coarse grid's scale had to follow the cell size.
+
+### 214. Keeping the terrain's character: rugged plateaus, unbroken spines, no rings or seams (owner's concern after track W)
+
+**Date:** 2026-11-17
+**Decision:** The owner asked that track W keep what they liked: the ridges and filled-in valleys from erosion, the coastal cliffs, the skerry archipelagos, the continents' spines, and tall, dramatic mountains. A before-and-after comparison of the cached eroded worlds of seeds 1 and 2 (hillshaded maps and relief statistics) found the coasts, valleys and northern ranges intact and the mountains taller, but six artifacts that track W had introduced:
+
+1. **Plateaus as sunken tables.** A smooth 3,700 m high-plateau uplift is a continental-scale height, so at the planet's relief scale (decision 121) it was about 700 m physical. Ringed by its taller collision rim, erosion filled it flat: a green table inside a wall.
+2. **Broken spines.** Old collisions at 45% of their uplift broke continuous ranges into rings and boxes. Seed 2's largest connected range above 1.5 km fell from 312,000 to 160,000 km².
+3. **A straight scarp along the bisector between two runs.** Each cell took its run's age (young × 1.25, old × 0.45) from its nearest boundary cell, so uplift stepped where the nearest run changed.
+4. **Concentric rings and arcs.** High plateaus and back-arc basin-and-range lay in bands at a fixed distance from a boundary, so curved boundaries drew target-like rings and arcs. Plateaus also wrapped both sides of a range.
+5. **Uniform worms.** Fossil sutures were smooth ridges of even width.
+6. **Perfect domes.** Hotspot shields were round.
+
+Fixes:
+
+- **Plateaus.** The uplift is 1,900 m and rugged: 0.35 + 0.5 × ridged + 0.5 × broad swells, so plateaus are highlands with ranges and basins. They lie on one side only, the plate of the run's first cell, and reach out from the range instead of forming a band.
+- **Spines.** Old runs keep 75% of their uplift and 70% of their ridging.
+- **Run age.** Youth (1 young, 0 old) is blurred over 8 cells before it scales uplift and ridging.
+- **Back-arc basin and range.** It reaches out from the cordillera, like the plateaus. Province edges wander by ±40% at a broad scale, and the province masks blur over 6 cells (was 3).
+- **Sutures.** Ridged relief with saddles along the crest, and a width that swells and pinches.
+- **Hotspots.** 3,200 m domes broken by ridged noise.
+- **Erodibility.** A milder range (0.55 to 2.0) and 6 blur passes, so hard and soft rock never meet in a scarp.
+- **Version.** `GENERATOR_VERSION` is 33.
+
+`docs/reports/world-diversity-report.md` (*Terrain character*) has the before-and-after numbers.
+
+**Reason:** Track W is meant to add variety on top of the terrain that worked, not to replace it. Each artifact was a sharp threshold or a smooth analytic shape where the old generator had noise and erosion; blending the thresholds and roughening the shapes gives the erosion pass the same kind of input it carved well before.

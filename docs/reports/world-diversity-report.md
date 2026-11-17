@@ -86,6 +86,37 @@ The full tables are in [world-diversity-metrics.md](world-diversity-metrics.md);
 
 **Local variety falls short of the proposal's 90%.** Coherent zones and high local entropy pull against each other, as the plan foresaw. The plan's measure counts altitude zones and surface character (riparian, lakes, ecotones) in the joint classes. The tool counts only biome and province so far, and adding those classes is the next step before tuning anything.
 
+## Terrain character (decision 214)
+
+The owner asked that track W keep the ridges and filled-in valleys from erosion, the coastal cliffs, the skerry archipelagos, the continents' spines, and tall, dramatic mountains. Hillshaded maps of the eroded worlds before track W, after its first pass, and after decision 214's fixes are in `docs/reports/screens/world-diversity/`:
+
+- seed 1: `relief-seed1-before.png`, `relief-seed1-now.png`;
+- seed 2: `relief-seed2-before.png`, `relief-seed2-first-pass.png`, `relief-seed2-now.png`.
+
+The first pass had six artifacts: plateaus as sunken tables, broken spines, a straight scarp between runs of different age, target-like rings and arcs, worm-like sutures and round domes. Decision 214 fixes them; seed 2's "now" picture predates its last two fixes (one-sided plateaus, ridged sutures).
+
+| Measure (eroded, 1024²)                                  | Seed 1 before | first pass    | now           | Seed 2 before | first pass    | now           |
+| -------------------------------------------------------- | ------------- | ------------- | ------------- | ------------- | ------------- | ------------- |
+| Highest point (m)                                        | 8,565         | 8,850         | 8,867         | 9,205         | 9,976         | 10,352        |
+| Land above 2 km                                          | 9.5%          | 16.2%         | 13.3%         | 11.2%         | 16.3%         | 14.3%         |
+| Land above 4 km                                          | 1.1%          | 4.5%          | 1.6%          | 1.8%          | 4.7%          | 1.9%          |
+| Relief above the local floor, 90th / 99th percentile (m) | 1,083 / 2,917 | 1,688 / 3,770 | 1,293 / 3,012 | 1,103 / 2,849 | 1,583 / 3,675 | 1,288 / 2,936 |
+| Steep land (slope over 30%)                              | 2.6%          | 5.1%          | 3.2%          | 2.5%          | 4.9%          | 3.0%          |
+| Flat land (slope under 2%)                               | 43.8%         | 37.9%         | 36.6%         | 43.3%         | 44.5%         | 40.1%         |
+| Coastal cells that are cliffs (slope over 10%)           | 43.4%         | 53.1%         | 50.3%         | 41.0%         | 47.9%         | 48.8%         |
+| Largest connected range above 1.5 km (km²)               | 84,000        | 241,000       | 94,000        | 313,000       | 160,000       | 168,000       |
+
+What this says:
+
+- **Mountains are taller than before**, and there is more high and rugged ground. The first pass's extra was largely the sunken plateau tables and their rims, which are gone.
+- **Valleys stay filled.** Flat land is about as common as before: erosion and its filled valleys are unchanged.
+- **Coasts are steeper.** Skerries and coastal cliffs come from the tile kernel, which track W did not change except to add fjords. The coarse maps show them where they were.
+- **Seed 2's spine** is visible again as a continuous range on the map. It is fragmented at the 1.5 km threshold, because the old collision under it is now lower (75%).
+- **Left:**
+  - Curved suture ranges on seed 1's southern and southwestern continents are smoother and more regular than the ranges around them.
+  - Hotspot islands in the far north stand as flat-topped lenses.
+  - Intermontane basins inside the highlands fill flat, as Earth's do, and are larger than before.
+
 ## Simplified, stubbed or deferred
 
 - **Landform props (W7)**: not started. This leaves out the prop kit, placement, the instanced layer, collision shapes and budgets. The karst bay and pillar forest wonders are selected and named but have no towers.

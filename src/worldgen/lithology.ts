@@ -62,15 +62,15 @@ export const isLayered = (lith: number): boolean => (lith & LAYERED) !== 0;
  */
 export const ROCK_ERODIBILITY: readonly number[] = [
   1, // none (sea floor)
-  0.35, // granite and gneiss
-  0.6, // schist
+  0.55, // granite and gneiss
+  0.75, // schist
   1.0, // sandstone
-  1.6, // shale
-  0.8, // limestone
-  0.4, // basalt
-  2.2, // ash
-  3.0, // loess
-  1.4, // till
+  1.35, // shale
+  0.9, // limestone
+  0.6, // basalt
+  1.6, // ash
+  2.0, // loess
+  1.25, // till
 ];
 
 export const LITHOLOGY_TUNING = {
@@ -82,8 +82,12 @@ export const LITHOLOGY_TUNING = {
   glaciatedBelow: 3,
   /** Glaciated lowland stays low: highest physical height (m). */
   glaciatedMaxHeight: 900,
-  /** Smoothing passes for the erodibility field on the tectonic grid. */
-  erodibilityBlur: 2,
+  /**
+   * Smoothing passes for the erodibility field on the tectonic grid: enough that
+   * hard and soft rock meet over tens of kilometers, never in a straight scarp
+   * along a province edge (decision 214).
+   */
+  erodibilityBlur: 6,
 };
 
 export interface Lithology {
