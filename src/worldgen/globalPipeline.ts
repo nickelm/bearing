@@ -8,6 +8,8 @@
  * The CPU part is injected as `finish`, so this module does not depend on the
  * worker plumbing (src/workers) and tests can run it in-process.
  */
+import { CubeGrid } from '../core/cubeGrid';
+import { erodibilityField } from './lithology';
 import { LAPSE_RATE } from './climate';
 import type { FinishInput, FinishResult } from './finishWorld';
 import { runDetailStage } from './gpu/detailStage';
@@ -90,6 +92,9 @@ export async function buildGlobalWorld(
     upsampleMap(grid, T, m.runoff, 'runoff');
     upsampleMap(grid, T, seaLevel, 'seaLevelTemperature');
     upsampleMap(grid, T, m.temperatureRange, 'temperatureRange');
+    // Erodibility from the rock (decision 204); worlds stored before it erode uniformly.
+    if (m.lithology)
+      upsampleMap(grid, T, erodibilityField(new CubeGrid(T), m.lithology), 'erodibility');
     await gpu.finish();
     lap('detail + upsample');
     check();
@@ -144,6 +149,7 @@ function releaseUnused(grid: GlobalGrid): void {
     'runoff',
     'seaLevelTemperature',
     'temperatureRange',
+    'erodibility',
     'valleyFloor',
     'glacier',
     'flow',

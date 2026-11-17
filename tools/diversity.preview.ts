@@ -29,17 +29,20 @@
  *     endorheic basins (always 0 today: every depression drains to the sea);
  *   - time per coarse stage.
  *
- * Provinces, lithology, zones and wonders do not exist yet; the tool grows
- * with track W and prints their criteria once they do.
+ * With provinces (W1), entropy and the divergence count joint classes of
+ * biome and province, and a table gives the province shares. Zones and
+ * wonders join as track W adds them.
  */
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { it } from 'vitest';
 import { CubeGrid } from '../src/core/cubeGrid';
 import { EARTH_RADIUS } from '../src/core/units';
+import { Vec3d } from '../src/core/vec3d';
 import { Biome, BIOME_COUNT, BIOME_NAMES } from '../src/worldgen/biomes';
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
 import { LANDFORM_MASK_TUNING } from '../src/worldgen/gpu/landformMasks';
+import { PROVINCE_COUNT, PROVINCE_NAMES } from '../src/worldgen/provinces';
 import { TILE_SYNTH_TUNING } from '../src/worldgen/gpu/tileSynth';
 import { labelLandmasses } from '../src/worldgen/landmasses';
 import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
@@ -49,6 +52,8 @@ import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
  * the planet like every regional extent (decision 205): about 16 km across.
  */
 const WINDOW_RADIUS = 50e3 * (DEFAULT_PLANET_PARAMS.radius / EARTH_RADIUS);
+/** The coarse grid's 6 km cells hold too few cells in that window; there the unscaled 100 km windows serve. */
+const COARSE_WINDOW_RADIUS = 50e3;
 /** The highest share of land that counts as mountain for the dry-mountain share. */
 const MOUNTAIN_SHARE = 0.05;
 const DRY_BIOMES: ReadonlySet<number> = new Set([
@@ -67,6 +72,8 @@ function seedList(): string[] {
 interface GridMetrics {
   /** Land area share per biome. */
   biomeShare: Float64Array;
+  /** Land area share per province (zeros without provinces). */
+  provinceShare: Float64Array;
   entropyMedian: number;
   entropyAbove05: number;
   entropyAbove1: number;
@@ -158,6 +165,7 @@ function measure(
   lakeDepth: Float32Array | undefined,
   radius: number,
   blurPasses: number,
+  province?: Uint8Array,
 ): GridMetrics {
   const t0 = performance.now();
   const n = grid.cellCount;
@@ -167,6 +175,7 @@ function measure(
 
   // Biome shares.
   const share = new Float64Array(BIOME_COUNT);
+  const provinceShare = new Float64Array(PROVINCE_COUNT);
   let landArea = 0;
   let maxHeight = -Infinity;
   let above4 = 0;
@@ -178,6 +187,7 @@ function measure(
     const a = grid.areas[c]!;
     const h = height[c]!;
     share[biome[c]!]! += a;
+    if (province) provinceShare[province[c]!]! += a;
     landArea += a;
     maxHeight = Math.max(maxHeight, h);
     if (h > 4000) above4 += a;
@@ -187,6 +197,7 @@ function measure(
       aridLake += a;
   }
   for (let i = 0; i < BIOME_COUNT; i++) share[i]! /= landArea;
+  for (let i = 0; i < PROVINCE_COUNT; i++) provinceShare[i]! /= landArea;
   landCells.sort((a, b) => height[b]! - height[a]!);
   let mountain = 0;
   let dryMountain = 0;
@@ -213,11 +224,14 @@ function measure(
   }
 
   // Entropy over 100 km windows: breadth-first over 8-neighbors within the radius.
-  const limit = WINDOW_RADIUS / radius;
+  const limit = (grid.n > 256 ? WINDOW_RADIUS : COARSE_WINDOW_RADIUS) / radius;
   const cosLimit = Math.cos(limit);
   const stamp = new Int32Array(n).fill(-1);
   const queue = new Int32Array(n);
-  const counts = new Float64Array(BIOME_COUNT);
+  // With provinces, entropy and divergence count joint classes (biome, province; decision 204).
+  const P = province ? PROVINCE_COUNT : 1;
+  const classOf = (c: number) => biome[c]! * P + (province ? province[c]! : 0);
+  const counts = new Float64Array(BIOME_COUNT * P);
   const C = grid.centers;
   const entropies: number[] = [];
   let e05 = 0;
@@ -239,7 +253,7 @@ function measure(
     while (head < tail) {
       const c = queue[head++]!;
       if (isLand(c)) {
-        counts[biome[c]!]! += grid.areas[c]!;
+        counts[classOf(c)]! += grid.areas[c]!;
         total += grid.areas[c]!;
       }
       for (let k = 0; k < 8; k++) {
@@ -262,16 +276,16 @@ function measure(
   const { label, landmasses } = labelLandmasses(grid, height, radius);
   let jsd = NaN;
   if (landmasses.length >= 2) {
-    const p = new Float64Array(BIOME_COUNT);
-    const q = new Float64Array(BIOME_COUNT);
+    const p = new Float64Array(BIOME_COUNT * P);
+    const q = new Float64Array(BIOME_COUNT * P);
     for (let c = 0; c < n; c++) {
       if (!isLand(c)) continue;
-      if (label[c] === 0) p[biome[c]!]! += grid.areas[c]!;
-      else if (label[c] === 1) q[biome[c]!]! += grid.areas[c]!;
+      if (label[c] === 0) p[classOf(c)]! += grid.areas[c]!;
+      else if (label[c] === 1) q[classOf(c)]! += grid.areas[c]!;
     }
     const sp = p.reduce((x, y) => x + y, 0);
     const sq = q.reduce((x, y) => x + y, 0);
-    for (let i = 0; i < BIOME_COUNT; i++) {
+    for (let i = 0; i < p.length; i++) {
       p[i]! /= sp;
       q[i]! /= sq;
     }
@@ -280,6 +294,7 @@ function measure(
 
   return {
     biomeShare: share,
+    provinceShare,
     entropyMedian: median(entropies),
     entropyAbove05: e05 / sampledArea,
     entropyAbove1: e1 / sampledArea,
@@ -324,6 +339,32 @@ function summaryRows(rows: { seed: string; m: GridMetrics }[]): string[] {
   return out;
 }
 
+/** A tectonic-grid map on a finer grid, by the coarse cell under each fine cell's center. */
+function upsampleNearest(src: Uint8Array, fine: CubeGrid): Uint8Array {
+  const coarse = new CubeGrid(Math.round(Math.sqrt(src.length / 6)));
+  const out = new Uint8Array(fine.cellCount);
+  const C = fine.centers;
+  const d = new Vec3d();
+  for (let c = 0; c < fine.cellCount; c++) {
+    out[c] = src[coarse.cellOfDirection(d.set(C[3 * c]!, C[3 * c + 1]!, C[3 * c + 2]!))]!;
+  }
+  return out;
+}
+
+function provinceTable(rows: { seed: string; m: GridMetrics }[]): string[] {
+  if (rows.every((r) => r.m.provinceShare.every((v) => v === 0))) return [];
+  const out = [
+    '| province | mean land share | seeds where present (> 0.1%) |',
+    '| --- | --- | --- |',
+  ];
+  for (let p = 1; p < PROVINCE_COUNT; p++) {
+    const mean = rows.reduce((s, r) => s + r.m.provinceShare[p]!, 0) / rows.length;
+    const present = rows.filter((r) => r.m.provinceShare[p]! > 0.001).length;
+    out.push(`| ${PROVINCE_NAMES[p]} | ${pct(mean)} | ${present} of ${rows.length} |`);
+  }
+  return ['### Provinces', '', ...out, ''];
+}
+
 function biomeTable(rows: { seed: string; m: GridMetrics }[]): string[] {
   const out = ['| biome | mean land share | seeds where present (> 0.1%) |', '| --- | --- | --- |'];
   for (let b = Biome.IceSheet; b < BIOME_COUNT; b++) {
@@ -357,7 +398,10 @@ it('measures world diversity', async () => {
     const m = w.world.maps;
     const grid =
       w.world.info.resolution === 256 ? coarseGrid : new CubeGrid(w.world.info.resolution);
-    coarse.push({ seed: s, m: measure(grid, m.height, m.biome, m.lakeDepth, params0.radius, 1) });
+    coarse.push({
+      seed: s,
+      m: measure(grid, m.height, m.biome, m.lakeDepth, params0.radius, 1, m.province),
+    });
     console.log(`seed ${s} (world ${w.seed}): coarse metrics in ${Math.round(genMs)} ms`);
   }
 
@@ -372,7 +416,7 @@ it('measures world diversity', async () => {
           .join(', ') || 'none retried'
       }).`,
     '',
-    '## Coarse pass (256² per face, about 6 km cells, no erosion)',
+    '## Coarse pass (256² per face, about 6 km cells, no erosion; entropy over unscaled 100 km windows)',
     '',
     ...summaryRows(coarse),
     '',
@@ -380,6 +424,7 @@ it('measures world diversity', async () => {
     '',
     ...biomeTable(coarse),
     '',
+    ...provinceTable(coarse),
     '### Coarse stage times (median ms)',
     '',
     '| stage | median ms |',
@@ -404,7 +449,7 @@ it('measures world diversity', async () => {
         String(generateCampaignWorld({ ...params0, seed: s }).seed);
       const params = { ...params0, seed: actual };
       const t0 = performance.now();
-      const { global } = await previewWorld(gpu, params, 256, gres);
+      const { world, global } = await previewWorld(gpu, params, 256, gres);
       const ms = performance.now() - t0;
       if (global.timings?.length)
         globalMs.push(
@@ -420,6 +465,7 @@ it('measures world diversity', async () => {
           global.finish.drainage.lakeDepth,
           params0.radius,
           LANDFORM_MASK_TUNING.blurPasses,
+          world.maps.province ? upsampleNearest(world.maps.province, globalGrid) : undefined,
         ),
       });
       console.log(`seed ${s}: eroded metrics done`);
@@ -437,7 +483,7 @@ function erodedSection(
   globalMs: string[],
 ): string[] {
   return [
-    `## Eroded global grid (${gres}² per face, decision 122's landform gain)`,
+    `## Eroded global grid (${gres}² per face, decision 122's landform gain; entropy over 16 km windows, decision 205)`,
     '',
     ...summaryRows(eroded),
     '',
@@ -445,6 +491,7 @@ function erodedSection(
     '',
     ...biomeTable(eroded),
     '',
+    ...provinceTable(eroded),
     '### Global pass times',
     '',
     '| seed | stages |',

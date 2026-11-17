@@ -1147,13 +1147,13 @@ Terrain provinces and rock from tectonic history, a richer climate with twenty l
 
 ### W1. Provinces and lithology
 
-- [ ] `provinces` stage after `boundaries`: boundary runs with an age (young or old, weighted by closing speed), craton ages, fossil sutures in old continental plates, 3–8 hotspots with tracks; forks `ages`, `sutures`, `hotspots`, `characters`
-- [ ] The province map (twelve classes; the first nine before uplift, karst and soft sediment from lithology, glaciated lowland after climate) in `WorldMaps` and the global finish; stored and transferred
-- [ ] `lithology` stage after elevation: nine rocks by province with noise and layering, the layered flag; `rng(seed, "lithology")`
-- [ ] Erodibility map (0.3–3, smoothed, contrast at most 10) multiplied into the incision; talus angle by rock; the uniform case pinned by a test
-- [ ] Map modes `provinces` and `lithology` in `npm run maps`; debug overlays for both in the strategic view (GUI)
-- [ ] Tests: every class appears over 20 seeds; plates, crust and boundaries byte-identical to before; determinism; `GENERATOR_VERSION` up
-- [ ] `tools/diversity.preview.ts`: province entropy and province shares
+- [x] `provinces` stage after `boundaries`: boundary runs with an age (young or old, weighted by closing speed), craton ages, fossil sutures in old continental plates, 3–8 hotspots with tracks; forks `ages`, `sutures`, `hotspots`, `characters`
+- [x] The province map (twelve classes; the first nine before uplift, karst and soft sediment from lithology, glaciated lowland after climate) in `WorldMaps` and the global finish; stored and transferred
+- [x] `lithology` stage after climate (decision 206): nine rocks by province with noise and layering, the layered flag; `rng(seed, "lithology")`
+- [x] Erodibility map (0.3–3, smoothed, contrast at most 10) multiplied into the incision; talus angle by rock; the uniform case pinned by a test
+- [x] Map modes `provinces` and `lithology` in `npm run maps`; debug overlays for both in the strategic view (GUI)
+- [x] Tests (`tests/provinces.test.ts`, 8 seeds at 64²): every class appears; plates, crust and boundaries byte-identical to before; determinism; `GENERATOR_VERSION` up
+- [x] `tools/diversity.preview.ts`: province entropy and province shares
 
 ### W2. Relief by province
 

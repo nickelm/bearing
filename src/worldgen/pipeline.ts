@@ -6,6 +6,8 @@
  * The output is plain typed arrays and numbers, which a worker can transfer
  * without copying.
  */
+import { assignLithology } from './lithology';
+import { assignProvinces } from './provinces';
 import { CubeGrid } from '../core/cubeGrid';
 import { rng } from '../core/rng';
 import { computeBiomes } from './biomes';
@@ -50,6 +52,10 @@ export interface WorldMaps {
   windNorth: Float32Array;
   /** Biome per cell. */
   biome: Uint8Array;
+  /** Terrain province per cell (`Province`, decision 204). */
+  province: Uint8Array;
+  /** Rock per cell (`Rock`, with `LAYERED` on horizontal sedimentary rock; decision 204). */
+  lithology: Uint8Array;
 }
 
 export interface StageTiming {
@@ -94,9 +100,11 @@ export const PIPELINE_STAGES = [
   'plates',
   'crust',
   'boundaries',
+  'provinces',
   'uplift',
   'elevation',
   'climate',
+  'lithology',
   'biomes',
 ] as const;
 
@@ -142,6 +150,17 @@ export function generateWorld(params: PlanetParams, options: GenerateOptions): W
   const boundaries = stage('boundaries', () =>
     classifyBoundaries(grid, plates, plate, continentalness, params.radius),
   );
+  const provinces = stage('provinces', () =>
+    assignProvinces(
+      grid,
+      params.radius,
+      plates,
+      plate,
+      continentalness,
+      boundaries,
+      rng(seed, 'provinces'),
+    ),
+  );
   const uplift = stage('uplift', () =>
     computeUplift(grid, params, boundaries, rng(seed, 'uplift')),
   );
@@ -150,6 +169,15 @@ export function generateWorld(params: PlanetParams, options: GenerateOptions): W
   );
   const climate = stage('climate', () =>
     computeClimate(grid, params, elevation.height, rng(seed, 'climate')),
+  );
+  const { lithology } = stage('lithology', () =>
+    assignLithology(
+      grid,
+      provinces.province,
+      elevation.height,
+      climate.temperature,
+      rng(seed, 'lithology'),
+    ),
   );
   const biome = stage('biomes', () => computeBiomes(grid, params, elevation.height, climate));
   options.onProgress?.('done', 1);
@@ -187,6 +215,8 @@ export function generateWorld(params: PlanetParams, options: GenerateOptions): W
       windEast: climate.windEast,
       windNorth: climate.windNorth,
       biome,
+      province: provinces.province,
+      lithology,
     },
     info: {
       resolution: grid.n,

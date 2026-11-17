@@ -3341,3 +3341,25 @@ The owner also asked for decision 204's prep commit on `main` (done), and for th
 `docs/design.md` (*Scale and Range*, *World Generation Pipeline*, *Reading the World*, *Casting*, *Open Questions*), Part I (*Zones*, check 15), proposal 0007's header, the plan, `TODO.md`, the baseline report and `tools/diversity.preview.ts` change with this decision.
 
 **Reason:** Bearing's continents are Earth's scaled by 0.157 (decision 121), so a region that is a given share of a continent on Earth is the same share here. Landforms and heights are what a pilot sees at working altitude, and they keep Earth's size.
+
+### 206. W1: terrain provinces and lithology; erodibility in the erosion pass
+
+**Date:** 2026-11-17
+**Decision:** Two new tectonic-grid stages, and the first input they give the existing erosion.
+
+- **`provinces`** (`worldgen/provinces.ts`, after `boundaries`, `rng(seed, "provinces")` with forks `ages`, `sutures`, `hotspots`, `noise`). Boundary runs (connected cells of one convergent or rift type) are young with a chance from 0.3 to 0.85 by mean strength, and draw a plateau flag (young collisions, 0.4) and a back-arc flag (cordilleras, 0.25). Old continental plates carry a fossil suture with a chance of 0.65 (an arc of 250–600 km through their interior). Three to eight hotspots leave chains of two to five edifices, 70 km apart along the plate's motion, shrinking with age. The province follows, by precedence:
+  - young collision within 110 km of a young collision run;
+  - volcanic arc within 65 km of a young cordillera or arc;
+  - rift within 55 km of a rift;
+  - hotspot within 35 km of an edifice;
+  - then, on continental crust only: high plateau 120–300 km behind a young collision with the flag; old mountains near old runs or sutures; basin and range within 140 km of a rift or 130–240 km behind a back-arc cordillera; shield at least 250 km from every active boundary; sedimentary basin elsewhere.
+  - All widths wobble by ±25% with noise. They are regional extents on the planet (decision 205), near the existing uplift widths.
+- **`lithology`** (`worldgen/lithology.ts`, after `climate`, `rng(seed, "lithology")`): nine rocks by province with broad and fine noise. Sandstone, shale and limestone in sedimentary basins and high plateaus carry a `LAYERED` bit; folded ranges do not. The stage finishes the province map: land outside every province becomes sedimentary basin; basins on limestone become karst platforms; basins on loess become soft sediment; shields and basins below 900 m with an annual mean under 3 °C become glaciated lowland on till (or bare granite on shields).
+- **Erodibility.** Each rock has a factor (granite 0.35, basalt 0.4, schist 0.6, limestone 0.8, sandstone 1, till 1.4, shale 1.6, ash 2.2, loess 3), smoothed in log space over two passes on the tectonic grid. It is upsampled into the global grid's `erodibility` map, which multiplies the incision factor; the talus slope divides by its square root, clamped to 0.6–1.6. Worlds without lithology, and `runErosion` without the map, erode uniformly as before.
+- **Shares over seeds 1–5 at 128²:** young collision 9%, high plateau 8%, old mountains 7%, shield 15%, basin and range 11%, rift 3%, volcanic arc 6%, hotspot 0.7%, sedimentary basin 19%, karst 5%, soft sediment 3%, glaciated lowland 14%. Layered rock covers 28% of land.
+- **Views and metrics.** The map modes `provinces` and `lithology` exist in `npm run maps` and in the GUI's "Color by", which also tints the strategic view. `tools/diversity.preview.ts` counts joint classes of biome and province for entropy and divergence. On seeds 1 and 2 the coarse joint entropy reaches 0.5 bit on 86–87% of land (biomes alone: 65–71%), and the divergence between the two largest landmasses is 0.36 and 0.48 bit (biomes alone: 0.11 and 0.29).
+- **Unchanged and changed.** Heights, climate, biomes, the graph and the cast are unchanged: the coarse pass gains maps only. The eroded world changes through erodibility, so `GENERATOR_VERSION` is 22.
+
+`TODO.md` changes with this decision.
+
+**Reason:** Provinces and rock are the landform layer's sources (rule 15); the erosion pass is the backbone, so rock reaches it as an input, not a new process. Computing both on the tectonic grid and upsampling follows how every other tectonic map reaches the global pass.

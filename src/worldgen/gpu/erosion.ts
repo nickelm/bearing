@@ -387,6 +387,7 @@ ${main(`  var a = CELL_AREA * max(rain[id], 0.0) / 1000.0;
 @group(0) @binding(3) var<storage, read_write> hOut: array<f32>;
 @group(0) @binding(4) var<storage, read> h0: array<f32>;
 @group(0) @binding(5) var<storage, read> w: array<f32>;
+@group(0) @binding(6) var<storage, read> erod: array<f32>;
 ${main(`  let hc = hIn[id];
   if (hc <= 0.0) { hOut[id] = hc; return; }
   // Closed hollows below the routing surface fill with sediment.
@@ -397,7 +398,7 @@ ${main(`  let hc = hIn[id];
   if (rc != id) {
     let hr = hIn[rc];
     if (hc > hr) {
-      let F = ${f(t.kdt)} * pow(max(area[id], 1e-6), ${f(t.m)}) / neighborDist(i32(r >> 28u));
+      let F = ${f(t.kdt)} * erod[id] * pow(max(area[id], 1e-6), ${f(t.m)}) / neighborDist(i32(r >> 28u));
       hn = (hc + u + F * hr) / (1.0 + F);
     }
   }
@@ -409,13 +410,16 @@ ${main(`  let hc = hIn[id];
   const thermal = gpu.kernel(`${head}
 @group(0) @binding(0) var<storage, read> hIn: array<f32>;
 @group(0) @binding(1) var<storage, read_write> hOut: array<f32>;
+@group(0) @binding(2) var<storage, read> erod: array<f32>;
 ${main(`  let hc = hIn[id];
+  // Hard rock stands steeper than weak rock (decision 204); 1 keeps today's talus.
+  let talus = ${f(t.talus)} * clamp(inverseSqrt(erod[id]), 0.6, 1.6);
   var dh = 0.0;
   for (var k = 0; k < 8; k++) {
     let nb = neighbor(c, k);
     if (nb < 0) { continue; }
     let diff = hIn[nb] - hc;
-    let excess = abs(diff) - ${f(t.talus)} * neighborDist(k);
+    let excess = abs(diff) - talus * neighborDist(k);
     if (excess > 0.0) { dh += sign(diff) * ${f(t.thermalRate)} * excess; }
   }
   var hn = hc + dh;
@@ -439,6 +443,9 @@ ${main(`  let hc = hIn[id];
   }
   const rcv = grid.map('receiver', 'u32');
   const count = grid.cellCount;
+  // Erodibility from the rock (decision 204); uniform where the caller gave none.
+  if (!grid.has('erodibility')) grid.upload('erodibility', new Float32Array(count).fill(1));
+  const erod = grid.get('erodibility');
 
   gpu.dispatchLinear(
     toRef,
@@ -483,10 +490,11 @@ ${main(`  let hc = hIn[id];
         grid.get('erosion.h2'),
         grid.get('erosion.h0'),
         grid.get('erosion.w'),
+        erod,
       ],
       count,
     );
-    gpu.dispatchLinear(thermal, [grid.get('erosion.h2'), grid.get('erosion.h')], count);
+    gpu.dispatchLinear(thermal, [grid.get('erosion.h2'), grid.get('erosion.h'), erod], count);
     if ((it + 1) % t.chunk === 0 || it === iterations - 1) {
       await gpu.finish();
       opts.onProgress?.((it + 1) / iterations);

@@ -30,11 +30,44 @@ export const VIEW_MODES = [
   'precipitation',
   'seasons',
   'rivers',
+  'provinces',
+  'lithology',
   'faces',
 ] as const;
 export type ViewMode = (typeof VIEW_MODES)[number];
 
 const LAND_GRAY: Rgb = [0.55, 0.55, 0.52];
+
+/** Debug colors per terrain province (decision 204), in `Province` order. */
+export const PROVINCE_COLORS: readonly Rgb[] = [
+  [0.18, 0.22, 0.28], // none (ocean floor)
+  [0.85, 0.2, 0.25], // young collision range
+  [0.85, 0.55, 0.75], // high plateau
+  [0.55, 0.35, 0.25], // old mountains
+  [0.45, 0.5, 0.6], // shield
+  [0.95, 0.6, 0.2], // basin and range
+  [0.6, 0.15, 0.5], // rift
+  [0.25, 0.2, 0.2], // volcanic arc
+  [0.95, 0.35, 0.05], // hotspot
+  [0.85, 0.8, 0.55], // sedimentary basin
+  [0.6, 0.85, 0.85], // karst platform
+  [0.8, 0.7, 0.35], // soft sediment
+  [0.55, 0.7, 0.9], // glaciated lowland
+];
+
+/** Debug colors per rock (decision 204), in `Rock` order; layered rock is drawn lighter. */
+export const ROCK_COLORS: readonly Rgb[] = [
+  [0.18, 0.22, 0.28], // none
+  [0.78, 0.72, 0.72], // granite and gneiss
+  [0.45, 0.55, 0.45], // schist
+  [0.85, 0.5, 0.3], // sandstone
+  [0.45, 0.4, 0.5], // shale
+  [0.92, 0.9, 0.8], // limestone
+  [0.2, 0.2, 0.22], // basalt
+  [0.5, 0.35, 0.35], // ash
+  [0.88, 0.75, 0.45], // loess
+  [0.6, 0.65, 0.75], // till
+];
 const OCEAN_GRAY: Rgb = [0.18, 0.22, 0.28];
 const CONTINENTAL: Rgb = [0.72, 0.6, 0.42];
 const OCEANIC: Rgb = [0.15, 0.3, 0.5];
@@ -79,6 +112,20 @@ export function cellColor(mode: ViewMode, world: World | null, c: number, faceCo
     }
     case 'seasons':
       return ramp(SEASONS_RAMP, m.temperatureRange[c]);
+    case 'provinces': {
+      if (!m.province) return land ? LAND_GRAY : OCEAN_GRAY;
+      const p = PROVINCE_COLORS[m.province[c]!] ?? LAND_GRAY;
+      return land ? p : [p[0] * 0.5, p[1] * 0.5, p[2] * 0.55];
+    }
+    case 'lithology': {
+      if (!m.lithology) return land ? LAND_GRAY : OCEAN_GRAY;
+      const l = m.lithology[c]!;
+      const r = ROCK_COLORS[l & 0x7f] ?? LAND_GRAY;
+      const k = l & 0x80 ? 1.12 : 1;
+      return land
+        ? [Math.min(1, r[0] * k), Math.min(1, r[1] * k), Math.min(1, r[2] * k)]
+        : OCEAN_GRAY;
+    }
     case 'rivers': {
       // Biome under a blue river overlay that thickens with discharge.
       const b = BIOME_COLORS[m.biome[c]]!;
