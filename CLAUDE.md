@@ -117,7 +117,7 @@ src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Bo
     infra/          settlements and infrastructure (decision 104): urban fill texture, building
                     glyph placement, the model of roads, railways, bridges and site symbols
                     (overlays/airModel.ts draws flights, trails, routes and carrier groups; decision 132)
-src/ui/             displays/ (P2, planned): display models, formats, layout, master modes, the status strip's rules,
+src/ui/             displays/ (P2, begun): layout.ts (the slots' rects, decision 195); planned: display models, formats, master modes, the status strip's rules,
                     cursor mode and display bindings, with the HTML, CSS and Canvas 2D that draw them in draw/ (decision 189);
                     lil-gui debug panel (atmosphereSettings.ts maps its Atmosphere folder to the scene),
                     overlays, time controls, the time bar's weather line; flight/ (Free Flight's start screen, input

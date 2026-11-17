@@ -62,7 +62,7 @@ import {
 } from '../ui/flight/flightCards';
 import type { SoundSettings } from '../ui/flight/flightCards';
 import { FlightInput } from '../ui/flight/flightInput';
-import type { FlightAction } from '../ui/flight/flightInput';
+import type { ControlMode, FlightAction } from '../ui/flight/flightInput';
 import { MouseCapture } from '../ui/flight/mouseCapture';
 import { DEFAULT_OPTIONS, FreeFlightMenu } from '../ui/flight/freeFlightMenu';
 import type {
@@ -122,6 +122,12 @@ const HELO_HELP = [
   'Landing: slow to a hover over the spot, then hold S: the descent eases near the ground (VS under the radar altitude turns amber if it is too fast). Keep S held on the ground to lower the collective.',
   'Camera: drag with the right mouse button to look around; the view stays where you leave it. Drag down to look further ahead. V or the middle button recenters it; the wheel zooms.',
 ];
+/** What the HUD says when the jet's mouse mode starts (decision 195). */
+const MOUSE_MODE_MESSAGE: Record<Exclude<ControlMode, 'keyboard'>, string> = {
+  'mouse-aim':
+    'Mouse aim: the jet flies toward the ring. M mouse as stick, N keys, Tab frees the mouse',
+  'mouse-stick': 'Mouse as stick: the cross is the stick. N mouse aim, M keys, Tab frees the mouse',
+};
 /** Where a helicopter starts on the ground: beside the runway's middle (m across, to the right). */
 const HELO_SPOT_ACROSS = 75;
 
@@ -155,6 +161,8 @@ export class FreeFlight {
   readonly heloInput: HeloInput;
   /** The mouse's pointer lock, shared by both inputs and toggled by Tab (decision 193). */
   readonly capture: MouseCapture;
+  /** The mouse mode a capture in keyboard mode switches the jet to: the last one used. */
+  private lastMouseMode: Exclude<ControlMode, 'keyboard'> = 'mouse-aim';
   /** When the browser last took the mouse back and paused (ms), so its Escape does not resume. */
   private lostAt = -Infinity;
   private readonly heloControls = neutralRotorControls();
@@ -247,6 +255,16 @@ export class FreeFlight {
     };
     this.capture.onRefused = () =>
       this.hud.message('The browser kept the mouse: click the view to capture it', 4);
+    // In the jet a captured mouse flies (decision 195): Tab or a click in keyboard mode
+    // switches to the last mouse mode, mouse aim at first.
+    this.capture.onChange = (on) => {
+      if (!on || this.helo || !this.model || this.state !== 'flying' || this.pilot) return;
+      if (this.input.mode !== 'keyboard') return;
+      this.input.mode = this.lastMouseMode;
+      this.input.centerCursor();
+      this.director.reset();
+      this.hud.message(MOUSE_MODE_MESSAGE[this.lastMouseMode], 3);
+    };
     this.input = new FlightInput(deps.canvas, this.capture);
     this.input.onAction = (a) => this.action(a);
     this.heloInput = new HeloInput(deps.canvas, this.capture);
@@ -488,8 +506,9 @@ export class FreeFlight {
         ? [
             `${r.name}, runway ${end.designator}`,
             'Parking brake set: P to release, Shift for throttle, H for help',
+            'Tab or a click: fly with the mouse (mouse aim); the keys fly until then',
           ]
-        : [`Air start over ${r.name}`, 'H for help'],
+        : [`Air start over ${r.name}`, 'Tab or a click: fly with the mouse, H for help'],
       7,
     );
     this.state = 'flying';
@@ -742,8 +761,8 @@ export class FreeFlight {
         this.input.mode = this.input.mode === 'mouse-stick' ? 'keyboard' : 'mouse-stick';
         this.mouseModeChanged();
         this.hud.message(
-          this.input.mode === 'mouse-stick' ? 'Mouse as stick' : 'Keyboard stick',
-          2,
+          this.input.mode === 'mouse-stick' ? MOUSE_MODE_MESSAGE['mouse-stick'] : 'Keyboard stick',
+          2.5,
         );
         break;
       case 'mouseAim':
@@ -751,9 +770,7 @@ export class FreeFlight {
         this.mouseModeChanged();
         this.director.reset();
         this.hud.message(
-          this.input.mode === 'mouse-aim'
-            ? 'Mouse aim: the flight director flies to the cursor'
-            : 'Keyboard stick',
+          this.input.mode === 'mouse-aim' ? MOUSE_MODE_MESSAGE['mouse-aim'] : 'Keyboard stick',
           2.5,
         );
         break;
@@ -768,9 +785,16 @@ export class FreeFlight {
     }
   }
 
-  /** A mouse mode starts from the center (stick neutral, aim ahead) with the mouse captured. */
+  /**
+   * A mouse mode starts from the center (stick neutral, aim ahead) with the mouse
+   * captured; the keys free it, so a captured mouse always flies (decision 195).
+   */
   private mouseModeChanged(): void {
-    if (this.input.mode === 'keyboard') return;
+    if (this.input.mode === 'keyboard') {
+      this.capture.release();
+      return;
+    }
+    this.lastMouseMode = this.input.mode;
     this.input.centerCursor();
     this.capture.grab();
   }

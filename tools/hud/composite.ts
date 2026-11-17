@@ -5,6 +5,8 @@
  * frame's camera, so the screenshot shows the real HUD code over the real
  * render. tools/freeflight.screens.mjs drives it in headless Chromium.
  * `composite.html?hover=<case>` draws the helicopter layout instead (hover.ts).
+ * `&slots=1` adds the display slots' layout over either (slots.ts; `&scale=` sets the
+ * UI scale).
  */
 import { Hud, matrixProjector } from '../../src/ui/flight/hud';
 import type { HudFrame } from '../../src/ui/flight/hud';
@@ -25,6 +27,7 @@ async function main(): Promise<void> {
     // The helicopter layout over a stand-in scene (hover.ts); no render needed.
     const { drawHover } = await import('./hover');
     await drawHover(hover);
+    await slots(query);
     document.title = 'ready';
     return;
   }
@@ -40,7 +43,14 @@ async function main(): Promise<void> {
     shot.frame,
     matrixProjector(shot.view, shot.projection, window.innerWidth, window.innerHeight),
   );
+  await slots(query);
   document.title = 'ready';
+}
+
+async function slots(query: URLSearchParams): Promise<void> {
+  if (!query.get('slots')) return;
+  const { drawSlots } = await import('./slots');
+  drawSlots(Number(query.get('scale') ?? 1));
 }
 
 void main();

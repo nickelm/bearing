@@ -210,6 +210,16 @@ async function main(): Promise<void> {
     while (document.title !== 'pressed') await sleep(20);
     document.title = 'session';
   };
+  /**
+   * Real mouse motion (px) from the tool, which only a headed browser under an X server
+   * delivers under pointer lock (`HEADED=1`, xdotool; decision 195); elsewhere `realMouse`
+   * is false and the motion checks are skipped.
+   */
+  const realMouse = (window as unknown as { realMouse?: boolean }).realMouse === true;
+  const moveMouse = async (dx: number, dy: number) => {
+    await press(`mouse:${dx},${dy}`);
+    for (let i = 0; i < 5; i++) frame();
+  };
   /** Frames until the capture is `want` (a refused grab is retried for up to 4 s). */
   const captureSettles = async (want: boolean) => {
     for (let i = 0; i < 50 && ff.capture.captured !== want; i++) {
@@ -515,17 +525,37 @@ async function main(): Promise<void> {
     ff.flight.model !== null && ff.flight.helo === null && ff.state === 'flying',
     'the Kestrel after the helicopters',
   );
-  // The same capture key in the jet; M takes the mouse for the stick at its center; a lock the
-  // browser drops by itself (Escape, focus) pauses (decision 193).
+  // The same capture key in the jet, where a captured mouse flies: Tab in keyboard mode
+  // switches to mouse aim; M takes the mouse for the stick at its center, and the keys free it;
+  // a lock the browser drops by itself (Escape, focus) pauses (decisions 193, 195).
   {
+    const keysFirst = ff.input.mode;
     await press('Tab');
     const grabbed = await captureSettles(true);
+    const aimByTab = ff.input.mode;
+    let aimFollows: boolean | null = null;
+    if (realMouse) {
+      await moveMouse(120, -60);
+      aimFollows = ff.input.cursor.x > 0.05 && ff.input.cursor.y > 0.05;
+    }
     await press('Tab');
     const freed = await captureSettles(false);
+    const heldAim = { ...ff.input.cursor };
+    if (realMouse) await moveMouse(200, 0);
+    const aimHolds = ff.input.cursor.x === heldAim.x && ff.input.cursor.y === heldAim.y;
     const flyingAfterTab = ff.state;
     await press('KeyM');
     const stick = (await captureSettles(true)) && ff.input.mode === 'mouse-stick';
     const centered = ff.input.cursor.x === 0 && ff.input.cursor.y === 0;
+    let stickFollows: boolean | null = null;
+    if (realMouse) {
+      await moveMouse(220, 0);
+      stickFollows = ff.input.controls.roll > 0.2;
+    }
+    await press('KeyM');
+    const keysFree = ff.input.mode === 'keyboard' && (await captureSettles(false));
+    await press('KeyM');
+    await captureSettles(true);
     document.exitPointerLock();
     await captureSettles(false);
     const pausedByLoss = ff.state;
@@ -533,7 +563,32 @@ async function main(): Promise<void> {
     key('Escape');
     const heldPaused = ff.state;
     click(ff.pause.el, 'Resume');
-    result.capture = { grabbed, freed, flyingAfterTab, stick, centered, pausedByLoss, heldPaused };
+    result.capture = {
+      realMouse,
+      keysFirst,
+      grabbed,
+      aimByTab,
+      aimFollows,
+      freed,
+      aimHolds,
+      flyingAfterTab,
+      stick,
+      centered,
+      stickFollows,
+      keysFree,
+      pausedByLoss,
+      heldPaused,
+    };
+    check(
+      keysFirst === 'keyboard' && aimByTab === 'mouse-aim',
+      'Kestrel: capturing the mouse in keyboard mode starts mouse aim',
+    );
+    check(aimHolds, 'Kestrel: the aim point holds while the mouse is free');
+    check(keysFree, 'Kestrel: back to the keys frees the mouse');
+    if (realMouse) {
+      check(aimFollows === true, 'Kestrel: the real mouse moves the aim point');
+      check(stickFollows === true, 'Kestrel: the real mouse moves the stick');
+    }
     check(
       grabbed && freed && flyingAfterTab === 'flying',
       'Kestrel: Tab captures and frees the mouse',

@@ -9,7 +9,9 @@
  * Env: SHOTS (comma list of shot names; a preview run with OUT=-storm wrote the
  * shots "runway-storm" and so on; default: the five of a plain run; "hover-hover",
  * "hover-hazard", "hover-sink", "hover-transition" and "hover-snow" draw the helicopter HUD over a
- * stand-in scene at 1280 × 720 and need no render), OUT_DIR (where
+ * stand-in scene at 1280 × 720 (SIZE=<w>x<h> for another) and need no render), SLOTS=1 (adds
+ * the display slots' layout over each shot, saved as <shot>-slots.png; SCALE sets the UI
+ * scale; decision 195), OUT_DIR (where
  * the screenshots go; default docs/reports/screens). Playwright is no dependency of the
  * repo: tools/browser/launch.mjs says where it is looked for.
  */
@@ -31,7 +33,8 @@ const browser = await chromium.launch();
 for (const shot of shots) {
   // hover-<case>: the helicopter HUD over a stand-in scene (tools/hud/hover.ts), no render needed.
   const hover = shot.startsWith('hover-') ? shot.slice('hover-'.length) : null;
-  let size = { width: 1280, height: 720 };
+  const [sw, sh] = (process.env.SIZE ?? '1280x720').split('x').map(Number);
+  let size = { width: sw || 1280, height: sh || 720 };
   if (!hover) {
     try {
       size = JSON.parse(readFileSync(join(here, 'out', `freeflight-${shot}.json`), 'utf8'));
@@ -44,9 +47,15 @@ for (const shot of shots) {
     viewport: { width: size.width, height: size.height },
     deviceScaleFactor: 1,
   });
-  await page.goto(`${base}/tools/hud/composite.html?${hover ? `hover=${hover}` : `shot=${shot}`}`);
+  const slots = process.env.SLOTS === '1' ? `&slots=1&scale=${process.env.SCALE ?? 1}` : '';
+  await page.goto(
+    `${base}/tools/hud/composite.html?${hover ? `hover=${hover}` : `shot=${shot}`}${slots}`,
+  );
   await page.waitForFunction(() => document.title === 'ready', null, { timeout: 60_000 });
-  const file = join(out, `${shot}.png`);
+  const file = join(
+    out,
+    `${shot}${slots ? '-slots' : ''}${process.env.SIZE ? `-${process.env.SIZE}` : ''}.png`,
+  );
   await page.screenshot({ path: file });
   console.log(`${shot} → ${file}`);
   await page.close();

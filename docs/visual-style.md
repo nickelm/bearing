@@ -299,12 +299,12 @@ Multifunction displays docked at the screen edges and a status strip carry what 
 |---|---|---|---|
 | Left MFD | Lower left | Large: a square about 28% of the screen height | Moving map or stores |
 | Right MFD | Lower right | Large | Radar or targeting pod |
-| Threat | Upper right | Small | Threat warning |
-| Messages | Upper left | Small | Comms log and crew callouts |
+| Threat | Upper right | Small: a square 60% of a large slot's side | Threat warning |
+| Messages | Upper left | Small: as wide as a large slot, 60% of its side high | Comms log and crew callouts |
 | Status strip | Bottom center, below the aircraft | Strip | Discrete states |
 
 - **Fixed.** Each slot has one position and one set of bindings in every aircraft and helicopter. An aircraft may leave a slot empty, never move it, and an empty slot leaves the screen clearer. No free-floating windows.
-- **Central area.** The middle 60% of the screen belongs to the aircraft and the HUD. A UI scale setting resizes all slots together.
+- **Central area.** The middle 60% of the width, above the strip, belongs to the aircraft and the HUD. Slots never enter it: on narrow screens they shrink to the side bands. A UI scale setting (0.75–1.5) resizes all slots together, until they meet the central column (at about 1.16 on 16:9). The rects come from `src/ui/displays/layout.ts` (decision 195).
 - **States.** Expanded, collapsed to a small labeled tab at its edge, or hidden. At most two large and two small displays are expanded at once.
 - **Calm.** Fades and expansions take about 300 ms and grow from the screen edge; nothing flashes or slides through the central area. An alert that brings a format forward highlights the bezel in amber instead.
 

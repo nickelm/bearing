@@ -189,7 +189,10 @@ export class FlightInput {
     const kd = (e: KeyboardEvent) => onKey(e, true);
     const ku = (e: KeyboardEvent) => onKey(e, false);
     const blur = () => this.held.clear();
-    const move = (e: PointerEvent) => {
+    // On the document, as the helicopter's input listens (decision 195): under pointer lock
+    // the motion arrives as `mousemove` with `movementX/Y` in every browser.
+    const moveTarget: EventTarget = typeof document === 'undefined' ? el : document;
+    const move = (e: MouseEvent) => {
       if (this.lookHeld) {
         this.lookDelta.x += e.movementX;
         this.lookDelta.y += e.movementY;
@@ -226,7 +229,7 @@ export class FlightInput {
     window.addEventListener('keydown', kd);
     window.addEventListener('keyup', ku);
     window.addEventListener('blur', blur);
-    el.addEventListener('pointermove', move);
+    moveTarget.addEventListener('mousemove', move as EventListener);
     el.addEventListener('pointerdown', down);
     window.addEventListener('pointerup', up);
     el.addEventListener('wheel', wheel, { passive: false });
@@ -235,7 +238,7 @@ export class FlightInput {
       window.removeEventListener('keydown', kd);
       window.removeEventListener('keyup', ku);
       window.removeEventListener('blur', blur);
-      el.removeEventListener('pointermove', move);
+      moveTarget.removeEventListener('mousemove', move as EventListener);
       el.removeEventListener('pointerdown', down);
       window.removeEventListener('pointerup', up);
       el.removeEventListener('wheel', wheel);
