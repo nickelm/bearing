@@ -143,7 +143,7 @@ const HELO_HELP = [
 ];
 /** What the HUD says when the jet's mouse mode starts (decisions 195, 198). */
 const MOUSE_MODE_MESSAGE: Record<ControlMode, string> = {
-  'mouse-aim': 'Mouse aim: the jet flies toward the ring. N for direct, Tab frees the mouse',
+  'mouse-aim': 'Mouse aim: the jet flies toward the ring; stick keys override. N for direct, Tab frees the mouse',
   direct: 'Direct: the mouse is the stick, its offset from the center. N for mouse aim',
 };
 const CONTROL_MODE: Record<JetControl, ControlMode> = { aim: 'mouse-aim', direct: 'direct' };
@@ -1056,7 +1056,13 @@ export class FreeFlight {
       .normalize();
   }
 
+  /**
+   * Mouse aim: the director flies toward the aim; the rudder keys stay the pilot's (the
+   * director zeroes the pedals in the air for its own turn coordination), and a held stick
+   * key takes its axis (decision 219).
+   */
   private mouseAim(m: FlightModel, ctl: FlightControls): void {
+    const pedals = ctl.yaw;
     const a = along(m, this.aimDirection());
     this.director.fly(
       m,
@@ -1071,6 +1077,8 @@ export class FreeFlight {
       ctl,
       FLIGHT_STEP,
     );
+    ctl.yaw = pedals;
+    this.input.overrideStick(ctl);
   }
 
   private event(e: FlightEvent): void {

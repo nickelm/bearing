@@ -8,8 +8,10 @@
  *
  * - **Frame.** The camera's own forward and up axes follow the aircraft's with
  *   critically damped springs (rotation lag); in flight the forward axis leans
- *   toward the velocity, so what lies along the flight path (a runway on final)
- *   shows above the aircraft; its up leans a third of the way toward the local
+ *   toward the velocity in the aircraft's vertical plane, so what lies along the
+ *   flight path (a runway on final) shows above the aircraft, while sideways it
+ *   follows the nose, so a crab or a sideslip shows the aircraft from straight
+ *   behind (decision 219); its up leans a third of the way toward the local
  *   vertical, so the horizon stays readable in a roll.
  * - **Distance.** The offset behind the aircraft stretches with forward
  *   acceleration through a spring (acceleration lag).
@@ -336,13 +338,24 @@ export class ChaseCamera {
     // approach's 12° of angle of attack a nose-aligned camera would put the runway,
     // which lies along the flight path, behind the airframe.
     // Helicopters lean toward the velocity as they leave the hover.
+    // Only within the aircraft's own vertical plane (decision 219): sideways the frame
+    // follows the nose, so a jet crabbing into a crosswind is seen straight from behind,
+    // the flight path marker off to the side, as its pilot sees it, not side-on along
+    // the track.
     const vw = t.onGround ? 0 : 0.85 * (hv ? 1 - wHover : smooth((speed - 30) / 30));
     const aimFwd = t.forward.clone();
-    if (vw > 0 && speed > 1)
-      aimFwd
-        .scale(1 - vw)
-        .addScaled(t.velocity, vw / speed)
-        .normalize();
+    if (vw > 0 && speed > 1) {
+      const side = t.forward.clone().cross(t.up);
+      const ls = side.length();
+      const path = t.velocity.clone();
+      if (ls > 1e-9) path.addScaled(side, -path.dot(side) / (ls * ls));
+      const lp = path.length();
+      if (lp > 1e-9)
+        aimFwd
+          .scale(1 - vw)
+          .addScaled(path, vw / lp)
+          .normalize();
+    }
     const aimUp = t.up.clone();
     if (hv && wHover > 0) {
       // Hover: the heading, with up on the local vertical; the nose's pitch and roll stay out.

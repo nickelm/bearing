@@ -3668,3 +3668,14 @@ Seen on a clean `main` while checking this, from other work and left to it: `tes
 The Kestrel's flight is unchanged; the lockstep test passes as it was. `TODO.md`, `docs/plans/displays.md` and `CLAUDE.md`'s directory map change with this decision.
 
 **Reason:** The owner asked to proceed after P2's review. The sensor model has to exist before any format can show a picture without ground truth (rule 12), and Free Flight has no war, so it needs traffic to sense. The radar and the threat warning are the two formats a fighter needs first; the rest wait for weapons (stores), missions (comms) and the elevation renderer.
+
+### 219. Mouse aim keeps the rudder and the stick keys; the chase camera follows the nose sideways
+
+**Date:** 2026-11-17
+**Decision:** The owner flew a straight-in approach in the default weather and found the jet pointing well left or right of the flight path marker, the chase camera apparently not lined up with it, and no keys working in mouse aim. With the wind off the offset went away: the jet was crabbing into a crosswind. The default `fair` preset passes the live weather's wind through (over land at 300 m a median of 11 m/s, 18 m/s one time in ten, stronger aloft), and 15–25 m/s across an approach at 150 kt is a 10–15° crab. The owner keeps that wind (an island airfield may be windy) and asked for no landing assist.
+
+- **The camera follows the nose sideways.** It leaned 85% toward the ground velocity, so in a crab it looked along the track and showed the jet from the side. Now it leans toward the velocity only within the aircraft's vertical plane (the approach's angle of attack still puts the runway above the jet); sideways it follows the nose, so a crab is seen as its pilot sees it: the jet straight from behind, the flight path marker off to the side toward the runway. The helicopters' rigs lean the same way.
+- **Rudder in mouse aim.** The flight director zeroes the pedals in the air for its turn coordination, which overwrote the rudder keys on every physics step. Free Flight's mouse aim now keeps the pedals the pilot holds; the director itself is unchanged, so the AI, the test pilot and the lockstep fixture are too.
+- **Stick keys in mouse aim.** In the air a held pitch or roll key takes that axis from the director, starting from the director's last command, and hands it back over 0.3 s after release (`FlightInput.keyStick`, `overrideStick`); the director then flies back toward the ring. On the wheels decision 217's mouse rotation stands, with a held key still winning.
+
+**Reason:** A crab is real and the marker showed it correctly; seen side-on it looked like a misaligned camera. Rudder and keys are what a pilot reaches for in a crosswind, and mouse aim had taken both away.

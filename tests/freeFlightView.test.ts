@@ -60,6 +60,25 @@ describe('chase camera', () => {
     return c;
   }
 
+  it('follows the nose sideways in a crab and leans toward the path only in pitch (decision 219)', () => {
+    const c = camera();
+    const t = c.target;
+    // Crabbing 15° into a crosswind: the track 15° right of the nose, descending 3°.
+    const crab = 15 * (Math.PI / 180);
+    const dive = 3 * (Math.PI / 180);
+    t.velocity.set(
+      150 * Math.cos(crab) * Math.cos(dive),
+      150 * Math.sin(crab) * Math.cos(dive),
+      -150 * Math.sin(dive),
+    );
+    for (let i = 0; i < 300; i++) c.update(1 / 60);
+    // Sideways: no turn toward the track. Up and down: it still leans toward the descent.
+    const side = Math.atan2(c.forward.y, c.forward.x);
+    expect(Math.abs(side)).toBeLessThan(1e-6);
+    const level = c.restForward.clone();
+    expect(level.y).toBeCloseTo(0, 9);
+  });
+
   it('keeps a sticky look where it is left, recenters it, and keeps the rest view (decision 198)', () => {
     const c = camera();
     for (let i = 0; i < 120; i++) c.update(1 / 60);

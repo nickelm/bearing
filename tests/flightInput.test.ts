@@ -81,3 +81,66 @@ describe('flight input under the pause menu', () => {
     expect(key('keydown', 'Escape').defaultPrevented).toBe(false);
   });
 });
+
+describe('the keys in mouse aim (decision 219)', () => {
+  let win: EventTarget;
+  let input: FlightInput;
+  const key = (type: 'keydown' | 'keyup', code: string) => {
+    const e = new Event(type, { cancelable: true }) as Event & { code: string };
+    e.code = code;
+    win.dispatchEvent(e);
+  };
+  const frames = (n: number) => {
+    for (let i = 0; i < n; i++) input.update(1 / 60);
+  };
+
+  beforeEach(() => {
+    win = new EventTarget();
+    vi.stubGlobal('window', win);
+    input = new FlightInput(new EventTarget() as unknown as HTMLElement);
+    input.enabled = true;
+    input.mode = 'mouse-aim';
+    input.directOnGround = false;
+  });
+  afterEach(() => {
+    input.dispose();
+    vi.unstubAllGlobals();
+  });
+
+  it('lets a held roll key take the roll from the director, and hands it back on release', () => {
+    // The director's last command, as the app leaves it in the controls.
+    input.controls.roll = 0.2;
+    input.controls.pitch = 0.1;
+    key('keydown', 'KeyA');
+    frames(30);
+    const ctl = { ...input.controls, roll: 0.2, pitch: 0.1 };
+    input.overrideStick(ctl);
+    // Roll left at full stick after half a second; pitch stays the director's.
+    expect(ctl.roll).toBeCloseTo(-1, 6);
+    expect(ctl.pitch).toBe(0.1);
+    key('keyup', 'KeyA');
+    frames(9);
+    const mid = { ...input.controls, roll: 0.2 };
+    input.overrideStick(mid);
+    expect(mid.roll).toBeGreaterThan(-1);
+    expect(mid.roll).toBeLessThan(0.2);
+    frames(12);
+    const back = { ...input.controls, roll: 0.2 };
+    input.overrideStick(back);
+    expect(back.roll).toBe(0.2);
+  });
+
+  it('keeps the rudder keys working', () => {
+    key('keydown', 'KeyE');
+    frames(30);
+    expect(input.controls.yaw).toBeCloseTo(1, 6);
+  });
+
+  it('leaves the stick to the keys directly in direct mode', () => {
+    input.mode = 'direct';
+    key('keydown', 'KeyS');
+    frames(30);
+    expect(input.controls.pitch).toBeCloseTo(1, 6);
+    expect(input.keyStick.pitchWeight).toBe(0);
+  });
+});

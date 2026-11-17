@@ -155,6 +155,8 @@ const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x
 const STICK_RATE = 2.5;
 const CENTER_RATE = 4;
 const THROTTLE_RATE = 0.45;
+/** Mouse aim: seconds over which a released stick key hands its axis back to the director (decision 219). */
+const KEY_HANDBACK = 0.3;
 const WHEEL_STEP = 0.04;
 /** Throttle stops (lever positions). */
 const DETENTS = [0, MIL_DETENT, AB_GATE];
@@ -189,6 +191,12 @@ export class FlightInput {
   aimRotates = false;
   /** On the wheels mouse aim hands the stick to the keys (set by the app each frame). */
   directOnGround = false;
+  /**
+   * Mouse aim in the air (decision 219): the stick keys' own axes, and how much each holds
+   * its axis from the flight director (1 while a key is held, back to 0 over KEY_HANDBACK
+   * after release). The app blends them over the director's stick (`overrideStick`).
+   */
+  readonly keyStick = { pitch: 0, roll: 0, pitchWeight: 0, rollWeight: 0 };
 
   private readonly held = new Set<string>();
   private readonly keyAction = new Map<string, FlightAction>();
@@ -383,6 +391,19 @@ export class FlightInput {
             : axis(c.pitch, 'pitchDown', 'pitchUp');
       c.roll =
         mouse && !keysRoll ? stickFromCursor(this.cursor.x) : axis(c.roll, 'rollLeft', 'rollRight');
+      this.keyStick.pitchWeight = this.keyStick.rollWeight = 0;
+    } else {
+      // Mouse aim in the air: a held stick key takes its axis from the director, starting
+      // from the director's last command (in `c`), and hands it back when released.
+      const k = this.keyStick;
+      const keysPitch = this.isHeld('pitchDown') || this.isHeld('pitchUp');
+      const keysRoll = this.isHeld('rollLeft') || this.isHeld('rollRight');
+      if (keysPitch && k.pitchWeight === 0) k.pitch = c.pitch;
+      if (keysRoll && k.rollWeight === 0) k.roll = c.roll;
+      k.pitch = axis(k.pitch, 'pitchDown', 'pitchUp');
+      k.roll = axis(k.roll, 'rollLeft', 'rollRight');
+      k.pitchWeight = keysPitch ? 1 : Math.max(0, k.pitchWeight - dt / KEY_HANDBACK);
+      k.rollWeight = keysRoll ? 1 : Math.max(0, k.rollWeight - dt / KEY_HANDBACK);
     }
     c.yaw = axis(c.yaw, 'yawLeft', 'yawRight');
     // Throttle with detents: a press stops at the next detent; a new press passes it.
@@ -394,6 +415,16 @@ export class FlightInput {
     c.brakeLeft = brake;
     c.brakeRight = brake;
     this.gamepad(dt);
+  }
+
+  /**
+   * Mouse aim (decision 219): blends the held stick keys over the stick the director wrote
+   * into `ctl`, axis by axis.
+   */
+  overrideStick(ctl: FlightControls): void {
+    const k = this.keyStick;
+    if (k.pitchWeight > 0) ctl.pitch += (k.pitch - ctl.pitch) * k.pitchWeight;
+    if (k.rollWeight > 0) ctl.roll += (k.roll - ctl.roll) * k.rollWeight;
   }
 
   /** Basic gamepad or flight stick: axes 0/1 stick, 2 or 5 pedals or twist, 3 throttle (stretch goal). */
