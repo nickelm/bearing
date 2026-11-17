@@ -87,6 +87,22 @@ describe('Free Flight URL', () => {
     expect(q.get('base')).toBe('3');
     expect({ ...DEFAULT_OPTIONS, ...parseFreeFlightUrl(q, '42').options }.wind).toBe(true);
   });
+
+  it('keeps the mouse inversion per aircraft kind (decision 196)', () => {
+    const q = new URLSearchParams();
+    writeFreeFlightParams(q, { ...DEFAULT_OPTIONS, invertJet: true }, null);
+    expect(q.get('invert')).toBe('jet');
+    expect(parseFreeFlightUrl(q, '1').options).toMatchObject({
+      invertJet: true,
+      invertHelo: false,
+    });
+    writeFreeFlightParams(q, { ...DEFAULT_OPTIONS, invertJet: true, invertHelo: true }, null);
+    expect(q.get('invert')).toBe('jet,helo');
+    writeFreeFlightParams(q, DEFAULT_OPTIONS, null);
+    expect(q.has('invert')).toBe(false);
+    expect(parse('invert=helo').options).toMatchObject({ invertJet: false, invertHelo: true });
+    expect(parse('mode=freeflight').options).not.toHaveProperty('invertJet');
+  });
 });
 
 describe("Free Flight's clock", () => {

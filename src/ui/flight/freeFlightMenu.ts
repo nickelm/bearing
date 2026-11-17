@@ -30,6 +30,23 @@ export interface FreeFlightOptions {
   weather: WeatherPreset;
   /** The aircraft feels the weather's wind and gusts (sim/flight/wind.ts). */
   wind: boolean;
+  /** The mouse's up and down inverted in the jet, and in the helicopters (decision 196). */
+  invertJet: boolean;
+  invertHelo: boolean;
+}
+
+/** Which inversion setting an aircraft uses: the jet's or the helicopters' (decision 196). */
+export function invertKey(aircraft: AircraftChoice): 'invertJet' | 'invertHelo' {
+  return aircraft === 'kestrel' ? 'invertJet' : 'invertHelo';
+}
+
+/** What the mouse's forward motion does in `aircraft` with the setting `inverted`. */
+export function invertNote(aircraft: AircraftChoice, inverted: boolean): string {
+  if (aircraft === 'kestrel')
+    return inverted
+      ? 'Mouse forward: the aim ring goes down, the stick comes back (nose up)'
+      : 'Mouse forward: the aim ring goes up, the stick goes forward (nose down)';
+  return inverted ? 'Mouse forward: nose up' : 'Mouse forward: nose down, as a cyclic';
 }
 
 export const DEFAULT_OPTIONS: FreeFlightOptions = {
@@ -39,6 +56,8 @@ export const DEFAULT_OPTIONS: FreeFlightOptions = {
   aircraft: 'kestrel',
   weather: 'fair',
   wind: true,
+  invertJet: false,
+  invertHelo: false,
 };
 
 /** The weather option of a card: the list of presets by name, and what the chosen one is like. */
@@ -156,6 +175,9 @@ export class FreeFlightMenu {
         <label>Aircraft <select class="ff-aircraft"></select></label> <span class="ff-aircraft-note ff-note"></span>
       </div>
       <div class="ff-row">
+        <label title="For the chosen aircraft; I switches it in flight"><input type="checkbox" class="ff-invert"> Invert mouse up and down</label> <span class="ff-invert-note ff-note"></span>
+      </div>
+      <div class="ff-row">
         <label>Time of day <input type="range" class="ff-tod" min="0" max="24" step="0.25"> <span class="ff-tod-label"></span></label>
       </div>
       <div class="ff-row">
@@ -205,6 +227,17 @@ export class FreeFlightMenu {
       o.textContent = a.label;
       aircraft.append(o);
     }
+    const invert = q<HTMLInputElement>('.ff-invert');
+    const invertText = q<HTMLSpanElement>('.ff-invert-note');
+    const showInvert = () => {
+      const k = invertKey(this.options.aircraft);
+      invert.checked = this.options[k];
+      invertText.textContent = invertNote(this.options.aircraft, this.options[k]);
+    };
+    invert.addEventListener('change', () => {
+      this.options[invertKey(this.options.aircraft)] = invert.checked;
+      showInvert();
+    });
     const spawnGround = q<HTMLSpanElement>('.ff-spawn-ground');
     const spawnAir = q<HTMLSpanElement>('.ff-spawn-air');
     const showAircraft = () => {
@@ -215,6 +248,7 @@ export class FreeFlightMenu {
       const helo = a.id !== 'kestrel';
       spawnGround.textContent = helo ? 'On the ground beside the runway' : 'On the runway';
       spawnAir.textContent = helo ? 'In the air (150 m, hovering)' : 'In the air (3,000 m, 300 kt)';
+      showInvert();
     };
     aircraft.addEventListener('change', () => {
       this.options.aircraft = aircraft.value as AircraftChoice;

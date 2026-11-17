@@ -64,7 +64,12 @@ import type { SoundSettings } from '../ui/flight/flightCards';
 import { FlightInput } from '../ui/flight/flightInput';
 import type { ControlMode, FlightAction } from '../ui/flight/flightInput';
 import { MouseCapture } from '../ui/flight/mouseCapture';
-import { DEFAULT_OPTIONS, FreeFlightMenu } from '../ui/flight/freeFlightMenu';
+import {
+  DEFAULT_OPTIONS,
+  FreeFlightMenu,
+  invertKey,
+  invertNote,
+} from '../ui/flight/freeFlightMenu';
 import type {
   AircraftChoice,
   BaseEntry,
@@ -233,6 +238,7 @@ export class FreeFlight {
           this.deps.exit();
         },
         optionsChanged: (o) => {
+          this.applyInvert();
           const flown = this.helo ?? this.model;
           if (flown) flown.unlimitedFuel = o.unlimitedFuel;
           if (o.weather !== this.weather.preset) this.setWeather(o.weather);
@@ -451,6 +457,7 @@ export class FreeFlight {
     if (!r || !this.ground) return;
     this.baseId = id;
     this.writeUrl(id);
+    this.applyInvert();
     if (this.options.aircraft !== 'kestrel') {
       this.startHelo(r, spawn, this.options.aircraft);
       return;
@@ -625,6 +632,9 @@ export class FreeFlight {
       case 'mouseCapture':
         this.toggleCapture();
         break;
+      case 'invertMouse':
+        this.toggleInvert();
+        break;
       default:
         break;
     }
@@ -726,6 +736,29 @@ export class FreeFlight {
     return this.state === 'paused' && performance.now() - this.lostAt < 300;
   }
 
+  /** Gives both inputs the mouse inversion the options hold (decision 196). */
+  private applyInvert(): void {
+    this.input.invertY = this.options.invertJet;
+    this.heloInput.invertPitch = this.options.invertHelo;
+  }
+
+  /** The inversion key (I): inverts the flown aircraft's mouse up and down, or reverts it. */
+  private toggleInvert(): void {
+    if (this.state !== 'flying') return;
+    const kind = this.options.aircraft;
+    const k = invertKey(kind);
+    this.options[k] = !this.options[k];
+    this.applyInvert();
+    this.writeUrl();
+    this.hud.message(
+      [
+        this.options[k] ? 'Mouse up and down inverted' : 'Mouse up and down normal',
+        invertNote(kind, this.options[k]),
+      ],
+      3,
+    );
+  }
+
   /** The capture key (Tab): frees a captured mouse for the displays, or captures a free one. */
   private toggleCapture(): void {
     if (this.state !== 'flying') return;
@@ -756,6 +789,9 @@ export class FreeFlight {
         break;
       case 'mouseCapture':
         this.toggleCapture();
+        break;
+      case 'invertMouse':
+        this.toggleInvert();
         break;
       case 'mouseStick':
         this.input.mode = this.input.mode === 'mouse-stick' ? 'keyboard' : 'mouse-stick';

@@ -3156,3 +3156,14 @@ The forest's placement asks `isClear` per tree the same way (decision 148); it h
 `docs/visual-style.md` (*Displays and Status Strip*, Slots), `docs/plans/displays.md`, `CLAUDE.md` (directory map) and `TODO.md` change with this decision.
 
 **Reason:** A capture key is only useful if a captured mouse does something in every aircraft; in the jet it did nothing until a second key. The slots' rects come first in P2 because the frame, the strip and the HUD's retrofit all place themselves against them, and a pure function with pinned values makes "slots never move" a test rather than a convention.
+
+### 196. The mouse's up and down inverted, per aircraft kind
+
+**Date:** 2026-11-17
+**Decision:** The owner flew the Kestrel with the captured mouse (decision 195) and found up and down inverted, and asked for a switch between the two regimes.
+
+- **One setting per aircraft kind.** `invertJet` and `invertHelo` in Free Flight's options, so the jet can be inverted without changing the helicopters, whose cyclic convention (mouse forward, nose down) the owner had not questioned. Normal: in the jet, mouse forward raises the aim ring (mouse aim) and pushes the stick forward (mouse stick); in the helicopters it pushes the nose down. Inverted flips the mouse's vertical motion in every mode of that kind: `FlightInput.invertY` for the jet's cursor, the existing `HeloInput.invertPitch` for the helicopters.
+- **Where to switch it.** A checkbox, "Invert mouse up and down", on the start screen (for the chosen aircraft) and in the pause menu (for the flown one), each with a line saying what mouse forward does; the key I in flight, in both binding tables, with a HUD message; the URL keeps it (`invert=jet`, `invert=helo` or both), so a reload or a shared link flies the same way. The defaults stay as they were.
+- **Checks.** Unit tests for the URL, the inverted cursor and the shared key; the session tool presses I, checks the URL, unticks the pause menu's box, and, headed with a real mouse (decision 195), checks that mouse forward lowers the inverted aim ring.
+
+**Reason:** Whether mouse forward should climb or dive is a matter of habit (an aim cursor against a stick), and players differ; a switch they can flip in flight lets the owner try both. The helicopters and the jet have different conventions, so one switch for both would have broken the one that felt right.

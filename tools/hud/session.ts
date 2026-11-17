@@ -599,6 +599,32 @@ async function main(): Promise<void> {
       'Kestrel: a lock lost to the browser pauses, and its Escape does not resume',
     );
   }
+  // The mouse's up and down inverted (decision 196): I in flight, the pause menu's box.
+  {
+    key('KeyI');
+    const byKey = ff.input.invertY && location.search.includes('invert=jet');
+    let forwardLowers: boolean | null = null;
+    if (realMouse) {
+      await press('Tab');
+      await captureSettles(true);
+      const y0 = ff.input.cursor.y;
+      await moveMouse(0, -80);
+      forwardLowers = ff.input.cursor.y < y0 - 0.05;
+      await press('Tab');
+      await captureSettles(false);
+    }
+    key('Escape');
+    const box = q<HTMLInputElement>(ff.pause.el, '.ff-invert');
+    const shown = box.checked;
+    box.checked = false;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+    const byBox = !ff.input.invertY && !location.search.includes('invert');
+    click(ff.pause.el, 'Resume');
+    result.invert = { byKey, forwardLowers, shown, byBox };
+    check(byKey, 'Kestrel: I inverts the mouse, and the URL keeps it');
+    check(shown && byBox, "Kestrel: the pause menu's box shows and switches the inversion");
+    if (realMouse) check(forwardLowers === true, 'Kestrel: inverted, mouse forward lowers the aim');
+  }
   key('Escape');
   click(ff.pause.el, 'Change airbase');
   frame();

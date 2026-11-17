@@ -123,6 +123,32 @@ describe('the capture key and the inputs', () => {
     }
   });
 
+  it('switches the inversion with one key, the same in the jet and the helicopters', () => {
+    expect(FLIGHT_BINDINGS.invertMouse).toEqual(HELO_BINDINGS.invertMouse);
+    const key = FLIGHT_BINDINGS.invertMouse[0];
+    for (const table of [FLIGHT_BINDINGS, HELO_BINDINGS] as Record<string, string[]>[]) {
+      const users = Object.entries(table).filter(([, codes]) => codes.includes(key));
+      expect(users.map(([a]) => a)).toEqual(['invertMouse']);
+    }
+  });
+
+  it("inverts the jet's cursor: mouse forward lowers it (decision 196)", () => {
+    vi.stubGlobal('window', new EventTarget());
+    const f = fakeLock();
+    const input = new FlightInput(
+      new EventTarget() as unknown as HTMLElement,
+      new MouseCapture(f.el, f.doc, f.schedule),
+    );
+    // Mouse forward (up the desk) is a negative movementY.
+    input.moveCursor(0, -90, 1600, 900);
+    expect(input.cursor.y).toBeCloseTo(0.2);
+    input.centerCursor();
+    input.invertY = true;
+    input.moveCursor(0, -90, 1600, 900);
+    expect(input.cursor.y).toBeCloseTo(-0.2);
+    input.dispose();
+  });
+
   it("moves the jet's cursor by relative motion, half the view for full travel", () => {
     vi.stubGlobal('window', new EventTarget());
     const f = fakeLock();

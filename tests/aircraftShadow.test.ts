@@ -82,7 +82,10 @@ describe('aircraft shadow', () => {
     const want = new Vec3d(-0.3, 0, 1).normalize();
     expect(n.dot(want)).toBeGreaterThan(Math.cos(0.5 * (Math.PI / 180)));
     // A few centimeters above the drawn ground at its middle.
-    const mid = p.reduce((s, q) => s.add(q), new Vec3d()).scale(1 / p.length).add(eye);
+    const mid = p
+      .reduce((s, q) => s.add(q), new Vec3d())
+      .scale(1 / p.length)
+      .add(eye);
     const above = mid.length() - (R + slope(mid.clone().normalize()));
     expect(above).toBeGreaterThan(0.02);
     expect(above).toBeLessThan(0.3);
@@ -112,7 +115,8 @@ describe('aircraft shadow', () => {
     // Hidden sources' triangles collapse to one point, so they draw nothing.
     for (const t of [fast, slow])
       for (let i = 0; i < t.shade.length; i++)
-        if (t.shade[i] === 0) expect([t.pts[3 * i], t.pts[3 * i + 1], t.pts[3 * i + 2]]).toEqual([0, 0, 0]);
+        if (t.shade[i] === 0)
+          expect([t.pts[3 * i], t.pts[3 * i + 1], t.pts[3 * i + 2]]).toEqual([0, 0, 0]);
   });
 
   it('never floats in the air over a valley when a knoll stands where the shadow would fall', () => {

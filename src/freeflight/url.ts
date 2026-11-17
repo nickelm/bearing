@@ -3,10 +3,11 @@
  * returns to the same flight:
  *
  *   ?mode=freeflight&seed=…&base=…&tod=…&weather=<preset>&spawn=runway|air
- *     &fuel=unlimited|limited&wind=off&aircraft=kestrel|scout|utility&autopilot
+ *     &fuel=unlimited|limited&wind=off&aircraft=kestrel|scout|utility&invert=jet,helo&autopilot
  *
  * `weather` is a preset of sim/weather/presets.ts (`fair` by default, `live`
- * for the world's own weather at that hour); `wind=off` flies in still air.
+ * for the world's own weather at that hour); `wind=off` flies in still air;
+ * `invert` lists the aircraft kinds whose mouse up and down is inverted (decision 196).
  * Values the mode does not know are ignored, and the defaults apply.
  */
 import { WEATHER_PRESETS } from '../sim/weather/presets';
@@ -40,6 +41,11 @@ export function parseFreeFlightUrl(q: URLSearchParams, seed: string): FreeFlight
   const aircraft = q.get('aircraft');
   if (aircraft === 'kestrel' || aircraft === 'scout' || aircraft === 'utility')
     options.aircraft = aircraft;
+  if (q.has('invert')) {
+    const kinds = (q.get('invert') ?? '').split(',');
+    options.invertJet = kinds.includes('jet');
+    options.invertHelo = kinds.includes('helo');
+  }
   const base = q.has('base') ? Number(q.get('base')) : NaN;
   return {
     seed,
@@ -65,4 +71,7 @@ export function writeFreeFlightParams(
   q.set('spawn', options.spawn);
   q.set('fuel', options.unlimitedFuel ? 'unlimited' : 'limited');
   q.set('aircraft', options.aircraft);
+  const inverted = [options.invertJet && 'jet', options.invertHelo && 'helo'].filter(Boolean);
+  if (inverted.length) q.set('invert', inverted.join(','));
+  else q.delete('invert');
 }

@@ -862,7 +862,8 @@ The thrust-disc model, the speed-scheduled controls, the Assisted preset, the ho
 - [ ] Free Flight: aircraft choice on the start screen and in the URL (`&aircraft=`), helipads painted on airbase aprons on the graded pad, spawn on a pad or in a hover, a landing zone marker at a point picked on the start screen's map
   - [x] Aircraft choice (start screen, `&aircraft=kestrel|scout|utility`), spawn beside the runway's middle or hovering at 150 m, the helicopter's own session path (decision 159)
   - [ ] Helipads on the aprons, a landing zone marker
-  - [ ] Mouse sensitivity and inversion in the pause menu
+  - [x] Mouse inversion: per aircraft kind, on the start screen, in the pause menu, the key I and the URL (decision 196)
+  - [ ] Mouse sensitivity in the pause menu
   - [ ] Owner: fly both helicopters with a real mouse (the camera's steep look down in a high hover, the mouse's sensitivity, the ease to a stop below 20 kt) and judge the feel
   - [x] The outcomes monitor's runway rules (touched down away from a runway, ran off the runway or the paved field) by kind: a helicopter may land and hover-taxi anywhere; its own hazards (slope, rollover, rotor strike) come with H3 and H4
 - [ ] Maneuver tests: 60 s hover in ground effect within 1 m with hover hold; a 360° pedal turn within the type's time; a nap-of-the-earth course at 30 m radar altitude over synthetic ridges without contact

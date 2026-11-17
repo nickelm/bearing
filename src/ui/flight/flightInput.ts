@@ -40,6 +40,7 @@ export type FlightAction =
   | 'mouseAim'
   | 'freeLook'
   | 'mouseCapture'
+  | 'invertMouse'
   | 'help'
   | 'debug'
   | 'pause';
@@ -62,6 +63,7 @@ export const FLIGHT_BINDINGS: Record<FlightAction, string[]> = {
   mouseAim: ['KeyN'],
   freeLook: ['KeyC'],
   mouseCapture: ['Tab'],
+  invertMouse: ['KeyI'],
   help: ['KeyH'],
   debug: ['F3'],
   pause: ['Escape'],
@@ -85,6 +87,7 @@ export const ACTION_LABELS: Record<FlightAction, string> = {
   mouseAim: 'Mouse aim (flight director) on / off',
   freeLook: 'Free look (hold; or hold the right mouse button)',
   mouseCapture: 'Capture the mouse to fly with it, or free it (or click the view to capture)',
+  invertMouse: "Invert the mouse's up and down (also in the pause menu)",
   help: 'This help',
   debug: 'Flight-model debug panel',
   pause: 'Pause menu',
@@ -98,6 +101,7 @@ const PRESS_ACTIONS = new Set<FlightAction>([
   'mouseStick',
   'mouseAim',
   'mouseCapture',
+  'invertMouse',
   'help',
   'debug',
   'pause',
@@ -149,6 +153,11 @@ export class FlightInput {
   /** Free look held, and the mouse movement since the last frame (px). */
   lookHeld = false;
   readonly lookDelta = { x: 0, y: 0 };
+  /**
+   * The mouse's up and down inverted (decision 196): mouse forward lowers the aim
+   * ring and pulls the stick back, instead of raising the ring and pushing it.
+   */
+  invertY = false;
   /** Called on a press of a toggle action (gear, help, pause...). */
   onAction: ((a: FlightAction) => void) | null = null;
   enabled = false;
@@ -253,7 +262,8 @@ export class FlightInput {
    */
   moveCursor(dx: number, dy: number, width: number, height: number): void {
     this.cursor.x = clamp(this.cursor.x + (2 * dx) / Math.max(1, width), -1, 1);
-    this.cursor.y = clamp(this.cursor.y - (2 * dy) / Math.max(1, height), -1, 1);
+    const up = this.invertY ? dy : -dy;
+    this.cursor.y = clamp(this.cursor.y + (2 * up) / Math.max(1, height), -1, 1);
   }
 
   /** Puts the cursor back at the center: the mouse stick at neutral, the aim straight ahead. */

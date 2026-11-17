@@ -31,6 +31,7 @@ export type HeloAction =
   | 'freeLook'
   | 'recenterView'
   | 'mouseCapture'
+  | 'invertMouse'
   | 'help'
   | 'debug'
   | 'pause';
@@ -49,6 +50,7 @@ export const HELO_BINDINGS: Record<HeloAction, string[]> = {
   freeLook: ['KeyC'],
   recenterView: ['KeyV'],
   mouseCapture: ['Tab'],
+  invertMouse: ['KeyI'],
   help: ['F1'],
   debug: ['F3'],
   pause: ['Escape'],
@@ -67,6 +69,7 @@ export const HELO_LABELS: Record<HeloAction, string> = {
   freeLook: 'Free look (hold; or hold the right mouse button); the view stays where you leave it',
   recenterView: 'Recenter the view (or click the middle mouse button); the wheel zooms',
   mouseCapture: 'Capture the mouse to fly with it, or free it (or click the view to capture)',
+  invertMouse: "Invert the mouse's up and down (also in the pause menu)",
   help: 'This help',
   debug: 'Flight-model debug panel',
   pause: 'Pause menu',
@@ -77,6 +80,7 @@ const PRESS_ACTIONS = new Set<HeloAction>([
   'parkingBrake',
   'recenterView',
   'mouseCapture',
+  'invertMouse',
   'help',
   'debug',
   'pause',
