@@ -8,7 +8,7 @@ import { FOOT, KNOT } from '../../core/units';
 import type { Touchdown } from '../../sim/flight/outcomes';
 import { ACTION_LABELS, FLIGHT_BINDINGS } from './flightInput';
 import type { FlightAction } from './flightInput';
-import { invertKey, invertNote, weatherSelect } from './freeFlightMenu';
+import { mouseRow, weatherSelect } from './freeFlightMenu';
 import type { FreeFlightOptions, SpawnKind } from './freeFlightMenu';
 
 function card(className = ''): HTMLDivElement {
@@ -67,7 +67,7 @@ export class PauseMenu {
       <label class="ff-weather-row">Weather </label> <span class="ff-weather-about"></span><br>
       <label><input type="checkbox" class="ff-wind"> Wind and turbulence</label><br>
       <label title="Fine faceted relief on the ground near a low camera; costly on some graphics cards"><input type="checkbox" class="ff-micro"> Ground micro-facets (graphics)</label><br>
-      <label title="For this aircraft; I switches it in flight"><input type="checkbox" class="ff-invert"> Invert mouse up and down</label> <span class="ff-invert-note ff-note"></span><br>
+      <span class="ff-mouse-row"></span><br>
       <label>Time of day <input type="range" class="ff-tod" min="0" max="24" step="0.25"> <span class="ff-tod-label"></span></label>
       <div class="ff-note">The weather changes at once; the time of day applies on the next restart.</div>
       <div class="ff-sound"><h2>Sound</h2>
@@ -92,13 +92,8 @@ export class PauseMenu {
       this.options.microFacets = micro.checked;
       events.optionsChanged(this.options);
     });
-    const invert = opts.querySelector('.ff-invert') as HTMLInputElement;
-    const invertText = opts.querySelector('.ff-invert-note') as HTMLSpanElement;
-    invert.addEventListener('change', () => {
-      this.options[invertKey(this.options.aircraft)] = invert.checked;
-      sync();
-      events.optionsChanged(this.options);
-    });
+    const mouse = mouseRow(this.options, () => events.optionsChanged(this.options));
+    (opts.querySelector('.ff-mouse-row') as HTMLSpanElement).append(mouse.el);
     const soundBox = opts.querySelector('.ff-sound') as HTMLDivElement;
     const volume = opts.querySelector('.ff-volume') as HTMLInputElement;
     const mute = opts.querySelector('.ff-mute') as HTMLInputElement;
@@ -114,9 +109,7 @@ export class PauseMenu {
       weather.show(this.options.weather);
       wind.checked = this.options.wind;
       micro.checked = this.options.microFacets;
-      const k = invertKey(this.options.aircraft);
-      invert.checked = this.options[k];
-      invertText.textContent = invertNote(this.options.aircraft, this.options[k]);
+      mouse.sync();
       if (sound) {
         volume.value = String(sound.volume);
         mute.checked = sound.muted;

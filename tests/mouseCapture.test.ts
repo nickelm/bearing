@@ -143,9 +143,14 @@ describe('the capture key and the inputs', () => {
     input.moveCursor(0, -90, 1600, 900);
     expect(input.cursor.y).toBeCloseTo(0.2);
     input.centerCursor();
-    input.invertY = true;
+    input.invertStick = true;
     input.moveCursor(0, -90, 1600, 900);
+    // Direct is the default mode: its own inversion applies, not mouse aim's.
     expect(input.cursor.y).toBeCloseTo(-0.2);
+    input.centerCursor();
+    input.mode = 'mouse-aim';
+    input.moveCursor(0, -90, 1600, 900);
+    expect(input.cursor.y).toBeCloseTo(0.2);
     input.dispose();
   });
 

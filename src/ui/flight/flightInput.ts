@@ -36,9 +36,9 @@ export type FlightAction =
   | 'speedbrake'
   | 'brakes'
   | 'parkingBrake'
-  | 'mouseStick'
   | 'mouseAim'
   | 'freeLook'
+  | 'recenterView'
   | 'mouseCapture'
   | 'invertMouse'
   | 'help'
@@ -59,9 +59,9 @@ export const FLIGHT_BINDINGS: Record<FlightAction, string[]> = {
   speedbrake: ['KeyB'],
   brakes: ['Space'],
   parkingBrake: ['KeyP'],
-  mouseStick: ['KeyM'],
   mouseAim: ['KeyN'],
   freeLook: ['KeyC'],
+  recenterView: ['KeyV'],
   mouseCapture: ['Tab'],
   invertMouse: ['KeyI'],
   help: ['KeyH'],
@@ -83,9 +83,10 @@ export const ACTION_LABELS: Record<FlightAction, string> = {
   speedbrake: 'Speedbrake out / in',
   brakes: 'Wheel brakes (hold)',
   parkingBrake: 'Parking brake on / off',
-  mouseStick: 'Mouse as stick on / off',
-  mouseAim: 'Mouse aim (flight director) on / off',
-  freeLook: 'Free look (hold; or hold the right mouse button)',
+  mouseAim: 'Mouse aim (fly toward the ring) or direct (the mouse is the stick)',
+  freeLook: 'Free look (hold; or hold the right mouse button); the view stays where you leave it',
+  recenterView:
+    'Recenter the view (or click the middle mouse button); the wheel zooms while you look',
   mouseCapture: 'Capture the mouse to fly with it, or free it (or click the view to capture)',
   invertMouse: "Invert the mouse's up and down (also in the pause menu)",
   help: 'This help',
@@ -98,8 +99,8 @@ const PRESS_ACTIONS = new Set<FlightAction>([
   'gear',
   'speedbrake',
   'parkingBrake',
-  'mouseStick',
   'mouseAim',
+  'recenterView',
   'mouseCapture',
   'invertMouse',
   'help',
@@ -107,7 +108,23 @@ const PRESS_ACTIONS = new Set<FlightAction>([
   'pause',
 ]);
 
-export type ControlMode = 'keyboard' | 'mouse-stick' | 'mouse-aim';
+/**
+ * The jet's control modes (decision 198): `direct`, the keys fly the stick and a captured
+ * mouse's offset from the screen's center is the stick (a held stick key wins on its
+ * axis); `mouse-aim`, the flight director flies toward the ring (the keys on the wheels).
+ */
+export type ControlMode = 'direct' | 'mouse-aim';
+
+/** The direct stick: full deflection at this offset from the center (NDC), and the dead zone. */
+export const STICK_FULL = 0.7;
+export const STICK_DEADZONE = 0.04;
+
+/** The direct stick's deflection (−1..1) for a cursor offset `v` in NDC. */
+export function stickFromCursor(v: number): number {
+  const a = Math.abs(v / STICK_FULL);
+  if (a < STICK_DEADZONE) return 0;
+  return Math.sign(v) * Math.min(1, (a - STICK_DEADZONE) / (1 - STICK_DEADZONE));
+}
 
 /**
  * The throttle lever moved by up to `step` toward `dir`, stopping at a detent
@@ -144,7 +161,9 @@ const DETENTS = [0, MIL_DETENT, AB_GATE];
 
 export class FlightInput {
   readonly controls: FlightControls = neutralControls();
-  mode: ControlMode = 'keyboard';
+  mode: ControlMode = 'direct';
+  /** Mouse wheel notches while looking around (positive: farther); otherwise the wheel is the throttle. */
+  zoomSteps = 0;
   /**
    * Cursor position in normalized device coordinates (−1..1, y up). Under mouse
    * capture it moves by the mouse's relative motion and holds while the mouse is free.
@@ -157,7 +176,8 @@ export class FlightInput {
    * The mouse's up and down inverted (decision 196): mouse forward lowers the aim
    * ring and pulls the stick back, instead of raising the ring and pushing it.
    */
-  invertY = false;
+  invertAim = false;
+  invertStick = false;
   /** Called on a press of a toggle action (gear, help, pause...). */
   onAction: ((a: FlightAction) => void) | null = null;
   enabled = false;
@@ -219,7 +239,17 @@ export class FlightInput {
       if (!this.enabled) return;
       if (e.button === 2) {
         this.rightDown = true;
-        el.setPointerCapture?.(e.pointerId);
+        // Pointer capture keeps a drag outside the window; under pointer lock it is not
+        // allowed (and not needed).
+        if (!this.capture?.captured)
+          try {
+            el.setPointerCapture?.(e.pointerId);
+          } catch {
+            /* a lock arrived meanwhile */
+          }
+      } else if (e.button === 1) {
+        e.preventDefault();
+        this.onAction?.('recenterView');
       } else if (e.button === 0 && this.capture && !this.capture.captured) {
         this.capture.grab();
       }
@@ -230,7 +260,12 @@ export class FlightInput {
     const wheel = (e: WheelEvent) => {
       if (!this.enabled) return;
       e.preventDefault();
-      this.wheelThrottle(e.deltaY < 0 ? 1 : -1);
+      if (this.lookHeld) {
+        // While looking around the wheel zooms, as in the helicopters (decision 198).
+        const px =
+          e.deltaMode === 1 ? e.deltaY * 33 : e.deltaMode === 2 ? e.deltaY * 800 : e.deltaY;
+        this.zoomSteps += Math.max(-3, Math.min(3, px / 100));
+      } else this.wheelThrottle(e.deltaY < 0 ? 1 : -1);
     };
     const menu = (e: Event) => {
       if (this.enabled) e.preventDefault();
@@ -262,7 +297,8 @@ export class FlightInput {
    */
   moveCursor(dx: number, dy: number, width: number, height: number): void {
     this.cursor.x = clamp(this.cursor.x + (2 * dx) / Math.max(1, width), -1, 1);
-    const up = this.invertY ? dy : -dy;
+    const inverted = this.mode === 'mouse-aim' ? this.invertAim : this.invertStick;
+    const up = inverted ? dy : -dy;
     this.cursor.y = clamp(this.cursor.y + (2 * up) / Math.max(1, height), -1, 1);
   }
 
@@ -326,13 +362,17 @@ export class FlightInput {
       const d = target - current;
       return current + clamp(d, -rate * dt, rate * dt);
     };
-    if (this.mode === 'mouse-stick') {
-      const dz = (v: number) => (Math.abs(v) < 0.04 ? 0 : (v - Math.sign(v) * 0.04) / 0.96);
-      c.pitch = clamp(dz(-this.cursor.y / 0.7), -1, 1);
-      c.roll = clamp(dz(this.cursor.x / 0.7), -1, 1);
-    } else if (this.mode === 'keyboard' || (this.mode === 'mouse-aim' && this.directOnGround)) {
-      c.pitch = axis(c.pitch, 'pitchDown', 'pitchUp');
-      c.roll = axis(c.roll, 'rollLeft', 'rollRight');
+    if (this.mode === 'direct' || this.directOnGround) {
+      // The captured mouse is the stick in direct mode; a held key wins on its axis.
+      const mouse = this.mode === 'direct' && this.capture?.captured === true;
+      const keysPitch = this.isHeld('pitchDown') || this.isHeld('pitchUp');
+      const keysRoll = this.isHeld('rollLeft') || this.isHeld('rollRight');
+      c.pitch =
+        mouse && !keysPitch
+          ? stickFromCursor(-this.cursor.y)
+          : axis(c.pitch, 'pitchDown', 'pitchUp');
+      c.roll =
+        mouse && !keysRoll ? stickFromCursor(this.cursor.x) : axis(c.roll, 'rollLeft', 'rollRight');
     }
     c.yaw = axis(c.yaw, 'yawLeft', 'yawRight');
     // Throttle with detents: a press stops at the next detent; a new press passes it.

@@ -48,8 +48,10 @@ for (const shot of shots) {
     deviceScaleFactor: 1,
   });
   const slots = process.env.SLOTS === '1' ? `&slots=1&scale=${process.env.SCALE ?? 1}` : '';
+  // QUERY adds parameters to the composite page, e.g. control=stick (decision 198).
+  const extra = process.env.QUERY ? `&${process.env.QUERY}` : '';
   await page.goto(
-    `${base}/tools/hud/composite.html?${hover ? `hover=${hover}` : `shot=${shot}`}${slots}`,
+    `${base}/tools/hud/composite.html?${hover ? `hover=${hover}` : `shot=${shot}`}${slots}${extra}`,
   );
   await page.waitForFunction(() => document.title === 'ready', null, { timeout: 60_000 });
   const file = join(

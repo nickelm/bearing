@@ -449,7 +449,7 @@ it('renders Free Flight shots', async () => {
     const frame = buildHudFrame(m, ctl, {
       aid: landingAid(m, runways, scene.chase.eye),
       mode: 'autopilot',
-      aim: null,
+      control: null,
       timing: null,
     });
     writeFileSync(

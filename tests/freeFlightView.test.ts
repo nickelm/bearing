@@ -60,6 +60,33 @@ describe('chase camera', () => {
     return c;
   }
 
+  it('keeps a sticky look where it is left, recenters it, and keeps the rest view (decision 198)', () => {
+    const c = camera();
+    for (let i = 0; i < 120; i++) c.update(1 / 60);
+    const rest0 = c.restForward.clone();
+    expect(rest0.dot(c.forward)).toBeGreaterThan(0.9999);
+    // The jet's look springs back by default.
+    c.lookHeld = true;
+    c.look(300, 0, 0.002);
+    c.update(1 / 60);
+    c.lookHeld = false;
+    for (let i = 0; i < 240; i++) c.update(1 / 60);
+    expect(Math.abs(c.lookYaw)).toBeLessThan(0.01);
+    // Sticky: it stays, the rest view does not turn with it, and recenter() brings it back.
+    c.stickyLook = true;
+    c.lookHeld = true;
+    c.look(300, 0, 0.002);
+    c.update(1 / 60);
+    c.lookHeld = false;
+    for (let i = 0; i < 240; i++) c.update(1 / 60);
+    expect(c.lookYaw).toBeCloseTo(0.6, 5);
+    expect(c.forward.dot(rest0)).toBeLessThan(0.99);
+    expect(c.restForward.dot(rest0)).toBeGreaterThan(0.9999);
+    c.recenter();
+    for (let i = 0; i < 400; i++) c.update(1 / 60);
+    expect(Math.abs(c.lookYaw)).toBeLessThan(0.01);
+  });
+
   it('sits behind and above the aircraft and looks at it', () => {
     const c = camera();
     c.update(1 / 60);

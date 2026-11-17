@@ -30,25 +30,97 @@ export interface FreeFlightOptions {
   weather: WeatherPreset;
   /** The aircraft feels the weather's wind and gusts (sim/flight/wind.ts). */
   wind: boolean;
-  /** The mouse's up and down inverted in the jet, and in the helicopters (decision 196). */
-  invertJet: boolean;
+  /** How the captured mouse flies the jet: toward the aim ring, or the stick directly (decision 198). */
+  control: JetControl;
+  /**
+   * The mouse's up and down inverted, per way of flying (decisions 196, 198): the
+   * jet's mouse aim, the jet's direct stick, and the helicopters.
+   */
+  invertAim: boolean;
+  invertStick: boolean;
   invertHelo: boolean;
   /** The ground's micro-facets near a low camera: costly on some GPUs, off by default (decision 197). */
   microFacets: boolean;
 }
 
-/** Which inversion setting an aircraft uses: the jet's or the helicopters' (decision 196). */
-export function invertKey(aircraft: AircraftChoice): 'invertJet' | 'invertHelo' {
-  return aircraft === 'kestrel' ? 'invertJet' : 'invertHelo';
+/** The jet's mouse modes: `aim`, the flight director flies to the ring; `direct`, the cursor is the stick. */
+export type JetControl = 'aim' | 'direct';
+
+export type InvertKey = 'invertAim' | 'invertStick' | 'invertHelo';
+
+/** Which inversion setting applies to `aircraft` flown with `control`. */
+export function invertKey(aircraft: AircraftChoice, control: JetControl): InvertKey {
+  if (aircraft !== 'kestrel') return 'invertHelo';
+  return control === 'aim' ? 'invertAim' : 'invertStick';
 }
 
-/** What the mouse's forward motion does in `aircraft` with the setting `inverted`. */
-export function invertNote(aircraft: AircraftChoice, inverted: boolean): string {
-  if (aircraft === 'kestrel')
-    return inverted
-      ? 'Mouse forward: the aim ring goes down, the stick comes back (nose up)'
-      : 'Mouse forward: the aim ring goes up, the stick goes forward (nose down)';
-  return inverted ? 'Mouse forward: nose up' : 'Mouse forward: nose down, as a cyclic';
+/** What the mouse's forward motion does under setting `key` when `inverted`. */
+export function invertNote(key: InvertKey, inverted: boolean): string {
+  switch (key) {
+    case 'invertAim':
+      return inverted
+        ? 'Mouse forward: the aim ring goes down (dive)'
+        : 'Mouse forward: the aim ring goes up (climb)';
+    case 'invertStick':
+      return inverted
+        ? 'Mouse forward: stick back, nose up'
+        : 'Mouse forward: stick forward, nose down, as a real stick';
+    default:
+      return inverted ? 'Mouse forward: nose up' : 'Mouse forward: nose down, as a cyclic';
+  }
+}
+
+/** The jet's mouse modes for the menus. */
+export const JET_CONTROLS: { id: JetControl; label: string }[] = [
+  { id: 'aim', label: 'Mouse aim (fly toward the ring)' },
+  { id: 'direct', label: 'Direct (the mouse is the stick)' },
+];
+
+/**
+ * The menus' mouse row (decision 198): the jet's mouse mode, and the inversion of
+ * the mode chosen (or of the helicopters). `changed` runs after either changes.
+ */
+export function mouseRow(
+  options: FreeFlightOptions,
+  changed: () => void,
+): {
+  el: HTMLSpanElement;
+  sync(): void;
+} {
+  const el = document.createElement('span');
+  el.innerHTML = `<label class="ff-control-row">Mouse <select class="ff-control"></select></label>
+    <label title="I switches it in flight"><input type="checkbox" class="ff-invert"> Invert up and down</label>
+    <span class="ff-invert-note ff-note"></span>`;
+  const select = el.querySelector('.ff-control') as HTMLSelectElement;
+  for (const c of JET_CONTROLS) {
+    const o = document.createElement('option');
+    o.value = c.id;
+    o.textContent = c.label;
+    select.append(o);
+  }
+  select.addEventListener('keydown', (e) => e.stopPropagation());
+  const row = el.querySelector('.ff-control-row') as HTMLLabelElement;
+  const box = el.querySelector('.ff-invert') as HTMLInputElement;
+  const note = el.querySelector('.ff-invert-note') as HTMLSpanElement;
+  const sync = () => {
+    row.hidden = options.aircraft !== 'kestrel';
+    select.value = options.control;
+    const k = invertKey(options.aircraft, options.control);
+    box.checked = options[k];
+    note.textContent = invertNote(k, options[k]);
+  };
+  select.addEventListener('change', () => {
+    options.control = select.value as JetControl;
+    sync();
+    changed();
+  });
+  box.addEventListener('change', () => {
+    options[invertKey(options.aircraft, options.control)] = box.checked;
+    sync();
+    changed();
+  });
+  sync();
+  return { el, sync };
 }
 
 export const DEFAULT_OPTIONS: FreeFlightOptions = {
@@ -58,7 +130,9 @@ export const DEFAULT_OPTIONS: FreeFlightOptions = {
   aircraft: 'kestrel',
   weather: 'fair',
   wind: true,
-  invertJet: false,
+  control: 'aim',
+  invertAim: false,
+  invertStick: false,
   invertHelo: false,
   microFacets: false,
 };
@@ -177,9 +251,7 @@ export class FreeFlightMenu {
       <div class="ff-row">
         <label>Aircraft <select class="ff-aircraft"></select></label> <span class="ff-aircraft-note ff-note"></span>
       </div>
-      <div class="ff-row">
-        <label title="For the chosen aircraft; I switches it in flight"><input type="checkbox" class="ff-invert"> Invert mouse up and down</label> <span class="ff-invert-note ff-note"></span>
-      </div>
+      <div class="ff-row ff-mouse-row"></div>
       <div class="ff-row">
         <label>Time of day <input type="range" class="ff-tod" min="0" max="24" step="0.25"> <span class="ff-tod-label"></span></label>
       </div>
@@ -235,17 +307,9 @@ export class FreeFlightMenu {
       o.textContent = a.label;
       aircraft.append(o);
     }
-    const invert = q<HTMLInputElement>('.ff-invert');
-    const invertText = q<HTMLSpanElement>('.ff-invert-note');
-    const showInvert = () => {
-      const k = invertKey(this.options.aircraft);
-      invert.checked = this.options[k];
-      invertText.textContent = invertNote(this.options.aircraft, this.options[k]);
-    };
-    invert.addEventListener('change', () => {
-      this.options[invertKey(this.options.aircraft)] = invert.checked;
-      showInvert();
-    });
+    const mouse = mouseRow(this.options, () => {});
+    q<HTMLDivElement>('.ff-mouse-row').append(mouse.el);
+    const showInvert = () => mouse.sync();
     const spawnGround = q<HTMLSpanElement>('.ff-spawn-ground');
     const spawnAir = q<HTMLSpanElement>('.ff-spawn-air');
     const showAircraft = () => {

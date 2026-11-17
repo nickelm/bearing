@@ -22,6 +22,7 @@ import {
   toRunway,
 } from '../sim/flight/runway';
 import type { Runway, RunwayEnd } from '../sim/flight/runway';
+import type { ControlCursor } from '../ui/flight/controlCursor';
 import type { HoverHud, HudFrame, HudLandingAid } from '../ui/flight/hud';
 
 /** Range of the landing aid (m): the nearest runway within it is the destination. */
@@ -100,8 +101,7 @@ export function buildHudFrame(
   opts: {
     aid: HudLandingAid | null;
     mode: string;
-    aim: { x: number; y: number } | null;
-    aimKind?: 'aim' | 'stick';
+    control: ControlCursor | null;
     timing: { frameMs: number; physicsMs: number; steps: number } | null;
     hover?: HoverHud | null;
   },
@@ -136,8 +136,7 @@ export function buildHudFrame(
     warnings: flightWarnings(m),
     aid: opts.aid,
     mode: opts.mode,
-    aim: opts.aim,
-    aimKind: opts.aimKind ?? 'aim',
+    control: opts.control,
     hover: opts.hover ?? null,
     debug: opts.timing
       ? {

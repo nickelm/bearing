@@ -689,6 +689,8 @@ A sandbox outside the campaign: pick a seed and an airbase, take off in the F-21
 - [ ] Owner: fly it in a desktop browser (takeoff, circuit, landing at another base) and judge the feel: rotation, roll rate, pitch response, the flare, ground handling
 - [ ] Owner: runway pavement concrete (as now) or dark asphalt (decision 135)
 - [ ] Mouse aim as in Proposal 0002: a world-locked aim point that the camera follows, not the cursor's direction in the chase view (P1)
+- [x] Direct mode (the captured mouse's offset from the center is the stick, keys win), inversion per mode, the control cursor in its own color, the jet's sticky right-button look with V and the wheel (decision 198)
+  - [ ] Owner: fly direct mode and judge the stick's travel (full at 0.7 of the half-screen) and the dead zone
 - [ ] The Kestrel at the controlled-aircraft detail level (1,500–4,000 triangles) with navigation lights and a blinking beacon at night (V4)
 - [ ] Shadow without double darkening where triangles overlap (a stencil or a max-blend pass)
 - [x] Weather in Free Flight: run the weather model without the war, so clouds and winds show (`StandaloneWeather`, decisions 137, 143)

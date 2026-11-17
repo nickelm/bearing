@@ -3180,3 +3180,18 @@ The forest's placement asks `isClear` per tree the same way (decision 148); it h
 `docs/visual-style.md` (*Terrain*, ground detail) and `docs/plans/ground-detail.md` change with this decision.
 
 **Reason:** The owner's report: a frame rate that low makes flying impossible, and the ground cover gives most of the near-ground cue without them.
+
+### 198. Two mouse modes for the jet, a control cursor of its own, and a sticky look
+
+**Date:** 2026-11-17
+**Decision:** The owner's review of decisions 195 and 196: mouse aim is fine, but they want a direct mode, the stick held by the cursor's offset from the screen's center and not inverted; the cursor is a game control, not HUD symbology, and should show it; the jet should look around with the right button as the helicopters do.
+
+- **Two jet modes,** chosen on the start screen and in the pause menu ("Mouse: aim / direct"), switched by N in flight and kept in the URL (`control=aim|direct`); mouse aim stays the default. *Direct*: while the mouse is captured, its offset from the screen's center is the stick (full deflection at 0.7 of the half-screen, a 4% dead zone), and a held stick key wins on its axis; freeing the mouse (Tab) centers the stick and the keys fly. *Mouse aim* as before; the keys steer on the wheels. Keyboard-only flying is direct mode with a free mouse. M (mouse as stick, decision 135) is gone.
+- **Inversion per mode** (refines decision 196): `invertAim`, `invertStick` and `invertHelo`, the URL's `invert=aim,stick,helo` (the first version's `jet` reads as `aim`, which is what the owner inverted). The menus show the inversion of the mode chosen, and I flips it. Direct's default is a real stick's: mouse forward, stick forward, nose down; the owner's "not inverted".
+- **The control cursor** (`ui/flight/controlCursor.ts`) draws in a soft magenta, `#FF8AE2` with a dark halo, apart from the HUD's green. Direct: a faint full-deflection box and dead-zone ring at the center, the line from the center to the cursor, and a cross at the cursor; shown while the mouse is captured. Mouse aim: the ring, projected from its direction in the world; dimmed while the mouse is free (it still holds). `HudFrame.control` replaces `aim`.
+- **Sticky free look for the jet.** The right button (or C) looks around and the view stays where it is left; V or a middle click recenters it; the wheel zooms while looking and is the throttle otherwise. `ChaseCamera.stickyLook` (the jet's rig) and `restForward`/`restUp`, the view with the look centered, which mouse aim now reads, so looking around never steers the jet. Pointer capture for the right-button drag is skipped under pointer lock, where browsers refuse it.
+- **Checks:** unit tests for the URL, both inversions, the sticky look and its recentering; the session tool switches modes with N, checks that a held key wins, that freeing centers the stick, that RMB and V reach the camera, and, headed with a real mouse, that the direct stick follows it and mouse forward pushes it. `docs/reports/screens/control-direct.png` shows the direct cursor.
+
+`docs/design.md` (*Flying*), Part I (*HUD and Displays*) and `TODO.md` change with this decision.
+
+**Reason:** Direct control is the scheme for players who want to fly the aircraft rather than point it, and with the offset from the center it needs no hardware. The cursor is the player's hand on the controls, not information the aircraft displays, so the allocation rule (decision 189) keeps it out of the HUD's color. A look that stays where it is left serves the jet as it does the helicopter, as long as it never changes where the jet flies.

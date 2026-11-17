@@ -11,6 +11,7 @@
  * ground under a pale sky, for the halo). tools/freeflight.screens.mjs shoots
  * them as `SHOTS=hover-hover,hover-hazard,…`.
  */
+import { STICK_DEADZONE, STICK_FULL } from '../../src/ui/flight/flightInput';
 import { DEG, KNOT } from '../../src/core/units';
 import { Vec3d } from '../../src/core/vec3d';
 import { hoverSymbols } from '../../src/freeflight/hudFrame';
@@ -392,10 +393,21 @@ export async function drawHover(name: string): Promise<void> {
     warnings: [],
     aid,
     mode: 'mouse stick',
-    aim: null,
     debug: null,
     hover,
   };
+  // `&control=stick` or `&control=free` adds the direct stick's control cursor (decision 198).
+  const control = new URLSearchParams(location.search).get('control');
+  if (control === 'stick' || control === 'free')
+    f.control = {
+      kind: 'stick',
+      x: 0.22,
+      y: 0.16,
+      dir: null,
+      active: control === 'stick',
+      full: STICK_FULL,
+      deadzone: STICK_DEADZONE,
+    };
   const hud = new Hud();
   hud.show(true);
   hud.draw(f, project);

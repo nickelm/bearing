@@ -288,6 +288,7 @@ A full pitch ladder is confusing when seen from outside the aircraft, so the com
 - **Layout.** The aircraft sits slightly below screen center, the tapes flank it, and the HUD keeps within the middle 60% of the screen, clear of the display slots. Declutter levels follow the master mode, down to the world-anchored symbols and tapes alone.
 - **HUD symbology.** A single color (green by default, amber as an option) with a thin dark halo, so it stays legible against bright sky, snow, and night. Free Flight's first HUD (decision 135) starts from green `#6CFF8A` with a halo of `rgba(0, 18, 6, 0.75)` and amber `#FFB347` for warnings; exact values are tuned with the HUD (milestone P2).
 - **Implementation.** A Canvas 2D overlay at device pixel ratio.
+- **Control cursor.** The mouse's hold on the controls is a game control, not HUD symbology, so it draws in its own soft magenta, `#FF8AE2`, with a dark halo (decision 198): in direct control a faint full-deflection box and dead-zone ring at the screen's center, the line from the center to the cursor, and a cross at the cursor; in mouse aim a ring where the aircraft flies, dimmed while the mouse is free.
 
 ## Displays and Status Strip
 

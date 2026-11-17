@@ -108,7 +108,6 @@ export function buildHeloHudFrame(
     aid: opts.aid,
     // The status column lists the modes; this line names the control mode.
     mode: 'fly-by-mouse',
-    aim: null,
     hover,
     debug: opts.timing
       ? {

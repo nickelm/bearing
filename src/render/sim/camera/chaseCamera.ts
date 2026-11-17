@@ -196,6 +196,14 @@ export class ChaseCamera {
   readonly eye = new Vec3d();
   readonly forward = new Vec3d();
   readonly up = new Vec3d();
+  /**
+   * The view the camera has with its free look centered (fixed-wing rigs): mouse aim
+   * reads it, so looking around does not move where the jet flies (decision 198).
+   */
+  readonly restForward = new Vec3d();
+  readonly restUp = new Vec3d();
+  /** A fixed-wing rig's free look stays where it is left, as a helicopter's does (decision 198). */
+  stickyLook = false;
   near: Meters = 0.3;
   far: Meters = 1e5;
   fov: Radians = FAST_JET_RIG.fov;
@@ -389,7 +397,7 @@ export class ChaseCamera {
     [this.lift, this.liftVel] = spring(this.lift, this.liftVel, hTarget, rig.stretch, dt);
     // Free look springs back when released; a helicopter's stays until recentered.
     if (this.lookHeld) this.recentering = false;
-    else if (!hv || this.recentering) {
+    else if ((!hv && !this.stickyLook) || this.recentering) {
       const k = Math.exp(-dt / 0.25);
       this.lookYaw *= k;
       this.lookPitch *= k;
@@ -486,6 +494,13 @@ export class ChaseCamera {
       }
     }
     this.up.copy(u).addScaled(this.forward, -u.dot(this.forward)).normalize();
+    // The same view with the look centered: eye behind and above, look point 25 m ahead.
+    this.restForward
+      .copy(f)
+      .scale(25 + this.dist)
+      .addScaled(u, 1 - this.lift)
+      .normalize();
+    this.restUp.copy(u).addScaled(this.restForward, -u.dot(this.restForward)).normalize();
     this.fov = rig.fov;
     // Clip planes: near enough for the aircraft, far to the horizon past the tallest peaks.
     const R = this.radius;

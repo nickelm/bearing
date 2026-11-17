@@ -525,14 +525,14 @@ async function main(): Promise<void> {
     ff.flight.model !== null && ff.flight.helo === null && ff.state === 'flying',
     'the Kestrel after the helicopters',
   );
-  // The same capture key in the jet, where a captured mouse flies: Tab in keyboard mode
-  // switches to mouse aim; M takes the mouse for the stick at its center, and the keys free it;
-  // a lock the browser drops by itself (Escape, focus) pauses (decisions 193, 195).
+  // The jet's two mouse modes (decisions 193, 195, 198): mouse aim flies toward the ring and
+  // holds it while the mouse is free; direct makes the captured mouse's offset from the
+  // center the stick, a held key wins on its axis, and freeing the mouse centers it. A lock
+  // the browser drops by itself (Escape, focus) pauses.
   {
-    const keysFirst = ff.input.mode;
+    const first = ff.input.mode;
     await press('Tab');
     const grabbed = await captureSettles(true);
-    const aimByTab = ff.input.mode;
     let aimFollows: boolean | null = null;
     if (realMouse) {
       await moveMouse(120, -60);
@@ -544,18 +544,28 @@ async function main(): Promise<void> {
     if (realMouse) await moveMouse(200, 0);
     const aimHolds = ff.input.cursor.x === heldAim.x && ff.input.cursor.y === heldAim.y;
     const flyingAfterTab = ff.state;
-    await press('KeyM');
-    const stick = (await captureSettles(true)) && ff.input.mode === 'mouse-stick';
+    await press('KeyN');
+    const direct = (await captureSettles(true)) && ff.input.mode === 'direct';
     const centered = ff.input.cursor.x === 0 && ff.input.cursor.y === 0;
+    const inUrl = location.search.includes('control=direct');
     let stickFollows: boolean | null = null;
+    let forwardPushes: boolean | null = null;
     if (realMouse) {
       await moveMouse(220, 0);
       stickFollows = ff.input.controls.roll > 0.2;
+      await moveMouse(0, -150);
+      forwardPushes = ff.input.controls.pitch < -0.1;
     }
-    await press('KeyM');
-    const keysFree = ff.input.mode === 'keyboard' && (await captureSettles(false));
-    await press('KeyM');
-    await captureSettles(true);
+    // A held key wins on its axis.
+    const p0 = ff.input.controls.pitch;
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyS', key: 's', bubbles: true }));
+    for (let i = 0; i < 40; i++) frame();
+    const keyWins = ff.input.controls.pitch > p0 + 0.6;
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyS', key: 's', bubbles: true }));
+    await press('Tab');
+    const freeCenters = (await captureSettles(false)) && ff.input.cursor.x === 0;
+    await press('KeyN');
+    const backToAim = (await captureSettles(true)) && ff.input.mode === 'mouse-aim';
     document.exitPointerLock();
     await captureSettles(false);
     const pausedByLoss = ff.state;
@@ -565,44 +575,70 @@ async function main(): Promise<void> {
     click(ff.pause.el, 'Resume');
     result.capture = {
       realMouse,
-      keysFirst,
+      first,
       grabbed,
-      aimByTab,
       aimFollows,
       freed,
       aimHolds,
       flyingAfterTab,
-      stick,
+      direct,
       centered,
+      inUrl,
       stickFollows,
-      keysFree,
+      forwardPushes,
+      keyWins,
+      freeCenters,
+      backToAim,
       pausedByLoss,
       heldPaused,
     };
-    check(
-      keysFirst === 'keyboard' && aimByTab === 'mouse-aim',
-      'Kestrel: capturing the mouse in keyboard mode starts mouse aim',
-    );
-    check(aimHolds, 'Kestrel: the aim point holds while the mouse is free');
-    check(keysFree, 'Kestrel: back to the keys frees the mouse');
-    if (realMouse) {
-      check(aimFollows === true, 'Kestrel: the real mouse moves the aim point');
-      check(stickFollows === true, 'Kestrel: the real mouse moves the stick');
-    }
+    check(first === 'mouse-aim', 'Kestrel: mouse aim by default');
     check(
       grabbed && freed && flyingAfterTab === 'flying',
       'Kestrel: Tab captures and frees the mouse',
     );
-    check(stick && centered, 'Kestrel: M captures the mouse for the stick, centered');
+    check(aimHolds, 'Kestrel: the aim point holds while the mouse is free');
+    check(direct && centered && inUrl, 'Kestrel: N switches to direct, centered, in the URL');
+    check(keyWins, 'Kestrel: in direct mode a held stick key wins');
+    check(freeCenters, 'Kestrel: freeing the mouse in direct mode centers the stick');
+    check(backToAim, 'Kestrel: N switches back to mouse aim');
+    if (realMouse) {
+      check(aimFollows === true, 'Kestrel: the real mouse moves the aim point');
+      check(stickFollows === true, 'Kestrel: the real mouse moves the direct stick');
+      check(forwardPushes === true, 'Kestrel: mouse forward pushes the direct stick');
+    }
     check(
       pausedByLoss === 'paused' && heldPaused === 'paused' && (ff.state as string) === 'flying',
       'Kestrel: a lock lost to the browser pauses, and its Escape does not resume',
     );
   }
-  // The mouse's up and down inverted (decision 196): I in flight, the pause menu's box.
+  // The right button's free look and V reach the camera (decision 198); how it eases back is
+  // tested in tests/freeFlightView.test.ts, since this page draws nothing.
+  {
+    const chase = globe.chase;
+    const canvas = document.querySelector('canvas')!;
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { button: 2, bubbles: true }));
+    for (let i = 0; i < 5; i++) {
+      document.dispatchEvent(new MouseEvent('mousemove', { movementX: 40, movementY: 0 }));
+      frame();
+    }
+    const held = chase.lookHeld;
+    window.dispatchEvent(new PointerEvent('pointerup', { button: 2, bubbles: true }));
+    frame();
+    const turned = Math.abs(chase.lookYaw) > 0.05 && !chase.lookHeld;
+    const sticky = chase.stickyLook;
+    key('KeyV');
+    const recentering = (chase as unknown as { recentering: boolean }).recentering;
+    chase.resetView();
+    result.look = { held, turned, sticky, recentering };
+    check(held && turned && sticky, 'Kestrel: the right button looks around, sticky');
+    check(recentering, 'Kestrel: V recenters the look');
+  }
+  // The mouse's up and down inverted per mode (decisions 196, 198): I in flight, the pause
+  // menu's box.
   {
     key('KeyI');
-    const byKey = ff.input.invertY && location.search.includes('invert=jet');
+    const byKey = ff.input.invertAim && location.search.includes('invert=aim');
     let forwardLowers: boolean | null = null;
     if (realMouse) {
       await press('Tab');
@@ -618,7 +654,7 @@ async function main(): Promise<void> {
     const shown = box.checked;
     box.checked = false;
     box.dispatchEvent(new Event('change', { bubbles: true }));
-    const byBox = !ff.input.invertY && !location.search.includes('invert');
+    const byBox = !ff.input.invertAim && !location.search.includes('invert');
     click(ff.pause.el, 'Resume');
     result.invert = { byKey, forwardLowers, shown, byBox };
     check(byKey, 'Kestrel: I inverts the mouse, and the URL keeps it');

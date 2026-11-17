@@ -90,18 +90,27 @@ describe('Free Flight URL', () => {
 
   it('keeps the mouse inversion per aircraft kind (decision 196)', () => {
     const q = new URLSearchParams();
-    writeFreeFlightParams(q, { ...DEFAULT_OPTIONS, invertJet: true }, null);
-    expect(q.get('invert')).toBe('jet');
+    writeFreeFlightParams(q, { ...DEFAULT_OPTIONS, invertAim: true }, null);
+    expect(q.get('invert')).toBe('aim');
     expect(parseFreeFlightUrl(q, '1').options).toMatchObject({
-      invertJet: true,
+      invertAim: true,
+      invertStick: false,
       invertHelo: false,
     });
-    writeFreeFlightParams(q, { ...DEFAULT_OPTIONS, invertJet: true, invertHelo: true }, null);
-    expect(q.get('invert')).toBe('jet,helo');
+    writeFreeFlightParams(
+      q,
+      { ...DEFAULT_OPTIONS, control: 'direct', invertStick: true, invertHelo: true },
+      null,
+    );
+    expect(q.get('invert')).toBe('stick,helo');
+    expect(q.get('control')).toBe('direct');
+    expect(parseFreeFlightUrl(q, '1').options.control).toBe('direct');
     writeFreeFlightParams(q, DEFAULT_OPTIONS, null);
     expect(q.has('invert')).toBe(false);
-    expect(parse('invert=helo').options).toMatchObject({ invertJet: false, invertHelo: true });
-    expect(parse('mode=freeflight').options).not.toHaveProperty('invertJet');
+    expect(parse('invert=helo').options).toMatchObject({ invertAim: false, invertHelo: true });
+    // The first version's `jet` meant mouse aim (decision 198).
+    expect(parse('invert=jet').options).toMatchObject({ invertAim: true, invertStick: false });
+    expect(parse('mode=freeflight').options).not.toHaveProperty('invertAim');
   });
 
   it('keeps the micro-facets off unless asked (decision 197)', () => {

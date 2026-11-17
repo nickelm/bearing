@@ -32,6 +32,8 @@ import './flight.css';
 import { DEG, FOOT, KNOT, NAUTICAL_MILE } from '../../core/units';
 import type { Vec3d } from '../../core/vec3d';
 import type { FlightWarning } from '../../sim/flight/outcomes';
+import { drawControlCursor } from './controlCursor';
+import type { ControlCursor } from './controlCursor';
 
 /** HUD green and its halo. */
 export const HUD_COLOR = '#6CFF8A';
@@ -129,9 +131,8 @@ export interface HudFrame {
   aid: HudLandingAid | null;
   /** Control mode label ("direct", "mouse stick", "mouse aim") and the aim point in NDC for mouse aim. */
   mode: string;
-  aim: { x: number; y: number } | null;
-  /** What `aim` is: mouse aim's point (a ring) or the mouse stick's cursor (a cross); default aim. */
-  aimKind?: 'aim' | 'stick';
+  /** The mouse's control cursor, drawn in its own color (controlCursor.ts, decision 198). */
+  control?: ControlCursor | null;
   debug: {
     cl: number;
     cd: number;
@@ -311,27 +312,7 @@ export class Hud {
     this.messagesAndWarnings(f, cx, 130 * s, s);
     // Below the app's frame-time readout.
     if (f.debug) this.debugPanel(f, 16, 64, s);
-    if (f.aim) {
-      const x = ((f.aim.x + 1) / 2) * W;
-      const y = ((1 - f.aim.y) / 2) * H;
-      if (f.aimKind === 'stick') {
-        // The mouse stick under pointer lock: a cross where the stick is (decision 193).
-        this.stroke(() => {
-          c.beginPath();
-          c.moveTo(x - 7 * s, y);
-          c.lineTo(x + 7 * s, y);
-          c.moveTo(x, y - 7 * s);
-          c.lineTo(x, y + 7 * s);
-        });
-      } else {
-        this.stroke(() => {
-          c.beginPath();
-          c.arc(x, y, 10 * s, 0, 2 * Math.PI);
-          c.moveTo(x - 4 * s, y);
-          c.lineTo(x + 4 * s, y);
-        });
-      }
-    }
+    if (f.control) drawControlCursor(c, f.control, project, W, H, s);
   }
 
   // ---- Drawing helpers ----
