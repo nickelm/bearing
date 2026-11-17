@@ -295,6 +295,107 @@ export interface TileSynthOptions {
   basinLevel?: Float32Array;
   index: RiverIndex;
   tuning?: Partial<typeof TILE_SYNTH_TUNING>;
+  /** The war's natural wonders the kernel shapes (decision 221); absent: none. */
+  wonders?: readonly TileWonder[];
+}
+
+/** A natural wonder shaped by the tile kernel (decision 221). */
+export interface TileWonder {
+  /** Unit direction of its anchor. */
+  dir: readonly [number, number, number];
+  /** `WonderKind` (strategic/graph.ts); kinds without a shape here are ignored. */
+  kind: number;
+  /** Eroded height at the anchor (m): what the shape stands on. */
+  base: number;
+}
+
+/**
+ * The shapes (decision 221), Earth's landmarks heightened (proposal 0007), in meters.
+ * Tepui: a table `tepuiRadius` across its warped outline, `tepuiRise` above the ground,
+ * walled over `tepuiWall`. Caldera: a rim `calderaRadius` out, `calderaRim` above the
+ * ground, its bowl `calderaDepth` below it holding a lake. Monolith: a dome
+ * `monolithRadius` across and `monolithRise` high with near-vertical flanks. Blue hole:
+ * a round shaft `blueHoleRadius` across, `blueHoleDepth` deep, in shallow sea.
+ */
+export const WONDER_SHAPES = {
+  tepuiRadius: 3200,
+  tepuiRise: 900,
+  tepuiWall: 160,
+  calderaRadius: 3500,
+  calderaRim: 350,
+  calderaDepth: 300,
+  monolithRadius: 1600,
+  monolithRise: 380,
+  blueHoleRadius: 280,
+  blueHoleDepth: 125,
+};
+
+/** Kinds shaped here: tepui, caldera crater lake, monolith, blue hole (`WonderKind`). */
+const SHAPED_WONDERS: ReadonlySet<number> = new Set([0, 6, 9, 10]);
+
+/** WGSL for the wonders: `shapeWonders(d, h)` → (height, lake level or NO_LAKE). */
+function wondersWgsl(wonders: readonly TileWonder[], R: number): string {
+  const W = WONDER_SHAPES;
+  const list = wonders.filter((w) => SHAPED_WONDERS.has(w.kind));
+  if (list.length === 0)
+    return 'fn shapeWonders(d: vec3f, h: f32) -> vec2f { return vec2f(h, NO_LAKE); }';
+  const reach = Math.cos(
+    (Math.max(W.tepuiRadius * 1.4 + W.tepuiWall, W.calderaRadius * 2) + 2000) / R,
+  );
+  const items = list
+    .map(
+      (w) =>
+        `vec4f(${f(w.dir[0])}, ${f(w.dir[1])}, ${f(w.dir[2])}, ${f(w.kind)}), vec4f(${f(w.base)}, 0.0, 0.0, 0.0)`,
+    )
+    .join(',\n  ');
+  return `
+const WONDER_COUNT: i32 = ${list.length};
+const WONDERS = array<vec4f, ${list.length * 2}>(
+  ${items});
+// The selected wonders' shapes (decision 221), on top of the ground (rule 15).
+fn shapeWonders(d: vec3f, hIn: f32) -> vec2f {
+  var h = hIn;
+  var lake = NO_LAKE;
+  for (var i = 0; i < WONDER_COUNT; i++) {
+    let w = WONDERS[i * 2];
+    let c = dot(d, w.xyz);
+    if (c < ${f(reach)}) { continue; }
+    let kind = i32(w.w);
+    let base = WONDERS[i * 2 + 1].x;
+    let dist = acos(min(c, 1.0)) * R;
+    if (kind == 0) {
+      // Tepui: sheer sandstone walls round a table with a gentle, rocky top.
+      let rr = ${f(W.tepuiRadius)} * (1.0 + 0.22 * noise3(d * (R / 2600.0) + vec3f(4.1, 7.3, 1.9), 512u));
+      let top = base + ${f(W.tepuiRise)} + 25.0 * noise3(d * (R / 700.0) + vec3f(1.1, 2.2, 3.3), 0u);
+      let wall = 1.0 - smoothstep(rr - ${f(W.tepuiWall)}, rr, dist);
+      h = max(h, mix(h, top, wall));
+    } else if (kind == 6) {
+      // Caldera: a rim falling away outside, a bowl inside holding a crater lake.
+      let r = ${f(W.calderaRadius)} * (1.0 + 0.1 * noise3(d * (R / 3000.0) + vec3f(8.2, 0.6, 5.1), 512u));
+      let rim = base + ${f(W.calderaRim)};
+      let floor = rim - ${f(W.calderaDepth)};
+      let x = dist / r;
+      if (x < 1.0) {
+        h = floor + (rim - floor) * pow(x, 3.0);
+        // Water inside the bowl only (x³ < 0.6), so a gorge through the rim drains no lake.
+        if (x < 0.84) { lake = floor + 0.6 * (rim - floor); }
+      } else {
+        h = max(h, rim - (dist - r) * 0.22);
+      }
+    } else if (kind == 9) {
+      // Monolith: a dome with near-vertical flanks over the plain.
+      let x = dist / ${f(W.monolithRadius)};
+      let rise = ${f(W.monolithRise)} * pow(clamp(1.0 - pow(x, 6.0), 0.0, 1.0), 0.3);
+      h = max(h, base + rise + 8.0 * noise3(d * (R / 300.0) + vec3f(6.6, 5.5, 4.4), 0u) * step(x, 1.0));
+    } else if (kind == 10) {
+      // Blue hole: a round shaft in the shallow sea.
+      let wall = 1.0 - smoothstep(${f(W.blueHoleRadius * 0.8)}, ${f(W.blueHoleRadius)}, dist);
+      h = mix(h, min(h, -${f(W.blueHoleDepth)}), wall);
+    }
+  }
+  return vec2f(h, lake);
+}
+`;
 }
 
 const f = (x: number) => (Number.isInteger(x) ? `${x}.0` : String(x));
@@ -381,6 +482,7 @@ const TWO_PI: f32 = 6.283185307;
 const NO_LAKE: f32 = ${NO_LAKE};
 const NO_LAKE_HALF: f32 = ${f(NO_LAKE_HALF)};
 const RIVER_REACH: f32 = ${f(t.riverReach)};
+${wondersWgsl(opts.wonders ?? [], R)}
 
 // Lake surface near d: the highest level among the 3×3 global cells around d's cell
 // whose centers lie within about one cell of d, or NO_LAKE.
@@ -956,6 +1058,10 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     let stepped = smoothstep(3.0 * ${f(t.strataThickness)}, 1.2 * ${f(t.strataThickness)}, sampleSpacing);
     h = mix(h, carveRivers(d, h, tile, stepped), dryBed);
   }
+  // The war's natural wonders (decision 221), after the rivers: a river's valley would
+  // cut a shape away, so only its channel keeps its cut, a gorge through a wall or rim.
+  let shaped = shapeWonders(d, h);
+  h = mix(shaped.x, min(h, shaped.x), riverCover);
 
   // Lake water stands only on the lake's cells (decision 129): elsewhere within the
   // lake level's reach, ground the interpolation or detail left below the level is
@@ -980,6 +1086,11 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
       biomeOut = ${Biome.IceSheet}u;
       forest = 0.0;
     }
+  }
+  // A caldera's crater lake (decision 221).
+  if (shaped.y > NO_LAKE * 0.5 && h < shaped.y) {
+    lakeOut = max(lakeOut, shaped.y);
+    forest = 0.0;
   }
   // Marshes (decision 146): flat, wet ground within a few meters of a water table
   // (a river's surface on its floodplain, a lake's level on its shore, sea level on

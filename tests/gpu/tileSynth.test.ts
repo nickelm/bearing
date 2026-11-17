@@ -309,4 +309,37 @@ describe.skipIf(!gpu)('tile synthesis (GPU)', async () => {
     expect(land).toBeGreaterThan(0);
     expect(forested).toBeGreaterThan(100);
   });
+
+  it('shapes a tepui and a caldera with its crater lake (decision 221)', async () => {
+    const tepuiAt = main.clone();
+    const calderaAt = new Vec3d(main.x + 0.05, main.y, main.z).normalize();
+    const shaped = new TileSynthesizer(g!.grid, {
+      seed: params.seed,
+      reliefScale: params.reliefScale,
+      radius: params.radius,
+      biome: g!.finish.biome,
+      lakeDepth: g!.finish.drainage.lakeDepth,
+      height: g!.height,
+      forest: g!.finish.forest,
+      treeline: g!.finish.treeline,
+      index: index!,
+      wonders: [
+        { dir: [tepuiAt.x, tepuiAt.y, tepuiAt.z], kind: 0, base: 400 },
+        { dir: [calderaAt.x, calderaAt.y, calderaAt.z], kind: 6, base: 400 },
+      ],
+    });
+    const [t, c] = await shaped.generate([
+      tileForDirection(tepuiAt, 7),
+      tileForDirection(calderaAt, 7),
+    ]);
+    expect(gpu!.errors).toEqual([]);
+    expect(t!.maxHeight).toBeGreaterThan(400 + 850);
+    // The caldera's bowl holds water at its lake level.
+    let wet = 0;
+    for (let i = 0; i < c!.lake.length; i++) {
+      if (c!.lake[i]! > NO_LAKE * 0.5 && c!.height[i]! < c!.lake[i]!) wet++;
+    }
+    expect(wet).toBeGreaterThan(100);
+    expect(c!.maxHeight).toBeGreaterThan(400 + 300);
+  });
 });

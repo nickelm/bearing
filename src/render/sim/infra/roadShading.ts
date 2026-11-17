@@ -39,7 +39,6 @@ import {
   sin,
   storage,
   uniform,
-  vec2,
   vec3,
   vec4,
 } from 'three/tsl';
@@ -52,7 +51,6 @@ import { localFrame } from './infraScene';
 import { runwayMarks } from './runwayMarkings';
 
 type F = Node<'float'>;
-type V2 = Node<'vec2'>;
 type V3 = Node<'vec3'>;
 type V4 = Node<'vec4'>;
 
@@ -86,15 +84,19 @@ export class RoadShading {
   }
 
   /**
-   * (coverage, concrete) at a planet-centered position: coverage 0..1 by any
-   * paved segment, and how much of that is concrete.
+   * (coverage, concrete, shoulder) at a planet-centered position: coverage 0..1 by
+   * any paved segment, how much of that is concrete, and the dark shoulder outside
+   * wide concrete (runways and aprons, decision 221): a band SHOULDER_WIDTH m wide,
+   * at least SHOULDER_PIXELS wide on screen, so a field reads from the air.
    */
-  coverage(planetPosition: V3, start: F, count: F, footprint: F, gate?: Node<'bool'>): V2 {
+  coverage(planetPosition: V3, start: F, count: F, footprint: F, gate?: Node<'bool'>): V3 {
     return Fn(() => {
       const p = normalize(planetPosition);
       const fp = max(footprint, 0.05);
       const cover = float(0).toVar();
       const concrete = float(0).toVar();
+      const shoulder = float(0).toVar();
+      const band = max(float(SHOULDER_WIDTH), fp.mul(SHOULDER_PIXELS));
       const first = int(start);
       // No segments where the gate fails (e.g. at sea), or with roads hidden.
       const run = this.style.enabled.greaterThan(0);
@@ -113,9 +115,15 @@ export class RoadShading {
         const c = clamp(float(0.5).sub(d.sub(drawn).div(fp)), 0, 1).mul(strength);
         cover.assign(max(cover, c));
         concrete.assign(max(concrete, select(signed.lessThan(0), c, float(0))));
+        // Outside the drawn edge, over a band, on concrete at least SHOULDER_MIN_HALF wide.
+        const outside = d.sub(drawn);
+        const s = clamp(float(0.5).add(outside.div(fp)), 0, 1)
+          .mul(clamp(float(0.5).sub(outside.sub(band).div(fp)), 0, 1))
+          .mul(select(signed.lessThan(-SHOULDER_MIN_HALF), float(1), float(0)));
+        shoulder.assign(max(shoulder, s));
       });
-      return vec2(cover, concrete).mul(this.style.enabled);
-    })() as V2;
+      return vec3(cover, concrete, shoulder.mul(float(1).sub(cover))).mul(this.style.enabled);
+    })() as V3;
   }
 
   /**
@@ -152,6 +160,15 @@ export class RoadShading {
  * (levels 4 and finer) every light. Villages below a tier show there through
  * the rural glow instead.
  */
+/** Dark shoulders along runways and aprons (decision 221): width (m), least width on screen (px). */
+export const SHOULDER_WIDTH = 12;
+export const SHOULDER_PIXELS = 2;
+/**
+ * Concrete half-widths (m) above this get shoulders: runways (22.5) and aprons (70),
+ * not taxiways (11.5).
+ */
+export const SHOULDER_MIN_HALF = 15;
+
 export const LIGHT_LEVELS = [0, 2, 4] as const;
 export const LIGHT_LEVEL = 2;
 const TIER_RADIUS = [5000, 2000, 0];

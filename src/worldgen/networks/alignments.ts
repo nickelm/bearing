@@ -17,7 +17,7 @@ import type { BridgeList } from '../strategic/graph';
 import { FORMATION_HALF_WIDTH } from './pieces';
 
 /** Version of the stored record and the stage that made it: a stored record of another is aligned anew. */
-export const ALIGNMENT_VERSION = 2;
+export const ALIGNMENT_VERSION = 3;
 
 export interface Alignments {
   version: number;

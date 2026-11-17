@@ -219,7 +219,7 @@ describe('observer stations', () => {
     expect(st.facing).toBeCloseTo(90 * DEG, 6);
   });
 
-  it('frames each selected wonder from its low side (decision 220)', () => {
+  it('frames each selected wonder from a clear side (decisions 220, 221)', () => {
     const f = w.graph.features;
     const ids = w.campaign.cast.wonders ?? [];
     const st = wonderStations(f, ids, R);
@@ -229,7 +229,8 @@ describe('observer stations', () => {
       const anchor = new Vec3d(f.anchor[3 * i]!, f.anchor[3 * i + 1]!, f.anchor[3 * i + 2]!);
       expect(s.kind).toBe('wonder');
       expect(s.label).toContain(f.names[i]!);
-      expect(s.point.distanceTo(anchor) * R).toBeCloseTo(WONDER_VIEW_DISTANCE, -1);
+      const want = f.measure[i] === 10 ? 1500 : f.measure[i] === 9 ? 5000 : WONDER_VIEW_DISTANCE;
+      expect(s.point.distanceTo(anchor) * R).toBeCloseTo(want, -1);
       expect(Math.abs(s.facing - bearingTo(s.point, anchor))).toBeLessThan(1e-9);
       expect(s.pitch).toBeLessThan(0);
     }

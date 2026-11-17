@@ -205,6 +205,8 @@ export function roadStations(al: Alignments, radius: number, count = 8): Observe
 /** How far out the wonder observer stands (m): a coarse cell and a half, so the anchor's cell is in view. */
 export const WONDER_VIEW_DISTANCE = 7000;
 export const WONDER_EYE_HEIGHT = 600;
+/** The height (m) above the ground at the wonder that the sight line aims at: about a shape's top. */
+export const WONDER_TARGET_RISE = 300;
 
 /**
  * Stations at the war's natural wonders (decision 220), `ids` being the
@@ -218,27 +220,46 @@ export function wonderStations(
   ids: readonly number[],
   radius: number,
   heightAt?: (d: Readonly<Vec3d>) => number,
+  /** Where the tiles shape each wonder (decision 221), by feature; else its anchor. */
+  sited?: ReadonlyMap<number, readonly [number, number, number]>,
 ): ObserverStation[] {
   const out: ObserverStation[] = [];
   for (const i of ids) {
     if (f.kind[i] !== FeatureKind.Wonder) continue;
-    const anchor = new Vec3d(f.anchor[3 * i]!, f.anchor[3 * i + 1]!, f.anchor[3 * i + 2]!);
+    const at = sited?.get(i) ?? [f.anchor[3 * i]!, f.anchor[3 * i + 1]!, f.anchor[3 * i + 2]!];
+    const anchor = new Vec3d(at[0], at[1], at[2]);
+    // Closer for small shapes: a blue hole is a few hundred meters across, a monolith 3 km.
+    const kindId = f.measure[i]!;
+    const viewDistance = kindId === 10 ? 1500 : kindId === 9 ? 5000 : WONDER_VIEW_DISTANCE;
+    const eyeHeight = kindId === 10 ? 400 : WONDER_EYE_HEIGHT;
+    // The bearing (of 16) whose sight line to the wonder clears the ground best, the
+    // lower eye breaking ties; where the best is still blocked, the eye rises over it.
     let from = 0;
+    let height = eyeHeight;
     if (heightAt) {
-      let lowest = Infinity;
-      for (let k = 0; k < 8; k++) {
-        const h = (k / 8) * 2 * Math.PI;
-        const g = heightAt(offsetPoint(anchor, h, WONDER_VIEW_DISTANCE, 0, radius));
-        if (g < lowest) {
-          lowest = g;
-          from = h;
+      const target = Math.max(0, heightAt(anchor)) + WONDER_TARGET_RISE;
+      let best = Infinity;
+      for (let k = 0; k < 16; k++) {
+        const b = (k / 16) * 2 * Math.PI;
+        const eyeGround = Math.max(0, heightAt(offsetPoint(anchor, b, viewDistance, 0, radius)));
+        const eyeAlt = eyeGround + eyeHeight;
+        let blocked = 0;
+        for (let t = 0.15; t < 0.9; t += 0.075) {
+          const g = heightAt(offsetPoint(anchor, b, viewDistance * (1 - t), 0, radius));
+          blocked = Math.max(blocked, g - (eyeAlt + (target - eyeAlt) * t));
+        }
+        const cost = 1000 * blocked + eyeGround;
+        if (cost < best) {
+          best = cost;
+          from = b;
+          height = Math.min(3000, eyeHeight + (blocked > 0 ? 2 * blocked + 100 : 0));
         }
       }
     }
-    const eye = offsetPoint(anchor, from, WONDER_VIEW_DISTANCE, 0, radius);
+    const eye = offsetPoint(anchor, from, viewDistance, 0, radius);
     const drop = heightAt
-      ? Math.max(0, heightAt(eye)) + WONDER_EYE_HEIGHT - Math.max(0, heightAt(anchor))
-      : WONDER_EYE_HEIGHT;
+      ? Math.max(0, heightAt(eye)) + height - Math.max(0, heightAt(anchor)) - WONDER_TARGET_RISE
+      : height;
     const kind = WONDER_KIND_NAMES[f.measure[i]!] ?? 'wonder';
     out.push({
       key: `wonder-${i}`,
@@ -247,7 +268,7 @@ export function wonderStations(
       side: null,
       point: eye,
       facing: bearingTo(eye, anchor),
-      height: WONDER_EYE_HEIGHT,
+      height,
       pitch: -Math.max(2 * (Math.PI / 180), Math.min(0.6, Math.atan2(drop, WONDER_VIEW_DISTANCE))),
     });
   }

@@ -4,7 +4,16 @@ import { DEG } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
 import { AIRFIELD_FOOTPRINT } from '../src/render/sim/infra/airfieldGrading';
 import { localFrame } from '../src/render/sim/infra/infraScene';
-import { SITING_DRY, SITING_RADIUS, SITING_TURN, siteAirfields } from '../src/worldgen/edits';
+import {
+  resiteSpurs,
+  SITING_DRY,
+  SITING_RADIUS,
+  SITING_TURN,
+  siteAirfields,
+  siteWonders,
+  WONDER_SITING_RADIUS,
+} from '../src/worldgen/edits';
+import type { RoadNetwork } from '../src/worldgen/strategic/graph';
 import type { Airbase, Infrastructure } from '../src/worldgen/strategic/infrastructure';
 
 const R = 1e6;
@@ -32,7 +41,16 @@ function base(heading = Math.PI / 2): Airbase {
   };
 }
 
-const infra = (b: Airbase) => ({ airbases: [b] }) as unknown as Infrastructure;
+const NO_SPURS: RoadNetwork = {
+  count: 0,
+  offsets: Uint32Array.from([0]),
+  cells: new Int32Array(0),
+  points: new Float64Array(0),
+  roadClass: new Uint8Array(0),
+  traffic: new Float32Array(0),
+  route: new Int32Array(0),
+};
+const infra = (b: Airbase) => ({ airbases: [b], spurs: NO_SPURS }) as unknown as Infrastructure;
 const site = (h: (x: number, y: number) => number, b = base()) =>
   siteAirfields(infra(b), R, AIRFIELD_FOOTPRINT, (d) => h(...xy(d)));
 
@@ -81,5 +99,57 @@ describe('airfield siting on the eroded ground (decision 220)', () => {
     const r = site(() => SITING_DRY - 10, b);
     expect(r.wet).toEqual([0]);
     expect(r.infrastructure.airbases[0]).toBe(b);
+  });
+
+  it('moves the spur road end to the sited field, or adds a spur (decision 221)', () => {
+    const q = latLonToDirection(20 * DEG, 30.2 * DEG, new Vec3d());
+    const spurs: RoadNetwork = {
+      count: 1,
+      offsets: Uint32Array.from([0, 2]),
+      cells: Int32Array.from([7, 0]),
+      points: Float64Array.from([q.x, q.y, q.z, P.x, P.y, P.z]),
+      roadClass: Uint8Array.from([2]),
+      traffic: new Float32Array(1),
+      route: Int32Array.from([-1]),
+    };
+    const b0 = base();
+    const moved: Airbase = { ...b0, point: [q.x, q.y + 0.001, q.z] };
+    const r = resiteSpurs(spurs, [b0], [moved]);
+    expect(r.count).toBe(1);
+    expect(Array.from(r.points.subarray(3, 6))).toEqual(moved.point);
+    expect(Array.from(r.points.subarray(0, 3))).toEqual([q.x, q.y, q.z]);
+    // Unmoved: unchanged.
+    expect(Array.from(resiteSpurs(spurs, [b0], [b0]).points)).toEqual(Array.from(spurs.points));
+    // A field whose cell had no spur gets one from its coarse point.
+    const other: Airbase = { ...b0, cell: 99 };
+    const r2 = resiteSpurs(spurs, [other], [{ ...other, point: moved.point }]);
+    expect(r2.count).toBe(2);
+    expect(r2.offsets[2]).toBe(4);
+    expect(Array.from(r2.points.subarray(6, 9))).toEqual(other.point);
+    expect(Array.from(r2.points.subarray(9, 12))).toEqual(moved.point);
+    expect(r2.route[1]).toBe(-1);
+  });
+
+  it('sites a monolith off a mountain onto the plain beside it (decision 221)', () => {
+    // A mountain west of x = 3 km, a flat plain at 120 m east of it.
+    const h = (d: Readonly<Vec3d>) => {
+      const [x] = xy(d);
+      return x < 3000 ? 2500 - 0.3 * x : 120;
+    };
+    const [w] = siteWonders([5], () => 9, () => P.clone(), R, h);
+    expect(w!.moved).toBeGreaterThan(3000);
+    expect(w!.moved).toBeLessThanOrEqual(WONDER_SITING_RADIUS);
+    expect(w!.base).toBeCloseTo(120, 0);
+    // Kinds the tiles do not shape stay at their anchor.
+    const [k] = siteWonders([5], () => 2, () => P.clone(), R, h);
+    expect(k!.moved).toBe(0);
+  });
+
+  it('sites a blue hole in shallow sea (decision 221)', () => {
+    // Deep sea west of x = 2 km, a shallow 15 m bank east of it.
+    const h = (d: Readonly<Vec3d>) => (xy(d)[0] < 2000 ? -300 : -15);
+    const [w] = siteWonders([1], () => 10, () => P.clone(), R, h);
+    expect(xy(new Vec3d(...w!.dir))[0]).toBeGreaterThan(2000);
+    expect(w!.base).toBeCloseTo(-15, 0);
   });
 });

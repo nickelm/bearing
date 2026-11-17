@@ -528,6 +528,14 @@ export class TerrainRenderer {
         .mul(running);
       const surface = mix(banked, foam, max(falls, white));
       const withRoads = mix(surface, roadRadiance, paved.x.mul(dry));
+      // The dark shoulders along runways and aprons (decision 221): fields read from the air.
+      const shoulderRadiance = L.shadeDiffuse(
+        this.land.wet(vec3(0.045, 0.042, 0.038) as unknown as typeof normal),
+        normal,
+        positionWorld,
+        at,
+      );
+      const withShoulders = mix(withRoads, shoulderRadiance, paved.z.mul(dry));
       // Settlement lights on the night side (sodium orange), plus a glow along paved roads.
       // By day, at sea and with lights off, none of it runs.
       const night = nightFactor(radial, L.sunDirection);
@@ -588,7 +596,7 @@ export class TerrainRenderer {
           )
           .mul(float(1).sub(paved.x)),
       );
-      const lit = withRoads
+      const lit = withShoulders
         .add(vec3(1, 0.7, 0.38).mul(glow))
         .add(sheen)
         .add(sparkle)

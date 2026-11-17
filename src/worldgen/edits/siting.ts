@@ -16,6 +16,8 @@
  * fields never move. Pure and deterministic: a function of the heights given.
  */
 import { Vec3d } from '../../core/vec3d';
+import { RoadClass } from '../strategic/graph';
+import type { RoadNetwork } from '../strategic/graph';
 import type { Airbase, Infrastructure } from '../strategic/infrastructure';
 
 /** Farthest a field moves from its coarse point (m): about one coarse cell, so spur roads still reach it. */
@@ -200,5 +202,186 @@ export function siteAirfields(
     rms[i] = best.rms;
     return { ...b, point: [best.p.x, best.p.y, best.p.z], heading: fold(best.h) };
   });
-  return { infrastructure: { ...infra, airbases }, moved, rms, wet };
+  const spurs = resiteSpurs(infra.spurs, infra.airbases, airbases);
+  return { infrastructure: { ...infra, airbases, spurs }, moved, rms, wet };
+}
+
+/**
+ * Spur roads to sited fields (decision 221). The coarse pass ends a field's spur at
+ * its cell's center, the field's coarse point. Where siting moved the field, that end
+ * moves to the sited point, and the alignment stage routes the last leg over the
+ * terrain. A field whose cell was already on the road network has no spur: it gets a
+ * new one from its coarse point to the sited point. New spurs are appended, so the
+ * spur bridges keep their indices.
+ */
+export function resiteSpurs(
+  spurs: RoadNetwork,
+  before: readonly Airbase[],
+  after: readonly Airbase[],
+): RoadNetwork {
+  const points = Float64Array.from(spurs.points);
+  const added: { cell: number; from: readonly number[]; to: readonly number[] }[] = [];
+  const ends = new Map<number, number[]>();
+  for (let k = 0; k < spurs.count; k++) {
+    const a = spurs.offsets[k]!;
+    const b = spurs.offsets[k + 1]! - 1;
+    if (b <= a) continue;
+    for (const p of [a, b]) {
+      const cell = spurs.cells[p]!;
+      let l = ends.get(cell);
+      if (!l) ends.set(cell, (l = []));
+      l.push(p);
+    }
+  }
+  for (let i = 0; i < before.length; i++) {
+    const b0 = before[i]!;
+    const b1 = after[i]!;
+    if (b0 === b1) continue;
+    const at = ends.get(b0.cell);
+    if (at) {
+      for (const p of at) points.set(b1.point, p * 3);
+    } else added.push({ cell: b0.cell, from: b0.point, to: b1.point });
+  }
+  if (added.length === 0) return { ...spurs, points };
+  const n = spurs.count + added.length;
+  const offsets = new Uint32Array(n + 1);
+  offsets.set(spurs.offsets);
+  const base = spurs.offsets[spurs.count]!;
+  added.forEach((_, j) => (offsets[spurs.count + j + 1] = base + 2 * (j + 1)));
+  const grow = <T extends Float64Array | Int32Array>(src: T, extra: number[]): T => {
+    const out = new (src.constructor as new (n: number) => T)(src.length + extra.length);
+    out.set(src);
+    out.set(extra, src.length);
+    return out;
+  };
+  const roadClass = new Uint8Array(n);
+  roadClass.set(spurs.roadClass);
+  roadClass.fill(RoadClass.Secondary, spurs.count);
+  const traffic = new Float32Array(n);
+  traffic.set(spurs.traffic);
+  const route = new Int32Array(n).fill(-1);
+  route.set(spurs.route);
+  return {
+    count: n,
+    offsets,
+    cells: grow(
+      spurs.cells,
+      added.flatMap((a) => [a.cell, a.cell]),
+    ),
+    points: grow(
+      points,
+      added.flatMap((a) => [...a.from, ...a.to]),
+    ),
+    roadClass,
+    traffic,
+    route,
+  };
+}
+
+/** A natural wonder sited on the eroded world (decision 221). */
+export interface SitedWonder {
+  /** Feature index in the graph. */
+  feature: number;
+  /** `WonderKind`. */
+  kind: number;
+  /** Unit direction of the shape's center. */
+  dir: [number, number, number];
+  /** The ground it stands on (m): the mean height on a ring round it. */
+  base: number;
+  /** How far it moved from the feature's anchor (m). */
+  moved: number;
+  /**
+   * The ground's RMS deviation (m) round and under the sited shape; above
+   * WONDER_MAX_UNEVEN the tiles leave the wonder unshaped: on rough ground a shape
+   * drew walls, not a landmark. NaN where no dry (or shallow-sea) site was found.
+   */
+  uneven: number;
+}
+
+/** Ground rougher than this (RMS, m) under a wonder's site leaves it unshaped (decision 221). */
+export const WONDER_MAX_UNEVEN = 60;
+
+/** Radius (m) of each shaped kind (tile kernel, `WONDER_SHAPES`); others are not moved. */
+export const WONDER_SITE_RADIUS: Readonly<Record<number, number>> = {
+  0: 3200, // tepui
+  6: 3500, // caldera
+  9: 1600, // monolith
+  10: 280, // blue hole
+};
+/** Farthest a wonder moves from its coarse anchor (m). */
+export const WONDER_SITING_RADIUS = 8000;
+
+/**
+ * Sites each wonder on the eroded ground (decision 221). A wonder's anchor is a coarse
+ * cell's center, and the eroded world can put a mountainside, a valley or the sea
+ * there: a dome raised from the anchor's height over the plain beside it drew a flat
+ * cylinder. The shaped kinds move, within WONDER_SITING_RADIUS, to where the ground on a
+ * ring round the shape (1.3 radii out) and under it is most even: dry land for a tepui,
+ * caldera or monolith, sea 2–40 m deep for a blue hole. The shape stands on the ring's
+ * mean height. Kinds the tiles do not shape stay at their anchors.
+ */
+export function siteWonders(
+  ids: readonly number[],
+  kindOf: (feature: number) => number,
+  anchorOf: (feature: number) => Vec3d,
+  radius: number,
+  heightAt: (d: Readonly<Vec3d>) => number,
+  /** Lakes, salt lakes and playas: no land wonder stands in one. */
+  wetAt: ((d: Readonly<Vec3d>) => boolean) | null = null,
+): SitedWonder[] {
+  return ids.map((id) => {
+    const kind = kindOf(id);
+    const a = anchorOf(id).normalize();
+    const shapeR = WONDER_SITE_RADIUS[kind];
+    const ringMean = (p: Vec3d, r: number) => {
+      let s = 0;
+      for (let k = 0; k < 16; k++) s += heightAt(offset(p, (k / 16) * 2 * Math.PI, r, 0, radius));
+      return s / 16;
+    };
+    if (shapeR === undefined) {
+      return { feature: id, kind, dir: [a.x, a.y, a.z], base: heightAt(a), moved: 0, uneven: 0 };
+    }
+    const sea = kind === 10;
+    const ringR = sea ? 3 * shapeR : 1.3 * shapeR;
+    let best = { cost: Infinity, p: a, base: ringMean(a, ringR), dist: 0, sd: NaN };
+    const step = 1000;
+    for (let ring = 0; ring * step <= WONDER_SITING_RADIUS; ring++) {
+      const dist = ring * step;
+      const around = ring === 0 ? 1 : 8 * ring;
+      for (let k = 0; k < around; k++) {
+        const p = ring === 0 ? a : offset(a, (2 * Math.PI * k) / around, dist, 0, radius);
+        const hs: number[] = [];
+        for (let j = 0; j < 16; j++)
+          hs.push(heightAt(offset(p, (j / 16) * 2 * Math.PI, ringR, 0, radius)));
+        for (let j = 0; j < 8; j++)
+          hs.push(heightAt(offset(p, (j / 8) * 2 * Math.PI, 0.6 * ringR, 0, radius)));
+        hs.push(heightAt(p));
+        const ok = sea
+          ? hs.every((h) => h < -2 && h > -40)
+          : hs.every((h) => h > 5) &&
+            !(
+              wetAt &&
+              (wetAt(p) ||
+                wetAt(offset(p, 0, ringR, 0, radius)) ||
+                wetAt(offset(p, Math.PI, ringR, 0, radius)) ||
+                wetAt(offset(p, Math.PI / 2, ringR, 0, radius)) ||
+                wetAt(offset(p, -Math.PI / 2, ringR, 0, radius)))
+            );
+        if (!ok) continue;
+        const mean = hs.reduce((x, y) => x + y, 0) / hs.length;
+        const sd = Math.sqrt(hs.reduce((x, y) => x + (y - mean) ** 2, 0) / hs.length);
+        // Lower ground counts a little: a monolith or tepui rises from a plain.
+        const cost = sd + 0.002 * dist + (sea ? Math.abs(mean + 15) : 0.01 * mean);
+        if (cost < best.cost) best = { cost, p, base: ringMean(p, ringR), dist, sd };
+      }
+    }
+    return {
+      feature: id,
+      kind,
+      dir: [best.p.x, best.p.y, best.p.z],
+      base: best.base,
+      moved: best.dist,
+      uneven: best.sd,
+    };
+  });
 }

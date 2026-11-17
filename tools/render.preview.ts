@@ -126,7 +126,8 @@ import { previewWorld } from './previewWorld';
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
 import { settlementPoint } from '../src/worldgen/strategic/graph';
 import { InfraScene, offsetPoint } from '../src/render/sim/infra/infraScene';
-import { observerStations } from '../src/render/sim/camera/observerStations';
+import { observerStations, wonderStations } from '../src/render/sim/camera/observerStations';
+import { sitedWonders, tileWonders, wonderWet } from '../src/render/common/terrain/tileWonders';
 import {
   AIRFIELD_FOOTPRINT,
   airfieldGrading,
@@ -918,6 +919,17 @@ it('renders preview views', async () => {
     lakeDepth: global.finish.drainage.lakeDepth,
     channels: global.finish.channels,
   });
+  const wonders = sitedWonders(
+    campaign.graph,
+    campaign.campaign.cast,
+    params.radius,
+    globalMapSampler(global.height, global.n),
+    wonderWet(global),
+  );
+  for (const w of wonders)
+    console.log(
+      `wonder ${w.feature}: sited ${(w.moved / 1000).toFixed(0)} km from its anchor, on ${w.base.toFixed(0)} m, ground ±${w.uneven.toFixed(0)} m`,
+    );
   const synth = new TileSynthesizer(global.grid, {
     seed: params.seed,
     reliefScale: params.reliefScale,
@@ -931,6 +943,8 @@ it('renders preview views', async () => {
     basinCell: global.finish.drainage.basinCell,
     basinLevel: global.finish.drainage.basinLevel,
     index: riverIndex,
+    // The war's wonders shaped in the tiles, as in the app (decision 221).
+    wonders: tileWonders(wonders),
     // TILE_TUNING='{"floodplainMinWidth":1e9}' overrides tile-synthesis tuning (decision 173).
     tuning: process.env.TILE_TUNING ? JSON.parse(process.env.TILE_TUNING) : undefined,
   });
@@ -1414,6 +1428,38 @@ it('renders preview views', async () => {
         heading: 0,
         localTime: Number(process.env.SPOT_TIME ?? 15.5),
         spot,
+      });
+    }
+  }
+  // WONDERS=1 frames every wonder; WONDERS=324,334 those features only.
+  if (process.env.WONDERS) {
+    const onlyWonders = process.env.WONDERS === '1' ? null : process.env.WONDERS.split(',');
+    const ws = wonderStations(
+      campaign.graph.features,
+      campaign.campaign.cast.wonders ?? [],
+      params.radius,
+      globalMapSampler(global.height, global.n),
+      new Map(wonders.map((w) => [w.feature, w.dir])),
+    );
+    for (const st of ws) {
+      if (onlyWonders && !onlyWonders.includes(st.key.slice('wonder-'.length))) continue;
+      console.log(`${st.key}: ${st.label}`);
+      views.push({
+        name: st.key,
+        dLat: 0,
+        dLon: 0,
+        altitude: 0,
+        tilt: 0,
+        heading: 0,
+        localTime: Number(process.env.SPOT_TIME ?? 15.5),
+        spot: {
+          kind: 'peaks',
+          point: st.point,
+          facing: st.facing,
+          height: st.height,
+          pitch: st.pitch,
+          note: st.label,
+        },
       });
     }
   }

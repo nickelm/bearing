@@ -18,6 +18,11 @@ export {
   SITING_RADIUS,
   SITING_TURN,
   SITING_WIDE_RADIUS,
+  resiteSpurs,
   siteAirfields,
+  siteWonders,
+  WONDER_MAX_UNEVEN,
+  WONDER_SITE_RADIUS,
+  WONDER_SITING_RADIUS,
 } from './siting';
-export type { PadFootprint, SitingResult } from './siting';
+export type { PadFootprint, SitedWonder, SitingResult } from './siting';

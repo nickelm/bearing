@@ -31,6 +31,7 @@ import {
   globalMaskSampler,
 } from './render/sim/infra/airfieldGrading';
 import { siteAirfields } from './worldgen/edits';
+import { sitedWonders, tileWonders, wonderWet } from './render/common/terrain/tileWonders';
 import {
   observerStations,
   roadStations,
@@ -521,13 +522,20 @@ async function main(): Promise<void> {
       globe.resetAtmosphere();
     };
     /** The river index and tile synthesizer of a global world. */
-    const terrainOf = (global: GlobalWorld, params: PlanetParams) => {
+    const terrainOf = (global: GlobalWorld, params: PlanetParams, strategic: StrategicWorld) => {
       const riverIndex = new RiverIndex(global.finish.rivers, {
         height: global.height,
         radius: params.radius,
         lakeDepth: global.finish.drainage.lakeDepth,
         channels: global.finish.channels,
       });
+      const wonders = sitedWonders(
+        strategic.graph,
+        strategic.campaign.cast,
+        params.radius,
+        globalMapSampler(global.height, global.n),
+        wonderWet(global),
+      );
       const tiles = new TileSynthesizer(global.grid, {
         seed: params.seed,
         reliefScale: params.reliefScale,
@@ -541,8 +549,10 @@ async function main(): Promise<void> {
         basinCell: global.finish.drainage.basinCell,
         basinLevel: global.finish.drainage.basinLevel,
         index: riverIndex,
+        // The war's wonders, sited on the eroded ground and shaped in the tiles (decision 221).
+        wonders: tileWonders(wonders),
       });
-      return { riverIndex, synth: tiles };
+      return { riverIndex, synth: tiles, wonders };
     };
     /**
      * The alignment stage (decision 184): every road and railway aligned over
@@ -613,13 +623,30 @@ async function main(): Promise<void> {
         pool.dispose();
       }
     };
+    /**
+     * The strategic world with its airfields sited on the eroded ground: the coarse cell may
+     * be sea or a mountainside there (decision 220), and the spur roads lead to the sited
+     * fields (decision 221). What is aligned, drawn, flown and stood beside uses this; the
+     * sim and the stored world keep the coarse record.
+     */
+    const sited = (strategic: StrategicWorld, global: GlobalWorld, radius: number) => {
+      const r = siteAirfields(
+        strategic.infrastructure,
+        radius,
+        AIRFIELD_FOOTPRINT,
+        globalMapSampler(global.height, global.n),
+        globalMaskSampler(global.finish.drainage.lakeDepth, global.n),
+      );
+      if (r.wet.length) console.warn('Airbases left without a dry site:', r.wet);
+      return { ...strategic, infrastructure: r.infrastructure };
+    };
     const showGlobal = (
       world: World,
       global: GlobalWorld,
       params: PlanetParams,
       strategic: StrategicWorld,
       alignments: Alignments | null,
-      terrain: ReturnType<typeof terrainOf> = terrainOf(global, params),
+      terrain: ReturnType<typeof terrainOf> = terrainOf(global, params, strategic),
     ) => {
       // Switch the terrain to the new world first, then free the old one once any
       // tile batch still running on it has finished.
@@ -627,17 +654,8 @@ async function main(): Promise<void> {
       const oldSynth = synth;
       const { riverIndex } = terrain;
       synth = terrain.synth;
-      // Airfields sited on the eroded ground: the coarse cell may be sea or a mountainside
-      // there (decision 220). What is drawn, flown and stood beside uses the sited runways.
-      const sited = siteAirfields(
-        strategic.infrastructure,
-        params.radius,
-        AIRFIELD_FOOTPRINT,
-        globalMapSampler(global.height, global.n),
-        globalMaskSampler(global.finish.drainage.lakeDepth, global.n),
-      );
-      if (sited.wet.length) console.warn('Airbases left without a dry site:', sited.wet);
-      const airbases = sited.infrastructure;
+      // `strategic` carries the sited airfields and their spurs (sited(), decision 220).
+      const airbases = strategic.infrastructure;
       // Roads, airfields, lights and buildings from the coarse pass (decision 65), roads
       // and railways along their alignments (decision 184).
       const infra = new InfraScene(strategic.graph, airbases, params.radius, alignments);
@@ -693,6 +711,7 @@ async function main(): Promise<void> {
           strategic.campaign.cast.wonders ?? [],
           params.radius,
           globalMapSampler(global.height, global.n),
+          new Map(terrain.wonders.map((w) => [w.feature, w.dir])),
         ),
       );
       // The aligned roads' most winding stretches, to find them (decision 186).
@@ -761,16 +780,16 @@ async function main(): Promise<void> {
         startSim(stored.tectonic, stored.strategic, params.radius);
         const restored = restoreGlobalWorld(gpu, stored.global);
         const storedParams = { ...params, seed: stored.strategic.seed };
-        const terrain = terrainOf(restored, storedParams);
+        const terrain = terrainOf(restored, storedParams, stored.strategic);
+        const sitedWorld = sited(stored.strategic, restored, storedParams.radius);
         // A world stored before the alignment stage existed is aligned now, and stored again.
         // A record from an older stage is aligned anew (ALIGNMENT_VERSION).
         const current =
           stored.alignments?.version === ALIGNMENT_VERSION ? stored.alignments : undefined;
         if (current) buildScreen.done(1, 'stored with the world');
-        const alignments =
-          current ?? (await alignNetworks(stored.strategic, storedParams, terrain, 1));
+        const alignments = current ?? (await alignNetworks(sitedWorld, storedParams, terrain, 1));
         if (token !== generation) return;
-        showGlobal(stored.tectonic, restored, storedParams, stored.strategic, alignments, terrain);
+        showGlobal(stored.tectonic, restored, storedParams, sitedWorld, alignments, terrain);
         buildScreen.finish();
         gui.status.generation = `cached (${((performance.now() - t0) / 1000).toFixed(1)} s)`;
         if (!current && alignments)
@@ -819,13 +838,14 @@ async function main(): Promise<void> {
       }
       buildScreen.done(1, `${global.finish.rivers.count} rivers`);
       // 3. Roads and railways aligned on the eroded world (decision 184).
-      const terrain = terrainOf(global, worldSeedParams);
-      const alignments = await alignNetworks(strategic, worldSeedParams, terrain, 2);
+      const terrain = terrainOf(global, worldSeedParams, strategic);
+      const sitedWorld = sited(strategic, global, worldSeedParams.radius);
+      const alignments = await alignNetworks(sitedWorld, worldSeedParams, terrain, 2);
       if (token !== generation) {
         global.grid.dispose();
         return;
       }
-      showGlobal(world, global, worldSeedParams, strategic, alignments, terrain);
+      showGlobal(world, global, worldSeedParams, sitedWorld, alignments, terrain);
       buildScreen.finish();
       const total = performance.now() - t0;
       gui.status.generation = `done in ${(total / 1000).toFixed(1)} s`;

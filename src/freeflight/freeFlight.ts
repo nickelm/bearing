@@ -143,7 +143,8 @@ const HELO_HELP = [
 ];
 /** What the HUD says when the jet's mouse mode starts (decisions 195, 198). */
 const MOUSE_MODE_MESSAGE: Record<ControlMode, string> = {
-  'mouse-aim': 'Mouse aim: the jet flies toward the ring; stick keys override. N for direct, Tab frees the mouse',
+  'mouse-aim':
+    'Mouse aim: the jet flies toward the ring; stick keys override. N for direct, Tab frees the mouse',
   direct: 'Direct: the mouse is the stick, its offset from the center. N for mouse aim',
 };
 const CONTROL_MODE: Record<JetControl, ControlMode> = { aim: 'mouse-aim', direct: 'direct' };
@@ -1308,9 +1309,10 @@ export class FreeFlight {
     const report = this.weather.view?.report(up, this.gameTime);
     const env: SensorEnv = {
       time: this.gameTime,
-      // Visibility near the ground; above the cloud base the air is clear.
+      // Visibility near the ground; above the cloud base the air is clear. The base is
+      // given above the ground (decision 221: it was compared with the altitude above the sea).
       visibility:
-        report && m.pos.length() - R < report.cloudBase
+        report && m.pos.length() - R - ground.height(up) < report.cloudBase
           ? report.visibility
           : Math.max(30_000, report?.visibility ?? 30_000),
       daylight: Math.min(1, Math.max(0, (sunUp + 0.1) / 0.2)),
