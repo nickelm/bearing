@@ -43,7 +43,7 @@ export const UPLIFT_PROFILES: readonly UpliftProfile[] = [
 const STRENGTH_SATURATION = 1.2;
 
 /**
- * Relief by province (decision 208), in reference meters. Young collisions
+ * Relief by province (decision 210), in reference meters. Young collisions
  * rise higher and old ones wear down; plateaus, sutures and hotspot shields add
  * their own uplift; basins and shields sink. Tuning knobs.
  */
@@ -51,14 +51,14 @@ export const PROVINCE_RELIEF = {
   /** Amplitude factor of collision and cordillera uplift from young and old runs. */
   youngFactor: 1.25,
   /**
-   * Old ranges stay continental spines, lower and softer (decision 214: 0.45 broke
+   * Old ranges stay continental spines, lower and softer (decision 216: 0.45 broke
    * the spines into rings and boxes).
    */
   oldFactor: 0.75,
   /** Old ranges are rounded: the ridged modulation keeps this much of its range. */
   oldRidging: 0.7,
   /**
-   * High plateaus: rugged highland uplift, ridged like a range (decision 214). A
+   * High plateaus: rugged highland uplift, ridged like a range (decision 216). A
    * smooth table of 3,700 m became, at the planet's relief scale (decision 121), a
    * flat basin some 700 m high inside its taller rim.
    */
@@ -144,7 +144,7 @@ export function computeUplift(
   const x = new Vec3d();
   const sources = new Uint8Array(n);
   // Youth of the nearest convergent run, 1 young … 0 old, blended over several cells
-  // (decision 214): a per-run switch stepped the uplift along the bisector between runs.
+  // (decision 216): a per-run switch stepped the uplift along the bisector between runs.
   let youth: Float32Array | null = null;
   if (provinces) {
     youth = new Float32Array(n);
@@ -171,7 +171,7 @@ export function computeUplift(
       const src = field.nearest[c];
       const s = Math.min(1, boundaries.strength[src] / STRENGTH_SATURATION);
       let v = prof.amplitude * (0.35 + 0.65 * s) * Math.exp(-d * d);
-      // Young collisions rise higher, old ones are worn and rounded (decisions 208, 214).
+      // Young collisions rise higher, old ones are worn and rounded (decisions 210, 216).
       const ranged = prof.type === BoundaryType.Collision || prof.type === BoundaryType.Cordillera;
       const y = ranged && youth ? youth[c]! : 1;
       if (ranged && youth) {
@@ -216,7 +216,7 @@ function addProvinceRelief(
       v += P.plateau * plateau[c]! * (0.35 + 0.5 * r + 0.5 * swell);
     }
     if (oldMtn[c]! > 0) {
-      // Worn ranges: ridged but softer than young ones, with saddles along the crest (decision 214).
+      // Worn ranges: ridged but softer than young ones, with saddles along the crest (decision 216).
       const rr = ridges.ridged(x.x * 11, x.y * 11, x.z * 11, 4);
       const saddle = 0.5 + 0.5 * ridges.fbm(x.x * 5, x.y * 5, x.z * 5, 2);
       v += P.suture * oldMtn[c]! * (0.2 + 0.7 * rr) * (0.5 + 0.8 * saddle);

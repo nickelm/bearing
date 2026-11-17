@@ -68,11 +68,11 @@ export interface WorldMaps {
   province: Uint8Array;
   /** Rock per cell (`Rock`, with `LAYERED` on horizontal sedimentary rock; decision 204). */
   lithology: Uint8Array;
-  /** Climate modifiers (decision 209): seasonality −1..1, cold-current fog 0..1, ecotone noise. */
+  /** Climate modifiers (decision 211): seasonality −1..1, cold-current fog 0..1, ecotone noise. */
   seasonality: Float32Array;
   fog: Float32Array;
   ecotone: Float32Array;
-  /** Moisture offset from the continent's character (decision 210). */
+  /** Moisture offset from the continent's character (decision 212). */
   moistureBias: Float32Array;
 }
 
@@ -103,9 +103,9 @@ export interface WorldInfo {
   maxHeight: number;
   /** Area fraction above sea level. */
   landFraction: number;
-  /** Continents of continental crust with their characters (decision 210), largest first. */
+  /** Continents of continental crust with their characters (decision 212), largest first. */
   continents?: { character: Character; area: number; latitude: number }[];
-  /** Times the distinctness check redrew a character (decision 210). */
+  /** Times the distinctness check redrew a character (decision 212). */
   characterRedraws?: number;
   timings: StageTiming[];
 }
@@ -175,7 +175,7 @@ export function generateWorld(params: PlanetParams, options: GenerateOptions): W
   const boundaries = stage('boundaries', () =>
     classifyBoundaries(grid, plates, plate, continentalness, params.radius),
   );
-  // Continents and their characters (decision 210): drawn before provinces, so
+  // Continents and their characters (decision 212): drawn before provinces, so
   // they can bias them; redrawn below when the two largest come out alike.
   const continents = stage('continents', () =>
     labelContinents(grid, params.radius, continentalness, boundaries, plate),
@@ -236,7 +236,7 @@ export function generateWorld(params: PlanetParams, options: GenerateOptions): W
     return { provinces, uplift, elevation, climate, modifiers, lithology, biome };
   };
   let built = run(stage);
-  // Distinctness (decision 210): at most MAX_REDRAWS redraws of the smaller of the
+  // Distinctness (decision 212): at most MAX_REDRAWS redraws of the smaller of the
   // two largest continents' characters, each from its own sub-stream.
   const redraws = stage('distinctness', () => {
     let count = 0;

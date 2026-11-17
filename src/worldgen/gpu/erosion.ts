@@ -144,7 +144,7 @@ export const LANDFORM = {
  *   floor rises again downstream: long lakes behind the old terminus (Lake Como,
  *   the Swedish mountain lakes). Drainage, lakes and rivers come from the CPU
  *   pass afterwards, as always.
- * - **Fjords** (decision 208). Where a deep, iced trough's local floor reaches
+ * - **Fjords** (decision 210). Where a deep, iced trough's local floor reaches
  *   the sea, its floor may sink below sea level and the sea floods it.
  */
 export const GLACIAL = {
@@ -320,7 +320,7 @@ ${main(`  let h = hA[id];
   let valley = 1.0 - smoothstep(0.0, ${f(gl.floorShare)}, x);
   let drain = smoothstep(${f(gl.deepenArea)}, ${f(4 * gl.deepenArea)}, area[id]);
   hn -= ${f(gl.deepen)} / RELIEF * g * g * valley * drain;
-  // Fjords (decision 208): a deep, iced trough whose floor reaches the sea within
+  // Fjords (decision 210): a deep, iced trough whose floor reaches the sea within
   // the trough radius may sink below sea level, so the sea floods it.
   let fjord = lo[id] <= 0.0 && g > 0.5 && valley * drain > 0.3;
   hOut[id] = select(max(hn, ${f(t.minLand)}), hn, fjord);`)}`);

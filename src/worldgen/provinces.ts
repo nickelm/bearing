@@ -28,7 +28,7 @@ import { plateVelocity } from './plates';
 import { CHARACTER_EFFECTS, effectAt } from './characters';
 import type { Character } from './characters';
 
-/** Continents and their characters (decision 210). */
+/** Continents and their characters (decision 212). */
 export interface CharacterMap {
   label: Int32Array;
   character: readonly Character[];
@@ -235,7 +235,7 @@ export function assignProvinces(
   const runs: Run[] = [];
   for (let id = 0; id < count; id++) {
     const s = Math.min(1, strengthSum[id]! / cells[id]! / T.strengthSaturation);
-    // The character of the continent the run touches biases its history (decision 210).
+    // The character of the continent the run touches biases its history (decision 212).
     const fx = effectAt(characters, continentCellNear(grid, firstCell[id]!, characters));
     const pYoung = Math.max(
       fx.youngFloor,
@@ -393,10 +393,10 @@ export function assignProvinces(
       const pd = behind === plate[c] ? dist(plateau) : Infinity;
       const bd = dist(backArc);
       // Regions reach out from their boundary, never a ring at a fixed distance band: a
-      // curved boundary drew concentric scarps (decision 214). Their outer edges wander widely.
+      // curved boundary drew concentric scarps (decision 216). Their outer edges wander widely.
       const reach = 1 + 0.4 * noise.fbm(x.x * 6 + 17, x.y * 6, x.z * 6, 3);
       if (pd < T.plateauBand[1] * reach) pv = Province.HighPlateau;
-      // Sutures swell and pinch along their length (decision 214).
+      // Sutures swell and pinch along their length (decision 216).
       else if (
         dist(oldColl) < T.collisionWidth * wob ||
         dist(suture) <

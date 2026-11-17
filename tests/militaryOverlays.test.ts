@@ -82,7 +82,7 @@ describe('overlay geometry', () => {
 });
 
 // The first seed whose cast has corridors and sea lanes: generator changes move
-// fronts between seeds (decisions 208–210), so the test looks for one.
+// fronts between seeds (decisions 210–212), so the test looks for one.
 function worldWithLanes() {
   const grid = new CubeGrid(128);
   for (let seed = 1; ; seed++) {

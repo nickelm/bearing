@@ -1,5 +1,5 @@
 /**
- * Zones (proposal 0007, decisions 204, 205, 211): named regions of similar
+ * Zones (proposal 0007, decisions 204, 205, 213): named regions of similar
  * province and biome, 16–63 km across (the proposal's 100–400 km scaled to the
  * planet), each with a look recipe. Presentation data, like the alignment tier:
  * segmented once per world on the eroded global grid in the worker's finish and
@@ -54,7 +54,7 @@ export const RECIPE_LIMITS = { hue: 10, saturation: 0.12, value: 0.12 };
 export type CloudRegime = 'clear' | 'cumulus' | 'low' | 'fog';
 export type AmbientParticles = 'none' | 'dust' | 'mist' | 'snow' | 'pollen';
 
-/** A zone's look (decision 211): shifts within the limits, and its air. */
+/** A zone's look (decision 213): shifts within the limits, and its air. */
 export interface ZoneRecipe {
   /** Hue shift (degrees), saturation and value factors applied to the biome colors. */
   hue: number;
@@ -174,7 +174,7 @@ function zoneTerm(t: Toponymy, biome: number, province: number): string {
   }
 }
 
-/** The look of a zone by its classes, varied within the limits (decision 211). */
+/** The look of a zone by its classes, varied within the limits (decision 213). */
 function zoneRecipe(biome: number, province: number, r: ReturnType<typeof rng>): ZoneRecipe {
   const g = biomeGroup(biome);
   const L = RECIPE_LIMITS;
@@ -396,7 +396,7 @@ export function segmentZones(
     if (merged === 0) break;
   }
   // Islets: a zone still under the minimum with no zone beside it joins the nearest
-  // large zone across the water, within `isletReach` (decision 211).
+  // large zone across the water, within `isletReach` (decision 213).
   {
     const reach = Math.max(1, Math.round(T.isletReach / cellSize));
     const near = new Int32Array(count).fill(-1);

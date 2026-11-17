@@ -373,7 +373,7 @@ export class StrategicScene {
     this.relief.setWorld(world);
   }
 
-  /** Zones from the eroded world, for their labels (decision 211); null to drop them. */
+  /** Zones from the eroded world, for their labels (decision 213); null to drop them. */
   setZones(zones: readonly ZoneRecord[] | null): void {
     this.zones = zones;
     this.lightsDirty = true;

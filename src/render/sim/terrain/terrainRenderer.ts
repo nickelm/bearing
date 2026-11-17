@@ -177,7 +177,7 @@ export interface TerrainWorld {
   infra?: InfraScene;
   /** Terrain edits: airfields graded in (V3), later corridors (rule 13); none when absent. */
   edits?: TerrainEdits;
-  /** The zones' palette shift (decision 211); none when absent. */
+  /** The zones' palette shift (decision 213); none when absent. */
   zoneShift?: ZoneShift;
 }
 

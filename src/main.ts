@@ -641,7 +641,7 @@ async function main(): Promise<void> {
         infra,
         // Airfields graded flat into the terrain (V3), river channels kept last (rule 13).
         edits,
-        // Each zone's palette shift (decision 211).
+        // Each zone's palette shift (decision 213).
         zoneShift: global.finish.zones ? makeZoneShift(global.finish.zones, global.n) : undefined,
       });
       // Mountain shadows are baked from the global heights (decision 139).

@@ -27,7 +27,7 @@ function measure(seed: string): RiverInvariants {
   const world = generateWorld(params, { resolution: N, grid });
   const m = world.maps;
   // With the climate, as the coarse pass and the global finish run it: closed basins
-  // end their rivers at their lakes (decision 208), which must keep every invariant.
+  // end their rivers at their lakes (decision 210), which must keep every invariant.
   const drainage = computeDrainage(N, m.height, m.runoff, R, {
     temperature: m.temperature,
     precipitation: m.precipitation,

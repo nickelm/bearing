@@ -938,7 +938,7 @@ it('renders preview views', async () => {
             riverIndex,
             alignments ? alignmentCorridors(alignments) : [],
           ),
-    // ZONES=0 leaves the zones' palette shift out (decision 211).
+    // ZONES=0 leaves the zones' palette shift out (decision 213).
     zoneShift:
       process.env.ZONES !== '0' && global.finish.zones
         ? makeZoneShift(global.finish.zones, global.n)

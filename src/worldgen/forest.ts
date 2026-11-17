@@ -30,7 +30,7 @@ export const FOREST_BASE: Readonly<Partial<Record<Biome, number>>> = {
   [Biome.Shrubland]: 0.18,
   [Biome.TemperateGrassland]: 0.1,
   [Biome.Tundra]: 0.03,
-  // Decision 209.
+  // Decision 211.
   [Biome.CloudForest]: 0.95,
   [Biome.Mangrove]: 0.9,
   [Biome.Moorland]: 0.04,

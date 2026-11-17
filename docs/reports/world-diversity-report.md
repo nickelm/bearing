@@ -1,18 +1,18 @@
 # World diversity: report (track W, proposal 0007)
 
-_Branch `feature/world-diversity`, 2026-11-17. Proposal: [docs/proposals/0007-world-diversity.md](../proposals/0007-world-diversity.md). Plan: [docs/plans/world-diversity.md](../plans/world-diversity.md). Decisions 204, 205 and 207–213 (206 is another track's). Baseline: [world-diversity-baseline.md](world-diversity-baseline.md). Metrics: [world-diversity-metrics.md](world-diversity-metrics.md)._
+_Branch `feature/world-diversity`, 2026-11-17. Proposal: [docs/proposals/0007-world-diversity.md](../proposals/0007-world-diversity.md). Plan: [docs/plans/world-diversity.md](../plans/world-diversity.md). Decisions 204, 205 and 209–216 (206–208 belong to other tracks). Baseline: [world-diversity-baseline.md](world-diversity-baseline.md). Metrics: [world-diversity-metrics.md](world-diversity-metrics.md)._
 
 ## Summary
 
 Track W gives the generated worlds a cause for one place to differ from another. Each part is listed with its decision:
 
-- **Terrain provinces and rock** come from tectonic history (decision 207).
-- **The relief follows the province.** Plateaus rise, old ranges wear down, basin-and-range blocks stand in rows, troughs reach the sea as fjords, and strata and buttes appear only in layered rock under a dry climate (decision 208).
-- **Closed basins** keep salt lakes and playas, and the playas become salt flats and airstrip sites in the graph (decision 208).
-- **Twenty land biomes** come from the climate, three local modifiers, the rock and the ground's shape, in a brighter palette (decision 209).
-- **Continents take a character**, checked for distinctness (decision 210).
-- **The land divides into zones** with names and look recipes. They shift the terrain's colors and label the map (decision 211).
-- **5–15 named natural wonders** are selected per war (decision 212).
+- **Terrain provinces and rock** come from tectonic history (decision 209).
+- **The relief follows the province.** Plateaus rise, old ranges wear down, basin-and-range blocks stand in rows, troughs reach the sea as fjords, and strata and buttes appear only in layered rock under a dry climate (decision 210).
+- **Closed basins** keep salt lakes and playas, and the playas become salt flats and airstrip sites in the graph (decision 210).
+- **Twenty land biomes** come from the climate, three local modifiers, the rock and the ground's shape, in a brighter palette (decision 211).
+- **Continents take a character**, checked for distinctness (decision 212).
+- **The land divides into zones** with names and look recipes. They shift the terrain's colors and label the map (decision 213).
+- **5–15 named natural wonders** are selected per war (decision 214).
 
 Landform props (W7) were not started, and several presentation pieces wait for later work. Both are listed under _Simplified, stubbed or deferred_.
 
@@ -59,7 +59,7 @@ Globe maps (coarse pass, equirectangular above both polar caps) of three contras
 - **Seed 9** (young mountains and dry extension): `seed9-biome.png`, `seed9-provinces.png`.
 - **Seed 16** (two old shields and dry extension): `seed16-biome.png`, `seed16-provinces.png`.
 
-Simulation-view renders of seed 1 from `tools/render.preview.ts` on lavapipe, with the brighter palette and the zones' shift (generator version 27, before decision 213):
+Simulation-view renders of seed 1 from `tools/render.preview.ts` on lavapipe, with the brighter palette and the zones' shift (generator version 27, before decision 215):
 
 - `sim-seed1-range.png`: a range at low sun.
 - `sim-seed1-alpine.png`: the highest summit near the main continent from 10 km, a cold plateau rising to a snowy crest.
@@ -86,14 +86,14 @@ The full tables are in [world-diversity-metrics.md](world-diversity-metrics.md);
 
 **Local variety falls short of the proposal's 90%.** Coherent zones and high local entropy pull against each other, as the plan foresaw. The plan's measure counts altitude zones and surface character (riparian, lakes, ecotones) in the joint classes. The tool counts only biome and province so far, and adding those classes is the next step before tuning anything.
 
-## Terrain character (decision 214)
+## Terrain character (decision 216)
 
-The owner asked that track W keep the ridges and filled-in valleys from erosion, the coastal cliffs, the skerry archipelagos, the continents' spines, and tall, dramatic mountains. Hillshaded maps of the eroded worlds before track W, after its first pass, and after decision 214's fixes are in `docs/reports/screens/world-diversity/`:
+The owner asked that track W keep the ridges and filled-in valleys from erosion, the coastal cliffs, the skerry archipelagos, the continents' spines, and tall, dramatic mountains. Hillshaded maps of the eroded worlds before track W, after its first pass, and after decision 216's fixes are in `docs/reports/screens/world-diversity/`:
 
 - seed 1: `relief-seed1-before.png`, `relief-seed1-now.png`;
 - seed 2: `relief-seed2-before.png`, `relief-seed2-first-pass.png`, `relief-seed2-now.png`.
 
-The first pass had six artifacts: plateaus as sunken tables, broken spines, a straight scarp between runs of different age, target-like rings and arcs, worm-like sutures and round domes. Decision 214 fixes them; seed 2's "now" picture predates its last two fixes (one-sided plateaus, ridged sutures).
+The first pass had six artifacts: plateaus as sunken tables, broken spines, a straight scarp between runs of different age, target-like rings and arcs, worm-like sutures and round domes. Decision 216 fixes them; seed 2's "now" picture predates its last two fixes (one-sided plateaus, ridged sutures).
 
 | Measure (eroded, 1024²)                                  | Seed 1 before | first pass    | now           | Seed 2 before | first pass    | now           |
 | -------------------------------------------------------- | ------------- | ------------- | ------------- | ------------- | ------------- | ------------- |
@@ -131,13 +131,13 @@ What this says:
 
 - **Decision 204**: the proposal accepted, with 21 readings.
 - **Decision 205**: the owner's answers. Regional distances scale with the planet (zones 16–63 km, blends 1–2.5 km, windows 16 km); landforms and heights keep Earth's values. Zones became presentation data on the eroded grid.
-- **Decision 207 (W1)**: provinces and lithology; erodibility.
-- **Decision 208 (W2, W3)**: relief by province, fault blocks, fjords, terracing on layered rock; closed basins, salt flats and airstrip sites.
-- **Decision 209 (W4)**: the modifiers and twenty biomes. _Deviation:_ seven codes appended instead of renumbering.
-- **Decision 210 (W5)**: characters. _Deviation:_ a continent is a plate's crust, because crust is one welded region in most seeds.
-- **Decision 211 (W6)**: zones, recipes, names, the palette shift and labels.
-- **Decision 212 (W8)**: wonders. W7 deferred.
-- **Decision 213**: islets join a zone; flatness and mangroves at the eroded grid's resolution.
+- **Decision 209 (W1)**: provinces and lithology; erodibility.
+- **Decision 210 (W2, W3)**: relief by province, fault blocks, fjords, terracing on layered rock; closed basins, salt flats and airstrip sites.
+- **Decision 211 (W4)**: the modifiers and twenty biomes. _Deviation:_ seven codes appended instead of renumbering.
+- **Decision 212 (W5)**: characters. _Deviation:_ a continent is a plate's crust, because crust is one welded region in most seeds.
+- **Decision 213 (W6)**: zones, recipes, names, the palette shift and labels.
+- **Decision 214 (W8)**: wonders. W7 deferred.
+- **Decision 215**: islets join a zone; flatness and mangroves at the eroded grid's resolution.
 - **Further deviations**:
   - Salt flats are point features, not polygons.
   - Wonders are selected weighted toward fronts and sea lanes, not airbases. Airbases are placed after casting, from the cast.
@@ -147,7 +147,7 @@ What this says:
 
 **High**
 
-- Two GPU tests fail on the new worlds (decision 213).
+- Two GPU tests fail on the new worlds (decision 215).
   - `tests/gpu/tileSynth.test.ts` "agrees across a cube-face seam": 0.13 m against 0.05 m, on the sea floor at −487 m near a new coast. It is unchanged with the fault blocks, provinces and rock switched off, which points to the masks' sampling across faces under the skerry and coastal sea floor.
   - "lets river beds fall downstream without humps": 6.5 m against 4 m on the longest river's first 16 km.
   - Neither tolerance was loosened. Both need a look at the kernel with these worlds before merging.
@@ -157,7 +157,7 @@ What this says:
 - Local variety misses the 90% target (see above).
 - Eroded peaks reach 10.0 km on seed 2, above the proposal's 8–9 km, from young collisions × 1.25 under the shared soft limit.
 - Tundra covers 16.5% of land on the coarse pass (baseline 9.6%), because cold plateaus are tundra below −12 °C. Alpine meadow rose from 5% to 7%.
-- Eroded wetland and mangrove shares were measured before decision 213's fix; the eroded run that would confirm it is still to do.
+- Eroded wetland and mangrove shares were measured before decision 215's fix; the eroded run that would confirm it is still to do.
 - Moorland's heather (`#8A6A7A`) covers wide tracts of seed 1's lowland in the `mixed` view and reads pink rather than purple-brown from 5 km. Its share (2.6% of land) is modest, but its color and the acid-rock rule (any granite, sandstone or till that is cool and wet) need tuning against the reference board.
 
 **Minor**

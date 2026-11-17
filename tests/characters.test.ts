@@ -9,7 +9,7 @@ import {
 import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
 import { generateWorld } from '../src/worldgen/pipeline';
 
-describe('continental character (decision 210)', () => {
+describe('continental character (decision 212)', () => {
   const worlds = ['1', '2', '3', '4', '5', '6'].map((seed) =>
     generateWorld({ ...DEFAULT_PLANET_PARAMS, seed }, { resolution: 64 }),
   );

@@ -202,7 +202,7 @@ export function writeBriefing(g: StrategicGraph, cast: Cast, names: NameGenerato
         (p ? `Pact: ${p}.` : 'The Pact keeps its carriers in port.'),
     );
   }
-  // Natural wonders as landmarks (decision 212).
+  // Natural wonders as landmarks (decision 214).
   const wonders = (cast.wonders ?? []).map((i) => g.features.names[i]).filter((x) => !!x);
   if (wonders.length > 0) {
     const shown = wonders.slice(0, 6);

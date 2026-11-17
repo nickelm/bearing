@@ -1,5 +1,5 @@
 /**
- * A zone's palette shift on the terrain's colors (decision 211): hue, saturation
+ * A zone's palette shift on the terrain's colors (decision 213): hue, saturation
  * and value from its recipe, within the limits of docs/visual-style.md (*Zones*).
  * The shift fades to nothing at a boundary, from both sides, so neighboring zones
  * meet without a seam; where a barrier divides them the boundary sits on it.

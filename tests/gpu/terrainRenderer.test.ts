@@ -80,7 +80,7 @@ describe.skipIf(!gpu)('TerrainRenderer (Dawn synthesis, no drawing)', () => {
     const orbit = await deepestAt(5000 * KM, 6);
     expect(terrain.stats.drawn).toBeGreaterThan(0);
     const mid = await deepestAt(100 * KM, 30);
-    // 3 km above the ground (decision 208): the main continent's interior may be a raised
+    // 3 km above the ground (decision 210): the main continent's interior may be a raised
     // plateau, and the relief here is exaggerated tenfold.
     const uv = directionToCubeFace(main);
     const gi = Math.min(g.n - 1, Math.floor(uv.u * g.n));

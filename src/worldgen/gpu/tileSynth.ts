@@ -288,7 +288,7 @@ export interface TileSynthOptions {
   /** Rock per global cell (decision 204): strata and buttes only on layered rock. Absent: all layered, as before. */
   lithology?: Uint8Array;
   /**
-   * Closed basins (decision 208): `BasinCell` per global cell and the salt lake's
+   * Closed basins (decision 210): `BasinCell` per global cell and the salt lake's
    * or playa's level. Absent: lakes in dry land are salt pans, as in decision 130.
    */
   basinCell?: Uint8Array;
@@ -333,7 +333,7 @@ export class TileSynthesizer {
     // surface (the Priority-Flood fill level, terrain + depth) and the treeline.
     // Half floats give about 1 m at these heights: lake levels are flat per lake and
     // lakes are at least 3 m deep, so that is enough.
-    // Closed basins (decision 208): bit 17 salt lake, bit 18 playa; a playa's cells
+    // Closed basins (decision 210): bit 17 salt lake, bit 18 playa; a playa's cells
     // carry its crust's level like a lake, so the shore code below shapes them.
     const packed = new Uint32Array(grid.cellCount * 2);
     for (let c = 0; c < grid.cellCount; c++) {
@@ -714,7 +714,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
 
     // Arid landforms (decision 126): buttes and mesas on dry plains and plateaus,
     // then the layered rock stepped into benches and cliffs.
-    // Only horizontally layered sedimentary rock steps into strata and buttes (decision 208).
+    // Only horizontally layered sedimentary rock steps into strata and buttes (decision 210).
     let layeredRock = smoothstep(0.3, 0.7, landformMasks2(d).y);
     let arid = smoothstep(${f(t.aridRange[0])}, ${f(t.aridRange[1])}, masks.x) * dryBed * layeredRock;
     if (arid > 0.0) {
@@ -966,7 +966,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     h = max(h, mix(h, lakeLevel + 0.6, outside));
     // Lakes in dry land are salt pans (decision 130): flat white ground a little
     // below the level, no water (Bonneville, the Etosha pan).
-    // With closed basins (decision 208) the basin's own record decides: playas are
+    // With closed basins (decision 210) the basin's own record decides: playas are
     // crust, salt lakes keep their water; without them, dry land's lakes are pans.
     let playa = ${opts.basinCell ? 'f32((mat >> 18u) & 1u)' : `smoothstep(${f(t.playaArid[0])}, ${f(t.playaArid[1])}, masks.x)`};
     if (playa > 0.5 && h < lakeLevel) {

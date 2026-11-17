@@ -85,7 +85,7 @@ export const LITHOLOGY_TUNING = {
   /**
    * Smoothing passes for the erodibility field on the tectonic grid: enough that
    * hard and soft rock meet over tens of kilometers, never in a straight scarp
-   * along a province edge (decision 214).
+   * along a province edge (decision 216).
    */
   erodibilityBlur: 6,
 };

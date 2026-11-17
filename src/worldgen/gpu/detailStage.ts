@@ -44,7 +44,7 @@ export const DETAIL_TUNING = {
   gentleFrequency: 20,
   gentleAmplitude: 70,
   /**
-   * Basin and range (decision 208): tilted fault blocks across the extension,
+   * Basin and range (decision 210): tilted fault blocks across the extension,
    * at Earth's spacing (a landform, decision 121), in reference meters above
    * the basin floors, with a regional strike from low-frequency noise.
    */
@@ -60,7 +60,7 @@ export interface TectonicMaps {
   height: Float32Array;
   /** Boundary uplift (reference m). */
   uplift: Float32Array;
-  /** Weight of the basin-and-range province, 0..1 (decision 208); absent: no fault blocks. */
+  /** Weight of the basin-and-range province, 0..1 (decision 210); absent: no fault blocks. */
   faultBlocks?: Float32Array;
 }
 

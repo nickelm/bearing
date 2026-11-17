@@ -1,5 +1,5 @@
 /**
- * Natural wonder candidates (proposal 0007, decision 212): detectors over the
+ * Natural wonder candidates (proposal 0007, decision 214): detectors over the
  * coarse world for twelve kinds, each a heightened version of an Earth feature.
  * Every candidate becomes a point feature of kind `Wonder` whose `measure` is
  * its `WonderKind`; casting selects 5–15 of them for the war (campaign/wonders.ts),

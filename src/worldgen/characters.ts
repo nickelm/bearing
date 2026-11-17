@@ -1,5 +1,5 @@
 /**
- * Continental character (proposal 0007, decision 210).
+ * Continental character (proposal 0007, decision 212).
  *
  * Each continent (a continental plate's crust, known before uplift) gets a
  * dominant identity drawn from what its tectonics allow and its

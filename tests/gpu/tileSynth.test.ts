@@ -50,7 +50,7 @@ describe.skipIf(!gpu)('tile synthesis (GPU)', async () => {
         height: g.height,
         forest: g.finish.forest,
         treeline: g.finish.treeline,
-        // As the app builds it: rock and closed basins (decisions 207, 208).
+        // As the app builds it: rock and closed basins (decisions 209, 210).
         lithology: g.finish.lithology,
         basinCell: g.finish.drainage.basinCell,
         basinLevel: g.finish.drainage.basinLevel,
@@ -244,7 +244,7 @@ describe.skipIf(!gpu)('tile synthesis (GPU)', async () => {
   it('floods lakes to their level with a shoreline from the fine terrain', async () => {
     // The deepest lake cell of the global grid on a shore (a dry cell beside it), so
     // the tile holds both water and a margin: closed basins' salt lakes can be wider
-    // than a tile (decision 208).
+    // than a tile (decision 210).
     const n = g!.n;
     const depth = g!.finish.drainage.lakeDepth;
     const nb = new Int32Array(8);

@@ -303,7 +303,7 @@ export function castCampaign(graph: StrategicGraph, detection: Detection, seed: 
     nodeNames,
     briefing: '',
   };
-  // 8. Natural wonders for this war, from their own stream (decision 212).
+  // 8. Natural wonders for this war, from their own stream (decision 214).
   cast.wonders = selectWonders(graph, cast, seed);
   cast.briefing = writeBriefing(graph, cast, names);
   return cast;

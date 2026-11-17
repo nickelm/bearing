@@ -2,7 +2,7 @@
 
 _Measured 2026-11-17 on `feature/world-diversity` with `tools/diversity.preview.ts` and `tools/zones.preview.ts`, against the baseline in [world-diversity-baseline.md](world-diversity-baseline.md). Proposal 0007's verification criteria with the thresholds the plan set (decision 204), regional windows scaled to the planet (decision 205)._
 
-The coarse pass ran seeds 1–20 on generator version 27. Eroded worlds (1024² per face, Dawn on lavapipe, 15–25 minutes each) ran on version 26, which differs from 27 and 28 only in the wonders (graph only) and decision 213 (eroded wetland and mangrove, islets). Zones were recomputed on those worlds with decision 213's code.
+The coarse pass ran seeds 1–20 on generator version 27. Eroded worlds (1024² per face, Dawn on lavapipe, 15–25 minutes each) ran on version 26, which differs from 27 and 28 only in the wonders (graph only) and decision 215 (eroded wetland and mangrove, islets). Zones were recomputed on those worlds with decision 215's code.
 
 ## Criteria
 
@@ -17,7 +17,7 @@ The coarse pass ran seeds 1–20 on generator version 27. Eroded worlds (1024² 
 | Zones                    | Every land cell in a zone; sizes in range; names and recipes                               | No zones                                                                                                          | 100% of land zoned; 3,728 and 3,754 zones on eroded seeds 1 and 2, 97.6% and 98.4% of them 16–63 km, median 36 km; every zone named, with a recipe within the limits                                                                                       | Yes     |
 | Wonders                  | 5–15 per world, named, placed where conditions hold                                        | None                                                                                                              | 5–15 selected in every seed of 1–20 (32–35 candidates each), all named; conditions checked by `tests/wonders.test.ts`                                                                                                                                      | Yes     |
 | Props                    | Prop triangles within budget in the standard views                                         | –                                                                                                                 | W7 not started                                                                                                                                                                                                                                             | Not run |
-| Existing invariants      | Existing terrain, river and network tests pass                                             | 1,097 tests                                                                                                       | 1,018 tests outside `tests/gpu/` pass (one network-stage test times out under load and passes alone); on the GPU, 95 of 97 pass: the face-seam (0.13 m against 0.05 m) and river-hump (6.5 m against 4 m) tolerances fail on the new worlds (decision 213) | No      |
+| Existing invariants      | Existing terrain, river and network tests pass                                             | 1,097 tests                                                                                                       | 1,018 tests outside `tests/gpu/` pass (one network-stage test times out under load and passes alone); on the GPU, 95 of 97 pass: the face-seam (0.13 m against 0.05 m) and river-hump (6.5 m against 4 m) tolerances fail on the new worlds (decision 215) | No      |
 | Determinism              | Same seed, same output; earlier stages unchanged except where intended                     | –                                                                                                                 | Tests for provinces, lithology, characters with redraws, zones; plates, crust and boundaries byte-identical                                                                                                                                                | Yes     |
 | Generation time          | Total pipeline at most 1.5 × the baseline                                                  | Coarse campaign world 11.9 s (median); global finish 8–15 s on top of 9–18 min of erosion                         | Coarse campaign world 14.3 s (+20%); global finish about 29 s (+15 s for zones and the expanded biomes); erosion unchanged in kind                                                                                                                         | Yes     |
 
@@ -92,7 +92,7 @@ The baseline counted biomes only; the measure now counts joint biome and provinc
 | soft sediment         | 2.6%            | 20 of 20                     |
 | glaciated lowland     | 12.9%           | 20 of 20                     |
 
-### Continental characters, wonders and salt flats (decisions 208, 210, 212)
+### Continental characters, wonders and salt flats (decisions 210, 212, 214)
 
 | seed | three largest continents                                                             | redraws | wonder candidates | wonders selected | first wonders                                                  | salt flats (airstrips) |
 | ---- | ------------------------------------------------------------------------------------ | ------- | ----------------- | ---------------- | -------------------------------------------------------------- | ---------------------- |
@@ -126,7 +126,7 @@ The baseline counted biomes only; the measure now counts joint biome and provinc
 | 2          | 9976           | 184601       | 40587        | 50.3%          | 24.4%        | 0.48              | 11.4%  | 7.6%   | 1.5%                    |
 | 2 baseline | 9205           | 70424        | 16007        | 34.3%          | 11.2%        | 0.28              | 31.4%  | 26.0%  | 0.1%                    |
 
-Baseline rows count biomes only. The eroded worlds' wetland and mangrove shares predate decision 213 and read 0%.
+Baseline rows count biomes only. The eroded worlds' wetland and mangrove shares predate decision 215 and read 0%.
 
 ### Global pass times (eroded seeds)
 

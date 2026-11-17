@@ -1150,7 +1150,7 @@ Terrain provinces and rock from tectonic history, a richer climate with twenty l
 
 - [x] `provinces` stage after `boundaries`: boundary runs with an age (young or old, weighted by closing speed), craton ages, fossil sutures in old continental plates, 3–8 hotspots with tracks; forks `ages`, `sutures`, `hotspots`, `characters`
 - [x] The province map (twelve classes; the first nine before uplift, karst and soft sediment from lithology, glaciated lowland after climate) in `WorldMaps` and the global finish; stored and transferred
-- [x] `lithology` stage after climate (decision 207): nine rocks by province with noise and layering, the layered flag; `rng(seed, "lithology")`
+- [x] `lithology` stage after climate (decision 209): nine rocks by province with noise and layering, the layered flag; `rng(seed, "lithology")`
 - [x] Erodibility map (0.3–3, smoothed, contrast at most 10) multiplied into the incision; talus angle by rock; the uniform case pinned by a test
 - [x] Map modes `provinces` and `lithology` in `npm run maps`; debug overlays for both in the strategic view (GUI)
 - [x] Tests (`tests/provinces.test.ts`, 8 seeds at 64²): every class appears; plates, crust and boundaries byte-identical to before; determinism; `GENERATOR_VERSION` up
@@ -1158,52 +1158,52 @@ Terrain provinces and rock from tectonic history, a richer climate with twenty l
 
 ### W2. Relief by province
 
-- [x] Uplift profiles by province (decision 208; soft limits per province left: peaks already reach 8.6–9.2 km): young collision ranges with a soft limit near 7.5 km (peaks 8–9 km), high plateaus at 4–5 km behind collisions, old mountains to about 2.5 km, volcanic cones of 3–6 km, hotspot shields of 2–5 km, rift escarpments, basins near sea level
-- [x] Glacial carving: troughs reaching the sea become fjords (decision 208)
+- [x] Uplift profiles by province (decision 210; soft limits per province left: peaks already reach 8.6–9.2 km): young collision ranges with a soft limit near 7.5 km (peaks 8–9 km), high plateaus at 4–5 km behind collisions, old mountains to about 2.5 km, volcanic cones of 3–6 km, hotspot shields of 2–5 km, rift escarpments, basins near sea level
+- [x] Glacial carving: troughs reaching the sea become fjords (decision 210)
   - [ ] Arêtes and cirques above the snow line beyond the kernel's alpine crests
-- [x] Basin and range (in the detail stage, decision 208): parallel tilted fault blocks at Earth spacing (15–30 km) with alluvial fans into flat basins
-- [ ] Plateau canyons with stepped walls where the rock is layered (left to erosion so far, decision 208)
-- [x] Strata and buttes only in layered sedimentary rock in a dry climate (decision 208): a layered-rock mask in the masks' reserved channel; the `buttes` spot and the terracing metric
+- [x] Basin and range (in the detail stage, decision 210): parallel tilted fault blocks at Earth spacing (15–30 km) with alluvial fans into flat basins
+- [ ] Plateau canyons with stepped walls where the rock is layered (left to erosion so far, decision 210)
+- [x] Strata and buttes only in layered sedimentary rock in a dry climate (decision 210): a layered-rock mask in the masks' reserved channel; the `buttes` spot and the terracing metric
 - [ ] Measure: peaks over 20 eroded worlds, the theater mix of `npm run seeds` before and after, the tile budget at `ceiling` and `range`
 
 ### W3. Closed basins
 
 - [x] Water balance on filled depressions in `computeDrainage` (both grids): hypsometry per depression, inflow from the catchment's runoff, lake evaporation from the climate; balance level, closed or open, salinity, playa
-- [x] Endorheic rivers end at their lake's surface (sinks are terminals, decision 208); `riverInvariants` checks it; profiles stay monotone
-- [x] Kernel: playas as flat white crust from the basin flags (decision 130's pans become the playa case; decision 208)
+- [x] Endorheic rivers end at their lake's surface (sinks are terminals, decision 210); `riverInvariants` checks it; profiles stay monotone
+- [x] Kernel: playas as flat white crust from the basin flags (decision 130's pans become the playa case; decision 210)
   - [ ] Brine colors by salinity and shoreline rings: a flag in the tiles' output material for the terrain shader
-- [x] Graph: `SaltFlat` features and airstrip sites (`StrategicGraph.saltFlats`, decision 208) (playas over about 25 km² with a straight run of at least 4 km (decision 205)); names
+- [x] Graph: `SaltFlat` features and airstrip sites (`StrategicGraph.saltFlats`, decision 210) (playas over about 25 km² with a straight run of at least 4 km (decision 205)); names
 - [ ] Spot `basin` in `tools/landscapeSpots.ts`; acceptance check 16's salt flat view
 
 ### W4. Climate and biomes
 
-- [x] `climate-modifiers`: precipitation seasonality, cold currents and fog tendency, ecotone noise (decision 209; continentality and rain shadows from the climate stage)
+- [x] `climate-modifiers`: precipitation seasonality, cold currents and fog tendency, ecotone noise (decision 211; continentality and rain shadows from the climate stage)
   - [ ] The weather model reads the fog tendency
-- [x] Twenty land biomes: seven codes appended, old codes keep their meaning (decision 209)
+- [x] Twenty land biomes: seven codes appended, old codes keep their meaning (decision 211)
 - [x] Every consumer: palettes (Part I's new table), shader shades, strategic fills and masks, forest base, tree kit weights, ground cover, rotor dust, landform masks, airbase suitability, farmable biomes, feature extraction
 - [x] Altitude zonation (cloud forest, alpine meadow; plateaus as steppe); soil from lithology (heath on acid sand, grassland on chalk, forest on loam, sparse on granite)
-- [x] Ecotones with noise (decision 209)
+- [x] Ecotones with noise (decision 211)
   - [ ] Aspect in the shader and `canopy.ts`
   - [ ] Oases at springs (riparian corridors are the tiles' green corridors, decision 126)
   - [ ] Disturbance patches in forests (fire scars, clearings, wind-throw) from a seeded rate per biome
 - [ ] Gully shade lines in the terrain shader for soft sediment in semi-arid climates; kernel gullies denser there
-- [x] Biome coverage over 20 seeds (all twenty, decision 209)
+- [x] Biome coverage over 20 seeds (all twenty, decision 211)
 - [ ] Acceptance checks 1–5 against the board with the brighter palette, the grade retuned if needed
 
 ### W5. Continental character
 
-- [x] Continents as the continental crust of each plate; characters drawn from what their tectonics allow and their climate belt (`provinces/characters`, decision 210)
+- [x] Continents as the continental crust of each plate; characters drawn from what their tectonics allow and their climate belt (`provinces/characters`, decision 212)
 - [x] Biases on province assignment, rock and moisture within tectonic limits
 - [x] Distinctness check on the coarse pass: joint province and biome divergence of the two largest continents; at most two redraws of the smaller (`provinces/characters/nudge-k`), stored with the world
 - [x] Metrics: divergence over 20 seeds (18 of 20 at 0.25 bit); coarse pass time (12.7 s against 11.9 s)
 
 ### W6. Zones and visual style
 
-- [x] Segmentation on the eroded global grid in the worker's finish (decisions 205, 211): region growing on province and biome group, merged and split to 16–63 km, boundaries pulled to barriers, stored with the world; zone records with a recipe within the limits of Part I's _Zones_ (`rng(seed, "zones")`) and a name (`names/zones`)
-- [x] A distance to the boundary per cell for the 1–2.5 km blends; the palette shift in the tile meshes' vertex colors (decision 211)
-- [x] Simulation view: palette shift per vertex (decision 211)
+- [x] Segmentation on the eroded global grid in the worker's finish (decisions 205, 213): region growing on province and biome group, merged and split to 16–63 km, boundaries pulled to barriers, stored with the world; zone records with a recipe within the limits of Part I's _Zones_ (`rng(seed, "zones")`) and a name (`names/zones`)
+- [x] A distance to the boundary per cell for the 1–2.5 km blends; the palette shift in the tile meshes' vertex colors (decision 213)
+- [x] Simulation view: palette shift per vertex (decision 213)
   - [ ] Haze, sky grading, sun warmth, cloud regime and ambient particles blended by camera position; vegetation kit weights; weather tendencies (low cloud, fog, wind)
-- [x] Strategic view: fills for the new biomes (decision 209), zone labels at the Theater and Region bands replacing the area labels of cover and plains (decision 211)
+- [x] Strategic view: fills for the new biomes (decision 211), zone labels at the Theater and Region bands replacing the area labels of cover and plains (decision 213)
   - [ ] Patterns for the new biomes (heather stipple, salt crust, tower dots, mineral banding)
 - [ ] Acceptance check 15 (`zones` view); Part II checks 1, 2, 4, 5 and check 3 with the owner
 
@@ -1217,17 +1217,17 @@ Terrain provinces and rock from tectonic history, a richer climate with twenty l
 
 ### W8. Natural wonders (stretch)
 
-- [x] Detectors for the proposal's twelve kinds; candidates in the graph (`geography/wonders.ts`, decision 212)
-- [x] Selection of 5–15 after casting's territory, weighted toward fronts and lanes (`rng(seed, "wonders")`); names (`names/wonders`); mentions in briefings (decision 212)
+- [x] Detectors for the proposal's twelve kinds; candidates in the graph (`geography/wonders.ts`, decision 214)
+- [x] Selection of 5–15 after casting's territory, weighted toward fronts and lanes (`rng(seed, "wonders")`); names (`names/wonders`); mentions in briefings (decision 214)
 - [ ] Shaping in the tile kernel (tepui, falls, caldera, travertine, mineral bands) or by props (karst bay, pillar forest, basalt columns)
 - [ ] Protection from earthworks in the router (N5's extra cost), scenic routes allowed in sight
-- [x] Map labels for the selected wonders (decision 212)
+- [x] Map labels for the selected wonders (decision 214)
   - [ ] The wonder glyph; acceptance check 16's wonder view
 
 ### W9. Verification and report
 
 - [x] Every criterion over 20 seeds against the baseline → `docs/reports/world-diversity-metrics.md` (coarse 20 seeds, eroded seeds so far)
-  - [ ] Eroded worlds of all 20 seeds on the final generator (decision 213's wetland and mangrove), and the local-variety measure with altitude zones and surface character
+  - [ ] Eroded worlds of all 20 seeds on the final generator (decision 215's wetland and mangrove), and the local-variety measure with altitude zones and surface character
 - [x] Globe maps of three contrasting seeds (coarse) → `docs/reports/screens/world-diversity/`
 - [ ] Screenshots on lavapipe: three contrasting globes, an alpine range with glacial valleys, a basin-and-range desert with a salt flat, a moorland, a jungle river, a karst bay, two adjacent zones → `docs/reports/screens/`
 - [x] `docs/reports/world-diversity-report.md`: what works, metrics, simplifications, decisions and deviations, known issues, times per stage, next steps

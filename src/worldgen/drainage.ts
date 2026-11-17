@@ -14,7 +14,7 @@
  *  3. Discharge: runoff (mm/yr) × cell area, accumulated downstream in
  *     topological order (Kahn), in m³/s.
  *  4. Lakes: where the filled surface stands above the terrain.
- *  5. Closed basins (decision 208), given the climate: a depression whose
+ *  5. Closed basins (decision 210), given the climate: a depression whose
  *     lake would evaporate more at its spill level than flows in is closed.
  *     Its lake stands at the balance level, where evaporation meets inflow,
  *     as a salt lake, or dries to a playa; steps 1–3 run again with the
@@ -30,18 +30,18 @@ import { DAY } from '../core/units';
 export interface Drainage {
   /**
    * Downstream cell, or −1 for ocean cells. Land cells always have one, except
-   * the sinks of closed basins (decision 208), which end their rivers like a mouth.
+   * the sinks of closed basins (decision 210), which end their rivers like a mouth.
    */
   receiver: Int32Array;
   /** Mean discharge (m³/s) leaving each land cell; 0 in the ocean. */
   discharge: Float32Array;
   /** Water depth of lakes in closed depressions (m); 0 elsewhere. */
   lakeDepth: Float32Array;
-  /** `BasinCell` per cell, with climate (decision 208); absent without. */
+  /** `BasinCell` per cell, with climate (decision 210); absent without. */
   basinCell?: Uint8Array;
-  /** The salt lake's or playa's level on its cells (m), 0 elsewhere (decision 208). */
+  /** The salt lake's or playa's level on its cells (m), 0 elsewhere (decision 210). */
   basinLevel?: Float32Array;
-  /** Closed basins, with climate (decision 208). */
+  /** Closed basins, with climate (decision 210). */
   basins?: ClosedBasin[];
 }
 
@@ -71,7 +71,7 @@ export function neighbors8(n: number, cell: number, out: Int32Array): void {
   }
 }
 
-/** Per-cell closed-basin class (decision 208). */
+/** Per-cell closed-basin class (decision 210). */
 export const BasinCell = {
   None: 0,
   /** Water of a closed basin's terminal lake: salt. */
@@ -80,7 +80,7 @@ export const BasinCell = {
   Playa: 2,
 } as const;
 
-/** A closed (endorheic) basin's terminal lake or playa (decision 208). */
+/** A closed (endorheic) basin's terminal lake or playa (decision 210). */
 export interface ClosedBasin {
   /** Lowest cell of the basin's floor. */
   lowest: number;
@@ -96,7 +96,7 @@ export interface ClosedBasin {
   cells: number;
 }
 
-/** Climate at each cell, for the closed basins' water balance (decision 208). */
+/** Climate at each cell, for the closed basins' water balance (decision 210). */
 export interface DrainageClimate {
   /** Annual mean temperature at the cell (°C). */
   temperature: Float32Array;
@@ -132,7 +132,7 @@ export function lakeEvaporation(t: number): number {
  * @param runoff runoff (mm/yr) per cell
  * @param radius planet radius (m)
  * @param climate if given, closed basins keep their water where evaporation
- *   beats inflow (decision 208); without it every depression drains to the sea
+ *   beats inflow (decision 210); without it every depression drains to the sea
  */
 export function computeDrainage(
   n: number,
@@ -293,7 +293,7 @@ function route(
   }
 
   // 2. D8 receivers on the filled surface. A closed basin's sink is a terminal,
-  // like a river mouth at sea: receiver −1, so rivers end at its lake (decision 208).
+  // like a river mouth at sea: receiver −1, so rivers end at its lake (decision 210).
   const receiver = new Int32Array(count).fill(-1);
   const donors = new Uint8Array(count);
   for (let c = 0; c < count; c++) {

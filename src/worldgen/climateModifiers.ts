@@ -1,5 +1,5 @@
 /**
- * Stage: climate modifiers (proposal 0007, decision 209), after climate.
+ * Stage: climate modifiers (proposal 0007, decision 211), after climate.
  *
  * Local modifiers that break the broad climate bands, as fields the biome table
  * reads; the climate maps themselves are unchanged, so every stage that reads
@@ -32,7 +32,7 @@ export interface ClimateModifiers {
   fog: Float32Array;
   /** Ecotone noise, about −1..1. */
   ecotone: Float32Array;
-  /** Moisture offset from the continent's character (decision 210); absent: none. */
+  /** Moisture offset from the continent's character (decision 212); absent: none. */
   moistureBias?: Float32Array;
   /** Planet radius (m), for slopes on any grid. */
   radius: number;

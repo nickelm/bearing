@@ -1,5 +1,5 @@
 /**
- * Salt flats (decision 208): the playas of closed basins, as point features
+ * Salt flats (decision 210): the playas of closed basins, as point features
  * anchored at each playa's most interior cell. A playa with a straight run of
  * at least `SALT_FLAT_MIN_RUN` is also a natural airstrip site (decision 205:
  * runways keep their real length), which the graph lists for casting.

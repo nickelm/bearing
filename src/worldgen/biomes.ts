@@ -30,7 +30,7 @@ export const Biome = {
   TropicalSeasonalForest: 14,
   TropicalRainforest: 15,
   Alpine: 16,
-  /** Proposal 0007's additions (decision 209); the codes above keep their meaning. */
+  /** Proposal 0007's additions (decision 211); the codes above keep their meaning. */
   CloudForest: 17,
   Mangrove: 18,
   RockyDesert: 19,
@@ -43,7 +43,7 @@ export type Biome = (typeof Biome)[keyof typeof Biome];
 export const BIOME_COUNT = 24;
 
 /**
- * Proposal 0007's twenty land biomes (decision 209) map onto the codes: ice
+ * Proposal 0007's twenty land biomes (decision 211) map onto the codes: ice
  * sheet = ice, taiga = boreal forest, temperate forest = temperate deciduous
  * forest, cold desert = cold desert and steppe, hot desert = sand sea,
  * shrubland = Mediterranean scrub, tropical seasonal forest = monsoon forest,
@@ -72,7 +72,7 @@ export const LAND_BIOMES: readonly Biome[] = [
   Biome.Wetland,
 ];
 
-/** Deserts of every kind (decision 209). */
+/** Deserts of every kind (decision 211). */
 export const DESERT_BIOMES: ReadonlySet<number> = new Set([
   Biome.ColdDesert,
   Biome.HotDesert,
@@ -129,7 +129,7 @@ const ALPINE_REFERENCE = 2600;
 const BOREAL_COLDEST_MONTH = -15;
 
 /**
- * What the expanded table reads besides temperature and moisture (decision 209):
+ * What the expanded table reads besides temperature and moisture (decision 211):
  * the rock under the cell, the climate modifiers, and the ground's shape.
  */
 export interface BiomeContext {
@@ -146,9 +146,9 @@ export interface BiomeContext {
   flat: boolean;
   /** Ecotone noise, about −1..1: boundaries interfinger instead of following isolines. */
   ecotone: number;
-  /** On a high plateau: flat high steppe, not alpine meadow or ice (decision 209). */
+  /** On a high plateau: flat high steppe, not alpine meadow or ice (decision 211). */
   plateau: boolean;
-  /** Moisture offset from the continent's character (decision 210). */
+  /** Moisture offset from the continent's character (decision 212). */
   moistureBias: number;
 }
 
@@ -204,7 +204,7 @@ export function classifyBiome(
     if (moisture < 0.75) return Biome.TropicalSeasonalForest;
     return Biome.TropicalRainforest;
   }
-  // The expanded table (decision 209).
+  // The expanded table (decision 211).
   const winterWet = ctx.seasonality <= -0.3;
   const layeredSand = ctx.layered && (ctx.rock === SANDSTONE || ctx.rock === SHALE);
   const desert = (hot: boolean): Biome => {
@@ -295,14 +295,14 @@ const FLAT_SLOPE = 0.004;
 /**
  * The same flatness on finer grids: a cell-to-cell slope grows as cells shrink,
  * since the eroded grid resolves the relief the coarse cells average out
- * (about 0.004 at 6 km, 0.012 at 1.5 km; decision 213).
+ * (about 0.004 at 6 km, 0.012 at 1.5 km; decision 215).
  */
 function flatSlope(cellSize: number): number {
   return FLAT_SLOPE * Math.max(1, 6_000 / cellSize) ** 0.8;
 }
 
 /**
- * The context of land cell `c` on an n-per-face grid (decision 209): the rock,
+ * The context of land cell `c` on an n-per-face grid (decision 211): the rock,
  * the modifiers, whether the sea or level ground is next to it. `nb` is scratch.
  */
 export function biomeContext(
