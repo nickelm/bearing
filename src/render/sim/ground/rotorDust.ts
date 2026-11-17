@@ -124,6 +124,9 @@ export function washSurface(s: WashSite): WashSurface {
   switch (s.cover) {
     case Biome.HotDesert:
     case Biome.ColdDesert:
+    case Biome.RockyDesert:
+    case Biome.RedRockDesert:
+    case Biome.FogDesert:
     case TileCover.Beach:
       return { kind: 'dust', amount: dry };
     case TileCover.Gravel:
@@ -131,6 +134,8 @@ export function washSurface(s: WashSite): WashSurface {
     case Biome.Tundra:
       return { kind: 'grit', amount: 0.5 * dry };
     case TileCover.Marsh:
+    case Biome.Wetland:
+    case Biome.Mangrove:
       return { kind: 'spray', amount: 0.35 };
     case Biome.Savanna:
     case Biome.Shrubland:

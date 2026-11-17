@@ -1176,13 +1176,18 @@ Terrain provinces and rock from tectonic history, a richer climate with twenty l
 
 ### W4. Climate and biomes
 
-- [ ] `climate-modifiers`: precipitation seasonality, cold currents and fog tendency, continentality, stronger orographic effects; the weather model reads the fog tendency
-- [ ] `Biome` v2: water 0–3, twenty land biomes from 4, under the tile covers; old-to-new mapping for the tests
-- [ ] Every consumer: palettes (Part I's new table), shader shades, strategic fills and masks, forest base, tree kit weights, ground cover, rotor dust, landform masks, airbase suitability, farmable biomes, feature extraction
-- [ ] Altitude zonation (foothill forest, cloud forest, alpine meadow, rock and ice); soil from lithology (heath on acid sand, grassland on chalk, forest on loam, sparse on granite)
-- [ ] Riparian corridors and oases at springs; ecotones with noise and terrain (aspect in the shader and `canopy.ts`); disturbance patches in forests (fire scars, clearings, wind-throw) from a seeded rate per biome
+- [x] `climate-modifiers`: precipitation seasonality, cold currents and fog tendency, ecotone noise (decision 208; continentality and rain shadows from the climate stage)
+  - [ ] The weather model reads the fog tendency
+- [x] Twenty land biomes: seven codes appended, old codes keep their meaning (decision 208)
+- [x] Every consumer: palettes (Part I's new table), shader shades, strategic fills and masks, forest base, tree kit weights, ground cover, rotor dust, landform masks, airbase suitability, farmable biomes, feature extraction
+- [x] Altitude zonation (cloud forest, alpine meadow; plateaus as steppe); soil from lithology (heath on acid sand, grassland on chalk, forest on loam, sparse on granite)
+- [x] Ecotones with noise (decision 208)
+  - [ ] Aspect in the shader and `canopy.ts`
+  - [ ] Oases at springs (riparian corridors are the tiles' green corridors, decision 126)
+  - [ ] Disturbance patches in forests (fire scars, clearings, wind-throw) from a seeded rate per biome
 - [ ] Gully shade lines in the terrain shader for soft sediment in semi-arid climates; kernel gullies denser there
-- [ ] Biome coverage over 20 seeds (all twenty); acceptance checks 1–5 against the board with the brighter palette, the grade retuned if needed
+- [x] Biome coverage over 20 seeds (all twenty, decision 208)
+- [ ] acceptance checks 1–5 against the board with the brighter palette, the grade retuned if needed
 
 ### W5. Continental character
 

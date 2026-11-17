@@ -6,6 +6,7 @@
  * The output is plain typed arrays and numbers, which a worker can transfer
  * without copying.
  */
+import { computeClimateModifiers } from './climateModifiers';
 import { assignLithology } from './lithology';
 import { assignProvinces } from './provinces';
 import { CubeGrid } from '../core/cubeGrid';
@@ -56,6 +57,10 @@ export interface WorldMaps {
   province: Uint8Array;
   /** Rock per cell (`Rock`, with `LAYERED` on horizontal sedimentary rock; decision 204). */
   lithology: Uint8Array;
+  /** Climate modifiers (decision 208): seasonality −1..1, cold-current fog 0..1, ecotone noise. */
+  seasonality: Float32Array;
+  fog: Float32Array;
+  ecotone: Float32Array;
 }
 
 export interface StageTiming {
@@ -104,6 +109,7 @@ export const PIPELINE_STAGES = [
   'uplift',
   'elevation',
   'climate',
+  'climate modifiers',
   'lithology',
   'biomes',
 ] as const;
@@ -170,6 +176,9 @@ export function generateWorld(params: PlanetParams, options: GenerateOptions): W
   const climate = stage('climate', () =>
     computeClimate(grid, params, elevation.height, rng(seed, 'climate')),
   );
+  const modifiers = stage('climate modifiers', () =>
+    computeClimateModifiers(grid, params.radius, elevation.height, rng(seed, 'climate-modifiers')),
+  );
   const { lithology } = stage('lithology', () =>
     assignLithology(
       grid,
@@ -179,7 +188,13 @@ export function generateWorld(params: PlanetParams, options: GenerateOptions): W
       rng(seed, 'lithology'),
     ),
   );
-  const biome = stage('biomes', () => computeBiomes(grid, params, elevation.height, climate));
+  const biome = stage('biomes', () =>
+    computeBiomes(grid, params, elevation.height, climate, {
+      lithology,
+      modifiers,
+      province: provinces.province,
+    }),
+  );
   options.onProgress?.('done', 1);
 
   const { landmasses } = labelLandmasses(grid, elevation.height, params.radius);
@@ -217,6 +232,9 @@ export function generateWorld(params: PlanetParams, options: GenerateOptions): W
       biome,
       province: provinces.province,
       lithology,
+      seasonality: modifiers.seasonality,
+      fog: modifiers.fog,
+      ecotone: modifiers.ecotone,
     },
     info: {
       resolution: grid.n,

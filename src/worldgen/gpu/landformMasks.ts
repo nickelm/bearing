@@ -35,6 +35,9 @@ export const LANDFORM_MASK_TUNING = {
   arid: {
     [Biome.HotDesert]: 1,
     [Biome.ColdDesert]: 1,
+    [Biome.RockyDesert]: 1,
+    [Biome.RedRockDesert]: 1,
+    [Biome.FogDesert]: 1,
     [Biome.Shrubland]: 0.75,
     [Biome.Savanna]: 0.25,
     [Biome.TemperateGrassland]: 0.2,
@@ -58,6 +61,10 @@ export const LANDFORM_MASK_TUNING = {
     [Biome.TropicalSeasonalForest]: 1,
     [Biome.Savanna]: 1,
     [Biome.HotDesert]: 0.8,
+    [Biome.Mangrove]: 1,
+    [Biome.CloudForest]: 1,
+    [Biome.RockyDesert]: 0.8,
+    [Biome.RedRockDesert]: 0.6,
   } as Record<number, number>,
   /** Proximity decay per cell, and passes (cells) for the land and sea proximity. */
   coastDecay: 0.86,

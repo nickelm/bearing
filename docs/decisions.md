@@ -3403,3 +3403,47 @@ The owner also asked for decision 204's prep commit on `main` (done), and for th
 `TODO.md` changes with this decision.
 
 **Reason:** Feeding the existing uplift, detail and erosion stages new inputs keeps the backbone, and a water balance on the depressions the drainage already finds is the smallest change that closes basins while keeping the river invariants.
+
+### 208. W4: climate modifiers and the twenty biomes; the brighter palette in the code
+
+**Date:** 2026-11-17
+**Decision:** The biome table grows to proposal 0007's twenty land biomes, read from the climate, three modifiers, the rock and the ground's shape.
+
+- **Codes.** The existing codes keep their meaning, and seven are appended, rather than renumbering as decision 204's item 11 planned: renumbering would touch every table and stored world for no gain.
+  - The appended codes are cloud forest 17, mangrove 18, rocky desert 19, red rock desert 20, fog desert 21, moorland and heath 22, wetland 23. `BIOME_COUNT` is 24, still under the tile covers at 32.
+  - The proposal's names map onto the old codes: ice sheet = ice, taiga = boreal forest, temperate forest = temperate deciduous forest, cold desert = cold desert and steppe, hot desert = sand sea, shrubland = Mediterranean scrub, tropical seasonal forest = monsoon forest, alpine = alpine meadow.
+  - `LAND_BIOMES` lists the twenty and `DESERT_BIOMES` the five deserts.
+- **Climate modifiers** (`climateModifiers.ts`, stage `climate modifiers` after `climate`, `rng(seed, "climate-modifiers")`). They are fields beside the climate, which stays unchanged:
+  - **Seasonality**, −1 to +1. Summer-wet in the monsoon belt (about 10–28°). Winter-wet on west coasts at about 30–44°, fading over 600 km inland, measured by a westward search for the sea along the parallel.
+  - **Fog** from cold currents on west coasts at about 12–34°, fading over 200 km inland, with a strength that varies along the coast. Fog also takes up to 60% of the moisture, as a cold current dries the air.
+  - **Ecotone noise** at about 25 km, which shifts temperature by up to 0.8 K and moisture by 0.04, so boundaries interfinger.
+  - Continentality and rain shadows already come from the climate stage. Aspect belongs to the shader and the canopy (left for later).
+- **Classification** (`classifyBiome` with a `BiomeContext`; without one it is the old table, so old tests and worlds keep their biomes). In table order:
+  - High plateaus are cold steppe (or tundra, or meadow where wet), never ice or alpine meadow.
+  - Cloud forest: frost-free, wet (moisture 0.7 and up), 9–20 °C, above 1,000 m Earth elevation.
+  - Moorland: acidic rock (granite, sandstone, till), wet (0.6 and up), cool (under 11 °C), upland (over 250 m) or coastal, below 1,600 m.
+  - Wetland: flat ground (reference slope under 0.004) that is wet (0.8 and up) and low (under 300 m).
+  - Mangrove: hot, wet coasts under 40 m.
+  - Deserts: fog desert where the fog passes 0.35; red rock desert on layered sandstone or shale above 500 m; rocky desert on crystalline, volcanic or limestone rock or above 1,100 m; sand sea otherwise (hot) or cold desert and steppe (cold).
+  - Winter-wet ground that would be grassland, temperate forest or dry savanna is Mediterranean scrub.
+  - Limestone carries grassland where loam would carry forest (moisture under 0.55).
+  - The coarse pass and the global finish classify the same way. The global grid reads the province and rock upsampled to the nearest tectonic cell, and the modifiers bilinearly.
+- **Consumers.** Every table indexed by biome gains the seven: the debug and terrain palette, open ground, strategic fills, forest density, fertility, movement cost, airbase suitability (no wetland or mangrove), landform masks (deserts arid; mangrove, cloud forest, rocky and red rock desert as warm coasts), rotor dust, ground cover, treeless biomes and feature extraction (all deserts are desert features; cloud forest and mangrove are forest; wetland and mangrove count as wetland).
+- **Palette.** `BIOME_COLORS` takes Part I's brighter middle shades for every land biome. The strategic fills of the new biomes are those shades mixed about 35% toward paper.
+- **Metrics on the coarse pass (seeds 1–20).**
+  - All twenty biomes appear: eighteen in every seed, the ice sheet and mangrove in 19 of 20.
+  - The joint biome-and-province entropy reaches 0.5 bit on a median 85% of land over unscaled 100 km windows; on seeds 1–8 after the plateau rule, 88%.
+  - The divergence between the two largest landmasses has a median of 0.62 bit (0.68 on seeds 1–8).
+  - The land the kernel terraces falls from 33% to 10–13%.
+  - The dry share of the highest 5% of land rises from 0 to 2.3% on seeds 1–8.
+- **Left for later.**
+  - Gully shade lines in the terrain shader.
+  - Aspect in the shader and the canopy.
+  - Disturbance patches in forests: the global finish has no seed yet.
+  - Oases at springs. The tiles' green corridors along desert rivers (decision 126) carry the riparian corridors.
+  - The weather reading the fog tendency.
+- **Version.** `GENERATOR_VERSION` is 24.
+
+`docs/visual-style.md` (*Palette*) and `TODO.md` change with this decision.
+
+**Reason:** Appending codes keeps every stored table valid and the old classification intact for the tests that pin it. The modifiers sit beside the climate rather than in it, so drainage and the weather keep their inputs, while the biome table gains the rock, the season and the coast, which is where the proposal's biomes differ.

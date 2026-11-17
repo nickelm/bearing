@@ -221,9 +221,13 @@ export function coverMix(s: CoverSite): Mix {
   switch (s.cover) {
     case Biome.HotDesert:
     case Biome.ColdDesert:
+    case Biome.RockyDesert:
+    case Biome.RedRockDesert:
+    case Biome.FogDesert:
       veg = DESERT;
       break;
     case Biome.Tundra:
+    case Biome.Moorland:
       veg = TUNDRA;
       break;
     case Biome.Alpine:

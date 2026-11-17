@@ -155,7 +155,15 @@ export const TREE_WATER_MARGIN = 1.5;
 export const LANDMARK_SHARE = 0.3;
 const SEED_GALLERY = 0x2f7d61;
 /** Biomes above the tree line or without trees: no woods along rivers, no landmarks. */
-const TREELESS = new Set<number>([Biome.IceSheet, Biome.Tundra, Biome.Alpine, Biome.ColdDesert]);
+const TREELESS = new Set<number>([
+  Biome.IceSheet,
+  Biome.Tundra,
+  Biome.Alpine,
+  Biome.ColdDesert,
+  Biome.RockyDesert,
+  Biome.RedRockDesert,
+  Biome.FogDesert,
+]);
 const SEED_LANDMARK = 0x59c3a8;
 export const SEED_ROW = 0x4ac215;
 /** Level whose mesh surface the trees stand on. */

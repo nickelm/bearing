@@ -85,7 +85,8 @@ export function airbaseSuitability(ctx: StrategicContext, c: number): number {
   const { height, slope, biome, lakeDepth, reliefScale } = ctx;
   if (ctx.labels.label[c]! < 0 || lakeDepth[c]! > 0) return -1;
   const b = biome[c]!;
-  if (b === Biome.IceSheet || b === Biome.Alpine) return -1;
+  if (b === Biome.IceSheet || b === Biome.Alpine || b === Biome.Wetland || b === Biome.Mangrove)
+    return -1;
   const ref = height[c]! / reliefScale;
   const s = slope[c]!;
   if (s >= AIRBASE_MAX_SLOPE || ref >= AIRBASE_MAX_HEIGHT) return -1;

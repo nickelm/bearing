@@ -53,6 +53,14 @@ const FERTILITY: Partial<Record<number, number>> = {
   [Biome.HotDesert]: 0.12,
   [Biome.Tundra]: 0.08,
   [Biome.Alpine]: 0.03,
+  // Decision 208.
+  [Biome.CloudForest]: 0.2,
+  [Biome.Mangrove]: 0.15,
+  [Biome.RockyDesert]: 0.08,
+  [Biome.RedRockDesert]: 0.08,
+  [Biome.FogDesert]: 0.1,
+  [Biome.Moorland]: 0.2,
+  [Biome.Wetland]: 0.15,
 };
 
 /** Habitability 0..1 per cell (0 at sea, on lakes and ice). */

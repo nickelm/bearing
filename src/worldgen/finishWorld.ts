@@ -4,7 +4,8 @@
  * global grid, then a downsample to the display resolution, which the
  * milestone-1 globe renders until tiles exist.
  */
-import { Biome, classifyBiome } from './biomes';
+import { Biome, biomeContext, classifyBiome } from './biomes';
+import type { ClimateModifiers } from './climateModifiers';
 import { earthElevation, LAPSE_RATE, potentialEvapotranspiration } from './climate';
 import { computeDrainage } from './drainage';
 import type { Drainage } from './drainage';
@@ -39,7 +40,15 @@ export interface FinishInput {
    * Terrain province and rock on the tectonic grid (decision 204), with its
    * cells per face edge (n must be a multiple); absent in worlds stored before them.
    */
-  tectonic?: { n: number; province: Uint8Array; lithology: Uint8Array };
+  tectonic?: {
+    n: number;
+    province: Uint8Array;
+    lithology: Uint8Array;
+    /** Climate modifiers (decision 208); absent in worlds stored before them. */
+    seasonality?: Float32Array;
+    fog?: Float32Array;
+    ecotone?: Float32Array;
+  };
 }
 
 export interface DisplayMaps {
@@ -71,7 +80,12 @@ export interface FinishResult {
   timings: { stage: string; ms: number }[];
 }
 
-export function globalBiomes(input: FinishInput, lakeDepth: Float32Array): Uint8Array {
+export function globalBiomes(
+  input: FinishInput,
+  lakeDepth: Float32Array,
+  extra?: { lithology: Uint8Array; modifiers: ClimateModifiers; province?: Uint8Array },
+): Uint8Array {
+  const nb = new Int32Array(8);
   const { height, precipitation, seaLevelTemperature, temperatureRange, reliefScale } = input;
   const out = new Uint8Array(height.length);
   for (let c = 0; c < height.length; c++) {
@@ -88,7 +102,25 @@ export function globalBiomes(input: FinishInput, lakeDepth: Float32Array): Uint8
     out[c] =
       lakeDepth[c]! > 0
         ? Biome.Shelf
-        : classifyBiome(h, ref, t, moisture, t - temperatureRange[c]!);
+        : classifyBiome(
+            h,
+            ref,
+            t,
+            moisture,
+            t - temperatureRange[c]!,
+            extra && h > 0
+              ? biomeContext(
+                  input.n,
+                  c,
+                  height,
+                  reliefScale,
+                  extra.lithology[c]!,
+                  extra.modifiers,
+                  nb,
+                  extra.province?.[c],
+                )
+              : undefined,
+          );
   }
   return out;
 }
@@ -169,7 +201,25 @@ export function finishWorld(input: FinishInput): FinishResult {
       radius: input.radius,
     }),
   );
-  const biome = time('global biomes', () => globalBiomes(input, drainage.lakeDepth));
+  const tect = input.tectonic;
+  const province = tect ? upsampleNearest(tect.province, tect.n, input.n) : undefined;
+  const lithology = tect ? upsampleNearest(tect.lithology, tect.n, input.n) : undefined;
+  const modifiers =
+    tect?.seasonality && tect.fog && tect.ecotone && lithology
+      ? {
+          seasonality: upsampleBilinear(tect.seasonality, tect.n, input.n),
+          fog: upsampleBilinear(tect.fog, tect.n, input.n),
+          ecotone: upsampleBilinear(tect.ecotone, tect.n, input.n),
+          radius: input.radius,
+        }
+      : undefined;
+  const biome = time('global biomes', () =>
+    globalBiomes(
+      input,
+      drainage.lakeDepth,
+      modifiers && lithology ? { lithology, modifiers, province } : undefined,
+    ),
+  );
   const display = time('display downsample', () =>
     downsampleForDisplay(
       input.n,
@@ -182,9 +232,6 @@ export function finishWorld(input: FinishInput): FinishResult {
     ),
   );
   const { forest, treeline } = time('forest', () => forestMaps(input, biome));
-  const tect = input.tectonic;
-  const province = tect ? upsampleNearest(tect.province, tect.n, input.n) : undefined;
-  const lithology = tect ? upsampleNearest(tect.lithology, tect.n, input.n) : undefined;
   return {
     drainage,
     rivers,
@@ -197,6 +244,32 @@ export function finishWorld(input: FinishInput): FinishResult {
     display,
     timings,
   };
+}
+
+/** A tectonic-grid float map on the global grid, bilinear within each face (edges clamped). */
+export function upsampleBilinear(src: Float32Array, from: number, to: number): Float32Array {
+  const out = new Float32Array(6 * to * to);
+  const k = from / to;
+  for (let f = 0; f < 6; f++) {
+    for (let j = 0; j < to; j++) {
+      const y = Math.min(from - 1, Math.max(0, (j + 0.5) * k - 0.5));
+      const j0 = Math.floor(y);
+      const j1 = Math.min(from - 1, j0 + 1);
+      const ty = y - j0;
+      for (let i = 0; i < to; i++) {
+        const x = Math.min(from - 1, Math.max(0, (i + 0.5) * k - 0.5));
+        const i0 = Math.floor(x);
+        const i1 = Math.min(from - 1, i0 + 1);
+        const tx = x - i0;
+        const a = src[(f * from + j0) * from + i0]!;
+        const b = src[(f * from + j0) * from + i1]!;
+        const c = src[(f * from + j1) * from + i0]!;
+        const d = src[(f * from + j1) * from + i1]!;
+        out[(f * to + j) * to + i] = (a + (b - a) * tx) * (1 - ty) + (c + (d - c) * tx) * ty;
+      }
+    }
+  }
+  return out;
 }
 
 /**

@@ -10,7 +10,7 @@
  *   (below 60 m) the coast.
  * - **Forests.** Forest biome cells outside wetlands.
  */
-import { Biome } from '../biomes';
+import { Biome, DESERT_BIOMES } from '../biomes';
 import { FeatureKind } from '../strategic/graph';
 import type { FeatureBuilder } from './builder';
 import type { GeographyInput } from './context';
@@ -27,14 +27,10 @@ const FOREST = new Set<number>([
   Biome.TemperateRainforest,
   Biome.TropicalSeasonalForest,
   Biome.TropicalRainforest,
+  Biome.CloudForest,
+  Biome.Mangrove,
 ]);
-const DRY_OR_ICE = new Set<number>([
-  Biome.ColdDesert,
-  Biome.HotDesert,
-  Biome.IceSheet,
-  Biome.Alpine,
-  Biome.SeaIce,
-]);
+const DRY_OR_ICE = new Set<number>([...DESERT_BIOMES, Biome.IceSheet, Biome.Alpine, Biome.SeaIce]);
 
 export function wetlandMask(input: GeographyInput): Uint8Array {
   const { grid, height, biome, slope, reliefScale, discharge, lakeDepth } = input.ctx;
@@ -43,7 +39,10 @@ export function wetlandMask(input: GeographyInput): Uint8Array {
     const h = height[c]! / reliefScale;
     if (height[c]! <= 0 || lakeDepth[c]! > 0 || h >= 250 || slope[c]! >= 0.012) continue;
     if (DRY_OR_ICE.has(biome[c]!)) continue;
-    let wet = discharge[c]! >= WETLAND_DISCHARGE;
+    let wet =
+      discharge[c]! >= WETLAND_DISCHARGE ||
+      biome[c] === Biome.Wetland ||
+      biome[c] === Biome.Mangrove;
     for (let k = 0; k < 8 && !wet; k++) {
       const nb = grid.neighbors8[c * 8 + k]!;
       if (nb < 0) continue;
@@ -70,7 +69,14 @@ export function extractCover(input: GeographyInput, fb: FeatureBuilder, region: 
       let hot = 0;
       for (const c of cells) {
         top = Math.max(top, height[c]!);
-        if (biome[c] === Biome.HotDesert) hot++;
+        const b = biome[c]!;
+        if (
+          b === Biome.HotDesert ||
+          b === Biome.RockyDesert ||
+          b === Biome.RedRockDesert ||
+          b === Biome.FogDesert
+        )
+          hot++;
       }
       fb.add({
         kind,
@@ -91,7 +97,7 @@ export function extractCover(input: GeographyInput, fb: FeatureBuilder, region: 
   for (let c = 0; c < N; c++) {
     if (height[c]! <= 0) continue;
     const b = biome[c]!;
-    if (b === Biome.HotDesert || b === Biome.ColdDesert) desert[c] = 1;
+    if (DESERT_BIOMES.has(b)) desert[c] = 1;
     if (FOREST.has(b) && !wet[c]) forest[c] = 1;
   }
   add(FeatureKind.Desert, desert, DESERT_MIN_AREA);

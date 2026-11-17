@@ -28,26 +28,36 @@ function hex(h: number): Rgb {
   return [((h >> 16) & 255) / 255, ((h >> 8) & 255) / 255, (h & 255) / 255];
 }
 
-/** Stylized biome palette, indexed by Biome. */
+/**
+ * Stylized biome palette, indexed by Biome: the middle shade of each land
+ * biome from Part I's brighter palette (proposal 0007, decision 208).
+ */
 export const BIOME_COLORS: readonly Rgb[] = (() => {
   const c: Rgb[] = new Array(BIOME_COUNT);
   c[Biome.DeepOcean] = hex(0x0d2a4f);
   c[Biome.Ocean] = hex(0x16477a);
   c[Biome.Shelf] = hex(0x2f7aa6);
   c[Biome.SeaIce] = hex(0xd8e6ee);
-  c[Biome.IceSheet] = hex(0xf2f6fa);
-  c[Biome.Tundra] = hex(0x8e9a82);
-  c[Biome.Taiga] = hex(0x3f5f45);
-  c[Biome.TemperateGrassland] = hex(0xa5b26a);
-  c[Biome.TemperateForest] = hex(0x4f7d3a);
-  c[Biome.TemperateRainforest] = hex(0x2f6a43);
-  c[Biome.ColdDesert] = hex(0xb4a888);
-  c[Biome.HotDesert] = hex(0xd9c18a);
-  c[Biome.Shrubland] = hex(0xa89a5c);
-  c[Biome.Savanna] = hex(0xb9ad55);
-  c[Biome.TropicalSeasonalForest] = hex(0x5e8c32);
-  c[Biome.TropicalRainforest] = hex(0x2c6b2a);
-  c[Biome.Alpine] = hex(0x8a8580);
+  c[Biome.IceSheet] = hex(0xcfe6f0);
+  c[Biome.Tundra] = hex(0x9a9a70);
+  c[Biome.Taiga] = hex(0x355e3e);
+  c[Biome.TemperateGrassland] = hex(0x8db255);
+  c[Biome.TemperateForest] = hex(0x4e8c3f);
+  c[Biome.TemperateRainforest] = hex(0x2e6b44);
+  c[Biome.ColdDesert] = hex(0xb7a77c);
+  c[Biome.HotDesert] = hex(0xe3a35a);
+  c[Biome.Shrubland] = hex(0x8a9a5b);
+  c[Biome.Savanna] = hex(0xc9b458);
+  c[Biome.TropicalSeasonalForest] = hex(0x4e8f3a);
+  c[Biome.TropicalRainforest] = hex(0x2a8c45);
+  c[Biome.Alpine] = hex(0x7daa5a);
+  c[Biome.CloudForest] = hex(0x3e8c5a);
+  c[Biome.Mangrove] = hex(0x2f6e4a);
+  c[Biome.RockyDesert] = hex(0xb9825a);
+  c[Biome.RedRockDesert] = hex(0xc9673f);
+  c[Biome.FogDesert] = hex(0xc8b9a0);
+  c[Biome.Moorland] = hex(0x8a6a7a);
+  c[Biome.Wetland] = hex(0x5e8a55);
   return c;
 })();
 

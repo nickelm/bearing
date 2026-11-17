@@ -140,6 +140,7 @@ describe('generateWorld', () => {
       'uplift',
       'elevation',
       'climate',
+      'climate modifiers',
       'lithology',
       'biomes',
     ]);

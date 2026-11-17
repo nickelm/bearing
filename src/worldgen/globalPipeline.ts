@@ -136,7 +136,14 @@ export async function buildGlobalWorld(
       displayN: T,
       tectonic:
         m.province && m.lithology
-          ? { n: T, province: m.province, lithology: m.lithology }
+          ? {
+              n: T,
+              province: m.province,
+              lithology: m.lithology,
+              seasonality: m.seasonality,
+              fog: m.fog,
+              ecotone: m.ecotone,
+            }
           : undefined,
     };
     lap('readback');

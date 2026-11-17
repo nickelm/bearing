@@ -303,6 +303,8 @@ const OPEN_GROUND: Partial<Record<number, Rgb>> = {
   [Biome.Taiga]: hexRgb(0x6b7c40),
   [Biome.TropicalSeasonalForest]: hexRgb(0x8a9a55),
   [Biome.TropicalRainforest]: hexRgb(0x6e8b3d),
+  [Biome.CloudForest]: hexRgb(0x5ba37a),
+  [Biome.Mangrove]: hexRgb(0x3e7f55),
 };
 
 /** Ground covers only tiles produce (decision 146): sand from Part I's palette, marsh olive, gravel gray. */

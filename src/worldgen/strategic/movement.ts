@@ -32,6 +32,14 @@ const BIOME_COST: Partial<Record<number, number>> = {
   [Biome.TropicalSeasonalForest]: 0.4,
   [Biome.HotDesert]: 0.3,
   [Biome.ColdDesert]: 0.3,
+  // Decision 208.
+  [Biome.CloudForest]: 1,
+  [Biome.Mangrove]: 1.5,
+  [Biome.RockyDesert]: 0.4,
+  [Biome.RedRockDesert]: 0.5,
+  [Biome.FogDesert]: 0.3,
+  [Biome.Moorland]: 0.4,
+  [Biome.Wetland]: 1.2,
 };
 
 /**

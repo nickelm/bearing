@@ -38,7 +38,7 @@ import { dirname, join } from 'node:path';
 import { it } from 'vitest';
 import { CubeGrid } from '../src/core/cubeGrid';
 import { EARTH_RADIUS } from '../src/core/units';
-import { Biome, BIOME_COUNT, BIOME_NAMES } from '../src/worldgen/biomes';
+import { Biome, BIOME_COUNT, BIOME_NAMES, DESERT_BIOMES } from '../src/worldgen/biomes';
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
 import { LANDFORM_MASK_TUNING } from '../src/worldgen/gpu/landformMasks';
 import { PROVINCE_COUNT, PROVINCE_NAMES } from '../src/worldgen/provinces';
@@ -56,11 +56,7 @@ const WINDOW_RADIUS = 50e3 * (DEFAULT_PLANET_PARAMS.radius / EARTH_RADIUS);
 const COARSE_WINDOW_RADIUS = 50e3;
 /** The highest share of land that counts as mountain for the dry-mountain share. */
 const MOUNTAIN_SHARE = 0.05;
-const DRY_BIOMES: ReadonlySet<number> = new Set([
-  Biome.HotDesert,
-  Biome.ColdDesert,
-  Biome.Shrubland,
-]);
+const DRY_BIOMES: ReadonlySet<number> = new Set([...DESERT_BIOMES, Biome.Shrubland]);
 
 function seedList(): string[] {
   if (process.env.SEEDS) return process.env.SEEDS.split(',').map((s) => s.trim());

@@ -56,6 +56,14 @@ export const STRATEGIC_BIOME_FILL: readonly (number | null)[] = (() => {
   f[Biome.TropicalSeasonalForest] = 0x6e8a5a;
   f[Biome.TropicalRainforest] = 0x5f8a55;
   f[Biome.Alpine] = 0x9c948a;
+  // Decision 208: Part I's middle shades mixed about 35% toward paper (#F4EFE4).
+  f[Biome.CloudForest] = 0x7fae8b;
+  f[Biome.Mangrove] = 0x73998a;
+  f[Biome.RockyDesert] = 0xd0a98a;
+  f[Biome.RedRockDesert] = 0xd99a77;
+  f[Biome.FogDesert] = 0xd8cdbb;
+  f[Biome.Moorland] = 0xb09ca3;
+  f[Biome.Wetland] = 0x8fa083;
   return f;
 })();
 
