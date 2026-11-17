@@ -7,6 +7,11 @@
  * proof that the flight model, the ground model and the outcomes work
  * together; the app can show it as an autopilot demonstration (`?autopilot`).
  *
+ * It can also fly a straight-in approach from an air start (`straightIn`, decision 207): idle
+ * and speedbrake to bleed the speed, the gear as soon as the speed is under its limit, the
+ * glide path flown with the throttle idle until the speed is down to the approach speed,
+ * then the final at on-speed angle of attack with the throttle.
+ *
  * Circuit coordinates are in the landing end's frame: `t` meters past the
  * threshold along the landing direction, `c` meters to the right of it.
  */
@@ -20,7 +25,16 @@ import { AIM_POINT, GLIDE_PATH, pastThreshold, runwayFrame, runwayPoint, toRunwa
 import type { Runway, RunwayEnd, RunwayFrame } from './runway';
 
 export type PilotPhase =
-  'lineup' | 'takeoff' | 'rotate' | 'climb' | 'circuit' | 'final' | 'flare' | 'rollout' | 'stopped';
+  | 'lineup'
+  | 'takeoff'
+  | 'rotate'
+  | 'climb'
+  | 'circuit'
+  | 'approach'
+  | 'final'
+  | 'flare'
+  | 'rollout'
+  | 'stopped';
 
 interface Waypoint {
   t: number;
@@ -31,8 +45,12 @@ interface Waypoint {
   label: string;
 }
 
-/** The test pilot's approach angle of attack: a degree under the HUD's 13° target, for flare margin. */
+/**
+ * The test pilot's approach angle of attack in the circuit: a degree under the HUD's 13°
+ * target, for flare margin. The straight-in approach flies the 13° itself (ON_SPEED_ALPHA).
+ */
 const APPROACH_ALPHA = 12 * DEG;
+const ON_SPEED_ALPHA = 13 * DEG;
 
 /** The flight director's flight-path gain (1/s) during the flare. */
 const FLARE_GAMMA_GAIN = 2.5;
@@ -58,6 +76,8 @@ export class TestPilot {
   private readonly frame: RunwayFrame;
   private readonly waypoints: Waypoint[];
   private leg = 0;
+  /** The angle of attack the final flies: the circuit's, or on speed for a straight-in. */
+  private approachAlpha = APPROACH_ALPHA;
   private phaseTime = 0;
   private readonly height: number;
   private readonly rotateSpeed: number;
@@ -106,6 +126,16 @@ export class TestPilot {
   private point(t: number, c: number, h: number): Vec3d {
     const along = this.end.threshold + t * this.end.sign;
     return runwayPoint(this.runway, this.frame, along, c * this.end.sign, h, this.radius);
+  }
+
+  /**
+   * Starts a straight-in approach from where the aircraft is (an air start on the extended
+   * centerline): the next steps fly the 'approach' phase, then the final, flare and rollout.
+   */
+  straightIn(): void {
+    this.director.reset();
+    this.approachAlpha = ON_SPEED_ALPHA;
+    this.setPhase('approach');
   }
 
   private setPhase(p: PilotPhase): void {
@@ -191,6 +221,37 @@ export class TestPilot {
         }
         break;
       }
+      case 'approach': {
+        // Idle and speedbrake; the gear once under its limit (with a margin for the transit).
+        ctl.throttle = 0;
+        ctl.speedbrake = true;
+        // (Not on the first step, before the model has given its airspeed.)
+        if (tel.cas > 0 && tel.cas < model.spec.gear.maxSpeed - 3 * KNOT) ctl.gearDown = true;
+        const v = Math.max(tel.tas, 50);
+        const carrot = this.point(pos.t + Math.max(1500, 25 * v), 0, 0);
+        const dir = toward(model, carrot);
+        // Down to the glide path, and along it, at idle: a steeper descent would gain speed.
+        const hGs = (AIM_POINT - pos.t) * Math.tan(GLIDE_PATH);
+        const vsDes = clamp(
+          -v * Math.tan(GLIDE_PATH) + 0.05 * (hGs - pos.h),
+          -1.6 * v * Math.tan(GLIDE_PATH),
+          0,
+        );
+        const gamma = Math.asin(vsDes / v);
+        this.director.fly(
+          model,
+          { course: dir.course, gamma, speed: null, maxBank: 25 * DEG },
+          ctl,
+          dt,
+        );
+        ctl.throttle = 0;
+        // On speed: the final's autothrottle takes over a few knots above the approach speed.
+        if (model.gear > 0.999 && tel.cas < speedForAlpha(model, this.approachAlpha) + 5 * KNOT) {
+          this.director.reset();
+          this.setPhase('final');
+        }
+        break;
+      }
       case 'final': {
         ctl.gearDown = true;
         const v = Math.max(tel.tas, 50);
@@ -199,7 +260,7 @@ export class TestPilot {
         const hGs = (AIM_POINT - pos.t) * Math.tan(GLIDE_PATH);
         const vsDes = clamp(-v * Math.tan(GLIDE_PATH) + 0.12 * (hGs - pos.h), -12, 3);
         const gamma = Math.asin(vsDes / v);
-        const speed = speedForAlpha(model, APPROACH_ALPHA);
+        const speed = speedForAlpha(model, this.approachAlpha);
         this.director.fly(model, { course: dir.course, gamma, speed, maxBank: 25 * DEG }, ctl, dt);
         if (pos.h < 10) this.setPhase('flare');
         break;
@@ -214,7 +275,7 @@ export class TestPilot {
         let gamma = Math.asin(vsDes / v);
         // Never above 12.5° of pitch: the tail strikes at about 13.5°.
         if (tel.pitch > 12.5 * DEG) gamma = Math.min(gamma, tel.gamma - 0.5 * DEG);
-        const speed = pos.h > 4 ? speedForAlpha(model, APPROACH_ALPHA) : null;
+        const speed = pos.h > 4 ? speedForAlpha(model, this.approachAlpha) : null;
         this.director.fly(model, { course: dir.course, gamma, speed, maxBank: 10 * DEG }, ctl, dt);
         if (pos.h <= 4) ctl.throttle = 0;
         if (model.onGround) this.setPhase('rollout');

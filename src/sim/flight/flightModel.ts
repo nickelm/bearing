@@ -74,8 +74,23 @@ export interface WheelState extends WheelContact {
   readonly spec: WheelSpec;
 }
 
+/** The drag coefficient by term (all referred to the wing area), for diagnostics and the debug panel. */
+export interface DragBreakdown {
+  /** Zero-lift drag at this Mach number. */
+  cd0: number;
+  /** Induced drag, k·CL², less the ground effect's relief. */
+  induced: number;
+  /** Separated-flow drag at high angle of attack. */
+  separated: number;
+  gear: number;
+  flaps: number;
+  speedbrake: number;
+}
+
 /** Per-substep quantities for the HUD and the debug panel: the common ones, and the jet's. */
 export interface FlightTelemetry extends AirframeTelemetry {
+  /** The drag coefficient's terms (they sum to `cd`). */
+  drag: DragBreakdown;
   /** Lift and drag coefficients, and the engine's thrust (N). */
   cl: number;
   cd: number;
@@ -165,6 +180,7 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
       cl: 0,
       cd: 0,
       thrust: 0,
+      drag: { cd0: 0, induced: 0, separated: 0, gear: 0, flaps: 0, speedbrake: 0 },
       load: 1,
       normalLoad: 1,
       altitude: 0,
@@ -316,13 +332,15 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
     const ge = Math.exp((-2.5 * Math.max(0, altitude - groundUnder)) / spec.wing.span);
     const cl = (clBase + a.flapCl * flaps * flapFade) * (1 + a.groundEffectLift * ge);
     const sinA = Math.sin(alpha);
+    const terms = tel.drag;
+    terms.cd0 = lookup(a.cd0, mach);
+    terms.induced = a.induced * cl * cl * (1 - a.groundEffectDrag * ge);
+    terms.separated = a.cdAlpha * sinA * sinA;
+    terms.gear = a.cdGear * this.gear;
+    terms.flaps = a.cdFlaps * flaps;
+    terms.speedbrake = a.cdSpeedbrake * this.speedbrake;
     const cd =
-      lookup(a.cd0, mach) +
-      a.induced * cl * cl * (1 - a.groundEffectDrag * ge) +
-      a.cdAlpha * sinA * sinA +
-      a.cdGear * this.gear +
-      a.cdFlaps * flaps +
-      a.cdSpeedbrake * this.speedbrake;
+      terms.cd0 + terms.induced + terms.separated + terms.gear + terms.flaps + terms.speedbrake;
     const fb = sc.fb.set(0, 0, 0);
     let liftX = 0;
     let liftZ = 0;
