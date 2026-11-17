@@ -1,8 +1,8 @@
 # TODO
 
-Tech-demo milestones from [docs/design.md](docs/design.md) (revision 9, decisions 72, 94 and 161): a foundation (F), a strategic track (S), a simulation core track (C), a flight view track (V) and integration (I), after a scaffold, then a post-demo piloting track (P, decisions 94 and 189) and helicopter track (H, decision 149), and the terrain networks track (N, decision 161). The design doc's _Milestones_ section maps the old M1–M9 onto these. Each task should take a few hours. Check tasks off as they are completed, and add subtasks as you discover them.
+Tech-demo milestones from [docs/design.md](docs/design.md) (revision 9, decisions 72, 94 and 161): a foundation (F), a strategic track (S), a simulation core track (C), a flight view track (V) and integration (I), after a scaffold, then a post-demo piloting track (P, decisions 94 and 189) and helicopter track (H, decision 149), the terrain networks track (N, decision 161), the ground detail track (G, decision 168) and the world diversity track (W, decision 204). The design doc's _Milestones_ section maps the old M1–M9 onto these. Each task should take a few hours. Check tasks off as they are completed, and add subtasks as you discover them.
 
-Suggested order for the remaining work: S1, V1, S2, V2, the rest of S3 and S4, V3, C2, V4, C3, I1. Visual milestones (all S, V, I, P, H and G, and N3, N6, N7 and N8) close only after the acceptance checks in [docs/visual-style.md](docs/visual-style.md) for the views they touch: Part I for the simulation view, Part II for the strategic view.
+Suggested order for the remaining work: S1, V1, S2, V2, the rest of S3 and S4, V3, C2, V4, C3, I1. Visual milestones (all S, V, I, P, H and G, N3, N6, N7 and N8, and W3, W4 and W6–W9) close only after the acceptance checks in [docs/visual-style.md](docs/visual-style.md) for the views they touch: Part I for the simulation view, Part II for the strategic view.
 
 ## Scaffold (done)
 
@@ -1137,6 +1137,89 @@ Detail near a low camera for helicopter flight, faceted and slightly cartoony, a
 - [ ] Wheels on dirt strips, vehicles on gravel roads and impacts through the same emitter
 - [x] Closes H3's downwash task for dust, snow and spray (the water ring stays open)
 
+## World diversity track (decision 204)
+
+Terrain provinces and rock from tectonic history, a richer climate with twenty land biomes, closed basins with salt lakes and playas, continental characters, named zones with their own look, landform props and natural wonders ([docs/proposals/0007-world-diversity.md](docs/proposals/0007-world-diversity.md)); the plan is [docs/plans/world-diversity.md](docs/plans/world-diversity.md). Keep the erosion and the tile kernel as the backbone: feed them new inputs, do not replace them. New stages draw from new streams (`provinces`, `lithology`, `climate-modifiers`, `zones`, `props`, `wonders`, `names/zones`, `names/wonders`); plates, crust and boundaries stay byte-identical. Every criterion is measured by `tools/diversity.preview.ts` against the baseline. Protect decisions 126, 130, 146, 161 and 165: keep their tests passing.
+
+- [x] W0: proposal saved, plan, decision 204; design doc, style guide, proposals 0001 and 0005, `CLAUDE.md` (rules 10 and 15) updated
+- [x] W0: `tools/diversity.preview.ts` and the baseline over 20 seeds → `docs/reports/world-diversity-baseline.md`
+- [ ] Owner: the plan's readings in decision 204 (zone labels replacing area labels, the steering exception, the thresholds, the branch for the unattended session)
+
+### W1. Provinces and lithology
+
+- [ ] `provinces` stage after `boundaries`: boundary runs with an age (young or old, weighted by closing speed), craton ages, fossil sutures in old continental plates, 3–8 hotspots with tracks; forks `ages`, `sutures`, `hotspots`, `characters`
+- [ ] The province map (twelve classes; the first nine before uplift, karst and soft sediment from lithology, glaciated lowland after climate) in `WorldMaps` and the global finish; stored and transferred
+- [ ] `lithology` stage after elevation: nine rocks by province with noise and layering, the layered flag; `rng(seed, "lithology")`
+- [ ] Erodibility map (0.3–3, smoothed, contrast at most 10) multiplied into the incision; talus angle by rock; the uniform case pinned by a test
+- [ ] Map modes `provinces` and `lithology` in `npm run maps`; debug overlays for both in the strategic view (GUI)
+- [ ] Tests: every class appears over 20 seeds; plates, crust and boundaries byte-identical to before; determinism; `GENERATOR_VERSION` up
+- [ ] `tools/diversity.preview.ts`: province entropy and province shares
+
+### W2. Relief by province
+
+- [ ] Uplift profiles by province: young collision ranges with a soft limit near 7.5 km (peaks 8–9 km), high plateaus at 4–5 km behind collisions, old mountains to about 2.5 km, volcanic cones of 3–6 km, hotspot shields of 2–5 km, rift escarpments, basins near sea level
+- [ ] Glacial carving: arêtes and cirques above the snow line; troughs reaching the sea become fjords
+- [ ] Basin and range in the tiles: parallel tilted fault blocks at Earth spacing (15–30 km) with alluvial fans into flat basins
+- [ ] Plateau canyons with stepped walls where the rock is layered
+- [ ] Strata and buttes only in layered sedimentary rock in a dry climate: a layered-rock mask in the masks' reserved channel; the `buttes` spot and the terracing metric
+- [ ] Measure: peaks over 20 eroded worlds, the theater mix of `npm run seeds` before and after, the tile budget at `ceiling` and `range`
+
+### W3. Closed basins
+
+- [ ] Water balance on filled depressions in `computeDrainage` (both grids): hypsometry per depression, inflow from the catchment's runoff, lake evaporation from the climate; balance level, closed or open, salinity, playa
+- [ ] Endorheic rivers end at their lake's surface; `riverInvariants` checks it; profiles stay monotone
+- [ ] Kernel: salt lakes in brine colors by salinity, playas as flat white crust, shoreline rings up to the highest former shoreline (decision 130's pans become the playa case)
+- [ ] Graph: `SaltFlat` features and `dry-lake` airstrip sites (playas over about 25 km²); names
+- [ ] Spot `basin` in `tools/landscapeSpots.ts`; acceptance check 16's salt flat view
+
+### W4. Climate and biomes
+
+- [ ] `climate-modifiers`: precipitation seasonality, cold currents and fog tendency, continentality, stronger orographic effects; the weather model reads the fog tendency
+- [ ] `Biome` v2: water 0–3, twenty land biomes from 4, under the tile covers; old-to-new mapping for the tests
+- [ ] Every consumer: palettes (Part I's new table), shader shades, strategic fills and masks, forest base, tree kit weights, ground cover, rotor dust, landform masks, airbase suitability, farmable biomes, feature extraction
+- [ ] Altitude zonation (foothill forest, cloud forest, alpine meadow, rock and ice); soil from lithology (heath on acid sand, grassland on chalk, forest on loam, sparse on granite)
+- [ ] Riparian corridors and oases at springs; ecotones with noise and terrain (aspect in the shader and `canopy.ts`); disturbance patches in forests (fire scars, clearings, wind-throw) from a seeded rate per biome
+- [ ] Gully shade lines in the terrain shader for soft sediment in semi-arid climates; kernel gullies denser there
+- [ ] Biome coverage over 20 seeds (all twenty); acceptance checks 1–5 against the board with the brighter palette, the grade retuned if needed
+
+### W5. Continental character
+
+- [ ] Continents as components of continental crust; characters drawn from what their tectonics allow and their climate belt (`provinces/characters`)
+- [ ] Biases on province assignment and climate parameters within tectonic limits
+- [ ] Distinctness check on the coarse pass: joint province and biome divergence of the two largest continents; at most two redraws of the smaller (`provinces/characters/nudge-k`), stored with the world
+- [ ] Metrics: divergence over 20 seeds; coarse pass time
+
+### W6. Zones and visual style
+
+- [ ] Segmentation on the coarse pass: region growing on province and biome group, merged and split to 100–400 km, boundaries pulled to barriers; zone records with a recipe within the limits of Part I's _Zones_ (`rng(seed, "zones")`) and a name (`names/zones`)
+- [ ] Zone ids upsampled to the global grid with a distance to the boundary; a zone texture for the terrain shader
+- [ ] Simulation view: per-fragment palette shift; haze, sky grading, sun warmth, cloud regime and ambient particles blended by camera position; vegetation kit weights; weather tendencies (low cloud, fog, wind)
+- [ ] Strategic view: fills and patterns for the twenty biomes (Part II's derivation), zone labels at the Theater and Region bands replacing the area labels inside them; `Zone` feature kind
+- [ ] Acceptance check 15 (`zones` view); Part II checks 1, 2, 4, 5 and check 3 with the owner
+
+### W7. Landform props (stretch)
+
+- [ ] Specs: karst towers, sandstone pillars, sea stacks and arches, hoodoos, natural arches, basalt column clusters, small inselbergs, within the budgets; silhouettes in the model viewer
+- [ ] `worldgen/props.ts`: pure placement by cell from province, rock and relief (`rng(seed, "props")`), drowned towers on the shelf; shared with the sim
+- [ ] Instanced layer with two levels of detail within about 6 km
+- [ ] Collision shapes queried by flight contact, the camera's clearance and line of sight beside the canopy; the Kestrel lockstep unchanged
+- [ ] `PERF` in the `karst` view: at most 0.3 M triangles and 40 draws for props; acceptance check 16's karst bay
+
+### W8. Natural wonders (stretch)
+
+- [ ] Detectors for the proposal's twelve kinds; candidates in the graph (`strategic/wonders.ts`)
+- [ ] Selection of 5–15 after casting's territory, weighted toward fronts, lanes and airbases (`rng(seed, "wonders")`); names (`names/wonders`); mentions in briefings
+- [ ] Shaping in the tile kernel (tepui, falls, caldera, travertine, mineral bands) or by props (karst bay, pillar forest, basalt columns)
+- [ ] Protection from earthworks in the router (N5's extra cost), scenic routes allowed in sight
+- [ ] Map glyphs and labels; acceptance check 16's wonder view
+
+### W9. Verification and report
+
+- [ ] Every criterion over 20 seeds against the baseline → `docs/reports/world-diversity-metrics.md`
+- [ ] Screenshots on lavapipe: three contrasting globes, an alpine range with glacial valleys, a basin-and-range desert with a salt flat, a moorland, a jungle river, a karst bay, two adjacent zones → `docs/reports/screens/`
+- [ ] `docs/reports/world-diversity-report.md`: what works, metrics, simplifications, decisions and deviations, known issues, times per stage, next steps
+- [ ] Checkpoint: owner flies Free Flight over three contrasting zones
+
 ## Known issues
 
 - [ ] Intermittent GPU determinism flake in Vitest (about 1 run in 5–10 of the full suite): a GPU determinism test (`detailStage`, `tileSynth`) gets different results for two identical runs. Present at the M2 baseline; not reproduced by 40 back-to-back detail-stage runs under load. Tests now report how many values differ and whether they are zeros (a readback race in Dawn's Node bindings would show zeros). First report (2026-11-10): 24 of 221k cells differ, worst 0.23 m, no zeros, in the single-dispatch detail kernel (pure per cell, no in-place neighbor reads). So it is not a readback race; suspect the GPU or driver under concurrent load. Check whether it happens with `--no-file-parallelism`, and on another GPU.
@@ -1147,6 +1230,7 @@ Detail near a low camera for helicopter flight, faceted and slightly cartoony, a
 - Entity promotion and ground behaviors
 - The piloting track (P1–P6, above)
 - The helicopter track (H1–H5, above)
+- The world diversity track (W1–W9, above)
 - Flyby and cinematic cameras for transitions, replays and idle spectating (Proposal 0002; not yet in a milestone)
 - Air combat
 - Naval combat

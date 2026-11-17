@@ -1,6 +1,6 @@
 # Bearing: Visual Style Guide
 
-*Revision 5, 2026-11-16. Companion to `docs/design.md`. Revision 5 adds the displays and status strip: the allocation rule, slots, the display frame, faction skins and their palette tokens, the full-color moving map, and their acceptance checks (Proposal 0006, decision 189); revision 4 adds meanders and floodplains, roads and railways with their earthworks in the terrain, the bridge kit and its budgets, and bridge labels, dashed tunnels and generalized rivers on the map (Proposal 0005, decision 161); revision 3 adds the controlled aircraft, the HUD and displays, and their acceptance checks for third-person flight without cockpits (Proposal 0002, decision 94); revision 2 split the guide into two parts for the two views (Proposal 0001, decision 72).*
+*Revision 6, 2026-11-17. Companion to `docs/design.md`. Revision 6 moves the terrain palette brighter and extends it to the twenty biomes and the surfaces of closed basins, volcanic rock and lagoons, adds zones with their own look, landform props and their budgets, salt lakes and playas, glaciers and fjords, gullies and natural wonders, with their checks in both parts (Proposal 0007, decision 204); revision 5 adds the displays and status strip: the allocation rule, slots, the display frame, faction skins and their palette tokens, the full-color moving map, and their acceptance checks (Proposal 0006, decision 189); revision 4 adds meanders and floodplains, roads and railways with their earthworks in the terrain, the bridge kit and its budgets, and bridge labels, dashed tunnels and generalized rivers on the map (Proposal 0005, decision 161); revision 3 adds the controlled aircraft, the HUD and displays, and their acceptance checks for third-person flight without cockpits (Proposal 0002, decision 94); revision 2 split the guide into two parts for the two views (Proposal 0001, decision 72).*
 
 ## Summary
 
@@ -23,6 +23,7 @@ Everything in Part I applies to the simulation view: chase, target, weapon, flyb
 4. **Sturdy and slightly cartoony.** Proportions are chunky: thick trunks, broad canopies, wide stances, blocky people. Nothing is spindly. Thin features that would alias or flicker get thickened or removed.
 5. **Light does the drama.** Scenes look best at low sun angles. Haze, bloom on emissive lights, and long shadows give scale and mood without adding polygons.
 6. **Readable at working distance.** The style must hold at 500 m altitude and 900 km/h, which is where players spend their time. Detail that only reads at 10 m gets cut, except the ground near a low camera, which serves helicopter flight: it shows height and drift below a few hundred meters and costs nothing above (decision 168).
+7. **Every place has a look** (decision 204). A region should be recognizable within seconds of arriving by air: zones carry their own palette shift, haze, light, vegetation and landforms, and each world has a few memorable wonders. The palette leans brighter than the reference board's muted ground, and slightly outlandish scenery is welcome where it plausibly extends something on Earth.
 
 ## Reference Board
 
@@ -50,10 +51,14 @@ Across all five, edges show slight stair-stepping and the image has faint grain,
 - **Facets by design.** Flat shading makes the LOD mesh's triangles visible. At low altitude, target facets of roughly 20 to 60 m, so mountains look carved (reference 3); the finest tile level gives 24 m. With distance the LOD coarsens the mesh at the rate it shrinks on screen, so facets stay about 20 to 40 px across while growing in meters; haze softens them toward the horizon (decision 123).
 - **Shade quantization.** Each biome has three to five shades (four by default). The shader picks a shade from slope, altitude, moisture, and a low-frequency noise term, then holds it constant per face, with the whole land albedo evaluated at the face's center. This produces the mottled, painted look of reference 2 without textures (decision 124).
 - **Rock and snow.** Steep faces switch to rock shades (three per face); cold faces switch to snow (two shades), which slides off faces steeper than about 30–45°, so high ranges show gray rock between snowfields. Transitions follow face boundaries rather than blending smoothly. Near the snow line, low-frequency noise and a per-face jitter make a patchy band hundreds of meters wide, each face all snow or all bare, and trees decide the same way at their own spot in the band (decisions 125, 126, 157).
-- **Dry rock.** In deserts and dry shrubland, rock is layered: each 75 m stratum is a cliff in one of the sandstone shades over a foot of red shale, and the dry ground below the cliffs takes a red tint (decision 126).
+- **Dry rock.** In horizontally layered sedimentary rock under a dry climate (red rock deserts above all), rock is layered: each 75 m stratum is a cliff in one of the sandstone shades over a foot of red shale, and the dry ground below the cliffs takes a red tint (decision 126). Rocky deserts and sand seas have no benches; their mountains are bare, faceted rock in the rocky desert's shades. Until W2 lands, every desert and dry shrubland is layered (decision 204).
+- **Rock by lithology.** Rock faces take their shades from the rock beneath: granite pale gray, schist darker and greenish, sandstone in the strata shades, limestone near white, basalt and volcanic ash near black (`#2E2B2B` to `#4A3F3A`), with black sand on volcanic coasts (decision 204).
+- **Glaciers and fjords.** Glaciers fill the heads of high troughs in the glacier shades, below arêtes and cirques; troughs that reach the sea are fjords with steep walls and deep, dark water (decision 204).
+- **Closed basins.** Salt lakes in brine colors, turquoise to pink with salinity, and playas as perfectly flat white crust (`#F1EEE6`, `#E6E1D3`), with pale rings of former shorelines on the slopes around them (decision 204).
+- **Gullies.** Soft rock under a semi-arid climate is cut by dense gullies and badlands; gullies finer than the mesh are darker shade lines along the downslope direction, fading in below about 2 km (decision 204).
 - **Water in motion.** River water on steep facets (falls and rapids) is drawn as white water rather than a reflecting surface (decision 126).
 - **Silt.** Warm rivers' water is brown under its sky reflection (decision 126); cold and temperate rivers stay clear.
-- **Shallows and reefs.** Water color counts the first few tens of meters of depth at Earth depth, so lagoons, reef flats, skerry sounds and lake margins read turquoise over sand and deeper water darkens as before; warm coasts carry reefs with a surf line on the crest (decision 129). Lakes keep a darker water color so shallow ones still read as water, and lakes in dry land are white salt pans (decision 130).
+- **Shallows and reefs.** Water color counts the first few tens of meters of depth at Earth depth, so lagoons, reef flats, skerry sounds and lake margins read turquoise over sand and deeper water darkens as before; warm coasts carry reefs with a surf line on the crest (decision 129). Lakes keep a darker water color so shallow ones still read as water, and lakes in dry land are white salt pans (decision 130), which become the playas of closed basins (decision 204).
 - **Coasts.** Headlands of coasts with relief end in cliffs, with rocks and stacks offshore; the coves between them hold sand beaches (`#C9B48A`) over a pale, shallow shelf. Glaciated coasts keep their bare-rock skerries, and islets raised from the sea are bare rock (decision 146).
 - **Wetlands.** Flat, wet ground at a river's, a lake's or the sea's level is olive marsh (`#6B7A4E`) with dark pools drawn as water; warm, low coasts grow mangroves (decision 146).
 - **Rivers run downhill.** A river's water surface never rises downstream, through canyons, confluences and falls alike (decision 146).
@@ -129,6 +134,10 @@ Beyond the shell's range, forests are dark canopy masses in the terrain shading 
 - **Rain and snow.** Far precipitation is gray veils that hang from the cloud base and lean with the wind. Near the camera it is particles: drizzle as sparse fine dashes, rain as steady streaks, a skyfall as a dense leaning sheet in gust bands; snow as soft flakes that sway, a blizzard as flakes streaming flat. Streaks follow the particle's motion relative to the camera, so rain from a fast aircraft radiates from the direction of flight. Particles take the light of the air they fall through and never glow against it; nothing falls above the cloud (decision 142).
 - **Lightning.** A jagged, branching bolt with bloom from the cloud base to the ground, a short pulse of blue-white light on the ground and in the cloud and rain around it, and thunder after the delay its distance gives. A flash lights the murk toward the strike and never turns the frame white (decisions 141, 142).
 
+## Zones
+
+A zone is a named region of 100–400 km with a coherent look (decision 204). Its recipe shifts the biome colors within limits (hue by up to ±10°, saturation and value by up to ±12%), and sets the haze color and density, the sky grading and the sun's warmth, the weights of the tree and ground cover kits, the landform props, the cloud regime, and ambient particles (dust, mist, drifting snow, pollen). Where a ridge, river, coast or escarpment divides two zones, the change happens there; elsewhere it blends over 5–15 km. The palette shift applies per fragment from a zone texture; haze, grading, warmth, clouds and particles blend by the camera's position. Zones keep the world coherent: the shift never takes a biome outside its own family of colors, and every zone stays under the same sun and sky.
+
 ## Models
 
 ### Polygon Budgets
@@ -145,6 +154,8 @@ Beyond the shell's range, forests are dark canopy masses in the terrain shading 
 | Ground cover (tufts, reeds, bushes, boulders, slabs, pebbles) | 8–40 (decision 172) |
 | Bridge, viaduct | About 300 (short beam) to 1,500 (long truss or viaduct) |
 | Tunnel portal | 100–200 |
+| Landform prop: karst tower, sandstone pillar | 40–160 (decision 204) |
+| Landform prop: sea stack or arch, hoodoo cluster, natural arch, basalt column cluster, small inselberg | 30–200 |
 | Carrier | 2,000–5,000 including deck details |
 | Other ships | 400–2,000 |
 
@@ -192,6 +203,10 @@ Helicopters are flown to the ground and hovered close to it (decision 149, propo
 - **Night.** Runway edge lights, apron floodlights, and tower windows as emissive points.
 - **Bridge kit.** Abutments, wall and column piers, beam deck segments, truss panels, arch ribs, viaduct arches, suspension towers and tunnel portals, built from model specs and assembled per bridge record by type, span and deck elevation. Each structure is unique in length, height and grade, so its parts are merged into one mesh per structure rather than instanced, drawn within about 12 km of the camera (decision 192). Pale concrete like the base kit and steel trusses in a muted gray, with a dark deck underside so a bridge reads from above and in silhouette from a low pass. Culverts under streams narrower than about 5 m have no model (decision 161).
 
+### Landform Props
+
+Tower karst, sandstone pillars, sea stacks and arches, hoodoos, natural arches, basalt columns and small inselbergs are props: instanced, flat-shaded meshes from model specs, placed on the terrain by province and rock, taking their rock colors from the lithology (decision 204). They are tall and chunky, never spindly: towers lean and bulge with undercut bases, arches keep thick spans, and columns cluster in hexagonal blocks. Karst towers may stand taller and denser than on Earth, and drowned towers rise from shallow sea. Props have levels of detail like the trees and count against the scene's triangle budget.
+
 ### Procedural Model Builders
 
 Aircraft, vehicles, ships, buildings, and trees should be generated in code from small JSON specifications rather than modeled by hand. A fuselage spec lists cross-sections along its length; a wing spec lists its planform, sweep, and dihedral; a camouflage spec maps colors to face groups. This approach suits the low-poly style, keeps assets reviewable as text, lets Claude Code author and adjust models, and makes new fictional types cheap to add. A small model viewer page in the debug UI should render any spec with turntable and lighting controls.
@@ -204,21 +219,42 @@ Starting values; final values get tuned in the model viewer and on the globe.
 
 ### Terrain and Water
 
+The land shades are proposal 0007's brighter starting values (decision 204); the code moves to them with the biome table of W4, and the earlier values remain in revision 5 of this guide until then. Zones shift them within the limits of *Zones*.
+
 | Element | Shades |
 |---|---|
 | Deep ocean | `#1E3A4C` |
 | Shallow water | `#2F6B73` |
+| Coral lagoon | `#3FD1C7`, `#7FE3D6`, atoll sand `#F2E6C8` |
 | Beach and sand | `#C9B48A`, `#B9A276` |
-| Wetland | `#6B7A4E` (marsh), dark pools |
 | River gravel | `#999185` |
-| Grassland | `#7A8C4A`, `#6B7C40`, `#8A9A55` |
+| Tropical rainforest | `#1F7A3A`, `#2A8C45`, `#3FA052` |
+| Cloud forest | `#3E8C5A`, `#5BA37A` |
+| Monsoon forest | `#4E8F3A`, `#6FA04A` |
+| Mangrove | `#2F6E4A`, `#3E7F55` |
+| Savanna | `#C9B458`, `#B8A24A`, `#D6C46A` |
+| Sand sea | `#E3A35A`, `#D98C45`, `#EDB873` |
+| Rocky desert | `#B9825A`, `#A0694A`, `#C99A70` |
+| Red rock | `#B8553A`, `#C9673F`, `#D98552` |
+| Fog desert | `#C8B9A0`, `#B5A58C` |
+| Cold desert and steppe | `#B7A77C`, `#A39468` |
+| Mediterranean scrub | `#8A9A5B`, `#9FA86A`, `#7C8B50` |
+| Temperate grassland | `#8DB255`, `#7FA34A`, `#A3C266` |
+| Temperate deciduous forest | `#3F7A35`, `#4E8C3F`, `#5E9C48` |
+| Temperate rainforest | `#22593A`, `#2E6B44` |
+| Moorland and heath | `#8A6A7A`, `#9C7F8C` (heather), `#7A6248`, `#4A3B2E` (peat) |
+| Wetland | `#5E8A55`, `#6E9A60`, pools `#4D7A80` |
+| Marsh (tile cover) | `#6B7A4E`, dark pools |
+| Boreal forest | `#2C5236`, `#355E3E` |
+| Tundra | `#9A9A70`, `#8A8A62`, `#B0A27A` |
+| Alpine meadow | `#7DAA5A`, `#96BC6E` |
+| Glacier and ice | `#CFE6F0`, `#A9D3E6` |
+| Salt flat | `#F1EEE6`, `#E6E1D3` |
+| Brine | `#E59AA8` (pink), `#5FC7C2` (turquoise) |
+| Travertine | `#F3EBDD`, pools `#6FD3D0` |
+| Volcanic rock and black sand | `#2E2B2B`, `#3A3634`, `#4A3F3A` |
+| Mineral bands | `#C65A4A`, `#E0A35A`, `#D9C27A`, `#8FA36A`, `#B58AA0` |
 | Farmland | `#C8A85A` (wheat), `#6E8B3D` (green crop), `#8A6A45` (fallow), `#7F944F` (pasture) |
-| Temperate forest | `#2F4A2A`, `#3B5A33`, `#466B3B` |
-| Conifer forest | `#24382A`, `#2C4434`, `#35503C` |
-| Rainforest | `#2E5A2E`, `#3A6B35` |
-| Savanna | `#A89A5A`, `#97894E` |
-| Desert | `#C49A6C`, `#B07F55`, `#D2AE80` |
-| Tundra | `#8C8A6E`, `#7A7860` |
 | Rock | `#6E665E`, `#857B70`, `#5C554F` |
 | Dry rock (strata) | `#B8693C`, `#C98D58`, `#9C4B2C`, `#D9BB8C`, `#A65A36` (cliffs), `#A8664A` (shale) |
 | Snow | `#E8ECEF`, `#D5DCE2` |
@@ -363,13 +399,14 @@ Targets for a mid-range laptop in a desktop browser at 1080p:
 - Under 500 draw calls per frame, through instancing and merged cluster meshes.
 - Under 2 million triangles per frame in the densest view (low altitude over forest near a base).
 - Trees: near and edge radii by quality tier, to be stepped by the quality governor after the atmospheric effects: tablet 400 m and 1 km, laptop 600 m and 1.2 km (the defaults), desktop 1 km and 2 km. Over dense forest at the laptop tier, trees take about 0.46 M triangles in about 100 draws, and terrain with canopy shell about 0.55 M (decision 150). At least 30 fps on a laptop over forest at treetop height, and on a tablet at its tier.
+- Landform props: within about 6 km of the camera, instanced by kind, with two levels of detail; together at most 0.3 M triangles and 40 draw calls in the densest karst view (decision 204).
 - Atmospheric effects scale with the machine: the volumetric stage marches a quarter, a third (default) or a half of the resolution, and a governor steps its quality and then the particle count down before the frame rate falls under the target, and back up when there is headroom (decision 143). In clear weather the volumetric stage and the particle overlay leave the frame; the pipeline's bloom and grade remain (decision 144).
 
 ## What to Avoid
 
 - Smooth shading on models or close terrain.
 - Photographic textures, and smooth or noisy high-frequency texture; fine ground detail is stepped micro-facets and chunky cover (decision 168).
-- Saturated primary colors outside emissives and UI highlights.
+- Saturated primary colors outside emissives and UI highlights. The brightest natural surfaces (brine, travertine pools, coral lagoons) stay small in area, and zone shifts never push a biome out of its color family (decision 204).
 - Cel-shading bands, and ink lines on terrain, trees or clouds (models carry their optional outline, decision 107).
 - Thin geometry such as antennas, pitot tubes, and fine branches that alias at distance; omit them or thicken them.
 - Uniform scatter of identical trees; forests need clusters, edges, and value variation.
@@ -394,8 +431,10 @@ Before a visual milestone with simulation-view work closes, capture these views 
 12. Each master mode for one fighter, one strike aircraft and one helicopter: slots in the same places in every shot, at most two large and two small displays expanded, the central 60% clear of display chrome, and the strip dark in normal cruise (decision 189).
 13. Displays and the strip in both faction skins at 1366 × 768 and 1920 × 1080: labels and symbology legible, and every item distinguishable under simulated protanopia, deuteranopia and tritanopia.
 14. The moving map's relative elevation mode in a scripted low-level run through a valley: terrain above the aircraft red and hatched, terrain within 500 ft below amber, both matching the ridges seen in the chase view.
+15. Zones: two adjacent zones from 2 km and 10 km, one across a barrier and one across a blend; each recognizable at a glance, the boundary at the barrier or soft over 5–15 km, never a seam (decision 204).
+16. Landmarks: an alpine range with glacial valleys, a basin-and-range desert with a salt flat, a moorland, a jungle river, a karst bay at 300 m with props within budget, and one natural wonder (decision 204).
 
-Checks 1–5 are the views `mixed`, `conifer`, `range`, `dusk` and `beach` in `tools/render.preview.ts` (`VIEWS=checks`), aimed at places the preview finds in each world (decision 128); check 6 runs in the model viewer. Check 11 is the views `hover` and `skid` in `tools/render.preview.ts` and a Free Flight hover, from G1 on. Checks 7–10 are scripted flight sequences in `tools/render.preview.ts` and apply from milestone V4 (camera rig and flight path marker); check 9 needs the flight model (P1), and the gun pipper part of check 8 needs guns (P4). Checks 12–14 apply from P2 (14 from P3): 12 and 13 as composites in `tools/hud/` and browser shots, 14 as a scripted Free Flight sequence.
+Checks 1–5 are the views `mixed`, `conifer`, `range`, `dusk` and `beach` in `tools/render.preview.ts` (`VIEWS=checks`), aimed at places the preview finds in each world (decision 128); check 6 runs in the model viewer. Check 11 is the views `hover` and `skid` in `tools/render.preview.ts` and a Free Flight hover, from G1 on. Checks 7–10 are scripted flight sequences in `tools/render.preview.ts` and apply from milestone V4 (camera rig and flight path marker); check 9 needs the flight model (P1), and the gun pipper part of check 8 needs guns (P4). Checks 12–14 apply from P2 (14 from P3): 12 and 13 as composites in `tools/hud/` and browser shots, 14 as a scripted Free Flight sequence. Checks 15 and 16 apply from W6 and W7 as `tools/render.preview.ts` views and spots (`zones`, `alpine`, `basin`, `moor`, `jungle`, `karst`, `wonder`).
 
 # Part II: Strategic View
 
@@ -407,7 +446,7 @@ The strategic view is where the player reads the war, finds missions, and follow
 2. **Illustrated, not photographic.** Painted fills, procedural patterns, and low-poly glyphs. Glyphs are flat-shaded with solid colors, the same model language as Part I at map scale.
 3. **Crisp at every zoom.** Patterns, glyphs, line widths, and text are sized in screen pixels within each zoom band, so nothing blurs or swims at the zoom floor.
 4. **Time and weather are information.** Night and cloud decide which sorties fly, so the map always shows them, styled so that the geography beneath stays readable.
-5. **Color carries meaning.** Faction colors are reserved for military information. Geography uses muted, natural tones.
+5. **Color carries meaning.** Faction colors are reserved for military information. Geography uses natural tones, brighter since decision 204 but always softer and less saturated than the faction colors.
 
 ## Reference Board (Strategic)
 
@@ -437,7 +476,7 @@ Civilization VI screenshots and Cold War operational maps (NATO planning maps, 1
   - reed marks for wetlands;
   - cracked-ice lines for ice caps;
   - rock hatching on steep slopes.
-  Biome boundaries blend over a few kilometers. Pattern scale is screen-stable, so a pattern looks the same at every zoom within a band: patterns are anchored to the ground, and each point picks its period from its pixel footprint, crossfading between powers of two. Farmland lies on settled land (the strategic graph's habitability) in open lowland biomes, outside forests; its field grid shows from the Theater band down (decision 80). Dune ripples mark hot (sand) deserts only, not cold deserts. Reed marks wait for data that marks wetlands, since the world has no wetland biome yet (decision 81).
+  Biome boundaries blend over a few kilometers. Pattern scale is screen-stable, so a pattern looks the same at every zoom within a band: patterns are anchored to the ground, and each point picks its period from its pixel footprint, crossfading between powers of two. Farmland lies on settled land (the strategic graph's habitability) in open lowland biomes, outside forests; its field grid shows from the Theater band down (decision 80). Dune ripples mark hot (sand) deserts only, not cold deserts. Reed marks wait for data that marks wetlands, since the world has no wetland biome yet (decision 81); W4's wetland biome brings them. The biomes of decision 204 add heather stipple for moorland, a polygonal crust for salt flats, sparse tower dots for tower karst, and banding for mineral hills.
 - **Coasts and water.** Water gets depth tints in a few flat bands, a lighter halo along coasts, and the faint parallel coastal lines of old printed maps. The bands split at reference depths of 200 m (shelf) and 3,000 m (deep) (decision 82). Coastlines carry a thin dark outline, about 1.2 px wide. The halo fades out over the first 11 px from the coast, and three faint lines run 7, 14 and 22 px out, measured at the map scale of the screen center so they stay fixed to the ground while the view orbits (decisions 83, 85). Lakes and wide rivers use the same treatment; narrow rivers are blue lines whose width follows discharge, kept at least a pixel wide: 1 px at 25 m wide, a pixel more per fourfold width, at most 3.5 px. A river becomes water once its true width passes about 4 px. Rivers show from the Theater band down: rivers at least 60 m wide at Theater scale, at least 15 m wide in the Region band (decision 84). Each band's rivers are generalized, simplified to a fraction of a pixel at the band's scale, so major meanders stay legible and the small bends drop out (decision 161).
 - **Graticule.** Optional latitude and longitude lines, and range rings around a selected base or aircraft. There is no hex grid: hexes imply movement rules, and the simulation has none. Lines are a pixel wide at a round spacing (30° down to 0.5°) about 120 px apart, the equator a little stronger; rings fall at multiples of a round distance (25 to 500 km) about 90 px apart, eight of them. Both are dark by day and light by night (decision 91).
 
@@ -455,6 +494,7 @@ Planning sorties needs night and weather, so the map always shows both (an owner
 - **Mountains.** Low-poly peak glyphs (faceted pyramids with snow caps above the snow line), instanced along ridge lines detected from uplift and prominence. Glyph size scales with prominence, and spacing keeps ranges legible as chains. Hills get smaller, rounded mounds. Chains space glyphs about half a glyph's width apart along the ridge, zigzagging across it, and the higher parts of a range fill with smaller glyphs; peaks get their own glyph sized by prominence. A glyph is snow-capped where the annual mean temperature at its point is below freezing (decision 97).
 - **Forests.** Pattern fill everywhere, plus sparse, oversized forest tokens (clumps of three to seven stylized trees, each token about 2 to 5 km across) in the Region band only. Individual trees never appear.
 - **Other landforms.** Dune glyphs in sand deserts: crescents with their horns downwind.
+- **Natural wonders** (decision 204). Each wonder has a glyph of its own kind (a tepui, a falls, a cluster of towers, a caldera), larger than the mountain glyphs around it and drawn on top of them, with a small star mark, from the Theater band down.
 - **Sizes and bands.** Glyphs have a Theater set and a Region set, each fading with its band. Theater mountains are 30–50 km across (peaks up to 60 km), Region mountains 10–17 km (peaks up to 22 km), wider than their spacing so chains overlap into massifs, so a glyph stays roughly the same size in pixels within its band (decision 97).
 - **Shading and color.** Flat shading from face normals, lit from the screen's upper left like the hillshade, then the map's night tint and paper finish. Rock `#8C8379` with snow `#F1F3F2`, mounds `#A99B73`, trees `#4E6A48`, dunes `#D8BD8C` with a `#C4A473` slip face.
 
@@ -475,6 +515,7 @@ Planning sorties needs night and weather, so the map always shows both (an owner
   The faces, under the SIL Open Font License and bundled from npm: EB Garamond Medium Italic for water, and Fira Sans Medium (Semibold for cities and theater names) for landforms, settlements and theaters. Panels keep the Part I UI typeface.
   Sizes (CSS px): oceans 22, seas 17, bays, straits and lakes 14, rivers 13; continents 19 with wide letter spacing, ranges, deserts, forests and plateaus 13, hills, plains and wetlands 11, islands 12, peaks 11; capitals 15.5 in spaced Semibold capitals, cities 14, towns 12, villages 10.5; roads 10.5 in brown `#5A3E2B`; theater names 15. Every style has a halo (`#F4EFE4`, or a pale `#E6EFF2` thinner one for water) so text stays legible over glyphs and the night side (decision 98).
 - **Placement.** Point labels for cities and peaks ("Mount Kessar 1,210 m", with the peak's true height), curved labels along polylines for rivers, ranges, and roads, and widely spaced area labels across deserts, forests, seas, and regions. Point labels try right, left, above and below their anchor; theater names sit centered on their anchor, or above or below the front or sea lane they name (decision 101); line labels sit at the middle of the visible stretch or at stations either side, never upside down and never bending more than about 30° between letters; area labels spread their letters along the feature's axis to fill about 60% of it, or sit level on the anchor where the axis is short or steep.
+- **Zones and wonders** (decision 204). Zone names ("the Oskel Waste", "the Varden Highlands") are area labels in the landform style at 13 px in the Theater band and 12 px in the Region band; they replace the labels of the deserts, forests, plains, plateaus and wetlands inside them. Wonders take a point label in italic landform brown, 12 px, next to their glyph.
 - **Band content.** Which labels show in which band, with the least importance each needs, is a table in `render/strategic/labels/labelModel.ts`: oceans, continents and theater names at the Globe band; seas, ranges, major deserts, forests, plateaus and rivers, straits, capitals, cities and the highest peaks at the Theater band; everything, down to hills, wetlands, towns, villages over 10,000 people, roads (route numbers, pass and coast road names) and bridges, at the Region band (decisions 98, 104, 161).
 - **Collision.** A screen-space placement pass, run when the camera settles or changes band, ranks labels by importance and drops those that collide. Labels fade in and out rather than popping. Between passes, placed labels follow the camera with the placement they won.
 - **Rendering.** Signed-distance-field text rendered by the WebGPU pipeline, so text stays sharp at any size: an atlas generated at load time from the font files (opentype.js), drawn as instanced screen-space quads by a TSL shader (decision 98). A single-channel field rounds the sharpest corners only at sizes far above the map's 10–22 px.
@@ -494,7 +535,7 @@ Planning sorties needs night and weather, so the map always shows both (an owner
 
 ## Strategic Palette
 
-Starting values, tuned on the globe. Land colors are lighter, softer versions of Part I's terrain shades. The world's biomes map onto these rows: taiga takes the conifer fill, temperate and tropical seasonal forest the temperate-forest fill, temperate and tropical rainforest the rainforest fill, hot and cold deserts the desert fill, alpine terrain and displayed slopes steeper than about 31° to 45° the steep-rock fill, and ice sheets the snow fill. Shrubland, which has no row, takes the midpoint of grassland and savanna. Fills blend across biome boundaries over about 9 km (decision 79).
+Starting values, tuned on the globe. Land colors are lighter, softer versions of Part I's terrain shades. With the biome table of decision 204 each biome gets its own fill, derived from Part I's middle shade mixed about 35% toward paper `#F4EFE4` with its saturation capped below the faction colors', and its pattern darker in the same hue; W6 fills in the rows. Until then: The world's biomes map onto these rows: taiga takes the conifer fill, temperate and tropical seasonal forest the temperate-forest fill, temperate and tropical rainforest the rainforest fill, hot and cold deserts the desert fill, alpine terrain and displayed slopes steeper than about 31° to 45° the steep-rock fill, and ice sheets the snow fill. Shrubland, which has no row, takes the midpoint of grassland and savanna. Fills blend across biome boundaries over about 9 km (decision 79).
 
 ### Land and Water
 

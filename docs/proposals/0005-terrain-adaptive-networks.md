@@ -1,6 +1,6 @@
 # Proposal 0005: Terrain-Adaptive Networks
 
-*Drafted 2026-11-15. Status: accepted (decision 161). Affects `docs/design.md`, `docs/visual-style.md`, `docs/proposals/0001-two-views.md`, `TODO.md`, and `CLAUDE.md`. The implementation plan is [docs/plans/terrain-networks.md](../plans/terrain-networks.md).*
+*Drafted 2026-11-15. Status: accepted (decision 161). Affects `docs/design.md`, `docs/visual-style.md`, `docs/proposals/0001-two-views.md`, `TODO.md`, and `CLAUDE.md`. The implementation plan is [docs/plans/terrain-networks.md](../plans/terrain-networks.md). Extended by [proposal 0007](0007-world-diversity.md) (decision 204): rivers into closed basins end at their lake's surface and keep the monotone profile, and alignments keep out of natural wonders' footprints except for scenic routes that pass in sight.*
 
 ## Principle
 

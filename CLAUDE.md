@@ -28,6 +28,7 @@ Guidance for Claude Code sessions in this repository. `docs/design.md` is the so
 | River beds               | `npx vitest run tools/rivers.preview.ts --config vitest.tools.config.ts --disable-console-intercept` (env: `COUNT`, `KM`, `MIN_DROP`, `GRES`): walks rivers' channels on level-7 tiles and prints where the bed climbs (decision 146) |
 | Alignment stage          | `npx vitest run --config vitest.tools.config.ts tools/alignment.preview.ts` (env: `LIMIT`, `NEAR=lat,lon,km`, `SAVE`, `ALIGN_TUNING`); `ALIGNMENTS=<saved>` in the render preview draws it (decision 184) |
 | Displays, checks 12–13   | `node tools/displays.screens.mjs` with `npm run dev` up: every master mode, both skins, 1366 × 768 and 1920 × 1080, color-vision views (env: `MODES`, `SIZES`, `CVD=0`, `OUT_DIR`) → `tools/out/displays/` (decision 200) |
+| World diversity metrics  | `npx vitest run --config vitest.tools.config.ts tools/diversity.preview.ts` (env: `SEEDS` or `FROM`/`COUNT`, `GLOBAL=1` for eroded worlds, `GLOBAL_SEEDS`, `GRES`, `OUT`) → `tools/out/diversity.md`: proposal 0007's criteria over 20 seeds (decision 204) |
 | Browser smoke test       | `npm run build && npm run preview`, then `node tools/browser.smoke.mjs` (env: `MODE`, `WORLD`, `ONLY`, `SCENES`, `OUT`) → `tools/out/browser/` (decision 144) |
 
 ## Directory map
@@ -40,14 +41,20 @@ docs/style/references/  reference screenshots: local only, gitignored, never shi
 docs/proposals/     owner proposals (do not reformat); 0001-two-views.md (decision 72),
                     0002-third-person-flight.md (decision 94), 0003-forests-for-low-flight.md
                     (decision 148), 0004-helicopter-flight.md (decision 149),
-                    0005-terrain-adaptive-networks.md (decision 161) and 0006-displays-and-crew.md
-                    (decision 189) are accepted
+                    0005-terrain-adaptive-networks.md (decision 161), 0006-displays-and-crew.md
+                    (decision 189) and 0007-world-diversity.md (decision 204) are accepted
 docs/plans/         implementation plans: free-flight.md (decision 134), helicopters.md (track H), ground-detail.md (track G),
-                    terrain-networks.md (track N), displays.md (P2, P3, P5, P6; decision 189)
+                    terrain-networks.md (track N), displays.md (P2, P3, P5, P6; decision 189),
+                    world-diversity.md (track W; decision 204)
+docs/reports/       milestone reports, metrics and screenshots (screens/ is excluded from the build);
+                    world-diversity-baseline.md is track W's baseline
 src/core/           units, float64 Vec3d, coordinates, seeded RNG, invented names, the moon's ephemeris. Leaf layer.
 src/worldgen/       planet generation pipeline stages (may use GPU compute); canopy.ts is the canopy height
                     field with its stands (decision 148), shared by the renderer and later the sim;
-                    groundCover.ts places the ground cover kit per cell (decision 174), shared the same way
+                    groundCover.ts places the ground cover kit per cell (decision 174), shared the same way;
+                    (track W, planned) provinces.ts, lithology.ts, zones.ts and props.ts: terrain provinces with
+                    continental characters, rock, zones with look recipes, landform prop placement shared with the sim;
+                    closed basins in drainage.ts; wonder candidates in strategic/wonders.ts (decision 204)
   coarsePass.ts     the design's pipeline at 256² on the CPU; campaignWorld.ts adds the validity retries
   edits/            terrain edits (decision 164): pads and corridors, their index by tile, protected
                     river channels and TerrainEdits.apply, the one height function (rule 13)
@@ -137,7 +144,7 @@ tests/              Vitest unit tests (node); tests/gpu/ runs WGSL kernels on a 
 tools/              offline previews (npm run maps; terrain/bench *.preview.ts), output in tools/out/;
                     hud/ (pages that draw Free Flight's HUD, cards, session and the software-adapter notice without WebGPU);
                     browser.smoke.mjs runs the built app in Chromium (browser/: launch, page probe, lavapipe shim)
-TODO.md             task list by milestone (F, S, C, V, I tracks, then P and H after the demo, and N; design.md, Milestones)
+TODO.md             task list by milestone (F, S, C, V, I tracks, then P and H after the demo, and N, G and W; design.md, Milestones)
 ```
 
 ## Rules
@@ -174,7 +181,7 @@ These are the project conventions. Lint enforces some of them (marked ⚙).
    - If campaign logic needs a new fact about the world, add it to the graph builder in `worldgen/strategic/` and to the graph types. The graph debug overlay then shows it too.
    - The sim's execution layer (flight paths, line of sight, ground movement) may query terrain. The restriction covers planning only.
    - ⚙ `Math.random()` is banned in `campaign` as well. Casting draws from `rng(worldSeed, "casting")`.
-10. **Unsteered generation** (decision 46). World generation never steers toward a particular geography. The only rejection is the validity check, which retries with a seeded sub-seed. Do not add biases to make a theater more likely. Theater detection adapts to the world instead.
+10. **Unsteered generation** (decisions 46, 204). World generation never steers toward a particular geography. The only rejection is the validity check, which retries with a seeded sub-seed. Do not add biases to make a theater more likely. Theater detection adapts to the world instead. One exception serves variety, not any geography: a continent's character is drawn from what its tectonics allow, and the distinctness check may redraw the smaller of two look-alike continents' characters, at most twice, from seeded sub-streams.
 11. **Visual style** (decisions 70, 72). All rendering, models and UI follow `docs/visual-style.md`: Part I for the simulation view, Part II for the strategic view.
     - Part I covers flat shading, the palette, polygon budgets, tree and model construction, LOD distances, post-processing, UI panels and type, and its "What to avoid" list.
     - Part II covers the strategic camera and zoom bands, the base map, glyphs, labels, overlays, day/night and weather on the map, its palette, and its own "What to avoid" list.
@@ -198,6 +205,12 @@ These are the project conventions. Lint enforces some of them (marked ⚙).
     - **Display models.** Every format is a pure function from the sensor-filtered aircraft snapshot and the display state to a serializable display model, in `src/ui/displays/`, with no DOM, canvas or three.js in it. Input from keys, clicks, the crewmate or a companion returns as display commands; what changes the aircraft's behavior is an avionics command in `src/sim/avionics/`, and the crew and AI issue the same ones. Hot actions (those a pilot needs without looking) have key bindings; bezel buttons work by mouse (decision 193).
     - **Mouse capture.** One `MouseCapture` (`src/ui/flight/mouseCapture.ts`) owns the pointer lock for every flown aircraft, toggled by one key (Tab) in every binding table (decision 193). Never request or exit pointer lock elsewhere.
 
+15. **Landform, biome, surface** (decision 204, Proposal 0007). Three separate layers make every landscape, and each has one source.
+    - **Landform** comes from tectonics and rock: the terrain province (`provinces.ts`) sets uplift, soft limit and which landforms form; the lithology (`lithology.ts`) sets erodibility, talus, rock color and gates landforms (strata, mesas and buttes only in layered sedimentary rock in a dry climate; karst only in limestone).
+    - **Biome** comes from climate: temperature, moisture, seasonality and the local modifiers, stacked by altitude. Climate may gate a landform (strata need a dry climate, cirques a cold one), but the biome label itself never decides one, and a province never decides a biome directly; soil from the rock may tip a biome (heath on acid sand, grassland on chalk).
+    - **Surface character** comes from soil, water and disturbance: riparian corridors, oases, ecotones, fire scars and wind-throw, closed-basin salt and shorelines.
+    - Zones, props and wonders read the three layers and never change the province, rock or biome maps; a wonder shapes the tiles on top of them. A new landscape feature names the layer it belongs to and reads only the layers below it.
+
 ## Fidelity as level of detail
 
 Fidelity is a level of detail in both space and time.
@@ -219,8 +232,8 @@ Promotion expands a unit deterministically from its seed and current strength. D
 - Record any architectural decision, or any deviation from `docs/design.md`, in `docs/decisions.md` with the date, the decision and the reason. In the same commit, update whatever `docs/design.md` or `docs/visual-style.md` says on the subject.
 - Run `npm test` and `npm run typecheck` (or `npm run check`) before declaring a task complete.
 - **The Kestrel's flight is pinned bit for bit** by `tests/flightLockstep.test.ts` (decision 154). A change meant to alter it (tuning, a new force) re-records the fixture with `LOCKSTEP_RECORD=1 npx vitest run tests/flightLockstep.test.ts`, once under Node 22 and once under Node 24 (`PATH=/opt/node24/bin:$PATH node node_modules/vitest/vitest.mjs run …` in a cloud session), and says so in its decision. A refactor must pass it unchanged.
-- **Visual milestones close only after the acceptance checks** in `docs/visual-style.md` for the views they touch. A visual milestone is any milestone with rendering, model or UI tasks (all of S1–S4, V1–V4, I1, P1–P5, H1–H5, G1–G5, and N3 and N6–N8).
-  - Simulation view (Part I): checks 1–5 as `tools/render.preview.ts` views; check 6, the silhouette test, in the model viewer once aircraft models exist; checks 7–10 (HUD and camera rig) as scripted sequences from V4 on; checks 12–14 (displays and status strip) from P2.
+- **Visual milestones close only after the acceptance checks** in `docs/visual-style.md` for the views they touch. A visual milestone is any milestone with rendering, model or UI tasks (all of S1–S4, V1–V4, I1, P1–P5, H1–H5, G1–G5, N3 and N6–N8, and W3, W4 and W6–W9).
+  - Simulation view (Part I): checks 1–5 as `tools/render.preview.ts` views; check 6, the silhouette test, in the model viewer once aircraft models exist; checks 7–10 (HUD and camera rig) as scripted sequences from V4 on; checks 12–14 (displays and status strip) from P2; checks 15–16 (zones and landmarks) from W6 and W7.
   - Strategic view (Part II): checks 1, 2, 4 and 5 as preview views (4 through simulated color-vision deficiencies); check 3, the ten-second legibility test, with the owner.
   - Read the PNGs next to the reference board in `docs/style/references/` and report to the owner where they match and where they fall short.
   - Add a TODO task for each gap. The milestone's owner checkpoint comes after this comparison, not before.

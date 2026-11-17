@@ -3283,3 +3283,38 @@ The gap, the faint thin ticks on a bright snow sky, goes to P2's HUD color task 
 `TODO.md` changes with this decision.
 
 **Reason:** Check 7 is the last of P2's checks that does not need the owner's eyes; it ran on the CPU renderer, which draws what the app draws.
+
+### 204. World diversity: provinces, lithology, richer biomes, closed basins, zones and wonders (proposal 0007 accepted)
+
+**Date:** 2026-11-17
+**Decision:** The owner accepts proposal 0007. Landform, biome and surface character become separate layers: a **province** map from tectonic history and a **lithology** map set relief, erodibility and which landforms form; an expanded climate with local modifiers sets twenty land biomes; soil, water and disturbance set the surface. **Closed basins** hold salt lakes and playas. Each continent gets a **character**, and a distinctness check redraws the smaller of two look-alike continents. **Zones** of 100–400 km get names and look recipes. **Landform props** carry the shapes a height field cannot (tower karst, pillars, arches, stacks), and 5–15 named **natural wonders** anchor each world. The palette moves brighter. The plan is `docs/plans/world-diversity.md` (track W, W0–W9); nothing is implemented yet beyond the metrics tool `tools/diversity.preview.ts` and the baseline `docs/reports/world-diversity-baseline.md`.
+
+How the plan reads the proposal, for the owner to confirm (the plan's *Where the proposal meets the code* gives the reasons):
+
+1. The radius in the code equals the design's 1,000 km, so the proposal's distances stand as written and its heights stay absolute. Landforms inside a province keep Earth's dimensions (decision 121); zones of 100–400 km give a world roughly 40–120 of them.
+2. Heights are physical meters after the landform gain. Provinces scale the uplift amplitude and carry their own soft limit: young collision ranges reach 8–9 km, old mountains top out near 2.5 km. The gain of 12 stays.
+3. Provinces, lithology, characters, climate modifiers, biome rules, closed basins, zones and wonder candidates are pure functions evaluated on the coarse pass for the graph and on the global grid for erosion and tiles; the graph reads only the coarse evaluation (rule 9, decision 65).
+4. A new `provinces` stage after `boundaries` draws boundary ages, fossil sutures and hotspots from its own stream; plates, crust and boundaries stay byte-identical.
+5. Tectonic provinces are assigned before uplift; karst and soft sediment are lithology classes decided after elevation; glaciated lowland is a surface province written after climate. Continents for character are components of continental crust, known before uplift.
+6. Rule 10 is amended: a continent's character is drawn from what its tectonics allow, and the distinctness check may redraw the smaller continent's character up to twice from seeded sub-streams. It never rejects a world or favors any geography or theater.
+7. Erodibility is a map multiplied into the incision (about 0.3 for granite and basalt to 3 for loess and ash), with the talus angle by rock.
+8. Strata and buttes need layered sedimentary rock in a dry climate (a layered-rock mask in the reserved channel of the landform masks), not dryness alone.
+9. Drainage gets a water balance on the filled depressions: a lake rises until evaporation meets inflow; below the spill level the basin is closed, its lake salt, or a playa when nothing remains. Decision 130's salt pans become the playa case, with shoreline rings added.
+10. Playas over about 25 km² on the coarse pass become `SaltFlat` features and `dry-lake` airstrip sites in the graph; casting's use of them waits for the C track.
+11. `Biome` v2 keeps the water values 0–3 and puts the twenty land biomes from 4, under the tile covers at 32. Shrubland splits into Mediterranean scrub, cold desert and steppe, and savanna; alpine becomes alpine meadow below the snow line.
+12. The climate gains precipitation seasonality, cold currents and a fog tendency, continentality and stronger orographic effects, in a stream of their own.
+13. Aspect and fine ecotones act in the shader and in `canopy.ts`, which the sim shares, so a north-slope forest is an obstacle where it is drawn.
+14. Local variety is the entropy of the joint classes a player sees at 1.5 km (biome with altitude zone, province, surface character) on the eroded grid, so coherent zones and local variety do not conflict; the minimum starts at 0.5 bit on 90% of land.
+15. Zones are segmented on the coarse pass with boundaries pulled to barriers, upsampled with a distance to the boundary for the 5–15 km blends, and are a feature kind whose labels replace those of the deserts, forests, plains, plateaus and wetlands inside them.
+16. Props are obstacles like the canopy: a pure placement function in `worldgen/props.ts` shared by the renderer and the sim, with collision shapes that contact, the camera's clearance and line of sight query. The one height function (rule 13) stays the ground's.
+17. Wonder candidates are graph facts; a campaign step after casting's territory and before its briefing selects 5–15 near fronts, lanes and airbases from its own stream; shaping is the tile kernel's or props'; the router keeps alignments out of their footprints and lets scenic routes pass in sight.
+18. Part I takes the proposal's palette as starting values; Part II mixes the middle shades toward paper and caps their saturation below the faction colors.
+19. Fine gullies are shade lines in the terrain shader, not micro-facets, since those are off by default (decision 197).
+20. New streams: `provinces`, `lithology`, `climate-modifiers`, `zones`, `props`, `wonders`, and the forks `names/zones` and `names/wonders`. Every stage from uplift on changes by design, so every seed's world and cast change; `GENERATOR_VERSION` rises with W1.
+21. The unattended session the owner briefed works on `feature/world-diversity` and opens a pull request, as the brief asks; every other session follows `CLAUDE.md` (`main`, decision 163).
+
+The verification criteria's open thresholds are set in the plan from the baseline: entropy as in item 14, a Jensen–Shannon divergence of at least 0.25 bit between the two largest continents' joint province and biome distributions, zone diameters of 100–400 km for 90% of zones, and the generation time at most 1.5 times the baseline's.
+
+`docs/design.md` (*Decisions So Far*, *Demo Goals*, *Scale and Range*, *World Generation Pipeline*, *Reading the World*, *Rendering*, *Milestones*, *Open Questions*), Part I (*Principles* preamble, *Terrain*, *Models*, *Palette*, *Performance Budgets*, *What to Avoid*, *Acceptance Checks*, and a new *Zones*), Part II (*Strategic Principles*, *Base Map*, *Geographic Glyphs*, *Labels*, *Strategic Palette*), proposals 0001 and 0005, `CLAUDE.md` (rules 10 and 15) and `TODO.md` change with this decision.
+
+**Reason:** The terrain and erosion already make good ground; what the worlds lack is a reason for one place to differ from another. Tying landforms to tectonic history and rock, biomes to a richer climate, and both to named zones gives each region a cause and an identity, which serves the strategic map, the briefings and the flying alike. Keeping every new stage a pure function on both grids keeps campaign facts the same on every machine, and feeding the existing erosion and kernel new inputs keeps what works.
