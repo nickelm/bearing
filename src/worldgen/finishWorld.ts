@@ -14,10 +14,15 @@ import { computeChannels } from './channels/channels';
 import type { Channels } from './channels/channels';
 import { extractRivers } from './rivers';
 import type { Rivers } from './rivers';
+import type { WorldSeed } from '../core/rng';
+import { segmentZones } from './zones';
+import type { Zones } from './zones';
 
 export interface FinishInput {
   /** Global grid cells per face edge. */
   n: number;
+  /** World seed, for the zones' names and recipes (decision 210); without it, no zones. */
+  seed?: WorldSeed;
   /** Eroded physical height (m). */
   height: Float32Array;
   /** Upsampled climate maps on the global grid. */
@@ -77,6 +82,8 @@ export interface FinishResult {
   /** Terrain province and rock per global cell (decision 204); absent in worlds stored before them. */
   province?: Uint8Array;
   lithology?: Uint8Array;
+  /** Zones with names and look recipes (decision 210); absent in worlds stored before them. */
+  zones?: Zones;
   display: DisplayMaps;
   timings: { stage: string; ms: number }[];
 }
@@ -236,6 +243,20 @@ export function finishWorld(input: FinishInput): FinishResult {
     ),
   );
   const { forest, treeline } = time('forest', () => forestMaps(input, biome));
+  const zones =
+    province && input.seed !== undefined
+      ? time('zones', () =>
+          segmentZones(
+            input.n,
+            input.height,
+            biome,
+            province,
+            drainage.discharge,
+            input.radius,
+            input.seed!,
+          ),
+        )
+      : undefined;
   return {
     drainage,
     rivers,
@@ -245,6 +266,7 @@ export function finishWorld(input: FinishInput): FinishResult {
     treeline,
     province,
     lithology,
+    zones,
     display,
     timings,
   };

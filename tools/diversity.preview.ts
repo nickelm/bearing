@@ -453,6 +453,7 @@ it('measures world diversity', async () => {
     const globalGrid = new CubeGrid(gres);
     const eroded: { seed: string; m: GridMetrics }[] = [];
     const globalMs: string[] = [];
+    const zoneRows: string[] = [];
     for (const s of gseeds) {
       const actual =
         generated.find((g) => g.seed === s)?.actual ??
@@ -479,11 +480,34 @@ it('measures world diversity', async () => {
           global.finish.lithology,
         ),
       });
+      const zs = global.finish.zones;
+      if (zs) {
+        let land = 0;
+        let zoned = 0;
+        for (let c = 0; c < global.height.length; c++) {
+          if (global.height[c]! <= 0) continue;
+          land++;
+          if (zs.zone[c] !== 0xffff) zoned++;
+        }
+        const inRange = zs.records.filter(
+          (z) => z.diameter >= 16_000 && z.diameter <= 63_000,
+        ).length;
+        const named = zs.records.filter((z) => z.name && z.recipe).length;
+        const d = zs.records.map((z) => z.diameter / 1000).sort((a, b) => a - b);
+        zoneRows.push(
+          `| ${s} | ${zs.records.length} | ${pct(zoned / land)} | ${pct(inRange / zs.records.length)} | ` +
+            `${d[Math.floor(d.length / 2)]!.toFixed(0)} | ${pct(named / zs.records.length)} | ` +
+            `${zs.records
+              .slice(0, 3)
+              .map((z) => z.name)
+              .join(', ')} |`,
+        );
+      }
       console.log(`seed ${s}: eroded metrics done`);
       // Incremental output: eroded worlds take minutes each.
-      writeReport([...lines, ...erodedSection(gres, eroded, globalMs)]);
+      writeReport([...lines, ...erodedSection(gres, eroded, globalMs, zoneRows)]);
     }
-    lines.push(...erodedSection(gres, eroded, globalMs));
+    lines.push(...erodedSection(gres, eroded, globalMs, zoneRows));
   }
   writeReport(lines);
 });
@@ -492,6 +516,7 @@ function erodedSection(
   gres: number,
   eroded: { seed: string; m: GridMetrics }[],
   globalMs: string[],
+  zoneRows: string[] = [],
 ): string[] {
   return [
     `## Eroded global grid (${gres}² per face, decision 122's landform gain; entropy over 16 km windows, decision 205)`,
@@ -503,6 +528,16 @@ function erodedSection(
     ...biomeTable(eroded),
     '',
     ...provinceTable(eroded),
+    ...(zoneRows.length
+      ? [
+          '### Zones (decision 210)',
+          '',
+          '| seed | zones | land in a zone | 16–63 km | median diameter (km) | named, with recipe | first names |',
+          '| --- | --- | --- | --- | --- | --- | --- |',
+          ...zoneRows,
+          '',
+        ]
+      : []),
     '### Global pass times',
     '',
     '| seed | stages |',

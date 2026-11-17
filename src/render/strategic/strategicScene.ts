@@ -11,6 +11,7 @@
  * There is no physical sky, aerial perspective or atmosphere here (Part II), only a
  * flat background. Everything is placed camera-relative (common/cameraRelative.ts).
  */
+import type { ZoneRecord } from '../../worldgen/zones';
 import {
   AmbientLight,
   DirectionalLight,
@@ -372,6 +373,14 @@ export class StrategicScene {
     this.relief.setWorld(world);
   }
 
+  /** Zones from the eroded world, for their labels (decision 210); null to drop them. */
+  setZones(zones: readonly ZoneRecord[] | null): void {
+    this.zones = zones;
+    this.lightsDirty = true;
+  }
+
+  private zones: readonly ZoneRecord[] | null = null;
+
   /** Strategic graph, cast and infrastructure for the overlay. */
   setStrategic(
     graph: StrategicGraph | null,
@@ -586,7 +595,9 @@ export class StrategicScene {
         const infra = buildInfraOverlays(d.graph, d.infra);
         this.infraLines.setOverlays(infra, dry);
         this.infraSites.setOverlays(infra, dry);
-        this.labels.setLabels(buildLabels(d.graph, d.cast, heightAt, military, d.infra));
+        this.labels.setLabels(
+          buildLabels(d.graph, d.cast, heightAt, military, d.infra, this.zones),
+        );
       } else {
         this.lights.setLights(null);
         this.glyphs.setGlyphs(null);

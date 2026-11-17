@@ -71,6 +71,7 @@
  * Output: tools/out/render-<seed>-<view>.png, or render-<seed>-strategic-<view>[-<cvd>].png
  * (gitignored).
  */
+import { makeZoneShift } from '../src/render/common/zoneLook';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { deserialize } from 'node:v8';
 import { createRequire } from 'node:module';
@@ -937,6 +938,11 @@ it('renders preview views', async () => {
             riverIndex,
             alignments ? alignmentCorridors(alignments) : [],
           ),
+    // ZONES=0 leaves the zones' palette shift out (decision 210).
+    zoneShift:
+      process.env.ZONES !== '0' && global.finish.zones
+        ? makeZoneShift(global.finish.zones, global.n)
+        : undefined,
   });
   scene.setInfrastructure(infra);
   // The bridge kit along the alignments (decision 192).

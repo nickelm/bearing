@@ -14,6 +14,7 @@
  * Two caches: TileData (CPU heights and materials, levels ≤ 7, also used for
  * ground-height queries) and meshes (GPU buffers, any level).
  */
+import type { ZoneShift } from '../../common/zoneLook';
 import {
   BufferAttribute,
   BufferGeometry,
@@ -176,6 +177,8 @@ export interface TerrainWorld {
   infra?: InfraScene;
   /** Terrain edits: airfields graded in (V3), later corridors (rule 13); none when absent. */
   edits?: TerrainEdits;
+  /** The zones' palette shift (decision 210); none when absent. */
+  zoneShift?: ZoneShift;
 }
 
 export class TerrainRenderer {
@@ -610,6 +613,7 @@ export class TerrainRenderer {
       mode: this.mode,
       detail: this.detail,
       edits: w.edits ?? null,
+      zoneShift: w.zoneShift ?? null,
       canopyClear: w.infra
         ? (d, extra) => w.infra!.isClear(d, false, extra) || w.infra!.isBuiltUp(d, extra)
         : null,
@@ -719,6 +723,7 @@ export class TerrainRenderer {
       detail: this.detail,
       lakeShore: true,
       edits: w.edits ?? null,
+      zoneShift: w.zoneShift ?? null,
       canopyClear: w.infra
         ? (d, extra) => w.infra!.isClear(d, false, extra) || w.infra!.isBuiltUp(d, extra)
         : null,

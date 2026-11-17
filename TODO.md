@@ -1198,10 +1198,12 @@ Terrain provinces and rock from tectonic history, a richer climate with twenty l
 
 ### W6. Zones and visual style
 
-- [ ] Segmentation on the eroded global grid in the worker's finish (decision 205): region growing on province and biome group, merged and split to 16–63 km, boundaries pulled to barriers, stored with the world; zone records with a recipe within the limits of Part I's _Zones_ (`rng(seed, "zones")`) and a name (`names/zones`)
-- [ ] A distance to the boundary per cell for the 1–2.5 km blends; a zone texture for the terrain shader
-- [ ] Simulation view: per-fragment palette shift; haze, sky grading, sun warmth, cloud regime and ambient particles blended by camera position; vegetation kit weights; weather tendencies (low cloud, fog, wind)
-- [ ] Strategic view: fills and patterns for the twenty biomes (Part II's derivation), zone labels at the Theater and Region bands replacing the area labels inside them; `Zone` feature kind
+- [x] Segmentation on the eroded global grid in the worker's finish (decisions 205, 210): region growing on province and biome group, merged and split to 16–63 km, boundaries pulled to barriers, stored with the world; zone records with a recipe within the limits of Part I's _Zones_ (`rng(seed, "zones")`) and a name (`names/zones`)
+- [x] A distance to the boundary per cell for the 1–2.5 km blends; the palette shift in the tile meshes' vertex colors (decision 210)
+- [x] Simulation view: palette shift per vertex (decision 210)
+  - [ ] Haze, sky grading, sun warmth, cloud regime and ambient particles blended by camera position; vegetation kit weights; weather tendencies (low cloud, fog, wind)
+- [x] Strategic view: fills for the new biomes (decision 208), zone labels at the Theater and Region bands replacing the area labels of cover and plains (decision 210)
+  - [ ] Patterns for the new biomes (heather stipple, salt crust, tower dots, mineral banding)
 - [ ] Acceptance check 15 (`zones` view); Part II checks 1, 2, 4, 5 and check 3 with the owner
 
 ### W7. Landform props (stretch)

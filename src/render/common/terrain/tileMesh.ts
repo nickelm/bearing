@@ -25,6 +25,7 @@
  *   TerrainEdits, heights, the morph target and the normals all come from the
  *   edited surface.
  */
+import type { ZoneShift } from '../zoneLook';
 import { cubeFaceUvToDirection } from '../../../core/coords';
 import type { Noise3 } from '../../../core/noise';
 import { parentTile, tileKey, TILE_BORDER, TILE_STRIDE, TILE_TEXELS } from '../../../core/tiles';
@@ -148,6 +149,8 @@ export interface MeshOptions {
    * one count as unforested for the canopy shell's edge density (decision 166).
    */
   canopyClear?: ((d: Readonly<Vec3d>, extra: number) => boolean) | null;
+  /** The zones' palette shift on land (decision 210); none when absent. */
+  zoneShift?: ZoneShift | null;
 }
 
 /** Shared index buffer: grid triangles split along (i, j)–(i+1, j+1), plus skirts. */
@@ -497,6 +500,7 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
   const tmp = new Vec3d();
   const dirOf = (v: number, out: Vec3d) =>
     out.set(dirs[v * 3]!, dirs[v * 3 + 1]!, dirs[v * 3 + 2]!);
+  const zoneDir = new Vec3d();
   for (let j = 0; j < V; j++) {
     for (let i = 0; i < V; i++) {
       const v = j * V + i;
@@ -552,7 +556,9 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
       const fx = dox + sx * dscale;
       const fy = doy + sy * dscale;
       const mat = materialAt(sources.data, fx, fy);
-      const rgb = colorFor(opts.mode, hOwn[v]!, mat, t.level, edge, opts.reliefScale);
+      let rgb = colorFor(opts.mode, hOwn[v]!, mat, t.level, edge, opts.reliefScale);
+      if (opts.zoneShift && opts.mode === 'biome' && hOwn[v]! > 0)
+        rgb = opts.zoneShift(rgb, dirOf(v, zoneDir));
       color[v * 3] = srgbToLinear(rgb[0]);
       color[v * 3 + 1] = srgbToLinear(rgb[1]);
       color[v * 3 + 2] = srgbToLinear(rgb[2]);

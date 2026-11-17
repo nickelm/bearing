@@ -134,6 +134,7 @@ export async function buildGlobalWorld(
       reliefScale: params.reliefScale,
       radius: params.radius,
       displayN: T,
+      seed: params.seed,
       tectonic:
         m.province && m.lithology
           ? {

@@ -3480,3 +3480,32 @@ The owner also asked for decision 204's prep commit on `main` (done), and for th
 `TODO.md` changes with this decision.
 
 **Reason:** The plate is the unit of tectonic history in the generator, so it is the honest unit for a continent's identity; biasing the provinces' draws and thresholds, never their geometry, keeps every character inside what the tectonics allow (rule 10's exception, decision 204).
+
+### 210. W6: zones on the eroded grid with names and look recipes; their palette shift on the terrain; zone labels on the map
+
+**Date:** 2026-11-17
+**Decision:**
+
+- **Segmentation** (`worldgen/zones.ts`, in the worker's global finish, as decision 205 placed it).
+  - **Seeds.** One per lattice block of about 36 km, jittered from `rng(seed, "zones").fork("seeds")`, on land.
+  - **Growth.** Region growing from every seed at once (Dijkstra over 8-neighbors). A step costs four times as much where the class changes (8 biome groups × 4 province groups), 0.6 more per 100 m of height difference, and 4 more across a river carrying 150 m³/s or more. Boundaries settle on class changes, ridges, escarpments and large rivers, and coasts bound zones by themselves.
+  - **Islands and small zones.** Land no seed reached (small islands) becomes zones of its own. Zones under 16 km (the equal-area disc's diameter) merge into the neighbor with the longest shared border, smallest first, in up to three passes.
+  - **Boundary distance.** A breadth-first search gives the distance to the nearest boundary, up to 4 cells.
+- **Records.** Each zone records cells, area, diameter, an anchor (the centroid's direction), its dominant biome and province, a name and a recipe.
+  - **Names** draw from `rng(seed, "names").fork("zones")` in zone order. The generic term follows the dominant classes: Highlands or Uplands, Barrens or Fells, Taiga, Woods or Forest, Moors or Heath, Downs or Steppe, Waste, Sands or Badlands, Plains or Veld, Jungle or Wilds, Fens or Marshes. The naming flavor follows the anchor's quarter of longitude, so neighbors share it.
+  - **Recipes** draw from `zones/recipe-<id>`: a hue shift within ±10°, saturation and value factors within ±12%, and air by biome group (haze tint and density, sun warmth, cloud regime, ambient particles). Mountains thin the haze, volcanic ground grays it, and fog deserts, cloud forest and moorland take fog.
+- **Simulation view.**
+  - The terrain's vertex colors pass through the zone's shift (`render/common/zoneLook.ts`, `MeshOptions.zoneShift`), in HSV. The shift fades to a quarter of a cell's worth at a boundary from both sides, so zones meet without a seam and the change sits on the barrier.
+  - Haze, sky grading, sun warmth, cloud regime and particles by the camera's position are left for later; the recipes carry them.
+  - `ZONES=0` in the render preview leaves the shift out.
+- **Map.** `StrategicScene.setZones` takes the stored records. Zone names are area labels in the small landform style, from the Theater band for zones over about 40 km and in the Region band for all, and they replace the labels of the deserts, forests, plains, plateaus and wetlands (decision 204).
+- **Measured on a 512² coarse world (seed 3).**
+  - A 512² coarse world stands in for the eroded grid: seeds 1 and 3 give 3,391 and a similar number of zones.
+  - Every land cell is in a zone, at least 90% of zones (98.6% on seed 1) fall within 16–63 km, the median diameter is 37 km, and names almost never repeat.
+  - Segmentation takes 3.2 s at 512², so about 13 s is expected at 1024².
+- **Tests.** `tests/zones.test.ts` covers coverage, sizes, names, recipe limits, determinism, and a shift that barely touches boundary cells.
+- **Version.** `GENERATOR_VERSION` is 26.
+
+`TODO.md` changes with this decision.
+
+**Reason:** Zones are presentation data at a scale only the eroded grid resolves (decision 205); a growth whose costs follow the barriers puts boundaries where the proposal asks, and a vertex-color shift is the cheapest way to give the faceted terrain each zone's palette without a new texture.

@@ -1,3 +1,4 @@
+import { makeZoneShift } from './render/common/zoneLook';
 import './style.css';
 import { Vector2, WebGPURenderer } from 'three/webgpu';
 import {
@@ -640,6 +641,8 @@ async function main(): Promise<void> {
         infra,
         // Airfields graded flat into the terrain (V3), river channels kept last (rule 13).
         edits,
+        // Each zone's palette shift (decision 210).
+        zoneShift: global.finish.zones ? makeZoneShift(global.finish.zones, global.n) : undefined,
       });
       // Mountain shadows are baked from the global heights (decision 139).
       globe.shadows.setHeights(global.height, global.n);
@@ -673,6 +676,7 @@ async function main(): Promise<void> {
       // The valley floor, so snow and seasons read the Earth-like elevation (decision 122).
       globe.climate.setValleyFloor(global.finish.display.valleyFloor ?? null, world.maps.height);
       strategicView.setValleyFloor(global.finish.display.valleyFloor ?? null);
+      strategicView.setZones(global.finish.zones?.records ?? null);
       // The map's relief mesh draws from the same synthesizer (decision 77).
       strategicView.setTerrainWorld({
         synth,
