@@ -21,7 +21,7 @@ const zones = segmentZones(
   '3',
 );
 
-describe('zones (decision 210)', () => {
+describe('zones (decision 211)', () => {
   it('puts every land cell in a zone and no sea cell in one', () => {
     for (let c = 0; c < m.height.length; c++) {
       if (m.height[c]! > 0) expect(zones.zone[c]).not.toBe(NO_ZONE);

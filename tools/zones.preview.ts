@@ -1,5 +1,5 @@
 /**
- * Zones (decision 210) recomputed on cached eroded worlds, with the current
+ * Zones (decision 211) recomputed on cached eroded worlds, with the current
  * code, without the GPU: reads the worlds `tools/previewWorld.ts` stored in the
  * OS temp directory and prints each one's zone statistics.
  *

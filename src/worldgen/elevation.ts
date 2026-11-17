@@ -43,7 +43,7 @@ export const UPLIFT_PROFILES: readonly UpliftProfile[] = [
 const STRENGTH_SATURATION = 1.2;
 
 /**
- * Relief by province (decision 207), in reference meters. Young collisions
+ * Relief by province (decision 208), in reference meters. Young collisions
  * rise higher and old ones wear down; plateaus, sutures and hotspot shields add
  * their own uplift; basins and shields sink. Tuning knobs.
  */
@@ -128,7 +128,7 @@ export function computeUplift(
       const src = field.nearest[c];
       const s = Math.min(1, boundaries.strength[src] / STRENGTH_SATURATION);
       let v = prof.amplitude * (0.35 + 0.65 * s) * Math.exp(-d * d);
-      // Young collisions rise higher, old ones are worn and rounded (decision 207).
+      // Young collisions rise higher, old ones are worn and rounded (decision 208).
       const age = provinces ? provinces.boundaryAge[src]! : 0;
       const ranged = prof.type === BoundaryType.Collision || prof.type === BoundaryType.Cordillera;
       const old = ranged && age === 2;

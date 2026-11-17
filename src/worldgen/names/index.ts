@@ -106,7 +106,7 @@ export function featureName(
   }
 }
 
-/** A natural wonder's name by its kind (decision 211). */
+/** A natural wonder's name by its kind (decision 212). */
 export function wonderName(t: Toponymy, kind: WonderKind, flavor: number): string {
   const p = t.proper(flavor);
   switch (kind) {
@@ -203,7 +203,7 @@ export function nameWorld(graph: StrategicGraph, seed: WorldSeed): void {
       parent: f.parent[i]!,
     });
   }
-  // Natural wonders from their own stream (decision 211), so the others keep their names.
+  // Natural wonders from their own stream (decision 212), so the others keep their names.
   const tw = new Toponymy(base.fork('wonders'));
   for (let i = 0; i < f.count; i++) {
     if (f.kind[i] !== FeatureKind.Wonder) continue;

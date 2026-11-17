@@ -2,7 +2,7 @@
 
 _Measured 2026-11-17 on `feature/world-diversity` with `tools/diversity.preview.ts` and `tools/zones.preview.ts`, against the baseline in [world-diversity-baseline.md](world-diversity-baseline.md). Proposal 0007's verification criteria with the thresholds the plan set (decision 204), regional windows scaled to the planet (decision 205)._
 
-The coarse pass ran seeds 1–20 on generator version 27. Eroded worlds (1024² per face, Dawn on lavapipe, 15–25 minutes each) ran on version 26, which differs from 27 and 28 only in the wonders (graph only) and decision 212 (eroded wetland and mangrove, islets). Zones were recomputed on those worlds with decision 212's code.
+The coarse pass ran seeds 1–20 on generator version 27. Eroded worlds (1024² per face, Dawn on lavapipe, 15–25 minutes each) ran on version 26, which differs from 27 and 28 only in the wonders (graph only) and decision 213 (eroded wetland and mangrove, islets). Zones were recomputed on those worlds with decision 213's code.
 
 ## Criteria
 
@@ -92,7 +92,7 @@ The baseline counted biomes only; the measure now counts joint biome and provinc
 | soft sediment         | 2.6%            | 20 of 20                     |
 | glaciated lowland     | 12.9%           | 20 of 20                     |
 
-### Continental characters, wonders and salt flats (decisions 207, 209, 211)
+### Continental characters, wonders and salt flats (decisions 208, 210, 212)
 
 | seed | three largest continents                                                             | redraws | wonder candidates | wonders selected | first wonders                                                  | salt flats (airstrips) |
 | ---- | ------------------------------------------------------------------------------------ | ------- | ----------------- | ---------------- | -------------------------------------------------------------- | ---------------------- |
@@ -126,7 +126,7 @@ The baseline counted biomes only; the measure now counts joint biome and provinc
 | 2          | 9976           | 184601       | 40587        | 50.3%          | 24.4%        | 0.48              | 11.4%  | 7.6%   | 1.5%                    |
 | 2 baseline | 9205           | 70424        | 16007        | 34.3%          | 11.2%        | 0.28              | 31.4%  | 26.0%  | 0.1%                    |
 
-Baseline rows count biomes only. The eroded worlds' wetland and mangrove shares predate decision 212 and read 0%.
+Baseline rows count biomes only. The eroded worlds' wetland and mangrove shares predate decision 213 and read 0%.
 
 ### Global pass times (eroded seeds)
 

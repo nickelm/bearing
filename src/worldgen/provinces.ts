@@ -28,7 +28,7 @@ import { plateVelocity } from './plates';
 import { CHARACTER_EFFECTS, effectAt } from './characters';
 import type { Character } from './characters';
 
-/** Continents and their characters (decision 209). */
+/** Continents and their characters (decision 210). */
 export interface CharacterMap {
   label: Int32Array;
   character: readonly Character[];
@@ -235,7 +235,7 @@ export function assignProvinces(
   const runs: Run[] = [];
   for (let id = 0; id < count; id++) {
     const s = Math.min(1, strengthSum[id]! / cells[id]! / T.strengthSaturation);
-    // The character of the continent the run touches biases its history (decision 209).
+    // The character of the continent the run touches biases its history (decision 210).
     const fx = effectAt(characters, continentCellNear(grid, firstCell[id]!, characters));
     const pYoung = Math.max(
       fx.youngFloor,

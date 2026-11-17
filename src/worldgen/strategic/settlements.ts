@@ -53,7 +53,7 @@ const FERTILITY: Partial<Record<number, number>> = {
   [Biome.HotDesert]: 0.12,
   [Biome.Tundra]: 0.08,
   [Biome.Alpine]: 0.03,
-  // Decision 208.
+  // Decision 209.
   [Biome.CloudForest]: 0.2,
   [Biome.Mangrove]: 0.15,
   [Biome.RockyDesert]: 0.08,

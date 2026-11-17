@@ -16,7 +16,7 @@
  * A second word holds:
  *   x  warm-coast proximity, at sea: the land proximity of warm coasts
  *      (tropical forest, savanna and hot desert), where reefs grow (decision 129)
- *   y  layered rock: horizontally layered sedimentary rock (decision 207), where
+ *   y  layered rock: horizontally layered sedimentary rock (decision 208), where
  *      the tiles may step strata and raise buttes; 1 everywhere without lithology
  *   z, w  reserved
  *

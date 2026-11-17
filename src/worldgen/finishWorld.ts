@@ -21,7 +21,7 @@ import type { Zones } from './zones';
 export interface FinishInput {
   /** Global grid cells per face edge. */
   n: number;
-  /** World seed, for the zones' names and recipes (decision 210); without it, no zones. */
+  /** World seed, for the zones' names and recipes (decision 211); without it, no zones. */
   seed?: WorldSeed;
   /** Eroded physical height (m). */
   height: Float32Array;
@@ -49,7 +49,7 @@ export interface FinishInput {
     n: number;
     province: Uint8Array;
     lithology: Uint8Array;
-    /** Climate modifiers (decision 208); absent in worlds stored before them. */
+    /** Climate modifiers (decision 209); absent in worlds stored before them. */
     seasonality?: Float32Array;
     fog?: Float32Array;
     ecotone?: Float32Array;
@@ -82,7 +82,7 @@ export interface FinishResult {
   /** Terrain province and rock per global cell (decision 204); absent in worlds stored before them. */
   province?: Uint8Array;
   lithology?: Uint8Array;
-  /** Zones with names and look recipes (decision 210); absent in worlds stored before them. */
+  /** Zones with names and look recipes (decision 211); absent in worlds stored before them. */
   zones?: Zones;
   display: DisplayMaps;
   timings: { stage: string; ms: number }[];

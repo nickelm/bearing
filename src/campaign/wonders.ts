@@ -1,5 +1,5 @@
 /**
- * Natural wonders for the war (proposal 0007, decision 211): from the graph's
+ * Natural wonders for the war (proposal 0007, decision 212): from the graph's
  * candidates, 5 to 15 per world, favoring those near the fronts and the sea
  * lanes in play, where pilots will see them. Reads the strategic graph and the
  * cast only (rule 9); draws from `rng(seed, "wonders")`, so casting's own stream

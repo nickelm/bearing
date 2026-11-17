@@ -149,7 +149,7 @@ export interface MeshOptions {
    * one count as unforested for the canopy shell's edge density (decision 166).
    */
   canopyClear?: ((d: Readonly<Vec3d>, extra: number) => boolean) | null;
-  /** The zones' palette shift on land (decision 210); none when absent. */
+  /** The zones' palette shift on land (decision 211); none when absent. */
   zoneShift?: ZoneShift | null;
 }
 

@@ -32,7 +32,7 @@ const climate = (t: number, p: number) => ({
   precipitation: new Float32Array(grid.cellCount).fill(p),
 });
 
-describe('closed basins (decision 207)', () => {
+describe('closed basins (decision 208)', () => {
   const h = bowlIsland();
 
   it('keeps a wet bowl open: its lake fills and spills to the sea', () => {

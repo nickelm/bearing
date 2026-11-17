@@ -48,7 +48,7 @@ export function coarsePass(params: PlanetParams, options: CoarseOptions = {}): C
   const t0 = performance.now();
   options.onProgress?.('drainage', 0.8);
   const m = world.maps;
-  // Closed basins keep their water where evaporation beats inflow (decision 207).
+  // Closed basins keep their water where evaporation beats inflow (decision 208).
   const drainage = computeDrainage(resolution, m.height, m.runoff, params.radius, {
     temperature: m.temperature,
     precipitation: m.precipitation,

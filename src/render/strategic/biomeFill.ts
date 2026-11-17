@@ -56,7 +56,7 @@ export const STRATEGIC_BIOME_FILL: readonly (number | null)[] = (() => {
   f[Biome.TropicalSeasonalForest] = 0x6e8a5a;
   f[Biome.TropicalRainforest] = 0x5f8a55;
   f[Biome.Alpine] = 0x9c948a;
-  // Decision 208: Part I's middle shades mixed about 35% toward paper (#F4EFE4).
+  // Decision 209: Part I's middle shades mixed about 35% toward paper (#F4EFE4).
   f[Biome.CloudForest] = 0x7fae8b;
   f[Biome.Mangrove] = 0x73998a;
   f[Biome.RockyDesert] = 0xd0a98a;

@@ -219,7 +219,7 @@ Starting values; final values get tuned in the model viewer and on the globe.
 
 ### Terrain and Water
 
-The land shades are proposal 0007's brighter starting values (decision 204); the terrain takes each biome's middle shade since decision 208. Zones shift them within the limits of *Zones*.
+The land shades are proposal 0007's brighter starting values (decision 204); the terrain takes each biome's middle shade since decision 209. Zones shift them within the limits of *Zones*.
 
 | Element | Shades |
 |---|---|

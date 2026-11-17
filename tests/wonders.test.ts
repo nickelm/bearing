@@ -6,7 +6,7 @@ import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
 import { Province } from '../src/worldgen/provinces';
 import { FeatureKind, WonderKind } from '../src/worldgen/strategic/graph';
 
-describe('natural wonders (decision 211)', () => {
+describe('natural wonders (decision 212)', () => {
   const grid = new CubeGrid(128);
   const worlds = [1, 2, 3].map((seed) =>
     generateCampaignWorld({ ...DEFAULT_PLANET_PARAMS, seed }, { grid }),

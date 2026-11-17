@@ -30,7 +30,7 @@ function hex(h: number): Rgb {
 
 /**
  * Stylized biome palette, indexed by Biome: the middle shade of each land
- * biome from Part I's brighter palette (proposal 0007, decision 208).
+ * biome from Part I's brighter palette (proposal 0007, decision 209).
  */
 export const BIOME_COLORS: readonly Rgb[] = (() => {
   const c: Rgb[] = new Array(BIOME_COUNT);

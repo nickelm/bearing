@@ -210,7 +210,7 @@ function measure(
   const aridSrc = new Float32Array(n);
   for (let c = 0; c < n; c++) aridSrc[c] = LANDFORM_MASK_TUNING.arid[biome[c]!] ?? 0;
   const arid = blur(grid, aridSrc, blurPasses);
-  // Strata and buttes need layered rock (decision 207): the kernel's second mask.
+  // Strata and buttes need layered rock (decision 208): the kernel's second mask.
   const laySrc = new Float32Array(n).fill(1);
   if (lithology) for (let c = 0; c < n; c++) laySrc[c] = isLayered(lithology[c]!) ? 1 : 0;
   const layered = blur(grid, laySrc, blurPasses);
@@ -439,7 +439,7 @@ it('measures world diversity', async () => {
     ...provinceTable(coarse),
     ...(characterRows.length
       ? [
-          '### Continental characters, wonders and salt flats (decisions 207, 209, 211)',
+          '### Continental characters, wonders and salt flats (decisions 208, 210, 212)',
           '',
           '| seed | three largest continents | redraws | wonder candidates | wonders selected | first wonders | salt flats (airstrips) |',
           '| --- | --- | --- | --- | --- | --- | --- |',
@@ -542,7 +542,7 @@ function erodedSection(
     ...provinceTable(eroded),
     ...(zoneRows.length
       ? [
-          '### Zones (decision 210)',
+          '### Zones (decision 211)',
           '',
           '| seed | zones | land in a zone | 16–63 km | median diameter (km) | named, with recipe | first names |',
           '| --- | --- | --- | --- | --- | --- | --- |',

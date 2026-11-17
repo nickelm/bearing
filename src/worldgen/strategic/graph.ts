@@ -386,9 +386,9 @@ export const FeatureKind = {
   Forest: 14,
   Wetland: 15,
   River: 16,
-  /** A playa of a closed basin (decision 207): also a natural airstrip site. */
+  /** A playa of a closed basin (decision 208): also a natural airstrip site. */
   SaltFlat: 17,
-  /** A natural wonder candidate (decision 211); its `measure` is the `WonderKind`. */
+  /** A natural wonder candidate (decision 212); its `measure` is the `WonderKind`. */
   Wonder: 18,
 } as const;
 export type FeatureKind = (typeof FeatureKind)[keyof typeof FeatureKind];
@@ -512,7 +512,7 @@ export interface FeatureList {
   names: string[];
 }
 
-/** Kinds of natural wonder (decision 211), heightened versions of Earth features. */
+/** Kinds of natural wonder (decision 212), heightened versions of Earth features. */
 export const WonderKind = {
   Tepui: 0,
   GiantFalls: 1,
@@ -543,7 +543,7 @@ export const WONDER_KIND_NAMES: readonly string[] = [
   'basalt causeway',
 ];
 
-/** A salt flat (decision 207): a closed basin's playa, and an airstrip site where long enough. */
+/** A salt flat (decision 208): a closed basin's playa, and an airstrip site where long enough. */
 export interface SaltFlatSite {
   /** Feature id of the salt flat. */
   feature: number;
@@ -588,7 +588,7 @@ export interface StrategicGraph {
   nodeDistance: Float32Array;
   /** Total airbase sites over all nodes. */
   airbaseCapacity: number;
-  /** Salt flats of closed basins (decision 207); absent in graphs built before them. */
+  /** Salt flats of closed basins (decision 208); absent in graphs built before them. */
   saltFlats?: SaltFlatSite[];
   timings: { stage: string; ms: number }[];
 }

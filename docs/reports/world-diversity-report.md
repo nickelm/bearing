@@ -1,18 +1,18 @@
 # World diversity: report (track W, proposal 0007)
 
-_Branch `feature/world-diversity`, 2026-11-17. Proposal: [docs/proposals/0007-world-diversity.md](../proposals/0007-world-diversity.md). Plan: [docs/plans/world-diversity.md](../plans/world-diversity.md). Decisions 204–211. Baseline: [world-diversity-baseline.md](world-diversity-baseline.md). Metrics: [world-diversity-metrics.md](world-diversity-metrics.md)._
+_Branch `feature/world-diversity`, 2026-11-17. Proposal: [docs/proposals/0007-world-diversity.md](../proposals/0007-world-diversity.md). Plan: [docs/plans/world-diversity.md](../plans/world-diversity.md). Decisions 204–212. Baseline: [world-diversity-baseline.md](world-diversity-baseline.md). Metrics: [world-diversity-metrics.md](world-diversity-metrics.md)._
 
 ## Summary
 
 Track W gives the generated worlds a cause for one place to differ from another. Each part is listed with its decision:
 
-- **Terrain provinces and rock** come from tectonic history (decision 206).
-- **The relief follows the province.** Plateaus rise, old ranges wear down, basin-and-range blocks stand in rows, troughs reach the sea as fjords, and strata and buttes appear only in layered rock under a dry climate (decision 207).
-- **Closed basins** keep salt lakes and playas, and the playas become salt flats and airstrip sites in the graph (decision 207).
-- **Twenty land biomes** come from the climate, three local modifiers, the rock and the ground's shape, in a brighter palette (decision 208).
-- **Continents take a character**, checked for distinctness (decision 209).
-- **The land divides into zones** with names and look recipes. They shift the terrain's colors and label the map (decision 210).
-- **5–15 named natural wonders** are selected per war (decision 211).
+- **Terrain provinces and rock** come from tectonic history (decision 207).
+- **The relief follows the province.** Plateaus rise, old ranges wear down, basin-and-range blocks stand in rows, troughs reach the sea as fjords, and strata and buttes appear only in layered rock under a dry climate (decision 208).
+- **Closed basins** keep salt lakes and playas, and the playas become salt flats and airstrip sites in the graph (decision 208).
+- **Twenty land biomes** come from the climate, three local modifiers, the rock and the ground's shape, in a brighter palette (decision 209).
+- **Continents take a character**, checked for distinctness (decision 210).
+- **The land divides into zones** with names and look recipes. They shift the terrain's colors and label the map (decision 211).
+- **5–15 named natural wonders** are selected per war (decision 212).
 
 Landform props (W7) were not started, and several presentation pieces wait for later work. Both are listed under _Simplified, stubbed or deferred_.
 
@@ -94,13 +94,13 @@ The full tables are in [world-diversity-metrics.md](world-diversity-metrics.md);
 
 - **Decision 204**: the proposal accepted, with 21 readings.
 - **Decision 205**: the owner's answers. Regional distances scale with the planet (zones 16–63 km, blends 1–2.5 km, windows 16 km); landforms and heights keep Earth's values. Zones became presentation data on the eroded grid.
-- **Decision 206 (W1)**: provinces and lithology; erodibility.
-- **Decision 207 (W2, W3)**: relief by province, fault blocks, fjords, terracing on layered rock; closed basins, salt flats and airstrip sites.
-- **Decision 208 (W4)**: the modifiers and twenty biomes. _Deviation:_ seven codes appended instead of renumbering.
-- **Decision 209 (W5)**: characters. _Deviation:_ a continent is a plate's crust, because crust is one welded region in most seeds.
-- **Decision 210 (W6)**: zones, recipes, names, the palette shift and labels.
-- **Decision 211 (W8)**: wonders. W7 deferred.
-- **Decision 212**: islets join a zone; flatness and mangroves at the eroded grid's resolution.
+- **Decision 207 (W1)**: provinces and lithology; erodibility.
+- **Decision 208 (W2, W3)**: relief by province, fault blocks, fjords, terracing on layered rock; closed basins, salt flats and airstrip sites.
+- **Decision 209 (W4)**: the modifiers and twenty biomes. _Deviation:_ seven codes appended instead of renumbering.
+- **Decision 210 (W5)**: characters. _Deviation:_ a continent is a plate's crust, because crust is one welded region in most seeds.
+- **Decision 211 (W6)**: zones, recipes, names, the palette shift and labels.
+- **Decision 212 (W8)**: wonders. W7 deferred.
+- **Decision 213**: islets join a zone; flatness and mangroves at the eroded grid's resolution.
 - **Further deviations**:
   - Salt flats are point features, not polygons.
   - Wonders are selected weighted toward fronts and sea lanes, not airbases. Airbases are placed after casting, from the cast.
@@ -113,7 +113,7 @@ The full tables are in [world-diversity-metrics.md](world-diversity-metrics.md);
 - Local variety misses the 90% target (see above).
 - Eroded peaks reach 10.0 km on seed 2, above the proposal's 8–9 km, from young collisions × 1.25 under the shared soft limit.
 - Tundra covers 16.5% of land on the coarse pass (baseline 9.6%), because cold plateaus are tundra below −12 °C. Alpine meadow rose from 5% to 7%.
-- Eroded wetland and mangrove shares were measured before decision 212's fix; the eroded run that would confirm it is still to do.
+- Eroded wetland and mangrove shares were measured before decision 213's fix; the eroded run that would confirm it is still to do.
 
 **Minor**
 

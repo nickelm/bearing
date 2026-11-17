@@ -3342,7 +3342,7 @@ The owner also asked for decision 204's prep commit on `main` (done), and for th
 
 **Reason:** Bearing's continents are Earth's scaled by 0.157 (decision 121), so a region that is a given share of a continent on Earth is the same share here. Landforms and heights are what a pilot sees at working altitude, and they keep Earth's size.
 
-### 206. W1: terrain provinces and lithology; erodibility in the erosion pass
+### 207. W1: terrain provinces and lithology; erodibility in the erosion pass
 
 **Date:** 2026-11-17
 **Decision:** Two new tectonic-grid stages, and the first input they give the existing erosion.
@@ -3364,10 +3364,10 @@ The owner also asked for decision 204's prep commit on `main` (done), and for th
 
 **Reason:** Provinces and rock are the landform layer's sources (rule 15); the erosion pass is the backbone, so rock reaches it as an input, not a new process. Computing both on the tectonic grid and upsampling follows how every other tectonic map reaches the global pass.
 
-### 207. W2 and W3: relief by province, fault blocks, fjords, terracing on layered rock; closed basins with salt lakes and playas
+### 208. W2 and W3: relief by province, fault blocks, fjords, terracing on layered rock; closed basins with salt lakes and playas
 
 **Date:** 2026-11-17
-**Decision:** The province and rock maps of decision 206 now shape the relief, and drainage gets a water balance. Simplest versions that meet the criteria; what is left is listed below.
+**Decision:** The province and rock maps of decision 207 now shape the relief, and drainage gets a water balance. Simplest versions that meet the criteria; what is left is listed below.
 
 **Relief by province (W2).**
 
@@ -3404,7 +3404,7 @@ The owner also asked for decision 204's prep commit on `main` (done), and for th
 
 **Reason:** Feeding the existing uplift, detail and erosion stages new inputs keeps the backbone, and a water balance on the depressions the drainage already finds is the smallest change that closes basins while keeping the river invariants.
 
-### 208. W4: climate modifiers and the twenty biomes; the brighter palette in the code
+### 209. W4: climate modifiers and the twenty biomes; the brighter palette in the code
 
 **Date:** 2026-11-17
 **Decision:** The biome table grows to proposal 0007's twenty land biomes, read from the climate, three modifiers, the rock and the ground's shape.
@@ -3448,7 +3448,7 @@ The owner also asked for decision 204's prep commit on `main` (done), and for th
 
 **Reason:** Appending codes keeps every stored table valid and the old classification intact for the tests that pin it. The modifiers sit beside the climate rather than in it, so drainage and the weather keep their inputs, while the biome table gains the rock, the season and the coast, which is where the proposal's biomes differ.
 
-### 209. W5: continental characters by plate, biases within tectonic limits, and the distinctness check
+### 210. W5: continental characters by plate, biases within tectonic limits, and the distinctness check
 
 **Date:** 2026-11-17
 **Decision:**
@@ -3481,7 +3481,7 @@ The owner also asked for decision 204's prep commit on `main` (done), and for th
 
 **Reason:** The plate is the unit of tectonic history in the generator, so it is the honest unit for a continent's identity; biasing the provinces' draws and thresholds, never their geometry, keeps every character inside what the tectonics allow (rule 10's exception, decision 204).
 
-### 210. W6: zones on the eroded grid with names and look recipes; their palette shift on the terrain; zone labels on the map
+### 211. W6: zones on the eroded grid with names and look recipes; their palette shift on the terrain; zone labels on the map
 
 **Date:** 2026-11-17
 **Decision:**
@@ -3510,7 +3510,7 @@ The owner also asked for decision 204's prep commit on `main` (done), and for th
 
 **Reason:** Zones are presentation data at a scale only the eroded grid resolves (decision 205); a growth whose costs follow the barriers puts boundaries where the proposal asks, and a vertex-color shift is the cheapest way to give the faceted terrain each zone's palette without a new texture.
 
-### 211. W8: natural wonders as graph candidates, selected after casting, named, labeled and briefed; landform props (W7) deferred
+### 212. W8: natural wonders as graph candidates, selected after casting, named, labeled and briefed; landform props (W7) deferred
 
 **Date:** 2026-11-17
 **Decision:**
@@ -3543,7 +3543,7 @@ The owner also asked for decision 204's prep commit on `main` (done), and for th
 
 **Reason:** As graph facts, wonders reach the briefing and the map on every machine. Selecting them after the territory is cast puts them where the war will be flown, and their own streams leave casting and every other name unchanged.
 
-### 212. W9 fixes: islets join a zone; flatness and mangroves at the eroded grid's resolution
+### 213. W9 fixes: islets join a zone; flatness and mangroves at the eroded grid's resolution
 
 **Date:** 2026-11-17
 **Decision:** Two fixes the eroded verification found.
