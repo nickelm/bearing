@@ -83,6 +83,7 @@ export const BAND_TABLE: Record<string, Row> = {
   plain: { theater: 0.55, region: 0 },
   hills: { region: 0 },
   wetland: { region: 0 },
+  saltflat: { theater: 0.5, region: 0 },
   river: { theater: 0.5, region: 0 },
   peak: { theater: 0.58, region: 0 },
   capital: { theater: 0, region: 0 },
@@ -123,6 +124,7 @@ const CLASS: Record<FeatureKind, string> = {
   [FeatureKind.Forest]: 'forest',
   [FeatureKind.Wetland]: 'wetland',
   [FeatureKind.River]: 'river',
+  [FeatureKind.SaltFlat]: 'saltflat',
 };
 
 const STYLE: Record<FeatureKind, LabelStyleId> = {
@@ -143,6 +145,7 @@ const STYLE: Record<FeatureKind, LabelStyleId> = {
   [FeatureKind.Forest]: 'landform',
   [FeatureKind.Wetland]: 'landformSmall',
   [FeatureKind.River]: 'river',
+  [FeatureKind.SaltFlat]: 'landformSmall',
 };
 
 /** "Mount Seir 1,036 m": peaks carry their height (physical meters). */
@@ -152,7 +155,8 @@ export function peakText(name: string, height: number): string {
 
 function placementOf(kind: FeatureKind): LabelPlacement {
   if (kind === FeatureKind.River || kind === FeatureKind.Range) return 'line';
-  if (kind === FeatureKind.Peak || kind === FeatureKind.Strait) return 'point';
+  if (kind === FeatureKind.Peak || kind === FeatureKind.Strait || kind === FeatureKind.SaltFlat)
+    return 'point';
   return 'area';
 }
 

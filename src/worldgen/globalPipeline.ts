@@ -9,7 +9,9 @@
  * worker plumbing (src/workers) and tests can run it in-process.
  */
 import { CubeGrid } from '../core/cubeGrid';
+import { provinceWeight } from './elevation';
 import { erodibilityField } from './lithology';
+import { Province } from './provinces';
 import { LAPSE_RATE } from './climate';
 import type { FinishInput, FinishResult } from './finishWorld';
 import { runDetailStage } from './gpu/detailStage';
@@ -77,7 +79,14 @@ export async function buildGlobalWorld(
     const m = tectonic.maps;
     runDetailStage(
       grid,
-      { n: T, height: m.height, uplift: m.uplift },
+      {
+        n: T,
+        height: m.height,
+        uplift: m.uplift,
+        faultBlocks: m.province
+          ? provinceWeight(new CubeGrid(T), m.province, Province.BasinAndRange, 2)
+          : undefined,
+      },
       params.seed,
       params.reliefScale,
     );
@@ -125,6 +134,10 @@ export async function buildGlobalWorld(
       reliefScale: params.reliefScale,
       radius: params.radius,
       displayN: T,
+      tectonic:
+        m.province && m.lithology
+          ? { n: T, province: m.province, lithology: m.lithology }
+          : undefined,
     };
     lap('readback');
     check();

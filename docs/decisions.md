@@ -3363,3 +3363,43 @@ The owner also asked for decision 204's prep commit on `main` (done), and for th
 `TODO.md` changes with this decision.
 
 **Reason:** Provinces and rock are the landform layer's sources (rule 15); the erosion pass is the backbone, so rock reaches it as an input, not a new process. Computing both on the tectonic grid and upsampling follows how every other tectonic map reaches the global pass.
+
+### 207. W2 and W3: relief by province, fault blocks, fjords, terracing on layered rock; closed basins with salt lakes and playas
+
+**Date:** 2026-11-17
+**Decision:** The province and rock maps of decision 206 now shape the relief, and drainage gets a water balance. Simplest versions that meet the criteria; what is left is listed below.
+
+**Relief by province (W2).**
+
+- **Uplift** (`elevation.ts`, `PROVINCE_RELIEF`):
+  - Collision and cordillera uplift from young runs × 1.25, from old runs × 0.45 with their ridged modulation cut to 30%.
+  - High plateaus add 3,700 reference m over the interior crust, about 4.5 km of Earth elevation in all. Like every continental-scale height, this is a reference height (decision 121), so it sets the climate of a high steppe; peaks stay physical meters.
+  - Fossil sutures add 1,500 m of rounded relief.
+  - Hotspot edifices add a dome of 4,200 m × strength over their 35 km radius.
+  - Basin and range and shields sink by 200 and 150 m. More flooded interiors under the sea-level quantile in a first try.
+  - Every province term is blurred over three cells.
+- **Fault blocks** (`detailStage.ts`). Where the basin-and-range weight (the province, blurred over two tectonic cells) is positive, the detail stage adds tilted blocks: a sawtooth across a regional extension axis, 22 km apart (Earth spacing; a landform, decision 121) and 900 reference m above the basin floors. The blocks have a steep scarp and a long dip slope and break into segments along strike. The extension axis comes from low-frequency noise, so neighboring ranges run parallel.
+- **Fjords** (`erosion.ts`, glacial pass). A deep, iced trough (ice over 0.5, valley floor, drainage) whose local floor reaches the sea within the trough radius may sink below sea level, so the sea floods it.
+- **Terracing.** Strata and buttes need layered rock as well as a dry climate. The masks' second word carries a layered-rock channel from the lithology, blurred like the aridity. The global finish upsamples province and rock to the global grid, and the tile kernel multiplies the aridity term by it. On seed 1's coarse pass the land the kernel would terrace falls from 23% to the share of dry layered rock; the metric is in `tools/diversity.preview.ts`.
+- **Left for later.** A soft limit per province (the baseline's eroded peaks already reach 8.6 and 9.2 km on seeds 1 and 2, so the criterion of peaks above 6 km holds without it). Cirques and arêtes beyond the kernel's alpine crests (decision 126). Separate stratovolcano cones (the arcs keep their ridged uplift). Canyons are left to the erosion of rivers crossing the raised plateaus, with strata in their walls where the rock is layered.
+
+**Closed basins (W3).**
+
+- **Water balance** (`drainage.ts`). With the climate, each depression (a component of cells at least 3 m under the filled surface, three cells or more) compares its inflow, the discharge at its outlet, with the net evaporation of a lake at its spill level. Evaporation is 400 + 60 · T mm/yr, clamped to 150–2,600, minus the precipitation on the lake.
+- **Closed basins.** A basin that loses more than flows in is closed. Its lake stands at the balance level, the lowest level where the lake's loss meets the inflow, and is salt. A balance lake shallower than 3 m dries to a playa, whose crust reaches 30% of the way from the floor to the spill level.
+- **Routing.** Routing runs again with the lake's or playa's cells as sinks at their level. They are terminals with receiver −1, like a mouth, so rivers end there and nothing leaves the basin; every consumer of the receivers already treats −1 as a mouth. Open depressions keep their lakes as before.
+- **Where it runs.** The coarse pass and the global finish both pass the climate: the temperature at each cell's Earth elevation and the precipitation. Seeds 1–6 at 256² give 34–81 closed basins each, of which 55–60% are playas.
+- **Graph.** Playas become point features of the new kind `SaltFlat` ("the Oskel Salt Flat", "Oskel Pan"), labeled from the Theater band, and `StrategicGraph.saltFlats` lists them. A playa is an airstrip site when its longest run is at least 4 km (decision 205). Casting's use of the airstrip sites waits for the C track.
+- **Tiles.** Salt lakes carry a flag (bit 17) and playas another (bit 18) in the global material, with the playa's level as its lake level. With basins, the kernel's salt pan of decision 130 is the playa, and salt lakes keep their water.
+- **Left for later.** Brine colors (pink or turquoise by salinity) and pale shoreline rings between the playa and the spill level. Both need a flag in the tiles' output material that the terrain shader reads.
+
+**Tests.**
+
+- `tests/closedBasins.test.ts`: a wet bowl stays open; a dry bowl closes below its spill level and sends less water to the sea; a very dry one dries to a playa; salt flats and airstrip sites appear in three worlds' graphs.
+- `tests/riverInvariants.test.ts` now drains with the climate, so its ten seeds check the invariants with closed basins too.
+- `tests/militaryOverlays.test.ts` moves from seed 1 to seed 5, which now has two fronts and sea lanes at 128².
+- `GENERATOR_VERSION` is 23.
+
+`TODO.md` changes with this decision.
+
+**Reason:** Feeding the existing uplift, detail and erosion stages new inputs keeps the backbone, and a water balance on the depressions the drainage already finds is the smallest change that closes basins while keeping the river invariants.

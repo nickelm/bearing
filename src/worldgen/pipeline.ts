@@ -162,7 +162,7 @@ export function generateWorld(params: PlanetParams, options: GenerateOptions): W
     ),
   );
   const uplift = stage('uplift', () =>
-    computeUplift(grid, params, boundaries, rng(seed, 'uplift')),
+    computeUplift(grid, params, boundaries, rng(seed, 'uplift'), provinces),
   );
   const elevation = stage('elevation', () =>
     computeElevation(grid, params, continentalness, uplift, rng(seed, 'elevation')),

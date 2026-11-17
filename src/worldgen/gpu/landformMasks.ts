@@ -16,7 +16,9 @@
  * A second word holds:
  *   x  warm-coast proximity, at sea: the land proximity of warm coasts
  *      (tropical forest, savanna and hot desert), where reefs grow (decision 129)
- *   y, z, w  reserved
+ *   y  layered rock: horizontally layered sedimentary rock (decision 207), where
+ *      the tiles may step strata and raise buttes; 1 everywhere without lithology
+ *   z, w  reserved
  *
  * Each source comes from the global biome and treeline maps, is spread by a
  * max filter where noted, then blurred with seam-aware passes on the GPU, so
@@ -24,6 +26,7 @@
  * two u32 per cell (four unorm8 channels each), sampled bilinearly by the tiles.
  */
 import { Biome } from '../biomes';
+import { isLayered } from '../lithology';
 import type { GlobalGrid } from './globalGrid';
 import { LINEAR_ID_WGSL } from './gpuContext';
 
@@ -68,6 +71,7 @@ export function buildLandformMasks(
   biome: Uint8Array,
   height: Float32Array,
   treeline: Float32Array,
+  lithology?: Uint8Array,
 ): GPUBuffer {
   const t = LANDFORM_MASK_TUNING;
   const gpu = grid.gpu;
@@ -77,7 +81,9 @@ export function buildLandformMasks(
   const land = new Float32Array(count);
   const warm = new Float32Array(count);
   const sea = new Float32Array(count);
+  const layered = new Float32Array(count);
   for (let c = 0; c < count; c++) {
+    layered[c] = lithology ? (isLayered(lithology[c]!) ? 1 : 0) : 1;
     const b = biome[c]!;
     arid[c] = t.arid[b] ?? 0;
     const h = height[c]!;
@@ -125,17 +131,27 @@ ${main(`  var sum = 2.0 * vIn[id];
 @group(0) @binding(2) var<storage, read> z: array<f32>;
 @group(0) @binding(3) var<storage, read> w: array<f32>;
 @group(0) @binding(4) var<storage, read> warm: array<f32>;
-@group(0) @binding(5) var<storage, read_write> out: array<vec2u>;
+@group(0) @binding(5) var<storage, read> lay: array<f32>;
+@group(0) @binding(6) var<storage, read_write> out: array<vec2u>;
 ${main(`  out[id] = vec2u(
     pack4x8unorm(clamp(vec4f(a[id], b[id], z[id], w[id]), vec4f(0.0), vec4f(1.0))),
-    pack4x8unorm(vec4f(clamp(warm[id], 0.0, 1.0), 0.0, 0.0, 0.0)));`)}`);
+    pack4x8unorm(vec4f(clamp(warm[id], 0.0, 1.0), clamp(lay[id], 0.0, 1.0), 0.0, 0.0)));`)}`);
 
-  const names = ['mask.arid', 'mask.ice', 'mask.land', 'mask.sea', 'mask.warm', 'mask.tmp'];
+  const names = [
+    'mask.arid',
+    'mask.ice',
+    'mask.land',
+    'mask.sea',
+    'mask.warm',
+    'mask.layered',
+    'mask.tmp',
+  ];
   grid.upload('mask.arid', arid);
   grid.upload('mask.ice', ice);
   grid.upload('mask.land', land);
   grid.upload('mask.sea', sea);
   grid.upload('mask.warm', warm);
+  grid.upload('mask.layered', layered);
   grid.map('mask.tmp');
   const passes = (kernel: GPUComputePipeline, name: string, n: number) => {
     for (let p = 0; p < n; p++) {
@@ -146,6 +162,7 @@ ${main(`  out[id] = vec2u(
   passes(dilate, 'mask.ice', t.iceSpread);
   passes(blur, 'mask.ice', t.blurPasses);
   passes(blur, 'mask.arid', t.blurPasses);
+  passes(blur, 'mask.layered', t.blurPasses);
   passes(coast, 'mask.land', t.landReach);
   passes(blur, 'mask.land', 2);
   passes(coast, 'mask.sea', t.seaReach);
@@ -161,6 +178,7 @@ ${main(`  out[id] = vec2u(
       grid.get('mask.land'),
       grid.get('mask.sea'),
       grid.get('mask.warm'),
+      grid.get('mask.layered'),
       out,
     ],
     count,

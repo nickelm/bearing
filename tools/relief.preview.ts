@@ -290,6 +290,9 @@ it('relief at a point', { timeout: 1_800_000 }, async () => {
     height: global.height,
     forest: global.finish.forest,
     treeline: global.finish.treeline,
+    lithology: global.finish.lithology,
+    basinCell: global.finish.drainage.basinCell,
+    basinLevel: global.finish.drainage.basinLevel,
     index: new RiverIndex(global.finish.rivers, {
       height: global.height,
       radius: R,

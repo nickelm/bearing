@@ -26,7 +26,12 @@ function measure(seed: string): RiverInvariants {
   const params = { ...DEFAULT_PLANET_PARAMS, seed };
   const world = generateWorld(params, { resolution: N, grid });
   const m = world.maps;
-  const drainage = computeDrainage(N, m.height, m.runoff, R);
+  // With the climate, as the coarse pass and the global finish run it: closed basins
+  // end their rivers at their lakes (decision 207), which must keep every invariant.
+  const drainage = computeDrainage(N, m.height, m.runoff, R, {
+    temperature: m.temperature,
+    precipitation: m.precipitation,
+  });
   const rivers = extractRivers(N, m.height, drainage.receiver, drainage.discharge);
   const sigma = process.env.SIGMA === undefined ? {} : { sigma: Number(process.env.SIGMA) };
   const index = new RiverIndex(rivers, {

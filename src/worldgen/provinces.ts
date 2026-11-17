@@ -289,11 +289,24 @@ export function assignProvinces(
     if (t.length() < 1e-6) continue;
     t.normalize();
     const len = T.sutureLength[0] + (T.sutureLength[1] - T.sutureLength[0]) * lenT;
-    const steps = Math.max(2, Math.ceil(len / (10 * KM)));
-    for (let k = 0; k <= steps; k++) {
-      along(x, t, ((k / steps - 0.5) * len) / radius, p);
-      const c = grid.cellOfDirection(p);
-      if (plate[c] === pl.id && continentalness[c]! > 0) sutureSrc[c] = 1;
+    // A wandering path both ways from the start: the heading turns a little every step.
+    const step = 10 * KM;
+    const steps = Math.max(2, Math.ceil(len / (2 * step)));
+    for (const dir of [1, -1]) {
+      p.copy(x);
+      const h = new Vec3d().copy(t).scale(dir);
+      for (let k = 0; k < steps; k++) {
+        const c = grid.cellOfDirection(p);
+        if (plate[c] === pl.id && continentalness[c]! > 0) sutureSrc[c] = 1;
+        // Turn by up to about ±12° per step, from noise along the path.
+        const turn = 0.21 * noise.noise(p.x * 9 + dir * 3.1, p.y * 9, p.z * 9 + pl.id);
+        const side = new Vec3d().copy(p).cross(h);
+        h.scale(Math.cos(turn)).addScaled(side, Math.sin(turn));
+        const next = along(p, h, step / radius, new Vec3d()).normalize();
+        // Keep the heading tangent at the new point.
+        h.addScaled(next, -h.dot(next)).normalize();
+        p.copy(next);
+      }
     }
   }
   const suture = field(sutureSrc, T.sutureWidth * 1.4);

@@ -78,6 +78,9 @@ it('measures the shadow bake', async () => {
     height: global.height,
     forest: global.finish.forest,
     treeline: global.finish.treeline,
+    lithology: global.finish.lithology,
+    basinCell: global.finish.drainage.basinCell,
+    basinLevel: global.finish.drainage.basinLevel,
     index: riverIndex,
   });
   const uv = directionToCubeFace(peak);

@@ -53,6 +53,7 @@ import { bicubicSamplerWgsl } from './gridWgsl';
 import { NOISE_WGSL, packPermutations } from './noiseWgsl';
 import { LANDFORM } from './erosion';
 import { Biome, TileCover } from '../biomes';
+import { BasinCell } from '../drainage';
 import { buildLandformMasks, LANDFORM_MASK_WGSL } from './landformMasks';
 
 export const TILE_SYNTH_TUNING = {
@@ -284,6 +285,14 @@ export interface TileSynthOptions {
   forest: Uint8Array;
   /** Treeline height per global cell (physical m). */
   treeline: Float32Array;
+  /** Rock per global cell (decision 204): strata and buttes only on layered rock. Absent: all layered, as before. */
+  lithology?: Uint8Array;
+  /**
+   * Closed basins (decision 207): `BasinCell` per global cell and the salt lake's
+   * or playa's level. Absent: lakes in dry land are salt pans, as in decision 130.
+   */
+  basinCell?: Uint8Array;
+  basinLevel?: Float32Array;
   index: RiverIndex;
   tuning?: Partial<typeof TILE_SYNTH_TUNING>;
 }
@@ -324,15 +333,25 @@ export class TileSynthesizer {
     // surface (the Priority-Flood fill level, terrain + depth) and the treeline.
     // Half floats give about 1 m at these heights: lake levels are flat per lake and
     // lakes are at least 3 m deep, so that is enough.
+    // Closed basins (decision 207): bit 17 salt lake, bit 18 playa; a playa's cells
+    // carry its crust's level like a lake, so the shore code below shapes them.
     const packed = new Uint32Array(grid.cellCount * 2);
     for (let c = 0; c < grid.cellCount; c++) {
       const depth = opts.lakeDepth[c]!;
-      packed[c * 2] = opts.biome[c]! | (depth > 0 ? 1 << 16 : 0) | (opts.forest[c]! << 24);
-      const level = depth > 0 ? opts.height[c]! + depth : NO_LAKE_HALF;
+      const basin = opts.basinCell?.[c] ?? 0;
+      const playa = basin === BasinCell.Playa;
+      packed[c * 2] =
+        opts.biome[c]! |
+        (depth > 0 || playa ? 1 << 16 : 0) |
+        (basin === BasinCell.SaltLake ? 1 << 17 : 0) |
+        (playa ? 1 << 18 : 0) |
+        (opts.forest[c]! << 24);
+      const level =
+        depth > 0 ? opts.height[c]! + depth : playa ? opts.basinLevel![c]! : NO_LAKE_HALF;
       packed[c * 2 + 1] = toHalf(level) | (toHalf(Math.max(-60_000, opts.treeline[c]!)) << 16);
     }
     this.material = gpu.storageFrom(packed, 'tiles.globalMaterial');
-    this.masks = buildLandformMasks(grid, opts.biome, opts.height, opts.treeline);
+    this.masks = buildLandformMasks(grid, opts.biome, opts.height, opts.treeline, opts.lithology);
 
     const code = /* wgsl */ `${grid.wgsl}
 struct Tile { face: i32, level: i32, x: i32, y: i32, segStart: u32, segCount: u32, octaves: u32,
@@ -695,7 +714,9 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
 
     // Arid landforms (decision 126): buttes and mesas on dry plains and plateaus,
     // then the layered rock stepped into benches and cliffs.
-    let arid = smoothstep(${f(t.aridRange[0])}, ${f(t.aridRange[1])}, masks.x) * dryBed;
+    // Only horizontally layered sedimentary rock steps into strata and buttes (decision 207).
+    let layeredRock = smoothstep(0.3, 0.7, landformMasks2(d).y);
+    let arid = smoothstep(${f(t.aridRange[0])}, ${f(t.aridRange[1])}, masks.x) * dryBed * layeredRock;
     if (arid > 0.0) {
       let flat = 1.0 - smoothstep(${f(t.butteFlat[0])}, ${f(t.butteFlat[1])}, slope);
       let bq = d * (R / ${f(t.butteWavelength)}) + vec3f(41.3, 7.9, 23.1);
@@ -945,7 +966,9 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     h = max(h, mix(h, lakeLevel + 0.6, outside));
     // Lakes in dry land are salt pans (decision 130): flat white ground a little
     // below the level, no water (Bonneville, the Etosha pan).
-    let playa = smoothstep(${f(t.playaArid[0])}, ${f(t.playaArid[1])}, masks.x);
+    // With closed basins (decision 207) the basin's own record decides: playas are
+    // crust, salt lakes keep their water; without them, dry land's lakes are pans.
+    let playa = ${opts.basinCell ? 'f32((mat >> 18u) & 1u)' : `smoothstep(${f(t.playaArid[0])}, ${f(t.playaArid[1])}, masks.x)`};
     if (playa > 0.5 && h < lakeLevel) {
       h = max(lakeLevel - 0.4, 0.3);
       lakeOut = NO_LAKE;

@@ -18,11 +18,16 @@ import { extractCover } from './cover';
 import { extractLand } from './land';
 import { extractRelief } from './relief';
 import { extractRivers } from './riverStems';
+import { extractSaltFlats } from './saltFlats';
 import { extractWater } from './water';
+import type { SaltFlatSite } from '../strategic/graph';
 
 export type { GeographyInput } from './context';
 
-export function extractFeatures(input: GeographyInput): FeatureList {
+export function extractFeatures(
+  input: GeographyInput,
+  out?: { saltFlats?: SaltFlatSite[] },
+): FeatureList {
   const fb = new FeatureBuilder(input.ctx.grid.cellCount);
   const lap = timer(input.timings);
   const region = regionField(input);
@@ -37,6 +42,9 @@ export function extractFeatures(input: GeographyInput): FeatureList {
   lap('cover');
   extractRivers(input, fb, region);
   lap('rivers');
+  const flats = extractSaltFlats(input, fb, region);
+  if (out) out.saltFlats = flats;
+  lap('salt flats');
   return fb.pack();
 }
 

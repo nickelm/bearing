@@ -79,6 +79,9 @@ it('aligns the network of a world', async () => {
     height: global.height,
     forest: global.finish.forest,
     treeline: global.finish.treeline,
+    lithology: global.finish.lithology,
+    basinCell: global.finish.drainage.basinCell,
+    basinLevel: global.finish.drainage.basinLevel,
     index,
   });
   const nets = (env.NETWORKS ?? 'road,rail,spur').split(',');

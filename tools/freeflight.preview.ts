@@ -129,6 +129,9 @@ it('renders Free Flight shots', async () => {
     height: global.height,
     forest: global.finish.forest,
     treeline: global.finish.treeline,
+    lithology: global.finish.lithology,
+    basinCell: global.finish.drainage.basinCell,
+    basinLevel: global.finish.drainage.basinLevel,
     index: rivers,
   });
   const edits = airfieldGrading(infra, global.height, global.n, rivers);

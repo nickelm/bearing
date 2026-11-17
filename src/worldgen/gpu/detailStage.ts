@@ -17,6 +17,7 @@
  */
 import { Noise3 } from '../../core/noise';
 import { rng } from '../../core/rng';
+import { PLANET_RADIUS } from '../../core/units';
 import type { WorldSeed } from '../../core/rng';
 import type { GlobalGrid } from './globalGrid';
 import { LINEAR_ID_WGSL } from './gpuContext';
@@ -42,6 +43,14 @@ export const DETAIL_TUNING = {
   ridgedPerUplift: 0.45,
   gentleFrequency: 20,
   gentleAmplitude: 70,
+  /**
+   * Basin and range (decision 207): tilted fault blocks across the extension,
+   * at Earth's spacing (a landform, decision 121), in reference meters above
+   * the basin floors, with a regional strike from low-frequency noise.
+   */
+  faultSpacing: 22_000,
+  faultRelief: 900,
+  faultStrikeFrequency: 2.5,
 };
 
 export interface TectonicMaps {
@@ -51,6 +60,8 @@ export interface TectonicMaps {
   height: Float32Array;
   /** Boundary uplift (reference m). */
   uplift: Float32Array;
+  /** Weight of the basin-and-range province, 0..1 (decision 207); absent: no fault blocks. */
+  faultBlocks?: Float32Array;
 }
 
 /** Octaves of noise with base frequency f0 whose wavelength stays above `minCells` global cells. */
@@ -104,6 +115,7 @@ export function runDetailStage(
   const mean = ridgedMean(ridged, tuning.ridgedFrequency, ridgedOctaves);
   const T = tectonic.n;
   const t = tuning;
+  const radiusOverSpacing = PLANET_RADIUS / t.faultSpacing;
 
   const code = /* wgsl */ `${grid.wgsl}${gridWgsl(T, 't_')}${LINEAR_ID_WGSL}
 @group(0) @binding(0) var<storage, read> perm: array<u32>;
@@ -111,9 +123,11 @@ export function runDetailStage(
 @group(0) @binding(2) var<storage, read> tUplift: array<f32>;
 @group(0) @binding(3) var<storage, read_write> height: array<f32>;
 @group(0) @binding(4) var<storage, read_write> uplift: array<f32>;
+@group(0) @binding(5) var<storage, read> tFault: array<f32>;
 ${NOISE_WGSL}
 ${bicubicSamplerWgsl('sampleHeight', 'tHeight', 't_')}
 ${bicubicSamplerWgsl('sampleUplift', 'tUplift', 't_')}
+${bicubicSamplerWgsl('sampleFault', 'tFault', 't_')}
 
 const RELIEF: f32 = ${f(reliefScale)};
 const P_WARP: u32 = 0u;
@@ -153,16 +167,39 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroups) nwg:
   let amp = mix(${f(t.ridgedOcean)}, ${f(t.ridgedPlains)}, landish) + ${f(t.ridgedPerUplift)} * max(s.y, 0.0);
   let rd = ridged3(dw * ${f(t.ridgedFrequency)}, P_RIDGED, ${ridgedOctaves}, 2.0, 0.5) - ${f(mean)};
   let gn = fbm3(dw * ${f(t.gentleFrequency)}, P_GENTLE, ${gentleOctaves}, 2.0, 0.5) * ${f(t.gentleAmplitude)};
-  height[id] = s.x + (amp * rd + gn) * RELIEF;
+  // 4. Basin and range: tilted blocks (steep scarp, long dip slope) between flat basins.
+  var fault = 0.0;
+  let fw = clamp(sampleFault(dirFace(dw), projectToFace(dw, dirFace(dw)).x, projectToFace(dw, dirFace(dw)).y), 0.0, 1.0);
+  if (fw > 0.01) {
+    let sq = d * ${f(t.faultStrikeFrequency)};
+    let a = normalize(vec3f(
+      fbm3(sq + vec3f(3.1, 0.0, 0.0), P_GENTLE, 2, 2.0, 0.5),
+      fbm3(sq + vec3f(0.0, 7.3, 0.0), P_GENTLE, 2, 2.0, 0.5),
+      fbm3(sq + vec3f(0.0, 0.0, 5.9), P_GENTLE, 2, 2.0, 0.5)) + vec3f(0.31, 0.77, -0.55));
+    // Extension direction: the regional axis made tangent here.
+    let e = normalize(a - d * dot(a, d));
+    let along = normalize(cross(d, e));
+    let u = dot(dw, e) * ${f(radiusOverSpacing)} + 0.35 * fbm3(dw * 90.0, P_WARP, 3, 2.0, 0.5);
+    let saw = fract(u);
+    let block = smoothstep(0.08, 0.72, saw) * (1.0 - smoothstep(0.8, 0.9, saw));
+    // Ranges break into segments along strike.
+    let seg = smoothstep(-0.25, 0.15, fbm3(vec3f(dot(dw, along) * ${f(radiusOverSpacing * 0.35)}, u * 0.37, 1.7), P_RIDGED, 2, 2.0, 0.5));
+    fault = fw * ${f(t.faultRelief)} * block * seg;
+  }
+  height[id] = s.x + (amp * rd + gn + fault) * RELIEF;
   uplift[id] = s.y;
 }`;
 
   const perm = gpu.storageFrom(packPermutations([warp, ridged, gentle]), 'detail.perm');
   const tHeight = gpu.storageFrom(tectonic.height, 'tectonic.height');
   const tUplift = gpu.storageFrom(tectonic.uplift, 'tectonic.uplift');
+  const tFault = gpu.storageFrom(
+    tectonic.faultBlocks ?? new Float32Array(tectonic.height.length),
+    'tectonic.faultBlocks',
+  );
   gpu.dispatchLinear(
     gpu.kernel(code),
-    [perm, tHeight, tUplift, grid.map('height'), grid.map('uplift')],
+    [perm, tHeight, tUplift, grid.map('height'), grid.map('uplift'), tFault],
     grid.cellCount,
   );
   gpu.flush();
@@ -170,4 +207,5 @@ fn main(@builtin(global_invocation_id) gid: vec3u, @builtin(num_workgroups) nwg:
   perm.destroy();
   tHeight.destroy();
   tUplift.destroy();
+  tFault.destroy();
 }

@@ -28,6 +28,8 @@ export interface StrategicInput {
   uplift?: Float32Array;
   /** World seed for the stages that draw random numbers (settlements). Default 0. */
   seed?: WorldSeed;
+  /** `BasinCell` per cell from drainage (decision 207): salt lakes and playas; optional. */
+  basinCell?: Uint8Array;
 }
 
 /** Derived per-cell fields shared by the builder's stages. */

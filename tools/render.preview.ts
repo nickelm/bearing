@@ -912,6 +912,9 @@ it('renders preview views', async () => {
     height: global.height,
     forest: global.finish.forest,
     treeline: global.finish.treeline,
+    lithology: global.finish.lithology,
+    basinCell: global.finish.drainage.basinCell,
+    basinLevel: global.finish.drainage.basinLevel,
     index: riverIndex,
     // TILE_TUNING='{"floodplainMinWidth":1e9}' overrides tile-synthesis tuning (decision 173).
     tuning: process.env.TILE_TUNING ? JSON.parse(process.env.TILE_TUNING) : undefined,
@@ -2204,6 +2207,9 @@ async function renderStrategic(
     height: global.height,
     forest: global.finish.forest,
     treeline: global.finish.treeline,
+    lithology: global.finish.lithology,
+    basinCell: global.finish.drainage.basinCell,
+    basinLevel: global.finish.drainage.basinLevel,
     index: riverIndex,
   });
   const main = new Vec3d(...world.info.mainContinent);

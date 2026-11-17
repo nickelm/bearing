@@ -16,7 +16,7 @@
  */
 import { labelLandmasses, landmassStats, referenceSlope } from '../landmasses';
 import { barrierMap, buildFronts } from './fronts';
-import type { StrategicGraph } from './graph';
+import type { SaltFlatSite, StrategicGraph } from './graph';
 import { CapWalker, forestDensity, steepestDescent } from './input';
 import type { StrategicContext, StrategicInput } from './input';
 import { crossingNearness, crossingScores, crossingSites } from './crossings';
@@ -112,14 +112,18 @@ export function buildStrategicGraphWithContext(input: StrategicInput): Strategic
     roads: roads.network,
   });
   lap('fronts');
-  const features = extractFeatures({
-    ctx,
-    nodes: nb.nodes,
-    nodeOfLandmass: nb.nodeOfLandmass,
-    members: nb.members,
-    chokepoints: ocean.chokepoints,
-    timings,
-  });
+  const geo: { saltFlats?: SaltFlatSite[] } = {};
+  const features = extractFeatures(
+    {
+      ctx,
+      nodes: nb.nodes,
+      nodeOfLandmass: nb.nodeOfLandmass,
+      members: nb.members,
+      chokepoints: ocean.chokepoints,
+      timings,
+    },
+    geo,
+  );
   lap('features');
   const routes = buildRoutes(ctx, roads.network, features, nb.nodeOfLandmass);
   lap('routes');
@@ -142,6 +146,7 @@ export function buildStrategicGraphWithContext(input: StrategicInput): Strategic
     fronts,
     nodeDistance: ocean.nodeDistance,
     airbaseCapacity: nb.nodes.reduce((s, n) => s + n.airbases.cells.length, 0),
+    saltFlats: geo.saltFlats,
     timings,
   };
   nameWorld(graph, input.seed ?? 0);

@@ -44,6 +44,8 @@ export const IMPORTANCE_SCALE: Record<FeatureKind, [number, number, number]> = {
   [FeatureKind.Wetland]: [0.5, 1_500e6, 50_000e6],
   // Rivers: discharge at the mouth relative to the main-stem threshold.
   [FeatureKind.River]: [0.75, 1, 60],
+  // Salt flats: area of the playa (decision 207).
+  [FeatureKind.SaltFlat]: [0.5, 100e6, 5_000e6],
 };
 
 export function importanceOf(kind: FeatureKind, magnitude: number): number {

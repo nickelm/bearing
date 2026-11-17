@@ -81,9 +81,9 @@ describe('overlay geometry', () => {
   });
 });
 
-describe('military overlays on a generated world (seed 1: two fronts, sea lanes)', () => {
+describe('military overlays on a generated world (seed 5: two fronts, sea lanes; decision 207)', () => {
   const grid = new CubeGrid(128);
-  const w = generateCampaignWorld({ ...DEFAULT_PLANET_PARAMS, seed: 1 }, { grid });
+  const w = generateCampaignWorld({ ...DEFAULT_PLANET_PARAMS, seed: 5 }, { grid });
   const g = w.graph;
   const cast = w.campaign.cast;
   const fgrid = new CubeGrid(g.resolution);

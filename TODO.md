@@ -1157,19 +1157,21 @@ Terrain provinces and rock from tectonic history, a richer climate with twenty l
 
 ### W2. Relief by province
 
-- [ ] Uplift profiles by province: young collision ranges with a soft limit near 7.5 km (peaks 8–9 km), high plateaus at 4–5 km behind collisions, old mountains to about 2.5 km, volcanic cones of 3–6 km, hotspot shields of 2–5 km, rift escarpments, basins near sea level
-- [ ] Glacial carving: arêtes and cirques above the snow line; troughs reaching the sea become fjords
-- [ ] Basin and range in the tiles: parallel tilted fault blocks at Earth spacing (15–30 km) with alluvial fans into flat basins
-- [ ] Plateau canyons with stepped walls where the rock is layered
-- [ ] Strata and buttes only in layered sedimentary rock in a dry climate: a layered-rock mask in the masks' reserved channel; the `buttes` spot and the terracing metric
+- [x] Uplift profiles by province (decision 207; soft limits per province left: peaks already reach 8.6–9.2 km): young collision ranges with a soft limit near 7.5 km (peaks 8–9 km), high plateaus at 4–5 km behind collisions, old mountains to about 2.5 km, volcanic cones of 3–6 km, hotspot shields of 2–5 km, rift escarpments, basins near sea level
+- [x] Glacial carving: troughs reaching the sea become fjords (decision 207)
+  - [ ] Arêtes and cirques above the snow line beyond the kernel's alpine crests
+- [x] Basin and range (in the detail stage, decision 207): parallel tilted fault blocks at Earth spacing (15–30 km) with alluvial fans into flat basins
+- [ ] Plateau canyons with stepped walls where the rock is layered (left to erosion so far, decision 207)
+- [x] Strata and buttes only in layered sedimentary rock in a dry climate (decision 207): a layered-rock mask in the masks' reserved channel; the `buttes` spot and the terracing metric
 - [ ] Measure: peaks over 20 eroded worlds, the theater mix of `npm run seeds` before and after, the tile budget at `ceiling` and `range`
 
 ### W3. Closed basins
 
-- [ ] Water balance on filled depressions in `computeDrainage` (both grids): hypsometry per depression, inflow from the catchment's runoff, lake evaporation from the climate; balance level, closed or open, salinity, playa
-- [ ] Endorheic rivers end at their lake's surface; `riverInvariants` checks it; profiles stay monotone
-- [ ] Kernel: salt lakes in brine colors by salinity, playas as flat white crust, shoreline rings up to the highest former shoreline (decision 130's pans become the playa case)
-- [ ] Graph: `SaltFlat` features and `dry-lake` airstrip sites (playas over about 25 km² with a straight run of at least 4 km (decision 205)); names
+- [x] Water balance on filled depressions in `computeDrainage` (both grids): hypsometry per depression, inflow from the catchment's runoff, lake evaporation from the climate; balance level, closed or open, salinity, playa
+- [x] Endorheic rivers end at their lake's surface (sinks are terminals, decision 207); `riverInvariants` checks it; profiles stay monotone
+- [x] Kernel: playas as flat white crust from the basin flags (decision 130's pans become the playa case; decision 207)
+  - [ ] Brine colors by salinity and shoreline rings: a flag in the tiles' output material for the terrain shader
+- [x] Graph: `SaltFlat` features and airstrip sites (`StrategicGraph.saltFlats`, decision 207) (playas over about 25 km² with a straight run of at least 4 km (decision 205)); names
 - [ ] Spot `basin` in `tools/landscapeSpots.ts`; acceptance check 16's salt flat view
 
 ### W4. Climate and biomes

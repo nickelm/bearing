@@ -35,6 +35,11 @@ export interface FinishInput {
    * it, elevation is height ÷ reliefScale.
    */
   valleyFloor?: Float32Array;
+  /**
+   * Terrain province and rock on the tectonic grid (decision 204), with its
+   * cells per face edge (n must be a multiple); absent in worlds stored before them.
+   */
+  tectonic?: { n: number; province: Uint8Array; lithology: Uint8Array };
 }
 
 export interface DisplayMaps {
@@ -59,6 +64,9 @@ export interface FinishResult {
   forest: Uint8Array;
   /** Treeline height per global cell (physical m). */
   treeline: Float32Array;
+  /** Terrain province and rock per global cell (decision 204); absent in worlds stored before them. */
+  province?: Uint8Array;
+  lithology?: Uint8Array;
   display: DisplayMaps;
   timings: { stage: string; ms: number }[];
 }
@@ -81,6 +89,18 @@ export function globalBiomes(input: FinishInput, lakeDepth: Float32Array): Uint8
       lakeDepth[c]! > 0
         ? Biome.Shelf
         : classifyBiome(h, ref, t, moisture, t - temperatureRange[c]!);
+  }
+  return out;
+}
+
+/** Annual mean temperature at each global cell's Earth-like elevation (°C, decision 122). */
+export function cellTemperature(input: FinishInput): Float32Array {
+  const { height, seaLevelTemperature, reliefScale } = input;
+  const out = new Float32Array(height.length);
+  for (let c = 0; c < height.length; c++) {
+    const h = height[c]!;
+    const ref = h > 0 ? earthElevation(h, input.valleyFloor?.[c] ?? h, reliefScale) : 0;
+    out[c] = seaLevelTemperature[c]! - LAPSE_RATE * ref;
   }
   return out;
 }
@@ -134,7 +154,10 @@ export function finishWorld(input: FinishInput): FinishResult {
     return r;
   };
   const drainage = time('drainage', () =>
-    computeDrainage(input.n, input.height, input.runoff, input.radius),
+    computeDrainage(input.n, input.height, input.runoff, input.radius, {
+      temperature: cellTemperature(input),
+      precipitation: input.precipitation,
+    }),
   );
   const rivers = time('rivers', () =>
     extractRivers(input.n, input.height, drainage.receiver, drainage.discharge),
@@ -159,5 +182,39 @@ export function finishWorld(input: FinishInput): FinishResult {
     ),
   );
   const { forest, treeline } = time('forest', () => forestMaps(input, biome));
-  return { drainage, rivers, channels, biome, forest, treeline, display, timings };
+  const tect = input.tectonic;
+  const province = tect ? upsampleNearest(tect.province, tect.n, input.n) : undefined;
+  const lithology = tect ? upsampleNearest(tect.lithology, tect.n, input.n) : undefined;
+  return {
+    drainage,
+    rivers,
+    channels,
+    biome,
+    forest,
+    treeline,
+    province,
+    lithology,
+    display,
+    timings,
+  };
+}
+
+/**
+ * A tectonic-grid byte map on the global grid: each global cell takes the
+ * tectonic cell it lies in (both grids share the faces' warp, and n is a
+ * multiple of the tectonic n).
+ */
+export function upsampleNearest(src: Uint8Array, from: number, to: number): Uint8Array {
+  const out = new Uint8Array(6 * to * to);
+  const k = to / from;
+  for (let f = 0; f < 6; f++) {
+    for (let j = 0; j < to; j++) {
+      const sj = Math.min(from - 1, Math.floor(j / k));
+      for (let i = 0; i < to; i++) {
+        const si = Math.min(from - 1, Math.floor(i / k));
+        out[(f * to + j) * to + i] = src[(f * from + sj) * from + si]!;
+      }
+    }
+  }
+  return out;
 }

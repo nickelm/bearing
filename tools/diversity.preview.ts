@@ -38,11 +38,11 @@ import { dirname, join } from 'node:path';
 import { it } from 'vitest';
 import { CubeGrid } from '../src/core/cubeGrid';
 import { EARTH_RADIUS } from '../src/core/units';
-import { Vec3d } from '../src/core/vec3d';
 import { Biome, BIOME_COUNT, BIOME_NAMES } from '../src/worldgen/biomes';
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
 import { LANDFORM_MASK_TUNING } from '../src/worldgen/gpu/landformMasks';
 import { PROVINCE_COUNT, PROVINCE_NAMES } from '../src/worldgen/provinces';
+import { isLayered } from '../src/worldgen/lithology';
 import { TILE_SYNTH_TUNING } from '../src/worldgen/gpu/tileSynth';
 import { labelLandmasses } from '../src/worldgen/landmasses';
 import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
@@ -166,6 +166,7 @@ function measure(
   radius: number,
   blurPasses: number,
   province?: Uint8Array,
+  lithology?: Uint8Array,
 ): GridMetrics {
   const t0 = performance.now();
   const n = grid.cellCount;
@@ -211,13 +212,18 @@ function measure(
   const aridSrc = new Float32Array(n);
   for (let c = 0; c < n; c++) aridSrc[c] = LANDFORM_MASK_TUNING.arid[biome[c]!] ?? 0;
   const arid = blur(grid, aridSrc, blurPasses);
+  // Strata and buttes need layered rock (decision 207): the kernel's second mask.
+  const laySrc = new Float32Array(n).fill(1);
+  if (lithology) for (let c = 0; c < n; c++) laySrc[c] = isLayered(lithology[c]!) ? 1 : 0;
+  const layered = blur(grid, laySrc, blurPasses);
   const t = TILE_SYNTH_TUNING;
   let strata = 0;
   let buttes = 0;
   for (let c = 0; c < n; c++) {
     if (!isLand(c)) continue;
     const a = grid.areas[c]!;
-    const w = smoothstep(t.aridRange[0], t.aridRange[1], arid[c]!);
+    const w =
+      smoothstep(t.aridRange[0], t.aridRange[1], arid[c]!) * smoothstep(0.3, 0.7, layered[c]!);
     if (w > 0.05) strata += a;
     const flat = 1 - smoothstep(t.butteFlat[0], t.butteFlat[1], slopeAt(grid, height, c, cellSize));
     if (w * flat > 0.25) buttes += a;
@@ -339,18 +345,6 @@ function summaryRows(rows: { seed: string; m: GridMetrics }[]): string[] {
   return out;
 }
 
-/** A tectonic-grid map on a finer grid, by the coarse cell under each fine cell's center. */
-function upsampleNearest(src: Uint8Array, fine: CubeGrid): Uint8Array {
-  const coarse = new CubeGrid(Math.round(Math.sqrt(src.length / 6)));
-  const out = new Uint8Array(fine.cellCount);
-  const C = fine.centers;
-  const d = new Vec3d();
-  for (let c = 0; c < fine.cellCount; c++) {
-    out[c] = src[coarse.cellOfDirection(d.set(C[3 * c]!, C[3 * c + 1]!, C[3 * c + 2]!))]!;
-  }
-  return out;
-}
-
 function provinceTable(rows: { seed: string; m: GridMetrics }[]): string[] {
   if (rows.every((r) => r.m.provinceShare.every((v) => v === 0))) return [];
   const out = [
@@ -400,7 +394,7 @@ it('measures world diversity', async () => {
       w.world.info.resolution === 256 ? coarseGrid : new CubeGrid(w.world.info.resolution);
     coarse.push({
       seed: s,
-      m: measure(grid, m.height, m.biome, m.lakeDepth, params0.radius, 1, m.province),
+      m: measure(grid, m.height, m.biome, m.lakeDepth, params0.radius, 1, m.province, m.lithology),
     });
     console.log(`seed ${s} (world ${w.seed}): coarse metrics in ${Math.round(genMs)} ms`);
   }
@@ -449,7 +443,7 @@ it('measures world diversity', async () => {
         String(generateCampaignWorld({ ...params0, seed: s }).seed);
       const params = { ...params0, seed: actual };
       const t0 = performance.now();
-      const { world, global } = await previewWorld(gpu, params, 256, gres);
+      const { global } = await previewWorld(gpu, params, 256, gres);
       const ms = performance.now() - t0;
       if (global.timings?.length)
         globalMs.push(
@@ -465,7 +459,8 @@ it('measures world diversity', async () => {
           global.finish.drainage.lakeDepth,
           params0.radius,
           LANDFORM_MASK_TUNING.blurPasses,
-          world.maps.province ? upsampleNearest(world.maps.province, globalGrid) : undefined,
+          global.finish.province,
+          global.finish.lithology,
         ),
       });
       console.log(`seed ${s}: eroded metrics done`);

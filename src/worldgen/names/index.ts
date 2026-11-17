@@ -93,6 +93,8 @@ export function featureName(
       return `the ${t.proper(flavor)} ${pick('Marshes', 'Fens')}`;
     case FeatureKind.River:
       return `the ${t.proper(flavor)} River`;
+    case FeatureKind.SaltFlat:
+      return info.size >= 1_000e6 ? `the ${t.proper(flavor)} Salt Flat` : `${t.proper(flavor)} Pan`;
   }
 }
 

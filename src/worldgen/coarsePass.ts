@@ -48,7 +48,11 @@ export function coarsePass(params: PlanetParams, options: CoarseOptions = {}): C
   const t0 = performance.now();
   options.onProgress?.('drainage', 0.8);
   const m = world.maps;
-  const drainage = computeDrainage(resolution, m.height, m.runoff, params.radius);
+  // Closed basins keep their water where evaporation beats inflow (decision 207).
+  const drainage = computeDrainage(resolution, m.height, m.runoff, params.radius, {
+    temperature: m.temperature,
+    precipitation: m.precipitation,
+  });
   m.discharge = drainage.discharge;
   m.lakeDepth = drainage.lakeDepth;
   timings.push({ stage: 'coarse drainage', ms: performance.now() - t0 });
@@ -61,6 +65,7 @@ export function coarsePass(params: PlanetParams, options: CoarseOptions = {}): C
     discharge: drainage.discharge,
     lakeDepth: drainage.lakeDepth,
     receiver: drainage.receiver,
+    basinCell: drainage.basinCell,
     reliefScale: params.reliefScale,
     radius: params.radius,
     seed: params.seed,

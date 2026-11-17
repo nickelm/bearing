@@ -46,6 +46,9 @@ it('render tile mosaic', async () => {
     height: g.height,
     forest: g.finish.forest,
     treeline: g.finish.treeline,
+    lithology: g.finish.lithology,
+    basinCell: g.finish.drainage.basinCell,
+    basinLevel: g.finish.drainage.basinLevel,
     index: new RiverIndex(g.finish.rivers),
   });
 

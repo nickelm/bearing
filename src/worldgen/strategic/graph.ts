@@ -386,9 +386,11 @@ export const FeatureKind = {
   Forest: 14,
   Wetland: 15,
   River: 16,
+  /** A playa of a closed basin (decision 207): also a natural airstrip site. */
+  SaltFlat: 17,
 } as const;
 export type FeatureKind = (typeof FeatureKind)[keyof typeof FeatureKind];
-export const FEATURE_KIND_COUNT = 17;
+export const FEATURE_KIND_COUNT = 18;
 export const FEATURE_KIND_NAMES: readonly string[] = [
   'continent',
   'island',
@@ -407,6 +409,7 @@ export const FEATURE_KIND_NAMES: readonly string[] = [
   'forest',
   'wetland',
   'river',
+  'salt flat',
 ];
 
 export type FeatureGeometry = 'point' | 'polyline' | 'polygon';
@@ -436,6 +439,7 @@ export const FEATURE_GEOMETRY: readonly FeatureGeometry[] = [
   'polygon', // forest
   'polygon', // wetland
   'polyline', // river
+  'point', // salt flat
 ];
 
 /** Raster layers of polygon features; each cell belongs to at most one feature per layer. */
@@ -457,6 +461,7 @@ export const FEATURE_LAYER: readonly (FeatureLayer | null)[] = [
   'cover',
   'cover',
   'cover',
+  null,
   null,
 ];
 
@@ -502,6 +507,18 @@ export interface FeatureList {
   names: string[];
 }
 
+/** A salt flat (decision 207): a closed basin's playa, and an airstrip site where long enough. */
+export interface SaltFlatSite {
+  /** Feature id of the salt flat. */
+  feature: number;
+  /** Coarse cell nearest its middle. */
+  cell: number;
+  /** Area (m²). */
+  area: number;
+  /** True if a straight run of at least 4 km fits: a natural airstrip site (decision 205). */
+  airstrip: boolean;
+}
+
 export interface StrategicGraph {
   /** Coarse grid cells per face edge the graph was built on. */
   resolution: number;
@@ -535,6 +552,8 @@ export interface StrategicGraph {
   nodeDistance: Float32Array;
   /** Total airbase sites over all nodes. */
   airbaseCapacity: number;
+  /** Salt flats of closed basins (decision 207); absent in graphs built before them. */
+  saltFlats?: SaltFlatSite[];
   timings: { stage: string; ms: number }[];
 }
 

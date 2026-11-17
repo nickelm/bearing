@@ -179,6 +179,9 @@ it('aligns pieces of a world network over two height sources', async () => {
       height: global.height,
       forest: global.finish.forest,
       treeline: global.finish.treeline,
+      lithology: global.finish.lithology,
+      basinCell: global.finish.drainage.basinCell,
+      basinLevel: global.finish.drainage.basinLevel,
       index,
     });
     const keys = new Map<string, TileKey>();
