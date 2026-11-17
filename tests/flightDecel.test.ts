@@ -272,6 +272,23 @@ describe('the straight-in approach (decision 207, acceptance)', () => {
   });
 });
 
+describe('the straight-in approach at Free Flight weight (decision 207)', () => {
+  it('makes the same gates at 13.3 t, with full fuel as unlimited fuel keeps it', () => {
+    const a = straightInApproach(3200);
+    expect(a.crashed).toBeNull();
+    expect(a.below300At!).toBeGreaterThan(12_000);
+    const s = a.at5km!;
+    expect(s.alpha / DEG).toBeGreaterThan(11.5);
+    expect(s.alpha / DEG).toBeLessThan(14.5);
+    expect(Math.abs(s.cas - s.approachSpeed) / KNOT).toBeLessThan(5);
+    expect(s.deviationSpread).toBeLessThan(15);
+    const td = a.touchdown!;
+    expect(td.inZone).toBe(true);
+    expect(td.sinkRate).toBeLessThan(2);
+    expect(a.phase).toBe('stopped');
+  });
+});
+
 describe('approach cues (decision 207)', () => {
   it('puts the approach bug at the speed of 13° in the landing configuration at this weight', () => {
     const { m } = levelStart(150 * KNOT, H, { gear: true, speedbrake: false });

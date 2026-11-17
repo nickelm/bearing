@@ -64,7 +64,7 @@ On a descending path at 2,500 m, idle, speedbrake out, gear up (kt/s at 11.1 t, 
 | 300 → 170 KIAS, idle, speedbrake (no 43° limit: 60°), gear down | 27.8 s (30–60) **fails: too fast** |
 | L/D at 13°, gear down, speedbrake | 3.6 (5–8) **fails** |
 | Thrust on a 3° path at 13°, gear down, speedbrake | 23.2 kN vs idle 3.7 kN (clearly above idle) |
-| Idle glide at 13°, gear down | 7.8° (steeper than 5°) |
+| Idle glide at 13°, gear down | 11.8° (steeper than 5°; the first run of the tool gave 7.8° from a glide that had not settled at 13°) |
 | On-speed approach speed | 150 KCAS at 11.1 t (135–155); 164 KCAS at Free Flight's 13.3 t |
 | Spool-down / spool-up | 1.8 s (2–4) / 5.4 s (4–6) |
 | Gear / speedbrake transit | 6.0 s (3–5) / 2.0 s (1–2) |
@@ -72,9 +72,30 @@ On a descending path at 2,500 m, idle, speedbrake out, gear up (kt/s at 11.1 t, 
 
 ## What step 2 changes
 
-- Drag: CD0 to about 0.021 subsonic; the separated-flow term becomes a table over α that is zero up to about 13° and rises steeply above 15°; k for e = 0.8; smaller gear and flap increments; a stores term.
+- Drag: CD0 to about 0.021 subsonic; the separated-flow term becomes a table over α that is zero up to about 13° and rises steeply above 15°; k for e = 0.8; smaller gear and flap increments; a stores term (zero for the standard load, which the CD0 table already holds).
 - Idle thrust: a table that reaches zero by Mach 0.7 (ram drag).
 - Spool-down 2–4 s; gear transit 4 s; speedbrake 1.5 s.
 - Speedbrake in degrees: 60° in flight, 43° with the gear down, drag scaled by deflection, a small nose-up moment the pitch law holds.
 - Gear overspeed: the handle always works; GEAR SPEED above 300 KIAS; more than 20 kt over the limit with the gear out damages the doors (gear stays down, extra drag).
 - Cues (step 3), since the main finding is that the player cannot see the deceleration.
+
+## After step 2 (decision 207)
+
+| Target | Before | After |
+|---|---|---|
+| 450 → 300 KIAS, 1,500 m, idle, speedbrake open (20–40 s) | 22.0 s | 23.9 s |
+| 300 → 170 KIAS, idle, speedbrake 43°, gear down (30–60 s) | 27.8 s (at 60°: no limit) | 40.3 s |
+| L/D at 13°, gear down, speedbrake 43° (5–8) | 3.6 | 5.2 |
+| Thrust on a 3° path at 13° (clearly above idle) | 23.2 kN, lever 0.26 (idle 3.7 kN) | 15.0 kN, lever 0.16 (idle 3.1 kN) |
+| Idle glide at 13°, gear down (steeper than 5°) | 11.8° | 8.9° |
+| On-speed approach speed at landing weight (135–155 KIAS) | 150 | 150 |
+| Spool-down / spool-up (2–4 s / 4–6 s) | 1.8 s / 5.4 s | 2.9 s / 5.4 s |
+| Gear / speedbrake transit (3–5 s / 1–2 s) | 6.0 s / 2.0 s | 4.0 s / 1.5 s |
+| Takeoff: rotation, liftoff roll | 147 KCAS, 570 m | 147 KCAS, 568 m |
+| Stall, landing configuration (120–140 KIAS) | 125 | 125 |
+| Top speed at 300 m (Mach 1.1–1.2) | 1.122 | 1.122 |
+| Straight-in at 11.1 t: under 300 KIAS / on speed / touchdown | 18.9 km / 13.7 km / 414 m, 1.3 m/s | 18.2 km / 10.0 km / 422 m, 1.0 m/s |
+| Straight-in at 13.3 t | 17.8 km / 12.8 km / 393 m, 1.5 m/s | 16.9 km / 9.0 km / 392 m, 1.4 m/s |
+
+The jet now decelerates a little more slowly at high speed than before, because the targets asked for less drag near 13°, a 43° speedbrake with the gear down and a lower CD0 ratio at the transonic rise. It still meets every deceleration target. What changes for the player is the cues: the trend vector shows whether the deceleration is enough, the gear marker shows where the limit sits on the tape, and the energy cue says whether idle and speedbrake will make the 5 km gate.
+
