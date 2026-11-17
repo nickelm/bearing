@@ -94,7 +94,7 @@ The full tables are in [world-diversity-metrics.md](world-diversity-metrics.md);
 - **Closed basins**: brine colors (pink and turquoise by salinity) and pale shoreline rings wait for a flag in the tiles' output material for the terrain shader. Salt lakes draw as ordinary lakes, playas as white crust.
 - **Relief**: no soft limit per province (peaks already reach 8–10 km); cirques and arêtes rest on the kernel's existing alpine crests; canyons are left to erosion; no separate stratovolcano cones.
 - **Biomes and surface**: aspect in the shader and canopy, disturbance patches in forests, oases, gully shade lines, and the weather reading the fog tendency are not done. Strategic patterns for the new biomes (heather, salt crust, towers, banding) are not done; the new fills are.
-- **Screenshots**: globe maps of three seeds from the coarse pass only. The simulation view's renders on lavapipe (`tools/render.preview.ts`, seed 1: range, alpine, mixed, farmland) had not finished when this report was written. The browser smoke test was not run.
+- **Screenshots**: globe maps of three seeds (coarse pass) and three simulation-view renders of seed 1 on lavapipe. Not rendered: a basin-and-range desert with a salt flat, a moorland close up, a jungle river, a karst bay (no props) and a zone boundary; the browser smoke test was not run.
 
 ## Decisions and deviations from proposal 0007
 
