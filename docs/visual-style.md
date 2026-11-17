@@ -312,7 +312,7 @@ With no cockpits, the HUD and the cockpit displays draw as 2D elements over the 
 The chase camera sits behind and above the aircraft, so HUD symbols cannot sit at fixed screen positions as on a real HUD.
 
 - **World-anchored symbols** are projected from the 3D scene every frame: the flight path marker (from the velocity vector, projected at a great distance so the camera offset causes no parallax), the boresight cross, the gun pipper (at the predicted impact point), CCIP bomb fall lines, target boxes, waypoint and target diamonds, and missile seeker circles.
-- **Screen-anchored instruments** sit at fixed positions around the aircraft: airspeed and altitude tapes, a heading tape, a compact attitude indicator, Mach, G, and the throttle with its detent. Fuel moves to the engines and fuel format, and gear, brakes, speedbrake, afterburner and the master caution move to the status strip.
+- **Screen-anchored instruments** sit at fixed positions around the aircraft: airspeed and altitude tapes, a heading tape, a compact attitude indicator, Mach, G, and the throttle with its detent. The jet's speed tape carries the gear limit, the approach speed bug and a trend vector to the speed 10 s ahead; the landing aid carries the approach energy cue (decision 207). Fuel moves to the engines and fuel format, and gear, brakes, speedbrake, afterburner and the master caution move to the status strip.
 - **Warnings that demand an immediate maneuver** (PULL UP, STALL, tail strike, the sink cue, and the helicopter hazard cues) stay on the HUD in amber; system cautions and warnings go to the strip.
 
 A full pitch ladder is confusing when seen from outside the aircraft, so the compact attitude indicator replaces it.
@@ -322,7 +322,7 @@ A full pitch ladder is confusing when seen from outside the aircraft, so the com
 ### HUD Style
 
 - **Layout.** The aircraft sits slightly below screen center, the tapes flank it, and the HUD keeps within the middle 60% of the screen, clear of the display slots. Declutter levels follow the master mode, down to the world-anchored symbols and tapes alone.
-- **HUD symbology.** A single color (green by default, amber as an option) with a thin dark halo, so it stays legible against bright sky, snow, and night. Free Flight's first HUD (decision 135) starts from green `#6CFF8A` with a halo of `rgba(0, 18, 6, 0.75)` and amber `#FFB347` for warnings; exact values are tuned with the HUD (milestone P2).
+- **HUD symbology.** A single color (green by default, amber as an option) with a thin dark halo, so it stays legible against bright sky, snow, and night. Free Flight's first HUD (decision 135) starts from green `#6CFF8A` with a halo of `rgba(0, 18, 6, 0.75)` and amber `#FFB347` for warnings; exact values are tuned with the HUD (milestone P2). Red `#FF3B30` appears on the HUD only in the approach energy cue's TOO FAST, beside its label (decision 207).
 - **Implementation.** A Canvas 2D overlay at device pixel ratio.
 - **Control cursor.** The mouse's hold on the controls is a game control, not HUD symbology, so it draws in its own soft magenta, `#FF8AE2`, with a dark halo (decision 198): in direct control a faint full-deflection box and dead-zone ring at the screen's center, the line from the center to the cursor, and a cross at the cursor; in mouse aim a ring where the aircraft flies, dimmed while the mouse is free.
 

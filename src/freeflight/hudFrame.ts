@@ -8,6 +8,7 @@ import { DEG } from '../core/units';
 import { Vec3d } from '../core/vec3d';
 import type { FlightControls } from '../sim/flight/controlLaws';
 import type { Airframe } from '../sim/flight/airframe';
+import { approachEnergy, approachSpeed, ON_SPEED_MARGIN } from '../sim/flight/energy';
 import type { FlightModel } from '../sim/flight/flightModel';
 import { flightWarnings } from '../sim/flight/outcomes';
 import {
@@ -23,7 +24,23 @@ import {
 } from '../sim/flight/runway';
 import type { Runway, RunwayEnd } from '../sim/flight/runway';
 import type { ControlCursor } from '../ui/flight/controlCursor';
-import type { HoverHud, HudFrame, HudLandingAid } from '../ui/flight/hud';
+import type { HoverHud, HudEnergy, HudFrame, HudLandingAid } from '../ui/flight/hud';
+
+/** The speed trend vector looks this far ahead (s). */
+export const TREND_TIME = 10;
+
+/**
+ * The approach energy cue (decision 207) for a jet `toAim` m before the aim point and `height`
+ * m above the runway (its gear's height over it, so the runway's elevation is the altitude
+ * less that): shown in the air on the way in while faster than the approach speed.
+ */
+export function energyCue(m: FlightModel, toAim: number, height: number): HudEnergy | null {
+  const t = m.telemetry;
+  if (m.onGround || toAim <= 0 || t.cas <= approachSpeed(m.spec, m.mass) + ON_SPEED_MARGIN)
+    return null;
+  const e = approachEnergy(m.spec, m.mass, t.altitude - height, t.cas, toAim, height);
+  return { needed: e.needed, available: e.available, state: e.state };
+}
 
 /** Range of the landing aid (m): the nearest runway within it is the destination. */
 export const AID_RANGE = 80_000;
@@ -92,6 +109,7 @@ export function landingAid(
       rel(-r.length / 2, hw),
     ],
     aim: rel(end.threshold + end.sign * AIM_POINT, 0),
+    energy: m.kind === 'fixed-wing' ? energyCue(m as FlightModel, gsDist, height) : null,
   };
 }
 
@@ -127,7 +145,9 @@ export function buildHudFrame(
     unlimitedFuel: m.unlimitedFuel,
     gear: m.gear,
     gearDown: c.gearDown,
+    gearDamaged: m.gearDamaged,
     speedbrake: m.speedbrake,
+    speedbrakeAngle: m.speedbrakeDeflection,
     brakes: c.brakeLeft > 0 || c.brakeRight > 0,
     parkingBrake: c.parkingBrake,
     onGround: m.onGround,
@@ -135,6 +155,11 @@ export function buildHudFrame(
     boresight: [bx.x, bx.y, bx.z],
     warnings: flightWarnings(m),
     aid: opts.aid,
+    speedCues: {
+      gearLimit: m.gearSpeedLimit,
+      approach: approachSpeed(m.spec, m.mass),
+      trend: tel.cas + TREND_TIME * tel.casRate,
+    },
     mode: opts.mode,
     control: opts.control,
     hover: opts.hover ?? null,

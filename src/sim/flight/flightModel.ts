@@ -49,6 +49,8 @@ import {
   pitchBlend,
 } from './controlLaws';
 import type { FlightControls, LawInput, LawOutput, LawState } from './controlLaws';
+import { dragCoefficient, emptyDrag, speedbrakeShare } from './drag';
+import type { DragBreakdown, DragState } from './drag';
 import { lookup, lookup2 } from './flightSpec';
 import type { FlightSpec, WheelSpec } from './flightSpec';
 import {
@@ -66,37 +68,30 @@ import {
 
 export type { GroundQuery, SurfaceKind } from './contact';
 export { FLIGHT_STEP, modelToBody, SUBSTEPS } from './rigidBody';
+export type { DragBreakdown } from './drag';
 
 /** Time constants of the stick prefilter (s). */
 const PITCH_PREFILTER = 0.25;
 /** With the gear down (pitch-rate command), a quick prefilter: letting go stops the rotation. */
 const PITCH_PREFILTER_GEAR = 0.08;
 const ROLL_PREFILTER = 0.08;
+/** Time constant (s) of the airspeed trend's filter. */
+const CAS_RATE_TAU = 1;
 
 /** A wheel: its spec, and its contact with the ground (contact.ts). */
 export interface WheelState extends WheelContact {
   readonly spec: WheelSpec;
 }
 
-/** The drag coefficient by term (all referred to the wing area), for diagnostics and the debug panel. */
-export interface DragBreakdown {
-  /** Zero-lift drag at this Mach number. */
-  cd0: number;
-  /** Induced drag, k·CL², less the ground effect's relief. */
-  induced: number;
-  /** Separated-flow drag at high angle of attack. */
-  separated: number;
-  /** The gear in proportion to its travel, and damaged doors. */
-  gear: number;
-  flaps: number;
-  speedbrake: number;
-  stores: number;
-}
-
 /** Per-substep quantities for the HUD and the debug panel: the common ones, and the jet's. */
 export interface FlightTelemetry extends AirframeTelemetry {
   /** The drag coefficient's terms (they sum to `cd`). */
   drag: DragBreakdown;
+  /**
+   * Rate of change of the calibrated airspeed (m/s², + accelerating), low-passed over
+   * CAS_RATE_TAU: the HUD's speed trend (decision 207). Telemetry only; the flight never reads it.
+   */
+  casRate: number;
   /** Lift and drag coefficients, and the engine's thrust (N). */
   cl: number;
   cd: number;
@@ -139,6 +134,8 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
   gearDamaged = false;
   /** Seconds flown beyond the gear's damage speed with it out. */
   gearOverspeedTime = 0;
+  /** The last substep's calibrated airspeed, for the trend (null after a placement). */
+  private lastCas: number | null = null;
   /** Game seconds flown. */
   time = 0;
   unlimitedFuel = true;
@@ -168,6 +165,16 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
     l: new Vec3d(),
     w: new Vec3d(),
     e: new Vec3d(),
+    drag: {
+      cl: 0,
+      alpha: 0,
+      mach: 0,
+      gear: 0,
+      flaps: 0,
+      gearDamaged: false,
+      speedbrake: 0,
+      groundEffect: 0,
+    } as DragState,
   };
 
   constructor(spec: FlightSpec, radius: number) {
@@ -195,7 +202,8 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
       cl: 0,
       cd: 0,
       thrust: 0,
-      drag: { cd0: 0, induced: 0, separated: 0, gear: 0, flaps: 0, speedbrake: 0, stores: 0 },
+      drag: emptyDrag(),
+      casRate: 0,
       load: 1,
       normalLoad: 1,
       altitude: 0,
@@ -254,6 +262,8 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
     this.crashed = null;
     this.gearDamaged = false;
     this.gearOverspeedTime = 0;
+    this.lastCas = null;
+    this.telemetry.casRate = 0;
     this.stick.pitch = 0;
     this.stick.roll = 0;
     Object.assign(this.lawState, newLawState());
@@ -366,28 +376,17 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
     const groundUnder = ground.height(up);
     const ge = Math.exp((-2.5 * Math.max(0, altitude - groundUnder)) / spec.wing.span);
     const cl = (clBase + a.flapCl * flaps * flapFade) * (1 + a.groundEffectLift * ge);
-    // Separated flow by |α|, folded past 90° (a tail slide meets the flow on the same plate).
-    const absA = Math.abs(alpha);
-    const terms = tel.drag;
-    terms.cd0 = lookup(a.cd0, mach);
-    terms.induced = a.induced * cl * cl * (1 - a.groundEffectDrag * ge);
-    terms.separated = lookup(a.cdSeparated, absA <= Math.PI / 2 ? absA : Math.PI - absA);
-    terms.gear = a.cdGear * this.gear + (this.gearDamaged ? a.cdGearDamage : 0);
-    terms.flaps = a.cdFlaps * flaps;
-    // The speedbrake panels by deflection: drag and moment grow as sin²δ, as a hinged plate's.
-    const sbMax = Math.sin(spec.speedbrake.maxDeflection);
-    const sbSin = Math.sin(this.speedbrakeDeflection);
-    const sbShare = (sbSin * sbSin) / (sbMax * sbMax);
-    terms.speedbrake = a.cdSpeedbrake * sbShare;
-    terms.stores = a.cdStores;
-    const cd =
-      terms.cd0 +
-      terms.induced +
-      terms.separated +
-      terms.gear +
-      terms.flaps +
-      terms.speedbrake +
-      terms.stores;
+    const sbShare = speedbrakeShare(spec, this.speedbrakeDeflection);
+    const ds = sc.drag;
+    ds.cl = cl;
+    ds.alpha = alpha;
+    ds.mach = mach;
+    ds.gear = this.gear;
+    ds.flaps = flaps;
+    ds.gearDamaged = this.gearDamaged;
+    ds.speedbrake = sbShare;
+    ds.groundEffect = ge;
+    const cd = dragCoefficient(spec, ds, tel.drag);
     const fb = sc.fb.set(0, 0, 0);
     let liftX = 0;
     let liftZ = 0;
@@ -547,6 +546,9 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
     tel.beta = sensedBeta;
     tel.tas = tas;
     tel.cas = cas;
+    if (this.lastCas !== null)
+      tel.casRate += ((cas - this.lastCas) / dt - tel.casRate) * Math.min(1, dt / CAS_RATE_TAU);
+    this.lastCas = cas;
     // Sensed, like the airspeed: no Mach number beside an airspeed of zero in a tailwind.
     tel.mach = ahead ? mach : 0;
     tel.qbar = qbar;

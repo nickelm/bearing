@@ -181,6 +181,8 @@ export class FreeFlight {
   private displayName = 'F-21 Kestrel';
   private sortieAt = 0;
   private fuelCapacity = 0;
+  /** The gear doors' failure has been announced this sortie. */
+  private gearDamageTold = false;
   private displaysAt = -Infinity;
   private movingMap: MovingMap | null = null;
   /**
@@ -501,6 +503,7 @@ export class FreeFlight {
     if (spawn === 'air') spawnInAir(m, r, end);
     else spawnOnRunway(m, r, end);
     this.model = m;
+    this.gearDamageTold = false;
     this.monitor = new FlightMonitor(this.runways, R);
     this.monitor.reset(spawn === 'air');
     // An air start holds about the throttle for 300 kt (trim is near 0.15 of the lever).
@@ -968,6 +971,11 @@ export class FreeFlight {
         for (const e of this.monitor.update(m, FLIGHT_STEP)) this.event(e);
       }
       if (steps >= MAX_STEPS) this.acc = 0;
+      // Gear doors failed in an overspeed (decision 207): said once; the strip keeps the caution.
+      if (m.gearDamaged && !this.gearDamageTold) {
+        this.gearDamageTold = true;
+        this.hud.message(['GEAR DOORS DAMAGED', 'GEAR STAYS DOWN'], 5, true);
+      }
     }
     this.steps = steps;
     this.physicsMs = performance.now() - t0;

@@ -20,7 +20,7 @@ Guidance for Claude Code sessions in this repository. `docs/design.md` is the so
 | Seed browser (theaters)  | `npm run seeds` (env: `SEEDS`, `FROM`, `COUNT`, `BRIEFING=1`)   |
 | Weather preview          | `npm run weather` (env: `SEED`, `HOURS`, `DAYS`, `PRESET`) → `tools/out/` |
 | Flight-model figures     | `npx vitest run --config vitest.tools.config.ts tools/flight.preview.ts` |
-| Kestrel deceleration     | `npx vitest run --config vitest.tools.config.ts tools/decel.preview.ts --disable-console-intercept`: drag breakdown, spool and transit times, the deceleration targets and the straight-in approach (decision 207) |
+| Kestrel deceleration     | `npx vitest run --config vitest.tools.config.ts tools/decel.preview.ts --disable-console-intercept`: drag breakdown, spool and transit times, the deceleration targets and the straight-in approach (decision 207); `tools/approachHud.preview.ts` writes HUD frames of that approach for `tools/freeflight.screens.mjs` (`SHOTS=approach-20,approach-13,approach-6 OUT_DIR=tools/out`) |
 | Kestrel lockstep charts  | `npx vitest run --config vitest.tools.config.ts tools/lockstep.preview.ts` (`ONLY`) → `tools/out/lockstep.html`: the lockstep test's 15 flights (decision 154) |
 | Sky sheets, shadow bake  | `tools/sky.preview.ts` (sky-only contact sheets; `PERF=n`, `VIBRANCE`), `tools/shadow.preview.ts` (height sources and bake cost; `ROUNDS`), both with the vitest tools config |
 | Clouds, fog, rain        | `tools/clouds.preview.ts` (the volumetrics over a plain ground, 0.1–0.3 s per view; `VIEWS`, `QUALITY`, `COUNT=1` for steps and texture reads, `PERF=n`, `GRAIN=0`, `TUNING` and `TUNING_AIR` as in the render preview), `tools/precip.preview.ts` (particles and a bolt; `BOLT`), both with the vitest tools config |

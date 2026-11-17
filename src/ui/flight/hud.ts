@@ -39,6 +39,8 @@ import type { ControlCursor } from './controlCursor';
 export const HUD_COLOR = '#6CFF8A';
 const HALO = 'rgba(0, 18, 6, 0.75)';
 const WARN_COLOR = '#FFB347';
+/** Red, on the HUD only for the approach energy cue's "cannot slow in time" (decision 207). */
+const RED_COLOR = '#FF3B30';
 
 /** A world direction or camera-relative point projected to CSS pixels, or null if behind the camera. */
 export type Projector = (
@@ -60,6 +62,29 @@ export interface HudLandingAid {
   /** Runway outline corners and aim point, camera-relative (m). */
   corners: [number, number, number][];
   aim: [number, number, number];
+  /** The approach energy cue (decision 207), for a jet still fast on the way in; else null. */
+  energy?: HudEnergy | null;
+}
+
+/**
+ * The approach energy cue (decision 207): the distance needed to slow to the approach speed at
+ * idle with the speedbrake against the distance left to the glide path intercept (m).
+ */
+export interface HudEnergy {
+  needed: number;
+  available: number;
+  /** 'ok' green, 'marginal' amber, 'short' red (it cannot slow in time). */
+  state: 'ok' | 'marginal' | 'short';
+}
+
+/** Markers on the jet's speed tape (decision 207), calibrated airspeeds in m/s. */
+export interface HudSpeedCues {
+  /** The gear's speed limit. */
+  gearLimit: number;
+  /** The approach speed for 13° at the present weight: the bug. */
+  approach: number;
+  /** The airspeed predicted 10 s ahead at the present rate: the trend vector's tip. */
+  trend: number;
 }
 
 /**
@@ -120,7 +145,11 @@ export interface HudFrame {
   unlimitedFuel: boolean;
   gear: number;
   gearDown: boolean;
+  /** The gear doors failed in an overspeed: the gear stays down (decision 207). */
+  gearDamaged?: boolean;
   speedbrake: number;
+  /** The speedbrake's deflection (rad), for the strip (decision 207). */
+  speedbrakeAngle?: number;
   brakes: boolean;
   parkingBrake: boolean;
   onGround: boolean;
@@ -129,6 +158,8 @@ export interface HudFrame {
   boresight: [number, number, number];
   warnings: FlightWarning[];
   aid: HudLandingAid | null;
+  /** The jet's speed tape markers: gear limit, approach speed bug, trend (decision 207). */
+  speedCues?: HudSpeedCues | null;
   /** Control mode label ("direct", "mouse stick", "mouse aim") and the aim point in NDC for mouse aim. */
   mode: string;
   /** The mouse's control cursor, drawn in its own color (controlCursor.ts, decision 198). */
@@ -453,11 +484,83 @@ export class Hud {
       if (Math.abs(ty - y) > 14 * s) this.text(String(v), x + 14 * s, ty, 'right');
     }
     this.box(x - 30 * s, y, 58 * s, `${Math.round(kias)}`, 'right');
+    if (f.speedCues && !f.hover) this.speedCues(f.speedCues, kias, x, y, s, pxPerKt, span);
     if (f.hover) {
       const gs = Math.hypot(f.hover.velocity.forward, f.hover.velocity.right) / KNOT;
       this.text(`GS ${Math.round(gs)}`, x + 28 * s, y + span + 18 * s, 'right');
     } else {
       this.text(`M ${f.mach.toFixed(2)}`, x + 28 * s, y + span + 18 * s, 'right');
+    }
+  }
+
+  /**
+   * The jet's speed tape markers (decision 207), on the tape's inner side: the trend vector
+   * next to the scale, a line from the present speed to the speed 10 s ahead (clamped to the
+   * tape, with an arrowhead when off it), then the gear limit (a double bar with a G) and the
+   * approach speed bug (a caret).
+   */
+  private speedCues(
+    q: HudSpeedCues,
+    kias: number,
+    x: number,
+    y: number,
+    s: number,
+    pxPerKt: number,
+    span: number,
+  ): void {
+    const c = this.ctx;
+    const at = (kt: number) => y - (kt - kias) * pxPerKt;
+    const inside = (ty: number) => Math.abs(ty - y) <= span;
+    const tape = x + 30 * s;
+    const gy = at(q.gearLimit / KNOT);
+    if (inside(gy)) {
+      this.stroke(
+        () => {
+          c.beginPath();
+          c.moveTo(tape + 9 * s, gy);
+          c.lineTo(tape + 21 * s, gy);
+          c.moveTo(tape + 9 * s, gy - 3 * s);
+          c.lineTo(tape + 21 * s, gy - 3 * s);
+        },
+        HUD_COLOR,
+        1.4,
+      );
+      this.text('G', tape + 24 * s, gy - 1.5 * s, 'left');
+    }
+    const ay = at(q.approach / KNOT);
+    if (inside(ay)) {
+      this.stroke(() => {
+        c.beginPath();
+        c.moveTo(tape + 9 * s, ay);
+        c.lineTo(tape + 19 * s, ay - 6 * s);
+        c.lineTo(tape + 19 * s, ay + 6 * s);
+        c.closePath();
+      });
+    }
+    // The trend: hidden under 1 kt of change in 10 s.
+    const dKt = q.trend / KNOT - kias;
+    if (Math.abs(dKt) >= 1) {
+      const tip = y - Math.max(-span, Math.min(span, dKt * pxPerKt));
+      const tx = tape + 5 * s;
+      const off = Math.abs(dKt * pxPerKt) > span;
+      this.stroke(
+        () => {
+          c.beginPath();
+          c.moveTo(tx, y);
+          c.lineTo(tx, tip);
+          if (off) {
+            const d = Math.sign(y - tip) * 6 * s;
+            c.moveTo(tx - 4 * s, tip + d);
+            c.lineTo(tx, tip);
+            c.lineTo(tx + 4 * s, tip + d);
+          } else {
+            c.moveTo(tx - 4 * s, tip);
+            c.lineTo(tx + 4 * s, tip);
+          }
+        },
+        HUD_COLOR,
+        2.2,
+      );
     }
   }
 
@@ -690,6 +793,42 @@ export class Hud {
     );
     this.text('LOC', bx + bw / 2 + 6 * s, by - 8 * s, 'left');
     this.text('GS', bx + bw / 2 + 6 * s, by + 10 * s, 'left');
+    if (a.energy) this.energyCue(a.energy, bx - bw / 2, by + bw / 2 + 16 * s, 2 * bw, s);
+  }
+
+  /**
+   * The approach energy cue (decision 207) under the landing aid: a bar as long as the
+   * distance left to the glide path, filled to the distance needed to slow to the approach
+   * speed (to 125%), with a tick where the margin ends; and a label, so the color is never
+   * the only cue: SLOW OK (green), SLOW MARGINAL (amber), TOO FAST (red).
+   */
+  private energyCue(e: HudEnergy, x: number, y: number, w: number, s: number): void {
+    const c = this.ctx;
+    const color = e.state === 'ok' ? HUD_COLOR : e.state === 'marginal' ? WARN_COLOR : RED_COLOR;
+    const label =
+      e.state === 'ok' ? 'SLOW OK' : e.state === 'marginal' ? 'SLOW MARGINAL' : 'TOO FAST';
+    const share = e.available > 0 ? e.needed / e.available : Infinity;
+    const full = w / 1.25;
+    const fill = Math.min(1.25, share) * full;
+    const h = 6 * s;
+    this.stroke(
+      () => {
+        c.beginPath();
+        c.rect(x, y - h / 2, w, h);
+        // The end of the distance left, and where the margin ends.
+        c.moveTo(x + full, y - h);
+        c.lineTo(x + full, y + h);
+        c.moveTo(x + 0.8 * full, y - h / 2);
+        c.lineTo(x + 0.8 * full, y + h / 2);
+      },
+      HUD_COLOR,
+      1.2,
+    );
+    if (fill > 0) {
+      c.fillStyle = color;
+      c.fillRect(x + 1, y - h / 2 + 1, Math.max(0, fill - 2), h - 2);
+    }
+    this.text(label, x, y + 14 * s, 'left', color);
   }
 
   private messagesAndWarnings(f: HudFrame, x: number, y: number, s: number): void {

@@ -12,6 +12,8 @@ import { FLIGHT_STEP } from '../src/sim/flight/flightModel';
 import { lookup, lookup2 } from '../src/sim/flight/flightSpec';
 import { flightWarnings } from '../src/sim/flight/outcomes';
 import { TOUCHDOWN_ZONE } from '../src/sim/flight/runway';
+import { approachEnergy, approachSpeed, distanceToSlow } from '../src/sim/flight/energy';
+import { buildHudFrame } from '../src/freeflight/hudFrame';
 import { kestrelSpec } from './helpers/flight';
 import {
   decelTime,
@@ -267,5 +269,70 @@ describe('the straight-in approach (decision 207, acceptance)', () => {
     expect(td.distance!).toBeLessThan(TOUCHDOWN_ZONE[1]);
     expect(td.sinkRate).toBeLessThan(2);
     expect(a.phase).toBe('stopped');
+  });
+});
+
+describe('approach cues (decision 207)', () => {
+  it('puts the approach bug at the speed of 13° in the landing configuration at this weight', () => {
+    const { m } = levelStart(150 * KNOT, H, { gear: true, speedbrake: false });
+    expect(approachSpeed(m.spec, m.mass)).toBeCloseTo(speedForAlpha(m, 13 * DEG), 9);
+    // Heavier is faster: by the square root of the weight.
+    const ratio = approachSpeed(m.spec, 1.2 * m.mass) / approachSpeed(m.spec, m.mass);
+    expect(ratio).toBeCloseTo(Math.sqrt(1.2), 9);
+  });
+
+  it("predicts the distance to slow within 10% of the model's own deceleration", () => {
+    // 300 → 170 KIAS level at idle with gear down and the speedbrake at 43°: the cue's own
+    // procedure below the gear limit, flown.
+    const { m, ctl } = levelStart(300 * KNOT, H, { gear: true, speedbrake: true });
+    const fd = new FlightDirector();
+    const start = m.pos.clone();
+    while (m.telemetry.cas > 170 * KNOT || m.telemetry.cas === 0) levelStep(m, ctl, fd, H);
+    const flown = m.pos.distanceTo(start);
+    const predicted = distanceToSlow(m.spec, m.mass, H, 300 * KNOT, 170 * KNOT);
+    expect(Math.abs(predicted / flown - 1)).toBeLessThan(0.1);
+  });
+
+  it('reads green far out, then amber, then red as the runway nears at 400 KIAS', () => {
+    const { m } = levelStart(400 * KNOT, H, { gear: false, speedbrake: false });
+    const states: string[] = [];
+    for (let toAim = 50_000; toAim >= 6000; toAim -= 250) {
+      const e = approachEnergy(m.spec, m.mass, 0, 400 * KNOT, toAim, 1000);
+      if (states[states.length - 1] !== e.state) states.push(e.state);
+    }
+    expect(states).toEqual(['ok', 'marginal', 'short']);
+    // Already on speed: nothing to slow.
+    const v = approachSpeed(m.spec, m.mass);
+    expect(approachEnergy(m.spec, m.mass, 0, v, 8000, 400).state).toBe('ok');
+  });
+
+  it("predicts the straight-in approach's slowing within a fifth, and reads it as making the gate", () => {
+    const { m } = levelStart(450 * KNOT, 1500, { gear: false, speedbrake: false });
+    // The acceptance test's start: 25 km before the threshold, 1,500 m up, 450 KIAS.
+    const e = approachEnergy(m.spec, m.mass, 120, 450 * KNOT, 25_300, 1500);
+    expect(e.state).not.toBe('short');
+    const flown = straightInApproach();
+    const slowed = 25_000 - flown.onSpeedAt!;
+    expect(Math.abs(e.needed / slowed - 1)).toBeLessThan(0.2);
+  });
+
+  it('draws the trend 10 s ahead from the filtered rate of the airspeed', () => {
+    const { m, ctl } = levelStart(350 * KNOT, H, { gear: false, speedbrake: true });
+    const fd = new FlightDirector();
+    for (let i = 0; i < 4 / FLIGHT_STEP; i++) levelStep(m, ctl, fd, H);
+    const cas0 = m.telemetry.cas;
+    const rate = m.telemetry.casRate;
+    expect(rate).toBeLessThan(-2 * KNOT);
+    for (let i = 0; i < 1 / FLIGHT_STEP; i++) levelStep(m, ctl, fd, H);
+    // The rate is the airspeed's slope (within 10% over a second of steady deceleration).
+    expect((m.telemetry.cas - cas0) / rate).toBeGreaterThan(0.9);
+    expect((m.telemetry.cas - cas0) / rate).toBeLessThan(1.1);
+    const frame = buildHudFrame(m, ctl, { aid: null, mode: 'direct', control: null, timing: null });
+    const q = frame.speedCues!;
+    expect(q.gearLimit / KNOT).toBeCloseTo(300, 0);
+    expect(q.approach).toBeCloseTo(approachSpeed(m.spec, m.mass), 9);
+    expect(q.trend).toBeCloseTo(m.telemetry.cas + 10 * m.telemetry.casRate, 9);
+    expect(q.trend).toBeLessThan(m.telemetry.cas - 20 * KNOT);
+    expect(frame.speedbrakeAngle! / DEG).toBeCloseTo(60, 6);
   });
 });

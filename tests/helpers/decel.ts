@@ -343,6 +343,7 @@ export function straightInApproach(
   distance = 25_000,
   height = 1500,
   kias = 450,
+  onStep?: (m: FlightModel, ctl: FlightControls, before: number, runway: Runway) => void,
 ): ApproachLog {
   const runway = testRunway();
   const ground = flatGround(runway);
@@ -391,6 +392,7 @@ export function straightInApproach(
     const t = m.telemetry;
     const c = pilot.coords(m);
     const before = -c.t;
+    onStep?.(m, ctl, before, runway);
     if (log.below300At === null && t.cas < 300 * KNOT) log.below300At = before;
     if (log.gearDownAt === null && m.gear >= 0.999) log.gearDownAt = before;
     if (log.onSpeedAt === null && pilot.phase === 'final') log.onSpeedAt = before;

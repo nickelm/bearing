@@ -167,6 +167,8 @@ Each milestone ends with tests, previews, Part I's acceptance checks for what it
 | Flight path marker, boresight, runway outline and aim point                                                         | HUD | HUD                                                                      |
 | Airspeed, Mach, altitude, radar altitude and heading tapes; compact attitude; G; α and indexer                      | HUD | HUD                                                                      |
 | Landing aid: distance, bearing, localizer and glideslope                                                            | HUD | HUD (approach symbology)                                                 |
+| Speed tape: gear limit, approach speed bug, speed trend (decision 207)                                              | —   | HUD                                                                      |
+| Approach energy cue (decision 207)                                                                                  | —   | HUD (approach symbology)                                                 |
 | Throttle and its detent                                                                                             | HUD | HUD (reading 3)                                                          |
 | Afterburner stage                                                                                                   | HUD | Strip                                                                    |
 | Fuel                                                                                                                | HUD | Engines and fuel format; JOKER, BINGO, LOW FUEL on the strip (reading 4) |
@@ -174,6 +176,7 @@ Each milestone ends with tests, previews, Part I's acceptance checks for what it
 | Control mode                                                                                                        | HUD | Strip, when not the default                                              |
 | PULL UP, STALL, tail strike, the sink cue                                                                           | HUD | HUD (reading 2)                                                          |
 | GEAR SPEED                                                                                                          | HUD | Strip                                                                    |
+| GEAR DOORS, speedbrake position (decision 207)                                                                      | —   | Strip                                                                    |
 | Messages (airborne, touchdown, crash reasons)                                                                       | HUD | Messages slot                                                            |
 | Helicopter velocity vector, acceleration cue, landing zone marker, radar altitude with vertical speed, ground speed | HUD | HUD                                                                      |
 | Torque and rotor RPM                                                                                                | HUD | Strip gauges (reading 1)                                                 |
