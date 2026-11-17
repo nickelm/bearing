@@ -3342,7 +3342,7 @@ The owner also asked for decision 204's prep commit on `main` (done), and for th
 
 **Reason:** Bearing's continents are Earth's scaled by 0.157 (decision 121), so a region that is a given share of a continent on Earth is the same share here. Landforms and heights are what a pilot sees at working altitude, and they keep Earth's size.
 
-### 204. Mouse aim takes the stick only once the mouse has been captured; the browser smoke test with the displays
+### 206. Mouse aim takes the stick only once the mouse has been captured; the browser smoke test with the displays
 
 **Date:** 2026-11-17
 **Decision:** A regression from decision 198, found by the browser smoke test on lavapipe, and that run's other results.

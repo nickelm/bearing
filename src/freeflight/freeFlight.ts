@@ -185,7 +185,7 @@ export class FreeFlight {
   private movingMap: MovingMap | null = null;
   /**
    * Mouse aim has the stick once the mouse has been captured this sortie; before that the
-   * keys fly, so a keyboard takeoff is never taken over at liftoff (decision 204).
+   * keys fly, so a keyboard takeoff is never taken over at liftoff (decision 206).
    */
   private aimEngaged = false;
   private mapAt = -Infinity;
@@ -929,7 +929,7 @@ export class FreeFlight {
     this.weather.update(this.gameTime);
     const chase = this.deps.globe.chase;
     // Mouse aim flies only in the air, and only once the mouse has been captured this sortie
-    // (decision 204); on the wheels, and until then, the keys steer and rotate.
+    // (decision 206); on the wheels, and until then, the keys steer and rotate.
     this.input.directOnGround = m.onGround || !this.aimEngaged;
     this.input.update(this.state === 'flying' ? dt : 0);
     chase.lookHeld = this.input.lookHeld;
