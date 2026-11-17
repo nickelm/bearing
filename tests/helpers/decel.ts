@@ -282,7 +282,7 @@ export function idleThrustAt(m: FlightModel): number {
  * The idle glide at on-speed angle of attack with the gear down: the flight path angle the
  * director must fly to hold `alpha` at idle (rad, negative descending), steady after `seconds`.
  */
-export function idleGlide(alpha = 13 * DEG, sb = false, h = 3000, seconds = 60) {
+export function idleGlide(alpha = 13 * DEG, sb = false, h = 3000, seconds = 90) {
   const { m, ctl } = levelStart(150 * KNOT, h, { gear: true, speedbrake: sb });
   const fd = new FlightDirector();
   let gamma = -5 * DEG;
@@ -292,7 +292,7 @@ export function idleGlide(alpha = 13 * DEG, sb = false, h = 3000, seconds = 60) 
   for (let i = 0; i < steps; i++) {
     const t = m.telemetry;
     // Slow (α high): steepen the path.
-    gamma = Math.max(-25 * DEG, Math.min(0, gamma - 0.3 * (t.alpha - alpha) * FLIGHT_STEP));
+    gamma = Math.max(-25 * DEG, Math.min(0, gamma - 0.6 * (t.alpha - alpha) * FLIGHT_STEP));
     ctl.throttle = 0;
     fd.fly(m, { course: SEA_END.heading, gamma, speed: null }, ctl, FLIGHT_STEP);
     ctl.throttle = 0;

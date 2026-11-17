@@ -59,14 +59,26 @@ export interface FlightSpec {
     flapFadeAlpha: number;
     /** Zero-lift drag by Mach. */
     cd0: Table1;
-    /** Induced drag factor k in k·CL². */
+    /** Induced drag factor k in k·CL² (1 / (π·AR·e), attached flow). */
     induced: number;
-    /** Separated-flow drag at high angle of attack: cdAlpha·sin²α. */
-    cdAlpha: number;
-    /** Drag increments of the landing gear (down), the flaps and the speedbrake (open). */
+    /**
+     * Separated-flow drag by angle of attack (radians after parsing; degrees in JSON),
+     * 0°..90°, looked up at |α| (folded past 90°): zero while the flow stays attached, rising
+     * steeply past the approach angle of attack (decision 207).
+     */
+    cdSeparated: Table1;
+    /**
+     * Drag increments: the landing gear (down, in proportion to its travel), the flaps, the
+     * speedbrake at full deflection (scaled by sin²δ / sin²δmax), the stores the payload
+     * hangs on the airframe, and gear doors damaged by an overspeed.
+     */
     cdGear: number;
     cdFlaps: number;
     cdSpeedbrake: number;
+    cdStores: number;
+    cdGearDamage: number;
+    /** Pitch moment coefficient (on the chord, + nose up) of the speedbrake at full deflection, scaled as its drag. */
+    cmSpeedbrake: number;
     /** Side force per radian of sideslip (negative opposes it). */
     cyBeta: number;
     /** Weathercock stability: yaw moment per radian of sideslip. */
@@ -137,9 +149,20 @@ export interface FlightSpec {
   };
   gear: {
     wheels: WheelSpec[];
-    /** Gear transit time (s), and the highest calibrated airspeed with it down (m/s). */
+    /**
+     * Gear transit time (s); the highest calibrated airspeed (m/s) to extend it or fly with
+     * it down, and to retract it. Above them the gear still moves, with the GEAR SPEED
+     * warning (decision 207).
+     */
     transit: number;
     maxSpeed: number;
+    retractSpeed: number;
+    /**
+     * Gear door damage: flown more than `damageMargin` (m/s) over the limit for `damageTime`
+     * (s) with the gear out, the doors fail; the gear stays down, with `aero.cdGearDamage`.
+     */
+    damageMargin: number;
+    damageTime: number;
     /** Friction coefficients: rolling, full braking, lateral (cornering) grip. */
     rolling: number;
     braking: number;
@@ -156,8 +179,12 @@ export interface FlightSpec {
     /** Tire cornering force per unit load per radian of slip, at speed. */
     cornering: number;
   };
-  /** Speedbrake transit time (s). */
-  speedbrake: { transit: number };
+  /**
+   * Speedbrake: transit time over its full travel (s), its full deflection in flight and
+   * its limit with the gear handle down (rad after parsing; degrees in JSON), as on the
+   * F-16, where 43° keeps the panels off the runway in the flare (decision 207).
+   */
+  speedbrake: { transit: number; maxDeflection: number; gearDownDeflection: number };
   /** Hard points on the airframe (model frame): any of them touching the ground is a crash. */
   contacts: [number, number, number][];
   /** Notes on the figures (sources, tuning). */
@@ -255,13 +282,16 @@ export function parseFlightSpec(raw: unknown, id = '?'): FlightSpec {
   const aero = s.aero ?? fail('aero', 'missing');
   aero.cl = table(aero.cl, 'aero.cl', DEG);
   aero.cd0 = table(aero.cd0, 'aero.cd0');
+  aero.cdSeparated = table(aero.cdSeparated, 'aero.cdSeparated', DEG);
   for (const k of [
     'flapCl',
     'induced',
-    'cdAlpha',
     'cdGear',
     'cdFlaps',
     'cdSpeedbrake',
+    'cdStores',
+    'cdGearDamage',
+    'cmSpeedbrake',
     'cyBeta',
     'cnBeta',
     'groundEffectLift',
@@ -326,6 +356,9 @@ export function parseFlightSpec(raw: unknown, id = '?'): FlightSpec {
   for (const k of [
     'transit',
     'maxSpeed',
+    'retractSpeed',
+    'damageMargin',
+    'damageTime',
     'rolling',
     'braking',
     'lateral',
@@ -340,7 +373,12 @@ export function parseFlightSpec(raw: unknown, id = '?'): FlightSpec {
     fail('gear.steerOff', 'must exceed steerFade');
   g.steerLow = num(g, 'steerLow', 'gear') * DEG;
   g.steerHigh = num(g, 'steerHigh', 'gear') * DEG;
-  pos(s.speedbrake, 'transit', 'speedbrake');
+  const sb = s.speedbrake;
+  pos(sb, 'transit', 'speedbrake');
+  sb!.maxDeflection = pos(sb, 'maxDeflection', 'speedbrake') * DEG;
+  sb!.gearDownDeflection = pos(sb, 'gearDownDeflection', 'speedbrake') * DEG;
+  if ((sb!.gearDownDeflection as number) > (sb!.maxDeflection as number))
+    fail('speedbrake.gearDownDeflection', 'must not exceed maxDeflection');
   if (!Array.isArray(s.contacts) || s.contacts.length === 0)
     fail('contacts', 'needs at least one point');
   (s.contacts as unknown as unknown[]).forEach((p, i) => vec(p, `contacts[${i}]`));

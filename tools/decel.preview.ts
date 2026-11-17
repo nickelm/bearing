@@ -32,7 +32,7 @@ test('Kestrel deceleration diagnostic', () => {
   const { m: probe } = levelStart(250 * KNOT, H, { gear: false, speedbrake: false });
   say(`Kestrel deceleration at ${H} m, idle, mass ${probe.mass.toFixed(0)} kg`);
   say(
-    '  KIAS gear sb |     q Pa    α°    CL |    CD0   ind   sep  gear  flap    sb |    CD |  drag N  thrust N | kt/s',
+    '  KIAS gear sb |     q Pa    α°    CL |    CD0   ind   sep  gear  flap    sb   sto |    CD |  drag N  thrust N | kt/s',
   );
   for (const kias of [450, 350, 250, 160]) {
     for (const gear of [false, true]) {
@@ -47,7 +47,7 @@ test('Kestrel deceleration diagnostic', () => {
           `  ${f(kias, 4)} ${gear ? 'down' : 'up  '} ${sb ? 'out' : 'in '}` +
             ` | ${f(snap.qbar, 8)} ${f(snap.alpha / DEG, 5, 1)} ${f(snap.cl, 5, 2)}` +
             ` | ${f(t.cd0, 6, 4)} ${f(t.induced, 5, 3)} ${f(t.separated, 5, 3)} ${f(t.gear, 5, 3)}` +
-            ` ${f(t.flaps, 5, 3)} ${f(t.speedbrake, 5, 3)} | ${f(snap.cd, 5, 3)}` +
+            ` ${f(t.flaps, 5, 3)} ${f(t.speedbrake, 5, 3)} ${f(t.stores, 5, 3)} | ${f(snap.cd, 5, 3)}` +
             ` | ${f(snap.drag, 7)} ${f(snap.thrust, 9)} | ${f(snap.decel / KNOT, 4, 1)}`,
         );
       }
@@ -75,9 +75,9 @@ test('Kestrel deceleration diagnostic', () => {
         deg * DEG,
         3200,
       );
-      row.push(
-        `${f(deg, 3)}°: ${f((light.snap?.decel ?? NaN) / KNOT, 4, 1)} (${f((heavy.snap?.decel ?? NaN) / KNOT, 4, 1)})`,
-      );
+      // No snapshot: the speed never fell to the mark (the descent holds or gains speed).
+      const kt = (x: number | undefined) => (x === undefined ? '  ≤0' : f(x / KNOT, 4, 1));
+      row.push(`${f(deg, 3)}°: ${kt(light.snap?.decel)} (${kt(heavy.snap?.decel)})`);
     }
     say(`  ${f(kias, 4)} KIAS  ${row.join('   ')}   kt/s at 11.1 t (13.3 t)`);
   }
@@ -90,21 +90,31 @@ test('Kestrel deceleration diagnostic', () => {
   say(
     `Spool-up idle → military:   ${up.seconds.toFixed(1)} s to 95% (${up.before.toFixed(0)} → ${up.after.toFixed(0)} N)`,
   );
-  // Transit times, from the spec's rates, measured on the model.
+  // Transit times, from the spec's rates, measured on the model: the gear, the speedbrake to
+  // its full 60° with the gear up and to its 43° limit with the handle down.
   {
-    const { m, ctl } = levelStart(250 * KNOT, H, { gear: false, speedbrake: false });
-    ctl.gearDown = true;
-    ctl.speedbrake = true;
-    let gearT = 0;
-    let sbT = 0;
-    for (let i = 1; i < 20 / FLIGHT_STEP && (!gearT || !sbT); i++) {
-      m.step(ctl, { height: () => 0, surface: () => 'field' });
-      if (!gearT && m.gear >= 0.999) gearT = i * FLIGHT_STEP;
-      if (!sbT && m.speedbrake >= 0.999) sbT = i * FLIGHT_STEP;
-    }
-    say(`Gear extension: ${gearT.toFixed(1)} s; speedbrake opening: ${sbT.toFixed(1)} s`);
+    const open = (gearDown: boolean) => {
+      const { m, ctl } = levelStart(250 * KNOT, H, { gear: false, speedbrake: false });
+      ctl.gearDown = gearDown;
+      ctl.speedbrake = true;
+      let gearT = 0;
+      let sbT = 0;
+      for (let i = 1; i < 20 / FLIGHT_STEP && (!sbT || (gearDown && !gearT)); i++) {
+        const before = m.speedbrake;
+        m.step(ctl, { height: () => 0, surface: () => 'field' });
+        if (!gearT && m.gear >= 0.999) gearT = i * FLIGHT_STEP;
+        if (!sbT && m.speedbrake === before && m.speedbrake > 0) sbT = (i - 1) * FLIGHT_STEP;
+      }
+      return { gearT, sbT, deg: m.speedbrakeDeflection / DEG, m };
+    };
+    const up = open(false);
+    const down = open(true);
     say(
-      `Gear limit: ${(m.spec.gear.maxSpeed / KNOT).toFixed(1)} KCAS (spec ${m.spec.gear.maxSpeed} m/s)`,
+      `Gear extension: ${down.gearT.toFixed(1)} s; speedbrake ${up.deg.toFixed(0)}° in ${up.sbT.toFixed(1)} s ` +
+        `(gear up), ${down.deg.toFixed(0)}° in ${down.sbT.toFixed(1)} s (gear handle down)`,
+    );
+    say(
+      `Gear limit: ${(up.m.spec.gear.maxSpeed / KNOT).toFixed(1)} KCAS (spec ${up.m.spec.gear.maxSpeed} m/s)`,
     );
   }
   say();

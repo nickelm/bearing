@@ -12,13 +12,17 @@
  * - **Forces.** Gravity along the local radial, g₀·(R/r)². Thrust from idle,
  *   military and afterburner tables over altitude and Mach, with spool lags.
  *   Lift from CL(α) with its stall break (flaps follow the gear handle), drag
- *   from CD0(Mach) with its transonic rise, induced and separated-flow drag and
- *   increments for gear, flaps and speedbrake, side force from sideslip, and
+ *   CD0(Mach) + k·CL² + CDsep(α) + increments for gear, flaps, speedbrake (by
+ *   deflection) and stores (decision 207), side force from sideslip, and
  *   ground effect within a span of the ground; the air from the standard
  *   atmosphere. The air may move: airspeed, angle of attack and sideslip are
  *   taken relative to `wind` (still air unless the owner sets it; wind.ts).
  * - **Moments.** The control laws (controlLaws.ts) within their authority,
- *   damping and weathercock stability, gyroscopic coupling, and the wheels.
+ *   damping and weathercock stability, the speedbrake's pitch-up (the pitch law's
+ *   integrator holds it), gyroscopic coupling, and the wheels.
+ * - **Systems.** Gear and speedbrake move at their rates; the speedbrake opens to
+ *   60°, or 43° with the gear handle down. The gear moves at any speed; flown more
+ *   than 20 kt over its limit with it out, the doors fail (decision 207).
  * - **Ground.** Three wheels as spring-dampers along the local vertical. Each
  *   tire holds the ground with a stiff grip spring capped by friction (a bristle
  *   model): braked or sideways it sticks until the friction limit and then
@@ -82,9 +86,11 @@ export interface DragBreakdown {
   induced: number;
   /** Separated-flow drag at high angle of attack. */
   separated: number;
+  /** The gear in proportion to its travel, and damaged doors. */
   gear: number;
   flaps: number;
   speedbrake: number;
+  stores: number;
 }
 
 /** Per-substep quantities for the HUD and the debug panel: the common ones, and the jet's. */
@@ -121,9 +127,18 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
   power = 0;
   afterburner = 0;
   fuel: number;
-  /** Gear 0 (up) .. 1 (down), speedbrake 0 (in) .. 1 (out). */
+  /** Gear 0 (up) .. 1 (down); speedbrake 0 (in) .. 1 (out to `spec.speedbrake.maxDeflection`). */
   gear = 1;
   speedbrake = 0;
+  /** The gear handle as last commanded (down: true), for the warnings. */
+  gearHandleDown = true;
+  /**
+   * Gear doors damaged by an overspeed (decision 207): the gear stays down whatever the
+   * handle, with extra drag, until the aircraft is placed anew.
+   */
+  gearDamaged = false;
+  /** Seconds flown beyond the gear's damage speed with it out. */
+  gearOverspeedTime = 0;
   /** Game seconds flown. */
   time = 0;
   unlimitedFuel = true;
@@ -180,7 +195,7 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
       cl: 0,
       cd: 0,
       thrust: 0,
-      drag: { cd0: 0, induced: 0, separated: 0, gear: 0, flaps: 0, speedbrake: 0 },
+      drag: { cd0: 0, induced: 0, separated: 0, gear: 0, flaps: 0, speedbrake: 0, stores: 0 },
       load: 1,
       normalLoad: 1,
       altitude: 0,
@@ -237,6 +252,8 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
     attitudeQuat(pos, heading, pitch, bank, this.q);
     this.omega.set(0, 0, 0);
     this.crashed = null;
+    this.gearDamaged = false;
+    this.gearOverspeedTime = 0;
     this.stick.pitch = 0;
     this.stick.roll = 0;
     Object.assign(this.lawState, newLawState());
@@ -254,6 +271,17 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
     this.crashed = reason;
     this.vel.set(0, 0, 0);
     this.omega.set(0, 0, 0);
+  }
+
+  /** The speedbrake's deflection (rad). */
+  get speedbrakeDeflection(): number {
+    return this.speedbrake * this.spec.speedbrake.maxDeflection;
+  }
+
+  /** The highest calibrated airspeed (m/s) for the gear as it is moving or resting: extension or retraction. */
+  get gearSpeedLimit(): number {
+    const g = this.spec.gear;
+    return this.gearHandleDown || this.gearDamaged ? g.maxSpeed : g.retractSpeed;
   }
 
   /** Advances one fixed step (FLIGHT_STEP) with the controls held. */
@@ -277,14 +305,21 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
     const m = this.mass;
 
     // ---- Systems ----
-    const gearTarget = ctl.gearDown ? 1 : 0;
-    this.gear += clamp(gearTarget - this.gear, -dt / spec.gear.transit, dt / spec.gear.transit);
-    const sbTarget = ctl.speedbrake ? 1 : 0;
-    this.speedbrake += clamp(
-      sbTarget - this.speedbrake,
-      -dt / spec.speedbrake.transit,
-      dt / spec.speedbrake.transit,
-    );
+    // The gear moves at any speed (decision 207); flown well over its limit with the gear
+    // out, the doors fail and the gear stays down.
+    this.gearHandleDown = ctl.gearDown;
+    const gs = spec.gear;
+    if (this.gear > 0.01 && tel.cas > this.gearSpeedLimit + gs.damageMargin)
+      this.gearOverspeedTime += dt;
+    else this.gearOverspeedTime = 0;
+    if (this.gearOverspeedTime > gs.damageTime) this.gearDamaged = true;
+    const gearTarget = ctl.gearDown || this.gearDamaged ? 1 : 0;
+    this.gear += clamp(gearTarget - this.gear, -dt / gs.transit, dt / gs.transit);
+    // The speedbrake opens to its full deflection, or to the gear-down limit with the handle down.
+    const sbs = spec.speedbrake;
+    const sbOpen = ctl.gearDown ? sbs.gearDownDeflection / sbs.maxDeflection : 1;
+    const sbTarget = ctl.speedbrake ? sbOpen : 0;
+    this.speedbrake += clamp(sbTarget - this.speedbrake, -dt / sbs.transit, dt / sbs.transit);
     const lever = clamp(ctl.throttle, 0, 1);
     const hasFuel = this.fuel > 0 || this.unlimitedFuel;
     const dryCmd = hasFuel ? Math.min(1, lever / MIL_DETENT) : 0;
@@ -331,16 +366,28 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
     const groundUnder = ground.height(up);
     const ge = Math.exp((-2.5 * Math.max(0, altitude - groundUnder)) / spec.wing.span);
     const cl = (clBase + a.flapCl * flaps * flapFade) * (1 + a.groundEffectLift * ge);
-    const sinA = Math.sin(alpha);
+    // Separated flow by |α|, folded past 90° (a tail slide meets the flow on the same plate).
+    const absA = Math.abs(alpha);
     const terms = tel.drag;
     terms.cd0 = lookup(a.cd0, mach);
     terms.induced = a.induced * cl * cl * (1 - a.groundEffectDrag * ge);
-    terms.separated = a.cdAlpha * sinA * sinA;
-    terms.gear = a.cdGear * this.gear;
+    terms.separated = lookup(a.cdSeparated, absA <= Math.PI / 2 ? absA : Math.PI - absA);
+    terms.gear = a.cdGear * this.gear + (this.gearDamaged ? a.cdGearDamage : 0);
     terms.flaps = a.cdFlaps * flaps;
-    terms.speedbrake = a.cdSpeedbrake * this.speedbrake;
+    // The speedbrake panels by deflection: drag and moment grow as sin²δ, as a hinged plate's.
+    const sbMax = Math.sin(spec.speedbrake.maxDeflection);
+    const sbSin = Math.sin(this.speedbrakeDeflection);
+    const sbShare = (sbSin * sbSin) / (sbMax * sbMax);
+    terms.speedbrake = a.cdSpeedbrake * sbShare;
+    terms.stores = a.cdStores;
     const cd =
-      terms.cd0 + terms.induced + terms.separated + terms.gear + terms.flaps + terms.speedbrake;
+      terms.cd0 +
+      terms.induced +
+      terms.separated +
+      terms.gear +
+      terms.flaps +
+      terms.speedbrake +
+      terms.stores;
     const fb = sc.fb.set(0, 0, 0);
     let liftX = 0;
     let liftZ = 0;
@@ -373,7 +420,9 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
     const thrust = hasFuel ? idle + (mil - idle) * this.power + (wet - mil) * this.afterburner : 0;
     fb.x += thrust;
     const wetShare = Math.min(1, this.afterburner * 5);
-    const fuelFlow = thrust * (eng.tsfcDry * (1 - wetShare) + eng.tsfcWet * wetShare);
+    // Net idle thrust goes negative at speed (ram drag): no fuel comes back.
+    const fuelFlow =
+      Math.max(0, thrust) * (eng.tsfcDry * (1 - wetShare) + eng.tsfcWet * wetShare);
     if (!this.unlimitedFuel) this.fuel = Math.max(0, this.fuel - fuelFlow * dt);
 
     // ---- Gravity (body) ----
@@ -389,7 +438,6 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
     // Nosewheel steering: full at taxi speed, a few degrees above `steerFade`, and
     // none by `steerOff`, where a pedal tap at takeoff speed would roll the jet onto
     // a wingtip.
-    const gs = spec.gear;
     const steerGain =
       tas <= gs.steerFade
         ? gs.steerHigh + (gs.steerLow - gs.steerHigh) * (1 - tas / gs.steerFade)
@@ -478,7 +526,11 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
     const c = spec.wing.chord;
     const halfRhoV = 0.5 * air.density * tas;
     const mx = laws.mx + mb.x + halfRhoV * S * b * b * 0.5 * a.clp * this.omega.x;
-    const my = laws.my + mb.y + halfRhoV * S * c * c * 0.5 * a.cmq * this.omega.y;
+    const my =
+      laws.my +
+      mb.y +
+      halfRhoV * S * c * c * 0.5 * a.cmq * this.omega.y +
+      qbar * S * c * a.cmSpeedbrake * sbShare;
     const mz =
       laws.mz +
       mb.z +
