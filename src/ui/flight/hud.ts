@@ -4,11 +4,11 @@
  *
  * - **World-anchored:** the flight path marker (the velocity projected at a great
  *   distance, so the camera's offset causes no parallax), the boresight cross,
- *   and the destination runway's outline and aim point.
+ *   the destination runway's outline and aim point, and with the gear down the
+ *   angle-of-attack bracket beside the marker (decision 208).
  * - **Screen-anchored:** airspeed (KIAS, Mach below), altitude (barometric feet,
  *   radar altitude below 1,500 ft) and heading tapes, a compact attitude
- *   indicator instead of a pitch ladder, load factor, angle of attack with the
- *   approach indexer (13°), throttle and afterburner stage, fuel, and the gear,
+ *   indicator instead of a pitch ladder, load factor, angle of attack, throttle and afterburner stage, fuel, and the gear,
  *   speedbrake and brake states.
  * - **Landing aid:** distance and bearing to the destination runway, and
  *   localizer and glideslope deviation bars for a 3° glide path.
@@ -20,7 +20,7 @@
  *   when off screen), a digital radar altitude with the vertical speed under it (amber in a hard
  *   descent near the ground; decision 160) and a vertical-speed bar, torque
  *   and rotor RPM, ground speed, mode tags and hazard cues. It leaves out what
- *   only a jet has: Mach, G, α and the indexer, throttle stages, speedbrake, and
+ *   only a jet has: Mach, G, α and its bracket, throttle stages, speedbrake, and
  *   the landing aid's needles (the runway outline stays); the flight path marker
  *   shows only above 12 m/s, where the velocity's direction means something.
  *
@@ -158,6 +158,16 @@ export interface HudFrame {
   boresight: [number, number, number];
   warnings: FlightWarning[];
   aid: HudLandingAid | null;
+  /**
+   * The angle-of-attack bracket (decision 208), with the gear down in the air: world
+   * directions (unit) where the flight path marker would sit at 11° (top), 13° (center) and
+   * 15° (bottom) of angle of attack. The marker centered in it is on speed.
+   */
+  aoaBracket?: {
+    top: [number, number, number];
+    center: [number, number, number];
+    bottom: [number, number, number];
+  } | null;
   /** The jet's speed tape markers: gear limit, approach speed bug, trend (decision 207). */
   speedCues?: HudSpeedCues | null;
   /** Control mode label ("direct", "mouse stick", "mouse aim") and the aim point in NDC for mouse aim. */
@@ -434,6 +444,7 @@ export class Hud {
         );
       }
     }
+    if (f.aoaBracket && !f.hover) this.aoaBracket(f.aoaBracket, project, s);
     // Destination runway: outline and aim point.
     if (f.aid) {
       const pts = f.aid.corners.map((q) => project(q[0], q[1], q[2], true));
@@ -684,37 +695,58 @@ export class Hud {
     );
   }
 
-  /** Load factor, angle of attack and the approach indexer (13° on speed, gear down). */
+  /** Load factor and angle of attack (the on-speed cue is the bracket on the marker, decision 208). */
   private numbers(f: HudFrame, x: number, y: number, s: number): void {
-    const c = this.ctx;
     this.text(`G ${f.load.toFixed(1)}`, x, y);
     this.text(`α ${(f.alpha / DEG).toFixed(1)}`, x, y + 18 * s);
-    if (f.gearDown && !f.onGround) {
-      const a = f.alpha / DEG;
-      const ix = x + 84 * s;
-      const iy = y + 18 * s;
-      const d = 6 * s;
-      const off = a > 14.5 || a < 11.5;
-      this.stroke(
-        () => {
-          c.beginPath();
-          if (a > 14.5) {
-            // Slow: chevron pointing down (lower the nose).
-            c.moveTo(ix - d, iy - d / 2);
-            c.lineTo(ix, iy + d / 2);
-            c.lineTo(ix + d, iy - d / 2);
-          } else if (a < 11.5) {
-            // Fast: chevron pointing up.
-            c.moveTo(ix - d, iy + d / 2);
-            c.lineTo(ix, iy - d / 2);
-            c.lineTo(ix + d, iy + d / 2);
-          } else {
-            c.arc(ix, iy, d * 0.8, 0, 2 * Math.PI);
-          }
-        },
-        off ? WARN_COLOR : HUD_COLOR,
-      );
-    }
+  }
+
+  /**
+   * The angle-of-attack bracket (decision 208), as on the F-16: an E to the left of the
+   * flight path marker, its top where the marker sits at 11° of angle of attack, its middle
+   * tine at 13° and its bottom at 15°. Marker centered: on speed; low in the bracket: slow;
+   * high: fast. The points are projected world directions, so the bracket tilts with the
+   * bank as the marker's wings do, and stands off the marker across that tilt.
+   */
+  private aoaBracket(b: NonNullable<HudFrame['aoaBracket']>, project: Projector, s: number): void {
+    const top = project(...b.top, false);
+    const mid = project(...b.center, false);
+    const bot = project(...b.bottom, false);
+    if (!top || !mid || !bot) return;
+    const c = this.ctx;
+    // Along the bracket (bottom to top) and its left normal on screen (y down).
+    const len = Math.hypot(top.x - bot.x, top.y - bot.y) || 1;
+    const ux = (top.x - bot.x) / len;
+    const uy = (top.y - bot.y) / len;
+    const nx = uy;
+    const ny = -ux;
+    // Clear of the marker's wing tip (2.6 radii, 18 px) when centered.
+    const off = 29 * s;
+    const at = (p: { x: number; y: number }, k: number) => ({
+      x: p.x + nx * off - nx * k,
+      y: p.y + ny * off - ny * k,
+    });
+    this.stroke(
+      () => {
+        c.beginPath();
+        const t0 = at(top, 0);
+        const b0 = at(bot, 0);
+        c.moveTo(t0.x, t0.y);
+        c.lineTo(b0.x, b0.y);
+        for (const [p, k] of [
+          [top, 6 * s],
+          [mid, 4 * s],
+          [bot, 6 * s],
+        ] as const) {
+          const a = at(p, 0);
+          const e = at(p, k);
+          c.moveTo(a.x, a.y);
+          c.lineTo(e.x, e.y);
+        }
+      },
+      HUD_COLOR,
+      1.8,
+    );
   }
 
   private status(f: HudFrame, x: number, y: number, s: number): void {

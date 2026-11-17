@@ -420,8 +420,7 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
     fb.x += thrust;
     const wetShare = Math.min(1, this.afterburner * 5);
     // Net idle thrust goes negative at speed (ram drag): no fuel comes back.
-    const fuelFlow =
-      Math.max(0, thrust) * (eng.tsfcDry * (1 - wetShare) + eng.tsfcWet * wetShare);
+    const fuelFlow = Math.max(0, thrust) * (eng.tsfcDry * (1 - wetShare) + eng.tsfcWet * wetShare);
     if (!this.unlimitedFuel) this.fuel = Math.max(0, this.fuel - fuelFlow * dt);
 
     // ---- Gravity (body) ----

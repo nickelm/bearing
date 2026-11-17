@@ -67,7 +67,5 @@ export function dragCoefficient(
   out.flaps = a.cdFlaps * s.flaps;
   out.speedbrake = a.cdSpeedbrake * s.speedbrake;
   out.stores = a.cdStores;
-  return (
-    out.cd0 + out.induced + out.separated + out.gear + out.flaps + out.speedbrake + out.stores
-  );
+  return out.cd0 + out.induced + out.separated + out.gear + out.flaps + out.speedbrake + out.stores;
 }

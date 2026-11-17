@@ -113,6 +113,45 @@ export function landingAid(
   };
 }
 
+/** The angle-of-attack bracket's top, center and bottom (rad): fast, on speed, slow (decision 208). */
+export const BRACKET_ALPHA = { top: 11 * DEG, center: 13 * DEG, bottom: 15 * DEG } as const;
+
+/**
+ * The angle-of-attack bracket's world directions (decision 208): where the flight path
+ * marker (the velocity's direction) would sit at the bracket's angles of attack, i.e. the
+ * velocity turned about the body's lateral axis by α less that angle, toward the nose when
+ * α is greater. With the gear handle down, in the air, moving; else null.
+ */
+export function aoaBracket(
+  m: FlightModel,
+  gearDown: boolean,
+): NonNullable<HudFrame['aoaBracket']> | null {
+  const t = m.telemetry;
+  const speed = m.vel.length();
+  if (!gearDown || m.onGround || speed < 20) return null;
+  const v = m.vel.clone().scale(1 / speed);
+  const k = m.bodyAxis(1);
+  const kxv = k.clone().cross(v);
+  const kv = k.dot(v);
+  // Rodrigues: v cos φ + (k × v) sin φ + k (k·v)(1 − cos φ); +φ about body y is nose up.
+  const turn = (phi: number): [number, number, number] => {
+    const c = Math.cos(phi);
+    const s = Math.sin(phi);
+    const d = v
+      .clone()
+      .scale(c)
+      .addScaled(kxv, s)
+      .addScaled(k, kv * (1 - c))
+      .normalize();
+    return [d.x, d.y, d.z];
+  };
+  return {
+    top: turn(t.alpha - BRACKET_ALPHA.top),
+    center: turn(t.alpha - BRACKET_ALPHA.center),
+    bottom: turn(t.alpha - BRACKET_ALPHA.bottom),
+  };
+}
+
 export function buildHudFrame(
   m: FlightModel,
   c: Readonly<FlightControls>,
@@ -155,6 +194,7 @@ export function buildHudFrame(
     boresight: [bx.x, bx.y, bx.z],
     warnings: flightWarnings(m),
     aid: opts.aid,
+    aoaBracket: aoaBracket(m, c.gearDown),
     speedCues: {
       gearLimit: m.gearSpeedLimit,
       approach: approachSpeed(m.spec, m.mass),

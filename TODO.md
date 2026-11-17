@@ -697,7 +697,8 @@ A sandbox outside the campaign: pick a seed and an airbase, take off in the F-21
 - [x] Weather in Free Flight: run the weather model without the war, so clouds and winds show (`StandaloneWeather`, decisions 137, 143)
 - [ ] Initial fuel option: with unlimited fuel the Kestrel always weighs 13.3 t and approaches at about 164 kt; a landing at 1,000 kg of fuel comes in near 150 kt (decision 207 measured both)
 - [x] The Kestrel slows down and lands straight in: drag polar, idle thrust, spool, speedbrake degrees and its 43° limit, gear overspeed with door damage, speed tape cues, the approach energy cue, the straight-in acceptance test (decision 207)
-- [ ] Owner: fly a straight-in in Free Flight from about 25 km at 450 KIAS (idle, speedbrake, gear under 300) and judge the trend vector, the gear marker, the approach bug and the energy cue, and whether the speedbrake now feels like it works
+- [x] The angle-of-attack bracket on the flight path marker, replacing the side indexer (decision 208)
+- [ ] Owner: fly a straight-in in Free Flight from about 25 km at 450 KIAS (idle, speedbrake, gear under 300) and judge the trend vector, the gear marker, the approach bug, the energy cue and the angle-of-attack bracket, and whether the speedbrake now feels like it works
 - [ ] The energy cue's plan takes the engine at idle and the gear and speedbrake at their stops at once; it reads a little optimistic in the first seconds after the throttle comes back (spool-down 2.9 s, gear 4 s)
 - [ ] Nosewheel steering switch (castoring nosewheel without it), so differential braking alone can turn the aircraft
 - [ ] Key remapping in the UI (the table exists; there is no settings page), and gamepad buttons for gear, brakes and throttle detents

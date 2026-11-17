@@ -13,7 +13,7 @@ import { lookup, lookup2 } from '../src/sim/flight/flightSpec';
 import { flightWarnings } from '../src/sim/flight/outcomes';
 import { TOUCHDOWN_ZONE } from '../src/sim/flight/runway';
 import { approachEnergy, approachSpeed, distanceToSlow } from '../src/sim/flight/energy';
-import { buildHudFrame } from '../src/freeflight/hudFrame';
+import { aoaBracket, buildHudFrame } from '../src/freeflight/hudFrame';
 import { kestrelSpec } from './helpers/flight';
 import {
   decelTime,
@@ -351,5 +351,46 @@ describe('approach cues (decision 207)', () => {
     expect(q.trend).toBeCloseTo(m.telemetry.cas + 10 * m.telemetry.casRate, 9);
     expect(q.trend).toBeLessThan(m.telemetry.cas - 20 * KNOT);
     expect(frame.speedbrakeAngle! / DEG).toBeCloseTo(60, 6);
+  });
+});
+
+describe('the angle-of-attack bracket (decision 208)', () => {
+  const angle = (a: readonly number[], b: readonly number[]) =>
+    Math.acos(Math.min(1, a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!));
+
+  it('puts the flight path marker in the bracket on the final, near its center', () => {
+    const seen: number[] = [];
+    straightInApproach(undefined, undefined, undefined, undefined, (m, ctl, before) => {
+      if (before > 5000 || before < 2000) return;
+      const b = aoaBracket(m, ctl.gearDown)!;
+      const v = m.vel.clone().normalize();
+      const fpm = [v.x, v.y, v.z];
+      // The bracket spans 4°, the marker inside it, as far from its center as α is from 13°.
+      expect(angle(b.top, b.bottom) / DEG).toBeCloseTo(4, 6);
+      expect(angle(b.center, fpm) / DEG).toBeCloseTo(Math.abs(m.telemetry.alpha / DEG - 13), 6);
+      expect(angle(b.top, fpm) + angle(fpm, b.bottom)).toBeCloseTo(angle(b.top, b.bottom), 6);
+      seen.push(angle(b.center, fpm) / DEG);
+    });
+    expect(seen.length).toBeGreaterThan(100);
+    expect(Math.max(...seen)).toBeLessThan(1);
+  });
+
+  it('sits above the marker when slow and below it when fast, and only with the gear down', () => {
+    const slow = levelStart(140 * KNOT, H, { gear: true, speedbrake: false });
+    const fd = new FlightDirector();
+    for (let i = 0; i < 3 / FLIGHT_STEP; i++) levelStep(slow.m, slow.ctl, fd, H);
+    const up = slow.m.pos.clone().normalize();
+    const v = slow.m.vel.clone().normalize();
+    const height = (d: readonly number[]) => d[0]! * up.x + d[1]! * up.y + d[2]! * up.z;
+    const b = aoaBracket(slow.m, true)!;
+    expect(slow.m.telemetry.alpha / DEG).toBeGreaterThan(14);
+    // Slow: the marker sinks toward the bracket's bottom; the center is above it.
+    expect(height(b.center)).toBeGreaterThan(height([v.x, v.y, v.z]));
+    const fast = levelStart(200 * KNOT, H, { gear: true, speedbrake: false });
+    for (let i = 0; i < 3 / FLIGHT_STEP; i++) levelStep(fast.m, fast.ctl, fd, H);
+    const vf = fast.m.vel.clone().normalize();
+    const bf = aoaBracket(fast.m, true)!;
+    expect(height(bf.center)).toBeLessThan(height([vf.x, vf.y, vf.z]));
+    expect(aoaBracket(fast.m, false)).toBeNull();
   });
 });

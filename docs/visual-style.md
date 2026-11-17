@@ -311,7 +311,7 @@ With no cockpits, the HUD and the cockpit displays draw as 2D elements over the 
 
 The chase camera sits behind and above the aircraft, so HUD symbols cannot sit at fixed screen positions as on a real HUD.
 
-- **World-anchored symbols** are projected from the 3D scene every frame: the flight path marker (from the velocity vector, projected at a great distance so the camera offset causes no parallax), the boresight cross, the gun pipper (at the predicted impact point), CCIP bomb fall lines, target boxes, waypoint and target diamonds, and missile seeker circles.
+- **World-anchored symbols** are projected from the 3D scene every frame: the flight path marker (from the velocity vector, projected at a great distance so the camera offset causes no parallax), the boresight cross, the gun pipper (at the predicted impact point), CCIP bomb fall lines, target boxes, waypoint and target diamonds, and missile seeker circles. With the gear down the jet's angle-of-attack bracket (11°, 13°, 15°) stands beside the flight path marker, as on the F-16 (decision 208).
 - **Screen-anchored instruments** sit at fixed positions around the aircraft: airspeed and altitude tapes, a heading tape, a compact attitude indicator, Mach, G, and the throttle with its detent. The jet's speed tape carries the gear limit, the approach speed bug and a trend vector to the speed 10 s ahead; the landing aid carries the approach energy cue (decision 207). Fuel moves to the engines and fuel format, and gear, brakes, speedbrake, afterburner and the master caution move to the status strip.
 - **Warnings that demand an immediate maneuver** (PULL UP, STALL, tail strike, the sink cue, and the helicopter hazard cues) stay on the HUD in amber; system cautions and warnings go to the strip.
 

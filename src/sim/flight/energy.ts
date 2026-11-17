@@ -29,7 +29,7 @@ import { lookup, lookup2 } from './flightSpec';
 import type { FlightSpec } from './flightSpec';
 import { AIM_POINT, GLIDE_PATH } from './runway';
 
-/** On-speed angle of attack: the HUD's indexer centers on it. */
+/** On-speed angle of attack: the middle of the HUD's angle-of-attack bracket (decision 208). */
 export const ON_SPEED_ALPHA = 13 * DEG;
 /** Within this much over the approach speed the aircraft counts as slowed (m/s). */
 export const ON_SPEED_MARGIN = 5 * KNOT;
