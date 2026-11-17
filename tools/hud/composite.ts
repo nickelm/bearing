@@ -42,12 +42,20 @@ async function main(): Promise<void> {
   await img.decode();
   const hud = new Hud();
   hud.show(true);
-  for (const m of shot.messages) hud.message(m, 600);
+  // `&panels=1`: the HUD as the displays and the strip leave it (decision 199); with
+  // `&displays=<mode>` the displays are drawn over the render too (check 7 with the full HUD).
+  const panels = query.get('panels') === '1' || query.has('displays');
+  if (panels) shot.frame.panels = true;
+  else for (const m of shot.messages) hud.message(m, 600);
   hud.draw(
     shot.frame,
     matrixProjector(shot.view, shot.projection, window.innerWidth, window.innerHeight),
   );
   await slots(query);
+  if (query.get('displays')) {
+    const { drawDisplays } = await import('./displays');
+    await drawDisplays(query);
+  }
   document.title = 'ready';
 }
 

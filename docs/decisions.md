@@ -3267,3 +3267,19 @@ Not yet: the destination runway, route and waypoints, the front and threat rings
 `docs/visual-style.md` (*Moving Map*) and `TODO.md` change with this decision.
 
 **Reason:** The runway the landing aid already knows is the one place in Free Flight the map can point to, and the proposal names the wheel for the map's range.
+
+### 203. Acceptance check 7 with the full HUD: passed at noon, in snow and at night
+
+**Date:** 2026-11-17
+**Decision:** Part I's check 7 (the HUD legible against bright sky, snow and night) with the HUD as the displays leave it (decision 199) and the displays over it, on real renders: `tools/freeflight.preview.ts` on lavapipe (`GRES=512`, 1280 × 720; noon in clear sky, snow at noon, 23:00 in clear sky), composited by `tools/freeflight.screens.mjs` with `QUERY='panels=1&displays=navigation&aircraft=kestrel'` (`composite.html` takes `panels=1` and `displays=` over a render shot now, and the screens tool waits out the displays' 300 ms fade). The pictures are `docs/reports/screens/check7/`.
+
+- **Noon:** the tapes, the heading scale, the landing aid and the flight path marker read over the bright sky and over the town below.
+- **Snow:** the green with its dark halo reads on the gray sky and the falling snow; the thinnest tick marks of the tapes are the faintest element against the brightest snow sky.
+- **Night:** everything reads; the halo is invisible against the dark, as it should be.
+- **The displays** stay opaque and readable over all three; the stand-in map (no picture without the strategic scene's world in this page) shows its loading line.
+
+The gap, the faint thin ticks on a bright snow sky, goes to P2's HUD color task (tune the values) rather than a change now: the owner should see it in the browser first.
+
+`TODO.md` changes with this decision.
+
+**Reason:** Check 7 is the last of P2's checks that does not need the owner's eyes; it ran on the CPU renderer, which draws what the app draws.

@@ -757,11 +757,11 @@ The allocation rule, the display frame, slots and slot states, the status strip,
 - [x] Tests: master mode transitions and pins; strip items in scripted Free Flight scenarios (gear up slow and low, speedbrake with afterburner, parking brake with throttle, hover hold); display model snapshots (decision 199: tests/displays.test.ts, the session tool)
 - [ ] Previews (in-flight screenshots done: `SHOT_DIR` in the session tool, decision 199): `tools/hud/` composites of displays and strip for the Kestrel and a helicopter in each master mode; `tools/freeflight.screens.mjs` shots; the browser smoke test checks that displays and strip exist and measures their CPU time (under 2 ms per frame) and the map's GPU pass
 - [x] UI scale setting in the pause menu (0.75–1.5) and the URL (decision 200)
-- [ ] HUD color: tune the values and record them in `docs/visual-style.md`
+- [ ] HUD color: tune the values and record them in `docs/visual-style.md` (decision 203: thicken or brighten the tapes' thin ticks against a bright snow sky)
 - [ ] Acceptance checks 7, 12 and 13 (Part I)
   - [x] Checks 12 and 13 as a tool, `tools/displays.screens.mjs` (decision 200): no slot in the column, at most two large and two small expanded, both skins and the three deficiencies; four color-only cues fixed
   - [ ] Checks 12 and 13 again with the moving map, and over real renders when a GPU is at hand
-  - [ ] Check 7 with the full HUD
+  - [x] Check 7 with the full HUD (decision 203): passed at noon, in snow and at night over lavapipe renders, `docs/reports/screens/check7/`; the thinnest tape ticks are faint on a bright snow sky (for the HUD color task)
 - [ ] Checkpoint: owner review of the HUD, displays and strip in Free Flight in both aircraft kinds, with mouse and keyboard
 
 ### P3. Sensors and formats

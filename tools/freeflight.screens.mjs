@@ -54,6 +54,8 @@ for (const shot of shots) {
     `${base}/tools/hud/composite.html?${hover ? `hover=${hover}` : `shot=${shot}`}${slots}${extra}`,
   );
   await page.waitForFunction(() => document.title === 'ready', null, { timeout: 60_000 });
+  // The displays fade in over 300 ms (decision 199).
+  if (extra.includes('displays=')) await page.waitForTimeout(450);
   const file = join(
     out,
     `${shot}${slots ? '-slots' : ''}${process.env.SIZE ? `-${process.env.SIZE}` : ''}.png`,
