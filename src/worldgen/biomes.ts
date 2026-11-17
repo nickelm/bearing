@@ -148,6 +148,8 @@ export interface BiomeContext {
   ecotone: number;
   /** On a high plateau: flat high steppe, not alpine meadow or ice (decision 208). */
   plateau: boolean;
+  /** Moisture offset from the continent's character (decision 209). */
+  moistureBias: number;
 }
 
 /** Acidic, sandy or thin soils where heather grows (granite, sandstone, till). */
@@ -169,7 +171,9 @@ export function classifyBiome(
 ): Biome {
   const temperature = temperatureIn + (ctx ? 0.8 * ctx.ecotone : 0);
   // A cold current dries the air it cools (fog deserts).
-  const moisture = ctx ? moistureIn * (1 - 0.6 * ctx.fog) + 0.04 * ctx.ecotone : moistureIn;
+  const moisture = ctx
+    ? moistureIn * (1 - 0.6 * ctx.fog) + 0.04 * ctx.ecotone + ctx.moistureBias
+    : moistureIn;
   if (heightM <= 0) {
     if (temperature < -10) return Biome.SeaIce;
     if (referenceHeightM > -200) return Biome.Shelf;
@@ -322,5 +326,6 @@ export function biomeContext(
     flat: steepest < FLAT_SLOPE,
     ecotone: m.ecotone[c]!,
     plateau: province === Province.HighPlateau,
+    moistureBias: m.moistureBias?.[c] ?? 0,
   };
 }

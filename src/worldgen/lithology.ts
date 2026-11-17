@@ -16,7 +16,9 @@ import type { CubeGrid } from '../core/cubeGrid';
 import { Noise3 } from '../core/noise';
 import type { Rng } from '../core/rng';
 import { Vec3d } from '../core/vec3d';
+import { effectAt } from './characters';
 import { Province } from './provinces';
+import type { CharacterMap } from './provinces';
 
 export const Rock = {
   None: 0,
@@ -99,6 +101,7 @@ export function assignLithology(
   height: Float32Array,
   temperature: Float32Array,
   r: Rng,
+  characters?: CharacterMap,
 ): Lithology {
   const L = LITHOLOGY_TUNING;
   const n = grid.cellCount;
@@ -111,6 +114,7 @@ export function assignLithology(
     const n1 = broad.fbm(x.x * 5, x.y * 5, x.z * 5, 3);
     const n2 = fine.fbm(x.x * 17, x.y * 17, x.z * 17, 3);
     const land = height[c]! > 0;
+    const fx = effectAt(characters, c);
     let rock: number;
     let layered = false;
     // Land outside the tectonic provinces (coastal plains on the shelf's crust) is a sedimentary basin.
@@ -145,10 +149,10 @@ export function assignLithology(
         break;
       case Province.SedimentaryBasin:
         layered = true;
-        if (n1 > L.karstThreshold) {
+        if (n1 > L.karstThreshold + fx.karst) {
           rock = Rock.Limestone;
           province[c] = Province.KarstPlatform;
-        } else if (n1 < L.loessThreshold) {
+        } else if (n1 < L.loessThreshold + fx.loess) {
           rock = Rock.Loess;
           layered = false;
           province[c] = Province.SoftSediment;

@@ -136,6 +136,7 @@ describe('generateWorld', () => {
       'plates',
       'crust',
       'boundaries',
+      'continents',
       'provinces',
       'uplift',
       'elevation',
@@ -143,6 +144,7 @@ describe('generateWorld', () => {
       'climate modifiers',
       'lithology',
       'biomes',
+      'distinctness',
     ]);
   });
 });

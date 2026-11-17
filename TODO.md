@@ -1187,14 +1187,14 @@ Terrain provinces and rock from tectonic history, a richer climate with twenty l
   - [ ] Disturbance patches in forests (fire scars, clearings, wind-throw) from a seeded rate per biome
 - [ ] Gully shade lines in the terrain shader for soft sediment in semi-arid climates; kernel gullies denser there
 - [x] Biome coverage over 20 seeds (all twenty, decision 208)
-- [ ] acceptance checks 1–5 against the board with the brighter palette, the grade retuned if needed
+- [ ] Acceptance checks 1–5 against the board with the brighter palette, the grade retuned if needed
 
 ### W5. Continental character
 
-- [ ] Continents as components of continental crust; characters drawn from what their tectonics allow and their climate belt (`provinces/characters`)
-- [ ] Biases on province assignment and climate parameters within tectonic limits
-- [ ] Distinctness check on the coarse pass: joint province and biome divergence of the two largest continents; at most two redraws of the smaller (`provinces/characters/nudge-k`), stored with the world
-- [ ] Metrics: divergence over 20 seeds; coarse pass time
+- [x] Continents as the continental crust of each plate; characters drawn from what their tectonics allow and their climate belt (`provinces/characters`, decision 209)
+- [x] Biases on province assignment, rock and moisture within tectonic limits
+- [x] Distinctness check on the coarse pass: joint province and biome divergence of the two largest continents; at most two redraws of the smaller (`provinces/characters/nudge-k`), stored with the world
+- [x] Metrics: divergence over 20 seeds (18 of 20 at 0.25 bit); coarse pass time (12.7 s against 11.9 s)
 
 ### W6. Zones and visual style
 

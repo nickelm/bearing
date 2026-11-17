@@ -143,6 +143,7 @@ export async function buildGlobalWorld(
               seasonality: m.seasonality,
               fog: m.fog,
               ecotone: m.ecotone,
+              moistureBias: m.moistureBias,
             }
           : undefined,
     };

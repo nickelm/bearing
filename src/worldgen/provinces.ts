@@ -25,6 +25,26 @@ import { distanceFromSources } from './fields';
 import type { DistanceField } from './fields';
 import type { Plate } from './plates';
 import { plateVelocity } from './plates';
+import { CHARACTER_EFFECTS, effectAt } from './characters';
+import type { Character } from './characters';
+
+/** Continents and their characters (decision 209). */
+export interface CharacterMap {
+  label: Int32Array;
+  character: readonly Character[];
+}
+
+const MAX_RIFT_FACTOR = Math.max(...CHARACTER_EFFECTS.map((e) => e.riftExtension));
+
+/** A continental cell at or next to `c`, for a boundary cell on the ocean side. */
+function continentCellNear(grid: CubeGrid, c: number, map: CharacterMap | undefined): number {
+  if (!map || map.label[c]! >= 0) return c;
+  for (let k = 0; k < 8; k++) {
+    const nb = grid.neighbors8[c * 8 + k]!;
+    if (nb >= 0 && map.label[nb]! >= 0) return nb;
+  }
+  return c;
+}
 
 export const Province = {
   /** Ocean floor away from arcs and hotspots. */
@@ -193,6 +213,7 @@ export function assignProvinces(
   continentalness: Float32Array,
   boundaries: Boundaries,
   r: Rng,
+  characters?: CharacterMap,
 ): ProvinceMap {
   const T = PROVINCE_TUNING;
   const n = grid.cellCount;
@@ -214,15 +235,20 @@ export function assignProvinces(
   const runs: Run[] = [];
   for (let id = 0; id < count; id++) {
     const s = Math.min(1, strengthSum[id]! / cells[id]! / T.strengthSaturation);
-    const pYoung = T.youngChance[0] + (T.youngChance[1] - T.youngChance[0]) * s;
+    // The character of the continent the run touches biases its history (decision 209).
+    const fx = effectAt(characters, continentCellNear(grid, firstCell[id]!, characters));
+    const pYoung = Math.max(
+      fx.youngFloor,
+      fx.youngFactor * (T.youngChance[0] + (T.youngChance[1] - T.youngChance[0]) * s),
+    );
     const a = ages.nextFloat();
     const b = ages.nextFloat();
     const d = ages.nextFloat();
     runs.push({
       type: boundaries.type[firstCell[id]!]!,
       young: a < pYoung,
-      plateau: b < T.plateauChance,
-      backArc: d < T.backArcChance,
+      plateau: b < (fx.plateauChance ?? T.plateauChance),
+      backArc: d < (fx.backArcChance ?? T.backArcChance),
     });
   }
 
@@ -253,7 +279,7 @@ export function assignProvinces(
   );
   const rift = field(
     src((u) => u.type === BoundaryType.Rift),
-    T.riftExtension,
+    T.riftExtension * MAX_RIFT_FACTOR,
   );
   const plateau = field(
     src((u) => u.type === BoundaryType.Collision && u.young && u.plateau),
@@ -349,6 +375,7 @@ export function assignProvinces(
     const wob = 1 + 0.25 * noise.fbm(x.x * 14, x.y * 14, x.z * 14, 3);
     const continental = continentalness[c]! > 0;
     const dist = (f: DistanceField) => f.angle[c]! * R;
+    const fx = effectAt(characters, c);
     const nearRun = active.nearest[c]!;
     if (nearRun >= 0 && active.angle[c]! * R < 1.3 * T.collisionWidth) {
       const id = run[nearRun]!;
@@ -366,12 +393,12 @@ export function assignProvinces(
       else if (dist(oldColl) < T.collisionWidth * wob || dist(suture) < T.sutureWidth * wob)
         pv = Province.OldMountains;
       else if (
-        dist(rift) < T.riftExtension * wob ||
+        dist(rift) < T.riftExtension * fx.riftExtension * wob ||
         (bd >= T.backArcBand[0] * wob && bd < T.backArcBand[1] * wob)
       )
         pv = Province.BasinAndRange;
       else if (
-        dist(active) >= T.shieldDistance * wob &&
+        dist(active) >= T.shieldDistance * fx.shieldDistance * wob &&
         noise.noise(x.x * 4, x.y * 4, x.z * 4) > -0.25
       )
         pv = Province.Shield;

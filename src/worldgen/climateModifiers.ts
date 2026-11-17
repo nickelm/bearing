@@ -32,6 +32,8 @@ export interface ClimateModifiers {
   fog: Float32Array;
   /** Ecotone noise, about −1..1. */
   ecotone: Float32Array;
+  /** Moisture offset from the continent's character (decision 209); absent: none. */
+  moistureBias?: Float32Array;
   /** Planet radius (m), for slopes on any grid. */
   radius: number;
 }

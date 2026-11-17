@@ -6,6 +6,17 @@
  * The output is plain typed arrays and numbers, which a worker can transfer
  * without copying.
  */
+import {
+  continentDivergence,
+  DISTINCT_JSD,
+  drawCharacters,
+  effectAt,
+  labelContinents,
+  largestTwo,
+  MAX_REDRAWS,
+  redrawCharacter,
+} from './characters';
+import type { Character } from './characters';
 import { computeClimateModifiers } from './climateModifiers';
 import { assignLithology } from './lithology';
 import { assignProvinces } from './provinces';
@@ -61,6 +72,8 @@ export interface WorldMaps {
   seasonality: Float32Array;
   fog: Float32Array;
   ecotone: Float32Array;
+  /** Moisture offset from the continent's character (decision 209). */
+  moistureBias: Float32Array;
 }
 
 export interface StageTiming {
@@ -90,6 +103,10 @@ export interface WorldInfo {
   maxHeight: number;
   /** Area fraction above sea level. */
   landFraction: number;
+  /** Continents of continental crust with their characters (decision 209), largest first. */
+  continents?: { character: Character; area: number; latitude: number }[];
+  /** Times the distinctness check redrew a character (decision 209). */
+  characterRedraws?: number;
   timings: StageTiming[];
 }
 
@@ -105,6 +122,7 @@ export const PIPELINE_STAGES = [
   'plates',
   'crust',
   'boundaries',
+  'continents',
   'provinces',
   'uplift',
   'elevation',
@@ -112,6 +130,7 @@ export const PIPELINE_STAGES = [
   'climate modifiers',
   'lithology',
   'biomes',
+  'distinctness',
 ] as const;
 
 /** Smallest landmass counted in `WorldInfo.landmassCount` (design, "Reading the World"). */
@@ -156,45 +175,97 @@ export function generateWorld(params: PlanetParams, options: GenerateOptions): W
   const boundaries = stage('boundaries', () =>
     classifyBoundaries(grid, plates, plate, continentalness, params.radius),
   );
-  const provinces = stage('provinces', () =>
-    assignProvinces(
-      grid,
-      params.radius,
-      plates,
-      plate,
-      continentalness,
-      boundaries,
-      rng(seed, 'provinces'),
-    ),
+  // Continents and their characters (decision 209): drawn before provinces, so
+  // they can bias them; redrawn below when the two largest come out alike.
+  const continents = stage('continents', () =>
+    labelContinents(grid, params.radius, continentalness, boundaries, plate),
   );
-  const uplift = stage('uplift', () =>
-    computeUplift(grid, params, boundaries, rng(seed, 'uplift'), provinces),
-  );
-  const elevation = stage('elevation', () =>
-    computeElevation(grid, params, continentalness, uplift, rng(seed, 'elevation')),
-  );
-  const climate = stage('climate', () =>
-    computeClimate(grid, params, elevation.height, rng(seed, 'climate')),
-  );
-  const modifiers = stage('climate modifiers', () =>
-    computeClimateModifiers(grid, params.radius, elevation.height, rng(seed, 'climate-modifiers')),
-  );
-  const { lithology } = stage('lithology', () =>
-    assignLithology(
-      grid,
-      provinces.province,
-      elevation.height,
-      climate.temperature,
-      rng(seed, 'lithology'),
-    ),
-  );
-  const biome = stage('biomes', () =>
-    computeBiomes(grid, params, elevation.height, climate, {
-      lithology,
-      modifiers,
-      province: provinces.province,
-    }),
-  );
+  const characterRng = rng(seed, 'provinces').fork('characters');
+  const character = drawCharacters(continents, characterRng);
+  const run = (st: typeof stage) => {
+    const characters = { label: continents.label, character };
+    const provinces = st('provinces', () =>
+      assignProvinces(
+        grid,
+        params.radius,
+        plates,
+        plate,
+        continentalness,
+        boundaries,
+        rng(seed, 'provinces'),
+        characters,
+      ),
+    );
+    const uplift = st('uplift', () =>
+      computeUplift(grid, params, boundaries, rng(seed, 'uplift'), provinces),
+    );
+    const elevation = st('elevation', () =>
+      computeElevation(grid, params, continentalness, uplift, rng(seed, 'elevation')),
+    );
+    const climate = st('climate', () =>
+      computeClimate(grid, params, elevation.height, rng(seed, 'climate')),
+    );
+    const modifiers = st('climate modifiers', () => {
+      const m = computeClimateModifiers(
+        grid,
+        params.radius,
+        elevation.height,
+        rng(seed, 'climate-modifiers'),
+      );
+      m.moistureBias = new Float32Array(grid.cellCount);
+      for (let c = 0; c < grid.cellCount; c++) m.moistureBias[c] = effectAt(characters, c).moisture;
+      return m;
+    });
+    const { lithology } = st('lithology', () =>
+      assignLithology(
+        grid,
+        provinces.province,
+        elevation.height,
+        climate.temperature,
+        rng(seed, 'lithology'),
+        characters,
+      ),
+    );
+    const biome = st('biomes', () =>
+      computeBiomes(grid, params, elevation.height, climate, {
+        lithology,
+        modifiers,
+        province: provinces.province,
+      }),
+    );
+    return { provinces, uplift, elevation, climate, modifiers, lithology, biome };
+  };
+  let built = run(stage);
+  // Distinctness (decision 209): at most MAX_REDRAWS redraws of the smaller of the
+  // two largest continents' characters, each from its own sub-stream.
+  const redraws = stage('distinctness', () => {
+    let count = 0;
+    const plain = <T>(_: string, fn: () => T): T => fn();
+    for (;;) {
+      const two = largestTwo(continents);
+      if (two.length < 2 || count >= MAX_REDRAWS) break;
+      const [a, b] = [two[0]!, two[1]!];
+      const d = continentDivergence(
+        continents.label,
+        a,
+        b,
+        built.provinces.province,
+        built.biome,
+        built.elevation.height,
+      );
+      if (d >= DISTINCT_JSD) break;
+      count++;
+      character[b] = redrawCharacter(
+        continents,
+        b,
+        [character[a]!, character[b]!],
+        characterRng.fork(`nudge-${count}`),
+      );
+      built = run(plain as typeof stage);
+    }
+    return count;
+  });
+  const { provinces, uplift, elevation, climate, modifiers, lithology, biome } = built;
   options.onProgress?.('done', 1);
 
   const { landmasses } = labelLandmasses(grid, elevation.height, params.radius);
@@ -235,6 +306,7 @@ export function generateWorld(params: PlanetParams, options: GenerateOptions): W
       seasonality: modifiers.seasonality,
       fog: modifiers.fog,
       ecotone: modifiers.ecotone,
+      moistureBias: modifiers.moistureBias!,
     },
     info: {
       resolution: grid.n,
@@ -248,6 +320,10 @@ export function generateWorld(params: PlanetParams, options: GenerateOptions): W
       minHeight,
       maxHeight,
       landFraction: landArea / totalArea,
+      continents: continents.area
+        .map((area, k) => ({ character: character[k]!, area, latitude: continents.latitude[k]! }))
+        .sort((x, y) => y.area - x.area),
+      characterRedraws: redraws,
       timings,
     },
   };

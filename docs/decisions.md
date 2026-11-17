@@ -3447,3 +3447,36 @@ The owner also asked for decision 204's prep commit on `main` (done), and for th
 `docs/visual-style.md` (*Palette*) and `TODO.md` change with this decision.
 
 **Reason:** Appending codes keeps every stored table valid and the old classification intact for the tests that pin it. The modifiers sit beside the climate rather than in it, so drainage and the weather keep their inputs, while the biome table gains the rock, the season and the coast, which is where the proposal's biomes differ.
+
+### 209. W5: continental characters by plate, biases within tectonic limits, and the distinctness check
+
+**Date:** 2026-11-17
+**Decision:**
+
+- **Continents.** A continent for character is the continental crust of one plate, not a connected region of crust. Continental crust is welded across collisions into one region in most seeds (a first try gave one "continent" of 3.7 M km² and a speck in 16 of 20 seeds), much as Eurasia joins several cratons. Each plate's crust has its own history, so it takes its own character. Continents are known after `boundaries` and before `provinces` (stage `continents`).
+- **Characters** (`characters.ts`): mixed, old shield, young mountains, dry extension, tropical platform. Each continent of at least 250,000 km² draws one character from `rng(seed, "provinces").fork("characters")`. The weights:
+  - mixed 1;
+  - old shield 2 above 40° of latitude, else 0.8;
+  - young mountains 1.4, only if a collision, arc or cordillera touches the continent;
+  - dry extension 2 between 12° and 45°, else 0.6, only if a rift or cordillera touches it;
+  - tropical platform 2.2 below 28°.
+- **Biases.** Factors of 1 and offsets of 0 mean no bias.
+  - Old shield: young runs × 0.45, shield distance × 0.55, moisture +0.04, karst threshold +0.05.
+  - Young mountains: young runs at least 0.9, plateau chance 0.7, moisture +0.02.
+  - Dry extension: back-arc chance 0.85, rift extension × 1.6, loess threshold +0.12, moisture −0.09.
+  - Tropical platform: young runs × 0.7, shield distance × 1.4, karst threshold −0.14, moisture +0.07.
+  - A run takes the character of the continent its first cell lies on or touches. Moisture offsets reach the biome table through a `moistureBias` map, upsampled to the global grid like the other modifiers.
+- **Distinctness** (stage `distinctness`). After biomes, the joint province and biome distributions of the two largest continents are compared. Under 0.25 bit, the smaller one's character is redrawn from `characters/nudge-k`, excluding both current characters, and the stages from `provinces` to `biomes` run again, at most twice. `WorldInfo.continents` and `characterRedraws` record the outcome. Plates, crust, boundaries and continents never rerun.
+- **Coarse pass, seeds 1–20.**
+  - The three largest continents of each seed carry two or three different characters in 18 of 20 seeds.
+  - Two seeds needed one redraw.
+  - The divergence between the two largest landmasses reaches 0.25 bit in 18 of 20 seeds (the proposal's 90%), against 11 of 20 in the baseline (biomes only), with a median of 0.51 bit.
+  - The coarse campaign world takes a median 12.7 s, against 11.9 s in the baseline.
+- **Tests.**
+  - `tests/characters.test.ts`: characters vary within worlds, redraws stay within their limit, redrawn worlds are deterministic, divergence is in bits.
+  - `tests/militaryOverlays.test.ts` now finds the first seed of 1–12 whose cast has corridors and sea lanes rather than pinning one, since every generator change moves fronts between seeds.
+- **Version.** `GENERATOR_VERSION` is 25.
+
+`TODO.md` changes with this decision.
+
+**Reason:** The plate is the unit of tectonic history in the generator, so it is the honest unit for a continent's identity; biasing the provinces' draws and thresholds, never their geometry, keeps every character inside what the tectonics allow (rule 10's exception, decision 204).

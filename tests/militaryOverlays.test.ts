@@ -81,17 +81,28 @@ describe('overlay geometry', () => {
   });
 });
 
-describe('military overlays on a generated world (seed 5: two fronts, sea lanes; decision 207)', () => {
+// The first seed whose cast has corridors and sea lanes: generator changes move
+// fronts between seeds (decisions 207–209), so the test looks for one.
+function worldWithLanes() {
   const grid = new CubeGrid(128);
-  const w = generateCampaignWorld({ ...DEFAULT_PLANET_PARAMS, seed: 5 }, { grid });
+  for (let seed = 1; ; seed++) {
+    const w = generateCampaignWorld({ ...DEFAULT_PLANET_PARAMS, seed }, { grid });
+    const fgrid = new CubeGrid(w.graph.resolution);
+    const v = new Vec3d();
+    const ownerAt = (p: Readonly<Point>) =>
+      w.infrastructure.territory[fgrid.cellOfDirection(v.set(p[0], p[1], p[2]))]!;
+    const territory: TerritoryLookup = { ownerAt, cellAngle: Math.PI / 2 / fgrid.n };
+    const o = buildMilitaryOverlays(w.graph, w.campaign.cast, territory);
+    const has = (layer: string) => o.lines.some((l) => l.layer === layer);
+    if ((has('corridors') && has('lanes')) || seed >= 12)
+      return { w, fgrid, ownerAt, territory, o };
+  }
+}
+
+describe('military overlays on a generated world (a seed with fronts and sea lanes)', () => {
+  const { w, fgrid, ownerAt, territory, o } = worldWithLanes();
   const g = w.graph;
   const cast = w.campaign.cast;
-  const fgrid = new CubeGrid(g.resolution);
-  const v = new Vec3d();
-  const ownerAt = (p: Readonly<Point>) =>
-    w.infrastructure.territory[fgrid.cellOfDirection(v.set(p[0], p[1], p[2]))]!;
-  const territory: TerritoryLookup = { ownerAt, cellAngle: Math.PI / 2 / fgrid.n };
-  const o = buildMilitaryOverlays(g, cast, territory);
   const fronts = cast.theaters.filter((t) => t.kind === 'continental-front');
 
   it('stores a territory holder for every coarse cell', () => {

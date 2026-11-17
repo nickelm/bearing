@@ -48,6 +48,7 @@ export interface FinishInput {
     seasonality?: Float32Array;
     fog?: Float32Array;
     ecotone?: Float32Array;
+    moistureBias?: Float32Array;
   };
 }
 
@@ -210,6 +211,9 @@ export function finishWorld(input: FinishInput): FinishResult {
           seasonality: upsampleBilinear(tect.seasonality, tect.n, input.n),
           fog: upsampleBilinear(tect.fog, tect.n, input.n),
           ecotone: upsampleBilinear(tect.ecotone, tect.n, input.n),
+          moistureBias: tect.moistureBias
+            ? upsampleBilinear(tect.moistureBias, tect.n, input.n)
+            : undefined,
           radius: input.radius,
         }
       : undefined;

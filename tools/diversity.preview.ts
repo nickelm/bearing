@@ -42,6 +42,7 @@ import { Biome, BIOME_COUNT, BIOME_NAMES, DESERT_BIOMES } from '../src/worldgen/
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
 import { LANDFORM_MASK_TUNING } from '../src/worldgen/gpu/landformMasks';
 import { PROVINCE_COUNT, PROVINCE_NAMES } from '../src/worldgen/provinces';
+import { CHARACTER_NAMES } from '../src/worldgen/characters';
 import { isLayered } from '../src/worldgen/lithology';
 import { TILE_SYNTH_TUNING } from '../src/worldgen/gpu/tileSynth';
 import { labelLandmasses } from '../src/worldgen/landmasses';
@@ -372,6 +373,7 @@ it('measures world diversity', async () => {
   const coarse: { seed: string; m: GridMetrics }[] = [];
   const stageMs = new Map<string, number[]>();
   const generated: { seed: string; actual: string }[] = [];
+  const characterRows: string[] = [];
   for (const s of seeds) {
     const t0 = performance.now();
     const w = generateCampaignWorld({ ...params0, seed: s });
@@ -385,6 +387,14 @@ it('measures world diversity', async () => {
     const total = stageMs.get('campaign world total') ?? [];
     total.push(genMs);
     stageMs.set('campaign world total', total);
+    const info = w.world.info;
+    if (info.continents) {
+      const top = info.continents
+        .slice(0, 3)
+        .map((k) => `${CHARACTER_NAMES[k.character]} (${Math.round(k.area / 1e9)}k km²)`)
+        .join(', ');
+      characterRows.push(`| ${s} | ${top} | ${info.characterRedraws ?? 0} |`);
+    }
     const m = w.world.maps;
     const grid =
       w.world.info.resolution === 256 ? coarseGrid : new CubeGrid(w.world.info.resolution);
@@ -415,6 +425,16 @@ it('measures world diversity', async () => {
     ...biomeTable(coarse),
     '',
     ...provinceTable(coarse),
+    ...(characterRows.length
+      ? [
+          '### Continental characters (decision 209)',
+          '',
+          '| seed | three largest continents | redraws |',
+          '| --- | --- | --- |',
+          ...characterRows,
+          '',
+        ]
+      : []),
     '### Coarse stage times (median ms)',
     '',
     '| stage | median ms |',
