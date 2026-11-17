@@ -38,6 +38,9 @@ export function parseFreeFlightUrl(q: URLSearchParams, seed: string): FreeFlight
   const wind = q.get('wind');
   if (wind === 'off') options.wind = false;
   if (wind === 'on') options.wind = true;
+  const micro = q.get('micro');
+  if (micro === 'on') options.microFacets = true;
+  if (micro === 'off') options.microFacets = false;
   const aircraft = q.get('aircraft');
   if (aircraft === 'kestrel' || aircraft === 'scout' || aircraft === 'utility')
     options.aircraft = aircraft;
@@ -68,6 +71,9 @@ export function writeFreeFlightParams(
   // Wind is on by default: the URL names it only when it is off.
   if (options.wind) q.delete('wind');
   else q.set('wind', 'off');
+  // Micro-facets are off by default: the URL names them only when on (decision 197).
+  if (options.microFacets) q.set('micro', 'on');
+  else q.delete('micro');
   q.set('spawn', options.spawn);
   q.set('fuel', options.unlimitedFuel ? 'unlimited' : 'limited');
   q.set('aircraft', options.aircraft);

@@ -3167,3 +3167,16 @@ The forest's placement asks `isClear` per tree the same way (decision 148); it h
 - **Checks.** Unit tests for the URL, the inverted cursor and the shared key; the session tool presses I, checks the URL, unticks the pause menu's box, and, headed with a real mouse (decision 195), checks that mouse forward lowers the inverted aim ring.
 
 **Reason:** Whether mouse forward should climb or dive is a matter of habit (an aim cursor against a stick), and players differ; a switch they can flip in flight lets the owner try both. The helicopters and the jet have different conventions, so one switch for both would have broken the one that felt right.
+
+### 197. Micro-facets off by default, a Free Flight option to turn them on
+
+**Date:** 2026-11-17
+**Decision:** On the owner's machine the Kestrel parked on a runway ran at 3–4 frames a second with the micro-facets (decisions 171, 178, 183) and recovered without them; the ground cover was fine. The micro-facets are now off by default (`MicroFacets.strength` 0), in the campaign's simulation view as in Free Flight.
+
+- **The option.** Free Flight's start screen and pause menu have "Ground micro-facets (graphics)" beside the wind's switch, off by default, applied at once and on each start; the URL carries `micro=on` when it is on. The debug panel's Lighting → Micro-facets slider still sets the strength directly.
+- **Previews.** `tools/render.preview.ts` now draws without them unless `MICRO=1`.
+- **Why so costly.** With the camera a few meters over the ground most of the screen is terrain within their range, and every such fragment ran three lattice octaves and their hashes on top of the terrain's own shading; decision 194's skip under pavement did not cover the grass around a runway. They stay available for machines that can afford them; a cheaper form (one octave, a shorter range, or baked per tile) is future work.
+
+`docs/visual-style.md` (*Terrain*, ground detail) and `docs/plans/ground-detail.md` change with this decision.
+
+**Reason:** The owner's report: a frame rate that low makes flying impossible, and the ground cover gives most of the near-ground cue without them.

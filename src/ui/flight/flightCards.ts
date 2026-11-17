@@ -66,6 +66,7 @@ export class PauseMenu {
       <label><input type="checkbox" class="ff-fuel"> Unlimited fuel</label><br>
       <label class="ff-weather-row">Weather </label> <span class="ff-weather-about"></span><br>
       <label><input type="checkbox" class="ff-wind"> Wind and turbulence</label><br>
+      <label title="Fine faceted relief on the ground near a low camera; costly on some graphics cards"><input type="checkbox" class="ff-micro"> Ground micro-facets (graphics)</label><br>
       <label title="For this aircraft; I switches it in flight"><input type="checkbox" class="ff-invert"> Invert mouse up and down</label> <span class="ff-invert-note ff-note"></span><br>
       <label>Time of day <input type="range" class="ff-tod" min="0" max="24" step="0.25"> <span class="ff-tod-label"></span></label>
       <div class="ff-note">The weather changes at once; the time of day applies on the next restart.</div>
@@ -84,6 +85,11 @@ export class PauseMenu {
     const wind = opts.querySelector('.ff-wind') as HTMLInputElement;
     wind.addEventListener('change', () => {
       this.options.wind = wind.checked;
+      events.optionsChanged(this.options);
+    });
+    const micro = opts.querySelector('.ff-micro') as HTMLInputElement;
+    micro.addEventListener('change', () => {
+      this.options.microFacets = micro.checked;
       events.optionsChanged(this.options);
     });
     const invert = opts.querySelector('.ff-invert') as HTMLInputElement;
@@ -107,6 +113,7 @@ export class PauseMenu {
       fuel.checked = this.options.unlimitedFuel;
       weather.show(this.options.weather);
       wind.checked = this.options.wind;
+      micro.checked = this.options.microFacets;
       const k = invertKey(this.options.aircraft);
       invert.checked = this.options[k];
       invertText.textContent = invertNote(this.options.aircraft, this.options[k]);

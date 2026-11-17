@@ -231,8 +231,12 @@ function octave(uv: V2, a: V3, b: V3, plane: F, o: Octave, seed: U): { grad: V3;
 }
 
 export class MicroFacets {
-  /** Strength 0..1 (0 = off): scales the tilt and the shade steps. */
-  readonly strength = uniform(1);
+  /**
+   * Strength 0..1 (0 = off): scales the tilt and the shade steps. Off by default: on the
+   * owner's machine they took the frame rate on a runway to 3–4 fps (decision 197); Free
+   * Flight's "Ground micro-facets" option and the debug panel turn them on.
+   */
+  readonly strength = uniform(0);
   /** 1 while the camera is low enough for any fragment to be within `range`. */
   readonly active = uniform(0);
   /** Distance (m) over which the detail fades out. */

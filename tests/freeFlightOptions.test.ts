@@ -103,6 +103,17 @@ describe('Free Flight URL', () => {
     expect(parse('invert=helo').options).toMatchObject({ invertJet: false, invertHelo: true });
     expect(parse('mode=freeflight').options).not.toHaveProperty('invertJet');
   });
+
+  it('keeps the micro-facets off unless asked (decision 197)', () => {
+    expect(DEFAULT_OPTIONS.microFacets).toBe(false);
+    const q = new URLSearchParams();
+    writeFreeFlightParams(q, { ...DEFAULT_OPTIONS, microFacets: true }, null);
+    expect(q.get('micro')).toBe('on');
+    expect(parseFreeFlightUrl(q, '1').options.microFacets).toBe(true);
+    writeFreeFlightParams(q, DEFAULT_OPTIONS, null);
+    expect(q.has('micro')).toBe(false);
+    expect(parse('mode=freeflight').options).not.toHaveProperty('microFacets');
+  });
 });
 
 describe("Free Flight's clock", () => {

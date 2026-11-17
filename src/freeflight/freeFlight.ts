@@ -239,6 +239,7 @@ export class FreeFlight {
         },
         optionsChanged: (o) => {
           this.applyInvert();
+          this.applyGraphics();
           const flown = this.helo ?? this.model;
           if (flown) flown.unlimitedFuel = o.unlimitedFuel;
           if (o.weather !== this.weather.preset) this.setWeather(o.weather);
@@ -458,6 +459,7 @@ export class FreeFlight {
     this.baseId = id;
     this.writeUrl(id);
     this.applyInvert();
+    this.applyGraphics();
     if (this.options.aircraft !== 'kestrel') {
       this.startHelo(r, spawn, this.options.aircraft);
       return;
@@ -734,6 +736,11 @@ export class FreeFlight {
    */
   private pausedByLoss(): boolean {
     return this.state === 'paused' && performance.now() - this.lostAt < 300;
+  }
+
+  /** The graphics options: the ground's micro-facets on or off (decision 197). */
+  private applyGraphics(): void {
+    this.deps.globe.terrain.micro.strength.value = this.options.microFacets ? 1 : 0;
   }
 
   /** Gives both inputs the mouse inversion the options hold (decision 196). */

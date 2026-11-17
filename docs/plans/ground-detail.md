@@ -37,6 +37,8 @@ Three layers, each switched off well before it stops paying for itself.
 
 ### 1. Micro-facets in the ground shader (G1)
 
+_Off by default since decision 197 (too costly near the ground on the owner's machine); a Free Flight graphics option turns them on._
+
 A virtual mesh, finer than the real one, drawn only in the shader. Each octave is a height field on a square lattice split along its diagonal, with a hashed value at each lattice point and linear inside each triangle, laid on the plane across the world axis nearest the terrain facet's normal. Its gradient is constant inside a triangle, so the ground falls into small flat triangles about a cell across. A fragment tilts the face normal by its cell's gradient and takes its cell's shade step. Every fragment of a cell shares one normal and one shade, so the result is a bump map that obeys the facet rule: stepped, never smooth or noisy. Three octaves (4, 1.2 and 0.45 m) are weighted by land cover (`render/sim/terrain/microFacets.ts`, decisions 171, 178). A first version cut a 3D lattice of tetrahedra with the ground; its slivers aliased into moiré.
 
 | Land cover                | Cell           | Tilt           | Character                                                                                                                               |

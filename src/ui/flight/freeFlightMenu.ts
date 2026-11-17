@@ -33,6 +33,8 @@ export interface FreeFlightOptions {
   /** The mouse's up and down inverted in the jet, and in the helicopters (decision 196). */
   invertJet: boolean;
   invertHelo: boolean;
+  /** The ground's micro-facets near a low camera: costly on some GPUs, off by default (decision 197). */
+  microFacets: boolean;
 }
 
 /** Which inversion setting an aircraft uses: the jet's or the helicopters' (decision 196). */
@@ -58,6 +60,7 @@ export const DEFAULT_OPTIONS: FreeFlightOptions = {
   wind: true,
   invertJet: false,
   invertHelo: false,
+  microFacets: false,
 };
 
 /** The weather option of a card: the list of presets by name, and what the chosen one is like. */
@@ -189,6 +192,9 @@ export class FreeFlightMenu {
         <label><input type="checkbox" class="ff-fuel"> Unlimited fuel</label>
       </div>
       <div class="ff-row">
+        <label title="Fine faceted relief on the ground near a low camera; costly on some graphics cards"><input type="checkbox" class="ff-micro"> Ground micro-facets (graphics)</label>
+      </div>
+      <div class="ff-row">
         Start:
         <label><input type="radio" name="ff-spawn" value="runway"> <span class="ff-spawn-ground">On the runway</span></label>
         <label><input type="radio" name="ff-spawn" value="air"> <span class="ff-spawn-air">In the air (3,000 m, 300 kt)</span></label>
@@ -219,6 +225,8 @@ export class FreeFlightMenu {
     wind.addEventListener('change', () => (this.options.wind = wind.checked));
     const fuel = q<HTMLInputElement>('.ff-fuel');
     fuel.addEventListener('change', () => (this.options.unlimitedFuel = fuel.checked));
+    const micro = q<HTMLInputElement>('.ff-micro');
+    micro.addEventListener('change', () => (this.options.microFacets = micro.checked));
     const aircraft = q<HTMLSelectElement>('.ff-aircraft');
     const aircraftNote = q<HTMLSpanElement>('.ff-aircraft-note');
     for (const a of AIRCRAFT_CHOICES) {
@@ -267,6 +275,7 @@ export class FreeFlightMenu {
       this.weatherList.show(this.options.weather);
       wind.checked = this.options.wind;
       fuel.checked = this.options.unlimitedFuel;
+      micro.checked = this.options.microFacets;
       for (const r of spawns) r.checked = r.value === this.options.spawn;
       showAircraft();
     };
