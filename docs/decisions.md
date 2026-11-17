@@ -3342,6 +3342,18 @@ The owner also asked for decision 204's prep commit on `main` (done), and for th
 
 **Reason:** Bearing's continents are Earth's scaled by 0.157 (decision 121), so a region that is a given share of a continent on Earth is the same share here. Landforms and heights are what a pilot sees at working altitude, and they keep Earth's size.
 
+### 206. Mouse aim takes the stick only once the mouse has been captured; the browser smoke test with the displays
+
+**Date:** 2026-11-17
+**Decision:** A regression from decision 198, found by the browser smoke test on lavapipe, and that run's other results.
+
+- **The regression.** Decision 198 made mouse aim the jet's default mode. On the wheels the keys steer and rotate, but the moment a keyboard takeoff lifted the wheels, the flight director took the stick and flew toward the aim ring at the screen's center, a point a little below the horizon, so it put the jet back on the runway, again and again: the smoke test's takeoff ran off the runway at 263 kt. Now mouse aim has the stick only once the mouse has been captured in this sortie (Tab or a click); until then the keys fly, as the start message already said. Freeing the mouse afterwards still holds the aim point (cursor mode). The aim ring shows only once mouse aim has the stick.
+- **The smoke test** (`MODE=lavapipe`, `WORLD=tools/out/browser/world-1983`) then passes the takeoff (181 kt, 71 m up); the full run before the fix passed the six weather scenes, the helicopter (hover, forward flight, landing) and the campaign's views, map and time controls, with no page, console or WebGPU error. Its page screenshots show the displays and the moving map's picture in the left display: the render target, the read-back and the map format work in Chromium's WebGPU on lavapipe, not only on Dawn.
+
+`TODO.md` changes with this decision.
+
+**Reason:** The keyboard takeoff is how Free Flight starts, and the default mouse mode must not take it over before the player has picked up the mouse.
+
 ### 207. W1: terrain provinces and lithology; erodibility in the erosion pass
 
 **Date:** 2026-11-17

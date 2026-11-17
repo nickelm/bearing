@@ -183,6 +183,11 @@ export class FreeFlight {
   private fuelCapacity = 0;
   private displaysAt = -Infinity;
   private movingMap: MovingMap | null = null;
+  /**
+   * Mouse aim has the stick once the mouse has been captured this sortie; before that the
+   * keys fly, so a keyboard takeoff is never taken over at liftoff (decision 206).
+   */
+  private aimEngaged = false;
   private mapAt = -Infinity;
   /** The mouse's pointer lock, shared by both inputs and toggled by Tab (decision 193). */
   readonly capture: MouseCapture;
@@ -288,8 +293,9 @@ export class FreeFlight {
       this.hud.message('The browser kept the mouse: click the view to capture it', 4);
     // In the jet a captured mouse flies in either mode (decisions 195, 198); in direct mode
     // the stick starts and ends at the center, where the keys take over.
-    this.capture.onChange = () => {
+    this.capture.onChange = (on) => {
       if (this.helo || !this.model || this.pilot) return;
+      if (on) this.aimEngaged = true;
       if (this.input.mode === 'direct') this.input.centerCursor();
     };
     this.input = new FlightInput(deps.canvas, this.capture);
@@ -500,6 +506,7 @@ export class FreeFlight {
     // An air start holds about the throttle for 300 kt (trim is near 0.15 of the lever).
     this.input.reset(spawn === 'runway', spawn === 'air' ? 0.2 : 0);
     this.input.mode = CONTROL_MODE[this.options.control];
+    this.aimEngaged = false;
     this.director.reset();
     this.pilot = this.autopilot && spawn === 'runway' ? new TestPilot(r, end, R) : null;
     // The sun and the moon: the chosen local time at the base, on Free Flight's day (clock.ts).
@@ -921,8 +928,9 @@ export class FreeFlight {
     if (!m || !this.ground || !this.monitor) return;
     this.weather.update(this.gameTime);
     const chase = this.deps.globe.chase;
-    // Mouse aim flies only in the air; on the wheels the keys steer and rotate.
-    this.input.directOnGround = m.onGround;
+    // Mouse aim flies only in the air, and only once the mouse has been captured this sortie
+    // (decision 206); on the wheels, and until then, the keys steer and rotate.
+    this.input.directOnGround = m.onGround || !this.aimEngaged;
     this.input.update(this.state === 'flying' ? dt : 0);
     chase.lookHeld = this.input.lookHeld;
     if (this.input.lookHeld) {
@@ -944,7 +952,12 @@ export class FreeFlight {
         this.acc -= FLIGHT_STEP;
         steps++;
         if (this.pilot) this.pilot.fly(m, ctl, FLIGHT_STEP);
-        else if (this.input.mode === 'mouse-aim' && this.state === 'flying' && !m.onGround)
+        else if (
+          this.input.mode === 'mouse-aim' &&
+          this.aimEngaged &&
+          this.state === 'flying' &&
+          !m.onGround
+        )
           this.mouseAim(m, ctl);
         const p0 = m.pos.clone();
         this.setWind(m);
@@ -1118,7 +1131,7 @@ export class FreeFlight {
     // The control cursor (decision 198): mouse aim's ring always (a free mouse holds it), the
     // direct stick only while the mouse flies it.
     let control: ControlCursor | null = null;
-    if (!this.pilot && aim) {
+    if (!this.pilot && aim && this.aimEngaged) {
       const d = this.aimDirection();
       control = {
         kind: 'aim',
