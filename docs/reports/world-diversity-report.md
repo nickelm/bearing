@@ -14,7 +14,7 @@ Track W gives the generated worlds a cause for one place to differ from another.
 - **The land divides into zones** with names and look recipes. They shift the terrain's colors and label the map (decision 210).
 - **5–15 named natural wonders** are selected per war (decision 211).
 
-Landform props (W7) were not started, and several presentation pieces wait for later work. Both are listed under *Simplified, stubbed or deferred*.
+Landform props (W7) were not started, and several presentation pieces wait for later work. Both are listed under _Simplified, stubbed or deferred_.
 
 ## What works
 
@@ -58,3 +58,87 @@ Globe maps (coarse pass, equirectangular above both polar caps) of three contras
 - **Seed 5** (two tropical platforms and an old shield): `seed5-biome.png`, `seed5-provinces.png`.
 - **Seed 9** (young mountains and dry extension): `seed9-biome.png`, `seed9-provinces.png`.
 - **Seed 16** (two old shields and dry extension): `seed16-biome.png`, `seed16-provinces.png`.
+
+## Metrics against the criteria
+
+The full tables are in [world-diversity-metrics.md](world-diversity-metrics.md); the baseline is [world-diversity-baseline.md](world-diversity-baseline.md).
+
+| Criterion                | Result                                                                                                                                                                                                                                                                     | Met     |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| Local variety            | Joint biome and province entropy reaches 0.5 bit on a median 87% of land over 100 km windows on the coarse pass (baseline, biomes only: 70%), and on 7 of 20 seeds the full 90%. Over the planet-scaled 16 km windows on eroded worlds, 48–50% of land (baseline: 29–34%). | No      |
+| Continental distinctness | 18 of 20 seeds at 0.25 bit or more, median 0.49 (baseline 11 of 20, median 0.35)                                                                                                                                                                                           | Yes     |
+| Mountain heights         | Eroded peaks of 8.9 and 10.0 km on seeds 1 and 2. Land above 4 km is 4.2× and 2.6× the baseline's.                                                                                                                                                                         | Yes     |
+| Terracing restriction    | Only layered rock in a dry climate, by construction. Terraced land is 11% (coarse median) against 33%, and 7–11% (eroded) against 21–31%.                                                                                                                                  | Yes     |
+| Endorheic basins         | 34–81 closed basins per world; 16–40 salt flats per world, each an airstrip site; the river invariants hold with them                                                                                                                                                      | Yes     |
+| Biome coverage           | All twenty land biomes over seeds 1–20, eighteen of them in every seed                                                                                                                                                                                                     | Yes     |
+| Zones                    | All land zoned; 97.6–98.4% of zones within 16–63 km on eroded worlds; all named, with recipes                                                                                                                                                                              | Yes     |
+| Wonders                  | 5–15 per world in every seed, named, conditions tested                                                                                                                                                                                                                     | Yes     |
+| Props                    | W7 not started                                                                                                                                                                                                                                                             | Not run |
+| Existing invariants      | Every test passes; one network-stage test times out only under load                                                                                                                                                                                                        | Yes     |
+| Determinism              | Tested per stage; plates, crust and boundaries byte-identical                                                                                                                                                                                                              | Yes     |
+| Generation time          | Coarse pass +20% (14.3 s against 11.9 s); global finish +15 s on 15–25 minutes of erosion                                                                                                                                                                                  | Yes     |
+
+**Local variety falls short of the proposal's 90%.** Coherent zones and high local entropy pull against each other, as the plan foresaw. The plan's measure counts altitude zones and surface character (riparian, lakes, ecotones) in the joint classes. The tool counts only biome and province so far, and adding those classes is the next step before tuning anything.
+
+## Simplified, stubbed or deferred
+
+- **Landform props (W7)**: not started. This leaves out the prop kit, placement, the instanced layer, collision shapes and budgets. The karst bay and pillar forest wonders are selected and named but have no towers.
+- **Wonder shaping and protection**: no tepui walls, falls, calderas, travertine or mineral bands in the tiles; no router cost around wonders; no map glyph of their own (labels only).
+- **Zones in the simulation view**: only the palette shift, per vertex. Haze, sky grading, sun warmth, cloud regimes, particles and vegetation kit weights by zone are in the recipes but not yet applied. Zones' weather tendencies are not read by the weather model.
+- **Closed basins**: brine colors (pink and turquoise by salinity) and pale shoreline rings wait for a flag in the tiles' output material for the terrain shader. Salt lakes draw as ordinary lakes, playas as white crust.
+- **Relief**: no soft limit per province (peaks already reach 8–10 km); cirques and arêtes rest on the kernel's existing alpine crests; canyons are left to erosion; no separate stratovolcano cones.
+- **Biomes and surface**: aspect in the shader and canopy, disturbance patches in forests, oases, gully shade lines, and the weather reading the fog tendency are not done. Strategic patterns for the new biomes (heather, salt crust, towers, banding) are not done; the new fills are.
+- **Screenshots**: globe maps of three seeds from the coarse pass only. The simulation view's renders on lavapipe (`tools/render.preview.ts`, seed 1: range, alpine, mixed, farmland) had not finished when this report was written. The browser smoke test was not run.
+
+## Decisions and deviations from proposal 0007
+
+- **Decision 204**: the proposal accepted, with 21 readings.
+- **Decision 205**: the owner's answers. Regional distances scale with the planet (zones 16–63 km, blends 1–2.5 km, windows 16 km); landforms and heights keep Earth's values. Zones became presentation data on the eroded grid.
+- **Decision 206 (W1)**: provinces and lithology; erodibility.
+- **Decision 207 (W2, W3)**: relief by province, fault blocks, fjords, terracing on layered rock; closed basins, salt flats and airstrip sites.
+- **Decision 208 (W4)**: the modifiers and twenty biomes. _Deviation:_ seven codes appended instead of renumbering.
+- **Decision 209 (W5)**: characters. _Deviation:_ a continent is a plate's crust, because crust is one welded region in most seeds.
+- **Decision 210 (W6)**: zones, recipes, names, the palette shift and labels.
+- **Decision 211 (W8)**: wonders. W7 deferred.
+- **Decision 212**: islets join a zone; flatness and mangroves at the eroded grid's resolution.
+- **Further deviations**:
+  - Salt flats are point features, not polygons.
+  - Wonders are selected weighted toward fronts and sea lanes, not airbases. Airbases are placed after casting, from the cast.
+  - The proposal's per-province soft limit was not needed for the height criterion.
+
+## Known issues
+
+**Moderate**
+
+- Local variety misses the 90% target (see above).
+- Eroded peaks reach 10.0 km on seed 2, above the proposal's 8–9 km, from young collisions × 1.25 under the shared soft limit.
+- Tundra covers 16.5% of land on the coarse pass (baseline 9.6%), because cold plateaus are tundra below −12 °C. Alpine meadow rose from 5% to 7%.
+- Eroded wetland and mangrove shares were measured before decision 212's fix; the eroded run that would confirm it is still to do.
+
+**Minor**
+
+- Every salt flat counts as an airstrip site on the coarse grid: a 6 km cell is longer than the 4 km run. The test is meaningful only at finer resolution.
+- Zone names take their naming flavor from the quarter of longitude, not the land node, so a zone's names can differ in flavor from the towns around it.
+- The basin-and-range sink and the plateau uplift change sea level's quantile slightly. Inland seas were present in the baseline too.
+- `tests/networkLink.test.ts` "never hands a task a tile another lane evicted" times out when the machine is loaded (it did before track W).
+
+## Generation time
+
+| Stage                                                             | Baseline (median) | Now (median)                       |
+| ----------------------------------------------------------------- | ----------------- | ---------------------------------- |
+| Coarse: continents, provinces, lithology, modifiers, distinctness | –                 | 0.06 + 0.47 + 0.31 + 0.56 + 0.00 s |
+| Coarse: uplift + elevation                                        | 0.94 s            | 1.18 s                             |
+| Coarse: climate + biomes                                          | 2.48 s            | 2.39 s                             |
+| Coarse: drainage (with closed basins)                             | 0.16 s            | 0.38 s                             |
+| Coarse: features (salt flats, wonders)                            | 1.17 s            | 1.32 s                             |
+| Coarse campaign world, total                                      | 11.9 s            | 14.3 s                             |
+| Global: erosion (lavapipe, under load)                            | 9–18 min          | 17–25 min (under heavier load)     |
+| Global: finish in the worker (drainage, rivers, biomes, zones)    | 8–15 s            | 29 s                               |
+
+Times are medians on a 4-core cloud machine while other generation jobs ran. Erosion did not change in kind, apart from one more buffer read per iteration; its longer times come from the heavier load. A comparison on an idle machine is still to do.
+
+## Next steps
+
+1. **Measure local variety as the plan defines it.** Add altitude zones and surface character (riparian cells, lakes, ecotone bands) to the joint classes, then tune. This decides whether the 90% target needs more generation or only a better measure.
+2. **Give zones their air in the simulation view.** Haze, sky grading, sun warmth and particles blended by the camera's position, and the weather's fog and low-cloud tendencies. Zones should read within seconds of arriving, which the palette shift alone does not achieve.
+3. **Build W7's landform props** (karst towers first) with collision shapes. Tower karst is the proposal's most striking landscape and helicopter environment, and the karst bay and pillar wonders wait for it.

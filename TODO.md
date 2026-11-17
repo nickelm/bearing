@@ -1225,9 +1225,11 @@ Terrain provinces and rock from tectonic history, a richer climate with twenty l
 
 ### W9. Verification and report
 
-- [ ] Every criterion over 20 seeds against the baseline → `docs/reports/world-diversity-metrics.md`
+- [x] Every criterion over 20 seeds against the baseline → `docs/reports/world-diversity-metrics.md` (coarse 20 seeds, eroded seeds so far)
+  - [ ] Eroded worlds of all 20 seeds on the final generator (decision 212's wetland and mangrove), and the local-variety measure with altitude zones and surface character
+- [x] Globe maps of three contrasting seeds (coarse) → `docs/reports/screens/world-diversity/`
 - [ ] Screenshots on lavapipe: three contrasting globes, an alpine range with glacial valleys, a basin-and-range desert with a salt flat, a moorland, a jungle river, a karst bay, two adjacent zones → `docs/reports/screens/`
-- [ ] `docs/reports/world-diversity-report.md`: what works, metrics, simplifications, decisions and deviations, known issues, times per stage, next steps
+- [x] `docs/reports/world-diversity-report.md`: what works, metrics, simplifications, decisions and deviations, known issues, times per stage, next steps
 - [ ] Checkpoint: owner flies Free Flight over three contrasting zones
 
 ## Known issues
