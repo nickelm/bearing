@@ -2,6 +2,8 @@
 
 _Drafted 2026-11-16 from the owner's direction of the same day (decision 168). The tasks are in `TODO.md` under the ground detail track; later decisions record what each milestone changes._
 
+_Audit 2026-11-18 (decision 229): the downwash this plan left to H3 is built (decisions 176, 182, 188, 191), and the micro-facets are off by default (decision 197). Milestones are scheduled by `docs/roadmap.md` (decision 228)._
+
 ## Goal
 
 Make the ground within a few hundred meters of a low camera worth looking at, and make it tell a helicopter pilot their height and drift, without adding cost at working altitude. The look stays faceted and slightly cartoony, in the spirit of a painted fantasy MMO rather than a photograph: fat, chunky grass tufts; hefty, flat-shaded, low-poly boulders; soft, wispy dust.

@@ -2,6 +2,8 @@
 
 *Drafted 2026-11-15. Status: accepted (decision 161). Affects `docs/design.md`, `docs/visual-style.md`, `docs/proposals/0001-two-views.md`, `TODO.md`, and `CLAUDE.md`. The implementation plan is [docs/plans/terrain-networks.md](../plans/terrain-networks.md). Extended by [proposal 0007](0007-world-diversity.md) (decision 204): rivers into closed basins end at their lake's surface and keep the monotone profile, and alignments keep out of natural wonders' footprints except for scenic routes that pass in sight.*
 
+*Audit 2026-11-18 (decision 229): features are drawn from segment lists, not a per-chunk distance field (decision 161); airfield pads are exempt from "rivers always last" until siting keeps them off rivers (decision 164); links are aligned independently in a spatial order (decision 184), not railways first; bridges are not yet nodes that a strike can cut, and fewer than half of the network's bridges match a drawn crossing (decision 190). This proposal has no roadmap section; `docs/roadmap.md` schedules its remaining work (decision 228).*
+
 ## Principle
 
 Every linear feature has a **design speed or flow regime**, and that regime decides how the feature and the terrain adapt to each other. A slow lowland river wanders and carves a floodplain. A minor mountain road yields to the slope and switches back. A motorway cuts, fills, and bridges to keep its grade and curves. A mainline railway accepts long detours, horseshoe curves, spiral loops, viaducts, and tunnels before it accepts a steep grade. A power line ignores the terrain.

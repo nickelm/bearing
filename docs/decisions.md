@@ -242,7 +242,7 @@ Revisit if convoy crossings in milestone 7 come out too long.
 - Map previews (`npm run maps`) showed that a round main continent covering about 18% of a 1,000 km planet spans about 100° of latitude. Centered at mid-latitudes, it reached over a pole, which produced a giant ice sheet, tundra where the front should be, and biomes in concentric rings.
 - The design is modeled on Cold War Central Europe, which needs a temperate continent. Elongating the continent east–west, as Eurasia is, keeps its area while limiting how far it reaches toward the poles.
 
-### 21. Provisional climate breaks latitude symmetry
+### 21a. Provisional climate breaks latitude symmetry
 
 **Date:** 2026-11-09
 **Decision:** The milestone-1 climate no longer depends on latitude alone.
@@ -253,7 +253,7 @@ Revisit if convoy crossings in milestone 7 come out too long.
 
 **Reason:** The owner's review found circular polar caps, and map previews showed biome stripes following latitude exactly. Real winds and rain shadows remain the climate stage proper in milestone 2.
 
-### 21. Two grid resolutions: tectonic CPU grid and GPU global grid
+### 21b. Two grid resolutions: tectonic CPU grid and GPU global grid
 
 **Date:** 2026-11-09
 **Decision:**
@@ -570,7 +570,7 @@ The vertex shader computes `base + up · height · exaggeration`, morphs toward 
 
 **Reason:** The first version estimated the coast distance per fragment from screen derivatives (depth ÷ `fwidth(height)`). That is constant over each triangle, so the foam came out in visible triangle steps. A per-vertex estimate interpolates smoothly and costs one float.
 
-### 40. Static hosting on GitHub Pages; no cross-origin isolation
+### 40a. Static hosting on GitHub Pages; no cross-origin isolation
 
 **Date:** 2026-11-10
 **Decision:**
@@ -582,7 +582,7 @@ The vertex shader computes `base + up · height · exaggeration`, morphs toward 
 
 **Reason:** Static hosting needs no server, costs nothing and deploys from CI. The price is no shared memory between threads. Transferring buffers moves them without a copy, so per-tick sim snapshots and world-generation output can still cross the worker boundary cheaply.
 
-### 40. Lakes from a per-sample lake level; smooth lowlands
+### 40b. Lakes from a per-sample lake level; smooth lowlands
 
 **Date:** 2026-11-10
 **Decision:**
@@ -2328,7 +2328,7 @@ Plausibility, checked by `tests/flightModel.test.ts` and printed by `tools/fligh
 
 **Reason:** Water must run downhill: a river that climbs breaks the illusion more than any missing detail, and the cause was structural (a surface sampled where the river is not), so the fix gives each river a surface of its own instead of tuning the carve. Beaches, cliffs and marshes follow causes the world already has (the coast's relief, waves eroding headlands and filling coves, a water table on flat ground), as decision 126 asks, and each is a monotone or local change that keeps coastlines, lakes and the campaign's data as they are. The sea's repetition came from a periodic field seen at a scale where its period shows; non-periodic modulation and an earlier hand-over to roughness remove it without losing the field's precision near the surface.
 
-### 147. A tree kit from model specs; lumpy blobs
+### 147a. A tree kit from model specs; lumpy blobs
 
 **Date:** 2026-11-15
 **Decision:** The tree kit of Part I's *Vegetation* exists as model specs (decision 106), the first step of the owner's brief on forests for low flight, written up as the draft proposal 0003.
@@ -2364,7 +2364,7 @@ The forest layer still draws the clumps of decision 45; the kit replaces them wi
 
 **Reason:** An attack helicopter's tactics depend on what a tree line hides, at the range where pop-up attacks happen. Flat canopy paint gives no cover and thinned clumps make distant forest translucent; one height field drawn as a cheap shell gives cover at every range, and sharing it with the simulation makes the cover on screen the cover the AI respects.
 
-### 147. River banks and bars, white water on fast reaches, and foam on lake shores
+### 147b. River banks and bars, white water on fast reaches, and foam on lake shores
 
 **Date:** 2026-11-15
 **Decision:** The owner asked, after decision 146, for river banks and beaches, white water at river edges, and foam lines on lakes.

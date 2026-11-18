@@ -2,6 +2,8 @@
 
 _Drafted 2026-11-13 for the overnight Free Flight task. Branch `feature/free-flight`. The decisions this plan leads to are recorded in `docs/decisions.md` (134 onward)._
 
+_Audit 2026-11-18 (decision 229): Free Flight has since gained the world's weather and presets (decisions 137, 143), two helicopters (decision 159) and scripted traffic for the sensors (decision 218); mouse aim, not direct control, is the default (decisions 195, 198). The order below is history; `docs/roadmap.md` schedules what follows (decision 228)._
+
 ## Goal
 
 A sandbox mode: pick a seed and an airbase, spawn on the runway in the F-21 Kestrel (the F-16 analogue), take off, fly anywhere, and land at the same or another airbase. No war simulation, no other traffic, no weapons.

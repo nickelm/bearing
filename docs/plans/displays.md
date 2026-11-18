@@ -2,6 +2,8 @@
 
 _Drafted 2026-11-16 for [proposal 0006](../proposals/0006-displays-and-crew.md) (decision 189). The tasks are in `TODO.md` under the piloting track; later decisions record what each milestone changes. Nothing is implemented yet._
 
+_Audit 2026-11-18 (decision 229): the sensor model (decision 218) and avionics profiles for every type (decision 224, in code rather than the specs) now exist, so "What exists" is a snapshot from drafting. The map's ranges run 5–160 nm; the moving map is read back into the display (decision 201); there is no focus ring (decision 193) and no HUD declutter by mode; P3 split into P3a and later steps (decision 218). Milestones are scheduled by `docs/roadmap.md` (decision 228); the steps below remain the task breakdown._
+
 ## Goal
 
 One display system for every aircraft and helicopter: a HUD for what the pilot needs while looking outside, docked displays for sensor pictures and configuration, and a status strip for discrete states, all reconfigured together by master modes. Every format draws from a serializable display model of the sensor-filtered picture, so an AI crewmate, a second window and a tablet work through the same commands as the player. Free Flight is the test bed for P2 and most of P3, as it is for track H.

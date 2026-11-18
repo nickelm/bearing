@@ -2,6 +2,8 @@
 
 *Drafted 2026-11-11. Status: accepted. Affects `docs/design.md`, `docs/visual-style.md`, `docs/proposals/0001-two-views.md`, and `TODO.md`. Amended for helicopters by [proposal 0004](0004-helicopter-flight.md) (decision 149): helicopters take off and land under the player's control, and that proposal specifies their camera rig and hover symbology. [Proposal 0006](0006-displays-and-crew.md) (decision 189) supersedes the *Displays* and *Layout and Style* sections and the P2, P3 and P5 milestones below; the HUD symbology and crew station mode stay, crew station mode now working through format ownership.*
 
+*Audit 2026-11-18 (decision 229): free look stays where it is left instead of springing back (decisions 160, 198); mouse aim steers by the cursor's direction in the chase view, not a world-locked aim point (decisions 135, 198); Free Flight animates the landing gear. The Displays and Layout sections are superseded by proposal 0006, and player flight control is in the tech demo (R2) under proposal 0008. The roadmap section below is superseded by `docs/roadmap.md` (decision 228).*
+
 ## Decision
 
 Bearing models no cockpits. The player flies every aircraft and helicopter from a third-person chase camera, with the aircraft near the center of the screen. The HUD and the key cockpit displays (radar, moving map, threat warning, weapons) appear as 2D elements on screen. Spectating an AI flight and flying it use the same view: taking control changes who provides the inputs, and the screen stays the same.

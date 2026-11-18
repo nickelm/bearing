@@ -2,6 +2,8 @@
 
 *Drafted 2026-11-15 from the owner's brief. Status: accepted 2026-11-15 (decision 148). Would affect `docs/design.md` (Line of sight, the flight model's ground model), `docs/visual-style.md` Part I (Vegetation, Performance Budgets, Acceptance Checks), and `TODO.md` (V2's tree kit and tree LOD).*
 
+*Audit 2026-11-18 (decision 229): near trees reach 600 m on an 8 m lattice over quarter level-10 tiles and edge trees 1.2 km (decision 150), not 700 m, 7 m, level 11 and 1.5 km as in sections 2 and 6. Line of sight and tree strikes from the canopy field (section 5) are not built. The steps in section 8 are superseded by `docs/roadmap.md` (decision 228).*
+
 ## The Brief
 
 An attack helicopter must fly through the world at treetop height, pop up from behind a tree line to attack, and duck back behind cover. At low altitude the player needs enough variation to orient and to remember places. Trees should look slightly cartoonish: low-poly and faceted, in the spirit of the owner's two reference renders, and matching the faceted terrain without becoming a block world. The frame rate must stay above 30 fps on a laptop, ideally on a tablet too. The owner suggests separating forests from individual trees, with areas where treetop canopies alone form a complete cover.

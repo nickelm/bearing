@@ -2,6 +2,8 @@
 
 _Drafted 2026-11-15 for [proposal 0004](../proposals/0004-helicopter-flight.md) (decision 149); the owner's answers are decision 151. The tasks are in `TODO.md` under the helicopter track; later decisions record what each milestone changes._
 
+_Audit 2026-11-18 (decision 229): the rotor model is `rotorAero.ts` and `rotorcraftModel.ts` with a lagged inflow state, parameters in the spec's `flight` block (decision 159), not the modules and `rotor` block named under Architecture; `heloDirector.ts` does not exist yet; a helicopter chase rig and `MouseCapture` exist. "What exists" is a snapshot from drafting. Milestones are scheduled by `docs/roadmap.md` (decision 228)._
+
 ## Goal
 
 Rotor-disc helicopters in the one flight-model family that AI and player share (rule 12): approachable with fly-by-mouse and the Assisted preset, complete with assists off. Free Flight is the test bed for H1–H4; H5 brings helicopters into the campaign.

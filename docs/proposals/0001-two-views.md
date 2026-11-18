@@ -2,6 +2,8 @@
 
 *Drafted 2026-11-11. Status: accepted 2026-11-11 with one amendment (decision 72). Amended by Proposal 0002 (decision 94): Bearing has no cockpits, so the simulation view is entered through a chase view or an observer camera. Extended by Proposal 0005 (decision 161): roads and railways are aligned to the terrain, bridges are typed and named nodes of the networks, and the map adds bridge labels, dashed tunnels and generalized rivers. Extended by [Proposal 0007](0007-world-diversity.md) (decision 204): the map's fills and patterns follow twenty biomes in a brighter palette, zone names label regions, natural wonders get glyphs and labels, and the simulation view gives each zone its own look. Affects `docs/design.md`, `docs/visual-style.md`, and `TODO.md`.*
 
+*Audit 2026-11-18 (decision 229): the code diverges from this proposal in three settled ways. The hillshade is computed per fragment, not baked (decision 78); labels use a single-channel SDF atlas built at load time, not MSDF (decision 98); infrastructure lives in `worldgen/strategic/`, not `worldgen/infrastructure/` (rule 9). The transition between views is not built. The roadmap section below is superseded by `docs/roadmap.md` (decision 228).*
+
 ## Summary
 
 Bearing gets two distinct views of the same world, each with its own renderer and visual language.

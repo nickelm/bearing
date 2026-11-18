@@ -2,6 +2,8 @@
 
 *Drafted 2026-11-15. Status: accepted 2026-11-15 (decision 149); open questions answered (decision 151). Affects `docs/design.md`, `docs/visual-style.md`, `docs/proposals/0002-third-person-flight.md`, `TODO.md`, and `CLAUDE.md`. The implementation plan is [docs/plans/helicopters.md](../plans/helicopters.md).*
 
+*Audit 2026-11-18 (decision 229): free look stays where it is left in cruise too (decision 160); type parameters live in the spec's `flight` block with `kind: "rotorcraft"`, and avionics profiles in `src/sim/avionics/typeProfiles.ts` (decision 224). No rotary flight director exists yet, so no AI flies a helicopter at full fidelity. The roadmap section below is superseded by `docs/roadmap.md` (decision 228).*
+
 ## Decision
 
 Bearing's helicopters use a rotor-disc flight model of medium fidelity and three control modes over one flight director. The design has two goals that it treats as equally important:

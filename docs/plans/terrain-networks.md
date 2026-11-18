@@ -2,6 +2,8 @@
 
 _Drafted 2026-11-16 for [proposal 0005](../proposals/0005-terrain-adaptive-networks.md) (decision 161). The tasks are in `TODO.md` under the terrain networks track; later decisions record what each milestone changes. Where this plan and the proposal differ, the plan says why, and decision 161 lists the readings for the owner to confirm._
 
+_Audit 2026-11-18 (decision 229): alignment is eager, once per world (decision 184), not lazy; structures are merged per structure in `bridgeLayer.ts` (decision 192); class fallback happens only when a route fails; the milestone table's "Proposal phase" column has no counterpart in the proposal; the measured network is 86,818 km (decision 186). "What exists" is a snapshot from drafting. Milestones are scheduled by `docs/roadmap.md` (decision 228); the tech demo does need bridges with a damage state and road data in the sim._
+
 ## Goal
 
 Rivers, roads and railways that fit the terrain they cross, and terrain that fits them: meanders, oxbows and floodplains on lowland rivers; switchbacks, cuttings, embankments, viaducts and tunnels where the grade demands them; a bridge or culvert at every crossing. The proposal's principle is that these emerge from each feature's design regime. This plan keeps that principle and fits it to three facts of the code: campaign facts come from the CPU coarse pass, the fine terrain exists only as GPU tiles, and rivers already carry a monotone water surface.

@@ -58,12 +58,12 @@ src/worldgen/       planet generation pipeline stages (may use GPU compute); can
                     (track W) provinces.ts, lithology.ts, zones.ts and props.ts: terrain provinces with
                     continental characters, rock, zones with look recipes, landform prop placement shared with the sim
                     (decision 225);
-                    closed basins in drainage.ts; wonder candidates in strategic/wonders.ts (decision 204)
+                    closed basins in drainage.ts; wonder candidates in geography/wonders.ts (decision 204)
   coarsePass.ts     the design's pipeline at 256² on the CPU; campaignWorld.ts adds the validity retries
   edits/            terrain edits (decision 164): pads and corridors, their index by tile, protected
                     river channels and TerrainEdits.apply, the one height function (rule 13);
                     siting.ts sites airfields on the eroded world (decision 220)
-  channels/         (track N, planned) river regimes, meander migration with oxbows, floodplain mask
+  channels/         (track N) meander migration with cutoffs and oxbows, the channel stage, river invariants
   networks/         the alignment tier (decisions 161, 180, 184): the router, plans, profiles, earthworks,
                     link tasks and anchors, links aligned whole, the stage (build.ts, run once per world
                     on a worker pool over level-6 tiles) and its stored record (alignments.ts)
@@ -82,25 +82,25 @@ src/sim/            headless simulation; runs in a worker: event queue + fixed t
                     standalone weather for Free Flight (decision 137)
   air/              the air war (C2, decision 132): aircraft type table, order of battle, missions,
                     analytic routes (great-circle legs, racetracks, fuel) and AirOps (live missions, phase events)
-  naval/            carrier groups on their patrol tracks (analytic position); convoys and amphibious groups in C3
+  naval/            carrier groups on their patrol tracks (analytic position); convoys, amphibious and surface groups in R4 (docs/roadmap.md)
   avionics/         avionics state per aircraft (master mode and its triggers, master arm, acknowledged cautions; later
                     radar mode, locks, designations, stores) changed only by avionics commands, and avionics profiles
                     (decisions 189, 199), one per type of the air war in typeProfiles.ts (decision 224)
   sensors/          the sensor model (P3a, decision 218): radar, RWR, visual and datalink contacts per aircraft,
-                    the filtered picture that displays and AI read; lineOfSight.ts over the ground; groundMap.ts,
+                    the filtered picture that displays read and the AI is to read (R3); lineOfSight.ts over the ground; groundMap.ts,
                     the air-to-ground radar's ground map (decision 226)
-  crew/             (P5, planned) AI crewmates: roles, format ownership, tasks, callouts; act through avionics commands
+  crew/             (R4, planned) AI crewmates: roles, format ownership, tasks, callouts; act through avionics commands
   command/          per-side command layer (graph and cast only): campaign input from the main thread, the interim
                     tasker (until the ATO), later the intelligence picture and the ATO
   flight/           flight model, control laws, ground model, runways, outcomes, flight director and a
-                    scripted test pilot, shared by AI and player (Free Flight, decision 134; P1 extends it;
-                    the sensor model comes with P3); wind and gusts from the weather (wind.ts, decision 143);
+                    scripted test pilot, to be shared by AI and player (Free Flight, decision 134; R2 extends it to
+                    campaign aircraft; the sensor model is in sensors/, decision 218); wind and gusts from the weather (wind.ts, decision 143);
                     the track hold on the wheels with free pedals (controlLaws.ts, decision 145);
                     airframe.ts (the Airframe interface every flown aircraft implements), rigidBody.ts
                     (gravity, Euler's equations, the integrator, attitude) and contact.ts (ground query,
                     wheels, hard points), shared by the Kestrel and the helicopters (decision 154);
-                    rotor/ will hold the helicopters' rotor-disc model, laws, assists and director
-                    (track H, decision 149)
+                    rotor/ holds the helicopters' rotor-disc model, laws, assists and downwash; the rotary
+                    director is planned (track H, decisions 149, 159)
 src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Both scenes stay resident;
                     the app renders the active one (GUI → View → View). Until V1, sim/'s GlobeScene
                     still draws orbit to ground.
@@ -123,7 +123,7 @@ src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Bo
                     post/ (SimPipeline: volumetric stage, overlay, bloom, grade, grain; decision 138),
                     weather/ (WeatherState, the uniforms the effects share, decision 137; Precipitation,
                     Lightning and its strike schedule, decision 142);
-                    later the camera rig and the HUD overlay (V4, P2)
+                    the chase camera and its rigs are in camera/; the HUD and displays are in ui/
   strategic/        strategic view: StrategicScene, StrategicCamera, zoom bands, relief mesh, hillshade,
                     biome fill, patterns, glyphs (glyphLayout, glyphGeometry, glyphLayer), graph debug
                     overlay
@@ -203,7 +203,7 @@ These are the project conventions. Lint enforces some of them (marked ⚙).
     - Fixed-wing and rotary-wing aircraft share one flight director interface and one airframe interface (decision 149, Proposal 0004). Helicopter physics live in `src/sim/flight/` beside the fixed-wing model, headless and deterministic at the same 120 Hz step. Assists and envelope protection belong to the control layer, never to the physics.
     - Displays show only what the aircraft's sensor model knows, which is the same filtered picture the AI uses, never ground truth.
 13. **Terrain edits and one height function** (decision 161, Proposal 0005).
-    - Every change to the terrain surface beyond the tile kernel's own synthesis (airfield pads, road and rail corridors with their banks, hairpin shelves, rail yards, lock chambers) is an analytic edit, a pure function of direction and the unedited height, applied after the render detail. Edits live in `src/worldgen/edits/`, so `sim/` can use them: `TerrainEdits` holds the airfield pads (built by `render/sim/infra/airfieldGrading.ts`) and later the corridors, and takes the river index for protected channels (decision 164).
+    - Every change to the terrain surface beyond the tile kernel's own synthesis (airfield pads, road and rail corridors with their banks, hairpin shelves, rail yards, lock chambers) is an analytic edit, a pure function of direction and the unedited height, applied after the render detail. Edits live in `src/worldgen/edits/`, so `sim/` can use them: `TerrainEdits` holds the airfield pads and the aligned corridors (assembled today by `render/sim/infra/airfieldGrading.ts`, so the sim worker cannot build it yet; decisions 164, 184), and takes the river index for protected channels (decision 164).
     - Everything that asks for the terrain's height (mesh vertices, trees, buildings, the camera's clearance, the flight model's ground, and later line of sight, ground movement and the AI) goes through that one function. Never add an edit's effect to tile data or the global grid yourself.
     - River channels stay last. Carving, floodplains and delta build-up belong to the tile kernel; no edit may raise the ground inside a river's protected channel, and a road or railway crosses a river on a bridge or culvert, never on terrain. Airfield pads are the one exception until their placement keeps off rendered rivers (decision 164).
     - Roads and railways have two tiers: the network tier (coarse pass, strategic graph) is what campaign logic reads (rule 9); the alignment tier (routes aligned on the eroded world, earthworks, structures) is execution and presentation data only.

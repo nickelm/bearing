@@ -2,6 +2,8 @@
 
 _Drafted 2026-11-17 for [proposal 0007](../proposals/0007-world-diversity.md) (decision 204). The tasks are in `TODO.md` under the world diversity track; later decisions record what each milestone changes. Where this plan and the proposal differ, the plan says why, and decision 204 lists the readings for the owner to confirm. The baseline is `docs/reports/world-diversity-baseline.md`._
 
+_Audit 2026-11-18 (decision 229): track W merged into `main`. There are no per-province soft limits (decision 210); new biome codes were appended (decision 211); erodibility spans 0.55–2.0 (decision 216); salt flats carry an `airstrip` flag in `geography/saltFlats.ts`; characters and modifiers live in `characters.ts` and `climateModifiers.ts`; wonder candidates are in `geography/wonders.ts`. Milestones and the session protocol are superseded by `docs/roadmap.md` (decision 228)._
+
 ## Goal
 
 Worlds that differ from each other and from region to region within themselves: continents with a tectonic and climatic identity, landforms that follow rock and history, a biome set that covers Earth's memorable landscapes, closed basins with salt lakes and playas, named zones with their own look, and a handful of named wonders. The proposal keeps the current terrain and erosion as the backbone. This plan does the same: every new stage either feeds the existing stages new inputs (uplift amplitude, erodibility, landform masks, biome rules) or adds a layer beside them (zones, props, wonders), and none replaces a working stage.

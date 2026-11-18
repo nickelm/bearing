@@ -1,8 +1,8 @@
 # Bearing
 
-Bearing is a browser-based late-Cold-War air war set on a procedurally generated, Earth-like planet about 1,000 km in radius. Fictional NATO and Warsaw Pact analogues fight a continuous war with fighters, bombers, helicopters and convoys over a moving ground front. You watch from orbit, accelerate time and drop into any airborne unit.
+Bearing is a browser-based late-Cold-War air war set on a procedurally generated, Earth-like planet about 1,000 km in radius. Fictional NATO and Warsaw Pact analogues are to fight a continuous war with fighters, bombers, helicopters and convoys over a moving ground front, and the player drops into any airborne unit of their side.
 
-The project is at the tech-demo stage. See [docs/design.md](docs/design.md) for the design, [TODO.md](TODO.md) for progress and [docs/decisions.md](docs/decisions.md) for the architecture decision log.
+Today the world, both views, the air war's analytic flights on the map and the Free Flight sandbox exist; the war does not yet resolve, and the player cannot yet join a mission. See [docs/roadmap.md](docs/roadmap.md) for what comes next, [docs/status/audit-2026-11-18.md](docs/status/audit-2026-11-18.md) for the state of every feature, [docs/design.md](docs/design.md) for the design, [TODO.md](TODO.md) for current tasks and [docs/decisions.md](docs/decisions.md) for the architecture decision log.
 
 **Live build:** <https://nickelm.github.io/bearing/>. Forks deploy to `https://<user>.github.io/bearing/`. It needs a WebGPU browser.
 
@@ -38,11 +38,11 @@ npx vitest run --config vitest.tools.config.ts tools/bench.preview.ts     # glob
 
 ## Free Flight
 
-Free Flight is a sandbox: pick a seed and an airbase, take off in the F-21 Kestrel (the F-16 analogue), fly anywhere, and land at the same or another airbase. There is no war, no other traffic and no weapons (decision 134).
+Free Flight is a sandbox: pick a seed and an airbase, take off in the F-21 Kestrel (the F-16 analogue) or one of two helicopters (the MH-14 Wren and the UH-68), fly anywhere, and land at the same or another airbase. There is no war and there are no weapons (decision 134); optional scripted traffic and ground radars feed the radar and the threat warning (decision 218).
 
 - **Open it** from the debug GUI (**Free Flight (fly from an airbase)…**), or with a URL such as `http://localhost:5173/?mode=freeflight&seed=1`. The start screen lists the world's airbases with their side, region and runway; click one in the list or on the map, choose the options and press **Fly** (or double-click a base). Generating a new world takes a while the first time; the **Fly** button waits for the terrain.
-- **URL parameters** for fast iteration: `base=<id>` spawns at once when the world is ready, `tod=<hours>` sets the local time (default 17, late afternoon), `spawn=runway|air` (default `runway`; `air` starts at 3,000 m and 300 kt along the runway), `fuel=unlimited|limited` (default unlimited), `autopilot` lets the scripted test pilot fly a circuit, and `dev` shows the debug GUI.
-- **On the runway** the engine idles and the parking brake is set. Release it (P), go to full throttle (Shift until the military detent, release, Shift again for afterburner), at about 150 kt hold the stick back (S) until about 9° of pitch and let go (with the gear down the stick commands pitch rate, 5°/s on the runway, and the attitude holds), and raise the gear (G); the stick then commands g. After touchdown, let go of the stick and the nose comes down onto the nosewheel. To land, lower the gear below 300 kt, fly the approach at 13° angle of attack (the HUD's indexer shows a circle) on the 3° glide path (the landing aid's needles), and brake (Space) once the nosewheel is down.
+- **URL parameters** for fast iteration: `base=<id>` spawns at once when the world is ready, `tod=<hours>` sets the local time (default 17, late afternoon), `spawn=runway|air` (default `runway`; `air` starts at 3,000 m and 300 kt along the runway), `fuel=unlimited|limited` (default unlimited), `aircraft=kestrel|scout|utility`, `weather=<preset>|live` (presets in `src/sim/weather/presets.ts`), `wind=off`, `control=aim|direct` (the jet's mouse mode; default `aim`), `invert=aim,stick,helo`, `traffic=on|off`, `fps=on|off`, `ui=<scale>`, `micro=on` (micro-facets), `autopilot` lets the scripted test pilot fly a circuit, and `dev` shows the debug GUI. `src/freeflight/url.ts` lists them all.
+- **On the runway** the engine idles and the parking brake is set. Release it (P), go to full throttle (Shift until the military detent, release, Shift again for afterburner), at about 150 kt hold the stick back (S) until about 9° of pitch and let go (with the gear down the stick commands pitch rate, 5°/s on the runway, and the attitude holds), and raise the gear (G); the stick then commands g. After touchdown, let go of the stick and the nose comes down onto the nosewheel. To land, lower the gear below 300 kt, fly the approach at 13° angle of attack (the angle-of-attack bracket on the flight path marker centers; decision 208) on the 3° glide path (the landing aid's needles), and brake (Space) once the nosewheel is down.
 
 | Input                            | Action                                                          |
 | -------------------------------- | --------------------------------------------------------------- |
@@ -54,9 +54,15 @@ Free Flight is a sandbox: pick a seed and an airbase, take off in the F-21 Kestr
 | B                                | Speedbrake                                                      |
 | Space (hold)                     | Wheel brakes                                                    |
 | P                                | Parking brake                                                   |
-| M                                | Mouse as stick                                                  |
-| N                                | Mouse aim (the flight director flies toward the cursor)         |
-| Right drag, or hold C            | Free look                                                       |
+| Tab                              | Capture or free the mouse (cursor mode for the displays)        |
+| N                                | Mouse aim (default) or direct control (mouse as stick)          |
+| I                                | Invert the mouse's up and down                                  |
+| Right drag, or hold C            | Free look; it stays where it is left                            |
+| V, or middle click               | Recenter the view                                               |
+| 1 / 2 / 3 / 4                    | Toggle the left display, right display, messages, threat        |
+| M / F                            | Master mode by hand / dogfight                                  |
+| K                                | Acknowledge the master caution                                  |
+| L / U                            | Radar lock / break lock                                         |
 | H                                | Help with every binding                                         |
 | F3                               | Flight-model debug panel                                        |
 | Esc                              | Pause menu: resume, restart, air start, change airbase, options |

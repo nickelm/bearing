@@ -2,6 +2,8 @@
 
 *Drafted 2026-11-16. Status: accepted 2026-11-16 (decision 189). Affects `docs/design.md`, `docs/visual-style.md`, `docs/proposals/0002-third-person-flight.md`, `docs/proposals/0004-helicopter-flight.md`, `TODO.md`, and `CLAUDE.md`. The implementation plan is [docs/plans/displays.md](../plans/displays.md).*
 
+*Audit 2026-11-18 (decision 229): Tab captures the mouse and only hot actions have keys (decision 193, superseding the Left Alt cursor key and a key for every action); freeing the mouse in direct control centers the stick (decision 198); the moving map is read back into the display's canvas (decision 201); pin and minimize are frame icons (decision 222); avionics profiles live in code (decision 224); the elevation modes are sampled on the CPU (decision 227). Master-mode declutter and alerts that claim a slot are not built. The roadmap section below is superseded by `docs/roadmap.md` (decision 228).*
+
 ## Decision
 
 Bearing stays third-person with a HUD overlay. Cockpit functions that do not need to be heads-up move into a small set of standardized **multifunction displays (MFDs)** docked at the screen edges, plus a **status strip** for discrete states. **Master modes** reconfigure the HUD and the displays together, the way they do in fourth-generation fighters. Displays have clickable buttons; a **cursor mode** frees the mouse to use them. Two-seat aircraft and helicopters get an **AI crewmate** the player commands, in the spirit of Jester and George in DCS.

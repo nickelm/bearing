@@ -2,6 +2,8 @@
 
 *Drafted 2026-11-17. Status: accepted (decision 204). Affects `docs/design.md`, `docs/visual-style.md`, `docs/proposals/0001-two-views.md`, `docs/proposals/0005-terrain-adaptive-networks.md`, `TODO.md`, and `CLAUDE.md`. The implementation plan is [docs/plans/world-diversity.md](../plans/world-diversity.md). Regional distances below (zones, blends, windows) are Earth figures; on Bearing's planet they scale by R / R_Earth ≈ 0.157, while landforms and heights keep Earth's values (decision 205).*
 
+*Audit 2026-11-18 (decision 229): one soft limit of 6.5 km serves every province and young collision ranges reach about 10 km (decisions 210, 216); erodibility spans 0.55–2.0 (decision 216); zones are 16–63 km (decision 205) with the palette shift per vertex (decision 213); wonders are weighted by fronts and sea lanes only. This proposal has no roadmap section; `docs/roadmap.md` schedules its remaining work (decision 228).*
+
 ## Goals
 
 The current terrain and erosion are good and stay as the backbone. What the worlds lack is variety: large regions look the same, mesas and buttes appear too widely, desert mountains are rare, and mountains are not tall enough. This proposal adds variety at every scale, from continents down to individual hillsides, and pushes the look toward majestic and memorable places. Slightly outlandish scenery is welcome, as long as it plausibly extends something that exists on Earth.
