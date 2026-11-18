@@ -446,6 +446,8 @@ export class FreeFlight {
       (d) => t.edits.apply(d, sampler(d)),
       this.deps.radius,
       (d) => terrain.displaySurfaceAt(d),
+      // Landform props are obstacles (decision 225).
+      (d) => this.deps.globe.props.obstacleAt(d),
     );
     this.menu.setReady(true);
     // A base in the URL starts the flight at once (fast iteration).

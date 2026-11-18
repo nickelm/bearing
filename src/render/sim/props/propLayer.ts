@@ -81,9 +81,28 @@ export interface PropWorldMaps {
   pillarWonders: readonly Vec3d[];
 }
 
+/**
+ * A tile's props as obstacles (decision 225): per prop cell the index of its prop in
+ * `items`, or −1; per prop its axis (unit direction), foot and top heights (m) and its
+ * collision radius (m): a cylinder of the footprint up to the top.
+ */
+export interface PropObstacles {
+  cells: Int32Array;
+  items: Float64Array;
+}
+/** Floats per obstacle. */
+const OBSTACLE_FLOATS = 6;
+/** The collision radius as a share of a kind's widest ring, at scale 1 (m). */
+export const PROP_COLLISION_RADIUS: Readonly<Record<PropKind, number>> = {
+  'prop-karst-tower': 21,
+  'prop-pillar': 16,
+  'prop-inselberg': 105,
+};
+
 interface Chunk {
   origin: Vec3d;
   lists: Map<PropKind, Float32Array>;
+  obstacles: PropObstacles;
   lastUsed: number;
 }
 
@@ -95,7 +114,7 @@ export function placePropTile(
   radius: number,
   /** True in a clearing (InfraScene.isClear): no prop there. */
   clear?: (d: Readonly<Vec3d>, extra?: number) => boolean,
-): { origin: Vec3d; lists: Map<PropKind, Float32Array> } {
+): { origin: Vec3d; lists: Map<PropKind, Float32Array>; obstacles: PropObstacles } {
   const t = data.key;
   const size = TILE_TEXELS * (1 << t.level);
   const sampleM = ((Math.PI / 2) * radius) / size;
@@ -121,6 +140,8 @@ export function placePropTile(
     );
   const origin = dirAt(TILE_TEXELS / 2, TILE_TEXELS / 2, new Vec3d()).scale(radius);
   const lists = new Map<PropKind, number[]>();
+  const cellIndex = new Int32Array((TILE_TEXELS / PROP_STRIDE) ** 2).fill(-1);
+  const obstacles: number[] = [];
   const d = new Vec3d();
   const nb = new Vec3d();
   const cells = TILE_TEXELS / PROP_STRIDE;
@@ -195,11 +216,53 @@ export function placePropTile(
       const base = d.clone().scale(radius).sub(origin);
       l.push(base.x, base.y, base.z, d.x * ground, d.y * ground, d.z * ground, d.x, d.y, d.z);
       l.push(item.scale, item.yaw, 0.88 + 0.24 * item.fy);
+      cellIndex[cy * cells + cx] = obstacles.length / OBSTACLE_FLOATS;
+      obstacles.push(
+        d.x,
+        d.y,
+        d.z,
+        ground,
+        ground + PROP_SIZE[item.kind].height * item.scale,
+        PROP_COLLISION_RADIUS[item.kind] * item.scale,
+      );
     }
   }
   const out = new Map<PropKind, Float32Array>();
   for (const [k, l] of lists) out.set(k, Float32Array.from(l));
-  return { origin, lists: out };
+  return {
+    origin,
+    lists: out,
+    obstacles: { cells: cellIndex, items: Float64Array.from(obstacles) },
+  };
+}
+
+/**
+ * The top (m) of the prop whose column holds unit direction `dir` in a tile's
+ * obstacles, or null; (cx, cy) is the direction's prop cell in the tile.
+ */
+function obstacleTop(
+  o: PropObstacles,
+  dir: Readonly<Vec3d>,
+  cx: number,
+  cy: number,
+  radius: number,
+): number | null {
+  const cells = TILE_TEXELS / PROP_STRIDE;
+  let top: number | null = null;
+  for (let j = cy - 1; j <= cy + 1; j++) {
+    for (let i = cx - 1; i <= cx + 1; i++) {
+      if (i < 0 || j < 0 || i >= cells || j >= cells) continue;
+      const k = o.cells[j * cells + i]!;
+      if (k < 0) continue;
+      const b = k * OBSTACLE_FLOATS;
+      const dx = dir.x - o.items[b]!;
+      const dy = dir.y - o.items[b + 1]!;
+      const dz = dir.z - o.items[b + 2]!;
+      if (Math.sqrt(dx * dx + dy * dy + dz * dz) * radius > o.items[b + 5]!) continue;
+      top = Math.max(top ?? -Infinity, o.items[b + 4]!);
+    }
+  }
+  return top;
 }
 
 function frame(p: Readonly<Vec3d>): { east: Vec3d; north: Vec3d } {
@@ -463,6 +526,25 @@ export class PropLayer {
     mesh.userData.buffer = buffer;
     mesh.userData.triangles = model.triangles;
     return mesh;
+  }
+
+  /**
+   * The top (m) of a prop standing over unit direction `dir`, or null (decision 225):
+   * for the flight model's ground, the camera's clearance and line of sight. Only
+   * tiles already placed near the eye answer, and a prop on a neighbouring tile is
+   * missed within its first cell of the edge.
+   */
+  obstacleAt(dir: Readonly<Vec3d>): number | null {
+    if (!this.group.visible && this.chunks.size === 0) return null;
+    const k = tileForDirection(dir, MAX_BAKED_LEVEL);
+    const c = this.chunks.get(tileKeyString(k));
+    if (!c) return null;
+    const uv = directionToCubeFace(dir);
+    const size = TILE_TEXELS * (1 << MAX_BAKED_LEVEL);
+    const cx = Math.floor((uv.u * size - k.x * TILE_TEXELS) / PROP_STRIDE);
+    const cy = Math.floor((uv.v * size - k.y * TILE_TEXELS) / PROP_STRIDE);
+    const R = this.terrain.meshOptions()?.radius ?? 1e6;
+    return obstacleTop(c.obstacles, dir, cx, cy, R);
   }
 
   dispose(): void {

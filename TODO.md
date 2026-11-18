@@ -1250,7 +1250,8 @@ The owner flew the branch before the merge: erosion and the vistas are intact an
   - [ ] Karst towers read as standing stones more than Guilin's cones: wider bases, more green on the shoulders
 - [x] `worldgen/props.ts` (decision 225): pure placement per 190 m cell from rock, province and biome (`rng(seed, "props")`), clumped by a 1.5 km noise, drowned towers on the karst shelf, dense at karst-bay and pillar-forest wonders
 - [x] Instanced layer (`render/sim/props/propLayer.ts`): full models within 2.5 km, far ones to 8 km, none above 9 km over the ground; Fust Towers on seed 1983: 1,300 props, 0.05 M triangles, 2 draws
-- [ ] Collision shapes queried by flight contact, the camera's clearance and line of sight beside the canopy; the Kestrel lockstep unchanged
+- [x] Collision cylinders in Free Flight's ground (decision 225): flight contact, the chase camera's clearance and the sensors' line of sight; the Kestrel lockstep unchanged
+  - [ ] Neighboring tiles' props near a tile edge; the campaign sim's AI flight (P1) and helicopters' low flight beside towers
 - [ ] `PERF` in a dense karst view: at most 0.3 M triangles and 40 draws for props (0.05 M and 2 draws at Fust Towers, without PERF timing); acceptance check 16's karst bay
 - [ ] Snow on props' tops in cold climates; props' colors from the zone's palette shift
 

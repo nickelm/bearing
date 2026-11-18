@@ -47,11 +47,18 @@ export class AirfieldGround implements GroundQuery {
     readonly radius: number,
     /** The finest drawn surface (m, sea and lakes at their surface), or null until loaded. */
     public drawn: ((d: Readonly<Vec3d>) => number | null) | null = null,
+    /**
+     * The top (m) of a landform prop over a direction, or null (decision 225): a tower
+     * is ground the aircraft can hit and the camera keeps clear of.
+     */
+    public obstacle: ((d: Readonly<Vec3d>) => number | null) | null = null,
   ) {}
 
   height(dir: Readonly<Vec3d>): number {
     const h = this.drawn?.(dir) ?? null;
-    return h ?? Math.max(0, this.global(dir));
+    const ground = h ?? Math.max(0, this.global(dir));
+    const top = this.obstacle?.(dir) ?? null;
+    return top !== null && top > ground ? top : ground;
   }
 
   surface(dir: Readonly<Vec3d>): SurfaceKind {
@@ -63,6 +70,8 @@ export class AirfieldGround implements GroundQuery {
       if (onRunway(n.runway, c.along, c.across)) return 'runway';
     }
     if (this.edits.cover(dir) > 0.999) return 'field';
+    // A drowned tower is rock, not sea.
+    if (this.obstacle?.(dir) != null) return 'land';
     return this.global(dir) <= 0 ? 'water' : 'land';
   }
 }

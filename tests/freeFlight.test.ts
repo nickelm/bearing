@@ -124,4 +124,22 @@ describe('headless flight test on a generated airbase', () => {
     expect(h).toBeLessThan(m.gearHeight);
     void Vec3d;
   });
+
+  it('stands landform props on the ground as obstacles (decision 225)', () => {
+    const at = runway.center.clone();
+    const far = fromRunway(runwayFrame(runway), 0, 30_000, R);
+    const base = ground.height(far);
+    const tower = (d: Readonly<Vec3d>) => (d.distanceTo(far) * R < 20 ? base + 150 : null);
+    const withProps = new AirfieldGround(
+      ground.runways,
+      (ground as unknown as { edits: TerrainEdits }).edits,
+      (d) => ground.height(d),
+      R,
+      null,
+      tower,
+    );
+    expect(withProps.height(far)).toBeCloseTo(base + 150, 6);
+    expect(withProps.surface(far)).toBe('land');
+    expect(withProps.height(at)).toBeCloseTo(ground.height(at), 6);
+  });
 });
