@@ -16,6 +16,7 @@ import type { BezelButton, DisplayModel, DisplayState, ScreenItem, Tone } from '
 import { BEZEL_BUTTONS, SMALL_BUTTONS } from './model';
 import type { AircraftSnapshot } from './snapshot';
 import { ACM_CONE } from '../../sim/sensors/sensors';
+import { elevationItems } from './elevation';
 
 const LB = 0.453_592_37;
 
@@ -49,7 +50,15 @@ const FORMATS: Partial<Record<FormatId, Format>> = {
 
 /** The moving map's ranges, center to edge (nautical miles; decision 201). */
 export const MAP_RANGES_NM = [5, 10, 20, 40, 80, 160] as const;
+/** The same steps in round kilometers for Pact skins (decision 227). */
+export const MAP_RANGES_KM = [10, 20, 40, 80, 150, 300] as const;
 const NM = 1852;
+
+/** The moving map's range (m, center to edge) at step `i` in a skin. */
+export function mapRange(skin: 'alliance' | 'pact', i: number): number {
+  const k = Math.max(0, Math.min(MAP_RANGES_NM.length - 1, i));
+  return skin === 'pact' ? MAP_RANGES_KM[k]! * 1000 : MAP_RANGES_NM[k]! * NM;
+}
 
 /** Whether a format is built yet. */
 export function implemented(f: FormatId): boolean {
@@ -88,6 +97,12 @@ export function displayModel(
       label: d.map.northUp ? 'N-UP' : 'TRK',
       active: false,
       command: { to: 'ui', command: { type: 'map-orient', slot } },
+    };
+    // Below it: the map's mode, chart, elevation or relative (decision 227).
+    buttons[7] = {
+      label: d.map.mode === 'chart' ? 'CHRT' : d.map.mode === 'elevation' ? 'ELEV' : 'REL',
+      active: d.map.mode !== 'chart',
+      command: { to: 'ui', command: { type: 'map-mode', slot } },
     };
   }
   if (format === 'radar-ag') {
@@ -241,10 +256,9 @@ function enginesFormat(s: AircraftSnapshot): ScreenItem[] {
  * for the Alliance, kilometers for the Pact.
  */
 function movingMapFormat(s: AircraftSnapshot, d: DisplayState): ScreenItem[] {
-  const nm = MAP_RANGES_NM[Math.max(0, Math.min(MAP_RANGES_NM.length - 1, d.map.range))]!;
-  const half = nm * NM;
-  const rotation = d.map.northUp ? 0 : s.track;
   const pact = s.profile.skin === 'pact';
+  const half = mapRange(s.profile.skin, d.map.range);
+  const rotation = d.map.northUp ? 0 : s.track;
   const fig = (m: number) => (pact ? `${Math.round(m / 1000)} KM` : `${Math.round(m / NM)} NM`);
   // The aircraft: pointing along its track on a north-up map, straight up on a track-up one.
   const a = d.map.northUp ? s.track : 0;
@@ -252,15 +266,24 @@ function movingMapFormat(s: AircraftSnapshot, d: DisplayState): ScreenItem[] {
     0.5 + (Math.sin(a) * fwd + Math.cos(a) * right) * 0.035,
     0.5 - (Math.cos(a) * fwd - Math.sin(a) * right) * 0.035,
   ];
+  // The elevation modes (decision 227) draw the snapshot's heights when they were sampled
+  // for this range; until then, the chart.
+  const t = s.terrain;
+  const elevation =
+    d.map.mode !== 'chart' && t && Math.abs(t.halfExtent - half) < 1
+      ? elevationItems(t, d.map.mode, pact)
+      : null;
   return [
-    {
-      kind: 'map',
-      lat: s.position.lat,
-      lon: s.position.lon,
-      halfExtent: half,
-      rotation,
-      radius: s.position.radius,
-    },
+    ...(elevation ?? [
+      {
+        kind: 'map' as const,
+        lat: s.position.lat,
+        lon: s.position.lon,
+        halfExtent: half,
+        rotation,
+        radius: s.position.radius,
+      },
+    ]),
     { kind: 'arc', x: 0.5, y: 0.5, r: 0.25, tone: 'normal', dashed: true },
     text(0.5 + 0.25 * 0.72, 0.5 + 0.25 * 0.72 + 0.06, fig(half / 2), 'small', 'left', 'normal'),
     { kind: 'line', points: [pt(1, 0), pt(-1, 0)], tone: 'normal', width: 2 },

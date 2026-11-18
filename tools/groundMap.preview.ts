@@ -124,6 +124,39 @@ it('ground map', { timeout: 3_600_000 }, async () => {
     writeFileSync(join(out, `groundmap-${nm}.png`), encodePng(2 * W, H, rgb));
     // For the displays page: `composite.html?…&gmr=groundmap-<nm>.json`.
     writeFileSync(join(out, `groundmap-${nm}.json`), JSON.stringify(img));
+    // The moving map's elevation samples over the same ground, track-up (decision 227), for
+    // the displays page's `&terrain=terrain-<nm>.json`; the aircraft at 60% of the highest
+    // ground, so the relative mode has something to show.
+    {
+      const N = 80;
+      const half = range;
+      const heights: number[] = [];
+      const water: number[] = [];
+      const rightAxis = coast.heading.clone().cross(coast.at).normalize();
+      for (let j = 0; j < N; j++)
+        for (let i = 0; i < N; i++) {
+          const x = (((i + 0.5) / N) * 2 - 1) * half;
+          const y = (1 - ((j + 0.5) / N) * 2) * half;
+          const g = Math.hypot(x, y);
+          const h = coast.heading.clone().scale(y).addScaled(rightAxis, x);
+          if (g > 0) h.scale(1 / g);
+          const v = height(along(coast.at, h, g));
+          heights.push(v <= 0 ? 0 : Math.round(v));
+          water.push(v <= 0 ? 1 : 0);
+        }
+      const top = Math.max(...heights);
+      writeFileSync(
+        join(out, `terrain-${nm}.json`),
+        JSON.stringify({
+          n: N,
+          halfExtent: half,
+          rotation: 0,
+          heights,
+          water,
+          altitude: 0.6 * top,
+        }),
+      );
+    }
     console.log(
       `groundmap-${nm}.png: ${img.cols}×${img.rows} in ${ms.toFixed(1)} ms; heights up to ${hiH.toFixed(0)} m`,
     );

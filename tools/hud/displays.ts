@@ -76,6 +76,10 @@ export async function drawDisplays(q: URLSearchParams): Promise<void> {
     snap.sensors.groundMap = { ...(await (await fetch(`../out/${gmr}`)).json()), age: 0 };
     snap.destination = { label: 'TGT', bearing: snap.heading + 0.25, distance: 22_000 };
   }
+  // `&terrain=<file in tools/out>&mapmode=elevation|relative`: the moving map's elevation
+  // samples from tools/groundMap.preview.ts (decision 227).
+  const terrain = q.get('terrain');
+  if (terrain) snap.terrain = (await (await fetch(`../out/${terrain}`)).json()) as never;
   const sys = new DisplaySystem();
   sys.edits = {};
   sys.uiScale = Number(q.get('scale') ?? 1);
@@ -103,6 +107,13 @@ export async function drawDisplays(q: URLSearchParams): Promise<void> {
     });
   }
   sys.update(snap);
+  const mapMode = q.get('mapmode');
+  for (let k = 0; k < (mapMode === 'relative' ? 2 : mapMode === 'elevation' ? 1 : 0); k++)
+    sys.command({ to: 'ui', command: { type: 'map-mode', slot: 'leftMfd' } });
+  if (mapMode) {
+    // Redraws with the new mode (the samples are 20 nm, the default range step).
+    sys.update({ ...snap, time: snap.time + 1 });
+  }
 }
 
 /** A made-up sensor picture: every kind of contact on the radar, one locked, and three emitters. */

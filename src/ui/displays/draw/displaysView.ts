@@ -406,7 +406,7 @@ function drawScreen(
   const base = Math.max(12, Math.min(w, h) / 16);
   const sizes = { small: Math.max(11, base * 0.85), normal: base, large: base * 1.5 };
   // Over the map's picture, symbology and labels get a dark halo (Part I, Moving Map).
-  halo = m.items.some((i) => i.kind === 'map');
+  halo = m.items.some((i) => i.kind === 'map' || (i.kind === 'raster' && i.colors));
   for (const it of m.items) drawItem(c, it, w, h, sizes, color, map);
   // Button labels on the screen's edges, beside their buttons.
   c.globalAlpha = 1;
@@ -612,8 +612,16 @@ function drawItem(
       ic.fillRect(0, 0, it.cols, it.rows);
       const data = ic.getImageData(0, 0, it.cols, it.rows);
       for (let r = 0; r < it.rows; r++)
-        for (let k = 0; k < it.cols; k++)
-          data.data[((it.rows - 1 - r) * it.cols + k) * 4 + 3] = it.values[r * it.cols + k] ?? 0;
+        for (let k = 0; k < it.cols; k++) {
+          const o = ((it.rows - 1 - r) * it.cols + k) * 4;
+          const rgb = it.colors?.[r * it.cols + k];
+          if (rgb !== undefined) {
+            data.data[o] = (rgb >> 16) & 255;
+            data.data[o + 1] = (rgb >> 8) & 255;
+            data.data[o + 2] = rgb & 255;
+            data.data[o + 3] = 255;
+          } else data.data[o + 3] = it.values[r * it.cols + k] ?? 0;
+        }
       ic.putImageData(data, 0, 0);
       c.imageSmoothingEnabled = true;
       c.drawImage(img, it.x * w, it.y * h, it.w * w, it.h * h);

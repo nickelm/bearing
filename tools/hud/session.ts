@@ -818,6 +818,18 @@ async function main(): Promise<void> {
     const painted = gm?.groundMap?.values.filter((v) => v > 0).length ?? 0;
     (result.traffic as Record<string, unknown>).groundMap = painted;
     check(painted > 500, `traffic: the ground map paints the ground (${painted} cells lit)`);
+    // The moving map's elevation mode samples the ground around the aircraft (decision 227).
+    ff.displays.command({ to: 'ui', command: { type: 'map-mode', slot: 'leftMfd' } });
+    if (ff.displays.display?.slots.leftMfd.state !== 'expanded') key('Digit1');
+    await new Promise((r) => setTimeout(r, 150));
+    for (let i = 0; i < 12; i++) frame();
+    const samples =
+      (ff as unknown as { terrainSnap: { heights: number[] } | null }).terrainSnap?.heights
+        .length ?? 0;
+    (result.traffic as Record<string, unknown>).elevation = samples;
+    check(samples === 6400, `traffic: the elevation map samples the ground (${samples})`);
+    ff.displays.command({ to: 'ui', command: { type: 'map-mode', slot: 'leftMfd' } });
+    ff.displays.command({ to: 'ui', command: { type: 'map-mode', slot: 'leftMfd' } });
     // Dogfight: air combat mode, and back to search after it (decision 223).
     key('KeyU');
     key('KeyF');

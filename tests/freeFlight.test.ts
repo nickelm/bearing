@@ -142,4 +142,24 @@ describe('headless flight test on a generated airbase', () => {
     expect(withProps.surface(far)).toBe('land');
     expect(withProps.height(at)).toBeCloseTo(ground.height(at), 6);
   });
+
+  it('gives the sensors resident tiles only, the global grid elsewhere (decision 227)', () => {
+    const far = fromRunway(runwayFrame(runway), 0, 30_000, R);
+    const fetched: Readonly<Vec3d>[] = [];
+    const g = new AirfieldGround(
+      ground.runways,
+      (ground as unknown as { edits: TerrainEdits }).edits,
+      (d) => ground.height(d),
+      R,
+      (d) => {
+        fetched.push(d);
+        return 999;
+      },
+      null,
+      () => null,
+    );
+    expect(g.sensedHeight(far)).toBeCloseTo(ground.height(far), 6);
+    expect(fetched).toHaveLength(0);
+    expect(g.height(far)).toBe(999);
+  });
 });

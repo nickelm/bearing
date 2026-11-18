@@ -795,7 +795,9 @@ The sensor model, avionics profiles with display complements, datalink tracks, t
 - [ ] Stores format: pylons and weapons, selection, fuzing, release mode (CCIP or CCRP), quantity and ripple, jettison, countermeasure programs
 - [ ] Engines and fuel format, complete: engine states, damage and failures
 - [ ] Comms format: radio channels, AWACS and controller calls, wingman commands, ATC, message history
-- [ ] Moving map, elevation mode: the resident terrain tiles drawn from an orthographic camera with hypsometric tints, contours and spot heights; the relative sub-mode (red and hatched above the aircraft, amber within 500 ft below); the global grid beyond the tiles; datalink tracks and threat rings from the side's picture on both modes
+- [x] Moving map, elevation mode: hypsometric tints, contours and a spot height; the relative sub-mode (red and hatched above the aircraft, amber within 500 ft below); resident tiles, the global grid beyond (decision 227: sampled on the CPU, not drawn by a camera)
+  - [ ] Datalink tracks and threat rings from the side's picture on the map's modes; spot heights from the named peaks
+  - [ ] Finer elevation samples at short ranges, if 80 × 80 proves coarse (owner's review)
 - [ ] The Su-27 analogue's radar picture in its HUD
 - [ ] Single-seat assists, if the owner wants them: the radar's mode follows the master mode, dogfight mode locks the nearest contact in the boresight; each a toggle
 - [ ] Spectator displays, if the owner wants them: the followed aircraft's own picture, read-only

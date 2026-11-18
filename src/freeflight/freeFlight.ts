@@ -69,7 +69,7 @@ import { clearPresetEdits, DisplaySystem } from '../ui/displays/system';
 import type { ControlsAction } from '../ui/displays/model';
 import { AVIONICS_PROFILES } from '../sim/avionics/profiles';
 import { relativePicture, snapshotFromHud } from './snapshot';
-import type { SnapshotSensors } from '../ui/displays/snapshot';
+import type { SnapshotSensors, SnapshotTerrain } from '../ui/displays/snapshot';
 import { ACM_CONE, acmAcquire, SensorModel } from '../sim/sensors/sensors';
 import { threatCalls } from '../ui/displays/calls';
 import type { ThreatTone } from '../ui/displays/calls';
@@ -80,7 +80,7 @@ import { groundRadarRange } from '../sim/avionics/avionics';
 import type { DatalinkFeed, SensorEnv, SensorTarget } from '../sim/sensors/sensors';
 import { buildTraffic, trafficState, trafficTargets } from './traffic';
 import { MovingMap } from '../render/strategic/movingMap';
-import { MAP_RANGES_NM } from '../ui/displays/formats';
+import { mapRange } from '../ui/displays/formats';
 import {
   DEFAULT_OPTIONS,
   FreeFlightMenu,
@@ -213,6 +213,9 @@ export class FreeFlight {
   /** The flown aircraft's sensors and their picture, relative to it, for the displays. */
   private readonly sensors = new SensorModel();
   private sensorSnap: SnapshotSensors | null = null;
+  /** The moving map's last height samples and when they were taken (ms; decision 227). */
+  private terrainSnap: SnapshotTerrain | null = null;
+  private terrainAt = -Infinity;
   /** The ground map's last picture and when it was painted (game time; decision 226). */
   private groundMapImg: GroundMapImage | null = null;
   private groundMapAt = -Infinity;
@@ -454,6 +457,8 @@ export class FreeFlight {
       (d) => terrain.displaySurfaceAt(d),
       // Landform props are obstacles (decision 225).
       (d) => this.deps.globe.props.obstacleAt(d),
+      // The sensors read resident tiles only (decision 227).
+      (d) => terrain.displaySurfaceAt(d, false),
     );
     this.menu.setReady(true);
     // A base in the URL starts the flight at once (fast iteration).
@@ -1258,6 +1263,8 @@ export class FreeFlight {
     this.threatsHeard = new Map();
     this.groundMapImg = null;
     this.groundMapAt = -Infinity;
+    this.terrainSnap = null;
+    this.terrainAt = -Infinity;
     const base = this.baseId !== null ? this.basePoints.get(this.baseId) : undefined;
     this.traffic =
       this.options.traffic && base
@@ -1321,7 +1328,7 @@ export class FreeFlight {
     const R = this.deps.radius;
     const own = { id: 'player', pos: m.pos };
     const targets: SensorTarget[] = this.traffic
-      ? trafficTargets(this.traffic, this.gameTime, R, (d) => ground.height(d), own)
+      ? trafficTargets(this.traffic, this.gameTime, R, (d) => ground.sensedHeight(d), own)
       : [];
     const up = m.pos.clone().normalize();
     const sunUp = up.dot(this.deps.globe.sun);
@@ -1335,7 +1342,7 @@ export class FreeFlight {
           ? report.visibility
           : Math.max(30_000, report?.visibility ?? 30_000),
       daylight: Math.min(1, Math.max(0, (sunUp + 0.1) / 0.2)),
-      lineOfSight: (a, b) => lineOfSight(a, b, R, ground),
+      lineOfSight: (a, b) => lineOfSight(a, b, R, { height: (d) => ground.sensedHeight(d) }),
     };
     const av = this.displays.avionics;
     const sys = profile.systems;
@@ -1421,7 +1428,7 @@ export class FreeFlight {
     const stale = this.gameTime - this.groundMapAt >= 2 || this.gameTime < this.groundMapAt;
     if (!this.groundMapImg || stale || this.groundMapImg.range !== range) {
       this.groundMapImg = groundMap(m.pos, forward, range, Math.PI / 3, this.deps.radius, {
-        height: (dir) => ground.height(dir),
+        height: (dir) => ground.sensedHeight(dir),
         water: (dir) => ground.surface(dir) === 'water',
         cultural: (dir) => {
           const k = ground.surface(dir);
@@ -1431,6 +1438,61 @@ export class FreeFlight {
       this.groundMapAt = this.gameTime;
     }
     return { ...this.groundMapImg, age: this.gameTime - this.groundMapAt };
+  }
+
+  /**
+   * Heights around the aircraft for the moving map's elevation modes (decision 227): 80 × 80
+   * samples of the drawn ground in the map's frame, taken again each second, on a new
+   * range, or when a track-up map has turned 3°.
+   */
+  private sampleTerrain(m: Airframe, track: number): SnapshotTerrain | null {
+    const d = this.displays.display;
+    const ground = this.ground;
+    if (!d || !ground || d.map.mode === 'chart') return null;
+    const shows = (['leftMfd', 'rightMfd'] as const).some(
+      (s) => d.slots[s].format === 'moving-map' && d.slots[s].state === 'expanded',
+    );
+    if (!shows) return null;
+    const R = this.deps.radius;
+    const altitude = m.pos.length() - R;
+    const half = mapRange(AVIONICS_PROFILES[this.displayModel]?.skin ?? 'alliance', d.map.range);
+    const rotation = d.map.northUp ? 0 : track;
+    const t = this.terrainSnap;
+    const now = performance.now();
+    const turned = t
+      ? Math.abs(Math.atan2(Math.sin(rotation - t.rotation), Math.cos(rotation - t.rotation)))
+      : 0;
+    if (t && t.halfExtent === half && turned < 3 * DEG && now - this.terrainAt < 1000)
+      return { ...t, altitude };
+    const n = 80;
+    const up = m.pos.clone().normalize();
+    const east = new Vec3d(0, 1, 0).cross(up).normalize();
+    const north = up.clone().cross(east);
+    // The map's up and right on the ground.
+    const fwd = north.clone().scale(Math.cos(rotation)).addScaled(east, Math.sin(rotation));
+    const right = fwd.clone().cross(up);
+    const heights = new Array<number>(n * n);
+    const water = new Array<number>(n * n);
+    const dir = new Vec3d();
+    const horiz = new Vec3d();
+    for (let j = 0; j < n; j++)
+      for (let i = 0; i < n; i++) {
+        const x = (((i + 0.5) / n) * 2 - 1) * half;
+        const y = (1 - ((j + 0.5) / n) * 2) * half;
+        const g = Math.hypot(x, y);
+        horiz.copy(fwd).scale(y).addScaled(right, x);
+        if (g > 0) horiz.scale(1 / g);
+        dir
+          .copy(up)
+          .scale(Math.cos(g / R))
+          .addScaled(horiz, Math.sin(g / R));
+        const wet = ground.surface(dir) === 'water';
+        water[j * n + i] = wet ? 1 : 0;
+        heights[j * n + i] = wet ? 0 : Math.round(ground.sensedHeight(dir));
+      }
+    this.terrainSnap = { n, halfExtent: half, rotation, heights, water, altitude };
+    this.terrainAt = now;
+    return this.terrainSnap;
   }
 
   /** The locked contact as the HUD's target box: relative to the camera, with its range. */
@@ -1502,6 +1564,7 @@ export class FreeFlight {
         warn: l.warn,
       })),
     });
+    snap.terrain = this.sampleTerrain(m, track);
     this.displays.update(snap);
   }
 
@@ -1519,10 +1582,10 @@ export class FreeFlight {
     const now = performance.now();
     if (!shows || now - this.mapAt < 500) return;
     this.mapAt = now;
-    const nm = MAP_RANGES_NM[d.map.range] ?? 20;
+    const half = mapRange(AVIONICS_PROFILES[this.displayModel]?.skin ?? 'alliance', d.map.range);
     this.movingMap ??= new MovingMap(this.deps.strategic, this.deps.strategic.gpu, 512);
     void this.movingMap
-      .picture(at.lat, at.lon, nm * NAUTICAL_MILE * Math.SQRT2)
+      .picture(at.lat, at.lon, half * Math.SQRT2)
       .then((pic) => {
         if (pic) this.displays.view.setMapPicture({ ...pic, flipY: MAP_FLIP_Y });
       })

@@ -52,7 +52,23 @@ export class AirfieldGround implements GroundQuery {
      * is ground the aircraft can hit and the camera keeps clear of.
      */
     public obstacle: ((d: Readonly<Vec3d>) => number | null) | null = null,
+    /**
+     * The drawn surface where its tiles are already resident, without asking for more
+     * (decision 227): what the sensors read over tens of kilometers.
+     */
+    public resident: ((d: Readonly<Vec3d>) => number | null) | null = null,
   ) {}
+
+  /**
+   * The ground's height for the sensors (line of sight, the ground map, the elevation map):
+   * as `height`, but from resident tiles only, the global grid elsewhere (decision 227).
+   */
+  sensedHeight(dir: Readonly<Vec3d>): number {
+    const h = (this.resident ?? this.drawn)?.(dir) ?? null;
+    const ground = h ?? Math.max(0, this.global(dir));
+    const top = this.obstacle?.(dir) ?? null;
+    return top !== null && top > ground ? top : ground;
+  }
 
   height(dir: Readonly<Vec3d>): number {
     const h = this.drawn?.(dir) ?? null;

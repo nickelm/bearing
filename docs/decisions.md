@@ -3807,3 +3807,16 @@ Radar figures are the detection range against a 5 m² fighter, from approximate 
 Moving-target mode waits for ground vehicles, and the terrain-following scope for an aircraft that carries the system to be flown. `docs/visual-style.md` (Part I, scopes), `TODO.md` and `CLAUDE.md` change with this decision.
 
 **Reason:** P3's air-to-ground radar, the format the strike aircraft's profiles (decision 224) put first on their right display. Its picture comes from the same terrain the aircraft flies over, so a pilot can navigate by it at night or in cloud.
+
+### 227. The moving map's elevation modes, sampled; sensors read resident tiles only
+
+**Date:** 2026-11-18
+**Decision:** The moving map gets its elevation and relative modes, a third button on its right edge stepping CHRT, ELEV and REL (a UI command, `map-mode`).
+
+- **Sampled, not drawn.** The plan had the simulation view's resident tiles drawn again by an orthographic camera with an elevation material. Instead, Free Flight samples the one height function (rule 13) on an 80 × 80 grid in the map's own frame (turned with the track in track-up), every second, on a new range, or when a track-up map has turned 3°, and carries the heights in the snapshot (`SnapshotTerrain`). The format (`ui/displays/elevation.ts`, pure) colors them: Part I's tints with a gentle hillshade, contours every 100 m (500 ft in Alliance skins, every fifth darker), a spot height at the highest ground in view; in the relative mode, red with a diagonal hatch above the aircraft's altitude, amber within 500 ft below it, gray-green shading clear below, water blue-gray throughout. Display models gain colored rasters. Until the first samples arrive the chart stays. Sampling keeps the format a pure function of plain data, testable without a GPU, and costs no second render pass; an 80-cell picture is coarse at 5 nm (about 230 m a cell), so the camera remains the way to a finer one if the owner wants it.
+- **Pact ranges.** The moving map steps 10, 20, 40, 80, 150 and 300 km in Pact skins, as the radars do since decision 223 (`mapRange`).
+- **Sensors read resident tiles only.** `TerrainRenderer.displaySurfaceAt` asks for the level-7 tile under any point it has not loaded. The sensors' queries reach tens of kilometers (line of sight to 70 km since decision 218, the ground map to 40 nm since decision 226, the elevation map to 160 nm), so they would have asked the tile synthesizer for hundreds of distant tiles. They now go through `AirfieldGround.sensedHeight`, which reads resident tiles without fetching (`displaySurfaceAt(dir, false)`) and the graded global grid elsewhere. The flight model, the camera and the shadow keep the fetching query.
+
+`docs/visual-style.md` (Part I, *Moving Map*), `docs/plans/displays.md` and `TODO.md` change with this decision.
+
+**Reason:** P3's elevation mode, the low-level pilot's question of which ridge is in the way, done the cheapest way that keeps display models pure. The tile requests were a defect in decisions 218 and 226, found while measuring this one's cost.

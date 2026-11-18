@@ -60,7 +60,11 @@ const SLOTS: SlotId[] = ['leftMfd', 'rightMfd', 'threat', 'messages', 'strip'];
 export function initialDisplayState(s: AircraftSnapshot, edits: PresetEdits = {}): DisplayState {
   const slots = {} as Record<SlotId, SlotDisplayState>;
   for (const id of SLOTS) slots[id] = { format: null, state: 'hidden', pinned: false };
-  return applyPreset({ slots, uiScale: 1, map: { range: 2, northUp: false } }, s, edits);
+  return applyPreset(
+    { slots, uiScale: 1, map: { range: 2, northUp: false, mode: 'chart' } },
+    s,
+    edits,
+  );
 }
 
 /**
@@ -163,6 +167,10 @@ export function applyUi(
     }
     case 'map-orient':
       return { ...d, map: { ...d.map, northUp: !d.map.northUp } };
+    case 'map-mode': {
+      const modes = ['chart', 'elevation', 'relative'] as const;
+      return { ...d, map: { ...d.map, mode: modes[(modes.indexOf(d.map.mode) + 1) % 3]! } };
+    }
   }
   return { ...d, slots };
 }

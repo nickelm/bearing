@@ -24,8 +24,12 @@ export interface SlotDisplayState {
 export interface DisplayState {
   slots: Record<SlotId, SlotDisplayState>;
   uiScale: number;
-  /** The moving map's range (an index into MAP_RANGES_NM) and orientation (decision 201). */
-  map: { range: number; northUp: boolean };
+  /**
+   * The moving map's range (an index into MAP_RANGES_NM), orientation (decision 201) and
+   * mode: the strategic chart, elevation tints, or terrain against the aircraft's altitude
+   * (decision 227).
+   */
+  map: { range: number; northUp: boolean; mode: MapMode };
 }
 
 /** Commands to the flight controls the strip's items toggle (gear, brakes), by the inputs' action names. */
@@ -36,7 +40,10 @@ export type UiCommand =
   | { type: 'toggle-slot'; slot: SlotId }
   | { type: 'pin'; slot: SlotId; pinned: boolean }
   | { type: 'map-range'; slot: SlotId; delta: 1 | -1 }
-  | { type: 'map-orient'; slot: SlotId };
+  | { type: 'map-orient'; slot: SlotId }
+  | { type: 'map-mode'; slot: SlotId };
+
+export type MapMode = 'chart' | 'elevation' | 'relative';
 
 export type DisplayCommand =
   | { to: 'avionics'; command: AvionicsCommand }
@@ -91,6 +98,8 @@ export type ScreenItem =
       cols: number;
       rows: number;
       values: number[];
+      /** Colors 0xRRGGBB per cell instead of the phosphor's intensities (the elevation map). */
+      colors?: number[];
     }
   /** A bar of `fill` (0..1) in a frame, filling up (vertical) or right. */
   | {

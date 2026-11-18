@@ -58,6 +58,20 @@ export interface SnapshotSensors {
   groundMap?: (GroundMapImage & { age: number }) | null;
 }
 
+/**
+ * Heights around the aircraft for the moving map's elevation modes (decision 227): `n` × `n`
+ * samples covering ±`halfExtent` m in the map's own frame (turned by `rotation`, the track in
+ * track-up), row 0 at the top; water marked apart. `altitude` is the aircraft's (m).
+ */
+export interface SnapshotTerrain {
+  n: number;
+  halfExtent: number;
+  rotation: number;
+  heights: number[];
+  water: number[];
+  altitude: number;
+}
+
 export interface AircraftSnapshot {
   /** Seconds since the flight began. */
   time: number;
@@ -111,4 +125,6 @@ export interface AircraftSnapshot {
   messages: SnapshotMessage[];
   /** The sensor picture (decision 218); null where nothing is sensed (no traffic). */
   sensors: SnapshotSensors | null;
+  /** Terrain for the moving map's elevation modes, while one shows (decision 227). */
+  terrain?: SnapshotTerrain | null;
 }

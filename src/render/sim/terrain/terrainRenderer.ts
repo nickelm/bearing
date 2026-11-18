@@ -1013,14 +1013,16 @@ export class TerrainRenderer {
    * of meters up stays above the drawn ground. Asks for the data tile it needs;
    * falls back to `displayHeightAt` until it has loaded.
    */
-  displaySurfaceAt(dir: Readonly<Vec3d>): number | null {
+  displaySurfaceAt(dir: Readonly<Vec3d>, fetch = true): number | null {
     const opts = this.meshOptions();
     if (!opts) return null;
     const t = tileForDirection(dir, MAX_TILE_LEVEL);
     const key = dataTileFor(t);
     const data = this.data.get(key);
     if (!data) {
-      this.requestDataTile(key, 1e6);
+      // Queries far from the camera (the sensors: line of sight, the ground map, the
+      // elevation map) pass `fetch` false and take what is resident (decision 227).
+      if (fetch) this.requestDataTile(key, 1e6);
       return this.displayHeightAt(dir);
     }
     const uv: CubeFaceUv = { face: 0, u: 0, v: 0 };
