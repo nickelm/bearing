@@ -83,7 +83,7 @@ src/sim/            headless simulation; runs in a worker: event queue + fixed t
   naval/            carrier groups on their patrol tracks (analytic position); convoys and amphibious groups in C3
   avionics/         avionics state per aircraft (master mode and its triggers, master arm, acknowledged cautions; later
                     radar mode, locks, designations, stores) changed only by avionics commands, and avionics profiles
-                    (decisions 189, 199)
+                    (decisions 189, 199), one per type of the air war in typeProfiles.ts (decision 224)
   sensors/          the sensor model (P3a, decision 218): radar, RWR, visual and datalink contacts per aircraft,
                     the filtered picture that displays and AI read; lineOfSight.ts over the ground
   crew/             (P5, planned) AI crewmates: roles, format ownership, tasks, callouts; act through avionics commands

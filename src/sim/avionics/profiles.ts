@@ -5,9 +5,11 @@
  * carries its system. The slot ids are the UI's five fixed slots; their places
  * on the screen are the UI's (`ui/displays/layout.ts`).
  *
- * The profiles live here, keyed by model spec, until the sensor model (P3)
- * gives the systems figures; then they move into the model specs beside the
- * flight blocks.
+ * Every type of the air war's table has a profile, keyed by its type id
+ * (`typeProfiles.ts`, decision 224); `AVIONICS_PROFILES` keys them by model
+ * spec for the aircraft Free Flight flies, whose helicopters are not in the
+ * table yet. Profiles stay in code rather than in the model specs: most types
+ * have no model yet, and the specs describe how an aircraft looks.
  */
 export type SlotId = 'leftMfd' | 'rightMfd' | 'threat' | 'messages' | 'strip';
 
@@ -23,7 +25,9 @@ export type FormatId =
   | 'messages'
   | 'mission'
   | 'crew'
-  | 'hook-camera';
+  | 'hook-camera'
+  | 'gunner-sight'
+  | 'airdrop';
 
 export type SystemId =
   | 'radar-aa'
@@ -33,9 +37,12 @@ export type SystemId =
   | 'targeting-pod'
   | 'terrain-following'
   | 'stores-management'
-  | 'hook';
+  | 'hook'
+  | 'sight'
+  | 'airdrop';
 
 import type { RadarSpec } from '../sensors/sensors';
+import { TYPE_PROFILES } from './typeProfiles';
 
 export interface AvionicsProfile {
   /** The air-to-air radar, where the aircraft carries one (decision 218). */
@@ -49,6 +56,8 @@ export interface AvionicsProfile {
   /** Torque and rotor gauges at the strip's end (helicopters). */
   rotorGauges: boolean;
   crew: readonly string[];
+  /** The radar's picture in the HUD as well (the Su-27 analogue alone; decision 224). */
+  hudRadar?: boolean;
 }
 
 /** The format each system makes possible. */
@@ -59,29 +68,8 @@ export const FORMAT_SYSTEM: Partial<Record<FormatId, SystemId>> = {
   threat: 'rwr',
   stores: 'stores-management',
   'hook-camera': 'hook',
-};
-
-const KESTREL: AvionicsProfile = {
-  // An F-16C's pulse-Doppler set: about 70 km against a fighter, ±60°.
-  radar: {
-    kind: 'pulse-doppler',
-    range: 70_000,
-    azimuth: Math.PI / 3,
-    elevation: Math.PI / 3,
-    notch: 40,
-  },
-  skin: 'alliance',
-  roundScopes: false,
-  // The F-16C analogue: the full complement; Free Flight has no weapons or sensor model yet.
-  systems: ['radar-aa', 'radar-ag', 'rwr', 'datalink', 'targeting-pod', 'stores-management'],
-  slots: {
-    leftMfd: ['moving-map', 'engines', 'stores'],
-    rightMfd: ['radar-aa', 'radar-ag', 'targeting-pod', 'engines'],
-    threat: ['threat'],
-    messages: ['messages'],
-  },
-  rotorGauges: false,
-  crew: [],
+  'gunner-sight': 'sight',
+  airdrop: 'airdrop',
 };
 
 const SCOUT: AvionicsProfile = {
@@ -111,8 +99,9 @@ const UTILITY: AvionicsProfile = {
   crew: ['crew-chief'],
 };
 
+/** The profiles of the aircraft Free Flight flies, by model spec. */
 export const AVIONICS_PROFILES: Readonly<Record<string, AvionicsProfile>> = {
-  'alliance-fighter': KESTREL,
+  'alliance-fighter': TYPE_PROFILES.f21!,
   'alliance-scout-helo': SCOUT,
   'alliance-utility-helo': UTILITY,
 };

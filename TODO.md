@@ -779,7 +779,8 @@ The sensor model, avionics profiles with display complements, datalink tracks, t
   - [ ] Ground clutter by terrain rather than the local horizontal; the datalink's source as a real aircraft (AWACS, ground control) with its own radar, not a notional feed
   - [ ] Emitters' launch state, with P4's missiles
 - [ ] The AI uses the same filtered picture as the player
-- [ ] Avionics profiles for every type of the air war's table, with display complements (the proposal's examples as the first cases)
+- [x] Avionics profiles for every type of the air war's table, with display complements (the proposal's examples as the first cases) (decision 224)
+  - [ ] The gunner sight and airdrop formats, and the crewmate owning the right display in crewed strike aircraft (P5)
 - [x] Free Flight targets: scripted traffic and emitters as a start-screen option, so the formats have something to sense (decision 218)
   - [ ] Traffic on the moving map (datalink tracks and threat rings, with the map's overlays)
 - [x] Air-to-air radar format: B-scope with range-while-search, track-while-scan and single-target track; contact altitude and heading; datalink tracks marked; LOCK, BRK and the hot keys L and U; the HUD's target box (decision 218)

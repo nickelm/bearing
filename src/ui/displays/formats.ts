@@ -32,6 +32,8 @@ export const FORMAT_TITLES: Record<FormatId, string> = {
   mission: 'MSN',
   crew: 'CREW',
   'hook-camera': 'HOOK',
+  'gunner-sight': 'SGT',
+  airdrop: 'DROP',
 };
 
 type Format = (s: AircraftSnapshot, d: DisplayState, slot: SlotId) => ScreenItem[];

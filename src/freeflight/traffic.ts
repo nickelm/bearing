@@ -9,6 +9,7 @@ import { Vec3d } from '../core/vec3d';
 import { KM } from '../core/units';
 import type { Emitter, RadarSpec, SensorTarget } from '../sim/sensors/sensors';
 import { scanHash } from '../sim/sensors/sensors';
+import { TYPE_PROFILES } from '../sim/avionics/typeProfiles';
 import type { Side } from '../campaign/cast';
 
 export interface TrafficAircraft {
@@ -38,13 +39,8 @@ export interface TrafficSite {
   trackRange: number;
 }
 
-const FIGHTER_RADAR: RadarSpec = {
-  kind: 'pulse-doppler',
-  range: 60_000,
-  azimuth: Math.PI / 3,
-  elevation: Math.PI / 3,
-  notch: 40,
-};
+/** The Pact fighters' radar: the MiG-29 analogue's profile (decision 224). */
+const FIGHTER_RADAR: RadarSpec = TYPE_PROFILES.vo31!.radar!;
 const SAM_RADAR: RadarSpec = {
   kind: 'pulse',
   range: 45_000,

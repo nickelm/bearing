@@ -3749,3 +3749,22 @@ Siting takes 0.3–1.7 s per world on the main thread. On seed 1983, Vaureko mov
 `docs/visual-style.md` (Part I, *HUD*, world-anchored symbols) and `TODO.md` change with this decision.
 
 **Reason:** The owner approved the radar's look and controls and asked to proceed. A dogfight radar that locks by itself is what makes the dogfight master mode worth having, and the RWR's calls let the threat display stay small and collapsed without the pilot missing a new threat.
+
+### 224. Avionics profiles for every type of the air war
+
+**Date:** 2026-11-18
+**Decision:** Every type in the air war's table (`sim/air/aircraft.ts`) has an avionics profile, in `sim/avionics/typeProfiles.ts`, keyed by type id. `AVIONICS_PROFILES` keeps model-spec keys only for what Free Flight flies (the Kestrel is the F-21's profile; the two helicopters are not in the table yet). The profiles stay in code rather than moving into the model specs, as decision 199 planned: most types have no model yet, and a spec describes how an aircraft looks.
+
+The complements follow the proposal's examples:
+- **Air superiority fighters** (F-15C, F-14A, Su-27, MiG-29 analogues): the air-to-air radar on the right display; moving map, stores and engines on the left; datalink. The Su-27 analogue's profile marks its radar picture for the HUD as well (`hudRadar`); drawing it waits for that aircraft to be flown.
+- **Multirole fighters** (F-16C, F/A-18C analogues): the full complement, air-to-air and air-to-ground radar and a targeting pod.
+- **The early fighter** (MiG-23ML analogue): no moving map, its radar in a round scope bezel, navigation on the HUD.
+- **Strike aircraft with crew** (F-111F, A-6E, Su-24M analogues): the air-to-ground radar first on the right display, the terrain-following system and a targeting pod. The crewmate's ownership of that display waits for P5.
+- **Attack aircraft** (A-10A, Su-25, F-117A analogues): no radar; the F-117A's pod.
+- **The F-4G analogue**: a pulse radar without look-down and the threat display, which is its weapon.
+- **Bombers, AEW, tankers, transports**: the moving map and their radar or airdrop format; crews as roles.
+- **Attack helicopters** (AH-64A, Mi-24V analogues): the gunner sight; **heavy helicopters** (CH-47D, Mi-26): the hook camera; both with rotor gauges.
+
+Radar figures are the detection range against a 5 m² fighter, from approximate public figures: 100 km for the F-15C and Su-27 analogues, 150 km for the F-14A's, 80 km for the F/A-18C's, 70 km for the F-16C's and MiG-29's, 55 km for the MiG-23ML's and F-4G's. Pact sets have wider Doppler notches (50–90 m/s against 40), so they lose more beaming targets in look-down. Free Flight's Pact fighters take the MiG-29 analogue's radar (it was a placeholder of 60 km). Two formats join the list without a drawing yet, the gunner sight and airdrop; an aircraft that lists them shows its other formats until they exist. `TODO.md` and `CLAUDE.md`'s directory map change with this decision.
+
+**Reason:** P3's step 2. The sensor model needs each type's radar to be what the AI and a followed aircraft see with, and P5's crews and the follow mode need a profile for whatever aircraft the player picks.
