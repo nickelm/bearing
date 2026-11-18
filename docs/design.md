@@ -1,6 +1,6 @@
 # Bearing: Design Doc
 
-*Revision 11, 2026-11-17. Adopts Proposal 0007, world diversity (`docs/proposals/0007-world-diversity.md`, decision 204); revision 10 adopted Proposal 0006, displays, status strip, master modes and AI crew (`docs/proposals/0006-displays-and-crew.md`, decision 189); revision 9 adopted Proposal 0005, terrain-adaptive networks (`docs/proposals/0005-terrain-adaptive-networks.md`, decision 161); revision 8 adopted Proposal 0002, third-person flight without cockpits (`docs/proposals/0002-third-person-flight.md`, decision 94); revision 7 adopted Proposal 0001, two views (`docs/proposals/0001-two-views.md`, decision 72); revision 6 brought in decisions 1–71. A decision that changes anything stated here updates this document in the same commit.*
+*Revision 12, 2026-11-18. Adopts Proposal 0008, game loop and campaign (`docs/proposals/0008-game-loop-and-campaign.md`, decision 228), and moves the roadmap to `docs/roadmap.md`; the audit of the same day (`docs/status/audit-2026-11-18.md`, decision 229) brought the text in line with the code. Revision 11, 2026-11-17, adopted Proposal 0007, world diversity (`docs/proposals/0007-world-diversity.md`, decision 204); revision 10 adopted Proposal 0006, displays, status strip, master modes and AI crew (`docs/proposals/0006-displays-and-crew.md`, decision 189); revision 9 adopted Proposal 0005, terrain-adaptive networks (`docs/proposals/0005-terrain-adaptive-networks.md`, decision 161); revision 8 adopted Proposal 0002, third-person flight without cockpits (`docs/proposals/0002-third-person-flight.md`, decision 94); revision 7 adopted Proposal 0001, two views (`docs/proposals/0001-two-views.md`, decision 72); revision 6 brought in decisions 1–71. A decision that changes anything stated here updates this document in the same commit.*
 
 ## Vision
 
@@ -27,8 +27,8 @@ The war is seen in two views of the same world. The **strategic view** is an ill
 - **Campaign:** Detected from the generated world as a set of theaters; one world can contain several.
 - **Casting:** Automatic and deterministic. Players get the war their seed produces and do not confirm or edit it.
 - **Sides:** Alliance and Pact are both playable. The player picks a side at campaign start and keeps it for the campaign. The side is a view: the simulation never reads it.
-- **Player role:** Pilot, not commander. The player does not command ground or naval forces.
-- **Core loop:** Search ongoing missions, jump in, fly, hand back. No takeoff or landing by default, except in helicopters, whose missions end on the ground (decision 149).
+- **Player role:** Pilot, not commander. The player does not command ground or naval forces. By default the player is a ghost who can take any aircraft of their side; they also have a named pilot in one squadron who builds reputation by flying its missions (proposal 0008).
+- **Core loop:** Search ongoing missions, jump in, fly, hand back. No takeoff or landing by default, except in helicopters, whose missions end on the ground (decision 149). The war itself runs in a cycle of plan, execute, resolve, consequence and replan that never waits for the player (see *The Game Loop*).
 - **Flight view:** A third-person chase camera and no cockpits. The HUD, docked displays and status strip are 2D overlays, and every item lives in exactly one of them (decision 189). AI pilots and the player share one flight director and one flight model; helicopters have their own rotor-disc model behind the same director interface (decision 149).
 - **Ranges:** Aircraft ranges compressed by a factor that the casting step adapts to each world; speeds stay real.
 - **Time:** Variable time acceleration from the first demo.
@@ -37,24 +37,35 @@ The war is seen in two views of the same world. The **strategic view** is an ill
 - **World diversity:** Landform, biome and surface character are separate layers: terrain provinces and rock from tectonic history, biomes from a climate with local modifiers, surface from soil, water and disturbance. Continents have a character, regions are named zones with their own look, and each world has a handful of named natural wonders (decision 204).
 - **Generation time:** No time budget. Generation may take minutes, and finished worlds are cached.
 - **Hosting:** Static site on GitHub Pages. No server, no SharedArrayBuffer.
+- **Campaign:** Two to four weeks of game time, ending in a breakthrough, a successful defense, or a ceasefire from mutual exhaustion (proposal 0008).
+- **Persistence:** An event log of player inputs and campaign decisions from the tech demo on; saves in IndexedDB with file export and import.
+- **Multiplayer:** Later. The event log keeps co-op possible.
 
-## Demo Goals
+## The Tech Demo
 
-1. Generate a planet from a seed on a mid-range laptop, with per-stage progress, and cache it so each seed is generated once.
-2. Produce terrain with geological structure: continents, oceans, mountain ranges, canyons, plains, rivers, and distinct biomes. Track W (decision 204) deepens this after the demo with provinces, rock, closed basins, zones and wonders.
-3. Show an illustrated strategic map from the full globe down to its zoom floor (about 100 km altitude), crisp at every zoom.
-4. Render a simulation view from the ground to about 20 km altitude without visible seams or distracting popping.
-5. Name the world's geography (continents, seas, straits, mountain ranges, peaks, deserts, forests, rivers, lakes, corridors, roads) and label it on the map without overlaps.
-6. Build a strategic graph, detect theaters, and cast a campaign for any seed that passes the validity check.
-7. Place settlements and roads as world facts, then ports, airbases, and targets according to the cast.
-8. Generate air tasking for both sides and fly 20 to 50 aircraft on typed missions.
-9. List ongoing missions in a searchable panel, and follow any of them from the map into the simulation view with a chase camera and a read-only HUD.
-10. Show ground formations along any continental front and convoys along any sea lane.
-11. Run at 1× to at least 64× time acceleration without the simulation diverging.
-12. Show day and night, seasons, and live weather in both views, and let weather and daylight constrain flight operations.
-13. Run in a desktop browser.
+The first goal is one day of war (proposal 0008; `docs/roadmap.md`, phase R2): one continental-front theater, 24 game hours, four mission types (CAP, interdiction, CAS and airlift), three to five flyable aircraft with at least one per side, aggregate battalions with minimal entity promotion near the player, a survivor and a CSAR mission for every ejection, aggregate outcomes calibrated against full fidelity, and an event log that replays to the same state. The player finds a mission through search, follows it, takes over, flies it, and hands it back. The roadmap lists the exit criteria. The demo goals of revision 11, which left player flight control out of the demo, are superseded.
 
-**Non-goals for the demo:** player flight control, HUD, and displays (the demo has only a read-only HUD for followed flights; the Free Flight sandbox, decision 134, is the one exception), combat between individual entities, the campaign economy, naval combat, sound, and multiplayer.
+## The Game Loop
+
+*Specified in `docs/proposals/0008-game-loop-and-campaign.md` (decision 228).*
+
+The war runs in a cycle that never waits for the player:
+
+1. **Plan.** Each side's command layer builds an air tasking order from theater needs, available aircraft, pilots and supplies, and revises it every few game hours.
+2. **Execute.** Missions fly. Most resolve at the aggregate level; missions the player watches or flies run at full fidelity.
+3. **Resolve.** Engagements produce losses, damage, delivered supplies, destroyed targets and ejected pilots.
+4. **Consequence.** Results feed the ground war, the naval war, logistics and morale: fronts move, depots empty, bridges fall, squadrons lose pilots.
+5. **Replan.** The next planning cycle responds to the new situation.
+
+The player enters the loop through mission search (see *Mission Search and Jump-In*). A good sortie changes the war through the same consequence step as any other mission, amplified by morale and reputation. The campaign clock drives one order per game day with revisions every two to four hours; ground and naval aggregates step on fixed ticks; takeoffs, arrivals, engagements, ejections and phase changes are events (see *Time*).
+
+- **Mission types are plug-ins.** Each has a planner rule with its priority score, a package template, an aggregate resolver, full-fidelity behavior for the AI pilots, jump-in windows, success criteria and consequences, a briefing template with named places, and interface defaults (master mode, formats and HUD cues per phase). A mission type is complete only when every part exists.
+- **Aircraft types are bundles.** Each type has geometry with animated parts, flight data (fixed-wing or rotary), an avionics profile with its display complement, pylon stations and loadouts, role tags for the planner, crew roles, camera rig settings, aggregate performance values from calibration, and a faction, name and skin. A type registry joins the parts by type id, since avionics profiles live in code (decisions 224, 230).
+- **Fidelity consistency.** Aggregate resolvers and full fidelity must agree, or the war would behave differently when watched. Aggregate outcome tables are fitted offline from many headless full-fidelity engagements per matchup; the tables live in the repository, a script regenerates them, and tests keep the two within tolerance. Promotion builds full-fidelity state from the aggregate (positions, fuel, weapons, damage) and demotion folds it back; both preserve losses and expended weapons.
+- **Player identity.** As a ghost, the player can take any aircraft of their side without lasting consequence. The named pilot belongs to one squadron; flying its missions builds reputation, which lifts squadron morale and may draw the enemy's attention (raids on the home base, fighters hunting the callsign). A named pilot who is captured or killed loses the reputation, and the player creates a new one.
+- **Ejection and CSAR.** Every ejection on either side creates a survivor with a position, an injury state, a survival timer and a capture risk that grows near enemy forces. The owning side always tasks a CSAR mission (rescue helicopter, escorts, on-scene cover), which ends with the survivor rescued, captured or killed. Rescued pilots return to their squadron's pool, which limits sortie generation; the player may fly any part of a CSAR mission or try to stop the enemy's.
+- **Campaign.** Two to four weeks of game time, about 10 to 30 hours of play. Fuel, munitions, spares, replacement aircraft and pilots flow over the road, rail and sea networks, and base stocks gate sorties. Unit, squadron and theater morale change sortie rates, AI skill and ground combat. After a mission the map shows the chain of consequences (bridge down, supply cut, battalion withdrawing). The war ends in a breakthrough, a successful defense or a ceasefire from exhaustion, and a summary closes it.
+- **Persistence.** The simulation records an event log of player inputs and campaign-level decisions. A save is a state snapshot plus the log since it; replaying the log from the snapshot reproduces the same state, which also serves replays, debugging and later co-op. Saves live in IndexedDB and export and import as files.
 
 ## Scale and Range
 
@@ -68,7 +79,7 @@ World data is tiled. Processes that need the whole planet (erosion, drainage, cl
 
 ## Technology
 
-**TypeScript + Three.js with the WebGPU renderer and TSL shaders**, built with Vite and hosted as a static site on GitHub Pages. Compute shaders handle erosion, tile synthesis, and line-of-sight queries; world-generation kernels are plain WGSL on the render device, tested in Node on Dawn. Long-running CPU tasks run in Web Workers. Workers exchange state with `postMessage` and transferable buffers, since GitHub Pages cannot set the headers that SharedArrayBuffer requires. A Gamepad API binding gives us flight stick support after the demo (P1).
+**TypeScript + Three.js with the WebGPU renderer and TSL shaders**, built with Vite and hosted as a static site on GitHub Pages. Compute shaders handle erosion, tile synthesis, and line-of-sight queries; world-generation kernels are plain WGSL on the render device, tested in Node on Dawn. Long-running CPU tasks run in Web Workers. Workers exchange state with `postMessage` and transferable buffers, since GitHub Pages cannot set the headers that SharedArrayBuffer requires. A Gamepad API binding drives the stick axes today; buttons and remapping come with roadmap R6.5.
 
 ## Architecture
 
@@ -85,7 +96,7 @@ Every unit exists at one of three fidelity levels:
 
 - **Aggregate:** a formation, flight, or convoy with a position, strength, supply, and orders. Always simulated, cheaply.
 - **Entity:** individual vehicles, aircraft, and infantry squads with positions, simple behaviors, and damage states. Simulated only inside a **promotion bubble** around the player's aircraft or the simulation view's camera.
-- **Full:** physical simulation, used only for the aircraft the player controls or follows, with the flight model, sensor model, and flight director (see *Flying*). Full fidelity arrives with P1; until then a followed aircraft flies its analytic route.
+- **Full:** physical simulation, used only for the aircraft the player controls or follows, with the flight model, sensor model, and flight director (see *Flying*). Full fidelity for campaign aircraft arrives with the tech demo (`docs/roadmap.md`, R2.5); until then a followed aircraft flies its analytic route, and only Free Flight's aircraft run at full fidelity.
 
 Promotion expands an aggregate deterministically from its seed and current strength. Demotion folds entity losses back into aggregate strength, so a tank company the player destroyed stays destroyed.
 
@@ -211,6 +222,7 @@ The Alliance and the Pact use fictional aircraft and vehicles with their own nam
 | Airborne early warning | E-3 | A-50 |
 | Tanker | KC-135 | Il-78 |
 | Tactical airlift | C-130 | An-12 |
+| Utility helicopter | UH-60 | Mi-8 |
 | Heavy helicopter | CH-47 | Mi-26 |
 | Reconnaissance | RF-4 | MiG-25R |
 
@@ -228,6 +240,8 @@ Each side's command layer produces an **air tasking order** (ATO) for each game 
 2. **Rank needs** by a priority score that combines theater weights, target value, and urgency.
 3. **Build packages.** Assign flights from squadrons within range, adding escort and SEAD to strikes when the target area is defended.
 4. **Schedule** missions so that the result matches the doctrine of the side: Pact strikes in large waves, Alliance missions spread more evenly.
+
+Each mission type contributes its planner rule and package template as a plug-in (see *The Game Loop*). Until the ATO exists (roadmap R2.1), an interim tasker plans every game hour against fixed targets, without weather or daylight (decision 132).
 
 The planner never searches or learns. It must produce a plausible war, and its decisions must be legible to a player browsing missions: each mission records the need it serves and its score. Ties break by stable ids, and random draws come from per-side, per-day forks.
 
@@ -265,19 +279,24 @@ Pass times are analytic and detection rolls come from per-side forks, so the pic
 | Airlift resupply | Tactical airlift | Base to base |
 | Combat airdrop | Tactical airlift | Paratroops or supplies over a drop zone |
 | Sling-load resupply | Heavy helicopters | Forward positions and island outposts |
+| Scramble | Air superiority | Quick-reaction alert against a raid the air picture shows |
+| Maritime patrol | Maritime bombers | Finds convoys and naval groups |
+| Helicopter assault and troop insertion | Utility and heavy helicopters | Landing zones near the front |
+| Combat search and rescue | Utility helicopters with escort and cover | Every ejection on either side (see *The Game Loop*) |
+| Medical evacuation | Utility helicopters | Casualties from the front |
 
 Each mission records its type, side, theater, package, target or station, and a timeline of phases: departure, climb-out, ingress, fence-in, on target or on station, egress, approach, and recovery.
 
 ## Mission Search and Jump-In
 
-Mission search is the player's main interface to the war. A panel lists the ongoing and upcoming missions of the player's side, with filters for mission type, aircraft, theater, current phase, threat level, and time until action ("on target in under 5 minutes"). Selecting a mission focuses the map on it and draws its route. *Follow* carries the camera through the transition into the simulation view, with a chase camera behind one of its aircraft; *Jump in* (after the demo) gives the player that aircraft's controls in the same chase view, so only the source of the inputs changes. Returning to the map lands the strategic camera above the flight's position.
+Mission search is the player's main interface to the war. A panel lists the ongoing and upcoming missions of the player's side, with filters for mission type, aircraft, theater, current phase, threat level, and time until action ("on target in under 5 minutes"). Selecting a mission focuses the map on it and draws its route. *Follow* carries the camera through the transition into the simulation view, with a chase camera behind one of its aircraft; *Jump in* (roadmap R2.5) gives the player that aircraft's controls in the same chase view, so only the source of the inputs changes. Returning to the map lands the strategic camera above the flight's position.
 
 - **Jump-in window.** A mission accepts the player from climb-out until approach. Takeoff and landing stay with the AI, so joining puts the player in the air with the package already formed.
 - **Helicopter missions** (decision 149). For helicopters, landing is the mission: inserting troops, delivering a sling load, reaching a forward arming and refueling point. Their jump-in window extends over their ground phases, and the player may fly every takeoff and landing.
 - **Handback.** Leaving an aircraft returns it to the AI with its current orders, at any phase.
 - **Subscriptions.** The player can subscribe to a query, such as "next attack helicopter CAS in corridor 2" or "any strike on our airbases". When a matching mission reaches the chosen phase, auto-slowdown drops time to 1× and offers the jump. Subscriptions combine time acceleration and search into one loop: accelerate, get notified, jump in.
 
-For the demo, the panel, the chase camera, and a read-only HUD are in scope. Player flight control comes after (the Piloting track).
+The tech demo (roadmap R2) includes the panel, subscriptions, following, taking over and handing back. In the demo, fixed-wing jump-in runs from climb-out to approach, since the AI cannot yet taxi or land through the flight model (decision 231).
 
 ## Flying
 
@@ -296,7 +315,7 @@ For the demo, the panel, the chase camera, and a read-only HUD are in scope. Pla
 - **Display models.** Every format draws from a serializable display model, a pure function of the sensor-filtered snapshot and the display state, so the AI crewmate, tests and later companion displays in a second window or on a tablet (P6) work through the same commands as the player. All displays together take under 2 ms of CPU per frame.
 - **Sensors.** A sensor model filters simulation state per aircraft: radar by type, mode, range, radar cross-section, aspect, terrain masking, and clutter; RWR; visual detection; datalinks and AWACS with lower precision and a delay; targeting pods and terrain-following radar. Avionics profiles per type set which sensors exist and how good they are. The displays show only this filtered picture, and the AI is to use the same one. Today radar, RWR, visual detection and datalink exist for Free Flight (decision 218); pods, terrain-following radar and the AI's use are planned.
 - **Crews.** See *Factions and Sides*. Transports add an airdrop format with a drop zone marker and release cue, and transport helicopters the hook camera format for sling loads.
-- **Free Flight** (decision 134). A sandbox outside the campaign: pick a seed and an airbase, take off in the F-21 Kestrel or one of two helicopters (decision 159), fly anywhere and land at any airbase, with no war or weapons; optional scripted traffic and ground radars feed the sensors (decision 218). Time of day and weather are options: the world's own weather or a preset from clear sky to thunderstorm, blizzard, fog and dust storm, with wind and turbulence on the aircraft; the flight is on a day with a full moon (decision 143). It brings a first version of P1 (flight model, control laws, direct control, flight director) and part of P2 (the HUD) forward, adds ground handling and landing gear, and builds them where P1 and P2 will extend them. Takeoff and landing stay with the AI in the campaign.
+- **Free Flight** (decision 134). A sandbox outside the campaign: pick a seed and an airbase, take off in the F-21 Kestrel or one of two helicopters (decision 159), fly anywhere and land at any airbase, with no war or weapons; optional scripted traffic and ground radars feed the sensors (decision 218). Time of day and weather are options: the world's own weather or a preset from clear sky to thunderstorm, blizzard, fog and dust storm, with wind and turbulence on the aircraft; the flight is on a day with a full moon (decision 143). It brings a first version of P1 (flight model, control laws, direct control, flight director) and part of P2 (the HUD) forward, adds ground handling and landing gear, and builds them where the campaign will reuse them (roadmap R1.5). Takeoff and landing stay with the AI in the campaign.
 
 ## The Ground War
 
@@ -307,11 +326,11 @@ The ground war exists wherever the cast contains a continental front, chokepoint
 - **Entities.** Inside the promotion bubble, battalions expand into tank and IFV platoons, infantry squads with MANPADS teams, artillery, short-range air defense, and logistics columns on roads. Air defense entities matter most, since they decide whether an attack run survives.
 - **Line of sight.** Attack helicopters fight by terrain masking and forest cover, so line-of-sight queries are to use the level-7 tiles (about 48 m) and the canopy height field, batched on the GPU within the bubble. Today line of sight is a CPU march over the ground only (decision 218). A closed forest is a volume from the ground to its canopy top, and for any sight line from or to an aircraft it is opaque, edges included; how far ground units see into and out of a forest edge is settled with the ground entities (decision 148).
 
-The demo shows battalions as unit symbols moving along the front under the aggregate model. Entity promotion comes later, but the data model supports it from the start.
+The tech demo (roadmap R2) runs battalions in aggregate, shown as unit symbols on a moving front, with minimal entity promotion: near the player a battalion spawns a handful of representative vehicles (tanks, infantry fighting vehicles, trucks, a short-range air defense vehicle) that can be targeted, and their losses fold back into its strength. Full entity behavior follows in R3.
 
 ## Naval Forces
 
-Convoys, carrier groups, and amphibious groups exist wherever the cast contains a sea lane, chokepoint, or island campaign. AI controls them. They are targets and protectees for air missions, and convoy arrivals deliver reinforcements and supplies to the receiving theater. Casting assigns carrier groups to sides, and their air wings fly ATO missions (see *Air Tasking*). A group starts the war on station, patrolling a stretch of a sea lane in its theater (decision 132). The demo shows naval groups as aggregate units on analytic sea routes. Naval combat comes later.
+Convoys, carrier groups, and amphibious groups exist wherever the cast contains a sea lane, chokepoint, or island campaign. AI controls them. They are targets and protectees for air missions, and convoy arrivals deliver reinforcements and supplies to the receiving theater. Casting assigns carrier groups to sides, and their air wings fly ATO missions (see *Air Tasking*). A group starts the war on station, patrolling a stretch of a sea lane in its theater (decision 132). Proposal 0008 adds surface action groups and abstract submarines. Naval groups move on sea lanes and fight with aggregate resolvers, and the player never commands ships; air missions meet them through anti-shipping strikes, maritime patrol, convoy escort and carrier operations. Carrier groups patrol today; the naval war arrives in roadmap phase R4.
 
 ## Rendering
 
@@ -329,125 +348,15 @@ The two views share world data, the simulation, and camera-relative rendering, a
 
 Selecting a flight and choosing *Follow* or *Jump in* eases the strategic camera toward the flight down to the zoom floor. A quick dissolve through a cloud layer hides the switch, and the simulation view opens with a chase camera behind the aircraft. Returning reverses the sequence. The whole transition lasts under two seconds.
 
-## Milestones
+## Roadmap
 
-The roadmap splits into a foundation and three tracks that can advance in parallel, joined by an integration milestone. `TODO.md` tracks the tasks and their status.
-
-### Foundation
-
-- **F1. Globe skeleton.** Cube-sphere, unsteered plates, uplift, biome coloring, debug orbit camera, parameter sliders.
-- **F2. World data.** Erosion, rivers, climate, and biomes baked to the global grid and tiles, and cached.
-
-### Strategic Track
-
-- **S1. Illustrated base map.** Exaggerated relief, hillshade, biome painting with pattern textures, coasts and water bands, camera with zoom floor and tilt, zoom bands, and stylized day and night and weather.
-- **S2. Geography and names.** Feature extraction, toponymy, mountain and forest glyphs, and a label engine with typography, placement, and collision.
-- **S3. Reading the world.** Validity check, strategic graph, front generator, theater detection, casting, briefing text, the seed browser, and the strategic overlays for theaters, fronts, named corridors, sea lanes, and chokepoints.
-- **S4. Settlements and infrastructure.** Settlements with urban extents and city glyphs, road hierarchy with route names, railways, ports, airbases, and industry, with their symbols.
-
-### Simulation Core Track
-
-- **C1. Simulation core.** Worker-based simulation, event scheduler, fixed ticks, time acceleration, and the weather model.
-- **C2. Air tasking and mission search.** Rule-based ATO for both sides, intelligence, mission model, flights, the search panel with subscriptions, and flight icons and routes on the map.
-- **C3. Ground and naval aggregates.** Battalions and aggregate combat along fronts, convoys and naval groups, all shown as map symbols.
-
-### Flight View Track
-
-- **V1. Local terrain.** Quadtree LOD within the horizon, 0 to 20 km altitude, faceted flat-shaded terrain at true scale, high-resolution regional tiles, observer camera.
-- **V2. Atmosphere and nature.** Sky, aerial perspective, ocean, clouds, weather effects, and the tree kit.
-- **V3. Models and bases.** Procedural model builders from JSON specs, the model viewer page, settlements, and the base kit in the simulation view.
-- **V4. Transition, camera rig, and spectator HUD.** Follow a flight from mission search into the simulation view and back. Chase camera with per-type rigs, free look, and terrain avoidance. Read-only HUD with flight path marker, tapes, and heading for the followed aircraft.
-
-### Integration
-
-- **I1. Polish.** Acceptance checks for both views, performance pass, side selection at campaign start, generation caching, and a short flythrough.
-
-### Piloting Track (after the demo)
-
-- **P1. Flight model and controls.** Table-driven flight model, flight director shared with the AI, mouse-aim and direct schemes, flight stick support through the Gamepad API, take control and hand back.
-- **P2. HUD, displays, and status strip.** The allocation rule, the display frame, slots and slot states, the status strip, master modes, cursor mode, faction skins, and the moving map format; Free Flight's discrete indicators move from the HUD into the status strip (decision 189). The plan is `docs/plans/displays.md`.
-- **P3. Sensors and formats.** The sensor model, avionics profiles with display complements, datalink tracks, the elevation mode of the moving map, and the air-to-air radar, air-to-ground radar, threat warning, stores, engines and fuel, and comms formats; the Su-27 analogue's HUD-integrated radar.
-- **P4. Weapons.** Guns with lead-computing pipper, air-to-air missiles, bombs with CCIP and CCRP, target and weapon cameras, damage states.
-- **P5. Crews and special roles.** Format ownership, the crew command menu, the six crew roles, callouts, crew station mode, and the targeting pod, hook camera and airdrop formats. Attack helicopter gunner mode and the sling-load tools move to track H (decision 149); the hook camera format is built by whichever of H3 and P5 comes first (decision 189).
-- **P6. Companion displays (later).** Displays popped out into a second window, synced through a broadcast channel, and a tablet or phone companion paired peer-to-peer.
-
-### Helicopter Track (after P1; decision 149)
-
-*Specified in `docs/proposals/0004-helicopter-flight.md`; the plan is `docs/plans/helicopters.md`. Free Flight is the test bed for H1–H4.*
-
-- **H1. Rotor model and fly-by-mouse.** The thrust-disc model, the speed-scheduled controls, the Assisted preset, the hover HUD, the helicopter camera rig, and Free Flight from a helicopter pad with the Little Bird and Black Hawk analogues.
-- **H2. All modes and types.** Mouse aim, direct control with flight stick support, all assists and presets, and the remaining types.
-- **H3. Ground and utility.** Skids and wheels, slope and confined-area landings, dynamic rollover, sling loads with the hook camera, hoisting, fast-roping.
-- **H4. Hazards and damage.** Vortex ring state, mast bumping, retreating blade stall, autorotation, tail rotor loss, and their cues.
-- **H5. Combat and AI.** Fixed and turreted weapons, gunner mode, AI nap-of-the-earth and battle-position behaviors, and helicopter missions in the campaign with jump-in over their ground phases.
-
-### Terrain Networks Track (decision 161)
-
-*Specified in `docs/proposals/0005-terrain-adaptive-networks.md`; the plan is `docs/plans/terrain-networks.md`.*
-
-- **N1. Edit framework.** Corridor and pad edits in one function for every height query, protected river channels, airfield pads migrated onto it.
-- **N2. River planform.** River invariants as metrics over many seeds, regimes, meander migration with cutoffs and oxbows, floodplain edits, distributaries.
-- **N3. River rendering.** Oxbows as water, banks on oxbows and distributaries, generalized rivers on the map.
-- **N4. Crossings and settlements.** Crossing sites, the settlement pull, bridges as typed nodes with traffic and detour.
-- **N5. Router and alignment.** The router, railways, major and minor roads and tracks aligned, plans, profiles, earthworks, structure records, spirals. The network is aligned once, when the world is built, by a worker pool over level-6 tiles, and stored with the world (decision 184); the world's build runs behind a build screen of phases, bars and messages (decision 186).
-- **N6. Corridors in the terrain.** Corridor edits with banks, road and rail shading, refined terrain along corridors near the camera.
-- **N7. Structures and names.** The bridge kit and tunnel portals, bridge symbols and labels and dashed tunnels on the map, names for reaches, sections, bridges and tunnels.
-- **N8. Verification.** The proposal's criteria over 20 seeds, screenshots, acceptance checks, report.
-
-### Ground Detail Track (decision 168)
-
-*The plan is `docs/plans/ground-detail.md`. Detail near a low camera for helicopter flight, at no cost at working altitude.*
-
-- **G1. Micro-facets.** A virtual triangle lattice in the ground shader, finer than the mesh, with stepped normals and shades by land cover, gated by the camera's height above the ground.
-- **G2. Ground cover kit.** Chunky grass tufts, tussocks, reeds, bushes, boulders, slabs and pebbles as model specs.
-- **G3. Placement.** A pure placement function shared with the sim, a ring of instances around the camera on the drawn surface, colored from the ground.
-- **G4. Motion.** Sway with the flight model's gusts, and downwash flattening the cover in rings.
-- **G5. Dust.** Soft, wispy sprites of dust, grit, snow and spray by surface; closes H3's downwash task.
-
-### World Diversity Track (decision 204)
-
-*Specified in `docs/proposals/0007-world-diversity.md`; the plan is `docs/plans/world-diversity.md`.*
-
-- **W1. Provinces and lithology.** Boundary ages, sutures and hotspots, the province and lithology maps, erodibility into erosion, debug overlays.
-- **W2. Relief by province.** Uplift and soft limits by province, taller collision ranges, glacial carving with fjords, basin and range, plateau canyons, terracing restricted to layered dry rock.
-- **W3. Closed basins.** The water balance, salt lakes and playas with shoreline rings, salt flats and airstrip sites in the graph.
-- **W4. Climate and biomes.** Climate modifiers, the twenty biomes, altitude zonation, soil, riparian corridors, ecotones, disturbance, gully shading.
-- **W5. Continental character.** Characters, biases within tectonic limits, the distinctness check.
-- **W6. Zones and visual style.** Zones, look recipes and names in both views; the brighter palette.
-- **W7. Landform props.** The prop kit, placement, collision shapes, budgets.
-- **W8. Natural wonders.** Detectors, selection, names, shaping, protection from earthworks, map glyphs and labels.
-- **W9. Verification.** The proposal's criteria over 20 seeds against the baseline, screenshots, report.
-
-### Dependencies and Order
-
-S1 and V1 both depend on F2. S3 depends on S2 for named corridors. V3 depends on S4 for settlement and base data. C2 depends on C1 and S4. V4 depends on C2 and V2. P1 depends on V4. P2 depends on P1, and its work in Free Flight may start before P1 closes (decision 189). P3 depends on P2 and S4. P4 and P5 depend on P3, P6 on P3. H1 depends on P1's framework (the shared airframe and director interfaces, input) and Free Flight, and may start before P1 closes (decision 151); H3's hook camera needs P2's display frame; H5 depends on P4, on P1's take control and hand back, and for gunner mode on P5's targeting pod format. In track N, N1, N2 and N4 depend on nothing open; N3 depends on N2, N5 on N1, N2 and N4, N6 on N1 and N5, N7 on N4 and N5. The demo needs none of track N, and N1's single height function is worth having before ground vehicles and line of sight (decision 161). In track G, G1 and G2 depend on nothing open, G3 on G2, G4 on G3 and H1's rotor state, G5 on G4; the demo needs none of it (decision 168). In track W, W1 depends on nothing open; W2, W3 and W4 on W1; W5 on W1 and W4; W6 on W4 and W5; W7 on W1 and W4; W8 on W2–W4, W6 and, for its karst and pillar wonders, W7; W9 on the rest. W8's protection from earthworks uses N5's router; the demo needs none of track W (decision 204).
-
-Suggested order: F1, F2, S1, V1, S2, V2, S3, C1, S4, V3, C2, V4, C3, I1. Alternating between the map and the flight view keeps both looking good as the project grows, and each milestone produces something visible.
-
-When the roadmap was adopted (revision 7), F1, F2, C1, and most of S3 and S4 were done, and V1's LOD and V2's atmosphere, ocean, and clouds existed in a single renderer that served orbit to ground. The remaining order is S1, V1 (adapting that renderer to the simulation view), S2, V2, the rest of S3 and S4, V3, C2, V4, C3, I1.
-
-### Mapping from the Old Milestones
-
-| Old | New |
-|---|---|
-| M1 Globe skeleton | F1 |
-| M2 Erosion, rivers, LOD | F2 (data), V1 (rendering) |
-| M3 Atmosphere, ocean, forests | V2 |
-| M4 Reading the world | S3 |
-| M5 Settlements, roads, ports, airbases | S4 (data and map), V3 (simulation view) |
-| M6 Simulation core and weather | C1 |
-| M7 Air tasking and mission search | C2, V4 (models to V3) |
-| M8 Ground and naval aggregates | C3 |
-| M9 Polish | I1 (tree kit and weather effects to V2) |
-| (new) | S1, S2 |
-
-**After the demo:** entity promotion and ground behaviors, the Piloting track (P1–P6), the Helicopter track (H1–H5), air combat, naval combat, the campaign economy.
+`docs/roadmap.md` is the source of truth for what to build next (decision 228). It orders the work in phases R0–R6 (audit, consolidation, one day of war, combat depth, breadth, dynamic campaign, polish) and maps the earlier tracks onto them: the foundation (F), strategic (S), simulation core (C), flight view (V) and integration (I) tracks, and the piloting (P), helicopter (H), terrain networks (N), ground detail (G) and world diversity (W) tracks, whose milestones decisions and plans still cite. `docs/status/audit-2026-11-18.md` records what each of them delivered.
 
 ## Open Questions
 
 - **Aggressor.** Should the Pact always attack, or should casting occasionally reverse the roles when the geography favors an Alliance offensive?
 - **Thresholds.** What are the right fit thresholds for each theater? The seed browser (S3) tells us how often each theater appears.
-- **Range factor.** Does the per-world range factor feel right? We should fly representative sorties once C2 and V4 work. The first seed-browser run gives 1.0 for almost every seed, because fronts are deeper than a medium strike radius.
+- **Range factor.** Does the per-world range factor feel right? We should fly representative sorties once following works (roadmap R2.4). The first seed-browser run gives 1.0 for almost every seed, because fronts are deeper than a medium strike radius.
 - **Zoom floor.** Is about 100 km altitude close enough, or should the floor go lower at the cost of more glyph and pattern detail?
 - **Vertical exaggeration.** A fixed 4× on the map, or an exaggeration that increases as the camera pulls out?
 - **Naming flavor.** How many cultural naming regions per world, and should they follow faction territory or landmasses?
@@ -455,7 +364,7 @@ When the roadmap was adopted (revision 7), F1, F2, C1, and most of S3 and S4 wer
 - **Strategic animation.** How much motion belongs on the map: moving flight icons only, or also animated front pushes, smoke over battles, and convoy wakes?
 - **Free look in combat.** Should free look be limited while the player is in combat, so the chase view gives less of an advantage, or left unrestricted?
 - **HUD color.** Green for both factions, or green for the Alliance and a different hue for the Pact, as a subtle cue for the side being flown?
-- **Voice.** Should crew callouts and messages use synthesized speech from the start of P5, or text first? (The plan recommends text first; decision 189.)
+- **Voice.** Should crew callouts and messages use synthesized speech from the start of the crews (roadmap R4.5), or text first? (The plan recommends text first; decision 189.)
 - **Single-seat help.** Should single-seat aircraft get a light automation assistant (for example, the radar's mode following the master mode), or stay fully manual? (The plan recommends avionics assists, each a toggle.)
 - **Spectating.** When the player follows an AI flight without taking control, should the displays show that aircraft's picture read-only, as the HUD does? (The plan recommends yes.)
 - **Clean mode.** Should a mode exist that hides all overlays for screenshots and spectating?
@@ -465,4 +374,4 @@ When the roadmap was adopted (revision 7), F1, F2, C1, and most of S3 and S4 wer
 
 ## Later (Out of Scope)
 
-Campaign economy with factories, resources, pilot training, and resupply; air defense networks; player flight control, HUD, displays and status strip, AI crews, and flight stick support (the Piloting track; Free Flight, decision 134, has a first version); player-flown helicopters (the Helicopter track, decision 149); companion displays on a second window or a tablet (P6); CSAR missions; carriers, surface combatants, and submarines in combat; multiplayer. On the map: enemy territory that friendly reconnaissance has not covered recently drawn in a sketched, desaturated style, revealed by reconnaissance missions.
+Multiplayer and co-op, which the event log keeps possible (proposal 0008). On the map: enemy territory that friendly reconnaissance has not covered recently drawn in a sketched, desaturated style, revealed by reconnaissance missions. Everything this section listed before revision 12 (the campaign economy, air defense networks, player flight control and displays, AI crews, flight sticks, player-flown helicopters, companion displays, CSAR, naval combat) now has a place in `docs/roadmap.md`.

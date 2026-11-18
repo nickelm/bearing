@@ -223,14 +223,7 @@ To keep this possible, every format renders from a **serializable display model*
 
 ## Roadmap Changes
 
-The Piloting track changes as follows:
-
-- **P2. HUD, displays, and status strip.** The allocation rule, the display frame, slots and slot states, the status strip, master modes, cursor mode, faction skins, and the moving map format. Retrofit Free Flight: its discrete indicators move from the HUD into the status strip.
-- **P3. Sensors and formats.** The sensor model, avionics profiles with display complements, datalink tracks, the elevation mode of the moving map, and the air-to-air radar, air-to-ground radar, threat warning, stores, engines and fuel, and comms formats. The Su-27 analogue's HUD-integrated radar.
-- **P5. Crews and special roles.** Format ownership, the crew command menu, the six crew roles, callouts, the targeting pod and hook camera formats.
-- **P6. Companion displays (new, later).** Pop-out windows and the tablet companion.
-
-The helicopter track uses these displays: the torque and rotor format and hook camera replace the dedicated displays in proposal 0004, while the hover symbology stays on the HUD.
+*Superseded by `docs/roadmap.md` (decision 228). This section redefined P2, P3 and P5 and added P6. P2 is mostly done (decisions 195, 199–203, 222); P3's sensor model, radars, threat warning and maps are done (decisions 218, 223, 224, 226, 227). Interface defaults per mission phase and declutter are in R2.6, the rest of P3 in R3.2, crews (P5) in R4.5 and companion displays (P6) in R6.7.*
 
 ## Changes to Existing Documents
 

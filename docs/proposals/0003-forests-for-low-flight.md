@@ -112,13 +112,7 @@ Part I's *Level of Detail* table becomes the three layers of section 2, with ran
 
 ## 8. Steps
 
-1. Tree kit specs and the builder's blob jitter, with the CPU previews (done with this draft; decision 147).
-2. The canopy height field and its stands, CPU and GPU versions, with tests that they agree and a map mode in `npm run maps` to see the stands.
-3. The canopy shell from the terrain tiles, with the understory hand-off; preview views at 30 m and 300 m over forest.
-4. Near trees on level-11 tiles from the kit: crown-only interiors, whole edge trees, per-instance variation, stands; retire the clumps of decision 45.
-5. Edge trees and linear features: hedgerows, tree rows, gallery woods, lone trees.
-6. Measure; quality tiers in the governor; aerial perspective for instances if the vertex work shows.
-7. Line of sight and tree strikes in the sim from the same field (with P3 and P1).
+*Superseded by `docs/roadmap.md` (decision 228). Steps 1–5 are done (decisions 147a, 150, 153, 162, 166). Step 6 (measurement and quality tiers for the tree ranges) is in R6.4; step 7 (line of sight and tree strikes from the canopy field) is in R3.6.*
 
 ## Questions for the Owner
 

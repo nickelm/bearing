@@ -187,15 +187,7 @@ Headless tests in `src/sim/`, each a scripted maneuver with pass criteria:
 
 ## Roadmap
 
-A new post-demo track, **Helicopters (H)**, follows P1 (flight model and controls framework) and uses the Free Flight mode as its test bed.
-
-- **H1. Rotor model and fly-by-mouse.** The thrust-disc model, the speed-scheduled controls, the Assisted preset, the hover HUD, the helicopter camera rig, and Free Flight from a helicopter pad with the Little Bird and Black Hawk analogues.
-- **H2. All modes and types.** Mouse aim, direct control with flight stick support, all assists and presets, and the remaining types.
-- **H3. Ground and utility.** Skids and wheels, slope and confined-area landings, dynamic rollover, sling loads with the hook camera, hoisting, fast-roping.
-- **H4. Hazards and damage.** Vortex ring state, mast bumping, retreating blade stall, autorotation, tail rotor loss, and their cues.
-- **H5. Combat and AI.** Fixed and turreted weapons, gunner mode from proposal 0002, AI nap-of-the-earth and battle-position behaviors.
-
-Dependencies: H1 depends on P1 and the Free Flight mode. H5 depends on P4.
+*Superseded by `docs/roadmap.md` (decision 228). This section defined the helicopter track H1–H5 after P1. H1 is partly done (decisions 159, 160, 188). The rotary director and an AI helicopter pilot, which the tech demo's CSAR missions need, are in R2.9; the rest of H1 and all of H2–H5 are in R4.3 and R4.4.*
 
 ## Changes to Existing Documents
 

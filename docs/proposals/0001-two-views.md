@@ -126,57 +126,7 @@ Feature extraction, naming, and infrastructure stay headless in `worldgen`. Labe
 
 ## Revised Roadmap
 
-The roadmap splits into a foundation and three tracks that can advance in parallel, joined by an integration milestone.
-
-### Foundation
-
-- **F1. Globe skeleton.** Cube-sphere, unsteered plates, uplift, biome coloring, debug orbit camera, parameter sliders. *(Old M1, unchanged.)*
-- **F2. World data.** Erosion, rivers, climate, and biomes baked to maps and cached. *(Old M2 without terrain LOD rendering.)*
-
-### Strategic Track
-
-- **S1. Illustrated base map.** Exaggerated relief, hillshade, biome painting with pattern textures, coasts and water bands, camera with zoom floor and tilt, zoom bands.
-- **S2. Geography and names.** Feature extraction, toponymy, mountain and forest glyphs, label engine with typography, placement, and collision.
-- **S3. Reading the world.** Validity check, strategic graph, front generator, theater detection, casting, briefing text, and the strategic overlays for theaters, fronts, named corridors, sea lanes, and chokepoints. *(Old M4, now drawn on the map.)*
-- **S4. Settlements and infrastructure.** Settlements with urban extents and city glyphs, road hierarchy with route names, railways, ports, airbases, and industry, with their symbols. *(Old M5, extended.)*
-
-### Simulation Core Track
-
-- **C1. Simulation core.** Worker-based simulation, event scheduler, fixed ticks, time acceleration. *(Old M6.)*
-- **C2. Air tasking and mission search.** Rule-based ATO for both sides, mission model, flights, search panel with subscriptions, and flight icons and routes on the map. *(Old M7, minus the chase camera.)*
-- **C3. Ground and naval aggregates.** Battalions and aggregate combat along fronts, convoys and naval groups, all shown as map symbols. *(Old M8.)*
-
-### Flight View Track
-
-- **V1. Local terrain.** Quadtree LOD within the horizon, 0 to 20 km altitude, faceted flat-shaded terrain, high-resolution regional bakes, observer camera. *(Rendering part of old M2.)*
-- **V2. Atmosphere and nature.** Sky, aerial perspective, ocean, clouds, and the tree kit. *(Old M3.)*
-- **V3. Models and bases.** Procedural model builders from JSON specs, the model viewer page, settlements, and the base kit in the simulation view.
-- **V4. Transition and chase camera.** Follow a flight from mission search into the simulation view and back.
-
-### Integration
-
-- **I1. Polish.** Acceptance checks for both views, performance pass, side selection at campaign start, generation caching, and a short flythrough.
-
-### Dependencies and Suggested Order
-
-S1 and V1 both depend on F2. S3 depends on S2 for named corridors. V3 depends on S4 for settlement and base data. C2 depends on C1 and S4. V4 depends on C2 and V2.
-
-Suggested order: F1, F2, S1, V1, S2, V2, S3, C1, S4, V3, C2, V4, C3, I1. Alternating between the map and the flight view keeps both looking good as the project grows, and each milestone produces something visible.
-
-### Mapping from the Old Milestones
-
-| Old | New |
-|---|---|
-| M1 Globe skeleton | F1 |
-| M2 Erosion, rivers, LOD | F2 (data), V1 (rendering) |
-| M3 Atmosphere, ocean, forests | V2 |
-| M4 Reading the world | S3 |
-| M5 Settlements, roads, ports, airbases | S4 (data and map), V3 (simulation view) |
-| M6 Simulation core | C1 |
-| M7 Air tasking and mission search | C2, V4 |
-| M8 Ground and naval aggregates | C3 |
-| M9 Polish | I1 |
-| (new) | S1, S2 |
+*Superseded by `docs/roadmap.md` (decision 228). This section split the work into a foundation (F1, F2), a strategic track (S1–S4), a simulation core track (C1–C3), a flight view track (V1–V4) and an integration milestone (I1). F1, F2, S2, S3, S4 and C1 are done; the roadmap's "Where the Old Milestones Went" places the rest: the transition and following in R2.4, the ATO and mission search in R1.4 and R2.1, the ground war in R2.3, the naval war in R4.6, and the remaining polish in R6.*
 
 ## Changes to Existing Documents
 

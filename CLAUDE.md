@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Guidance for Claude Code sessions in this repository. `docs/design.md` is the source of truth for scope and architecture. Read it before starting milestone work. `docs/decisions.md` records the decisions behind it, with dates and reasons. `docs/visual-style.md` is the source of truth for how the game looks: rendering, models and UI (rule 11). The game has two views of one world (decision 72): the illustrated **strategic view** (globe down to a ~100 km zoom floor; visual-style Part II) and the low-poly **simulation view** (0–20 km, entered through a unit; Part I). Owner proposals live in `docs/proposals/`; an accepted proposal is folded into the design doc and a decision.
+Guidance for Claude Code sessions in this repository. **`docs/roadmap.md` is the source of truth for what to build next** (phases R0–R6, decision 228), and `TODO.md` breaks its current phases into tasks. `docs/design.md` is the source of truth for scope and architecture. Read both before starting milestone work. `docs/status/audit-2026-11-18.md` records what exists, feature by feature, as of the audit. `docs/decisions.md` records the decisions behind it, with dates and reasons. `docs/visual-style.md` is the source of truth for how the game looks: rendering, models and UI (rule 11). The game has two views of one world (decision 72): the illustrated **strategic view** (globe down to a ~100 km zoom floor; visual-style Part II) and the low-poly **simulation view** (0–20 km, entered through a unit; Part I). Owner proposals live in `docs/proposals/`; an accepted proposal is folded into the design doc and a decision.
 
 **Keep the documents in step with the decisions.** A decision that changes anything `docs/design.md` or `docs/visual-style.md` states must update that document in the same commit. Edit the statement in place rather than leaving the old text for readers to reconcile. If you find a document contradicting a decision anyway, the later decision wins: fix the document.
 
@@ -45,7 +45,11 @@ docs/proposals/     owner proposals (do not reformat); 0001-two-views.md (decisi
                     0002-third-person-flight.md (decision 94), 0003-forests-for-low-flight.md
                     (decision 148), 0004-helicopter-flight.md (decision 149),
                     0005-terrain-adaptive-networks.md (decision 161), 0006-displays-and-crew.md
-                    (decision 189) and 0007-world-diversity.md (decision 204) are accepted
+                    (decision 189), 0007-world-diversity.md (decision 204) and
+                    0008-game-loop-and-campaign.md (decision 228) are accepted
+docs/roadmap.md     phases R0–R6 with milestones, dependencies and exit criteria: what to build next
+docs/status/        audits: audit-2026-11-18.md (status matrix, health, decisions for the owner) and
+                    todo-2026-11-18.md (the earlier tracks' TODO, archived)
 docs/plans/         implementation plans: free-flight.md (decision 134), helicopters.md (track H), ground-detail.md (track G),
                     terrain-networks.md (track N), displays.md (P2, P3, P5, P6; decision 189),
                     world-diversity.md (track W; decision 204)
@@ -152,7 +156,7 @@ tests/              Vitest unit tests (node); tests/gpu/ runs WGSL kernels on a 
 tools/              offline previews (npm run maps; terrain/bench *.preview.ts), output in tools/out/;
                     hud/ (pages that draw Free Flight's HUD, cards, session and the software-adapter notice without WebGPU);
                     browser.smoke.mjs runs the built app in Chromium (browser/: launch, page probe, lavapipe shim)
-TODO.md             task list by milestone (F, S, C, V, I tracks, then P and H after the demo, and N, G and W; design.md, Milestones)
+TODO.md             tasks by roadmap phase and milestone (R1, R2 in tasks of a few hours; later phases as milestones)
 ```
 
 ## Rules
@@ -219,6 +223,11 @@ These are the project conventions. Lint enforces some of them (marked ⚙).
     - **Surface character** comes from soil, water and disturbance: riparian corridors, oases, ecotones, fire scars and wind-throw, closed-basin salt and shorelines.
     - Zones, props and wonders read the three layers and never change the province, rock or biome maps; a wonder shapes the tiles on top of them. A new landscape feature names the layer it belongs to and reads only the layers below it.
 
+16. **Mission types are plug-ins** (decision 230, Proposal 0008). A mission type is complete only when all eight parts exist: planner rule with priority scoring, package template, aggregate resolver, full-fidelity behavior for the AI pilots, jump-in windows, success criteria and consequences, briefing template, and interface defaults (master mode, formats and HUD cues per phase). Register it with the mission registry, whose test checks every part; never special-case a mission type in the planner, the resolver or the UI outside its plug-in. `docs/roadmap.md`, *Adding Mission and Aircraft Types*, has the checklist.
+17. **Aircraft types are bundles** (decision 230, Proposal 0008). Every type joins, by its type id in the type registry, its model spec (geometry, animated parts, flight data, pylons, camera rig), its avionics profile (`src/sim/avionics/typeProfiles.ts`), its air-war entry (role tags, performance, crew roles, faction, name, skin) and its calibration values. Add a type by filling every part; the registry's test lists what a type lacks. A type that changes every world's cast needs its own decision.
+18. **Calibration** (decision 230). Aggregate resolvers and full fidelity must agree. Aggregate outcome tables are fitted from headless full-fidelity engagements by a script, stored in the repository, and checked by a tolerance test. A change to a flight model, a weapon or a resolver regenerates the affected tables in the same commit; never tune an aggregate table by hand.
+19. **Event log** (decision 230). Every player input to the campaign and every campaign-level decision is an event in the log, and the consequences of a full-fidelity session return to the simulation as logged events. Nothing outside the log may change campaign state, so replaying the log from a snapshot reproduces the same state. Sim state must be serializable: no hidden RNG state, no closures in the queue, no state held only by the UI.
+
 ## Fidelity as level of detail
 
 Fidelity is a level of detail in both space and time.
@@ -229,19 +238,19 @@ Fidelity is a level of detail in both space and time.
 Every unit exists at one of three levels:
 
 - **Aggregate:** formation, flight or convoy. Always simulated, cheaply.
-- **Entity:** individual vehicles and squads. Simulated only inside a promotion bubble of about 15–25 km around the player (around the followed aircraft or the simulation view's camera until player flight control exists in P1, decisions 49, 72, 94).
-- **Full:** physical simulation (flight model, sensor model, flight director). Used only for the aircraft the player controls or follows, from P1; until then a followed aircraft flies its analytic route. The player flies and never commands ground or naval forces.
+- **Entity:** individual vehicles and squads. Simulated only inside a promotion bubble of about 15–25 km around the player (around the followed or flown aircraft, or the simulation view's camera; decisions 49, 72, 94).
+- **Full:** physical simulation (flight model, sensor model, flight director). Used only for the aircraft the player controls or follows, from roadmap R2.5; until then a followed aircraft flies its analytic route, and only Free Flight's aircraft run at full fidelity. The player flies and never commands ground or naval forces.
 
 Promotion expands a unit deterministically from its seed and current strength. Demotion folds entity losses back into aggregate strength, so nothing destroyed comes back. Design data models so that promotion is possible even before it is implemented.
 
 ## Working rules
 
-- Work on one milestone task at a time. Keep `TODO.md` current: check off finished tasks and add subtasks you discover.
+- Work on one milestone task at a time, in the order `docs/roadmap.md` suggests. Keep `TODO.md` current: check off finished tasks and add subtasks you discover. When a roadmap milestone starts, break it into tasks of a few hours in `TODO.md`; when one closes, update its state in the roadmap.
 - Record any architectural decision, or any deviation from `docs/design.md`, in `docs/decisions.md` with the date, the decision and the reason. In the same commit, update whatever `docs/design.md` or `docs/visual-style.md` says on the subject.
 - Run `npm test` and `npm run typecheck` (or `npm run check`) before declaring a task complete.
 - **The Kestrel's flight is pinned bit for bit** by `tests/flightLockstep.test.ts` (decision 154). A change meant to alter it (tuning, a new force) re-records the fixture with `LOCKSTEP_RECORD=1 npx vitest run tests/flightLockstep.test.ts`, once under Node 22 and once under Node 24 (`PATH=/opt/node24/bin:$PATH node node_modules/vitest/vitest.mjs run …` in a cloud session), and says so in its decision. A refactor must pass it unchanged.
-- **Visual milestones close only after the acceptance checks** in `docs/visual-style.md` for the views they touch. A visual milestone is any milestone with rendering, model or UI tasks (all of S1–S4, V1–V4, I1, P1–P5, H1–H5, G1–G5, N3 and N6–N8, and W3, W4 and W6–W9).
-  - Simulation view (Part I): checks 1–5 as `tools/render.preview.ts` views; check 6, the silhouette test, in the model viewer once aircraft models exist; checks 7–10 (HUD and camera rig) as scripted sequences from V4 on; checks 12–14 (displays and status strip) from P2; checks 15–16 (zones and landmarks) from W6 and W7.
+- **Visual milestones close only after the acceptance checks** in `docs/visual-style.md` for the views they touch. A visual milestone is any milestone with rendering, model or UI tasks; `docs/roadmap.md` lists them (from R1.1, R2.4, R2.6–R2.8 and R2.12 on). Decisions before 228 name the earlier tracks' visual milestones (S, V, I, P, H, G, N3, N6–N8, W3, W4, W6–W9).
+  - Simulation view (Part I): checks 1–5 as `tools/render.preview.ts` views; check 6, the silhouette test, in the model viewer once aircraft models exist; checks 7–10 (HUD and camera rig) as scripted sequences (R2.4 on); checks 12–14 (displays and status strip); checks 15–16 (zones and landmarks; R6.8).
   - Strategic view (Part II): checks 1, 2, 4 and 5 as preview views (4 through simulated color-vision deficiencies); check 3, the ten-second legibility test, with the owner.
   - Read the PNGs next to the reference board in `docs/style/references/` and report to the owner where they match and where they fall short.
   - Add a TODO task for each gap. The milestone's owner checkpoint comes after this comparison, not before.

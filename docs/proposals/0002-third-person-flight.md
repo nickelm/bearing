@@ -138,23 +138,7 @@ The player's aircraft fills the center of the screen for entire missions, so it 
 
 ## Roadmap Changes
 
-The tech demo includes the camera rig and a read-only HUD for followed flights, since milestone V4 already provides a chase camera. Player flight control comes after the demo.
-
-**Extended demo milestone**
-
-- **V4. Transition, camera rig, and spectator HUD.** Follow a flight from mission search into the simulation view and back. Chase camera with per-type rigs, free look, and terrain avoidance. Read-only HUD with flight path marker, tapes, and heading for the followed aircraft.
-
-**New post-demo track: Piloting (P)**
-
-*P2, P3 and P5 as redefined by [proposal 0006](0006-displays-and-crew.md), which also adds P6, companion displays.*
-
-- **P1. Flight model and controls.** Table-driven flight model, flight director shared with the AI, mouse-aim and direct schemes, flight stick support through the Gamepad API, take control and hand back.
-- **P2. HUD and display framework.** Canvas overlay, layout system, world-anchored and screen-anchored symbology, message log, collapsible displays.
-- **P3. Sensors and displays.** Sensor model, avionics profiles, radar, RWR, moving map from the strategic renderer, stores display.
-- **P4. Weapons.** Guns with lead-computing pipper, air-to-air missiles, bombs with CCIP and CCRP, target and weapon cameras, damage states.
-- **P5. Crews and special roles.** AI crewmate and callouts, crew station mode, attack helicopter gunner mode, targeting sensor display, airdrop and sling-load tools with the hook camera.
-
-**Updated dependencies.** P1 depends on V4. P2 depends on P1. P3 depends on P2 and S4. P4 and P5 depend on P3.
+*Superseded by `docs/roadmap.md` (decision 228). This section extended V4 with the camera rig and a read-only HUD and added the piloting track P1–P5 after the demo. Proposal 0008 brings player flight into the tech demo: following and the HUD in R2.4, take control and hand back in R2.5, the first weapons in R2.6; full sensors and weapons in R3; crews in R4.5. Proposal 0006 redefined P2, P3 and P5.*
 
 ## Open Questions
 
