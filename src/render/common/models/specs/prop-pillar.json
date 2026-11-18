@@ -1,0 +1,56 @@
+{
+  "name": "Sandstone pillar",
+  "class": "prop",
+  "groups": {
+    "rock": "#C4925C",
+    "cap": "#965532"
+  },
+  "parts": [
+    {
+      "type": "column",
+      "group": "rock",
+      "sides": 6,
+      "jitter": 0.16,
+      "seed": 5,
+      "rings": [
+        {
+          "y": -9.6,
+          "r": 25.6
+        },
+        {
+          "y": 12.8,
+          "r": 20.8
+        },
+        {
+          "y": 48.0,
+          "r": 16.0,
+          "x": 1.6
+        },
+        {
+          "y": 76.8,
+          "r": 12.8,
+          "x": 3.2
+        }
+      ]
+    },
+    {
+      "type": "column",
+      "group": "cap",
+      "sides": 6,
+      "jitter": 0.12,
+      "seed": 6,
+      "rings": [
+        {
+          "y": 75.2,
+          "r": 19.2,
+          "x": 3.2
+        },
+        {
+          "y": 88.0,
+          "r": 20.0,
+          "x": 3.2
+        }
+      ]
+    }
+  ]
+}

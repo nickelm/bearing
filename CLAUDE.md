@@ -54,8 +54,9 @@ src/core/           units, float64 Vec3d, coordinates, seeded RNG, invented name
 src/worldgen/       planet generation pipeline stages (may use GPU compute); canopy.ts is the canopy height
                     field with its stands (decision 148), shared by the renderer and later the sim;
                     groundCover.ts places the ground cover kit per cell (decision 174), shared the same way;
-                    (track W, planned) provinces.ts, lithology.ts, zones.ts and props.ts: terrain provinces with
-                    continental characters, rock, zones with look recipes, landform prop placement shared with the sim;
+                    (track W) provinces.ts, lithology.ts, zones.ts and props.ts: terrain provinces with
+                    continental characters, rock, zones with look recipes, landform prop placement shared with the sim
+                    (decision 225);
                     closed basins in drainage.ts; wonder candidates in strategic/wonders.ts (decision 204)
   coarsePass.ts     the design's pipeline at 256² on the CPU; campaignWorld.ts adds the validity retries
   edits/            terrain edits (decision 164): pads and corridors, their index by tile, protected
@@ -115,7 +116,7 @@ src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Bo
                     clouds/ (Volumetrics: the march through cloud, fog, dust and rain veils; cloudForm,
                     noiseVolume, the coverage bake and the weather texture; decision 141), forest/ (the canopy
                     shell over the terrain tiles and the kit trees on it, decision 148), ground/ (the ground cover's
-                    ring near a low camera, decision 174), infra/,
+                    ring near a low camera, decision 174), props/ (landform props, decision 225), infra/,
                     lighting/ (PlanetLighting; TerrainShadow, decision 139),
                     post/ (SimPipeline: volumetric stage, overlay, bloom, grade, grain; decision 138),
                     weather/ (WeatherState, the uniforms the effects share, decision 137; Precipitation,

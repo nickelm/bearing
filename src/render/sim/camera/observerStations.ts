@@ -206,7 +206,7 @@ export function roadStations(al: Alignments, radius: number, count = 8): Observe
 export const WONDER_VIEW_DISTANCE = 7000;
 export const WONDER_EYE_HEIGHT = 600;
 /** The height (m) above the ground at the wonder that the sight line aims at: about a shape's top. */
-export const WONDER_TARGET_RISE = 300;
+export const WONDER_TARGET_RISE = 400;
 
 /**
  * Stations at the war's natural wonders (decision 220), `ids` being the
@@ -252,7 +252,15 @@ export function wonderStations(
         if (cost < best) {
           best = cost;
           from = b;
-          height = Math.min(3000, eyeHeight + (blocked > 0 ? 2 * blocked + 100 : 0));
+          // And at least 200 m above the wonder's top (900 m for a caldera, whose lake is seen
+          // from above).
+          height = Math.min(
+            3000,
+            Math.max(
+              eyeHeight + (blocked > 0 ? 2 * blocked + 100 : 0),
+              target + (kindId === 6 ? 900 : 200) - eyeGround,
+            ),
+          );
         }
       }
     }

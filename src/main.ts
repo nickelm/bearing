@@ -17,6 +17,7 @@ import { tileKeyString } from './core/tiles';
 import { DEG, HOUR, KM } from './core/units';
 import { latLonToDirection } from './core/coords';
 import { Vec3d } from './core/vec3d';
+import { WonderKind } from './worldgen/strategic/graph';
 import { DEFAULT_PLANET_PARAMS } from './worldgen/params';
 import type { PlanetParams } from './worldgen/params';
 import { GlobeScene } from './render/sim/globeScene';
@@ -678,6 +679,22 @@ async function main(): Promise<void> {
         // Each zone's palette shift (decision 213).
         zoneShift: global.finish.zones ? makeZoneShift(global.finish.zones, global.n) : undefined,
       });
+      // Landform props from the eroded grid's rock, provinces and biomes (decision 225), dense
+      // at the karst-bay and pillar-forest wonders.
+      const propWonders = (kind: number) =>
+        terrain.wonders.filter((w) => w.kind === kind).map((w) => new Vec3d(...w.dir));
+      globe.props.setMaps(
+        global.finish.province && global.finish.lithology
+          ? {
+              n: global.n,
+              province: global.finish.province,
+              lithology: global.finish.lithology,
+              biome: global.finish.biome,
+              karstWonders: propWonders(WonderKind.KarstBay),
+              pillarWonders: propWonders(WonderKind.PillarForest),
+            }
+          : null,
+      );
       // Mountain shadows are baked from the global heights (decision 139).
       globe.shadows.setHeights(global.height, global.n);
       // Cloud bases, fog and dust now stand on the eroded ground, as drawn (decision 220).

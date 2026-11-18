@@ -1,0 +1,46 @@
+{
+  "name": "Sandstone pillar (far)",
+  "class": "prop",
+  "groups": {
+    "rock": "#C4925C",
+    "cap": "#965532"
+  },
+  "parts": [
+    {
+      "type": "column",
+      "group": "rock",
+      "sides": 5,
+      "jitter": 0.12,
+      "seed": 5,
+      "rings": [
+        {
+          "y": -9.6,
+          "r": 24.0
+        },
+        {
+          "y": 76.8,
+          "r": 14.4,
+          "x": 3.2
+        }
+      ]
+    },
+    {
+      "type": "column",
+      "group": "cap",
+      "sides": 5,
+      "seed": 6,
+      "rings": [
+        {
+          "y": 75.2,
+          "r": 19.2,
+          "x": 3.2
+        },
+        {
+          "y": 88.0,
+          "r": 19.2,
+          "x": 3.2
+        }
+      ]
+    }
+  ]
+}

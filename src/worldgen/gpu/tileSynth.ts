@@ -338,7 +338,7 @@ function wondersWgsl(wonders: readonly TileWonder[], R: number): string {
   const W = WONDER_SHAPES;
   const list = wonders.filter((w) => SHAPED_WONDERS.has(w.kind));
   if (list.length === 0)
-    return 'fn shapeWonders(d: vec3f, h: f32) -> vec2f { return vec2f(h, NO_LAKE); }';
+    return 'fn shapeWonders(d: vec3f, h: f32) -> vec3f { return vec3f(h, NO_LAKE, NO_LAKE); }';
   const reach = Math.cos(
     (Math.max(W.tepuiRadius * 1.4 + W.tepuiWall, W.calderaRadius * 2) + 2000) / R,
   );
@@ -352,10 +352,12 @@ function wondersWgsl(wonders: readonly TileWonder[], R: number): string {
 const WONDER_COUNT: i32 = ${list.length};
 const WONDERS = array<vec4f, ${list.length * 2}>(
   ${items});
-// The selected wonders' shapes (decision 221), on top of the ground (rule 15).
-fn shapeWonders(d: vec3f, hIn: f32) -> vec2f {
+// The selected wonders' shapes (decision 221), on top of the ground (rule 15):
+// (height, lake level or NO_LAKE, least channel floor or NO_LAKE).
+fn shapeWonders(d: vec3f, hIn: f32) -> vec3f {
   var h = hIn;
   var lake = NO_LAKE;
+  var channel = NO_LAKE;
   for (var i = 0; i < WONDER_COUNT; i++) {
     let w = WONDERS[i * 2];
     let c = dot(d, w.xyz);
@@ -382,6 +384,11 @@ fn shapeWonders(d: vec3f, hIn: f32) -> vec2f {
       } else {
         h = max(h, rim - (dist - r) * 0.22);
       }
+      // A river through the caldera fills its lake and leaves by an outlet (decision 225):
+      // its channel stays under the water inside and starts at the lake's surface through
+      // the rim, falling to the valley outside, not a gorge below the lake.
+      let level = floor + 0.6 * (rim - floor);
+      channel = max(channel, level - 2.0 - max(dist - 0.84 * r, 0.0) * 0.12);
     } else if (kind == 9) {
       // Monolith: a dome with near-vertical flanks over the plain.
       let x = dist / ${f(W.monolithRadius)};
@@ -393,7 +400,7 @@ fn shapeWonders(d: vec3f, hIn: f32) -> vec2f {
       h = mix(h, min(h, -${f(W.blueHoleDepth)}), wall);
     }
   }
-  return vec2f(h, lake);
+  return vec3f(h, lake, channel);
 }
 `;
 }
@@ -1061,7 +1068,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   // The war's natural wonders (decision 221), after the rivers: a river's valley would
   // cut a shape away, so only its channel keeps its cut, a gorge through a wall or rim.
   let shaped = shapeWonders(d, h);
-  h = mix(shaped.x, min(h, shaped.x), riverCover);
+  h = mix(shaped.x, max(min(h, shaped.x), shaped.z), riverCover);
 
   // Lake water stands only on the lake's cells (decision 129): elsewhere within the
   // lake level's reach, ground the interpolation or detail left below the level is

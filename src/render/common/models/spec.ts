@@ -61,6 +61,8 @@ export const MODEL_BUDGETS = {
   tree: [12, 80],
   /** Ground cover (decision 172): tufts, reeds, bushes, boulders, slabs, pebbles. */
   cover: [8, 40],
+  /** Landform props (decision 204): karst towers, pillars, stacks, inselbergs; 30–200. */
+  prop: [30, 200],
   carrier: [2000, 5000],
   ship: [400, 2000],
 } as const satisfies Record<string, readonly [number, number]>;
@@ -162,7 +164,21 @@ export type PartSpec =
       roofGroup: string;
       yaw?: number;
     })
-  | (PartBase & { type: 'mast'; center: Vec3; height: number; base: number; top: number });
+  | (PartBase & { type: 'mast'; center: Vec3; height: number; base: number; top: number })
+  | (PartBase & {
+      /**
+       * A vertical column of rings (decision 225): landform props' towers, pillars and
+       * domes. Each ring has a height, a radius and an offset (x, z) for lean and bulge;
+       * `jitter` moves each ring vertex in or out by up to ± that fraction; the base is
+       * closed and the top ends in a peak `top` m above the last ring (0: flat).
+       */
+      type: 'column';
+      sides: number;
+      rings: { y: number; r: number; x?: number; z?: number }[];
+      top?: number;
+      jitter?: number;
+      seed?: number;
+    });
 
 export type PartType = PartSpec['type'];
 
@@ -237,6 +253,7 @@ const FIELDS: Record<
   arch: { center: 'vec3', length: 'number', width: 'number', height: 'number', sides: 'number' },
   house: { center: 'vec3', size: 'vec3', roof: 'number', roofGroup: 'string' },
   mast: { center: 'vec3', height: 'number', base: 'number', top: 'number' },
+  column: { sides: 'number' },
 };
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
@@ -277,6 +294,21 @@ export function validateSpec(raw: unknown, id = '?'): ModelSpec {
     const known = (g: unknown) => typeof g === 'string' && (g in groups || g in MODEL_COLORS);
     if (!known(part.group))
       fail(`${path}.group`, `group "${String(part.group)}" has no color in groups`);
+    if (type === 'column') {
+      const rings = part.rings;
+      if (
+        !Array.isArray(rings) ||
+        rings.length < 1 ||
+        !rings.every(
+          (r) =>
+            typeof r === 'object' &&
+            r !== null &&
+            isNum((r as { y: unknown }).y) &&
+            isNum((r as { r: unknown }).r),
+        )
+      )
+        fail(`${path}.rings`, 'must be a list of { y, r } rings');
+    }
     for (const [k, kind] of Object.entries(fields)) {
       const v = part[k];
       const ok =

@@ -434,7 +434,38 @@ function emitPart(s: Sink, p: PartSpec, groups: Record<string, string>): void {
       return house(s, p);
     case 'mast':
       return mast(s, p);
+    case 'column':
+      return column(s, p);
   }
+}
+
+function column(s: Sink, p: Extract<PartSpec, { type: 'column' }>): void {
+  const j = p.jitter ?? 0;
+  const seed = p.seed ?? 0;
+  const rings: V[][] = p.rings.map((ring, i) =>
+    Array.from({ length: p.sides }, (_, k) => {
+      const t = ((k + 0.5) / p.sides) * Math.PI * 2;
+      const f = 1 + j * (2 * hash(i, k, 7, seed) - 1);
+      const r = ring.r * f;
+      return [(ring.x ?? 0) + r * Math.cos(t), ring.y, (ring.z ?? 0) + r * Math.sin(t)] as V;
+    }),
+  );
+  const axis = (i: number): V => [p.rings[i]!.x ?? 0, p.rings[i]!.y, p.rings[i]!.z ?? 0];
+  for (let i = 0; i + 1 < rings.length; i++) {
+    const a = axis(i);
+    const b = axis(i + 1);
+    ringStack(s, [rings[i]!, rings[i + 1]!], p.group, scale(add(a, b), 0.5), false);
+  }
+  const n = rings.length;
+  s.fan(rings[0]!, p.group, axis(Math.min(1, n - 1)));
+  const last = rings[n - 1]!;
+  const topH = p.top ?? 0;
+  if (topH > 0) {
+    const c = axis(n - 1);
+    const apex: V = [c[0], c[1] + topH, c[2]];
+    for (let k = 0; k < last.length; k++)
+      s.tri(last[k]!, last[(k + 1) % last.length]!, apex, p.group, axis(Math.max(0, n - 2)));
+  } else s.fan(last, p.group, axis(Math.max(0, n - 2)));
 }
 
 // ---- Color ----

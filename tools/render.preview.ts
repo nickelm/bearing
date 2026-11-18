@@ -984,6 +984,18 @@ it('renders preview views', async () => {
   // Mountain shadows (decision 139) from the global heights; SHADOW=0 leaves them out.
   // SPARKLE=0 leaves the snow's glints out; WET=x (0..1) wets the ground whatever the weather.
   if (process.env.SHADOW !== '0') scene.shadows.setHeights(global.height, global.n);
+  // Landform props (decision 225), as main.ts sets them; PROPS=0 leaves them out.
+  const propWonders = (kind: number) =>
+    wonders.filter((w) => w.kind === kind).map((w) => new Vec3d(...w.dir));
+  if (process.env.PROPS !== '0' && global.finish.province && global.finish.lithology)
+    scene.props.setMaps({
+      n: global.n,
+      province: global.finish.province,
+      lithology: global.finish.lithology,
+      biome: global.finish.biome,
+      karstWonders: propWonders(2),
+      pillarWonders: propWonders(3),
+    });
   if (process.env.SPARKLE === '0') scene.terrain.land.sparkle.value = 0;
   // MICRO=x scales the ground's micro-facets (decision 168; 0 = off); GLINT=x their glints.
   if (process.env.MICRO) scene.terrain.micro.strength.value = Number(process.env.MICRO);
@@ -1710,10 +1722,12 @@ it('renders preview views', async () => {
       const s = scene.terrain.stats;
       const sig = `${s.drawn}/${s.deepest}/${s.meshes}`;
       if (process.env.DEBUG) console.log(v.name, f, JSON.stringify(s), o.tilt, o.altitude);
+      if (process.env.DEBUG_PROPS) console.log('props', scene.props.group.visible, JSON.stringify(scene.props.stats));
       const treesPending =
         (scene.forest.group.visible ? scene.forest.stats.pending : 0) +
         (scene.structures.group.visible ? scene.structures.stats.pending : 0) +
-        (scene.groundCover.group.visible ? scene.groundCover.stats.pending : 0);
+        (scene.groundCover.group.visible ? scene.groundCover.stats.pending : 0) +
+        (scene.props.group.visible ? scene.props.stats.pending : 0);
       stable = s.pending === 0 && treesPending === 0 && sig === last ? stable + 1 : 0;
       last = sig;
     }
@@ -2194,6 +2208,12 @@ it('renders preview views', async () => {
     if (scene.forest.stats.instances) {
       console.log(
         `  trees: ${scene.forest.stats.tiles} parts, ${scene.forest.stats.instances} trees, ${(scene.forest.stats.triangles / 1e6).toFixed(2)} M triangles; ${scene.terrain.stats.shells} canopy shells`,
+      );
+    }
+    if (scene.props.stats.instances) {
+      const ps = scene.props.stats;
+      console.log(
+        `  props: ${ps.chunks} tiles, ${ps.instances} props in ${ps.draws} draws, ${(ps.triangles / 1e6).toFixed(3)} M triangles`,
       );
     }
     if (scene.groundCover.stats.instances) {

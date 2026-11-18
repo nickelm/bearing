@@ -3768,3 +3768,27 @@ The complements follow the proposal's examples:
 Radar figures are the detection range against a 5 m² fighter, from approximate public figures: 100 km for the F-15C and Su-27 analogues, 150 km for the F-14A's, 80 km for the F/A-18C's, 70 km for the F-16C's and MiG-29's, 55 km for the MiG-23ML's and F-4G's. Pact sets have wider Doppler notches (50–90 m/s against 40), so they lose more beaming targets in look-down. Free Flight's Pact fighters take the MiG-29 analogue's radar (it was a placeholder of 60 km). Two formats join the list without a drawing yet, the gunner sight and airdrop; an aircraft that lists them shows its other formats until they exist. `TODO.md` and `CLAUDE.md`'s directory map change with this decision.
 
 **Reason:** P3's step 2. The sensor model needs each type's radar to be what the AI and a followed aircraft see with, and P5's crews and the follow mode need a profile for whatever aircraft the player picks.
+
+### 225. Landform props, first kinds: tower karst, sandstone pillars, inselbergs; crater lakes with outlets
+
+**Date:** 2026-11-18
+**Decision:** W7's first version, and the owner's note on Keimen Crater.
+
+1. **The `column` part.** Model specs gain a vertical column of rings: per ring a height, a radius and an (x, z) offset for lean and bulge, a radial jitter, a closed base and an optional peak. Landform props are a model class of their own, `prop`, at 30–200 triangles (Part I's budgets).
+2. **Kit.** Each kind has a full and a far version: karst tower (148 m at scale 1, an undercut base, a lean and a green cap; 80 and 34 triangles), sandstone pillar (88 m, a hoodoo with its darker caprock; 64 and 32) and inselberg (133 m, a dome 250 m across; 70 and 34).
+3. **Placement** (`worldgen/props.ts`, pure, `rng(seed, "props")`). One candidate per cell of four level-7 samples (about 190 m), at a hashed spot, with a hashed scale and turn. It reads the landform and biome layers only (rule 15):
+   - **Tower karst:** in limestone or karst platform, 0.3 per cell under a wet, warm biome, 0.03 elsewhere.
+   - **Drowned towers:** in sea up to 40 m deep with limestone within about a global cell, 0.22 per cell.
+   - **Pillars:** in layered sandstone in a dry biome, 0.05 per cell.
+   - **Inselbergs:** on granite of shields and old mountains under savanna, desert, scrub or grassland, on slopes under 8%, 0.006 per cell.
+   - **Clumping:** a value noise of about 1.5 km scales the chance from none to twice the mean, so props stand in fields with gaps.
+   - **Wonders:** karst-bay and pillar-forest wonders raise the chance to 0.5 at the wonder, falling off to 6 km. These two kinds of wonder are now fields of props.
+   - **Exclusions:** lakes, river water, and the infrastructure's clearings, widened by a quarter of the prop's height.
+4. **Layer** (`render/sim/props/propLayer.ts`). A level-7 data tile is one chunk, placed once when it comes within reach. One instanced mesh per kind and level of detail: full models within 2.5 km, far ones to 8 km, none while the eye is more than 9 km over the ground. A prop sinks to the lowest ground under its footprint, so it stands on slopes. Flat-shaded under the planet's light, with aerial perspective, anchored at the eye (rule 4). At Fust Towers on seed 1983: 1,300 props in 2 draws, 0.05 M triangles.
+5. **Not yet.** There are no collision shapes for the flight model, the camera or line of sight (rule 12's flight is unchanged, and the Kestrel lockstep with it). Also missing: sea stacks, arches and basalt columns, snow on props, and zone tints.
+6. **Crater lakes with outlets.** On Keimen Crater the owner saw a deep river beside the lake that never reached it: the river's channel kept its full cut through the rim (decision 221). Within a caldera, a river's channel now stays under the lake inside the bowl. Through the rim it starts at the lake's surface and falls 0.12 m per m to the valley. The river fills the lake and leaves by an outlet.
+7. **Stations.** A caldera's station stands at least 900 m above the wonder's ground plus 400 m, so its lake shows from above. Other wonders keep 200 m.
+
+`docs/visual-style.md` (*Landform Props*, *Natural wonders*) and `docs/design.md` change with this decision; `TODO.md` lists what is left of W7.
+
+**Reason:** W7 is track W's most striking landscape that the height field cannot hold, and the karst-bay and pillar-forest wonders waited for it.

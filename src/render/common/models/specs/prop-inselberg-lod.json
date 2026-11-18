@@ -1,0 +1,20 @@
+{
+  "name": "Inselberg (far)",
+  "class": "prop",
+  "groups": { "rock": "#9A928A" },
+  "parts": [
+    {
+      "type": "column",
+      "group": "rock",
+      "sides": 6,
+      "jitter": 0.08,
+      "seed": 8,
+      "rings": [
+        { "y": -10, "r": 125 },
+        { "y": 60, "r": 102, "x": 5 },
+        { "y": 105, "r": 62, "x": 10, "z": 4 }
+      ],
+      "top": 28
+    }
+  ]
+}

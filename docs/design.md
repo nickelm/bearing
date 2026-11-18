@@ -188,7 +188,7 @@ Casting turns the detected theaters into a campaign. It draws from `rng("casting
 3. **Set posture.** By default the Pact attacks and the Alliance defends in every theater.
 4. **Set the range factor** as described in *Scale and Range*.
 5. **Mark industry, port, base, and ground-combat regions** for each side, consistent with its territory and theaters. Industry regions sit on each side's largest urban clusters. Infrastructure placement (pipeline step 12) then puts the sites inside these regions.
-6. **Select the natural wonders** (decision 204). From the graph's candidates, 5 to 15, favoring those near fronts, sea lanes and airbases, drawn from `rng("wonders")` so casting's own stream is unchanged. The tiles shape the tepuis, calderas, monoliths and blue holes (decision 221), the map labels them, and the alignment keeps roads and railways out of them.
+6. **Select the natural wonders** (decision 204). From the graph's candidates, 5 to 15, favoring those near fronts, sea lanes and airbases, drawn from `rng("wonders")` so casting's own stream is unchanged. The tiles shape the tepuis, calderas, monoliths and blue holes (decision 221), props crowd the karst bays and pillar forests (decision 225), the map labels them, and the alignment keeps roads and railways out of them.
 7. **Write the briefing.** A generated summary of the war the world produced: the theaters, the stakes in each, the first expected moves, and the wonders that serve as landmarks.
 
 Casting runs before the player picks a side, and the cast does not depend on that choice. The same seed always produces the same war, and it unfolds identically until the player intervenes.

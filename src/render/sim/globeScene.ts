@@ -36,6 +36,7 @@ import { Volumetrics } from './clouds/volumetrics';
 import { WeatherTexture } from './clouds/weatherTexture';
 import { ForestLayer } from './forest/forestLayer';
 import { GroundCoverLayer } from './ground/groundCoverLayer';
+import { PropLayer } from './props/propLayer';
 import { RotorDust } from './ground/rotorDust';
 import { GlobeMesh } from '../common/globeMesh';
 import { PlanetLighting } from './lighting/planetLighting';
@@ -116,6 +117,8 @@ export class GlobeScene {
   readonly forest: ForestLayer;
   /** Ground cover near a low camera (decision 174). */
   readonly groundCover: GroundCoverLayer;
+  /** Landform props: tower karst, pillars, inselbergs (decision 225). */
+  readonly props: PropLayer;
   /** Buildings of towns, airbases and industry near the camera (decision 65). */
   readonly structures: StructureLayer;
   /** Bridges and viaducts of the aligned roads and railways (decision 192). */
@@ -214,6 +217,7 @@ export class GlobeScene {
       this.climate,
       this.terrain.land,
     );
+    this.props = new PropLayer(this.terrain, this.lighting);
     this.structures = new StructureLayer(this.terrain, this.lighting);
     this.bridges = new BridgeLayer(this.terrain, this.lighting);
     // The sky, drawn behind everything: its LUT, the sun, the moon and the stars (decision 140).
@@ -225,6 +229,7 @@ export class GlobeScene {
       this.terrain.group,
       this.forest.group,
       this.groundCover.group,
+      this.props.group,
       this.structures.group,
       this.bridges.group,
       this.clouds.group,
@@ -322,6 +327,7 @@ export class GlobeScene {
     this.structures.setScene(scene);
     this.forest.setInfrastructure(scene);
     this.groundCover.setInfrastructure(scene);
+    this.props.setInfrastructure(scene);
     this.rotorDust?.setInfrastructure(scene);
   }
 
@@ -487,11 +493,13 @@ export class GlobeScene {
         (this.camera.fov * Math.PI) / 180 / this.viewportHeight,
       );
       this.structures.update(o.eye, aboveGround, cull);
+      this.props.update(o.eye, aboveGround);
       this.bridges.update(o.eye, aboveGround);
     } else {
       this.bridges.group.visible = false;
       this.forest.group.visible = false;
       this.groundCover.group.visible = false;
+      this.props.group.visible = false;
       if (this.rotorDust) this.rotorDust.group.visible = false;
       this.structures.group.visible = false;
     }
@@ -561,6 +569,7 @@ export class GlobeScene {
     this.terrain.dispose();
     this.forest.dispose();
     this.groundCover.dispose();
+    this.props.dispose();
     this.structures.dispose();
     this.bridges.dispose();
     this.clouds.dispose();

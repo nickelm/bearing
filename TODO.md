@@ -1245,11 +1245,14 @@ The owner flew the branch before the merge: erosion and the vistas are intact an
 
 ### W7. Landform props (stretch)
 
-- [ ] Specs: karst towers, sandstone pillars, sea stacks and arches, hoodoos, natural arches, basalt column clusters, small inselbergs, within the budgets; silhouettes in the model viewer
-- [ ] `worldgen/props.ts`: pure placement by cell from province, rock and relief (`rng(seed, "props")`), drowned towers on the shelf; shared with the sim
-- [ ] Instanced layer with two levels of detail within about 6 km
+- [x] Specs (decision 225): karst tower, sandstone pillar (a hoodoo with its caprock), inselberg, each with a far version, built from the new `column` part; 34–80 triangles
+  - [ ] Sea stacks and arches, natural arches, basalt column clusters; silhouettes in the model viewer
+  - [ ] Karst towers read as standing stones more than Guilin's cones: wider bases, more green on the shoulders
+- [x] `worldgen/props.ts` (decision 225): pure placement per 190 m cell from rock, province and biome (`rng(seed, "props")`), clumped by a 1.5 km noise, drowned towers on the karst shelf, dense at karst-bay and pillar-forest wonders
+- [x] Instanced layer (`render/sim/props/propLayer.ts`): full models within 2.5 km, far ones to 8 km, none above 9 km over the ground; Fust Towers on seed 1983: 1,300 props, 0.05 M triangles, 2 draws
 - [ ] Collision shapes queried by flight contact, the camera's clearance and line of sight beside the canopy; the Kestrel lockstep unchanged
-- [ ] `PERF` in the `karst` view: at most 0.3 M triangles and 40 draws for props; acceptance check 16's karst bay
+- [ ] `PERF` in a dense karst view: at most 0.3 M triangles and 40 draws for props (0.05 M and 2 draws at Fust Towers, without PERF timing); acceptance check 16's karst bay
+- [ ] Snow on props' tops in cold climates; props' colors from the zone's palette shift
 
 ### W8. Natural wonders (stretch)
 

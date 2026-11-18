@@ -1,0 +1,21 @@
+{
+  "name": "Inselberg",
+  "class": "prop",
+  "groups": { "rock": "#9A928A" },
+  "parts": [
+    {
+      "type": "column",
+      "group": "rock",
+      "sides": 9,
+      "jitter": 0.1,
+      "seed": 8,
+      "rings": [
+        { "y": -10, "r": 125 },
+        { "y": 25, "r": 118 },
+        { "y": 70, "r": 98, "x": 6 },
+        { "y": 105, "r": 62, "x": 10, "z": 4 }
+      ],
+      "top": 28
+    }
+  ]
+}

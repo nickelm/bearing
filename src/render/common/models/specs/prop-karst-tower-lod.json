@@ -1,0 +1,35 @@
+{
+  "name": "Karst tower (far)",
+  "class": "prop",
+  "groups": {
+    "rock": "#C9C3B6",
+    "green": "leaf"
+  },
+  "parts": [
+    {
+      "type": "column",
+      "group": "rock",
+      "sides": 6,
+      "jitter": 0.1,
+      "seed": 3,
+      "rings": [
+        {
+          "y": -8,
+          "r": 21
+        },
+        {
+          "y": 50,
+          "r": 25,
+          "x": 3
+        },
+        {
+          "y": 132,
+          "r": 15,
+          "x": 8,
+          "z": 3
+        }
+      ],
+      "top": 18
+    }
+  ]
+}
