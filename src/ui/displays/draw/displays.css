@@ -84,6 +84,37 @@
   background: #2f3236;
   cursor: default;
 }
+/* The frame's pin and minimize icons in the bezel's top corners (decision 222). */
+.dsp-icon {
+  position: absolute;
+  box-sizing: border-box;
+  padding: 1px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  fill: #8a9096;
+  opacity: 0.75;
+}
+.dsp-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.dsp-icon:hover {
+  opacity: 1;
+  fill: #c9ced3;
+}
+.dsp-pin svg {
+  transform: rotate(40deg);
+  transition: transform 150ms ease;
+}
+.dsp-pin.dsp-on {
+  fill: var(--phosphor);
+  opacity: 1;
+}
+.dsp-pin.dsp-on svg {
+  transform: none;
+}
 .dsp-tab {
   position: absolute;
   box-sizing: border-box;

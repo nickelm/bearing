@@ -3728,3 +3728,10 @@ Siting takes 0.3–1.7 s per world on the main thread. On seed 1983, Vaureko mov
 `docs/design.md` and `docs/visual-style.md` (*Base kit*, *Natural wonders*) change with this decision.
 
 **Reason:** The owner's review asked for visible fields and findable wonders; the station of decision 220 showed the place, and this makes most of the shaped kinds into landmarks.
+
+### 222. The pin and minimize are the frame's icons, not bezel buttons
+
+**Date:** 2026-11-18
+**Decision:** The owner's review of P3a: MIN and the pin took two of the top row's bezel buttons on every display (decision 217). They are now small icons in the bezel's top corners, drawn by the frame rather than by the format: the pin at the left, upright and in the phosphor color while the slot is pinned, tilted and gray otherwise; minimize at the right, a bar for the tab the display collapses to. The top row of buttons spans between the icons, so all twenty bezel buttons (five on small displays) belong to the format again. The display model carries `pinned`, and the view issues the same UI commands as before (`pin`, `toggle-slot`). `docs/visual-style.md` (Part I, *Displays and Status Strip*, one frame) changes with this decision.
+
+**Reason:** The owner's review. Pin and minimize act on the slot, not on the format, so they belong to the frame, and the formats need the buttons.

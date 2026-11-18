@@ -274,9 +274,10 @@ describe('display models', () => {
     }
     // The bottom row selects the slot's formats; the format shown is highlighted.
     expect(left.buttons[14]).toMatchObject({ label: 'MAP', active: true });
-    // Every display minimizes to its tab and pins (decision 217).
-    expect(left.buttons[3]).toMatchObject({ label: 'MIN' });
-    expect(msgs.buttons[3]).toMatchObject({ label: 'MIN' });
+    // The pin and minimize are the frame's icons, not bezel buttons (decision 222): the
+    // model says whether the slot is pinned, and the top row's buttons stay the format's.
+    expect(left.pinned).toBe(false);
+    for (const m of [left, msgs]) expect(m.buttons.filter((b) => b?.label === 'MIN')).toEqual([]);
     expect(left.buttons[13]).toMatchObject({ label: 'ENG', active: false });
   });
 });

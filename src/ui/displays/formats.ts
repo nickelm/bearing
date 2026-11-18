@@ -72,17 +72,6 @@ export function displayModel(
   const buttons: (BezelButton | null)[] = new Array<BezelButton | null>(
     large(slot) ? BEZEL_BUTTONS : SMALL_BUTTONS,
   ).fill(null);
-  // Top row, right end: minimize (to the slot's tab) and the pin.
-  buttons[3] = {
-    label: 'MIN',
-    active: false,
-    command: { to: 'ui', command: { type: 'toggle-slot', slot } },
-  };
-  buttons[4] = {
-    label: st.pinned ? 'PIN' : 'pin',
-    active: st.pinned,
-    command: { to: 'ui', command: { type: 'pin', slot, pinned: !st.pinned } },
-  };
   if (format === 'moving-map') {
     // Left side, top: the range up and down; right side, top: north-up or track-up.
     const pic = (delta: 1 | -1) => ({
@@ -145,6 +134,7 @@ export function displayModel(
     format,
     title: FORMAT_TITLES[format],
     owner: null,
+    pinned: st.pinned,
     buttons,
     items: FORMATS[format]!(s, d, slot),
     alert: false,

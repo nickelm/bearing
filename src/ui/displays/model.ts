@@ -104,6 +104,11 @@ export interface DisplayModel {
   title: string;
   /** Who works the format: the player, or a crewmate's role (P5). */
   owner: string | null;
+  /**
+   * The slot is pinned. The frame, not the format, carries the pin and the minimize
+   * control: icons in the bezel's top corners (decision 222).
+   */
+  pinned: boolean;
   /** Buttons by position (`BEZEL_BUTTONS` or `SMALL_BUTTONS`); null leaves a position blank. */
   buttons: (BezelButton | null)[];
   items: ScreenItem[];

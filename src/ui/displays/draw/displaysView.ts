@@ -22,12 +22,21 @@ import type {
 
 const SLOTS: Exclude<SlotId, 'strip'>[] = ['leftMfd', 'rightMfd', 'messages', 'threat'];
 
+/** A push pin, upright when pinned (CSS turns it while unpinned). */
+const PIN_ICON =
+  '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 2h6v1.5l-1 1V8l2.5 2v1.5H8.8V15H7.2v-3.5H3.5V10L6 8V4.5l-1-1z"/></svg>';
+/** Minimize: a bar at the bottom, the tab the display collapses to. */
+const MIN_ICON = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 11.5h10V14H3z"/></svg>';
+
 interface SlotEls {
   box: HTMLDivElement;
   screen: HTMLCanvasElement;
   title: HTMLDivElement;
   buttons: HTMLButtonElement[];
   tab: HTMLButtonElement;
+  /** The frame's icons in the bezel's top corners: the pin (left) and minimize (right). */
+  pin: HTMLButtonElement;
+  min: HTMLButtonElement;
   drawn: string;
   rect: string;
 }
@@ -63,7 +72,23 @@ export class DisplaysView {
       tab.addEventListener('click', () =>
         this.send({ to: 'ui', command: { type: 'toggle-slot', slot: id } }),
       );
-      box.append(screen, title);
+      // The frame's own controls (decision 222): small icons in the bezel's top corners,
+      // so every bezel button stays the format's.
+      const pin = document.createElement('button');
+      pin.className = 'dsp-icon dsp-pin';
+      pin.innerHTML = PIN_ICON;
+      pin.addEventListener('click', () => {
+        const m = this.shown.get(id);
+        if (m) this.send({ to: 'ui', command: { type: 'pin', slot: id, pinned: !m.pinned } });
+      });
+      const min = document.createElement('button');
+      min.className = 'dsp-icon dsp-min';
+      min.innerHTML = MIN_ICON;
+      min.title = 'Minimize to the tab';
+      min.addEventListener('click', () =>
+        this.send({ to: 'ui', command: { type: 'toggle-slot', slot: id } }),
+      );
+      box.append(screen, title, pin, min);
       // The wheel over the map steps its range in cursor mode (Proposal 0006; decision 202).
       let wheel = 0;
       box.addEventListener(
@@ -83,7 +108,17 @@ export class DisplaysView {
         { passive: false },
       );
       this.root.append(box, tab);
-      this.slots.set(id, { box, screen, title, buttons: [], tab, drawn: '', rect: '' });
+      this.slots.set(id, {
+        box,
+        screen,
+        title,
+        buttons: [],
+        tab,
+        pin,
+        min,
+        drawn: '',
+        rect: '',
+      });
     }
     this.strip.addEventListener('click', (e) => {
       const el = (e.target as HTMLElement).closest('[data-cmd]');
@@ -176,6 +211,8 @@ export class DisplaysView {
     el.tab.textContent = m ? `${m.title} ▴` : '';
     if (!m) return;
     el.box.classList.toggle('dsp-alert', m.alert);
+    el.pin.classList.toggle('dsp-on', m.pinned);
+    el.pin.title = m.pinned ? 'Pinned: keeps its format in every mode (click to unpin)' : 'Pin';
     const rectKey = JSON.stringify(rect);
     const n = m.buttons.length;
     if (el.rect !== rectKey || el.buttons.length !== n) {
@@ -220,6 +257,20 @@ export class DisplaysView {
     const inner = { w: r.width - 4, h: r.height - 4 };
     const bw = Math.round(bez * 0.75);
     const span = (len: number, i: number) => ((i + 0.5) / 5) * len;
+    // The frame's icons in the top corners; the top row of buttons spans between them.
+    const icon = Math.max(12, Math.round(top * 0.8));
+    const corner = icon + 4;
+    for (const [b, left] of [
+      [el.pin, true],
+      [el.min, false],
+    ] as const)
+      place(b, {
+        x: left ? 2 : inner.w - icon - 2,
+        y: Math.round((top - icon) / 2),
+        width: icon,
+        height: icon,
+      });
+    const topSpan = (i: number) => corner + span(inner.w - 2 * corner, i);
     for (let i = 0; i < n; i++) {
       const b = document.createElement('button');
       b.className = 'dsp-osb';
@@ -229,7 +280,7 @@ export class DisplaysView {
       let w = bw * 1.6;
       let h = bw * 0.7;
       if (i < 5) {
-        x = span(inner.w, k) - w / 2;
+        x = topSpan(k) - w / 2;
         y = (top - h) / 2;
       } else if (i < 10) {
         [w, h] = [h, w];
