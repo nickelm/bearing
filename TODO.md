@@ -789,7 +789,9 @@ The sensor model, avionics profiles with display complements, datalink tracks, t
   - [x] Pact skins: the radar's ranges in round kilometers (20, 40, 80, 150), not converted nautical miles (decision 223)
 - [x] Threat warning format: RWR symbols by bearing and type, lock and launch indications (decision 218)
   - [x] A new threat's audio tone and a message call (decision 223)
-- [ ] Air-to-ground radar format: ground map, moving-target mode; the terrain-following scope for the F-111 and Su-24 analogues
+- [x] Air-to-ground radar format: the ground map (decision 226)
+  - [ ] Moving-target mode (with ground vehicles); the terrain-following scope for the F-111 and Su-24 analogues
+  - [ ] Cultural returns from settlements and roads in the ground map (Free Flight paints only runways and airfield pads bright)
 - [ ] Stores format: pylons and weapons, selection, fuzing, release mode (CCIP or CCRP), quantity and ripple, jettison, countermeasure programs
 - [ ] Engines and fuel format, complete: engine states, damage and failures
 - [ ] Comms format: radio channels, AWACS and controller calls, wingman commands, ATC, message history

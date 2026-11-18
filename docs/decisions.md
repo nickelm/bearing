@@ -3793,3 +3793,17 @@ Radar figures are the detection range against a 5 m² fighter, from approximate 
 `docs/visual-style.md` (*Landform Props*, *Natural wonders*) and `docs/design.md` change with this decision; `TODO.md` lists what is left of W7.
 
 **Reason:** W7 is track W's most striking landscape that the height field cannot hold, and the karst-bay and pillar-forest wonders waited for it.
+
+### 226. The air-to-ground radar's ground map
+
+**Date:** 2026-11-18
+**Decision:** The air-to-ground radar format (`radar-ag`, labeled GMR) shows a ground map: a B-scope of the ground ahead, azimuth across (±60°) and ground range up, the returns as the phosphor's intensity.
+
+- **The model** (`sim/sensors/groundMap.ts`, headless and deterministic). Each of 72 columns is a ray along the ground; each of 60 cells along it is in radar shadow when nearer ground stands higher in the radar's view, else it returns by the grazing angle between the beam and the local slope, divided by level ground's at that range (the receiver's gain rises with range, as sensitivity time control does), so level ground paints an even gray, slopes facing the aircraft bright and slopes facing away dark. Water reflects the beam away and paints nearly black, so coasts, lakes and islands stand out. Hard surfaces return strongly: in Free Flight, runways and graded airfield pads. A fixed speckle per 150 m patch of ground gives the grain without flicker. The ground enters through the host's height and water queries, through the one height function (rule 13).
+- **In Free Flight** the map is painted from the drawn ground every 2 s of game time while a display shows it (about 4,300 height queries), and carried in the snapshot with its age; a map older than 6 s says NO UPDATE.
+- **The format.** The raster fills the scope; range ticks at quarters, the aircraft's mark at the bottom center, the range at the left, the destination as a diamond where it lies on the map. Buttons: RNG▲ and RNG▼ step the range, 5, 10, 20 and 40 nm (10, 20, 40 and 80 km in Pact skins), an avionics command (`ground-radar-range`). Display models gain a `raster` item (intensities 0–255, plain data).
+- **A preview** (`tools/groundMap.preview.ts`) paints the map over a generated world's coast beside a height map of the same sector, and writes the map as JSON for the displays page (`&gmr=`).
+
+Moving-target mode waits for ground vehicles, and the terrain-following scope for an aircraft that carries the system to be flown. `docs/visual-style.md` (Part I, scopes), `TODO.md` and `CLAUDE.md` change with this decision.
+
+**Reason:** P3's air-to-ground radar, the format the strike aircraft's profiles (decision 224) put first on their right display. Its picture comes from the same terrain the aircraft flies over, so a pilot can navigate by it at night or in cloud.

@@ -78,6 +78,20 @@ export type ScreenItem =
    * `command`, as the designation cursor does on a real display. Drawn as nothing.
    */
   | { kind: 'hit'; x: number; y: number; r: number; command: DisplayCommand }
+  /**
+   * A raster of `cols` × `rows` intensities 0..255 (row 0 at the bottom) filling the
+   * rectangle, in the phosphor color: the ground map (decision 226).
+   */
+  | {
+      kind: 'raster';
+      x: number;
+      y: number;
+      w: number;
+      h: number;
+      cols: number;
+      rows: number;
+      values: number[];
+    }
   /** A bar of `fill` (0..1) in a frame, filling up (vertical) or right. */
   | {
       kind: 'bar';

@@ -74,6 +74,9 @@ import { ACM_CONE, acmAcquire, SensorModel } from '../sim/sensors/sensors';
 import { threatCalls } from '../ui/displays/calls';
 import type { ThreatTone } from '../ui/displays/calls';
 import { lineOfSight } from '../sim/sensors/lineOfSight';
+import { groundMap } from '../sim/sensors/groundMap';
+import type { GroundMapImage } from '../sim/sensors/groundMap';
+import { groundRadarRange } from '../sim/avionics/avionics';
 import type { DatalinkFeed, SensorEnv, SensorTarget } from '../sim/sensors/sensors';
 import { buildTraffic, trafficState, trafficTargets } from './traffic';
 import { MovingMap } from '../render/strategic/movingMap';
@@ -210,6 +213,9 @@ export class FreeFlight {
   /** The flown aircraft's sensors and their picture, relative to it, for the displays. */
   private readonly sensors = new SensorModel();
   private sensorSnap: SnapshotSensors | null = null;
+  /** The ground map's last picture and when it was painted (game time; decision 226). */
+  private groundMapImg: GroundMapImage | null = null;
+  private groundMapAt = -Infinity;
   /** The emitters the threat warning heard last, for its calls (decision 223). */
   private threatsHeard = new Map<string, 'search' | 'track' | 'launch'>();
   /** The mouse's pointer lock, shared by both inputs and toggled by Tab (decision 193). */
@@ -1250,6 +1256,8 @@ export class FreeFlight {
     this.sensors.reset();
     this.sensorSnap = null;
     this.threatsHeard = new Map();
+    this.groundMapImg = null;
+    this.groundMapAt = -Infinity;
     const base = this.baseId !== null ? this.basePoints.get(this.baseId) : undefined;
     this.traffic =
       this.options.traffic && base
@@ -1374,6 +1382,7 @@ export class FreeFlight {
       this.displays.avionics,
       profile.skin,
     );
+    this.sensorSnap.groundMap = this.paintGroundMap(m, forward, profile);
     // Air combat mode locks the first contact in its cone (decision 223).
     const radar = this.displays.avionics.radar;
     if (radar.on && radar.mode === 'acm' && !radar.lock) {
@@ -1387,6 +1396,41 @@ export class FreeFlight {
       this.hud.message(c.text, 4, c.warn);
       this.deps.tone?.(c.tone);
     }
+  }
+
+  /**
+   * The air-to-ground radar's ground map (decision 226): painted every 2 s of game time
+   * while a display shows it, from the drawn ground; the last picture with its age between.
+   */
+  private paintGroundMap(
+    m: Airframe,
+    forward: Readonly<Vec3d>,
+    profile: (typeof AVIONICS_PROFILES)[string],
+  ): SnapshotSensors['groundMap'] {
+    const d = this.displays.display;
+    const ground = this.ground;
+    if (!d || !ground || !profile.systems.includes('radar-ag')) return null;
+    const shows = (['leftMfd', 'rightMfd'] as const).some(
+      (s) => d.slots[s].format === 'radar-ag' && d.slots[s].state === 'expanded',
+    );
+    if (!shows)
+      return this.groundMapImg
+        ? { ...this.groundMapImg, age: this.gameTime - this.groundMapAt }
+        : null;
+    const range = groundRadarRange(profile.skin, this.displays.avionics.groundRadar.range);
+    const stale = this.gameTime - this.groundMapAt >= 2 || this.gameTime < this.groundMapAt;
+    if (!this.groundMapImg || stale || this.groundMapImg.range !== range) {
+      this.groundMapImg = groundMap(m.pos, forward, range, Math.PI / 3, this.deps.radius, {
+        height: (dir) => ground.height(dir),
+        water: (dir) => ground.surface(dir) === 'water',
+        cultural: (dir) => {
+          const k = ground.surface(dir);
+          return k === 'runway' ? 1 : k === 'field' ? 0.5 : 0;
+        },
+      });
+      this.groundMapAt = this.gameTime;
+    }
+    return { ...this.groundMapImg, age: this.gameTime - this.groundMapAt };
   }
 
   /** The locked contact as the HUD's target box: relative to the camera, with its range. */

@@ -6,6 +6,7 @@
  */
 import type { AvionicsState } from '../../sim/avionics/avionics';
 import type { AvionicsProfile } from '../../sim/avionics/profiles';
+import type { GroundMapImage } from '../../sim/sensors/groundMap';
 
 export interface SnapshotMessage {
   /** Seconds since the flight began. */
@@ -53,6 +54,8 @@ export interface SnapshotSensors {
   } | null;
   contacts: SnapshotContact[];
   threats: SnapshotThreat[];
+  /** The air-to-ground radar's latest ground map, and its age (s); null without one (decision 226). */
+  groundMap?: (GroundMapImage & { age: number }) | null;
 }
 
 export interface AircraftSnapshot {

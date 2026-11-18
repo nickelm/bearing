@@ -31,6 +31,7 @@ Guidance for Claude Code sessions in this repository. `docs/design.md` is the so
 | Displays, checks 12–13   | `node tools/displays.screens.mjs` with `npm run dev` up: every master mode, both skins, 1366 × 768 and 1920 × 1080, color-vision views (env: `MODES`, `SIZES`, `CVD=0`, `OUT_DIR`) → `tools/out/displays/` (decision 200) |
 | World diversity metrics  | `npx vitest run --config vitest.tools.config.ts tools/diversity.preview.ts` (env: `SEEDS` or `FROM`/`COUNT`, `GLOBAL=1` for eroded worlds, `GLOBAL_SEEDS`, `GRES`, `OUT`) → `tools/out/diversity.md`: proposal 0007's criteria over 20 seeds (decision 204) |
 | Airfield siting          | `npx vitest run --config vitest.tools.config.ts tools/airbaseWater.preview.ts --disable-console-intercept` (env: `SEEDS`, `GRES`, `ALL=1`): each airbase's pad on the eroded world before and after siting (decision 220) |
+| Ground map               | `npx vitest run --config vitest.tools.config.ts tools/groundMap.preview.ts` (env: `SEED`, `LAT`/`LON`, `KM`, `ALT`, `RANGES`) → `tools/out/groundmap-<nm>.png` and `.json` (decision 226) |
 | Browser smoke test       | `npm run build && npm run preview`, then `node tools/browser.smoke.mjs` (env: `MODE`, `WORLD`, `ONLY`, `SCENES`, `OUT`) → `tools/out/browser/` (decision 144) |
 
 ## Directory map
@@ -86,7 +87,8 @@ src/sim/            headless simulation; runs in a worker: event queue + fixed t
                     radar mode, locks, designations, stores) changed only by avionics commands, and avionics profiles
                     (decisions 189, 199), one per type of the air war in typeProfiles.ts (decision 224)
   sensors/          the sensor model (P3a, decision 218): radar, RWR, visual and datalink contacts per aircraft,
-                    the filtered picture that displays and AI read; lineOfSight.ts over the ground
+                    the filtered picture that displays and AI read; lineOfSight.ts over the ground; groundMap.ts,
+                    the air-to-ground radar's ground map (decision 226)
   crew/             (P5, planned) AI crewmates: roles, format ownership, tasks, callouts; act through avionics commands
   command/          per-side command layer (graph and cast only): campaign input from the main thread, the interim
                     tasker (until the ATO), later the intelligence picture and the ATO

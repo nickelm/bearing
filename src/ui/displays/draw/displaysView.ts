@@ -601,6 +601,24 @@ function drawItem(
       }
       break;
     }
+    case 'raster': {
+      // Intensities as the phosphor's alpha, scaled up with smoothing (the beam's blur).
+      const img = document.createElement('canvas');
+      img.width = it.cols;
+      img.height = it.rows;
+      const ic = img.getContext('2d');
+      if (!ic) break;
+      ic.fillStyle = color('normal');
+      ic.fillRect(0, 0, it.cols, it.rows);
+      const data = ic.getImageData(0, 0, it.cols, it.rows);
+      for (let r = 0; r < it.rows; r++)
+        for (let k = 0; k < it.cols; k++)
+          data.data[((it.rows - 1 - r) * it.cols + k) * 4 + 3] = it.values[r * it.cols + k] ?? 0;
+      ic.putImageData(data, 0, 0);
+      c.imageSmoothingEnabled = true;
+      c.drawImage(img, it.x * w, it.y * h, it.w * w, it.h * h);
+      break;
+    }
     case 'bar': {
       const x = it.x * w;
       const y = it.y * h;

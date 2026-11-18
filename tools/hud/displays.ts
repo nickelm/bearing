@@ -69,6 +69,13 @@ export async function drawDisplays(q: URLSearchParams): Promise<void> {
       { at: 405, text: ['Joker fuel in 6 minutes at this setting'], warn: true },
     ],
   };
+  // `&gmr=<file in tools/out>`: a ground map from tools/groundMap.preview.ts (decision 226),
+  // shown on the right display.
+  const gmr = q.get('gmr');
+  if (gmr && snap.sensors) {
+    snap.sensors.groundMap = { ...(await (await fetch(`../out/${gmr}`)).json()), age: 0 };
+    snap.destination = { label: 'TGT', bearing: snap.heading + 0.25, distance: 22_000 };
+  }
   const sys = new DisplaySystem();
   sys.edits = {};
   sys.uiScale = Number(q.get('scale') ?? 1);

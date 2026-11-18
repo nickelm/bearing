@@ -806,6 +806,18 @@ async function main(): Promise<void> {
     // The threat warning's calls reach the messages (decision 223).
     const calls = ff.hud.log.filter((l) => l.text.some((t) => /radar|tracking/.test(t))).length;
     check(calls >= 1, `traffic: the threat warning calls its emitters (${calls})`);
+    // The ground map on the right display (decision 226).
+    ff.displays.command({
+      to: 'ui',
+      command: { type: 'select-format', slot: 'rightMfd', format: 'radar-ag' },
+    });
+    // The displays update at 10 Hz of real time.
+    await new Promise((r) => setTimeout(r, 150));
+    for (let i = 0; i < 12; i++) frame();
+    const gm = internals.sensorSnap as unknown as { groundMap?: { values: number[] } | null };
+    const painted = gm?.groundMap?.values.filter((v) => v > 0).length ?? 0;
+    (result.traffic as Record<string, unknown>).groundMap = painted;
+    check(painted > 500, `traffic: the ground map paints the ground (${painted} cells lit)`);
     // Dogfight: air combat mode, and back to search after it (decision 223).
     key('KeyU');
     key('KeyF');

@@ -44,6 +44,7 @@ const FORMATS: Partial<Record<FormatId, Format>> = {
   messages: messagesFormat,
   threat: threatFormat,
   'radar-aa': radarFormat,
+  'radar-ag': groundMapFormat,
 };
 
 /** The moving map's ranges, center to edge (nautical miles; decision 201). */
@@ -88,6 +89,16 @@ export function displayModel(
       active: false,
       command: { to: 'ui', command: { type: 'map-orient', slot } },
     };
+  }
+  if (format === 'radar-ag') {
+    // Left side, top: the ground map's range (decision 226).
+    const step = (delta: 1 | -1) => ({
+      to: 'avionics' as const,
+      command: { type: 'ground-radar-range' as const, delta },
+    });
+    buttons[19] = { label: 'RNG▲', active: false, command: step(1) };
+    buttons[18] = { label: 'RNG▼', active: false, command: step(-1) };
+    buttons[0] = { label: 'MAP', active: true, command: null };
   }
   if (format === 'radar-aa' && s.sensors?.radar) {
     const r = s.sensors.radar;
@@ -496,6 +507,89 @@ function radarFormat(s: AircraftSnapshot): ScreenItem[] {
     items.push(text(0.5, 0.845, `${rng}  VC ${vc}`, 'small', 'center', 'normal'));
     items.push(text(0.5, 0.905, `${alt}  ${spd}`, 'small', 'center', 'normal'));
   }
+  return items;
+}
+
+/**
+ * The air-to-ground radar's ground map (decision 226): a B-scope of the ground ahead,
+ * azimuth across and ground range up, the returns as phosphor intensity: slopes facing
+ * the aircraft bright, water and radar shadow dark. The destination is a diamond where it
+ * lies in the picture. Ranges in nautical miles, kilometers for the Pact.
+ */
+function groundMapFormat(s: AircraftSnapshot): ScreenItem[] {
+  const map = s.sensors?.groundMap ?? null;
+  const pact = s.profile.skin === 'pact';
+  const x0 = 0.14;
+  const x1 = 0.86;
+  const y0 = 0.14;
+  const y1 = 0.86;
+  const items: ScreenItem[] = [];
+  if (!map) return [text(0.5, 0.5, 'GMR STBY', 'normal', 'center', 'dim')];
+  items.push({
+    kind: 'raster',
+    x: x0,
+    y: y0,
+    w: x1 - x0,
+    h: y1 - y0,
+    cols: map.cols,
+    rows: map.rows,
+    values: map.values,
+  });
+  // Range marks at quarters, the aircraft at the bottom center.
+  for (const f of [0.25, 0.5, 0.75]) {
+    const y = y1 - (y1 - y0) * f;
+    items.push({
+      kind: 'line',
+      points: [
+        [x0 - 0.025, y],
+        [x0, y],
+      ],
+      tone: 'dim',
+    });
+  }
+  items.push({
+    kind: 'line',
+    points: [
+      [0.47, y1 + 0.035],
+      [0.5, y1 + 0.005],
+      [0.53, y1 + 0.035],
+    ],
+    tone: 'normal',
+    width: 2,
+  });
+  items.push(
+    text(
+      0.04,
+      0.42,
+      pact ? `${Math.round(map.range / 1000)} KM` : `${Math.round(map.range / NM)} NM`,
+      'small',
+      'left',
+      'normal',
+    ),
+  );
+  const d = s.destination;
+  if (d) {
+    const az = Math.atan2(Math.sin(d.bearing - s.heading), Math.cos(d.bearing - s.heading));
+    if (Math.abs(az) <= map.azimuth && d.distance <= map.range) {
+      const x = x0 + ((x1 - x0) * (az + map.azimuth)) / (2 * map.azimuth);
+      const y = y1 - ((y1 - y0) * d.distance) / map.range;
+      const q = 0.022;
+      items.push({
+        kind: 'line',
+        points: [
+          [x, y - q],
+          [x + q, y],
+          [x, y + q],
+          [x - q, y],
+          [x, y - q],
+        ],
+        tone: 'normal',
+        width: 2,
+      });
+      items.push(text(x + 0.035, y + 0.012, d.label, 'small', 'left', 'normal'));
+    }
+  }
+  if (map.age > 6) items.push(text(0.5, 0.93, 'NO UPDATE', 'small', 'center', 'caution'));
   return items;
 }
 

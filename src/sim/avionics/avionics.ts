@@ -19,6 +19,15 @@ export const RADAR_RANGES_NM = [10, 20, 40, 80] as const;
 /** The same steps in round kilometers for Pact skins (decision 223). */
 export const RADAR_RANGES_KM = [20, 40, 80, 150] as const;
 
+/** The ground map's range steps (decision 226): nautical miles, and kilometers for the Pact. */
+export const GROUND_RANGES_NM = [5, 10, 20, 40] as const;
+export const GROUND_RANGES_KM = [10, 20, 40, 80] as const;
+
+/** The ground map's range (m) at step `i` in a skin. */
+export function groundRadarRange(skin: 'alliance' | 'pact', i: number): number {
+  return skin === 'pact' ? (GROUND_RANGES_KM[i] ?? 40) * 1000 : (GROUND_RANGES_NM[i] ?? 20) * 1852;
+}
+
 /** The radar's display range (m) at step `i` in a skin; air combat mode shows its 10 nm. */
 export function radarDisplayRange(skin: 'alliance' | 'pact', i: number, mode?: RadarMode): number {
   if (mode === 'acm') return skin === 'pact' ? 20_000 : 10 * 1852;
@@ -49,6 +58,8 @@ export interface AvionicsState {
   acknowledged: readonly string[];
   /** The air-to-air radar (decision 218): on, its mode, its range (an index), the contact locked. */
   radar: { on: boolean; mode: RadarMode; range: number; lock: string | null };
+  /** The air-to-ground radar's ground map (decision 226): its range step. */
+  groundRadar: { range: number };
 }
 
 export type AvionicsCommand =
@@ -61,7 +72,8 @@ export type AvionicsCommand =
   | { type: 'radar-mode'; mode: 'rws' | 'tws' }
   | { type: 'radar-range'; delta: 1 | -1 }
   /** Locks a contact (single-target track), or breaks the lock with null. */
-  | { type: 'radar-lock'; id: string | null };
+  | { type: 'radar-lock'; id: string | null }
+  | { type: 'ground-radar-range'; delta: 1 | -1 };
 
 export function initialAvionics(onGround: boolean): AvionicsState {
   return {
@@ -71,6 +83,7 @@ export function initialAvionics(onGround: boolean): AvionicsState {
     masterArm: false,
     acknowledged: [],
     radar: { on: true, mode: 'rws', range: 2, lock: null },
+    groundRadar: { range: 2 },
   };
 }
 
@@ -114,6 +127,13 @@ export function applyCommand(s: AvionicsState, c: AvionicsCommand): AvionicsStat
     case 'radar-range': {
       const range = Math.max(0, Math.min(RADAR_RANGES_NM.length - 1, s.radar.range + c.delta));
       return { ...s, radar: { ...s.radar, range } };
+    }
+    case 'ground-radar-range': {
+      const range = Math.max(
+        0,
+        Math.min(GROUND_RANGES_NM.length - 1, s.groundRadar.range + c.delta),
+      );
+      return { ...s, groundRadar: { range } };
     }
     case 'radar-lock':
       if (!s.radar.on) return s;
