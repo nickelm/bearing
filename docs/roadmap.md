@@ -96,15 +96,15 @@ _Needed by R2.2 (low-level resolution), R2.5 (handover over terrain), R2.8 (vehi
 
 **Exit:** no analytic low-level route on the pinned seeds passes below the terrain; a flight handed to full fidelity at any point of its route is above the ground.
 
-### R1.7 Type Registry and Roster Data — medium
+### R1.7 Aircraft Bundles and Roster Data — medium
 
 _Needed by R2.1, R2.6, R2.7, R2.9._
 
-- A type registry keyed by type id that joins the air-war table, the avionics profile, the model spec, the flight data, pylons, the camera rig, crew roles, role tags and the calibration table; a test lists what each type lacks (owner decision 2).
+- Every aircraft type becomes one JSON bundle (decision 232): the model spec gains the avionics profile (from `typeProfiles.ts`), the air-war entry (role tags, performance, crew roles, faction, name, skin, from `sim/air/aircraft.ts`), pylons and loadouts, the camera rig (from `FAST_JET_RIG` and `helicopterRig`) and a calibration block. Types without geometry yet get a spec without geometry. One loader serves the sim worker and the renderer, and a test lists what each bundle lacks.
 - A utility helicopter role with a Black Hawk and an Mi-8 analogue in the air war; rename the UH-68 "Buzzard" (owner decisions 3, 4), recorded as a change to every world's cast.
 - Pilots per squadron in the order of battle (data only; R2.2 uses them).
 
-**Exit:** the registry test passes for the demo roster's data that exists and lists the rest as R2.7's work.
+**Exit:** all 31 air-war types load from their bundles with the same performance and avionics as before (the air war's determinism hash unchanged); the bundle test lists the demo roster's missing parts as R2.7's work.
 
 ### R1.8 Network Data for the Sim — medium
 
@@ -161,7 +161,7 @@ _Depends on R1.4, R1.5, R1.7._
 - Aircraft of campaign flights in the simulation view, instanced, with a level of detail for packages.
 - _Follow_ from mission search and from a subscription offer: a cut with a chase-camera settle (owner decision 12) behind one aircraft of the mission; return to the map above the flight.
 - The read-only HUD and the followed aircraft's own displays (spectator displays).
-- Per-type camera rigs from the registry.
+- Per-type camera rigs from the bundles.
 
 **Exit:** the owner follows a mission of each demo type from the map and returns, with acceptance checks 7 and 10.
 
@@ -181,7 +181,7 @@ _Depends on R1.5, R1.6, R2.4._
 
 _Depends on R1.5, R1.7, R2.5._
 
-- Pylons and loadouts in the registry; stores on pylons that disappear on release; the stores format; master arm.
+- Pylons and loadouts in the bundles; stores on pylons that disappear on release; the stores format; master arm.
 - Guns with a lead-computing pipper, one IR missile per side with a seeker circle, unguided bombs with CCIP fall lines, rockets (owner decision 6).
 - Hit and kill resolution, minimal damage states, ejection from full fidelity.
 - The sensors read campaign contacts: aggregate flights become radar targets, sites with radars become emitters.
@@ -298,7 +298,7 @@ flowchart LR
   R14[R1.4 Mission search] --> R24
   R15[R1.5 FlownAircraft] --> R24 & R25 & R26
   R16[R1.6 Terrain in sim] --> R25 & R28
-  R17[R1.7 Type registry] --> R21 & R26 & R27 & R29
+  R17[R1.7 Aircraft bundles] --> R21 & R26 & R27 & R29
   R18[R1.8 Network data] --> R21 & R23
   R21[R2.1 ATO + plug-ins] --> R22[R2.2 Resolution]
   R22 --> R23[R2.3 Ground war]
@@ -352,7 +352,7 @@ Then: a calibration matchup in R2.10's runner, a determinism test at 1× and 64�
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | Geometry              | A model spec with animated parts, within Part I's budgets; the silhouette check                                              |
 | Flight data           | A `flight` block (fixed-wing or rotorcraft) and its control laws, with performance figures checked against the air-war table |
-| Avionics profile      | Slots, formats, sensors and skin in `typeProfiles.ts`                                                                        |
+| Avionics profile      | Slots, formats, sensors and skin in the bundle                                                                               |
 | Pylons and loadouts   | Stations and the loadouts the planner may choose                                                                             |
 | Role tags             | The roles the planner may task                                                                                               |
 | Crew roles            | Seats and the crewmates that fill them                                                                                       |
@@ -360,7 +360,7 @@ Then: a calibration matchup in R2.10's runner, a determinism test at 1× and 64�
 | Aggregate performance | Values fitted by calibration                                                                                                 |
 | Identity              | Faction, name and skin                                                                                                       |
 
-The type registry (R1.7) joins the parts by type id and its test lists what a type lacks. A type that changes every world's cast (a new role in the order of battle) needs its own decision.
+All parts live in the type's JSON bundle (decision 232), and the bundle test (R1.7) lists what a type lacks. A type that changes every world's cast (a new role in the order of battle) needs its own decision.
 
 ## Where the Old Milestones Went
 

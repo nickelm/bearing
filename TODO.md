@@ -9,7 +9,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] Proposal 0008 saved as accepted
 - [x] Status matrix, health, divergences and decisions for the owner (`docs/status/audit-2026-11-18.md`)
 - [x] `docs/roadmap.md`; `design.md`, proposals, plans, `CLAUDE.md`, `README.md` and this file reconciled (decisions 228–231)
-- [ ] Owner: answer the audit's decisions for the owner; record each answer as a decision and adjust the roadmap
+- [x] Owner's answers to the audit's decisions (decision 232)
 
 ## R1. Consolidation
 
@@ -74,11 +74,14 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] Analytic low-level routes: a terrain floor along each leg from the coarse heights, with clearance by mission type; test that no route on the pinned seeds passes below terrain
 - [ ] Sited runways for full fidelity and the simulation view: the sim carries the sited runway as presentation data beside the coarse point
 
-### R1.7 Type registry and roster data
+### R1.7 Aircraft bundles and roster data
 
-- [ ] Type registry keyed by type id: air-war table, avionics profile, model spec, flight data, pylons (empty for now), camera rig, crew roles, role tags, calibration table (empty for now)
-- [ ] Registry test: list what each type lacks; fail on inconsistent ids
-- [ ] Camera rigs into the registry (`FAST_JET_RIG`, `helicopterRig` become per-type data)
+- [ ] Bundle schema: the model spec gains `avionics`, `airWar` (role tags, performance, crew roles, faction, name, skin), `pylons`, `rig` and `calibration` blocks; geometry optional; validation
+- [ ] One bundle loader usable by the sim worker (no render imports) and the renderer
+- [ ] Move the 31 avionics profiles from `typeProfiles.ts` into the bundles; `tests/typeProfiles.test.ts` passes on the loaded data
+- [ ] Move the air-war table from `sim/air/aircraft.ts` into the bundles; the air war's determinism hash is unchanged
+- [ ] Camera rigs into the bundles (`FAST_JET_RIG`, `helicopterRig` become per-type data)
+- [ ] Bundle test: list what each type lacks; fail on duplicate or inconsistent ids
 - [ ] Rename the UH-68 "Buzzard" helicopter (clash with the A-15 Buzzard)
 - [ ] Utility helicopter role: a Black Hawk analogue and an Mi-8 analogue in `sim/air/aircraft.ts` with avionics profiles; a decision for the change to every world's cast
 - [ ] Pilots per squadron in the order of battle (count, names from a fork); the hash change recorded
@@ -143,7 +146,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] Return to the map above the flight's position
 - [ ] Read-only HUD for the followed aircraft from its analytic state
 - [ ] Spectator displays: the followed aircraft's own picture, read-only
-- [ ] Per-type camera rigs from the registry, including a transport rig
+- [ ] Per-type camera rigs from the bundles, including a transport rig
 - [ ] Retire the debug free camera behind `?dev` only
 - [ ] Acceptance checks 7 and 10 as scripted sequences
 - [ ] Owner: follow a mission of each demo type and return
@@ -163,7 +166,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 
 ### R2.6 Weapons, damage and interface defaults
 
-- [ ] Pylons and loadouts in the registry for the demo types
+- [ ] Pylons and loadouts in the bundles for the demo types
 - [ ] Stores on pylons that disappear on release; jettison
 - [ ] Stores format and master arm; weapon selection triggers air-to-air and air-to-ground modes
 - [ ] Gun with a lead-computing pipper
