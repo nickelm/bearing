@@ -1,25 +1,25 @@
 # Bearing Roadmap
 
-*Adopted 2026-11-18 with Proposal 0008 (`docs/proposals/0008-game-loop-and-campaign.md`, decision 228). This document is the source of truth for what to build next. It supersedes the milestone sections of `docs/design.md` and the roadmap sections of proposals 0001–0007. `docs/status/audit-2026-11-18.md` records the state each phase starts from; `TODO.md` breaks the current phases into tasks.*
+_Adopted 2026-11-18 with Proposal 0008 (`docs/proposals/0008-game-loop-and-campaign.md`, decision 228). This document is the source of truth for what to build next. It supersedes the milestone sections of `docs/design.md` and the roadmap sections of proposals 0001–0007. `docs/status/audit-2026-11-18.md` records the state each phase starts from; `TODO.md` breaks the current phases into tasks._
 
 ## How to Read This
 
 - **Phases** R0–R6 come from Proposal 0008. Each phase has **milestones** (R1.1, R1.2, …) with tasks, dependencies, an exit criterion and a size.
-- **Sizes:** *small* fits one working session; *medium* takes two to four; *large* takes five or more and should be split into tasks of a few hours in `TODO.md` before it starts.
-- **Visual milestones** still close only after the acceptance checks of `docs/visual-style.md` for the views they touch (`CLAUDE.md`, *Working rules*). Here they are R1.1, R2.4, R2.6, R2.7, R2.8, R2.12, R3.2–R3.6, all of R4 except R4.6's aggregates, R5.5 and all of R6.
-- **Earlier tracks.** The old milestone names (F, S, C, V, I, P, H, N, G, W) survive in decisions and plans. *Where the Old Milestones Went* maps each to its place here, and `docs/status/todo-2026-11-18.md` keeps the old `TODO.md` with every open item as it stood.
+- **Sizes:** _small_ fits one working session; _medium_ takes two to four; _large_ takes five or more and should be split into tasks of a few hours in `TODO.md` before it starts.
+- **Visual milestones** still close only after the acceptance checks of `docs/visual-style.md` for the views they touch (`CLAUDE.md`, _Working rules_). Here they are R1.1, R2.4, R2.6, R2.7, R2.8, R2.12, R3.2–R3.6, all of R4 except R4.6's aggregates, R5.5 and all of R6.
+- **Earlier tracks.** The old milestone names (F, S, C, V, I, P, H, N, G, W) survive in decisions and plans. _Where the Old Milestones Went_ maps each to its place here, and `docs/status/todo-2026-11-18.md` keeps the old `TODO.md` with every open item as it stood.
 
 ## Phase Overview
 
-| Phase | Goal | Milestones | State |
-|---|---|---|---|
-| R0. Audit and reconcile | Know what exists; documents match the code | — | done (this audit) |
-| R1. Consolidation | What the demo needs from earlier tracks, and nothing more | R1.1–R1.8 | next |
-| R2. One day of war | The thin, complete loop: the tech demo | R2.1–R2.12 | |
-| R3. Combat depth | Sensors, weapons, air combat, air defense, ground entities | R3.1–R3.6 | |
-| R4. Breadth | Roster, mission catalog, helicopters, transport, crews, naval war | R4.1–R4.7 | |
-| R5. Dynamic campaign | Logistics, morale, weeks of war, saves, consequences | R5.1–R5.6 | |
-| R6. Polish | Onboarding, briefings, audio, performance, accessibility, the visual backlog | R6.1–R6.8 | |
+| Phase                   | Goal                                                                         | Milestones | State             |
+| ----------------------- | ---------------------------------------------------------------------------- | ---------- | ----------------- |
+| R0. Audit and reconcile | Know what exists; documents match the code                                   | —          | done (this audit) |
+| R1. Consolidation       | What the demo needs from earlier tracks, and nothing more                    | R1.1–R1.8  | next              |
+| R2. One day of war      | The thin, complete loop: the tech demo                                       | R2.1–R2.12 |                   |
+| R3. Combat depth        | Sensors, weapons, air combat, air defense, ground entities                   | R3.1–R3.6  |                   |
+| R4. Breadth             | Roster, mission catalog, helicopters, transport, crews, naval war            | R4.1–R4.7  |                   |
+| R5. Dynamic campaign    | Logistics, morale, weeks of war, saves, consequences                         | R5.1–R5.6  |                   |
+| R6. Polish              | Onboarding, briefings, audio, performance, accessibility, the visual backlog | R6.1–R6.8  |                   |
 
 ## R0. Audit and Reconcile (done)
 
@@ -31,7 +31,7 @@ R1 contains exactly what the audit found missing or partial that R2 needs. Each 
 
 ### R1.1 Health and Baselines — medium
 
-*Needed by every R2 milestone: R2's exit criteria include determinism, three seeds and frame budgets.*
+_Needed by every R2 milestone: R2's exit criteria include determinism, three seeds and frame budgets._
 
 - Fix the cube-face seam in the tile kernel, or re-baseline the test with a decision.
 - Close or reproduce the front generator's determinism flake: run the campaign determinism tests 50 times in CI-like conditions; if it recurs, quantize the band cut (decision 86's fallback).
@@ -44,7 +44,7 @@ R1 contains exactly what the audit found missing or partial that R2 needs. Each 
 
 ### R1.2 Campaign State That Can Be Saved — medium
 
-*Needed by R2.11 (event log and replay) and everything that changes sim state.*
+_Needed by R2.11 (event log and replay) and everything that changes sim state._
 
 - `save()` and `load()` for every sim process: the event queue, `AirOps`, the tasker's maps, the weather systems and the clock.
 - Export the RNG state, or make every draw a fork keyed by game time (the tasker and weather already fork per hour).
@@ -56,7 +56,7 @@ R1 contains exactly what the audit found missing or partial that R2 needs. Each 
 
 ### R1.3 A Headless Day of War — small
 
-*Needed by R2.1–R2.3 and R2.12.*
+_Needed by R2.1–R2.3 and R2.12._
 
 - A tool that runs the campaign on a generated world (the pinned seeds) for 24 game hours as fast as it can, and reports errors, step cost per game hour and the state hash.
 - One integration test on a small generated world in place of the synthetic air-war world.
@@ -65,7 +65,7 @@ R1 contains exactly what the audit found missing or partial that R2 needs. Each 
 
 ### R1.4 Mission Search Shell and Side Selection — medium
 
-*Needed by R2.4 (follow) and R2.5 (take over).*
+_Needed by R2.4 (follow) and R2.5 (take over)._
 
 - Side selection at campaign start, with the generated briefing.
 - The mission search panel over the strategic view: ongoing and upcoming missions of the viewing side, filters (type, aircraft, theater, phase, time until action), focus on the map with the route drawn.
@@ -76,7 +76,7 @@ R1 contains exactly what the audit found missing or partial that R2 needs. Each 
 
 ### R1.5 The Flown Aircraft Leaves Free Flight — large
 
-*Needed by R2.4–R2.7.*
+_Needed by R2.4–R2.7._
 
 - Extract a `FlownAircraft` from `freeflight/freeFlight.ts`: airframe, control laws, director, input source (player or AI), avionics state, sensors and the HUD frame, usable by Free Flight and the campaign alike.
 - Move `AvionicsState` from the UI's `DisplaySystem` into per-aircraft sim state; build the aircraft snapshot outside `freeflight/`.
@@ -87,7 +87,7 @@ R1 contains exactly what the audit found missing or partial that R2 needs. Each 
 
 ### R1.6 Terrain for the Execution Layer — medium
 
-*Needed by R2.2 (low-level resolution), R2.5 (handover over terrain), R2.8 (vehicles).*
+_Needed by R2.2 (low-level resolution), R2.5 (handover over terrain), R2.8 (vehicles)._
 
 - Move the assembly of `TerrainEdits` from `render/sim/infra/airfieldGrading.ts` into `worldgen/edits/`, so the worker can build the one height function (rule 13).
 - A deterministic height service from the global grid plus edits, available in the worker; AI sensing and line of sight read it (owner decision 9).
@@ -98,7 +98,7 @@ R1 contains exactly what the audit found missing or partial that R2 needs. Each 
 
 ### R1.7 Type Registry and Roster Data — medium
 
-*Needed by R2.1, R2.6, R2.7, R2.9.*
+_Needed by R2.1, R2.6, R2.7, R2.9._
 
 - A type registry keyed by type id that joins the air-war table, the avionics profile, the model spec, the flight data, pylons, the camera rig, crew roles, role tags and the calibration table; a test lists what each type lacks (owner decision 2).
 - A utility helicopter role with a Black Hawk and an Mi-8 analogue in the air war; rename the UH-68 "Buzzard" (owner decisions 3, 4), recorded as a change to every world's cast.
@@ -108,7 +108,7 @@ R1 contains exactly what the audit found missing or partial that R2 needs. Each 
 
 ### R1.8 Network Data for the Sim — medium
 
-*Needed by R2.1 (interdiction), R2.2 (strike effects), R2.3 (supply and movement).*
+_Needed by R2.1 (interdiction), R2.2 (strike effects), R2.3 (supply and movement)._
 
 - The road and rail networks as a node and edge graph in the campaign input: junctions as nodes, polylines as edges, bridges as edges a strike can cut.
 - A damage state for targets and bridges in the sim.
@@ -122,9 +122,9 @@ R2 builds the thin, complete loop of Proposal 0008: plan, execute, resolve, cons
 
 ### R2.1 Mission Plug-ins and the Air Tasking Order — large
 
-*Depends on R1.2, R1.3, R1.7, R1.8.*
+_Depends on R1.2, R1.3, R1.7, R1.8._
 
-- The mission plug-in interface with its eight parts (see *Adding Mission and Aircraft Types*), and a test that each registered type has all of them.
+- The mission plug-in interface with its eight parts (see _Adding Mission and Aircraft Types_), and a test that each registered type has all of them.
 - The ATO: needs from the front (segments under pressure, supply behind it), from bases and from high-value assets; priority scores with stable tie-breaking; packages from squadrons in range with escorts; Pact waves and Alliance spreading; one order per game day and revisions every two to four hours.
 - Weather and daylight minimums; winds aloft in ground speed.
 - The four demo types as plug-ins: CAP, interdiction (fixed targets: bridges, depots, rail yards, road segments; owner decision 10), CAS (fixed-wing) and airlift.
@@ -134,7 +134,7 @@ R2 builds the thin, complete loop of Proposal 0008: plan, execute, resolve, cons
 
 ### R2.2 Resolution and Consequences — large
 
-*Depends on R2.1.*
+_Depends on R2.1._
 
 - Aggregate resolvers for the four types: air-to-air engagements between packages and CAP, point defenses at targets (an abstract air defense value per site until R3.5), strike damage to targets and bridges, airlift deliveries into base stocks.
 - Losses lower squadron strength; pilots eject and become survivors (R2.9); missions abort and return.
@@ -144,7 +144,7 @@ R2 builds the thin, complete loop of Proposal 0008: plan, execute, resolve, cons
 
 ### R2.3 The Ground War in Aggregate — large
 
-*Depends on R1.8, R2.2.*
+_Depends on R1.8, R2.2._
 
 - Order of battle: divisions, brigades or regiments, battalions with per-unit seeds (ready for promotion).
 - Deployment along the start line; Lanchester attrition each game minute with terrain, posture, supply and air support.
@@ -156,10 +156,10 @@ R2 builds the thin, complete loop of Proposal 0008: plan, execute, resolve, cons
 
 ### R2.4 Follow — medium
 
-*Depends on R1.4, R1.5, R1.7.*
+_Depends on R1.4, R1.5, R1.7._
 
 - Aircraft of campaign flights in the simulation view, instanced, with a level of detail for packages.
-- *Follow* from mission search and from a subscription offer: a cut with a chase-camera settle (owner decision 12) behind one aircraft of the mission; return to the map above the flight.
+- _Follow_ from mission search and from a subscription offer: a cut with a chase-camera settle (owner decision 12) behind one aircraft of the mission; return to the map above the flight.
 - The read-only HUD and the followed aircraft's own displays (spectator displays).
 - Per-type camera rigs from the registry.
 
@@ -167,11 +167,11 @@ R2 builds the thin, complete loop of Proposal 0008: plan, execute, resolve, cons
 
 ### R2.5 Full Fidelity and Handover — large
 
-*Depends on R1.5, R1.6, R2.4.*
+_Depends on R1.5, R1.6, R2.4._
 
 - Promotion: a followed flight's aircraft become `FlownAircraft` from their analytic state (position, attitude, speed, fuel, stores, damage); demotion folds them back. Both preserve losses and expended weapons.
 - An AI pilot on the flight director: route following, formation, orbit, attack run, egress.
-- *Take over* inside the jump-in window (climb-out to approach; owner decision 13); *hand back* gives the director the AI's orders.
+- _Take over_ inside the jump-in window (climb-out to approach; owner decision 13); _hand back_ gives the director the AI's orders.
 - The flight cap: up to 8× in cruise while the player flies, cancelled on any threat.
 - A session's consequences return to the worker as logged campaign events (owner decision 1).
 
@@ -179,7 +179,7 @@ R2 builds the thin, complete loop of Proposal 0008: plan, execute, resolve, cons
 
 ### R2.6 Weapons, Damage and Interface Defaults — large
 
-*Depends on R1.5, R1.7, R2.5.*
+_Depends on R1.5, R1.7, R2.5._
 
 - Pylons and loadouts in the registry; stores on pylons that disappear on release; the stores format; master arm.
 - Guns with a lead-computing pipper, one IR missile per side with a seeker circle, unguided bombs with CCIP fall lines, rockets (owner decision 6).
@@ -192,7 +192,7 @@ R2 builds the thin, complete loop of Proposal 0008: plan, execute, resolve, cons
 
 ### R2.7 The Demo Roster — large
 
-*Depends on R1.7; the flight data waits for R1.5's per-type laws.*
+_Depends on R1.7; the flight data waits for R1.5's per-type laws._
 
 - Flyable (owner decision 5): Kestrel (exists), Vo-31 (MiG-29) and Vo-35 (Su-25) with flight data and per-type control laws; A-15 (A-10) and C-150 (C-130) with models and flight data if time allows, flown by the AI otherwise.
 - AI-only models for the types the demo's orders fly: F-25 (F-15), E-5 (E-3), KC-40 (KC-135), Vo-37 (Su-24), Ra-44 (An-12), Ra-60 (A-50), Ve-28 (Mi-24) and the utility helicopters.
@@ -202,7 +202,7 @@ R2 builds the thin, complete loop of Proposal 0008: plan, execute, resolve, cons
 
 ### R2.8 Minimal Entity Promotion — medium
 
-*Depends on R1.6, R2.3.*
+_Depends on R1.6, R2.3._
 
 - Near the player, a battalion spawns a few representative vehicles (tanks, infantry fighting vehicles, trucks, a short-range air defense vehicle) on the ground or aligned roads, from its seed and strength.
 - Vehicle models from the kit; vehicles are targets; their losses fold back into the battalion's strength.
@@ -211,7 +211,7 @@ R2 builds the thin, complete loop of Proposal 0008: plan, execute, resolve, cons
 
 ### R2.9 Survivors and CSAR — large
 
-*Depends on R1.7, R2.2, R2.5.*
+_Depends on R1.7, R2.2, R2.5._
 
 - Survivors with position, injury state, survival timer and a capture risk that grows near enemy forces.
 - The CSAR mission plug-in: the owning side always tasks one (rescue helicopter, escort, cover); an aggregate resolver for when no one watches.
@@ -222,7 +222,7 @@ R2 builds the thin, complete loop of Proposal 0008: plan, execute, resolve, cons
 
 ### R2.10 Calibration — medium
 
-*Depends on R2.2, R2.5, R2.6.*
+_Depends on R2.2, R2.5, R2.6._
 
 - A headless runner flies many full-fidelity engagements per demo matchup (two Vo-31 against two Kestrels at a set range and altitude; CAS against a SHORAD vehicle) and fits the aggregate tables.
 - The tables live in the repository, a script regenerates them, and a test keeps aggregate and full-fidelity outcome rates within tolerance.
@@ -231,7 +231,7 @@ R2 builds the thin, complete loop of Proposal 0008: plan, execute, resolve, cons
 
 ### R2.11 Event Log and Replay — medium
 
-*Depends on R1.2, R2.5.*
+_Depends on R1.2, R2.5._
 
 - Every player input to the campaign, every campaign-level decision and every fidelity session's consequences go into the log.
 - Replay from a snapshot; export and import of a log as a file.
@@ -240,7 +240,7 @@ R2 builds the thin, complete loop of Proposal 0008: plan, execute, resolve, cons
 
 ### R2.12 Demo Verification — medium
 
-*Depends on all of R2.*
+_Depends on all of R2._
 
 - Three seeds × 24 h at 64× unattended; the suppressed-air comparison; take over and hand back in each flyable aircraft.
 - Frame budgets on a real GPU during a full-fidelity mission with the war running.
@@ -251,31 +251,31 @@ R2 builds the thin, complete loop of Proposal 0008: plan, execute, resolve, cons
 
 ## R3. Combat Depth
 
-- **R3.1 Intelligence — large.** The per-side picture with decay, satellites on Cold War orbits with imaging conditions and delivery delays, the radar air picture with ground-controlled interception, reconnaissance refreshing contacts; interdiction of moving targets. *Depends on R2.2.*
-- **R3.2 Sensors and displays in full — large.** The AI reads the same filtered picture (rule 12); radar designation by keys, elevation bars, clutter by terrain; moving-target and terrain-following modes; datalink from a real AEW or ground controller; the targeting pod format; alerts that claim a slot; engines and fuel with damage; the Su-27 analogue's HUD radar; checks 12–14 for more types. *Depends on R2.6.*
-- **R3.3 Weapons in full — large.** Radar missiles, anti-radiation missiles, CCRP, laser-guided bombs with the pod, countermeasures with programs and the threat warning's launch state, target and weapon cameras, damage effects (smoke, fire, missing parts). *Depends on R3.2.*
-- **R3.4 Air combat — medium.** AI maneuvering in air combat, departures and spins in the flight model, check 9, and a second look at a world-locked mouse aim point (owner decision 14). *Depends on R2.5.*
-- **R3.5 Air defense networks and scrambles — large.** SAM and AAA sites and belts from the cast, air defense rings on the map, quick-reaction alert and the scramble mission. *Depends on R3.1.*
-- **R3.6 Ground entities and terrain in the sim — large.** Entity behavior for promoted units (movement on aligned roads, firing, MANPADS teams), line of sight through the canopy height field, tree strikes, props and wonder shapes in the one height function, corridor-aware refinement (spike N6.0), tracks near the camera. *Depends on R2.8, R1.6.*
+- **R3.1 Intelligence — large.** The per-side picture with decay, satellites on Cold War orbits with imaging conditions and delivery delays, the radar air picture with ground-controlled interception, reconnaissance refreshing contacts; interdiction of moving targets. _Depends on R2.2._
+- **R3.2 Sensors and displays in full — large.** The AI reads the same filtered picture (rule 12); radar designation by keys, elevation bars, clutter by terrain; moving-target and terrain-following modes; datalink from a real AEW or ground controller; the targeting pod format; alerts that claim a slot; engines and fuel with damage; the Su-27 analogue's HUD radar; checks 12–14 for more types. _Depends on R2.6._
+- **R3.3 Weapons in full — large.** Radar missiles, anti-radiation missiles, CCRP, laser-guided bombs with the pod, countermeasures with programs and the threat warning's launch state, target and weapon cameras, damage effects (smoke, fire, missing parts). _Depends on R3.2._
+- **R3.4 Air combat — medium.** AI maneuvering in air combat, departures and spins in the flight model, check 9, and a second look at a world-locked mouse aim point (owner decision 14). _Depends on R2.5._
+- **R3.5 Air defense networks and scrambles — large.** SAM and AAA sites and belts from the cast, air defense rings on the map, quick-reaction alert and the scramble mission. _Depends on R3.1._
+- **R3.6 Ground entities and terrain in the sim — large.** Entity behavior for promoted units (movement on aligned roads, firing, MANPADS teams), line of sight through the canopy height field, tree strikes, props and wonder shapes in the one height function, corridor-aware refinement (spike N6.0), tracks near the camera. _Depends on R2.8, R1.6._
 
 ## R4. Breadth
 
-- **R4.1 Roster — large.** Every remaining type through the bundle checklist: the F-15 and Black Hawk analogues become flyable; F-111, A-6, F-14, F-117, Apache, Lynx, Cobra, CH-47 analogues; the Su-24, Mi-24 and Mi-8 analogues become flyable; Su-27, Tu-22M, Tu-95, MiG-23, Mi-26 analogues. Includes the controlled-aircraft detail level with navigation lights. *Depends on R2.7.*
-- **R4.2 Mission catalog — large.** Fighter sweep, escort, scramble (with R3.5), low-level penetration strike, stealth strike, SEAD, attack helicopter CAS, helicopter assault and troop insertion, anti-shipping, maritime patrol, strategic bombing, reconnaissance, AWACS and tanker support, combat airdrop, sling-load resupply, medical evacuation, and full CSAR with escorts and the player flying any part. *Depends on R2.1.*
-- **R4.3 Helicopter track — large.** Plan H's remainder: calibration figures, helipads and landing zones in Free Flight, mouse aim and direct control with sticks, the Standard and Expert presets, the remaining types (teetering, hingeless, tandem, stub wings), ground handling on slopes with dynamic rollover, rooftops and ship decks, hazards and damage (vortex ring state, mast bumping, blade stall, autorotation, tail rotor loss), weapons and gunner mode, AI nap-of-the-earth and battle positions, player-flown helicopter missions with jump-in over their ground phases. *Depends on R2.9, R3.3.*
-- **R4.4 Transport operations — medium.** The airdrop format and combat airdrop, sling loads with the hook camera, hoist and fast-rope, troop insertion. *Depends on R4.3.*
-- **R4.5 Crews — large.** Plan P5: crewmates per seat, format ownership, the crew command menu, the six roles, callouts by priority, crew station mode, crew figures. *Depends on R3.2.*
-- **R4.6 Naval war — large.** Convoys, carrier groups tasked between theaters, surface action groups and abstract submarines on sea lanes with aggregate resolvers; amphibious groups; convoy and naval icons on the map; ship decks as moving ground. *Depends on R2.2.*
-- **R4.7 Power lines — small.** Pylons on high ground and wire strikes for helicopters, on the corridor framework. *Depends on R4.3.*
+- **R4.1 Roster — large.** Every remaining type through the bundle checklist: the F-15 and Black Hawk analogues become flyable; F-111, A-6, F-14, F-117, Apache, Lynx, Cobra, CH-47 analogues; the Su-24, Mi-24 and Mi-8 analogues become flyable; Su-27, Tu-22M, Tu-95, MiG-23, Mi-26 analogues. Includes the controlled-aircraft detail level with navigation lights. _Depends on R2.7._
+- **R4.2 Mission catalog — large.** Fighter sweep, escort, scramble (with R3.5), low-level penetration strike, stealth strike, SEAD, attack helicopter CAS, helicopter assault and troop insertion, anti-shipping, maritime patrol, strategic bombing, reconnaissance, AWACS and tanker support, combat airdrop, sling-load resupply, medical evacuation, and full CSAR with escorts and the player flying any part. _Depends on R2.1._
+- **R4.3 Helicopter track — large.** Plan H's remainder: calibration figures, helipads and landing zones in Free Flight, mouse aim and direct control with sticks, the Standard and Expert presets, the remaining types (teetering, hingeless, tandem, stub wings), ground handling on slopes with dynamic rollover, rooftops and ship decks, hazards and damage (vortex ring state, mast bumping, blade stall, autorotation, tail rotor loss), weapons and gunner mode, AI nap-of-the-earth and battle positions, player-flown helicopter missions with jump-in over their ground phases. _Depends on R2.9, R3.3._
+- **R4.4 Transport operations — medium.** The airdrop format and combat airdrop, sling loads with the hook camera, hoist and fast-rope, troop insertion. _Depends on R4.3._
+- **R4.5 Crews — large.** Plan P5: crewmates per seat, format ownership, the crew command menu, the six roles, callouts by priority, crew station mode, crew figures. _Depends on R3.2._
+- **R4.6 Naval war — large.** Convoys, carrier groups tasked between theaters, surface action groups and abstract submarines on sea lanes with aggregate resolvers; amphibious groups; convoy and naval icons on the map; ship decks as moving ground. _Depends on R2.2._
+- **R4.7 Power lines — small.** Pylons on high ground and wire strikes for helicopters, on the corridor framework. _Depends on R4.3._
 
 ## R5. Dynamic Campaign
 
-- **R5.1 Logistics — large.** Fuel, munitions, spares, replacement aircraft and pilots over road, rail and sea to depots, bases and the front; base stocks gate sorties; bridges as network nodes with detours. *Depends on R2.3, R4.6.*
-- **R5.2 Morale and reputation — medium.** Unit, squadron and theater morale on sortie rates, AI skill and ground combat; the named pilot, reputation, and the enemy's reaction (owner decision 11). *Depends on R2.2.*
-- **R5.3 Weeks of war — medium.** Two to four weeks, end conditions (breakthrough, successful defense, ceasefire from exhaustion), the campaign summary. *Depends on R5.1, R5.2.*
-- **R5.4 Save and load — medium.** Campaigns in IndexedDB with file export and import, on R1.2's snapshots and R2.11's log. *Depends on R2.11.*
-- **R5.5 Consequence visibility — medium.** The chain of consequences on the map after a mission (bridge down, supply cut, battalion withdrawing); destroyed structures in the simulation view. *Depends on R5.1.*
-- **R5.6 Campaign tuning — medium.** Range factor, theater fit thresholds, ring continents (two cuts), island campaigns that leave the Alliance under 15 bases, the validity check counting placed airbases (owner decision 16), salt flats as airstrips, carrier tasking between theaters. *Depends on R5.3.*
+- **R5.1 Logistics — large.** Fuel, munitions, spares, replacement aircraft and pilots over road, rail and sea to depots, bases and the front; base stocks gate sorties; bridges as network nodes with detours. _Depends on R2.3, R4.6._
+- **R5.2 Morale and reputation — medium.** Unit, squadron and theater morale on sortie rates, AI skill and ground combat; the named pilot, reputation, and the enemy's reaction (owner decision 11). _Depends on R2.2._
+- **R5.3 Weeks of war — medium.** Two to four weeks, end conditions (breakthrough, successful defense, ceasefire from exhaustion), the campaign summary. _Depends on R5.1, R5.2._
+- **R5.4 Save and load — medium.** Campaigns in IndexedDB with file export and import, on R1.2's snapshots and R2.11's log. _Depends on R2.11._
+- **R5.5 Consequence visibility — medium.** The chain of consequences on the map after a mission (bridge down, supply cut, battalion withdrawing); destroyed structures in the simulation view. _Depends on R5.1._
+- **R5.6 Campaign tuning — medium.** Range factor, theater fit thresholds, ring continents (two cuts), island campaigns that leave the Alliance under 15 bases, the validity check counting placed airbases (owner decision 16), salt flats as airstrips, carrier tasking between theaters. _Depends on R5.3._
 
 ## R6. Polish
 
@@ -320,8 +320,8 @@ R3–R6 overlap in practice: R4.6 (naval) and R5.4 (saves) need only R2, and R6'
 
 **R1**, in two streams that meet before R2:
 
-1. *War stream:* R1.1 → R1.3 → R1.2 → R1.8 → R1.7.
-2. *Flight stream:* R1.5 → R1.6 → R1.4.
+1. _War stream:_ R1.1 → R1.3 → R1.2 → R1.8 → R1.7.
+2. _Flight stream:_ R1.5 → R1.6 → R1.4.
 
 **R2:** R2.1 → R2.2 → R2.3 (the war resolves and the front moves; the demo's first visible proof) → R2.4 → R2.5 → R2.6 (the player joins and fights) → R2.7 and R2.8 in parallel → R2.9 → R2.10 → R2.11 → R2.12.
 
@@ -333,54 +333,54 @@ R4 adds most types; R2 adds the first five missions and the demo roster. Both fo
 
 ### A Mission Type
 
-| Part | What to build | Where |
-|---|---|---|
-| Planner rule | When the ATO creates the mission, from which need, with which priority score | `src/sim/command/` |
-| Package template | Flights, roles, escorts and support, by doctrine | `src/sim/command/` |
-| Aggregate resolver | Outcomes when no one watches, of the same kinds as full fidelity | `src/sim/air/` |
-| Full-fidelity behavior | How the AI pilots fly it on the director, phase by phase | `src/sim/flight/` |
-| Jump-in windows | The phases that accept the player | the mission's phase data |
-| Success and consequences | What counts as success; what changes in the world | `src/sim/` |
-| Briefing template | Text with named places | `src/campaign/` |
-| Interface defaults | Master mode, formats and HUD cues per phase | `src/ui/displays/presets.ts` |
+| Part                     | What to build                                                                | Where                        |
+| ------------------------ | ---------------------------------------------------------------------------- | ---------------------------- |
+| Planner rule             | When the ATO creates the mission, from which need, with which priority score | `src/sim/command/`           |
+| Package template         | Flights, roles, escorts and support, by doctrine                             | `src/sim/command/`           |
+| Aggregate resolver       | Outcomes when no one watches, of the same kinds as full fidelity             | `src/sim/air/`               |
+| Full-fidelity behavior   | How the AI pilots fly it on the director, phase by phase                     | `src/sim/flight/`            |
+| Jump-in windows          | The phases that accept the player                                            | the mission's phase data     |
+| Success and consequences | What counts as success; what changes in the world                            | `src/sim/`                   |
+| Briefing template        | Text with named places                                                       | `src/campaign/`              |
+| Interface defaults       | Master mode, formats and HUD cues per phase                                  | `src/ui/displays/presets.ts` |
 
 Then: a calibration matchup in R2.10's runner, a determinism test at 1× and 64×, and an entry in mission search's filters.
 
 ### An Aircraft Type
 
-| Part | What to build |
-|---|---|
-| Geometry | A model spec with animated parts, within Part I's budgets; the silhouette check |
-| Flight data | A `flight` block (fixed-wing or rotorcraft) and its control laws, with performance figures checked against the air-war table |
-| Avionics profile | Slots, formats, sensors and skin in `typeProfiles.ts` |
-| Pylons and loadouts | Stations and the loadouts the planner may choose |
-| Role tags | The roles the planner may task |
-| Crew roles | Seats and the crewmates that fill them |
-| Camera rig | Offsets and damping |
-| Aggregate performance | Values fitted by calibration |
-| Identity | Faction, name and skin |
+| Part                  | What to build                                                                                                                |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Geometry              | A model spec with animated parts, within Part I's budgets; the silhouette check                                              |
+| Flight data           | A `flight` block (fixed-wing or rotorcraft) and its control laws, with performance figures checked against the air-war table |
+| Avionics profile      | Slots, formats, sensors and skin in `typeProfiles.ts`                                                                        |
+| Pylons and loadouts   | Stations and the loadouts the planner may choose                                                                             |
+| Role tags             | The roles the planner may task                                                                                               |
+| Crew roles            | Seats and the crewmates that fill them                                                                                       |
+| Camera rig            | Offsets and damping                                                                                                          |
+| Aggregate performance | Values fitted by calibration                                                                                                 |
+| Identity              | Faction, name and skin                                                                                                       |
 
 The type registry (R1.7) joins the parts by type id and its test lists what a type lacks. A type that changes every world's cast (a new role in the order of battle) needs its own decision.
 
 ## Where the Old Milestones Went
 
-| Old | State at the audit | New place |
-|---|---|---|
-| F1, F2, S2, S3, S4, C1 | done; follow-ups open | follow-ups to R5.6 and R6.8 |
-| S1 | done but for owner checks | R6.8 |
-| C2 | data model, flights, interim tasker, map done | ATO R2.1; resolution R2.2; intelligence R3.1; search and subscriptions R1.4 |
-| C3 | not started | ground R2.3; naval R4.6 |
-| V1, V2, V3 | mostly done | open items R6.4, R6.8 |
-| V4 | not started | R2.4 |
-| I1 | partly done | side selection R1.4; performance R6.4; flythrough R6.6; checks R2.12 and R6.8 |
-| Free Flight | done | extraction R1.5; open items R6.5, R6.8 |
-| P1 | first version in Free Flight | handover R2.5; stick and effects R6.5, R6.6; departures R3.4 |
-| P2 | mostly done | defaults R2.6; declutter R2.6; open checks R2.12 |
-| P3 | sensor model, radar, threat, maps done | campaign contacts R2.6; the rest R3.2 |
-| P4 | not started | minimum R2.6; the rest R3.3 |
-| P5 | not started | R4.5 |
-| P6 | not started | R6.7 |
-| H1–H5 | H1 partly done | rotary director and AI pilot R2.9; the rest R4.3 |
-| N1–N8 | N1, N2, N4, N5 largely done | bridge data R1.8; terrain for the sim R1.6; entities R3.6; logistics R5.1; the rest R6.8 |
-| G1–G5 | G2, G4, G5 done; G1, G3 partial | R6.4, R6.8 |
-| W1–W9 | W1, W5 done; the rest partial | seeds R1.1; strategic map frame rate R1.1; the rest R6.8 |
+| Old                    | State at the audit                            | New place                                                                                |
+| ---------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| F1, F2, S2, S3, S4, C1 | done; follow-ups open                         | follow-ups to R5.6 and R6.8                                                              |
+| S1                     | done but for owner checks                     | R6.8                                                                                     |
+| C2                     | data model, flights, interim tasker, map done | ATO R2.1; resolution R2.2; intelligence R3.1; search and subscriptions R1.4              |
+| C3                     | not started                                   | ground R2.3; naval R4.6                                                                  |
+| V1, V2, V3             | mostly done                                   | open items R6.4, R6.8                                                                    |
+| V4                     | not started                                   | R2.4                                                                                     |
+| I1                     | partly done                                   | side selection R1.4; performance R6.4; flythrough R6.6; checks R2.12 and R6.8            |
+| Free Flight            | done                                          | extraction R1.5; open items R6.5, R6.8                                                   |
+| P1                     | first version in Free Flight                  | handover R2.5; stick and effects R6.5, R6.6; departures R3.4                             |
+| P2                     | mostly done                                   | defaults R2.6; declutter R2.6; open checks R2.12                                         |
+| P3                     | sensor model, radar, threat, maps done        | campaign contacts R2.6; the rest R3.2                                                    |
+| P4                     | not started                                   | minimum R2.6; the rest R3.3                                                              |
+| P5                     | not started                                   | R4.5                                                                                     |
+| P6                     | not started                                   | R6.7                                                                                     |
+| H1–H5                  | H1 partly done                                | rotary director and AI pilot R2.9; the rest R4.3                                         |
+| N1–N8                  | N1, N2, N4, N5 largely done                   | bridge data R1.8; terrain for the sim R1.6; entities R3.6; logistics R5.1; the rest R6.8 |
+| G1–G5                  | G2, G4, G5 done; G1, G3 partial               | R6.4, R6.8                                                                               |
+| W1–W9                  | W1, W5 done; the rest partial                 | seeds R1.1; strategic map frame rate R1.1; the rest R6.8                                 |
