@@ -344,7 +344,7 @@ describe('the radar and the threat warning (decision 218)', () => {
     ...over,
   });
   const sensors = (contacts: SnapshotContact[], lock: string | null = null): SnapshotSensors => ({
-    radar: { on: true, mode: 'rws', rangeNm: 40, lock, azimuth: 1, elevation: 1 },
+    radar: { on: true, mode: 'rws', range: 40 * 1852, lock, azimuth: 1, elevation: 1 },
     contacts,
     threats: [
       { id: 's', kind: 'SA6', azimuth: Math.PI / 2, state: 'track', ground: true },
@@ -419,5 +419,81 @@ describe('the radar and the threat warning (decision 218)', () => {
     expect(applyCommand(a, { type: 'radar-lock', id: 'x' }).radar.lock).toBeNull();
     for (let i = 0; i < 6; i++) a = applyCommand(a, { type: 'radar-range', delta: 1 });
     expect(a.radar.range).toBe(3);
+  });
+});
+
+describe('the radar, second step (decision 223)', () => {
+  const contact = (over: Partial<SnapshotContact>): SnapshotContact => ({
+    id: 'a',
+    source: 'radar',
+    range: 15_000,
+    azimuth: 0.05,
+    elevation: 0,
+    altitude: 5000,
+    heading: 0,
+    speed: 250,
+    closing: 300,
+    side: null,
+    locked: false,
+    ...over,
+  });
+  const onRadar = (s: AircraftSnapshot) => {
+    const d = initialDisplayState(s);
+    return displayModel(
+      s,
+      { ...d, slots: { ...d.slots, rightMfd: { ...d.slots.rightMfd, format: 'radar-aa' } } },
+      'rightMfd',
+    )!;
+  };
+
+  it('lets a click lock a hostile or unknown radar contact, not a friend or a datalink track', () => {
+    const m = onRadar(
+      snap({
+        sensors: {
+          radar: { on: true, mode: 'rws', range: 40 * 1852, lock: null, azimuth: 1, elevation: 1 },
+          contacts: [
+            contact({ id: 'bandit', side: 'pact' }),
+            contact({ id: 'unknown' }),
+            contact({ id: 'friend', side: 'alliance' }),
+            contact({ id: 'linked', source: 'datalink', side: 'pact' }),
+          ],
+          threats: [],
+        },
+      }),
+    );
+    const hits = m.items.filter((i) => i.kind === 'hit');
+    expect(hits.map((h) => (h.command as { command: { id: string } }).command.id)).toEqual([
+      'bandit',
+      'unknown',
+    ]);
+    expect(JSON.parse(JSON.stringify(m))).toEqual(m);
+  });
+
+  it('labels air combat mode and draws its cone; Pact ranges in kilometers', () => {
+    const acm = onRadar(
+      snap({
+        sensors: {
+          radar: { on: true, mode: 'acm', range: 10 * 1852, lock: null, azimuth: 1, elevation: 1 },
+          contacts: [],
+          threats: [],
+        },
+      }),
+    );
+    expect(acm.buttons[0]).toMatchObject({ label: 'ACM' });
+    expect(acm.items.filter((i) => i.kind === 'line' && i.points[0]![1] === 0.16)).toHaveLength(2);
+    const texts = (m: ReturnType<typeof onRadar>) =>
+      m.items.filter((i) => i.kind === 'text').map((i) => (i as { text: string }).text);
+    expect(texts(acm)).toContain('10 NM');
+    const pact = onRadar(
+      snap({
+        profile: { ...AVIONICS_PROFILES['alliance-fighter']!, skin: 'pact' },
+        sensors: {
+          radar: { on: true, mode: 'rws', range: 80_000, lock: null, azimuth: 1, elevation: 1 },
+          contacts: [],
+          threats: [],
+        },
+      }),
+    );
+    expect(texts(pact)).toContain('80 KM');
   });
 });

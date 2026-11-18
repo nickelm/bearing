@@ -7,13 +7,9 @@
 import type { AvionicsState } from '../sim/avionics/avionics';
 import type { AvionicsProfile } from '../sim/avionics/profiles';
 import type { HudFrame } from '../ui/flight/hud';
-import type {
-  AircraftSnapshot,
-  SnapshotMessage,
-  SnapshotSensors,
-} from '../ui/displays/snapshot';
+import type { AircraftSnapshot, SnapshotMessage, SnapshotSensors } from '../ui/displays/snapshot';
 import { Vec3d } from '../core/vec3d';
-import { RADAR_RANGES_NM } from '../sim/avionics/avionics';
+import { radarDisplayRange } from '../sim/avionics/avionics';
 import type { RadarSpec, SensorPicture } from '../sim/sensors/sensors';
 
 /**
@@ -24,10 +20,16 @@ import type { RadarSpec, SensorPicture } from '../sim/sensors/sensors';
  */
 export function relativePicture(
   pic: SensorPicture,
-  own: { pos: Readonly<Vec3d>; vel: Readonly<Vec3d>; forward: Readonly<Vec3d>; up: Readonly<Vec3d> },
+  own: {
+    pos: Readonly<Vec3d>;
+    vel: Readonly<Vec3d>;
+    forward: Readonly<Vec3d>;
+    up: Readonly<Vec3d>;
+  },
   radius: number,
   radar: RadarSpec | null,
   avionics: AvionicsState,
+  skin: 'alliance' | 'pact' = 'alliance',
 ): SnapshotSensors {
   const right = own.forward.clone().cross(own.up).normalize();
   const fwdH = own.forward.clone();
@@ -68,7 +70,7 @@ export function relativePicture(
       ? {
           on: avionics.radar.on,
           mode: avionics.radar.mode,
-          rangeNm: RADAR_RANGES_NM[avionics.radar.range] ?? 40,
+          range: radarDisplayRange(skin, avionics.radar.range, avionics.radar.mode),
           lock: avionics.radar.lock,
           azimuth: radar.azimuth,
           elevation: radar.elevation,

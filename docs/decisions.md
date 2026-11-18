@@ -3735,3 +3735,17 @@ Siting takes 0.3–1.7 s per world on the main thread. On seed 1983, Vaureko mov
 **Decision:** The owner's review of P3a: MIN and the pin took two of the top row's bezel buttons on every display (decision 217). They are now small icons in the bezel's top corners, drawn by the frame rather than by the format: the pin at the left, upright and in the phosphor color while the slot is pinned, tilted and gray otherwise; minimize at the right, a bar for the tab the display collapses to. The top row of buttons spans between the icons, so all twenty bezel buttons (five on small displays) belong to the format again. The display model carries `pinned`, and the view issues the same UI commands as before (`pin`, `toggle-slot`). `docs/visual-style.md` (Part I, *Displays and Status Strip*, one frame) changes with this decision.
 
 **Reason:** The owner's review. Pin and minimize act on the slot, not on the format, so they belong to the frame, and the formats need the buttons.
+
+### 223. The radar's second step: air combat mode, click to lock, ranges by skin, the threat warning's calls
+
+**Date:** 2026-11-18
+**Decision:** P3b begins with what the radar and the threat warning still lacked after decision 218.
+
+- **Air combat mode.** Dogfight (the F key or M) puts the radar in air combat mode (`acm`): it scans a 10° cone about the nose out to 10 nm every 0.2 s (contacts coast 2 s) and locks the nearest radar contact it finds there, with no key (`acmAcquire`; the host issues the same `radar-lock` command a key would). Breaking a lock in a dogfight returns to the cone; leaving the dogfight, by F or by any other master mode, returns to range-while-search, and a lock held across keeps its single-target track. The scope draws the cone's limits as two dim vertical lines and shows 10 nm (20 km in Pact skins); the HUD draws the cone as a dashed circle about the boresight until the lock, a spatial cue and so the HUD's (rule 14).
+- **Click to lock.** A display model may carry hit spots (`ScreenItem` kind `hit`: a point, a radius and a display command), drawn as nothing. A click on the screen within one issues its command. The radar puts one on each radar contact that is not a friend and not locked, so with the mouse free a click on a contact locks it. This is the mouse half of the designation cursor; a cursor moved by keys waits.
+- **Ranges by skin.** The radar's range steps are 10, 20, 40 and 80 nm in Alliance skins and 20, 40, 80 and 150 km in Pact skins, one step index for both (`radarDisplayRange`): a skin changes units, never layout (rule 14). The snapshot carries the display range in meters.
+- **The threat warning's calls** (`ui/displays/calls.ts`, pure). A new emitter is called once in the messages ("SA6 search radar, 3 o'clock"), with two short beeps; one that starts tracking the aircraft is called again as a warning ("SA6 tracking, 3 o'clock") with three higher beeps; a launch gets a fast warble (no emitter launches until P4). An emitter that goes quiet and returns is new again. The tones are synthesized in the app's one audio context (`WeatherAudio.cue`), at the master volume, silent while paused.
+
+`docs/visual-style.md` (Part I, *HUD*, world-anchored symbols) and `TODO.md` change with this decision.
+
+**Reason:** The owner approved the radar's look and controls and asked to proceed. A dogfight radar that locks by itself is what makes the dogfight master mode worth having, and the RWR's calls let the threat display stay small and collapsed without the pilot missing a new threat.

@@ -129,7 +129,7 @@ Each milestone ends with tests, previews, Part I's acceptance checks for what it
 
 ### P3. Sensors and formats
 
-Split by decision 218: P3a (steps 1, 3, 4 and 5, done) and P3b (the rest). Step 4's dogfight sub-mode and designation cursor moved to P3b.
+Split by decision 218: P3a (steps 1, 3, 4 and 5, done) and P3b (the rest). Step 4's dogfight sub-mode and designation cursor moved to P3b; decision 223 adds air combat mode, click to lock, ranges by skin and the threat warning's calls.
 
 1. Sensor model in `sim/sensors/`: radar by type, mode, range, radar cross-section, aspect, terrain masking and clutter; RWR; visual detection; datalink and AWACS tracks with lower precision and a delay; deterministic, with tests. The AI reads the same picture.
 2. Avionics profiles for every type of the air war's table, with their display complements (the proposal's examples as the first cases).

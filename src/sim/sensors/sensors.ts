@@ -14,7 +14,9 @@
  *   pulse-Doppler set loses a target beaming it (closing speed under the notch).
  *   Range-while-search scans every 2 s and keeps contacts 6 s; track-while-scan
  *   every second, keeping them 4 s; single-target track follows only the locked
- *   contact, every 0.1 s, and drops it when it leaves the radar.
+ *   contact, every 0.1 s, and drops it when it leaves the radar. Air combat mode
+ *   (dogfight; decision 223) scans a 10° cone about the nose out to 10 nm every
+ *   0.2 s, and the avionics lock the first contact it finds.
  * - **RWR.** An emitting radar is heard out to 1.5 times its own detection range
  *   for a 5 m² target, when its scan covers the aircraft and the line is clear:
  *   by bearing and kind, searching, tracking (locked on this aircraft) or launching.
@@ -30,7 +32,7 @@ import type { Side } from '../../campaign/cast';
 import { Vec3d } from '../../core/vec3d';
 
 export type RadarKind = 'pulse' | 'pulse-doppler';
-export type RadarMode = 'rws' | 'tws' | 'stt';
+export type RadarMode = 'rws' | 'tws' | 'stt' | 'acm';
 
 export interface RadarSpec {
   kind: RadarKind;
@@ -134,7 +136,46 @@ export const SCAN: Record<RadarMode, { period: number; coast: number }> = {
   rws: { period: 2, coast: 6 },
   tws: { period: 1, coast: 4 },
   stt: { period: 0.1, coast: 1 },
+  acm: { period: 0.2, coast: 2 },
 };
+
+/** Air combat mode's cone about the nose (half angle, rad) and reach (m) (decision 223). */
+export const ACM_CONE = (10 * Math.PI) / 180;
+export const ACM_RANGE = 10 * 1852;
+
+/** The radar as air combat mode narrows it: the cone, and no farther than its reach. */
+export function acmRadar(spec: RadarSpec): RadarSpec {
+  return {
+    ...spec,
+    azimuth: ACM_CONE,
+    elevation: ACM_CONE,
+    range: Math.min(spec.range, ACM_RANGE),
+  };
+}
+
+/**
+ * The radar contact air combat mode locks (decision 223): the nearest one seen by the
+ * radar in the cone about the nose, within its reach; null if none.
+ */
+export function acmAcquire(
+  picture: SensorPicture,
+  pos: Readonly<Vec3d>,
+  fwd: Readonly<Vec3d>,
+  up: Readonly<Vec3d>,
+  time: number,
+): string | null {
+  let best: string | null = null;
+  let bestRange = ACM_RANGE;
+  for (const c of picture.contacts) {
+    if (c.source !== 'radar' || time - c.seen > SCAN.acm.period * 1.5) continue;
+    const p = new Vec3d(c.pos[0], c.pos[1], c.pos[2]);
+    const a = angles(pos, p, fwd, up);
+    if (Math.abs(a.az) > ACM_CONE || Math.abs(a.el) > ACM_CONE || a.range > bestRange) continue;
+    best = c.id;
+    bestRange = a.range;
+  }
+  return best;
+}
 
 /** Range at which a radar of `spec` detects a target of `rcs` m², closing (`aspect` 1) or receding (0). */
 export function detectionRange(spec: RadarSpec, rcs: number, aspect = 1): number {
@@ -253,8 +294,9 @@ export class SensorModel {
     feed: DatalinkFeed | null,
   ): void {
     const t = env.time;
-    const radar = own.radarOn ? own.radar : null;
     const mode = own.radarMode === 'stt' && !own.lock ? 'tws' : own.radarMode;
+    const radar =
+      own.radarOn && own.radar ? (mode === 'acm' ? acmRadar(own.radar) : own.radar) : null;
     const scanTimes = SCAN[mode];
     const scan = Math.floor(t / scanTimes.period);
     const others = targets.filter((x) => x.id !== own.id);

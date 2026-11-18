@@ -46,6 +46,8 @@ async function main(): Promise<void> {
   // `&displays=<mode>` the displays are drawn over the render too (check 7 with the full HUD).
   const panels = query.get('panels') === '1' || query.has('displays');
   if (panels) shot.frame.panels = true;
+  // `&acm=1`: the radar's air combat mode cone about the boresight (decision 223).
+  if (query.get('acm') === '1') shot.frame.acmCone = (10 * Math.PI) / 180;
   else for (const m of shot.messages) hud.message(m, 600);
   hud.draw(
     shot.frame,

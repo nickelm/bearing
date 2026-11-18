@@ -70,7 +70,9 @@ import type { ControlsAction } from '../ui/displays/model';
 import { AVIONICS_PROFILES } from '../sim/avionics/profiles';
 import { relativePicture, snapshotFromHud } from './snapshot';
 import type { SnapshotSensors } from '../ui/displays/snapshot';
-import { SensorModel } from '../sim/sensors/sensors';
+import { ACM_CONE, acmAcquire, SensorModel } from '../sim/sensors/sensors';
+import { threatCalls } from '../ui/displays/calls';
+import type { ThreatTone } from '../ui/displays/calls';
 import { lineOfSight } from '../sim/sensors/lineOfSight';
 import type { DatalinkFeed, SensorEnv, SensorTarget } from '../sim/sensors/sensors';
 import { buildTraffic, trafficState, trafficTargets } from './traffic';
@@ -119,6 +121,8 @@ export interface FreeFlightDeps {
   status(): string;
   /** The weather's sound, for the pause menu's volume and mute (none: no sound controls). */
   sound?: SoundSettings;
+  /** Sounds a threat warning tone (decision 223); none: silent. */
+  tone?(kind: ThreatTone): void;
   /** Another weather was chosen on the start screen or in the pause menu. */
   weatherChanged?(preset: WeatherPreset): void;
 }
@@ -206,6 +210,8 @@ export class FreeFlight {
   /** The flown aircraft's sensors and their picture, relative to it, for the displays. */
   private readonly sensors = new SensorModel();
   private sensorSnap: SnapshotSensors | null = null;
+  /** The emitters the threat warning heard last, for its calls (decision 223). */
+  private threatsHeard = new Map<string, 'search' | 'track' | 'launch'>();
   /** The mouse's pointer lock, shared by both inputs and toggled by Tab (decision 193). */
   readonly capture: MouseCapture;
   /** When the browser last took the mouse back and paused (ms), so its Escape does not resume. */
@@ -1220,6 +1226,8 @@ export class FreeFlight {
     frame.panels = true;
     this.updateDisplays(frame);
     frame.target = this.hudTarget(m, this.deps.globe.chase.eye);
+    const radar = this.displays.avionics.radar;
+    frame.acmCone = radar.on && radar.mode === 'acm' && !radar.lock ? ACM_CONE : null;
     this.hud.draw(frame, project);
   }
 
@@ -1239,6 +1247,7 @@ export class FreeFlight {
   private startTraffic(): void {
     this.sensors.reset();
     this.sensorSnap = null;
+    this.threatsHeard = new Map();
     const base = this.baseId !== null ? this.basePoints.get(this.baseId) : undefined;
     this.traffic =
       this.options.traffic && base
@@ -1361,7 +1370,21 @@ export class FreeFlight {
       R,
       sys.includes('radar-aa') ? (profile.radar ?? null) : null,
       this.displays.avionics,
+      profile.skin,
     );
+    // Air combat mode locks the first contact in its cone (decision 223).
+    const radar = this.displays.avionics.radar;
+    if (radar.on && radar.mode === 'acm' && !radar.lock) {
+      const id = acmAcquire(pic, m.pos, forward, upBody, this.gameTime);
+      if (id) this.displays.command({ to: 'avionics', command: { type: 'radar-lock', id } });
+    }
+    // The threat warning's calls: a line in the messages and a tone (decision 223).
+    const called = threatCalls(this.threatsHeard, this.sensorSnap.threats);
+    this.threatsHeard = called.heard;
+    for (const c of called.calls) {
+      this.hud.message(c.text, 4, c.warn);
+      this.deps.tone?.(c.tone);
+    }
   }
 
   /** The locked contact as the HUD's target box: relative to the camera, with its range. */

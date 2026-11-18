@@ -16,6 +16,14 @@ import type { RadarMode } from '../sensors/sensors';
 
 /** The air-to-air radar's display ranges, nose to the scope's top (nautical miles; decision 218). */
 export const RADAR_RANGES_NM = [10, 20, 40, 80] as const;
+/** The same steps in round kilometers for Pact skins (decision 223). */
+export const RADAR_RANGES_KM = [20, 40, 80, 150] as const;
+
+/** The radar's display range (m) at step `i` in a skin; air combat mode shows its 10 nm. */
+export function radarDisplayRange(skin: 'alliance' | 'pact', i: number, mode?: RadarMode): number {
+  if (mode === 'acm') return skin === 'pact' ? 20_000 : 10 * 1852;
+  return skin === 'pact' ? (RADAR_RANGES_KM[i] ?? 80) * 1000 : (RADAR_RANGES_NM[i] ?? 40) * 1852;
+}
 
 export type MasterMode =
   'ground' | 'navigation' | 'air-to-air' | 'dogfight' | 'air-to-ground' | 'approach' | 'hover';
@@ -66,16 +74,33 @@ export function initialAvionics(onGround: boolean): AvionicsState {
   };
 }
 
+/** Air combat mode belongs to dogfight: any other master mode searches again. */
+function leaveAcm(r: AvionicsState['radar']): AvionicsState['radar'] {
+  return r.mode === 'acm' ? { ...r, mode: 'rws' } : r;
+}
+
 export function applyCommand(s: AvionicsState, c: AvionicsCommand): AvionicsState {
   switch (c.type) {
     case 'master-mode':
       if (c.mode === 'dogfight') return applyCommand(s, { type: 'dogfight' });
-      return { ...s, masterMode: c.mode, manual: true };
+      return { ...s, masterMode: c.mode, manual: true, radar: leaveAcm(s.radar) };
     case 'dogfight':
-      // The override key: in, and out again to the mode before it.
+      // The override key: in, and out again to the mode before it. The radar goes to air
+      // combat mode and back to range-while-search, keeping a lock it holds (decision 223).
       return s.masterMode === 'dogfight'
-        ? { ...s, masterMode: s.beforeDogfight, manual: s.beforeDogfight !== 'navigation' }
-        : { ...s, masterMode: 'dogfight', manual: true, beforeDogfight: s.masterMode };
+        ? {
+            ...s,
+            masterMode: s.beforeDogfight,
+            manual: s.beforeDogfight !== 'navigation',
+            radar: { ...s.radar, mode: s.radar.lock ? 'stt' : 'rws' },
+          }
+        : {
+            ...s,
+            masterMode: 'dogfight',
+            manual: true,
+            beforeDogfight: s.masterMode,
+            radar: { ...s.radar, mode: s.radar.lock ? 'stt' : 'acm' },
+          };
     case 'auto-mode':
       return { ...s, manual: false };
     case 'master-arm':
@@ -97,8 +122,15 @@ export function applyCommand(s: AvionicsState, c: AvionicsCommand): AvionicsStat
         radar: {
           ...s.radar,
           lock: c.id,
-          // A lock is single-target track; breaking it returns to the search it came from.
-          mode: c.id ? 'stt' : s.radar.mode === 'stt' ? 'tws' : s.radar.mode,
+          // A lock is single-target track; breaking it returns to the search it came from,
+          // air combat mode in a dogfight (decision 223).
+          mode: c.id
+            ? 'stt'
+            : s.masterMode === 'dogfight'
+              ? 'acm'
+              : s.radar.mode === 'stt'
+                ? 'tws'
+                : s.radar.mode,
         },
       };
   }
@@ -140,5 +172,5 @@ export function autoMode(s: AvionicsState, i: ModeInputs): AvionicsState {
   if (s.manual && !i.onGround) return s;
   const mode = triggeredMode(s.masterMode, i);
   if (mode === s.masterMode && !(s.manual && i.onGround)) return s;
-  return { ...s, masterMode: mode, manual: false };
+  return { ...s, masterMode: mode, manual: false, radar: leaveAcm(s.radar) };
 }

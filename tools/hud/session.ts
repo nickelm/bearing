@@ -803,6 +803,21 @@ async function main(): Promise<void> {
     check((snapNow?.threats.length ?? 0) >= 1, 'traffic: the threat warning hears a radar');
     if (lockable)
       check(locked !== null && boxed !== null, 'traffic: L locks a contact, boxed on the HUD');
+    // The threat warning's calls reach the messages (decision 223).
+    const calls = ff.hud.log.filter((l) => l.text.some((t) => /radar|tracking/.test(t))).length;
+    check(calls >= 1, `traffic: the threat warning calls its emitters (${calls})`);
+    // Dogfight: air combat mode, and back to search after it (decision 223).
+    key('KeyU');
+    key('KeyF');
+    for (let i = 0; i < 12; i++) frame();
+    const radarMode = ff.displays.avionics.radar.mode;
+    key('KeyF');
+    const after = ff.displays.avionics.radar.mode;
+    (result.traffic as Record<string, unknown>).dogfight = [radarMode, after];
+    check(
+      (radarMode === 'acm' || radarMode === 'stt') && (after === 'rws' || after === 'stt'),
+      'traffic: F puts the radar in air combat mode and back',
+    );
     key('Escape');
     const off = q<HTMLInputElement>(ff.pause.el, '.ff-traffic');
     off.checked = false;

@@ -44,8 +44,9 @@ export interface SnapshotSensors {
   /** The air-to-air radar, if carried: power, mode, display range (nm), scan limits (rad). */
   radar: {
     on: boolean;
-    mode: 'rws' | 'tws' | 'stt';
-    rangeNm: number;
+    mode: 'rws' | 'tws' | 'stt' | 'acm';
+    /** The display range (m): a step in the skin's units, 10 nm in air combat mode (decision 223). */
+    range: number;
     lock: string | null;
     azimuth: number;
     elevation: number;

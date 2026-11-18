@@ -1319,6 +1319,7 @@ async function main(): Promise<void> {
         status: () =>
           `World ${worldParams.seed}: ${gui.status.generation}${globe.terrainReady ? '' : ' (the terrain must finish before you fly)'}`,
         sound,
+        tone: (kind) => audio.cue(kind),
         weatherChanged: (preset) => (atmosphere.weather = preset),
       },
       flightUrl!,

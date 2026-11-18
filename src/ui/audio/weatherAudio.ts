@@ -261,6 +261,42 @@ export class WeatherAudio {
     this.ambience?.set(levels);
   }
 
+  /**
+   * A threat warning tone (decision 223): two short beeps for a new emitter, three higher
+   * ones when one tracks the aircraft, a fast warble on a launch. Silent while paused or
+   * before the audio has started.
+   */
+  cue(kind: 'new' | 'track' | 'launch'): void {
+    const context = this.context;
+    if (!context || !this.master || this.paused || context.state !== 'running') return;
+    const beeps =
+      kind === 'new'
+        ? { n: 2, f: 900, on: 0.07, gap: 0.08 }
+        : kind === 'track'
+          ? { n: 3, f: 1300, on: 0.08, gap: 0.06 }
+          : { n: 10, f: 1600, on: 0.04, gap: 0.03 };
+    try {
+      const t0 = context.currentTime + 0.02;
+      for (let i = 0; i < beeps.n; i++) {
+        const at = t0 + i * (beeps.on + beeps.gap);
+        const osc = context.createOscillator();
+        const gain = context.createGain();
+        osc.type = 'square';
+        osc.frequency.value = kind === 'launch' && i % 2 ? beeps.f * 0.75 : beeps.f;
+        gain.gain.setValueAtTime(0, at);
+        gain.gain.linearRampToValueAtTime(0.06, at + 0.005);
+        gain.gain.setValueAtTime(0.06, at + beeps.on - 0.005);
+        gain.gain.linearRampToValueAtTime(0, at + beeps.on);
+        osc.connect(gain);
+        gain.connect(this.master);
+        osc.start(at);
+        osc.stop(at + beeps.on + 0.01);
+      }
+    } catch (error) {
+      console.warn('The threat tone could not be played.', error);
+    }
+  }
+
   /** Schedules the thunder of a strike: it sounds after the sound's travel time. */
   thunder(strike: ThunderStrike): void {
     const context = this.context;

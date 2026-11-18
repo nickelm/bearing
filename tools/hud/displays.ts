@@ -8,7 +8,7 @@
  * `&sensors=0` leaves it out.
  */
 import type { MasterMode } from '../../src/sim/avionics/avionics';
-import { initialAvionics } from '../../src/sim/avionics/avionics';
+import { initialAvionics, radarDisplayRange } from '../../src/sim/avionics/avionics';
 import { AVIONICS_PROFILES } from '../../src/sim/avionics/profiles';
 import type {
   AircraftSnapshot,
@@ -37,7 +37,7 @@ export async function drawDisplays(q: URLSearchParams): Promise<void> {
     avionics: initialAvionics(ground),
     position: { lat: 0.8, lon: 0.3, radius: 1_000_000 },
     destination: { label: 'RWY 07', bearing: 1.2, distance: 30_000 },
-    sensors: helo || q.get('sensors') === '0' ? null : picture(ground),
+    sensors: helo || q.get('sensors') === '0' ? null : picture(ground, profile.skin),
     track: 0.6,
     heading: 0.6,
     onGround: ground,
@@ -99,7 +99,7 @@ export async function drawDisplays(q: URLSearchParams): Promise<void> {
 }
 
 /** A made-up sensor picture: every kind of contact on the radar, one locked, and three emitters. */
-function picture(ground: boolean): SnapshotSensors {
+function picture(ground: boolean, skin: 'alliance' | 'pact'): SnapshotSensors {
   const c = (id: string, over: Partial<SnapshotContact>): SnapshotContact => ({
     id,
     source: 'radar',
@@ -119,7 +119,7 @@ function picture(ground: boolean): SnapshotSensors {
     radar: {
       on: !ground,
       mode: ground ? 'rws' : 'stt',
-      rangeNm: 40,
+      range: radarDisplayRange(skin, 2),
       lock,
       azimuth: Math.PI / 3,
       elevation: Math.PI / 3,

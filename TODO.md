@@ -783,10 +783,11 @@ The sensor model, avionics profiles with display complements, datalink tracks, t
 - [x] Free Flight targets: scripted traffic and emitters as a start-screen option, so the formats have something to sense (decision 218)
   - [ ] Traffic on the moving map (datalink tracks and threat rings, with the map's overlays)
 - [x] Air-to-air radar format: B-scope with range-while-search, track-while-scan and single-target track; contact altitude and heading; datalink tracks marked; LOCK, BRK and the hot keys L and U; the HUD's target box (decision 218)
-  - [ ] Dogfight sub-mode, a designation cursor with the mouse, the elevation coverage and scan bars
-  - [ ] Pact skins: the radar's ranges in round kilometers (20, 40, 80, 150), not converted nautical miles
+  - [x] Dogfight sub-mode (air combat mode with its automatic lock and the HUD's cone), a click on a contact locks it (decision 223)
+  - [ ] A designation cursor moved by keys, the elevation coverage and scan bars
+  - [x] Pact skins: the radar's ranges in round kilometers (20, 40, 80, 150), not converted nautical miles (decision 223)
 - [x] Threat warning format: RWR symbols by bearing and type, lock and launch indications (decision 218)
-  - [ ] A new threat's audio tone and a message call
+  - [x] A new threat's audio tone and a message call (decision 223)
 - [ ] Air-to-ground radar format: ground map, moving-target mode; the terrain-following scope for the F-111 and Su-24 analogues
 - [ ] Stores format: pylons and weapons, selection, fuzing, release mode (CCIP or CCRP), quantity and ripple, jettison, countermeasure programs
 - [ ] Engines and fuel format, complete: engine states, damage and failures

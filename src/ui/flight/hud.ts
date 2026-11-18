@@ -177,6 +177,11 @@ export interface HudFrame {
    * and a label (its range), drawn as a world-anchored target box.
    */
   target?: { point: [number, number, number]; label: string } | null;
+  /**
+   * The radar's air combat mode cone about the boresight (half angle, rad), while it
+   * searches in a dogfight (decision 223); else null.
+   */
+  acmCone?: number | null;
   /** The mouse's control cursor, drawn in its own color (controlCursor.ts, decision 198). */
   control?: ControlCursor | null;
   debug: {
@@ -379,6 +384,44 @@ export class Hud {
     if (f.control) drawControlCursor(c, f.control, project, W, H, s);
   }
 
+  /** Air combat mode's cone about the boresight, dashed (decision 223). */
+  private acmCircle(b: [number, number, number], cone: number, project: Projector): void {
+    const n = Math.hypot(...b) || 1;
+    const [bx, by, bz] = [b[0] / n, b[1] / n, b[2] / n];
+    // Two directions across the boresight.
+    const ref = Math.abs(by) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+    let ux = by * ref[2]! - bz * ref[1]!;
+    let uy = bz * ref[0]! - bx * ref[2]!;
+    let uz = bx * ref[1]! - by * ref[0]!;
+    const un = Math.hypot(ux, uy, uz);
+    [ux, uy, uz] = [ux / un, uy / un, uz / un];
+    const vx = by * uz - bz * uy;
+    const vy = bz * ux - bx * uz;
+    const vz = bx * uy - by * ux;
+    const pts: { x: number; y: number }[] = [];
+    for (let i = 0; i <= 48; i++) {
+      const a = (i / 48) * 2 * Math.PI;
+      const [cu, sv] = [Math.cos(a) * Math.sin(cone), Math.sin(a) * Math.sin(cone)];
+      const k = Math.cos(cone);
+      const p = project(
+        bx * k + ux * cu + vx * sv,
+        by * k + uy * cu + vy * sv,
+        bz * k + uz * cu + vz * sv,
+        false,
+      );
+      if (!p) return;
+      pts.push(p);
+    }
+    const c = this.ctx;
+    c.save();
+    c.setLineDash([6, 6]);
+    this.stroke(() => {
+      c.beginPath();
+      pts.forEach((p, i) => (i ? c.lineTo(p.x, p.y) : c.moveTo(p.x, p.y)));
+    });
+    c.restore();
+  }
+
   /** The locked contact's box, world-anchored, with its range under it (decision 218). */
   private targetBox(
     t: { point: [number, number, number]; label: string },
@@ -445,6 +488,7 @@ export class Hud {
         c.lineTo(b.x, b.y - 3 * s);
       });
     }
+    if (f.acmCone) this.acmCircle(f.boresight, f.acmCone, project);
     // Flight path marker: a circle with wings and a fin.
     // A helicopter's velocity points anywhere in the hover: its marker waits for 12 m/s.
     if (Math.hypot(...f.velocity) > (f.hover ? 12 : 0.5)) {

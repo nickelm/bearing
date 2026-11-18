@@ -15,6 +15,7 @@ import type { FormatId, SlotId } from '../../sim/avionics/profiles';
 import type { BezelButton, DisplayModel, DisplayState, ScreenItem, Tone } from './model';
 import { BEZEL_BUTTONS, SMALL_BUTTONS } from './model';
 import type { AircraftSnapshot } from './snapshot';
+import { ACM_CONE } from '../../sim/sensors/sensors';
 
 const LB = 0.453_592_37;
 
@@ -96,6 +97,7 @@ export function displayModel(
     buttons[0] = {
       label: r.mode.toUpperCase(),
       active: false,
+      // From air combat mode or a lock, the button returns to range-while-search.
       command: av({ type: 'radar-mode', mode: r.mode === 'rws' ? 'tws' : 'rws' }),
     };
     buttons[1] = {
@@ -328,7 +330,7 @@ export function lockCandidate(s: AircraftSnapshot): string | null {
       (c) =>
         c.source === 'radar' &&
         Math.abs(c.azimuth) <= r.azimuth &&
-        c.range <= r.rangeNm * NM &&
+        c.range <= r.range &&
         c.side !== 'alliance',
     )
     .sort((a, b) => a.range - b.range);
@@ -356,7 +358,7 @@ function radarFormat(s: AircraftSnapshot): ScreenItem[] {
   const y0 = 0.16;
   // The scope ends above two lines for the locked contact, clear of the side buttons' labels.
   const y1 = 0.78;
-  const scale = r.rangeNm * NM;
+  const scale = r.range;
   const items: ScreenItem[] = [
     {
       kind: 'line',
@@ -377,7 +379,7 @@ function radarFormat(s: AircraftSnapshot): ScreenItem[] {
     text(
       0.04,
       0.42,
-      pact ? `${Math.round((r.rangeNm * NM) / 1000)} KM` : `${r.rangeNm} NM`,
+      pact ? `${Math.round(r.range / 1000)} KM` : `${Math.round(r.range / NM)} NM`,
       'small',
       'left',
       'normal',
@@ -406,11 +408,33 @@ function radarFormat(s: AircraftSnapshot): ScreenItem[] {
     items.push(text(0.5, 0.5, 'RADAR OFF', 'normal', 'center', 'dim'));
     return items;
   }
+  const xAt = (az: number) => x0 + ((x1 - x0) * (az + r.azimuth)) / (2 * r.azimuth);
+  if (r.mode === 'acm') {
+    // Air combat mode's cone about the nose (decision 223).
+    for (const az of [-ACM_CONE, ACM_CONE])
+      items.push({
+        kind: 'line',
+        points: [
+          [xAt(az), y0],
+          [xAt(az), y1],
+        ],
+        tone: 'dim',
+      });
+  }
   let locked: (typeof sens.contacts)[number] | null = null;
   for (const c of sens.contacts) {
     if (Math.abs(c.azimuth) > r.azimuth || c.range > scale) continue;
-    const x = x0 + ((x1 - x0) * (c.azimuth + r.azimuth)) / (2 * r.azimuth);
+    const x = xAt(c.azimuth);
     const y = y1 - ((y1 - y0) * c.range) / scale;
+    // A click on a radar contact not a friend locks it (decision 223).
+    if (c.source === 'radar' && c.side !== 'alliance' && !c.locked)
+      items.push({
+        kind: 'hit',
+        x,
+        y,
+        r: 0.05,
+        command: { to: 'avionics', command: { type: 'radar-lock', id: c.id } },
+      });
     const q = 0.018;
     const tone: Tone = c.source === 'datalink' ? 'dim' : 'normal';
     if (c.side === 'alliance') items.push({ kind: 'arc', x, y, r: q, tone });

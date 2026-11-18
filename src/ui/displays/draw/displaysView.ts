@@ -89,6 +89,25 @@ export class DisplaysView {
         this.send({ to: 'ui', command: { type: 'toggle-slot', slot: id } }),
       );
       box.append(screen, title, pin, min);
+      // Clicks on the screen work its hit spots: a contact on the radar locks (decision 223).
+      screen.addEventListener('click', (e) => {
+        const m = this.shown.get(id);
+        if (!m) return;
+        const r = screen.getBoundingClientRect();
+        const x = (e.clientX - r.left) / r.width;
+        const y = (e.clientY - r.top) / r.height;
+        let best: DisplayCommand | null = null;
+        let bestD = Infinity;
+        for (const it of m.items) {
+          if (it.kind !== 'hit') continue;
+          const d = Math.hypot(it.x - x, it.y - y);
+          if (d <= it.r && d < bestD) {
+            best = it.command;
+            bestD = d;
+          }
+        }
+        if (best) this.send(best);
+      });
       // The wheel over the map steps its range in cursor mode (Proposal 0006; decision 202).
       let wheel = 0;
       box.addEventListener(
@@ -482,6 +501,8 @@ function drawItem(
   c.lineWidth = 1.5;
   c.setLineDash([]);
   switch (it.kind) {
+    case 'hit':
+      break;
     case 'text':
       c.font = `${Math.round(sizes[it.size])}px ui-monospace, 'JetBrains Mono', Consolas, monospace`;
       c.textAlign = it.align;

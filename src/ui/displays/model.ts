@@ -73,6 +73,11 @@ export type ScreenItem =
     }
   /** A log of lines, wrapped to the screen's width and stacked up from the bottom, newest last. */
   | { kind: 'log'; lines: { text: string; tone: Tone }[] }
+  /**
+   * A spot on the screen a click works (decision 223): within `r` of (`x`, `y`) it issues
+   * `command`, as the designation cursor does on a real display. Drawn as nothing.
+   */
+  | { kind: 'hit'; x: number; y: number; r: number; command: DisplayCommand }
   /** A bar of `fill` (0..1) in a frame, filling up (vertical) or right. */
   | {
       kind: 'bar';
