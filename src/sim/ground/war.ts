@@ -62,6 +62,9 @@ export const OFFENSIVE_PRESSURE = 0.5;
 export const CULMINATION = 0.5;
 export const CAS_KILL = 0.04;
 export const LOCAL_SUPPLY = 0.25;
+/** The map's unit grid behind a segment: first row's depth and the spacing of columns and rows (m). */
+export const UNIT_DEPTH = 10e3;
+export const UNIT_SPACING = 14e3;
 
 const other = (s: Side): Side => (s === 'alliance' ? 'pact' : 'alliance');
 
@@ -408,10 +411,17 @@ export class GroundWar implements TickProcess {
           const brigades = [
             ...new Set(f.members[side][k]!.map((id) => this.orbat.battalions[id]!.brigade)),
           ].sort((a, b) => a - b);
+          // A grid behind the segment: columns UNIT_SPACING apart along it, rows deeper.
+          const cols = Math.max(
+            1,
+            Math.min(brigades.length, Math.floor(((s.to - s.from) * f.length) / UNIT_SPACING)),
+          );
           brigades.forEach((id, j) => {
             const br = this.orbat.brigades[id]!;
-            const frac = s.from + ((j + 0.5) / brigades.length) * (s.to - s.from);
-            const depth = j % 2 === 0 ? 12e3 : 28e3;
+            const col = j % cols;
+            const row = Math.floor(j / cols);
+            const frac = s.from + ((col + 0.5) / cols) * (s.to - s.from);
+            const depth = UNIT_DEPTH + row * UNIT_SPACING;
             const p = this.frontPoint(f.input.theater, frac, side, depth)!.point;
             const bns = br.battalions.map((b) => this.orbat.battalions[b]!);
             units.push({

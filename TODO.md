@@ -171,7 +171,8 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] Comparison tool: one side's air support suppressed; report the front's difference (`tools/airSupport.preview.ts`)
 - [x] Benchmark: battalions plus weather plus air war in the worker at 64× and 256× (decision 251)
 - [ ] Owner: the moving front and the unit symbols on the map (`npm run dev`, seed 4, Region band over the front, run at 64× for a few hours)
-- [ ] Part II's check of the unit symbols (preview views with `SCENE=strategic`; needs the ground picture in `tools/render.preview.ts`)
+- [ ] Part II's checks of the unit symbols (`SCENE=strategic VIEWS=ground`, with `CVD=1` for check 4): the first render (seed 4, a day in) reads; symbols still touch in an oblique view's distance where the attacker masses
+- [x] Unit symbols in a grid behind each segment (columns and rows 14 km apart; the first render piled twenty Pact regiments on one corridor)
 - [ ] Reserves and their commitment, motorized infantry, echelon marks on the symbols (R3.6)
 - [ ] Seed 10's response to suppressed air support is not monotonic (both suppressed runs stall the Pact's advance): look at how the air war's allocation shifts when a category is removed
 

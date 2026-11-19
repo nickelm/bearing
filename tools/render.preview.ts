@@ -744,6 +744,18 @@ export const STRATEGIC_PREVIEW_VIEWS: PreviewView[] = [
     day: 1,
     target: 'front',
   },
+  // The ground war a day in (R2.3): the moved front and the unit symbols at the Region band.
+  {
+    name: 'ground',
+    dLat: 0,
+    dLon: 0,
+    altitude: 250 * KM,
+    tilt: 0,
+    heading: 0,
+    localTime: 14,
+    day: 1,
+    target: 'front',
+  },
   {
     name: 'winter',
     dLat: 0,
@@ -2400,6 +2412,8 @@ async function renderStrategic(
       if (when < simWorld.sim.time) simWorld = createSimWorld(airConfig);
       simWorld.sim.advanceTo(when);
       scene.setMissions(simWorld.air?.liveMissions() ?? []);
+      // The ground war's front line now and its unit symbols (R2.3).
+      scene.setGround(simWorld.ground?.picture() ?? null);
       scene.setAirTime(when);
       scene.airView.routes = process.env.ROUTES === '1';
       scene.setAirVisible('routes', scene.airView.routes);
