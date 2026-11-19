@@ -41,9 +41,9 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 
 ### R1.3 A headless day of war
 
-- [ ] `tools/war.preview.ts`: build a pinned seed's campaign world, run the sim for 24 game hours as fast as possible, report errors, worker step cost per game hour, missions flown and the state hash
-- [ ] Measure the worker's cost at 64× on the three seeds with the interim tasker; record it in the audit
-- [ ] Replace or supplement `tests/air.test.ts`'s synthetic world with a small generated world (fast parameters)
+- [x] `tools/war.preview.ts`: build a pinned seed's campaign world, run the sim for 24 game hours as fast as possible, report errors, worker step cost per game hour, missions flown and the state hash (decision 236)
+- [x] Measure the worker's cost at 64× on the three seeds with the interim tasker; record it in the audit (7–12 ms per game hour, 0.02% of real time)
+- [x] Replace or supplement `tests/air.test.ts`'s synthetic world with a small generated world (fast parameters): `tests/war.test.ts`, with the world's own climate
 
 ### R1.4 Mission search shell and side selection
 

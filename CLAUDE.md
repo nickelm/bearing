@@ -31,6 +31,7 @@ Guidance for Claude Code sessions in this repository. **`docs/roadmap.md` is the
 | Displays, checks 12–13   | `node tools/displays.screens.mjs` with `npm run dev` up: every master mode, both skins, 1366 × 768 and 1920 × 1080, color-vision views (env: `MODES`, `SIZES`, `CVD=0`, `OUT_DIR`) → `tools/out/displays/` (decision 200) |
 | World diversity metrics  | `npx vitest run --config vitest.tools.config.ts tools/diversity.preview.ts` (env: `SEEDS` or `FROM`/`COUNT`, `GLOBAL=1` for eroded worlds, `GLOBAL_SEEDS`, `GRES`, `OUT`) → `tools/out/diversity.md`: proposal 0007's criteria over 20 seeds (decision 204) |
 | Airfield siting          | `npx vitest run --config vitest.tools.config.ts tools/airbaseWater.preview.ts --disable-console-intercept` (env: `SEEDS`, `GRES`, `ALL=1`): each airbase's pad on the eroded world before and after siting (decision 220) |
+| Headless day of war      | `npx vitest run --config vitest.tools.config.ts tools/war.preview.ts --disable-console-intercept` (env: `SEEDS`, `HOURS`, `RATE`, `OUT`) → `tools/out/war.md`: the campaign on the demo seeds, stepped at 64× and in one jump, with the worker's cost (decision 236) |
 | Ground map               | `npx vitest run --config vitest.tools.config.ts tools/groundMap.preview.ts` (env: `SEED`, `LAT`/`LON`, `KM`, `ALT`, `RANGES`) → `tools/out/groundmap-<nm>.png` and `.json` (decision 226) |
 | Browser smoke test       | `npm run build && npm run preview`, then `node tools/browser.smoke.mjs` (env: `MODE`, `WORLD`, `ONLY`, `SCENES`, `OUT`) → `tools/out/browser/` (decision 144) |
 

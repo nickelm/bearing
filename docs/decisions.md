@@ -3913,3 +3913,20 @@ Two aids stay. While `frontTrace.sink` is set, `buildFronts` appends one line pe
 **How it was checked.** `tests/simState.test.ts`: 6 h, save, restore, 6 h more gives the 12 h hash on a generated world with the air war, in steps of 1 s, 16 s (64× at the worker's longest step) and 10 min; a saved state is independent of its simulation and loads twice alike; a mismatched state is refused; a restored run logs the same launches; an alarm survives a backward seek before it goes off and is set again by a seek to before it was made, and a seek back and forth reaches the straight run's hash; auto-slowdown stops at the alarm in the straight run's state; checkpoints are taken and thinned, and a seek to the middle of 17 days reaches the straight state; a saved host loads and runs on alike.
 
 **Reason:** rule 19 asks that nothing outside the log changes campaign state and that replaying the log from a snapshot reproduces it. The sim already kept events as data and drew randomness from keyed forks, so saving needs only each part's mutable data. Checkpoints keep a backward seek short at any campaign length (six game hours of replay at most, about a second of worker time today).
+
+### 236. A headless day of war: the worker's cost on the demo seeds
+
+**Date:** 2026-11-19
+**Decision:** R1.3. `tools/war.preview.ts` builds each demo seed's campaign world as the app does (the coarse pass at `COARSE_RESOLUTION`, the weather climate from its maps, the default campaign start) and runs the campaign for 24 game hours twice: stepped as the worker steps it at 64× (30 steps per real second, each new hour's weather fields computed as the worker sends them) and in one jump. It writes `tools/out/war.md` and fails on an error or on two different end states (`SEEDS`, `HOURS`, `RATE`, `OUT`). `tests/war.test.ts` runs the same setup on a small generated world for 12 hours, with the world's own climate; `tests/air.test.ts` keeps its synthetic climate.
+
+Measured on this session's machine (Intel Xeon, Node 22):
+
+| Seed | ms per game hour at 64× | Worst step | One jump | Missions launched (A/P) | Airborne mean / max |
+| --- | --- | --- | --- | --- | --- |
+| 4 | 11.7 | 65 ms | 2.6 ms | 93/87 | 36.8 / 47 |
+| 10 | 9.8 | 40 ms | 1.7 ms | 91/95 | 35.2 / 48 |
+| 7 | 7.4 | 13 ms | 1.3 ms | 90/86 | 36.8 / 48 |
+
+The air war and the weather systems take 1–3 ms per game hour; the hourly weather fields take most of the rest, and the worst step is the one that computes them. At 64× a game hour lasts 56 real seconds, so the worker is busy about 0.02% of the time; the stepped and jumped runs end in the same state on all three seeds.
+
+**Reason:** R2 adds the ATO, resolvers and battalions to this loop and needs a baseline to measure them against; the roadmap's benchmark (R2.3) reruns this tool. The worst step shows where a later budget breaks first: the hourly weather fields, which could be computed a part at a time as Free Flight's standalone weather does if a step ever needs to stay short.
