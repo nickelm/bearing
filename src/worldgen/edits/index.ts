@@ -26,3 +26,16 @@ export {
   WONDER_SITING_RADIUS,
 } from './siting';
 export type { PadFootprint, SitedWonder, SitingResult } from './siting';
+export {
+  AIRFIELD_FOOTPRINT,
+  AIRFIELD_MARGIN,
+  airfieldPads,
+  globalMapSampler,
+  globalMaskSampler,
+  globalMaxSampler,
+  localFrame,
+  offsetPoint,
+  terrainEditsFor,
+} from './airfields';
+export type { AirfieldSite } from './airfields';
+export { HeightService } from './heightService';

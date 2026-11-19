@@ -96,14 +96,29 @@ export function townRadiusToward(site: BuiltSite, d: Readonly<Vec3d>): number {
 export const ROAD_CLEARING = 8;
 /** Width of a railway's ballast bed as drawn (m), single track. */
 export const RAIL_WIDTH = 4;
-export const RUNWAY_WIDTH = 45;
-export const TAXIWAY_WIDTH = 23;
-export const TAXIWAY_OFFSET = 190;
-export const APRON_WIDTH = 140;
-export const APRON_LENGTH = 600;
-export const APRON_OFFSET = 420;
-/** Links from the taxiway to the apron, this far either side of the apron's middle (m). */
-export const APRON_LINK_ALONG = 200;
+// The airfield layout and the local frame live with the airfields' terrain edits (R1.6).
+export {
+  APRON_LENGTH,
+  APRON_LINK_ALONG,
+  APRON_OFFSET,
+  APRON_WIDTH,
+  localFrame,
+  offsetPoint,
+  RUNWAY_WIDTH,
+  TAXIWAY_OFFSET,
+  TAXIWAY_WIDTH,
+} from '../../../worldgen/edits/airfields';
+import {
+  APRON_LENGTH,
+  APRON_LINK_ALONG,
+  APRON_OFFSET,
+  APRON_WIDTH,
+  localFrame,
+  offsetPoint,
+  RUNWAY_WIDTH,
+  TAXIWAY_OFFSET,
+  TAXIWAY_WIDTH,
+} from '../../../worldgen/edits/airfields';
 
 /** How far a town's outline may reach beyond its light radius (m): inside LightTables' reach. */
 export const OUTLINE_REACH = 1500;
@@ -134,32 +149,6 @@ export function decodeRunway(code: number): { length: number; heading: number } 
 /** Urban radius (m) of a settlement: about 3.2 km at 100,000 people. */
 export function urbanRadius(population: number): number {
   return Math.min(9000, Math.max(500, 10 * Math.sqrt(population)));
-}
-
-/** Local east and north unit vectors at a unit direction. */
-export function localFrame(p: Readonly<Vec3d>): { east: Vec3d; north: Vec3d } {
-  const east = new Vec3d(0, 1, 0).cross(p);
-  if (east.length() < 1e-9) east.set(1, 0, 0);
-  east.normalize();
-  const north = p.clone().cross(east);
-  return { east, north };
-}
-
-/** The unit direction `along` m forward on `heading` and `across` m to its right from p. */
-export function offsetPoint(
-  p: Readonly<Vec3d>,
-  heading: number,
-  along: number,
-  across: number,
-  radius: number,
-): Vec3d {
-  const { east, north } = localFrame(p);
-  const fx = Math.sin(heading);
-  const fy = Math.cos(heading);
-  // Right of heading: rotate (fx, fy) clockwise by 90°.
-  const e = (fx * along + fy * across) / radius;
-  const n = (fy * along - fx * across) / radius;
-  return p.clone().addScaled(east, e).addScaled(north, n).normalize();
 }
 
 export interface Clearing {

@@ -69,7 +69,17 @@ function day(seed: number): Report {
   );
   const calendar = defaultCampaignStart(new Vec3d(...w.world.info.mainContinent), params);
   const campaign = campaignInput(w.graph, w.campaign.cast, w.infrastructure);
-  const config = { seed: String(w.seed), radius, orbit: params, calendar, climate, campaign };
+  // As main.ts starts it: the coarse heights are the ground under routes (R1.6).
+  const ground = { height: w.world.maps.height, n: w.world.info.resolution };
+  const config = {
+    seed: String(w.seed),
+    radius,
+    orbit: params,
+    calendar,
+    climate,
+    campaign,
+    ground,
+  };
   // The worker hands the sim its own copy of the climate; so does each world here.
   const make = (): SimWorld =>
     createSimWorld({ ...config, climate: structuredClone(config.climate) });

@@ -25,6 +25,8 @@ import { arcDistance, destination, initialHeading, toward } from '../../core/gre
 import { MINUTE } from '../../core/units';
 import type { GameTime, Meters } from '../../core/units';
 import { cruiseFlow, FLOW } from './aircraft';
+import { clearanceFor, floorRoute } from './terrainFloor';
+import type { GroundSource } from './terrainFloor';
 import type { AircraftType, Loadout } from './aircraft';
 import type { MissionProfile } from './mission';
 import { RouteBuilder, routeEndFuel, routeFeasible } from './route';
@@ -57,6 +59,8 @@ export interface RoutePlanInput {
   stationTime?: number;
   /** Racetrack axis heading for orbits (rad); toward the base's side by default. */
   orbitHeading?: number;
+  /** The ground under the route, for its terrain floor (terrainFloor.ts, R1.6); none: sea level. */
+  ground?: GroundSource | null;
 }
 
 /** Ground time before takeoff (taxi, takeoff, join-up) and after landing (s). */
@@ -163,8 +167,11 @@ export function planMissionRoute(p: RoutePlanInput): Route | null {
   const [least, wanted] = p.profile.stationTime;
   let stationTime = Math.min(wanted, p.stationTime ?? wanted);
   if (stationTime < least) stationTime = least;
+  // The floor changes altitudes only, not times or fuel, so it comes after the fuel check.
+  const floored = (r: Route) =>
+    p.ground ? floorRoute(r, p.ground, clearanceFor(p.type), p.radius) : r;
   let route = planOnce(p, stationTime);
-  if (routeFeasible(route)) return route;
+  if (routeFeasible(route)) return floored(route);
   if (p.profile.station !== 'orbit') return null;
   // Cut the station time by the shortfall at loiter flow.
   const flow = cruiseFlow(p.type, p.loadout.radiusFactor) * FLOW.loiter;
@@ -172,7 +179,7 @@ export function planMissionRoute(p: RoutePlanInput): Route | null {
   stationTime -= short / flow + 1;
   if (stationTime < least) return null;
   route = planOnce(p, stationTime);
-  return routeFeasible(route) ? route : null;
+  return routeFeasible(route) ? floored(route) : null;
 }
 
 /** Time the route reaches the target or the station (its first on-target segment). */

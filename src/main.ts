@@ -289,7 +289,10 @@ async function main(): Promise<void> {
       strategic.infrastructure,
     );
     presetWeather.clear();
-    sim.init(String(strategic.seed), radius, orbitParams, calendar, climate, campaign);
+    sim.init(String(strategic.seed), radius, orbitParams, calendar, climate, campaign, {
+      height: world.maps.height,
+      n: world.info.resolution,
+    });
   };
   /**
    * The weather on screen in the campaign: the sim's own, or a preset of it chosen in the
@@ -667,6 +670,8 @@ async function main(): Promise<void> {
         riverIndex,
         alignments ? alignmentCorridors(alignments) : [],
       );
+      // The sim's height service and sited runways (R1.6): the same grid, the same fields.
+      sim.setTerrain(global.height, global.n, airbases.airbases);
       globe.terrain.setWorld({
         synth,
         seed: params.seed,

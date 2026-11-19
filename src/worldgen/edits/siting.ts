@@ -16,6 +16,7 @@
  * fields never move. Pure and deterministic: a function of the heights given.
  */
 import { Vec3d } from '../../core/vec3d';
+import { offsetPoint } from './airfields';
 import { RoadClass } from '../strategic/graph';
 import type { RoadNetwork } from '../strategic/graph';
 import type { Airbase, Infrastructure } from '../strategic/infrastructure';
@@ -66,20 +67,7 @@ export interface SitingResult {
   wet: number[];
 }
 
-/** The unit direction `along` m forward on `heading` and `across` m to its right from p. */
-function offset(p: Readonly<Vec3d>, heading: number, along: number, across: number, R: number) {
-  const east = new Vec3d(0, 1, 0).cross(p);
-  if (east.length() < 1e-9) east.set(1, 0, 0);
-  east.normalize();
-  const north = p.clone().cross(east);
-  const fx = Math.sin(heading);
-  const fy = Math.cos(heading);
-  return p
-    .clone()
-    .addScaled(east, (fx * along + fy * across) / R)
-    .addScaled(north, (fy * along - fx * across) / R)
-    .normalize();
-}
+const offset = offsetPoint;
 
 /**
  * The pad's grading RMS and mean height (m) at a point and heading, or null where

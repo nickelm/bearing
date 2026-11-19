@@ -91,6 +91,7 @@ export class SimClient {
     calendar: CampaignCalendar,
     climate: WeatherClimate,
     campaign: CampaignInput | null = null,
+    ground: { height: Float32Array; n: number } | null = null,
   ): void {
     this.session++;
     this.seekTarget = null;
@@ -100,9 +101,21 @@ export class SimClient {
     this.snapshotTime = this.lastDisplay = 0;
     this.receivedAt = performance.now();
     this.started = true;
+    const heights = ground ? ground.height.slice() : null;
     this.send(
-      { type: 'init', session: this.session, seed, radius, orbit, calendar, climate, campaign },
-      climateBuffers(climate),
+      {
+        type: 'init',
+        session: this.session,
+        seed,
+        radius,
+        orbit,
+        calendar,
+        climate,
+        campaign,
+        // A copy, transferred: the main thread keeps its world's heights.
+        ground: heights && ground ? { height: heights, n: ground.n } : null,
+      },
+      [...climateBuffers(climate), ...(heights ? [heights.buffer] : [])],
     );
     // The worker starts paused; keep the player's chosen rate.
     this.send({ type: 'setRate', rate: this.rate });
@@ -136,6 +149,32 @@ export class SimClient {
       this.pendingStates.set(request, resolve);
       this.send({ type: 'saveState', request });
     });
+  }
+
+  /**
+   * Hands the worker the global world's ground (R1.6): the height grid (copied and
+   * transferred) and the sited airfields. Ignored before `init`.
+   */
+  setTerrain(
+    height: Float32Array,
+    n: number,
+    fields: readonly { point: readonly number[]; heading: number; runwayLength: number }[],
+  ): void {
+    if (!this.started) return;
+    const copy = height.slice();
+    this.send(
+      {
+        type: 'terrain',
+        height: copy,
+        n,
+        fields: fields.map((f) => ({
+          point: [f.point[0]!, f.point[1]!, f.point[2]!],
+          heading: f.heading,
+          runwayLength: f.runwayLength,
+        })),
+      },
+      [copy.buffer],
+    );
   }
 
   /** Replaces the campaign with a saved state; the next snapshot carries its hash. */

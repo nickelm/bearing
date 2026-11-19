@@ -505,6 +505,8 @@ export class InterimTasker implements TickProcess {
           launch,
           stationTime: n.stationTime,
           orbitHeading: n.orbitHeading,
+          // The execution layer's ground for the route's floor (R1.6); the tasker never reads it.
+          ground: this.air.ground,
         });
       const earliest = now + MIN_LEAD;
       let route = plan(earliest);

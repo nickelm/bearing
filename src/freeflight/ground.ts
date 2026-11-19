@@ -70,6 +70,18 @@ export class AirfieldGround implements GroundQuery {
     return top !== null && top > ground ? top : ground;
   }
 
+  /**
+   * The ground for line of sight (R1.6, owner decision 9): the global grid plus edits
+   * (the height service) and the landform props, never tiles, so the flown aircraft
+   * and the AI see over the same ground. The ground map and the elevation map keep
+   * `sensedHeight`.
+   */
+  sightHeight(dir: Readonly<Vec3d>): number {
+    const ground = Math.max(0, this.global(dir));
+    const top = this.obstacle?.(dir) ?? null;
+    return top !== null && top > ground ? top : ground;
+  }
+
   height(dir: Readonly<Vec3d>): number {
     const h = this.drawn?.(dir) ?? null;
     const ground = h ?? Math.max(0, this.global(dir));

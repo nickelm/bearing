@@ -28,6 +28,7 @@ describe('a generated world at war', () => {
     calendar: defaultCampaignStart(new Vec3d(...w.world.info.mainContinent), params),
     climate,
     campaign: campaignInput(w.graph, w.campaign.cast, w.infrastructure),
+    ground: { height: w.world.maps.height, n: w.world.info.resolution },
   };
   const make = () => createSimWorld({ ...config, climate: structuredClone(climate) });
 

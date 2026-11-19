@@ -28,6 +28,7 @@ import type { BaseRef, Mission, MissionPhase } from './mission';
 import { buildOrderOfBattle, baseIndex } from './orbat';
 import type { AirBaseRecord, BaseStocks, OrderOfBattle, Squadron } from './orbat';
 import { routeState } from './route';
+import type { GroundSource } from './terrainFloor';
 
 export const AIR_PHASE_EVENT = 'air:phase';
 export const AIR_READY_EVENT = 'air:ready';
@@ -86,6 +87,8 @@ export class AirOps {
   constructor(
     readonly input: CampaignInput,
     seed: WorldSeed,
+    /** The ground under routes, for their terrain floor (R1.6); null: sea level. */
+    readonly ground: GroundSource | null = null,
   ) {
     this.radius = input.radius;
     this.orbat = buildOrderOfBattle(input, seed);
@@ -248,6 +251,9 @@ export class AirOps {
     for (const m of this.missions.values()) {
       h.number(m.id).string(m.type).number(m.squadron).number(m.aircraft).number(m.seed);
       for (const e of m.timeline) h.number(e.time);
+      // The route's shape too, so its terrain floor (R1.6) is in the hash.
+      h.number(m.route.segments.length);
+      for (const g of m.route.segments) h.number(g.t0).number(g.alt0).number(g.alt1);
     }
   }
 }

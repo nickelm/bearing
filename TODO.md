@@ -70,11 +70,12 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 
 ### R1.6 Terrain for the execution layer
 
-- [ ] Move `TerrainEdits` assembly from `render/sim/infra/airfieldGrading.ts` into `worldgen/edits/` (pads from the light record's data, corridors from the alignments)
-- [ ] A height service from the global grid plus edits that runs in the worker; test against the main thread's function at sample points
-- [ ] AI sensing and line of sight read the height service, not resident tiles (decision 227's sensors keep tiles for the ground map and elevation map only)
-- [ ] Analytic low-level routes: a terrain floor along each leg from the coarse heights, with clearance by mission type; test that no route on the pinned seeds passes below terrain
-- [ ] Sited runways for full fidelity and the simulation view: the sim carries the sited runway as presentation data beside the coarse point
+- [x] Move `TerrainEdits` assembly from `render/sim/infra/airfieldGrading.ts` into `worldgen/edits/` (pads from the light record's data, corridors from the alignments): `terrainEditsFor`, from the sited airbases (decision 240)
+- [x] A height service from the global grid plus edits that runs in the worker; test against the main thread's function at sample points (bit for bit)
+- [x] AI sensing and line of sight read the height service, not resident tiles (decision 227's sensors keep tiles for the ground map and elevation map only)
+- [x] Analytic low-level routes: a terrain floor along each leg from the coarse heights, with clearance by mission type; test that no route on the pinned seeds passes below terrain (clearance by airframe: 100 m jets, 30 m helicopters)
+- [x] Sited runways for full fidelity and the simulation view: the sim carries the sited runway as presentation data beside the coarse point (`world.terrain.fields`)
+- [ ] R2.5: check a flight handed to full fidelity anywhere on its route is above the drawn ground (the floor is checked against the coarse ground only; decision 240)
 
 ### R1.7 Aircraft bundles and roster data
 

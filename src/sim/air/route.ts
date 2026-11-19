@@ -89,7 +89,7 @@ export const ORBIT_LEG = 40e3;
 export const ORBIT_TURN = 8e3;
 export const HELICOPTER_ORBIT_TURN = 2e3;
 
-function perimeter(turn: number): number {
+export function perimeter(turn: number): number {
   return 2 * ORBIT_LEG + 2 * Math.PI * turn;
 }
 
@@ -123,8 +123,8 @@ function racetrack(d: number, turn: number): { x: number; y: number; tx: number;
   };
 }
 
-/** Racetrack position on the sphere: center c, axis toward `ahead`. */
-function orbitPoint(
+/** Racetrack position on the sphere: center c, axis toward `ahead`, `d` m around it. */
+export function orbitPoint(
   c: Readonly<Dir>,
   ahead: Readonly<Dir>,
   turn: number,
@@ -158,9 +158,16 @@ export function orbitEntry(
 /** The flight's state at game time t. */
 export function routeState(route: Route, t: GameTime, radius: Meters): RouteState {
   const segs = route.segments;
-  let i = segs.length - 1;
-  // Segments are few (about ten): a linear scan from the end is fine.
-  while (i > 0 && segs[i]!.t0 > t) i--;
+  // The last segment starting at or before t (the first if none): a binary search, since a
+  // route with a terrain floor has dozens of segments (terrainFloor.ts).
+  let lo = 0;
+  let hi = segs.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (segs[mid]!.t0 > t) hi = mid - 1;
+    else lo = mid;
+  }
+  const i = lo;
   const s = segs[i]!;
   const outside = t < s.t0 || t > s.t1;
   const dt = Math.min(Math.max(t - s.t0, 0), s.t1 - s.t0);

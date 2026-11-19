@@ -21,6 +21,7 @@ import type { GlobeScene } from '../render/sim/globeScene';
 import { AircraftView } from '../render/sim/aircraft/aircraftView';
 import type { AircraftPose } from '../render/sim/aircraft/aircraftView';
 import { airfieldPads, globalMapSampler } from '../render/sim/infra/airfieldGrading';
+import { HeightService } from '../worldgen/edits';
 import type { InfraScene } from '../render/sim/infra/infraScene';
 import { modelSpec } from '../render/common/models/library';
 import type { StrategicScene } from '../render/strategic/strategicScene';
@@ -450,10 +451,12 @@ export class FreeFlight {
     // The sited runways (decision 220): their points and designators on the start screen.
     this.listBases(t.airbases);
     const terrain = this.deps.globe.terrain;
+    // The height service (R1.6): the global grid plus the edits, as the sim worker's.
+    const heights = new HeightService(this.deps.radius, t.height, t.n, t.edits);
     this.ground = new AirfieldGround(
       this.runways,
       t.edits,
-      (d) => t.edits.apply(d, sampler(d)),
+      (d) => heights.height(d),
       this.deps.radius,
       (d) => terrain.displaySurfaceAt(d),
       // Landform props are obstacles (decision 225).
@@ -1343,7 +1346,8 @@ export class FreeFlight {
           ? report.visibility
           : Math.max(30_000, report?.visibility ?? 30_000),
       daylight: Math.min(1, Math.max(0, (sunUp + 0.1) / 0.2)),
-      lineOfSight: (a, b) => lineOfSight(a, b, R, { height: (d) => ground.sensedHeight(d) }),
+      // Line of sight over the height service (R1.6); the ground map keeps the tiles.
+      lineOfSight: (a, b) => lineOfSight(a, b, R, { height: (d) => ground.sightHeight(d) }),
     };
     const av = this.displays.avionics;
     const sys = profile.systems;

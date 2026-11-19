@@ -8,6 +8,10 @@
 import type { GameTime } from '../core/units';
 import type { CampaignInputEvent } from './eventLog';
 import { AirOps } from './air/airOps';
+import type { GroundSource } from './air/terrainFloor';
+import { Vec3d } from '../core/vec3d';
+import { globalMaxSampler } from '../worldgen/edits/airfields';
+import type { HeightService } from '../worldgen/edits/heightService';
 import { DamageState } from './ground/damage';
 import { NetworkGraph } from './ground/network';
 import type { CampaignInput } from './command/campaignInput';
@@ -22,6 +26,12 @@ export const ALARM_EVENT = 'alarm';
 export interface SimConfig extends WeatherConfig {
   /** The campaign's bases, targets, carriers and fronts; without it there is no air war. */
   campaign?: CampaignInput | null;
+  /**
+   * The coarse world's height map (physical m above the sea, n × n per face),
+   * the ground under analytic routes (R1.6). Execution data: the command layer
+   * never reads it (rule 9).
+   */
+  ground?: { height: Float32Array; n: number } | null;
 }
 
 export interface SimWorld {
@@ -32,6 +42,11 @@ export interface SimWorld {
   readonly networks: { road: NetworkGraph; rail: NetworkGraph } | null;
   /** Damage to target sites and bridges (R1.8); null without a campaign. */
   readonly damage: DamageState | null;
+  /**
+   * The ground from the global grid plus edits, with the sited airfields (R1.6):
+   * set when the main thread sends the global world, null before.
+   */
+  terrain: HeightService | null;
 }
 
 export function createSimWorld(config: SimConfig): SimWorld {
@@ -43,7 +58,11 @@ export function createSimWorld(config: SimConfig): SimWorld {
   let networks: SimWorld['networks'] = null;
   let damage: DamageState | null = null;
   if (config.campaign) {
-    air = new AirOps(config.campaign, config.seed);
+    air = new AirOps(
+      config.campaign,
+      config.seed,
+      config.ground ? groundSource(config.ground) : null,
+    );
     air.register(sim);
     sim.addProcess(new InterimTasker(air, config.campaign, config.seed));
     networks = {
@@ -53,7 +72,7 @@ export function createSimWorld(config: SimConfig): SimWorld {
     damage = new DamageState(config.campaign.targets);
     sim.addState('damage', damage);
   }
-  return { sim, weather, air, networks, damage };
+  return { sim, weather, air, networks, damage, terrain: null };
 }
 
 /** Schedules a player alarm (flagged, so it triggers auto-slowdown). */
@@ -68,4 +87,11 @@ export function applyInput(world: SimWorld, input: CampaignInputEvent): void {
       scheduleAlarm(world, input.at, input.label);
       break;
   }
+}
+
+/** A route ground from a coarse height map: the highest cell around each point, never below the sea. */
+export function groundSource(g: { height: Float32Array; n: number }): GroundSource {
+  const sample = globalMaxSampler(g.height, g.n);
+  const v = new Vec3d();
+  return (d) => Math.max(0, sample(v.set(d[0], d[1], d[2])));
 }

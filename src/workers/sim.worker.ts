@@ -7,7 +7,8 @@
 import { rng } from '../core/rng';
 import { SimHost } from '../sim/host';
 import { applyInput, createSimWorld } from '../sim/world';
-import type { SimWorld } from '../sim/world';
+import type { SimConfig, SimWorld } from '../sim/world';
+import { HeightService, terrainEditsFor } from '../worldgen/edits';
 import type { FromSimWorker, InitMessage, ToSimWorker } from './protocol';
 import { PING_STREAM, SNAPSHOT_FIELDS, SnapshotField } from './protocol';
 
@@ -21,6 +22,9 @@ const ctx = self as unknown as {
 const STEP_HZ = 30;
 
 let host: SimHost<SimWorld> | null = null;
+/** The last init's configuration, and the height service once the global world has come (R1.6). */
+let config: SimConfig | null = null;
+let terrain: HeightService | null = null;
 let session = 0;
 let lastReal = 0;
 let lastSentTime = NaN;
@@ -33,16 +37,24 @@ let timer: ReturnType<typeof setTimeout> | null = null;
 
 function init(msg: InitMessage): void {
   session = msg.session;
-  const config = {
+  terrain = null;
+  config = {
     seed: msg.seed,
     radius: msg.radius,
     orbit: msg.orbit,
     calendar: msg.calendar,
     climate: msg.climate,
     campaign: msg.campaign,
+    ground: msg.ground,
   };
   const autoSlowdown = host?.autoSlowdown ?? true;
-  host = new SimHost(() => createSimWorld(config), applyInput);
+  const c = config;
+  // A restored or rebuilt world takes the height service too, once it is here.
+  host = new SimHost(() => {
+    const w = createSimWorld(c);
+    w.terrain = terrain;
+    return w;
+  }, applyInput);
   host.autoSlowdown = autoSlowdown;
   sentHours = new Set();
   sentAirRevision = -1;
@@ -149,6 +161,19 @@ ctx.onmessage = (e) => {
     case 'autoSlowdown':
       if (host) host.autoSlowdown = msg.enabled;
       break;
+    case 'terrain': {
+      // Pads only: corridors and channels are tens of meters wide, below the grid's cells,
+      // and their sources (the alignments, the river index) stay on the main thread.
+      const edits = terrainEditsFor({
+        radius: config?.radius ?? 0,
+        fields: msg.fields,
+        height: msg.height,
+        n: msg.n,
+      });
+      terrain = new HeightService(config?.radius ?? 0, msg.height, msg.n, edits, msg.fields);
+      if (host) host.world.terrain = terrain;
+      break;
+    }
     case 'saveState':
       if (host) {
         ctx.postMessage({

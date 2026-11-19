@@ -29,6 +29,8 @@ export interface InitMessage {
   climate: WeatherClimate;
   /** The campaign for the air war (C2); null runs the weather alone. */
   campaign: CampaignInput | null;
+  /** The coarse world's heights (physical m, n per face): the ground under routes (R1.6). */
+  ground: { height: Float32Array; n: number } | null;
 }
 
 export interface SetRateMessage {
@@ -54,6 +56,19 @@ export interface AutoSlowdownMessage {
   enabled: boolean;
 }
 
+/**
+ * The global world's ground for the execution layer (R1.6): the eroded height
+ * grid (n per face, transferred) and the airfields as sited on it (decision
+ * 220), from which the worker builds the height service. The campaign keeps
+ * the coarse points; the sited ones are presentation data for full fidelity.
+ */
+export interface TerrainMessage {
+  type: 'terrain';
+  height: Float32Array;
+  n: number;
+  fields: { point: [number, number, number]; heading: number; runwayLength: number }[];
+}
+
 /** Asks for the whole campaign state (R1.2); answered by a StateMessage. */
 export interface SaveStateMessage {
   type: 'saveState';
@@ -75,7 +90,8 @@ export type ToSimWorker =
   | AlarmMessage
   | AutoSlowdownMessage
   | SaveStateMessage
-  | LoadStateMessage;
+  | LoadStateMessage
+  | TerrainMessage;
 
 export interface PongMessage {
   type: 'pong';
