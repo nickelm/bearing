@@ -274,6 +274,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 
 ## Known issues
 
+- [ ] `tests/militaryOverlays.test.ts` "shows the lanes and chokepoints in play" fails in CI now and then (5 of 174 runs, always 2 lanes for 3 theaters on seed 1); not reproduced in 100 local Node 24 runs before or after decision 234's fix; the CI `determinism` job runs it in fresh processes
 - [ ] Intermittent GPU determinism flake in `detailStage` and `tileSynth` (about 1 run in 5–10); R1.1. History in the archived TODO
 - [ ] The Free Flight session's "drizzle: wet at once" check fails (decision 217); not investigated
 - [ ] Stale code comments listed in the audit's "Left in the Code"; fix when the files are next touched
