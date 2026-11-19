@@ -14,7 +14,7 @@ _Adopted 2026-11-18 with Proposal 0008 (`docs/proposals/0008-game-loop-and-campa
 | Phase                   | Goal                                                                         | Milestones | State             |
 | ----------------------- | ---------------------------------------------------------------------------- | ---------- | ----------------- |
 | R0. Audit and reconcile | Know what exists; documents match the code                                   | —          | done (this audit) |
-| R1. Consolidation       | What the demo needs from earlier tracks, and nothing more                    | R1.1–R1.8  | next              |
+| R1. Consolidation       | What the demo needs from earlier tracks, and nothing more                    | R1.1–R1.8  | in progress       |
 | R2. One day of war      | The thin, complete loop: the tech demo                                       | R2.1–R2.12 |                   |
 | R3. Combat depth        | Sensors, weapons, air combat, air defense, ground entities                   | R3.1–R3.6  |                   |
 | R4. Breadth             | Roster, mission catalog, helicopters, transport, crews, naval war            | R4.1–R4.7  |                   |
@@ -42,6 +42,8 @@ _Needed by every R2 milestone: R2's exit criteria include determinism, three see
 
 **Exit:** green CPU and GPU suites, three pinned seeds, a strategic map at its frame budget on the owner's machine, and a recorded GPU baseline for the standard views.
 
+**State (2026-11-19):** in progress. Done: the seam (decision 233), the front generator's flake (decision 234), the demo seeds pinned, the GPU flake measured on lavapipe (none in 10 runs), `networkLink`'s timeout, the GPU timing tool (decision 242). Open: the strategic map's frame rate and the session-long decay (need the owner's GPU), the owner's `MODE=gpu` baseline and GPU-flake runs, the desktop alignment rerun.
+
 ### R1.2 Campaign State That Can Be Saved — medium
 
 _Needed by R2.11 (event log and replay) and everything that changes sim state._
@@ -54,6 +56,8 @@ _Needed by R2.11 (event log and replay) and everything that changes sim state._
 
 **Exit:** a snapshot taken at any time restores to the same state hash at 1× and 64×.
 
+**State (2026-11-19):** done (decision 235).
+
 ### R1.3 A Headless Day of War — small
 
 _Needed by R2.1–R2.3 and R2.12._
@@ -62,6 +66,8 @@ _Needed by R2.1–R2.3 and R2.12._
 - One integration test on a small generated world in place of the synthetic air-war world.
 
 **Exit:** the tool runs today's interim tasker for 24 h on the three seeds without errors and reports the worker's cost at 64×.
+
+**State (2026-11-19):** done (decision 236).
 
 ### R1.4 Mission Search Shell and Side Selection — medium
 
@@ -74,6 +80,8 @@ _Needed by R2.4 (follow) and R2.5 (take over)._
 
 **Exit:** the owner finds the next CAS mission over the front in under ten seconds, and a subscription drops 64× to 1× when its mission reaches the chosen phase.
 
+**State (2026-11-19):** built (decision 241); the subscription criterion holds in a test. Open: the owner's ten-second check.
+
 ### R1.5 The Flown Aircraft Leaves Free Flight — large
 
 _Needed by R2.4–R2.7._
@@ -84,6 +92,8 @@ _Needed by R2.4–R2.7._
 - Free Flight keeps working unchanged: the lockstep test passes bit for bit.
 
 **Exit:** Free Flight runs on `FlownAircraft`; a test creates one for a campaign flight from a position, velocity and fuel and flies it with the scripted pilot.
+
+**State (2026-11-19):** done (decision 243).
 
 ### R1.6 Terrain for the Execution Layer — medium
 
@@ -96,6 +106,8 @@ _Needed by R2.2 (low-level resolution), R2.5 (handover over terrain), R2.8 (vehi
 
 **Exit:** no analytic low-level route on the pinned seeds passes below the terrain; a flight handed to full fidelity at any point of its route is above the ground.
 
+**State (2026-11-19):** built (decision 240); the route criterion holds against the coarse ground. Open: the handover criterion, checked with R2.5's handover over the drawn ground.
+
 ### R1.7 Aircraft Bundles and Roster Data — medium
 
 _Needed by R2.1, R2.6, R2.7, R2.9._
@@ -106,6 +118,8 @@ _Needed by R2.1, R2.6, R2.7, R2.9._
 
 **Exit:** all 31 air-war types load from their bundles with the same performance and avionics as before (the air war's determinism hash unchanged); the bundle test lists the demo roster's missing parts as R2.7's work.
 
+**State (2026-11-19):** done (decisions 238, 239).
+
 ### R1.8 Network Data for the Sim — medium
 
 _Needed by R2.1 (interdiction), R2.2 (strike effects), R2.3 (supply and movement)._
@@ -115,6 +129,8 @@ _Needed by R2.1 (interdiction), R2.2 (strike effects), R2.3 (supply and movement
 - Bridge aim points: each network bridge drawn at its matched crossing, or at the nearest point of its aligned road (owner decision 7); the aim point lives on the main thread only.
 
 **Exit:** a test cuts a bridge and the detour the graph finds equals the bridge's recorded detour within a tolerance.
+
+**State (2026-11-19):** done (decision 237).
 
 ## R2. One Day of War (Tech Demo)
 
