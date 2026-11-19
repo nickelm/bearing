@@ -123,7 +123,7 @@ const MARGIN = 3;
  * those nearer the screen's center (up to CENTER_BONUS of importance).
  */
 export const AREA_MIN_PX = 120;
-export const LABEL_BUDGET: Record<LabelGroup, number> = { area: 8, peak: 5 };
+export const LABEL_BUDGET: Record<LabelGroup, number> = { area: 8, peak: 5, airbase: 10 };
 export const CENTER_BONUS = 0.1;
 
 export interface TextRun {
@@ -448,7 +448,7 @@ export function placeLabels(
   const order = kept.sort((a, b) => key.get(b.id)! - key.get(a.id)! || a.id - b.id);
   const index = new BoxIndex();
   const out = new Map<number, Placement>();
-  const used: Record<LabelGroup, number> = { area: 0, peak: 0 };
+  const used: Record<LabelGroup, number> = { area: 0, peak: 0, airbase: 0 };
   for (const label of order) {
     if (label.group !== undefined && used[label.group] >= LABEL_BUDGET[label.group]) continue;
     const style = LABEL_STYLES[label.style];

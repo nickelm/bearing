@@ -527,6 +527,7 @@ export class StrategicScene {
     this.labels.setHidden([
       ...OVERLAY_LAYERS.filter((l) => !this.military.visible[l]),
       ...(this.infraLines.visible.roads ? [] : ['roads']),
+      ...(this.infraSites.visible.sites ? [] : ['sites']),
     ]);
   }
 

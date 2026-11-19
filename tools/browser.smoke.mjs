@@ -428,7 +428,8 @@ async function helicopter() {
     const t = m.telemetry;
     return {
       height: +t.radarAltitude.toFixed(1),
-      knots: Math.round(t.groundSpeed / 0.5144),
+      // One decimal: rounded to whole knots, 10.4 kt read as 10 and failed `> 10` (2026-11-19).
+      knots: +(t.groundSpeed / 0.5144).toFixed(1),
       heading: Math.round((t.heading * 180) / Math.PI),
       pitch: +((t.pitch * 180) / Math.PI).toFixed(1),
       bank: +((t.bank * 180) / Math.PI).toFixed(1),
@@ -482,7 +483,7 @@ async function helicopter() {
   await frames(60);
   await until(() => {
     const m = window.bearing.freeFlight.flight.helo;
-    return m.crashed || m.telemetry.groundSpeed > 10 * 0.514444;
+    return m.crashed || m.telemetry.groundSpeed > 11 * 0.5144; // a margin over the check's 10 kt
   }, 30).catch(() => {});
   const forward = await page.evaluate(helo);
   check(

@@ -4064,3 +4064,14 @@ The sim worker's chunk grows from 58 kB to 104 kB, since the six bundles with ge
 - **Timings after decision 245** (owner, 1080p): the map's CPU is 7–10 ms a frame (render call about 5 ms, relief 1–4 ms, labels 0.3–0.6 ms), its GPU 15 ms, almost all in the main pass, and frames come every 26–34 ms (30–38 fps, from 10–15). With GPU and CPU work each under 16.7 ms but not together, the frame misses the display's interval; the next gain is the main pass's GPU time (TODO).
 
 **Reason:** the owner found the orbit near the poles finicky, the campaign opening in the simulation view at an airbase, and too many zone names on the map; they suggested ranking by size and screen position with a budget, which this follows.
+
+### 247. Airbase names on the map; R1 closed but for the owner's mission-search check
+
+**Date:** 2026-11-19
+**Decision:**
+
+- **Airbase names.** The map drew airbases as badges and never named them, though casting gives each a name ("Gar Air Base", "Kri Airfield"); nothing but the label table left them out. Each airbase now has a point label beside its badge (a gap of 14 px, past the 26 px badge's half width) in 11 px Fira Sans in the holder's faction color (`airbaseAlliance`, `airbasePact`), hidden with the sites layer. They show in the Region band only, budgeted to ten at once (decision 246's ranking, importance 0.66 for main and bomber bases and 0.5 for the rest); at the Theater band about twenty names crowded the front on seed 1, which Part II's "airbases as icons" there already ruled out.
+- **The helicopter's smoke check** waited for 10 kt and then compared a speed rounded to whole knots with `> 10`: 10.4 kt read as 10 and failed on the owner's GPU. The report now has one decimal, and the wait asks for 11 kt.
+- **R1's state.** R1.1 is done: the map runs at 50 fps and more on the owner's machine (from 10–15) with no decay over a session; a steady 60 fps (the main pass's GPU time) and the desktop alignment rerun move to R6.4, as neither gates R2. R1.6 is done, its handover criterion moving to R2.5, where a flight is first handed over. R1.2, R1.3, R1.5, R1.7 and R1.8 were done. What remains is R1.4's exit criterion, the owner finding the next CAS mission over the front in under ten seconds.
+
+**Reason:** the owner asked whether airbases should be named on the map (they should: they are where missions start and what strikes target) and whether R1 could close.

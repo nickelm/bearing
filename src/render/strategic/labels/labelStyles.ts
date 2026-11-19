@@ -8,7 +8,7 @@
  *   spaced capitals (decision 104).
  * - **Roads:** route numbers and road names in small brown sans (decision 104).
  * - **Theaters** in near-black spaced capitals; **invasion corridors** in the
- *   attacker's faction color (decision 101).
+ *   attacker's faction color (decision 101); **airbases** in the holder's (decision 247).
  *
  * Every style has a halo so text stays legible over relief, glyphs and the night
  * side; water labels get a pale, thin one.
@@ -32,6 +32,8 @@ export type LabelStyleId =
   | 'theater'
   | 'corridorAlliance'
   | 'corridorPact'
+  | 'airbaseAlliance'
+  | 'airbasePact'
   | 'road';
 
 export interface LabelStyle {
@@ -214,6 +216,27 @@ export const LABEL_STYLES: Record<LabelStyleId, LabelStyle> = {
     color: 0xd0532b,
     halo: HALO,
     haloWidth: 2,
+    haloOpacity: 0.85,
+  },
+  // Airbase names beside their badges, in the holder's faction color (decision 247).
+  airbaseAlliance: {
+    font: 'sans',
+    size: 11,
+    tracking: 0.02,
+    uppercase: false,
+    color: 0x2f6fb5,
+    halo: HALO,
+    haloWidth: 1.8,
+    haloOpacity: 0.85,
+  },
+  airbasePact: {
+    font: 'sans',
+    size: 11,
+    tracking: 0.02,
+    uppercase: false,
+    color: 0xd0532b,
+    halo: HALO,
+    haloWidth: 1.8,
     haloOpacity: 0.85,
   },
   road: {

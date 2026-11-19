@@ -14,7 +14,7 @@ _Adopted 2026-11-18 with Proposal 0008 (`docs/proposals/0008-game-loop-and-campa
 | Phase                   | Goal                                                                         | Milestones | State             |
 | ----------------------- | ---------------------------------------------------------------------------- | ---------- | ----------------- |
 | R0. Audit and reconcile | Know what exists; documents match the code                                   | —          | done (this audit) |
-| R1. Consolidation       | What the demo needs from earlier tracks, and nothing more                    | R1.1–R1.8  | in progress       |
+| R1. Consolidation       | What the demo needs from earlier tracks, and nothing more                    | R1.1–R1.8  | done but R1.4's check |
 | R2. One day of war      | The thin, complete loop: the tech demo                                       | R2.1–R2.12 |                   |
 | R3. Combat depth        | Sensors, weapons, air combat, air defense, ground entities                   | R3.1–R3.6  |                   |
 | R4. Breadth             | Roster, mission catalog, helicopters, transport, crews, naval war            | R4.1–R4.7  |                   |
@@ -42,7 +42,7 @@ _Needed by every R2 milestone: R2's exit criteria include determinism, three see
 
 **Exit:** green CPU and GPU suites, three pinned seeds, a strategic map at its frame budget on the owner's machine, and a recorded GPU baseline for the standard views.
 
-**State (2026-11-19):** in progress. Done: the seam (decision 233), the front generator's flake (decision 234), the demo seeds pinned, the GPU flake measured on lavapipe (none in 10 runs), `networkLink`'s timeout, the GPU timing tool (decision 242). The CPU and GPU suites are green on the owner's GPU (2026-11-19: 96 passed, 2 skipped; the old GPU flake not seen in 20 runs; decision 244). Open: the strategic map's frame rate and the session-long decay (need the owner's GPU), the owner's `MODE=gpu` baseline, the desktop alignment rerun.
+**State (2026-11-19):** done. The seam (decision 233), the front generator's flake (decision 234), the demo seeds pinned, the GPU flake measured, `networkLink`'s timeout, the GPU timing tool and the owner's `MODE=gpu` baseline (decision 242), green suites on the owner's GPU (decision 244), the map from 10–15 fps to 50 fps and more on the owner's machine with no decay (decisions 245, 246). The map's last few milliseconds to a steady 60 fps (its main pass's GPU time) and the desktop alignment rerun are TODO items for R6.4; neither gates R2.
 
 ### R1.2 Campaign State That Can Be Saved — medium
 
@@ -80,7 +80,7 @@ _Needed by R2.4 (follow) and R2.5 (take over)._
 
 **Exit:** the owner finds the next CAS mission over the front in under ten seconds, and a subscription drops 64× to 1× when its mission reaches the chosen phase.
 
-**State (2026-11-19):** built (decision 241); the subscription criterion holds in a test. Open: the owner's ten-second check.
+**State (2026-11-19):** built (decision 241); the subscription criterion holds in a test. Open: the owner's ten-second check, the last item of R1.
 
 ### R1.5 The Flown Aircraft Leaves Free Flight — large
 
@@ -106,7 +106,7 @@ _Needed by R2.2 (low-level resolution), R2.5 (handover over terrain), R2.8 (vehi
 
 **Exit:** no analytic low-level route on the pinned seeds passes below the terrain; a flight handed to full fidelity at any point of its route is above the ground.
 
-**State (2026-11-19):** built (decision 240); the route criterion holds against the coarse ground. Open: the handover criterion, checked with R2.5's handover over the drawn ground.
+**State (2026-11-19):** done (decision 240); the route criterion holds against the coarse ground. The handover criterion moves to R2.5, where a flight is first handed over above the drawn ground (TODO R2.5).
 
 ### R1.7 Aircraft Bundles and Roster Data — medium
 

@@ -24,6 +24,7 @@
  * | theater | all | – | – |
  * | corridor (in the attacker's color) | – | all | all |
  * | road (route numbers, pass and coast road names; decision 104) | – | – | all |
+ * | airbase (in the holder's color, budgeted; decision 247) | – | – | all |
  */
 import type { ZoneRecord } from '../../../worldgen/zones';
 import type { Cast } from '../../../campaign/cast';
@@ -68,14 +69,14 @@ export interface MapLabel {
   /**
    * A budgeted group (decision 246): at most LABEL_BUDGET[group] of its names show at
    * once, the most important and most central first. Land areas (zones, salt pans,
-   * hills, wetlands, deserts, forests, plateaus, plains) and named peaks.
+   * hills, wetlands, deserts, forests, plateaus, plains), named peaks and airbases.
    */
   group?: LabelGroup;
   /** Size across (m) of a land area: its name shows only where it spans AREA_MIN_PX on screen. */
   extent?: number;
 }
 
-export type LabelGroup = 'area' | 'peak';
+export type LabelGroup = 'area' | 'peak' | 'airbase';
 
 /** Feature kinds whose names share the land-area budget (decision 246). */
 const AREA_GROUP: ReadonlySet<FeatureKind> = new Set([
@@ -120,6 +121,8 @@ export const BAND_TABLE: Record<string, Row> = {
   theater: { globe: 0 },
   corridor: { theater: 0, region: 0 },
   road: { region: 0 },
+  // In the Region band only, at most LABEL_BUDGET.airbase at once (decision 247).
+  airbase: { region: 0 },
 };
 /** Gap (px) between a front or lane theater's name and the line it is anchored on. */
 export const THEATER_LINE_GAP = 12;
@@ -377,6 +380,25 @@ export function buildLabels(
       // Beside the front or lane it names, not over it (decision 101).
       gap: t.kind === 'continental-front' || t.kind === 'sea-lane' ? THEATER_LINE_GAP : 0,
       bands: bandsFor('theater', 1),
+    });
+  }
+  // Airbases (decision 247): the name beside the badge, hidden with the sites layer.
+  for (const a of infra?.airbases ?? []) {
+    const importance = a.kind === 'main' || a.kind === 'bomber' ? 0.66 : 0.5;
+    out.push({
+      id: out.length,
+      text: a.name,
+      style: a.side === 'alliance' ? 'airbaseAlliance' : 'airbasePact',
+      importance,
+      placement: 'point',
+      anchor: a.point,
+      height: Math.max(0, heightAt(a.point)),
+      path: null,
+      // Past the badge's half width (AIRBASE_SIZE: 20 px at the Theater band, 26 at the Region).
+      gap: 14,
+      bands: bandsFor('airbase', importance),
+      layer: 'sites',
+      group: 'airbase',
     });
   }
   // Invasion corridors: named arrows, the name along the arrow in the attacker's color.
