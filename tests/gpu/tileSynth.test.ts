@@ -99,8 +99,10 @@ describe.skipIf(!gpu)('tile synthesis (GPU)', async () => {
     expect(a1!.maxHeight).toBeGreaterThan(a1!.minHeight);
   });
 
-  it('agrees across a cube-face seam to within a few centimeters', async () => {
-    // Tiles straddling the +u edge of face 4 at level 5, at several rows.
+  it('agrees bit for bit across a cube-face seam', async () => {
+    // Tiles straddling the +u edge of face 4 at level 5, at several rows. Both faces
+    // compute an edge sample's direction exactly alike (tileSampleDir), so the two
+    // tiles' edge heights are identical, as on an edge inside a face.
     let worst = 0;
     for (const y of [3, 11, 20, 28]) {
       const a: TileKey = tileKey(4, 5, 31, y);
@@ -120,7 +122,7 @@ describe.skipIf(!gpu)('tile synthesis (GPU)', async () => {
         worst = Math.max(worst, Math.abs(ha - hb));
       }
     }
-    expect(worst).toBeLessThan(0.05);
+    expect(worst).toBe(0);
   });
 
   it('cuts channels along rivers', async () => {

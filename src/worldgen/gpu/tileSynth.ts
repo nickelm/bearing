@@ -491,6 +491,20 @@ const NO_LAKE_HALF: f32 = ${f(NO_LAKE_HALF)};
 const RIVER_REACH: f32 = ${f(t.riverReach)};
 ${wondersWgsl(opts.wonders ?? [], R)}
 
+// The direction of face sample (ix, iy) of n per face edge, bit for bit the same from
+// either face of a seam: the warped coordinate comes from integers, is odd in its
+// argument, and is exactly ±1 on an edge, so a sample on the edge is the same vector
+// computed from both faces (faceUvDir rounds tan(π/4) and the two faces' 1 − u apart,
+// which put the two tiles' edge samples about half a meter apart; R1.1).
+fn warpedCoord(k: i32, n: i32) -> f32 {
+  let s = f32(2 * k - n) / f32(n);
+  let a = abs(s);
+  return sign(s) * select(tan(QUARTER_PI * a), 1.0, a == 1.0);
+}
+fn tileSampleDir(face: i32, ix: i32, iy: i32, n: i32) -> vec3f {
+  return normalize(FACE_NORMAL[face] + warpedCoord(ix, n) * FACE_U[face] + warpedCoord(iy, n) * FACE_V[face]);
+}
+
 // Lake surface near d: the highest level among the 3×3 global cells around d's cell
 // whose centers lie within about one cell of d, or NO_LAKE.
 fn lakeLevelAt(d: vec3f) -> f32 {
@@ -658,9 +672,7 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
   let sx = id % STRIDE - BORDER;
   let sy = id / STRIDE - BORDER;
   let denom = TEXELS * f32(1u << u32(tile.level));
-  let u = f32(tile.x * ${TILE_TEXELS} + sx) / denom;
-  let v = f32(tile.y * ${TILE_TEXELS} + sy) / denom;
-  let d = faceUvDir(tile.face, u, v);
+  let d = tileSampleDir(tile.face, tile.x * ${TILE_TEXELS} + sx, tile.y * ${TILE_TEXELS} + sy, i32(denom));
   let slot = gid.z * u32(STRIDE * STRIDE) + u32(id);
 
   let base = heightAt(d);
