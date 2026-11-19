@@ -86,6 +86,15 @@ export function applyInput(world: SimWorld, input: CampaignInputEvent): void {
     case 'alarm':
       scheduleAlarm(world, input.at, input.label);
       break;
+    case 'side':
+      // The choice is the log entry itself; the sim's state does not depend on it.
+      break;
+    case 'subscribe':
+      world.air?.subscriptions.add(input.subscription);
+      break;
+    case 'unsubscribe':
+      world.air?.subscriptions.remove(input.id);
+      break;
   }
 }
 

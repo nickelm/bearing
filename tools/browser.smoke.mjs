@@ -26,6 +26,7 @@
  *            cache before the app loads, which spares a machine without a GPU the global pass
  *   ONLY     comma list of parts to run: flight, takeoff, helicopter, campaign (default all)
  *   TRAFFIC  1: Free Flight with its traffic and ground radars (decision 218)
+ *   GPU_TIMING 1: GPU pass timings per view from timestamp queries (R1.1; a real GPU)
  *   HELO     the helicopter the helicopter part flies: scout (default) or utility
  *   SCENES   comma list of the flight's scenes: fair, storm, snow, fog, night, dust
  *   ALIGN    1 runs the alignment stage (decision 184); by default the run passes align=0
@@ -79,6 +80,8 @@ const software =
 const flashSeconds = Number(env('FLASH', '20'));
 const verbose = env('VERBOSE', '') === '1';
 const traffic = env('TRAFFIC', '') === '1' ? '&traffic=on' : '';
+// GPU pass timings per view (R1.1): needs timestamp queries, so a real GPU (MODE=gpu).
+const gpuTime = env('GPU_TIMING', '') === '1' ? '&gputime=1' : '';
 mkdirSync(out, { recursive: true });
 
 /** The flight's scenes: weather preset, time of day, and what must show. */
@@ -155,7 +158,7 @@ const until = (predicate, timeoutSeconds, arg) =>
  * instead of running into a timeout.
  */
 const open = async (query) => {
-  await page.goto(`${app}?${query}&dev${software}`, { timeout: seconds(60) });
+  await page.goto(`${app}?${query}&dev${software}${gpuTime}`, { timeout: seconds(60) });
   await until(
     () => window.bearing !== undefined || document.getElementById('fatal')?.hidden === false,
     60,
@@ -581,9 +584,14 @@ try {
   fail(`the run stopped: ${String(e.stack ?? e).slice(0, 800)}`);
   await page.screenshot({ path: join(out, 'stopped-page.png'), timeout: 30_000 }).catch(() => {});
 }
+// The last page's GPU timings per view, when asked for (GPU_TIMING=1).
+const gpuTiming = gpuTime
+  ? await page.evaluate(() => window.bearing?.gpuTiming?.views ?? null).catch(() => null)
+  : null;
+if (gpuTiming) console.log(`GPU timings per view: ${JSON.stringify(gpuTiming)}`);
 writeFileSync(
   join(out, 'smoke.json'),
-  JSON.stringify({ mode, app, seed, problems, results }, null, 1),
+  JSON.stringify({ mode, app, seed, problems, results, gpuTiming }, null, 1),
 );
 await context.close().catch(() => {});
 console.log(

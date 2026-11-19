@@ -6,6 +6,8 @@
  */
 import { rng } from '../core/rng';
 import { SimHost } from '../sim/host';
+import { SUBSCRIPTION_EVENT } from '../sim/air/subscriptions';
+import type { SubscriptionHit } from '../sim/air/subscriptions';
 import { applyInput, createSimWorld } from '../sim/world';
 import type { SimConfig, SimWorld } from '../sim/world';
 import { HeightService, terrainEditsFor } from '../worldgen/edits';
@@ -73,7 +75,11 @@ function loop(): void {
   try {
     const t0 = performance.now();
     const step = host.step(real);
-    const flagged = step.flagged.map((e) => ({ time: e.time, label: e.flag ?? e.kind }));
+    const flagged = step.flagged.map((e) => ({
+      time: e.time,
+      label: e.flag ?? e.kind,
+      ...(e.kind === SUBSCRIPTION_EVENT ? { mission: (e.data as SubscriptionHit).mission } : {}),
+    }));
     post(flagged, step.slowed, false, performance.now() - t0);
   } catch (err) {
     ctx.postMessage({ type: 'error', session, message: String(err) });
@@ -157,6 +163,13 @@ ctx.onmessage = (e) => {
       break;
     case 'alarm':
       if (host) host.input({ kind: 'alarm', at: msg.at, label: msg.label });
+      break;
+    case 'input':
+      if (host) {
+        host.input(msg.input);
+        // A subscription or side change shows at once, not at the next step.
+        post([], false, true);
+      }
       break;
     case 'autoSlowdown':
       if (host) host.autoSlowdown = msg.enabled;

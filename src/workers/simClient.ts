@@ -9,6 +9,7 @@ import type { GameTime } from '../core/units';
 import type { Mission } from '../sim/air/mission';
 import type { CampaignInput } from '../sim/command/campaignInput';
 import type { HostState } from '../sim/host';
+import type { CampaignInputEvent } from '../sim/eventLog';
 import { climateBuffers } from '../sim/weather/climate';
 import type { WeatherClimate } from '../sim/weather/climate';
 import { WeatherView } from '../sim/weather/frame';
@@ -23,7 +24,7 @@ const MAX_EXTRAPOLATION = 0.1;
 const SEEK_TOLERANCE = 1e-3;
 
 export interface FlaggedNotice {
-  events: { time: GameTime; label: string }[];
+  events: { time: GameTime; label: string; mission?: number }[];
   /** True if auto-slowdown dropped the rate to 1×. */
   slowed: boolean;
 }
@@ -140,6 +141,11 @@ export class SimClient {
 
   setAutoSlowdown(enabled: boolean): void {
     this.send({ type: 'autoSlowdown', enabled });
+  }
+
+  /** A player input to the campaign (R1.4): logged and applied in the worker. */
+  input(input: CampaignInputEvent): void {
+    this.send({ type: 'input', input });
   }
 
   /** The whole campaign state and its hash (R1.2), as the worker holds it now. */

@@ -103,6 +103,10 @@ import { FrameTimeOverlay } from './ui/frameTimeOverlay';
 import { BuildStamp } from './ui/buildStamp';
 import { CampaignPanel } from './ui/campaignPanel';
 import { AirPanel } from './ui/airPanel';
+import { GpuTiming } from './render/common/gpuTiming';
+import { MissionSearchPanel } from './ui/missionSearch/panel';
+import { SidePanel } from './ui/sidePanel';
+import { routeState } from './sim/air/route';
 import { SeedBrowser } from './ui/seedBrowser';
 import { THEATER_LABELS } from './campaign/theaters';
 import type { StrategicWorld } from './worldgen/campaignWorld';
@@ -130,6 +134,9 @@ import { fetchLabelFonts } from './render/strategic/labels/fonts';
 import { FreeFlight, parseFreeFlightUrl } from './freeflight/freeFlight';
 import { buildFontAtlas } from './render/strategic/labels/fontAtlas';
 
+/** Eye altitude the map eases down to when focusing a mission (R1.4): the theater band's floor. */
+const MISSION_FOCUS_ALTITUDE = 400e3;
+
 /** What tools read from the page as `window.bearing`: on the dev server or with `?dev` only. */
 export interface BearingHandle {
   readonly globe: GlobeScene;
@@ -141,6 +148,8 @@ export interface BearingHandle {
   readonly atmosphere: AtmosphereGuiParams;
   /** The Free Flight mode, when the URL asked for it. */
   readonly freeFlight: FreeFlight | null;
+  /** GPU pass timings per view, with `?dev&gputime=1` on a device that has timestamp queries (R1.1). */
+  readonly gpuTiming: GpuTiming | null;
 }
 
 declare global {
@@ -171,10 +180,21 @@ async function main(): Promise<void> {
   const device = await requestRendererDevice(probe.adapter, probe.limits);
   // Reversed depth: the observer camera needs a near plane under a meter with the
   // horizon 200 km away (decision 112).
-  const renderer = new WebGPURenderer({ antialias: true, device, reversedDepthBuffer: true });
+  // GPU timing (R1.1): timestamp queries behind ?dev&gputime=1, set when the renderer is made.
+  const startQuery = new URLSearchParams(location.search);
+  const timeGpu = startQuery.has('dev') && startQuery.get('gputime') === '1';
+  const renderer = new WebGPURenderer({
+    antialias: true,
+    device,
+    reversedDepthBuffer: true,
+    trackTimestamp: timeGpu,
+  });
   renderer.setPixelRatio(window.devicePixelRatio);
   container.appendChild(renderer.domElement);
   await renderer.init();
+  const gpuTiming = timeGpu ? new GpuTiming(renderer) : null;
+  if (gpuTiming && !gpuTiming.supported)
+    console.warn('GPU timing: the device has no timestamp queries');
   // Adaptive resolution (decision 69): the canvas backing store follows the frame time.
   const renderScale = new RenderScaleController();
   const applyRenderScale = (scale: number, now: number) => {
@@ -261,6 +281,8 @@ async function main(): Promise<void> {
    * Starts the simulation for a world: its climate drives the weather (decision 68),
    * its campaign the air war (C2).
    */
+  /** Called when a campaign (not Free Flight) starts in the sim: side selection (R1.4). */
+  let onCampaignStart: ((strategic: StrategicWorld) => void) | null = null;
   const startSim = (world: World, strategic: StrategicWorld, radius: number) => {
     const climate = buildWeatherClimate(
       { ...world.maps, resolution: world.info.resolution, reliefScale: world.info.reliefScale },
@@ -293,6 +315,7 @@ async function main(): Promise<void> {
       height: world.maps.height,
       n: world.info.resolution,
     });
+    onCampaignStart?.(strategic);
   };
   /**
    * The weather on screen in the campaign: the sim's own, or a preset of it chosen in the
@@ -426,6 +449,34 @@ async function main(): Promise<void> {
   const airPanel = new AirPanel();
   strategicView.onAirSelect = (key) => airPanel.select(key);
   airPanel.onClose = () => (strategicView.airSelected = null);
+  // Mission search (M) and side selection at campaign start (R1.4).
+  const missionSearch = new MissionSearchPanel();
+  const sidePanel = new SidePanel();
+  let theaterNames: string[] = [];
+  /** Selects a mission on the map, draws its route and centers the camera on its flight. */
+  const focusMission = (id: number) => {
+    const m = sim.missions.find((x) => x.id === id);
+    if (!m) return;
+    strategicView.airSelected = `mission:${id}`;
+    const o = strategicView.orbit;
+    const p = routeState(m.route, gameTime, o.radius).point;
+    o.lat = Math.asin(Math.max(-1, Math.min(1, p[1])));
+    o.lon = Math.atan2(p[0], p[2]);
+    o.targetAltitude = Math.min(o.targetAltitude, MISSION_FOCUS_ALTITUDE);
+  };
+  missionSearch.onFocus = focusMission;
+  missionSearch.onInput = (input) => sim.input(input);
+  sidePanel.onChoose = (side) => {
+    mapParams.viewingSide = side;
+    strategicView.airView.side = side;
+    missionSearch.setCampaign(side, theaterNames);
+    sim.input({ kind: 'side', side });
+  };
+  onCampaignStart = (s) => {
+    theaterNames = s.campaign.cast.theaters.map((t) => t.name);
+    missionSearch.setCampaign(mapParams.viewingSide, theaterNames);
+    sidePanel.show(String(s.seed), s.campaign.cast);
+  };
   const showStrategic = (s: StrategicWorld | null) => {
     freeFlight?.setStrategic(s);
     globe.strategic.setWorld(s?.graph ?? null, s?.campaign.cast ?? null, s?.infrastructure ?? null);
@@ -1069,7 +1120,13 @@ async function main(): Promise<void> {
   const touchDevice = hasTouch();
   sim.onFlagged = (n) => {
     const labels = n.events.map((e) => e.label).join(', ');
-    timeControls.notify(n.slowed ? `Slowed to 1×: ${labels}` : labels);
+    // A subscription's hit offers its mission (R1.4; following it is R2.4).
+    const hit = n.events.find((e) => e.mission !== undefined);
+    timeControls.notify(
+      n.slowed ? `Slowed to 1×: ${labels}` : labels,
+      hit ? 15000 : 6000,
+      hit ? { label: 'Show', run: () => focusMission(hit.mission!) } : undefined,
+    );
   };
   const relief = strategicView.relief;
   const mapParams: MapGuiParams = {
@@ -1378,6 +1435,7 @@ async function main(): Promise<void> {
       sim,
       atmosphere,
       freeFlight,
+      gpuTiming,
     };
   }
   // Apply the View folder's starting values (once onResize exists): before this, the
@@ -1437,7 +1495,10 @@ async function main(): Promise<void> {
     strategicView.sun.copy(globe.sun);
     strategicView.relief.seasonPhase.value = globe.terrain.land.seasonPhase.value;
     strategicView.setAirTime(gameTime);
-    if (activeView === 'strategic') airPanel.update(sim.missions, gameTime, now);
+    if (activeView === 'strategic') {
+      airPanel.update(sim.missions, gameTime, now);
+      missionSearch.update(sim.missions, gameTime, now);
+    }
     globe.clouds.time.value = gameTime;
     // The weather the scene reads at the camera; Free Flight feeds the texture itself.
     const weather = shownWeather();
@@ -1451,6 +1512,7 @@ async function main(): Promise<void> {
       touchDevice && activeView === 'simulation' && globe.cameraMode === 'observer';
     if (activeView === 'strategic') strategicView.render(dt);
     else globe.render(dt);
+    gpuTiming?.frame(freeFlight && activeView === 'simulation' ? 'freeflight' : activeView, now);
     if (freeFlight && activeView === 'simulation') freeFlight.drawHud(globe.camera);
     // Rain, wind and dust where the camera is; silence over the map.
     const listening = activeView === 'simulation';

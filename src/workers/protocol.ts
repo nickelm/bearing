@@ -8,6 +8,7 @@ import type { CampaignCalendar, OrbitParams } from '../core/calendar';
 import type { GameTime } from '../core/units';
 import type { Mission } from '../sim/air/mission';
 import type { HostState } from '../sim/host';
+import type { CampaignInputEvent } from '../sim/eventLog';
 import type { CampaignInput } from '../sim/command/campaignInput';
 import type { WeatherClimate } from '../sim/weather/climate';
 
@@ -51,6 +52,12 @@ export interface AlarmMessage {
   label: string;
 }
 
+/** A player input to the campaign (R1.4: side, subscriptions; alarms too): logged and applied. */
+export interface InputMessage {
+  type: 'input';
+  input: CampaignInputEvent;
+}
+
 export interface AutoSlowdownMessage {
   type: 'autoSlowdown';
   enabled: boolean;
@@ -91,7 +98,8 @@ export type ToSimWorker =
   | AutoSlowdownMessage
   | SaveStateMessage
   | LoadStateMessage
-  | TerrainMessage;
+  | TerrainMessage
+  | InputMessage;
 
 export interface PongMessage {
   type: 'pong';
@@ -127,8 +135,11 @@ export interface SnapshotMessage {
   session: number;
   header: Float64Array;
   weather: { hour: number; data: Float32Array }[];
-  /** Flagged events that ran in this step, and whether auto-slowdown changed the rate. */
-  flagged: { time: GameTime; label: string }[];
+  /**
+   * Flagged events that ran in this step, and whether auto-slowdown changed the rate;
+   * a subscription's hit names its mission (R1.4).
+   */
+  flagged: { time: GameTime; label: string; mission?: number }[];
   slowed: boolean;
   /** Determinism hash of the whole state (only after a seek, or when asked). */
   hash?: string;

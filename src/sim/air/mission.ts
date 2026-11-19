@@ -85,12 +85,29 @@ export const MISSION_LABELS: Record<MissionType, string> = {
  * - `low`: descends to low level for the fence-in, on target and the first part of egress.
  * - `stationTime`: [least, wanted] time on target or on station (s); fuel decides between them.
  */
+/** Phases between which the player may take over a flight: from the start of `from` to the start of `to`. */
+export interface JumpInWindow {
+  from: MissionPhase;
+  to: MissionPhase;
+}
+
+/**
+ * Fixed-wing jump-in runs from climb-out to approach (decision 231): no takeoff
+ * or landing is forced on the player.
+ */
+export const DEFAULT_JUMP_IN: JumpInWindow = { from: 'climb-out', to: 'approach' };
+
+/** Helicopters' window spans their ground phases: landing is their mission (decision 149). */
+export const HELICOPTER_JUMP_IN: JumpInWindow = { from: 'departure', to: 'complete' };
+
 export interface MissionProfile {
   roles: readonly AircraftRole[];
   loadout?: string;
   station: 'orbit' | 'pass' | 'land';
   low: boolean;
   stationTime: readonly [number, number];
+  /** The jump-in window (R1.4); DEFAULT_JUMP_IN when absent. */
+  jumpIn?: JumpInWindow;
 }
 
 export const MISSION_PROFILES: Record<MissionType, MissionProfile> = {
@@ -151,6 +168,7 @@ export const MISSION_PROFILES: Record<MissionType, MissionProfile> = {
     stationTime: [15 * MINUTE, 40 * MINUTE],
   },
   'helo-cas': {
+    jumpIn: HELICOPTER_JUMP_IN,
     roles: ['attack-helicopter'],
     loadout: 'cas',
     station: 'orbit',
@@ -199,6 +217,7 @@ export const MISSION_PROFILES: Record<MissionType, MissionProfile> = {
     stationTime: [3 * MINUTE, 5 * MINUTE],
   },
   'sling-load': {
+    jumpIn: HELICOPTER_JUMP_IN,
     roles: ['heavy-helicopter'],
     loadout: 'sling',
     station: 'land',
@@ -260,6 +279,18 @@ export function missionPhase(m: Mission, t: GameTime): MissionPhase | 'planned' 
     else break;
   }
   return phase;
+}
+
+/**
+ * Game times between which the player may take over the mission's flight
+ * (R1.4, decision 231): its profile's window on its timeline, or null when the
+ * route skips a phase of it.
+ */
+export function jumpInWindow(m: Mission): { from: GameTime; to: GameTime } | null {
+  const w = MISSION_PROFILES[m.type].jumpIn ?? DEFAULT_JUMP_IN;
+  const from = phaseTime(m, w.from);
+  const to = phaseTime(m, w.to);
+  return Number.isFinite(from) && Number.isFinite(to) && to > from ? { from, to } : null;
 }
 
 /** Time the mission starts a phase, or NaN if its route skips it. */

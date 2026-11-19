@@ -23,8 +23,9 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] Pin the demo seeds 4, 10 and 7: a test that each keeps a continental front and passes validity on the current `GENERATOR_VERSION` (`DEMO_SEEDS` in `src/campaign/demoSeeds.ts`, `tests/demoSeeds.test.ts`: valid, a continental front with fit ≥ 0.9, and a reminder to re-check on a version bump)
 - [ ] Strategic map frame rate (10–15 fps): profile labels, the zone list and glyph rebuilds; fix the hot path
 - [ ] Frame-rate decay over a session: check tile and mesh caches, undisposed geometries and textures, label rebuilds; a soak test that counts GPU objects after 20 view switches
-- [ ] GPU timing tool: timestamp queries per pass in the app behind `?dev`, logged per view
-- [ ] Owner: run `tools/browser.smoke.mjs` with `MODE=gpu` and the timing tool on the owner's machine; record the standard views in the audit's performance baseline
+- [x] GPU timing tool: timestamp queries per pass in the app behind `?dev`, logged per view (`?dev&gputime=1`, `GPU_TIMING=1` in the smoke test; decision 242)
+- [ ] Owner: run `tools/browser.smoke.mjs` with `MODE=gpu` and the timing tool on the owner's machine; record the standard views in the audit's performance baseline (`MODE=gpu GPU_TIMING=1 node tools/browser.smoke.mjs`)
+- [ ] The lavapipe smoke test loses its device about 160 s into Free Flight's start screen in cloud containers, also at `0c81707` (decision 242); find out whether it is memory or the shim
 - [ ] Rerun the whole-world alignment on a desktop after the tile-cache fix; record time, forced pieces, viaduct and tunnel totals
 - [x] Remove `networkLink`'s timeout under load (raise the budget or split the test): the eviction test reuses one aligned link instead of aligning forty (9.4 s → 0.2 s)
 
@@ -48,14 +49,15 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 
 ### R1.4 Mission search shell and side selection
 
-- [ ] Side selection at campaign start, with the generated briefing; the debug viewing side becomes the chosen side
-- [ ] Jump-in windows as data on each mission's phases (fixed-wing: climb-out to approach; decision 231)
-- [ ] Mission search panel: list of ongoing and upcoming missions of the player's side, sorted by time until action
-- [ ] Filters: mission type, aircraft, theater, current phase, threat level, time until action
-- [ ] Focus the strategic camera on a selected mission and draw its route
-- [ ] Subscriptions: a saved query plus a phase; phase events flagged for auto-slowdown; an offer to follow at 1×
-- [ ] Tests: filter logic on display models; a subscription drops 64× to 1× at its phase
+- [x] Side selection at campaign start, with the generated briefing; the debug viewing side becomes the chosen side (decision 241)
+- [x] Jump-in windows as data on each mission's phases (fixed-wing: climb-out to approach; decision 231); helicopters over their ground phases (decision 149)
+- [x] Mission search panel: list of ongoing and upcoming missions of the player's side, sorted by time until action (M)
+- [x] Filters: mission type, aircraft, theater, current phase, threat level, time until action (threat interim per mission type until R3)
+- [x] Focus the strategic camera on a selected mission and draw its route
+- [x] Subscriptions: a saved query plus a phase; phase events flagged for auto-slowdown; an offer to follow at 1× (the offer shows the mission; following is R2.4)
+- [x] Tests: filter logic on display models; a subscription drops 64× to 1× at its phase
 - [ ] Owner: find the next CAS mission over the front; subscribe to strikes on own airbases
+- [ ] Subscriptions to the enemy's missions ("strikes on our airbases"): a target-side and target-kind query on what the side knows; needs the intelligence picture (R3), since the side cannot see enemy missions yet (decision 241)
 
 ### R1.5 The flown aircraft leaves Free Flight
 

@@ -100,9 +100,19 @@ export class TimeControls {
     if (this.weatherEl.textContent !== d.weather) this.weatherEl.textContent = d.weather;
   }
 
-  /** Shows a short notice above the bar (e.g. why the clock slowed down). */
-  notify(text: string, ms = 6000): void {
+  /** Shows a short notice above the bar (e.g. why the clock slowed down), with an optional action. */
+  notify(text: string, ms = 6000, action?: { label: string; run: () => void }): void {
     this.noticeEl.textContent = text;
+    if (action) {
+      const b = document.createElement('button');
+      b.className = 'notice-action';
+      b.textContent = action.label;
+      b.addEventListener('click', () => {
+        this.noticeEl.hidden = true;
+        action.run();
+      });
+      this.noticeEl.append(' ', b);
+    }
     this.noticeEl.hidden = false;
     if (this.noticeTimer !== null) clearTimeout(this.noticeTimer);
     this.noticeTimer = setTimeout(() => (this.noticeEl.hidden = true), ms);

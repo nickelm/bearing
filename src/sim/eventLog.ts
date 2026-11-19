@@ -14,16 +14,24 @@
  * The log is part of the saved state and of the state hash. Entries are plain,
  * structured-cloneable data.
  */
+import type { Side } from '../campaign/cast';
 import type { GameTime } from '../core/units';
+import type { Subscription } from './air/subscriptions';
 import type { StateHasher } from './stateHash';
 
 /** A player input to the campaign. Later phases add their kinds here. */
-export type CampaignInputEvent = {
-  kind: 'alarm';
-  /** Game time the alarm goes off, and its label. */
-  at: GameTime;
-  label: string;
-};
+export type CampaignInputEvent =
+  | {
+      kind: 'alarm';
+      /** Game time the alarm goes off, and its label. */
+      at: GameTime;
+      label: string;
+    }
+  /** The side the player flies for (R1.4): logged; the UI shows that side's missions. */
+  | { kind: 'side'; side: Side }
+  /** A mission subscription (R1.4), added or replaced by id, or removed. */
+  | { kind: 'subscribe'; subscription: Subscription }
+  | { kind: 'unsubscribe'; id: number };
 
 /** A campaign-level decision. Later phases add their kinds here. */
 export type CampaignDecision = {

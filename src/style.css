@@ -451,3 +451,159 @@ body.ff-flying.ff-no-fps .frame-overlay {
   font-size: 16px;
   cursor: pointer;
 }
+
+/* Mission search (R1.4): the viewing side's missions, filters and subscriptions; M toggles it. */
+.mission-search {
+  position: fixed;
+  top: 56px;
+  left: 8px;
+  width: min(30rem, 45vw);
+  max-height: calc(100vh - 140px);
+  overflow-y: auto;
+  padding: 8px 28px 8px 12px;
+  background: rgb(0 0 0 / 0.75);
+  border-left: 3px solid #ffc83d;
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.mission-search[hidden],
+.side-panel[hidden] {
+  display: none;
+}
+
+.mission-search h2,
+.side-panel h2 {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.mission-search .close {
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  color: inherit;
+  background: none;
+  border: none;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.mission-search .filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.mission-search select,
+.mission-search button,
+.side-panel button {
+  color: #fff;
+  background: rgb(255 255 255 / 0.08);
+  border: 1px solid rgb(255 255 255 / 0.25);
+  border-radius: 3px;
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 4px;
+}
+
+.mission-search .rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mission-search .rows li {
+  padding: 3px 6px;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+}
+
+.mission-search .rows li:hover,
+.mission-search .rows li:focus {
+  background: rgb(255 255 255 / 0.1);
+  outline: none;
+}
+
+.mission-search .rows li.in-action {
+  border-left-color: #ffc83d;
+}
+
+.mission-search .rows li.empty {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.mission-search .head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mission-search .when {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mission-search .sub {
+  opacity: 0.75;
+  font-size: 12px;
+}
+
+.mission-search .threat-high .head::before {
+  content: '▲ ';
+  color: #ff7a59;
+}
+
+.mission-search .subscriptions {
+  margin-top: 8px;
+  border-top: 1px solid rgb(255 255 255 / 0.15);
+  padding-top: 6px;
+}
+
+.mission-search .subscribe {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 4px;
+}
+
+.mission-search .subscription button {
+  margin-left: 6px;
+  padding: 0 5px;
+}
+
+/* With the search open, the selected flight's panel sits beside it. */
+body.search-open .air-panel {
+  left: calc(min(30rem, 45vw) + 24px);
+}
+
+/* Side selection at campaign start (R1.4). */
+.side-panel {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(36rem, calc(100vw - 32px));
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: 12px 16px;
+  background: rgb(0 0 0 / 0.85);
+  border-radius: 4px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.side-panel .choose {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.side-panel .choose button {
+  font-size: 14px;
+  padding: 6px 12px;
+  cursor: pointer;
+}

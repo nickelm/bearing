@@ -3989,3 +3989,27 @@ The sim worker's chunk grows from 58 kB to 104 kB, since the six bundles with ge
 **Not yet checked.** That a flight handed to full fidelity anywhere on its route is above the drawn ground (R1.6's second exit criterion) needs the tile surface; the floor is checked against the coarse ground only, and the global grid's smaller hills can rise above it. R2.5's handover test is where it is checked, and the clearance may need to grow with what it finds.
 
 **Reason:** the execution layer needs a ground it can query without the renderer's tiles, built from the one edit function (rule 13), and routes that do not pass through hills.
+
+### 241. Mission search, subscriptions, jump-in windows and side selection
+
+**Date:** 2026-11-19
+**Decision:** R1.4.
+
+- **Side selection.** When a campaign starts (not Free Flight), a panel shows the generated briefing with a button per side (`src/ui/sidePanel.ts`). The choice is a campaign input (`side`, logged; the sim's state does not depend on it) and becomes the map's viewing side; the debug GUI's viewing side, with both sides, stays as the developer view.
+- **Jump-in windows** are data on the mission profiles (`MissionProfile.jumpIn`): fixed-wing from climb-out to approach (decision 231, `DEFAULT_JUMP_IN`), helicopters from departure to completion, over their ground phases (decision 149, `HELICOPTER_JUMP_IN`). `jumpInWindow(m)` gives a mission's window in game time.
+- **Search.** `src/ui/missionSearch/model.ts` is a pure display model: the viewing side's missions as rows with type, aircraft, unit, theater, phase, threat and time until action, filtered by type, aircraft, theater, phase, threat and a time window, sorted with missions in action (on target) first, then those still to reach it by how soon, then those past it, most recent first. Threat is an interim level per mission type until the intelligence picture (R3). The panel (`panel.ts`, M toggles it) draws the rows; choosing one selects the mission on the map, which draws its route, and eases the camera to the theater band's floor over the flight.
+- **Subscriptions.** A subscription is a query (side, mission types, aircraft types, theaters: what the sim can match) plus a phase, made from the panel's filters. Subscribing and unsubscribing are campaign inputs (rule 19) that travel in the worker's new `input` message; the list is a saved part of the campaign (`Subscriptions`, `sim/air/subscriptions.ts`). When a matching mission reaches the phase, `AirOps` schedules a flagged event at that moment, so the host's auto-slowdown drops the clock to 1×; the worker names the mission with the flag, and the notice offers to show it (following is R2.4).
+
+**How it was checked.** `tests/missionSearch.test.ts`: rows hold only the viewing side's missions, in the order above; every filter keeps only what it names; jump-in windows match the phases for fixed-wing and helicopter missions, and a row's jump-in state matches its window; time to action is 0 during the action and negative after it. A subscription to Alliance CAS on target, run at 64× in worker-sized steps, stops at 1× at the first such mission's on-target time, in the same state as a run that seeks there, and survives a save and restore.
+
+**Reason:** proposal 0008 makes search the player's way into the war, and subscriptions the way time acceleration and search work together; everything that changes the campaign goes through the log.
+
+### 242. A GPU timing tool behind ?dev; the lavapipe smoke test loses its device in this container
+
+**Date:** 2026-11-19
+**Decision:** R1.1.
+
+- **GPU timing.** With `?dev&gputime=1` the app creates its renderer with `trackTimestamp` and `GpuTiming` (`src/render/common/gpuTiming.ts`) resolves the render and compute timestamps every frame, averaging the frame's total and each render call per view (`strategic`, `simulation`, `freeflight`). It logs them every five seconds and exposes them as `window.bearing.gpuTiming`. Three keys a pass by its place in the frame, not by name, so passes are numbered by call order. The device must offer `timestamp-query`; the renderer's device already asks for every feature the adapter has. `tools/browser.smoke.mjs` with `GPU_TIMING=1` adds the flag and saves the last page's figures in `smoke.json`. Lavapipe has no timestamp queries, so the first figures come from the owner's machine (`MODE=gpu`).
+- **Smoke test here.** In this session's container the smoke test on lavapipe loses the WebGPU device about 160 s into Free Flight's start screen, while the terrain synthesizes ("A valid external Instance reference no longer exists"). The session's starting commit (`0c81707`) fails the same way at 166 s, so it comes from the container, not from today's changes. Free Flight could not be checked in a browser in this session.
+
+**Reason:** R2 needs a GPU baseline per view and per pass, measured on the owner's machine with the same tool that runs the smoke test.

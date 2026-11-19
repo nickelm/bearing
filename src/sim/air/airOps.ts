@@ -28,6 +28,9 @@ import type { BaseRef, Mission, MissionPhase } from './mission';
 import { buildOrderOfBattle, baseIndex } from './orbat';
 import type { AirBaseRecord, BaseStocks, OrderOfBattle, Squadron } from './orbat';
 import { routeState } from './route';
+import { MISSION_LABELS } from './mission';
+import { SUBSCRIPTION_EVENT, Subscriptions } from './subscriptions';
+import type { SubscriptionHit } from './subscriptions';
 import type { GroundSource } from './terrainFloor';
 
 export const AIR_PHASE_EVENT = 'air:phase';
@@ -73,6 +76,8 @@ export class AirOps {
   readonly orbat: OrderOfBattle;
   readonly carriers: CarrierTrack[];
   readonly radius: number;
+  /** The player's mission subscriptions (R1.4). */
+  readonly subscriptions = new Subscriptions();
   /** Live missions by id (planned or flying), in launch order. */
   readonly missions = new Map<number, Mission>();
   /** Bumped whenever a mission is added or removed (snapshots resend the list). */
@@ -100,7 +105,10 @@ export class AirOps {
   register(sim: Simulation): void {
     sim.on(AIR_PHASE_EVENT, (e, s) => this.onPhase(e.data as PhaseEvent, s));
     sim.on(AIR_READY_EVENT, (e) => this.onReady(e.data as ReadyEvent));
+    // Subscription hits carry a flag for auto-slowdown and nothing else.
+    sim.on(SUBSCRIPTION_EVENT, () => {});
     sim.addState('air', this);
+    sim.addState('subscriptions', this.subscriptions);
   }
 
   /**
@@ -210,9 +218,15 @@ export class AirOps {
   }
 
   private onPhase(e: PhaseEvent, sim: Simulation): void {
-    if (e.phase !== 'complete') return;
     const m = this.missions.get(e.mission);
     if (!m) return;
+    for (const s of this.subscriptions.matching(m, e.phase)) {
+      const hit: SubscriptionHit = { subscription: s.id, mission: m.id, phase: e.phase };
+      sim.schedule(sim.time, SUBSCRIPTION_EVENT, hit, {
+        flag: `${s.label}: ${m.callsign}, ${MISSION_LABELS[m.type]}, ${e.phase}`,
+      });
+    }
+    if (e.phase !== 'complete') return;
     this.missions.delete(e.mission);
     this.completed[m.side]++;
     this.revision++;
