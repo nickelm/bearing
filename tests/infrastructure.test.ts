@@ -1,12 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { readWorld } from '../src/campaign';
 import { CubeGrid } from '../src/core/cubeGrid';
-import { latLonToDirection } from '../src/core/coords';
 import { DEG } from '../src/core/units';
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
 import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
-import { buildStrategicGraphWithContext } from '../src/worldgen/strategic/builder';
-import type { StrategicBuild } from '../src/worldgen/strategic/builder';
 import {
   RoadClass,
   settlementKind,
@@ -19,57 +16,17 @@ import {
   MIN_AIRBASES,
   placeInfrastructure,
 } from '../src/worldgen/strategic/infrastructure';
-import { BRIDGE_MIN_DISCHARGE } from '../src/worldgen/strategic/movement';
 import { LOCAL_LINK, localLinks } from '../src/worldgen/strategic/roads';
 import { buildTerritory, territoryCode } from '../src/worldgen/strategic/territory';
-import { boxWorld, firstDifference, graphFingerprint, RADIUS } from './helpers/syntheticWorld';
-
-const RIVER_LON = -50;
-
-/**
- * The campaign test's continent (a ridge at lon −30°) and rear base, plus a
- * wide river flowing south along lon −50° from 18° N to the coast.
- */
-function riverWorld(seed: number): { build: StrategicBuild; river: Set<number> } {
-  const input = boxWorld(
-    96,
-    [
-      { lat: [-20, 20], lon: [-80, 20] },
-      { lat: [-12, 12], lon: [105, 140] },
-    ],
-    (_lat, lon) => 2000 * (RADIUS / 6_371_000) * Math.exp(-(((lon + 30) / 1.5) ** 2)),
-  );
-  const g = input.grid;
-  const receiver = new Int32Array(g.cellCount).fill(-1);
-  const discharge = new Float32Array(g.cellCount);
-  const river = new Set<number>();
-  let c = g.cellOfDirection(latLonToDirection(18 * DEG, RIVER_LON * DEG));
-  const target = latLonToDirection(-40 * DEG, RIVER_LON * DEG);
-  for (let guard = 0; guard < 1000 && input.height[c]! > 0; guard++) {
-    river.add(c);
-    discharge[c] = 4 * BRIDGE_MIN_DISCHARGE;
-    let next = -1;
-    let best = -Infinity;
-    for (let k = 0; k < 8; k++) {
-      const nb = g.neighbors8[c * 8 + k]!;
-      if (nb < 0 || river.has(nb)) continue;
-      // Head south, staying on the meridian.
-      const p = g.center(nb);
-      const lon = Math.atan2(p.x, p.z) / DEG;
-      const score = p.dot(target) - Math.abs(lon - RIVER_LON) * 0.01;
-      if (score > best) {
-        best = score;
-        next = nb;
-      }
-    }
-    receiver[c] = next;
-    c = next;
-  }
-  input.discharge = discharge;
-  input.receiver = receiver;
-  input.seed = seed;
-  return { build: buildStrategicGraphWithContext(input), river };
-}
+import {
+  firstDifference,
+  firstTraceDifference,
+  graphFingerprint,
+  RADIUS,
+  RIVER_LON,
+  riverWorld,
+  traced,
+} from './helpers/syntheticWorld';
 
 function connectedOver(roads: RoadNetwork, cells: number[]): boolean {
   const parent = new Map<number, number>();
@@ -91,7 +48,8 @@ function connectedOver(roads: RoadNetwork, cells: number[]): boolean {
 }
 
 describe('settlements, roads and bridges in the strategic graph', () => {
-  const { build, river } = riverWorld(1983);
+  const first = traced(() => riverWorld(1983));
+  const { build, river } = first.value;
   const { graph, ctx } = build;
   const s = graph.settlements;
 
@@ -189,8 +147,10 @@ describe('settlements, roads and bridges in the strategic graph', () => {
   });
 
   it('is deterministic; the settlement seed changes towns, not landmasses', () => {
-    const again = riverWorld(1983).build.graph;
-    // Names the first differing quantity if this ever diverges (TODO.md Known issues).
+    const second = traced(() => riverWorld(1983));
+    const again = second.value.build.graph;
+    // Names the first differing step and quantity if this ever diverges (decision 234).
+    expect(firstTraceDifference(first.trace, second.trace)).toBeNull();
     expect(firstDifference(again, graph, 'graph')).toBeNull();
     expect(graphFingerprint(again)).toBe(graphFingerprint(graph));
     const other = riverWorld(7).build.graph;
@@ -200,7 +160,8 @@ describe('settlements, roads and bridges in the strategic graph', () => {
 });
 
 describe('infrastructure placed from the cast', () => {
-  const { build } = riverWorld(1983);
+  const first = traced(() => riverWorld(1983));
+  const { build } = first.value;
   const { graph } = build;
   const { cast } = readWorld(graph, 1983);
   const territory = buildTerritory(build, cast);
@@ -278,7 +239,9 @@ describe('infrastructure placed from the cast', () => {
   it('is deterministic and leaves the graph and the cast unchanged', () => {
     const before = graphFingerprint(graph);
     const castBefore = JSON.stringify(cast);
-    const again = placeInfrastructure(riverWorld(1983).build, cast, 1983);
+    const second = traced(() => riverWorld(1983));
+    expect(firstTraceDifference(first.trace, second.trace)).toBeNull();
+    const again = placeInfrastructure(second.value.build, cast, 1983);
     const strip = (x: typeof infra) => graphFingerprint({ ...x, timings: [] } as never);
     expect(strip(again)).toBe(strip(infra));
     expect(graphFingerprint(graph)).toBe(before);

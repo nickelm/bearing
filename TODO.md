@@ -16,7 +16,8 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 ### R1.1 Health and baselines
 
 - [x] Find the cube-face seam in `tests/gpu/tileSynth.test.ts` (0.10 m against 0.05 m on lavapipe): fix the kernel, or re-baseline with a decision. Fixed in the kernel: edge samples agree bit for bit (decision 233)
-- [ ] Front generator determinism: run `tests/campaign.test.ts` and `tests/infrastructure.test.ts` 50 times under parallel load on Node 22 and 24; if a divergence recurs, quantize the band cut's axis coordinate (decision 86)
+- [x] Front generator determinism: run `tests/campaign.test.ts` and `tests/infrastructure.test.ts` 50 times under parallel load on Node 22 and 24; if a divergence recurs, quantize the band cut's axis coordinate (decision 86). Reproduced on Node 24 only (2 of 50 runs; 9 of 200 fresh processes): a V8 on-stack-replacement fault in `lineFromPath`'s side sums, worked around with `lineSides` (decision 234); quantizing would not have helped
+- [ ] Watch the CI `determinism` job for a few weeks after decision 234; remove it once clean
 - [ ] GPU determinism flake (`detailStage`, `tileSynth`): run the GPU suite ten times with and without `--no-file-parallelism` on lavapipe and on the owner's GPU; record the rate
 - [ ] Pin the demo seeds 4, 10 and 7: a test that each keeps a continental front and passes validity on the current `GENERATOR_VERSION`
 - [ ] Strategic map frame rate (10–15 fps): profile labels, the zone list and glyph rebuilds; fix the hot path
@@ -274,6 +275,5 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 ## Known issues
 
 - [ ] Intermittent GPU determinism flake in `detailStage` and `tileSynth` (about 1 run in 5–10); R1.1. History in the archived TODO
-- [ ] CPU determinism flake in the front generator (three CI occurrences; fix in decision 86, open until several CI runs pass); R1.1. History in the archived TODO
 - [ ] The Free Flight session's "drizzle: wet at once" check fails (decision 217); not investigated
 - [ ] Stale code comments listed in the audit's "Left in the Code"; fix when the files are next touched

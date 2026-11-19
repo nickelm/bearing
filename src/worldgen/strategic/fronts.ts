@@ -49,6 +49,36 @@ const PROMINENCE_RADIUS = 30e3;
 /** Side depth ignores the most remote land beyond this area fraction (peninsula tips). */
 const DEPTH_QUANTILE = 0.9;
 
+/**
+ * Diagnostics for the front generator's determinism (R1.1, decision 234):
+ * while `sink` is set, `buildFronts` appends one line per step (its inputs'
+ * hashes, the projection, the band, the coastal arcs and every path search) with
+ * exact values. Tests that build a world twice compare the two traces, so a
+ * divergence names the first step that differs. Never read by the generator.
+ */
+export const frontTrace: { sink: string[] | null } = { sink: null };
+
+const traceF64 = new Float64Array(1);
+const traceU32 = new Uint32Array(traceF64.buffer);
+
+/** FNV-1a over the float64 bits of `values` (all of them, or those at `cells`). */
+export function traceHash(values: ArrayLike<number>, cells?: readonly number[]): string {
+  let h = 0x811c9dc5;
+  const n = cells ? cells.length : values.length;
+  for (let i = 0; i < n; i++) {
+    traceF64[0] = values[cells ? cells[i]! : i]!;
+    for (const w of traceU32) {
+      h = Math.imul(h ^ (w & 0xffff), 0x01000193);
+      h = Math.imul(h ^ (w >>> 16), 0x01000193);
+    }
+  }
+  return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+function trace(line: () => string): void {
+  frontTrace.sink?.push(line());
+}
+
 /** Barrier strength 0..1 per coarse cell (0 at sea). */
 export function barrierMap(ctx: StrategicContext, walker = new CapWalker(ctx.grid)): Float32Array {
   const { grid, height, reliefScale } = ctx;
@@ -101,6 +131,10 @@ export function buildFronts(
 ): FrontResult {
   const lines: BarrierLine[] = [];
   const fronts: FrontGeometry[] = [];
+  trace(() => {
+    const g = ctx.grid;
+    return `inputs centers=${traceHash(g.centers)} areas=${traceHash(g.areas)} label=${traceHash(ctx.labels.label)} height=${traceHash(ctx.height)} discharge=${traceHash(ctx.discharge)} slope=${traceHash(ctx.slope)} forest=${traceHash(ctx.forest)} lake=${traceHash(ctx.lakeDepth)} barrier=${traceHash(barrier)}`;
+  });
   for (const node of nodes) {
     if (node.kind !== 'landmass' || node.area < FRONT_MIN_AREA) continue;
     const front = landmassFront(ctx, node, members[node.id]![0]!, barrier, lines, civ);
@@ -133,10 +167,8 @@ function landmassFront(
     ref[2] * C[0] - ref[0] * C[2],
     ref[0] * C[1] - ref[1] * C[0],
   ];
-  // No sin, cos, acos or hypot below: their results can differ in the last bit between
-  // V8's compilation tiers on some CPUs, and the band cut by sorted axis position turns
-  // a last-bit change into a different front (TODO.md Known issues; decision 86). Only
-  // +, −, ×, ÷, sqrt and atan2 (as in angleBetween) remain.
+  // No sin, cos, acos or hypot below (decision 86): only +, −, ×, ÷, sqrt and atan2
+  // (as in angleBetween). The flake that motivated it was a V8 fault (decision 234).
   const l1 = Math.sqrt(e1[0] * e1[0] + e1[1] * e1[1] + e1[2] * e1[2]);
   e1 = [e1[0] / l1, e1[1] / l1, e1[2] / l1];
   const e2: Point = [
@@ -169,6 +201,10 @@ function landmassFront(
   }
   mx /= wsum;
   my /= wsum;
+  trace(
+    () =>
+      `landmass ${landmass} cells=${cells.length} centroid=${C.join(',')} px=${traceHash(px, cells)} py=${traceHash(py, cells)} mean=${mx},${my} area=${wsum}`,
+  );
   for (const c of cells) {
     const a = grid.areas[c]!;
     const x = px[c]! - mx;
@@ -204,6 +240,10 @@ function landmassFront(
     tHi = Math.max(tHi, t[c]!);
   }
   const exclusion = Math.max(MIN_EXCLUSION, 3 * ctx.cellSize, ((tHi - tLo) * radius) / 8);
+  trace(
+    () =>
+      `axis s=${sxx},${syy},${sxy} rot=${ca},${sa} t=${traceHash(t, cells)} order=${traceHash(order)} q=${traceHash(q, cells)} band=${tLo},${tHi}`,
+  );
 
   // The two coastal arcs of the band: 8-connected components of coastal band
   // cells, taking those with the largest and smallest mean minor coordinate.
@@ -247,6 +287,10 @@ function landmassFront(
     .sort((a, b) => b.cells.length - a.cells.length || a.i - b.i);
   const left = bySize[0];
   const right = left && bySize.find((k) => k.meanS - bandS > 0 !== left.meanS - bandS > 0);
+  trace(
+    () =>
+      `arcs ${comps.length} bandS=${bandS} left=${left?.i}:${left?.cells.length}:${left?.meanS} right=${right?.i}:${right?.cells.length}:${right?.meanS}`,
+  );
   if (!left || !right) return null;
   const isTarget = new Uint8Array(grid.cellCount);
   for (const c of right.cells) isTarget[c] = 1;
@@ -293,6 +337,13 @@ function landmassFront(
     path.reverse();
 
     const result = lineFromPath(ctx, node, landmass, cells, path, q, barrier, civ.settlements);
+    trace(
+      () =>
+        `attempt ${attempt} end=${end} cost=${dist[end]} path=${path.length}:${traceHash(path)} dist=${traceHash(dist, cells)} ` +
+        (result
+          ? `sides=${traceHash(result.side, cells)} area=${result.line.sides[0].area},${result.line.sides[1].area} points=${result.line.points.length}`
+          : 'no split'),
+    );
     if (!result) {
       // The path does not split the land (it wraps around an inland sea): rule out its cells and retry.
       for (const c of path) {
@@ -361,6 +412,64 @@ function landmassFront(
     forwardSide,
     corridors,
   };
+}
+
+/**
+ * Area, area fraction, centroid and depth of a line's two sides, both in one pass.
+ * A top-level function without closures on purpose (decision 234): Node 24's V8
+ * sometimes ran the earlier form, a closure mapped over [0, 1] with this loop
+ * inside, with on-stack-replaced code that summed another call's side, so about
+ * one build in twenty came out with wrong side areas and a different front.
+ */
+function lineSides(
+  grid: StrategicContext['grid'],
+  cells: readonly number[],
+  side: Int8Array,
+  onPath: Uint8Array,
+  distance: Float64Array,
+  radius: number,
+  landArea: number,
+): [LineSide, LineSide] {
+  const area = [0, 0];
+  const cx = [0, 0];
+  const cy = [0, 0];
+  const cz = [0, 0];
+  const dists: [number, number][][] = [[], []];
+  for (const c of cells) {
+    const v = side[c]!;
+    if ((v !== 0 && v !== 1) || onPath[c]) continue;
+    const a = grid.areas[c]!;
+    area[v] += a;
+    cx[v] += grid.centers[c * 3]! * a;
+    cy[v] += grid.centers[c * 3 + 1]! * a;
+    cz[v] += grid.centers[c * 3 + 2]! * a;
+    if (Number.isFinite(distance[c]!)) dists[v]!.push([distance[c]!, a]);
+  }
+  const out: LineSide[] = [];
+  for (let v = 0; v < 2; v++) {
+    const len = Math.hypot(cx[v]!, cy[v]!, cz[v]!) || 1;
+    const areaM2 = area[v]! * radius * radius;
+    // Depth: the distance within which DEPTH_QUANTILE of the side's land lies.
+    const list = dists[v]!.sort(byFirst);
+    let depth = 0;
+    let seen = 0;
+    for (const [d, a] of list) {
+      seen += a;
+      depth = d;
+      if (seen >= DEPTH_QUANTILE * area[v]!) break;
+    }
+    out.push({
+      area: areaM2,
+      fraction: areaM2 / landArea,
+      centroid: [cx[v]! / len, cy[v]! / len, cz[v]! / len],
+      depth,
+    });
+  }
+  return [out[0]!, out[1]!];
+}
+
+function byFirst(x: [number, number], y: [number, number]): number {
+  return x[0] - y[0];
 }
 
 function lineFromPath(
@@ -441,39 +550,7 @@ function lineFromPath(
     }
   }
 
-  const sides: [LineSide, LineSide] = [0, 1].map((v) => {
-    let area = 0;
-    const dists: [number, number][] = [];
-    let cx = 0;
-    let cy = 0;
-    let cz = 0;
-    for (const c of cells) {
-      if (side[c] !== v || onPath[c]) continue;
-      const a = grid.areas[c]!;
-      area += a;
-      cx += grid.centers[c * 3]! * a;
-      cy += grid.centers[c * 3 + 1]! * a;
-      cz += grid.centers[c * 3 + 2]! * a;
-      if (Number.isFinite(distance[c]!)) dists.push([distance[c]!, a]);
-    }
-    const len = Math.hypot(cx, cy, cz) || 1;
-    const areaM2 = area * radius * radius;
-    // Depth: the distance within which DEPTH_QUANTILE of the side's land lies.
-    dists.sort((x, y) => x[0] - y[0]);
-    let depth = 0;
-    let seen = 0;
-    for (const [d, a] of dists) {
-      seen += a;
-      depth = d;
-      if (seen >= DEPTH_QUANTILE * area) break;
-    }
-    return {
-      area: areaM2,
-      fraction: areaM2 / node.area,
-      centroid: [cx / len, cy / len, cz / len] as Point,
-      depth,
-    };
-  }) as [LineSide, LineSide];
+  const sides = lineSides(grid, cells, side, onPath, distance, radius, node.area);
 
   // Polyline: cell centers, lightly smoothed (ends fixed); strength per point.
   const raw = path.map((c) => cellPoint(ctx, c));
