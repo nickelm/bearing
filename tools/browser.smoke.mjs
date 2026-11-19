@@ -472,12 +472,18 @@ async function helicopter() {
     turned && Math.abs(((turned.heading - hover.heading + 540) % 360) - 180) > 10,
     `helicopter: the pedals do not turn it: ${JSON.stringify([hover, turned])}`,
   );
-  // The mouse forward: nose down, forward flight.
+  // The mouse forward: nose down, forward flight. Wait for the speed, not for a count of
+  // frames: 70 frames were over ten seconds of flight on lavapipe and under two on a GPU,
+  // too short to pass 10 kt from a hover (the first MODE=gpu run, 2026-11-19).
   for (let i = 0; i < 10; i++) {
     await page.evaluate(() => window.bearing.freeFlight.heloInput.nudge(0, -6));
     await frames(1);
   }
   await frames(60);
+  await until(() => {
+    const m = window.bearing.freeFlight.flight.helo;
+    return m.crashed || m.telemetry.groundSpeed > 10 * 0.514444;
+  }, 30).catch(() => {});
   const forward = await page.evaluate(helo);
   check(
     forward && forward.knots > 10 && !forward.crashed,
