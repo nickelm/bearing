@@ -1,0 +1,44 @@
+{
+  "name": "Vo-37 Grom",
+  "class": "strike",
+  "scheme": "pact-air",
+  "airWar": {
+    "id": "vo37",
+    "order": 20,
+    "side": "pact",
+    "role": "deep-strike",
+    "reference": "Su-24M",
+    "crew": 2,
+    "flightSize": 4,
+    "cruiseSpeedKt": 480,
+    "lowLevelSpeedKt": 560,
+    "maxSpeedKt": 1200,
+    "cruiseAltitude": 8000,
+    "ceiling": 11000,
+    "climbRate": 50,
+    "combatRadiusKm": 1050,
+    "stationTimeMin": 5,
+    "fuel": 13000,
+    "turnaroundH": 4,
+    "loadouts": [
+      {
+        "id": "strike",
+        "stores": "6 × 500 kg bombs, 2 tanks",
+        "radiusFactor": 0.9
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "pact",
+    "roundScopes": false,
+    "systems": ["radar-ag", "terrain-following", "rwr", "stores-management", "targeting-pod"],
+    "slots": {
+      "leftMfd": ["moving-map", "stores", "engines"],
+      "rightMfd": ["radar-ag", "targeting-pod", "engines"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": false,
+    "crew": ["wso"]
+  }
+}

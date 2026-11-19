@@ -42,7 +42,7 @@
           "square": 0.4
         },
         {
-          "x": 1.0,
+          "x": 1,
           "y": 0.3,
           "w": 0.75,
           "h": 0.85,
@@ -81,7 +81,7 @@
       "type": "cylinder",
       "group": "body",
       "mirror": true,
-      "from": [2.0, 0.15, 1.15],
+      "from": [2, 0.15, 1.15],
       "to": [-3.6, 0.2, 1.15],
       "radius": 0.62,
       "radius2": 0.55,
@@ -91,7 +91,7 @@
       "type": "cylinder",
       "group": "intake",
       "mirror": true,
-      "from": [2.0, 0.15, 1.15],
+      "from": [2, 0.15, 1.15],
       "to": [2.08, 0.15, 1.15],
       "radius": 0.52,
       "sides": 8
@@ -130,8 +130,8 @@
       "type": "wing",
       "group": "body",
       "mirror": true,
-      "root": [-5.4, 1.0, 0.25],
-      "rootChord": 2.0,
+      "root": [-5.4, 1, 0.25],
+      "rootChord": 2,
       "tipChord": 0.9,
       "span": 2.4,
       "sweep": 25,
@@ -144,7 +144,7 @@
       "root": [-4.6, 0.95, 0],
       "rootChord": 2.8,
       "tipChord": 1.3,
-      "span": 3.0,
+      "span": 3,
       "sweep": 35,
       "vertical": true,
       "thickness": 0.05
@@ -171,8 +171,8 @@
       "type": "cylinder",
       "group": "store",
       "mirror": true,
-      "from": [-1.8, 0.3, 5.0],
-      "to": [0.0, 0.3, 5.0],
+      "from": [-1.8, 0.3, 5],
+      "to": [0, 0.3, 5],
       "radius": 0.14,
       "sides": 6
     },
@@ -180,8 +180,8 @@
       "type": "cylinder",
       "group": "store",
       "mirror": true,
-      "from": [-1.8, 0.33, 6.0],
-      "to": [-0.4, 0.33, 6.0],
+      "from": [-1.8, 0.33, 6],
+      "to": [-0.4, 0.33, 6],
       "radius": 0.11,
       "sides": 4
     }
@@ -203,5 +203,43 @@
       "kind": "beacon",
       "at": [-6.6, 3.9, 0]
     }
-  ]
+  ],
+  "airWar": {
+    "id": "vo35",
+    "order": 22,
+    "side": "pact",
+    "role": "cas",
+    "reference": "Su-25",
+    "flightSize": 4,
+    "cruiseSpeedKt": 400,
+    "lowLevelSpeedKt": 400,
+    "maxSpeedKt": 520,
+    "cruiseAltitude": 4000,
+    "ceiling": 7000,
+    "climbRate": 40,
+    "combatRadiusKm": 400,
+    "stationTimeMin": 20,
+    "fuel": 4300,
+    "turnaroundH": 2,
+    "loadouts": [
+      {
+        "id": "cas",
+        "stores": "rocket pods, 4 × 250 kg bombs, cannon",
+        "radiusFactor": 0.9
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "pact",
+    "roundScopes": false,
+    "systems": ["rwr", "stores-management"],
+    "slots": {
+      "leftMfd": ["moving-map", "stores", "engines"],
+      "rightMfd": ["engines"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": false,
+    "crew": []
+  }
 }

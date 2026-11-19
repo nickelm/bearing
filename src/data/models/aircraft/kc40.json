@@ -1,0 +1,44 @@
+{
+  "name": "KC-40 Pelican",
+  "class": "bomber",
+  "scheme": "alliance-air",
+  "airWar": {
+    "id": "kc40",
+    "order": 12,
+    "side": "alliance",
+    "role": "tanker",
+    "reference": "KC-135A",
+    "crew": 3,
+    "flightSize": 1,
+    "cruiseSpeedKt": 460,
+    "lowLevelSpeedKt": 300,
+    "maxSpeedKt": 500,
+    "cruiseAltitude": 9000,
+    "ceiling": 15000,
+    "climbRate": 15,
+    "combatRadiusKm": 1800,
+    "stationTimeMin": 120,
+    "fuel": 90000,
+    "turnaroundH": 6,
+    "loadouts": [
+      {
+        "id": "tanker",
+        "stores": "transfer fuel through a boom",
+        "radiusFactor": 1
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "alliance",
+    "roundScopes": false,
+    "systems": ["rwr"],
+    "slots": {
+      "leftMfd": ["moving-map", "engines"],
+      "rightMfd": ["engines"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": false,
+    "crew": ["boom"]
+  }
+}

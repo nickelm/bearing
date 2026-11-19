@@ -1,0 +1,50 @@
+{
+  "name": "A-14 Bittern",
+  "class": "strike",
+  "scheme": "alliance-air",
+  "airWar": {
+    "id": "a14",
+    "order": 5,
+    "side": "alliance",
+    "role": "carrier-attack",
+    "reference": "A-6E",
+    "carrier": true,
+    "crew": 2,
+    "flightSize": 2,
+    "cruiseSpeedKt": 410,
+    "lowLevelSpeedKt": 450,
+    "maxSpeedKt": 560,
+    "cruiseAltitude": 7000,
+    "ceiling": 12000,
+    "climbRate": 40,
+    "combatRadiusKm": 1000,
+    "stationTimeMin": 5,
+    "fuel": 9000,
+    "turnaroundH": 4,
+    "loadouts": [
+      {
+        "id": "strike",
+        "stores": "10 × 230 kg bombs, 2 tanks",
+        "radiusFactor": 0.9
+      },
+      {
+        "id": "anti-ship",
+        "stores": "2 anti-ship missiles, 2 tanks",
+        "radiusFactor": 1
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "alliance",
+    "roundScopes": false,
+    "systems": ["radar-ag", "terrain-following", "rwr", "stores-management", "targeting-pod"],
+    "slots": {
+      "leftMfd": ["moving-map", "stores", "engines"],
+      "rightMfd": ["radar-ag", "targeting-pod", "engines"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": false,
+    "crew": ["bn"]
+  }
+}

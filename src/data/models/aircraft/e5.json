@@ -1,0 +1,44 @@
+{
+  "name": "E-5 Watchman",
+  "class": "bomber",
+  "scheme": "alliance-air",
+  "airWar": {
+    "id": "e5",
+    "order": 11,
+    "side": "alliance",
+    "role": "aew",
+    "reference": "E-3A",
+    "crew": 18,
+    "flightSize": 1,
+    "cruiseSpeedKt": 420,
+    "lowLevelSpeedKt": 300,
+    "maxSpeedKt": 460,
+    "cruiseAltitude": 9000,
+    "ceiling": 12500,
+    "climbRate": 15,
+    "combatRadiusKm": 1600,
+    "stationTimeMin": 360,
+    "fuel": 70000,
+    "turnaroundH": 6,
+    "loadouts": [
+      {
+        "id": "aew",
+        "stores": "rotodome surveillance radar",
+        "radiusFactor": 1
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "alliance",
+    "roundScopes": false,
+    "systems": ["rwr", "datalink"],
+    "slots": {
+      "leftMfd": ["moving-map", "engines"],
+      "rightMfd": ["engines"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": false,
+    "crew": ["mission-crew"]
+  }
+}

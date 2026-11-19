@@ -1,0 +1,43 @@
+{
+  "name": "F-130 Nightjar",
+  "class": "strike",
+  "scheme": "alliance-air",
+  "airWar": {
+    "id": "f130",
+    "order": 6,
+    "side": "alliance",
+    "role": "stealth-strike",
+    "reference": "F-117A",
+    "flightSize": 1,
+    "cruiseSpeedKt": 470,
+    "lowLevelSpeedKt": 450,
+    "maxSpeedKt": 540,
+    "cruiseAltitude": 8000,
+    "ceiling": 13000,
+    "climbRate": 40,
+    "combatRadiusKm": 900,
+    "stationTimeMin": 5,
+    "fuel": 8000,
+    "turnaroundH": 6,
+    "loadouts": [
+      {
+        "id": "strike",
+        "stores": "2 × 900 kg laser-guided bombs in the bay",
+        "radiusFactor": 1
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "alliance",
+    "roundScopes": false,
+    "systems": ["rwr", "targeting-pod", "stores-management"],
+    "slots": {
+      "leftMfd": ["moving-map", "stores", "engines"],
+      "rightMfd": ["targeting-pod", "engines"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": false,
+    "crew": []
+  }
+}

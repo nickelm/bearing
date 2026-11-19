@@ -81,17 +81,22 @@ src/worldgen/       planet generation pipeline stages (may use GPU compute); can
                     settlements and corridors (route numbering in S4)
 src/campaign/       theater detection, casting (carrier groups in carriers.ts), briefing, validity check (reads the
                     strategic graph only)
+src/data/models/    model specs (JSON, decision 106) of everything drawn; aircraft/ holds one bundle per aircraft
+                    type (rule 17, decision 238): geometry, flight data, air-war entry, avionics profile, rig
 src/sim/            headless simulation; runs in a worker: event queue + fixed ticks (simulation.ts),
-                    time acceleration (host.ts), world factory (world.ts)
+                    time acceleration, checkpoints and the input timeline (host.ts), saved state and the
+                    event log (simulation.ts, eventLog.ts; decision 235), world factory (world.ts)
   weather/          hourly weather model on a bordered 24² cube grid; WeatherView for queries; presets and the
                     standalone weather for Free Flight (decision 137)
-  air/              the air war (C2, decision 132): aircraft type table, order of battle, missions,
+  air/              the air war (C2, decision 132): the bundle loader (bundles.ts) and the type table it fills,
+                    order of battle, missions,
                     analytic routes (great-circle legs, racetracks, fuel) and AirOps (live missions, phase events)
   naval/            carrier groups on their patrol tracks (analytic position); convoys, amphibious and surface groups in R4 (docs/roadmap.md)
+  ground/           road and rail graphs with bridge cuts (network.ts) and damage to targets (damage.ts; decision 237);
+                    battalions in R2.3
   avionics/         avionics state per aircraft (master mode and its triggers, master arm, acknowledged cautions; later
                     radar mode, locks, designations, stores) changed only by avionics commands, and avionics profiles
-                    (decisions 189, 199), one per type of the air war in typeProfiles.ts (decision 224) until
-                    R1.7 moves them into the types' JSON bundles (decision 232)
+                    (decisions 189, 199), each type's from its bundle (decisions 224, 238)
   sensors/          the sensor model (P3a, decision 218): radar, RWR, visual and datalink contacts per aircraft,
                     the filtered picture that displays read and the AI is to read (R3); lineOfSight.ts over the ground; groundMap.ts,
                     the air-to-ground radar's ground map (decision 226)
@@ -116,7 +121,7 @@ src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Bo
                     field in TSL, decision 148), cube-sphere
                     geometry, WebGPU checks, terrain/ (tile quadtree, tile meshes, tile cache, budget, prefetch),
                     water/ (river segment tables and river shading), models/ (model spec format,
-                    procedural builder, palettes and schemes, specs/*.json; decision 106);
+                    procedural builder, palettes and schemes; the specs are in src/data/models/, decision 106);
                     later the transition controller
   sim/              simulation view: GlobeScene, camera/ (observer, chase camera and stations), aircraft/
                     (the flown aircraft with animated parts, decision 135), terrain/
@@ -226,7 +231,7 @@ These are the project conventions. Lint enforces some of them (marked ⚙).
     - Zones, props and wonders read the three layers and never change the province, rock or biome maps; a wonder shapes the tiles on top of them. A new landscape feature names the layer it belongs to and reads only the layers below it.
 
 16. **Mission types are plug-ins** (decision 230, Proposal 0008). A mission type is complete only when all eight parts exist: planner rule with priority scoring, package template, aggregate resolver, full-fidelity behavior for the AI pilots, jump-in windows, success criteria and consequences, briefing template, and interface defaults (master mode, formats and HUD cues per phase). Register it with the mission registry, whose test checks every part; never special-case a mission type in the planner, the resolver or the UI outside its plug-in. `docs/roadmap.md`, *Adding Mission and Aircraft Types*, has the checklist.
-17. **Aircraft types are bundles** (decisions 230, 232, Proposal 0008). Every type is one JSON bundle in `src/render/common/models/specs/`: geometry with animated parts, flight data, avionics profile and display complement, pylons and loadouts, role tags, crew roles, camera rig, aggregate performance from calibration, and faction, name and skin. Never keep a part of a type in code; until R1.7 moves them, avionics profiles are in `typeProfiles.ts` and the air-war entries in `sim/air/aircraft.ts`. Add a type by filling every part; the bundle test lists what a type lacks. A type that changes every world's cast needs its own decision.
+17. **Aircraft types are bundles** (decisions 230, 232, Proposal 0008). Every type is one JSON bundle: geometry with animated parts, flight data, avionics profile and display complement, pylons and loadouts, role tags, crew roles, camera rig, aggregate performance from calibration, and faction, name and skin. Bundles live in `src/data/models/aircraft/`, where the sim may import them (decision 238); `src/sim/air/bundles.ts` is the one loader for the sim worker and the renderer. Never keep a part of a type in code. Add a type by filling every part; the bundle test (`tests/bundles.test.ts`) lists what a type lacks. A type that changes every world's cast needs its own decision.
 18. **Calibration** (decision 230). Aggregate resolvers and full fidelity must agree. Aggregate outcome tables are fitted from headless full-fidelity engagements by a script, stored in the repository, and checked by a tolerance test. A change to a flight model, a weapon or a resolver regenerates the affected tables in the same commit; never tune an aggregate table by hand.
 19. **Event log** (decision 230). Every player input to the campaign and every campaign-level decision is an event in the log, and the consequences of a full-fidelity session return to the simulation as logged events. Nothing outside the log may change campaign state, so replaying the log from a snapshot reproduces the same state. Sim state must be serializable: no hidden RNG state, no closures in the queue, no state held only by the UI.
 

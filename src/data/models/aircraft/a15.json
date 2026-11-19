@@ -1,0 +1,42 @@
+{
+  "name": "A-15 Buzzard",
+  "class": "strike",
+  "scheme": "alliance-air",
+  "airWar": {
+    "id": "a15",
+    "order": 7,
+    "side": "alliance",
+    "role": "cas",
+    "reference": "A-10A",
+    "flightSize": 2,
+    "cruiseSpeedKt": 300,
+    "lowLevelSpeedKt": 300,
+    "maxSpeedKt": 380,
+    "cruiseAltitude": 4500,
+    "ceiling": 9000,
+    "climbRate": 30,
+    "combatRadiusKm": 450,
+    "stationTimeMin": 40,
+    "fuel": 5000,
+    "loadouts": [
+      {
+        "id": "cas",
+        "stores": "cannon, 6 anti-tank missiles, 4 cluster bombs",
+        "radiusFactor": 0.9
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "alliance",
+    "roundScopes": false,
+    "systems": ["rwr", "stores-management"],
+    "slots": {
+      "leftMfd": ["moving-map", "stores", "engines"],
+      "rightMfd": ["engines"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": false,
+    "crew": []
+  }
+}

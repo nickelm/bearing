@@ -1,7 +1,7 @@
 /** Flight-model test fixtures: the Kestrel's flight spec and a flat world with one runway. */
 import { Vec3d } from '../../src/core/vec3d';
 import { DEG } from '../../src/core/units';
-import spec from '../../src/render/common/models/specs/alliance-fighter.json';
+import spec from '../../src/data/models/aircraft/alliance-fighter.json';
 import { parseFlightSpec } from '../../src/sim/flight/flightSpec';
 import type { FlightSpec } from '../../src/sim/flight/flightSpec';
 import { FlightModel } from '../../src/sim/flight/flightModel';

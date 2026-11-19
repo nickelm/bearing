@@ -405,8 +405,8 @@
       "spoolUp": 1.6,
       "spoolDown": 1,
       "afterburner": 1,
-      "tsfcDry": 0.0000198,
-      "tsfcWet": 0.0000567
+      "tsfcDry": 1.98e-5,
+      "tsfcWet": 5.67e-5
     },
     "controls": {
       "rollAuthority": 0.05,
@@ -494,5 +494,65 @@
       [-5.4, 0.05, -3],
       [-5.4, 0.05, 3]
     ]
+  },
+  "airWar": {
+    "id": "f21",
+    "order": 1,
+    "side": "alliance",
+    "role": "multirole",
+    "reference": "F-16C",
+    "flightSize": 4,
+    "cruiseSpeedKt": 480,
+    "lowLevelSpeedKt": 480,
+    "maxSpeedKt": 1150,
+    "cruiseAltitude": 9000,
+    "ceiling": 15000,
+    "climbRate": 110,
+    "combatRadiusKm": 550,
+    "stationTimeMin": 15,
+    "fuel": 5800,
+    "loadouts": [
+      {
+        "id": "air-to-air",
+        "stores": "2 medium-range and 4 short-range missiles, 2 tanks",
+        "radiusFactor": 1
+      },
+      {
+        "id": "strike",
+        "stores": "2 \u00d7 900 kg bombs, 2 short-range missiles, 2 tanks",
+        "radiusFactor": 0.85
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "alliance",
+    "roundScopes": false,
+    "systems": ["radar-aa", "radar-ag", "rwr", "datalink", "targeting-pod", "stores-management"],
+    "slots": {
+      "leftMfd": ["moving-map", "engines", "stores"],
+      "rightMfd": ["radar-aa", "radar-ag", "targeting-pod", "engines"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": false,
+    "crew": [],
+    "radar": {
+      "kind": "pulse-doppler",
+      "rangeKm": 70,
+      "azimuthDeg": 60,
+      "elevationDeg": 60,
+      "notch": 40
+    }
+  },
+  "rig": {
+    "kind": "fast-jet",
+    "distance": 19,
+    "height": 4,
+    "groundDistance": 14,
+    "groundHeight": 2.6,
+    "rotation": 3.5,
+    "stretch": 2,
+    "stretchPerAccel": 0.25,
+    "fovDeg": 50
   }
 }

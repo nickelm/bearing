@@ -36,6 +36,7 @@
 import { DEG, KNOT } from '../../../core/units';
 import type { Meters, Radians } from '../../../core/units';
 import { Vec3d } from '../../../core/vec3d';
+import type { RigSpec } from '../../../sim/air/bundles';
 import type { Airframe } from '../../../sim/flight/airframe';
 
 export interface ChaseRig {
@@ -80,7 +81,11 @@ export interface ChaseHoverSchedule {
   groundLookMax: Meters;
 }
 
-/** The rig for fast jets: further back and looser (Proposal 0002, Per-type rigs). */
+/**
+ * The rig for fast jets: further back and looser (Proposal 0002, Per-type rigs).
+ * The camera's default; a flown type takes its rig from its bundle (`rigFromBundle`),
+ * and the Kestrel's bundle holds these numbers.
+ */
 export const FAST_JET_RIG: ChaseRig = {
   distance: 19,
   height: 4,
@@ -91,6 +96,27 @@ export const FAST_JET_RIG: ChaseRig = {
   stretchPerAccel: 0.25,
   fov: 50 * DEG,
 };
+
+/**
+ * The rig an aircraft bundle names (R1.7): a fast jet's numbers as given, or the
+ * helicopter rig scaled by `rotorRadius` (m), the radius of its main rotor.
+ */
+export function rigFromBundle(rig: RigSpec, rotorRadius = 0): ChaseRig {
+  if (rig.kind === 'helicopter') {
+    if (!(rotorRadius > 0)) throw new Error('A helicopter rig needs the main rotor radius');
+    return helicopterRig(rotorRadius);
+  }
+  return {
+    distance: rig.distance,
+    height: rig.height,
+    groundDistance: rig.groundDistance,
+    groundHeight: rig.groundHeight,
+    rotation: rig.rotation,
+    stretch: rig.stretch,
+    stretchPerAccel: rig.stretchPerAccel,
+    fov: rig.fov,
+  };
+}
 
 /**
  * The rig for a helicopter of rotor radius `rotorRadius` (m): higher than the

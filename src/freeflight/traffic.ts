@@ -9,7 +9,7 @@ import { Vec3d } from '../core/vec3d';
 import { KM } from '../core/units';
 import type { Emitter, RadarSpec, SensorTarget } from '../sim/sensors/sensors';
 import { scanHash } from '../sim/sensors/sensors';
-import { TYPE_PROFILES } from '../sim/avionics/typeProfiles';
+import { TYPE_PROFILES } from '../sim/avionics/profiles';
 import type { Side } from '../campaign/cast';
 
 export interface TrafficAircraft {

@@ -1,0 +1,43 @@
+{
+  "name": "RF-34 Magpie",
+  "class": "strike",
+  "scheme": "alliance-air",
+  "airWar": {
+    "id": "rf34",
+    "order": 9,
+    "side": "alliance",
+    "role": "recon",
+    "reference": "RF-4C",
+    "crew": 2,
+    "flightSize": 2,
+    "cruiseSpeedKt": 500,
+    "lowLevelSpeedKt": 540,
+    "maxSpeedKt": 1200,
+    "cruiseAltitude": 9000,
+    "ceiling": 18000,
+    "climbRate": 80,
+    "combatRadiusKm": 900,
+    "stationTimeMin": 5,
+    "fuel": 9000,
+    "loadouts": [
+      {
+        "id": "recon",
+        "stores": "cameras and side-looking radar, 3 tanks",
+        "radiusFactor": 1
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "alliance",
+    "roundScopes": false,
+    "systems": ["radar-ag", "terrain-following", "rwr"],
+    "slots": {
+      "leftMfd": ["moving-map", "engines"],
+      "rightMfd": ["radar-ag"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": false,
+    "crew": ["wso"]
+  }
+}

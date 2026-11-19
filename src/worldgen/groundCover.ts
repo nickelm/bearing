@@ -26,7 +26,7 @@ import type { WorldSeed } from '../core/rng';
 import { Biome, TileCover } from './biomes';
 import { CANOPY_THRESHOLD, cellHash, hashBits } from './canopy';
 
-/** The kit (render/common/models/specs/cover-*.json, decision 172). */
+/** The kit (data/models/cover-*.json, decision 172). */
 export const COVER_KINDS = [
   'cover-tuft',
   'cover-tuft-dry',

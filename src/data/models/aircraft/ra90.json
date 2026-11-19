@@ -1,0 +1,44 @@
+{
+  "name": "Ra-90 Medved",
+  "class": "bomber",
+  "scheme": "pact-air",
+  "airWar": {
+    "id": "ra90",
+    "order": 23,
+    "side": "pact",
+    "role": "bomber",
+    "reference": "Tu-95MS",
+    "crew": 7,
+    "flightSize": 2,
+    "cruiseSpeedKt": 380,
+    "lowLevelSpeedKt": 300,
+    "maxSpeedKt": 500,
+    "cruiseAltitude": 10000,
+    "ceiling": 12000,
+    "climbRate": 10,
+    "combatRadiusKm": 4000,
+    "stationTimeMin": 10,
+    "fuel": 80000,
+    "turnaroundH": 8,
+    "loadouts": [
+      {
+        "id": "strike",
+        "stores": "6 cruise missiles in the bay",
+        "radiusFactor": 1
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "pact",
+    "roundScopes": false,
+    "systems": ["rwr", "radar-ag", "stores-management"],
+    "slots": {
+      "leftMfd": ["moving-map", "engines"],
+      "rightMfd": ["radar-ag", "stores"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": false,
+    "crew": ["nav", "radar-nav", "gunner"]
+  }
+}

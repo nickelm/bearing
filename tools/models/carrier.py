@@ -1,6 +1,6 @@
-# Generates src/render/common/models/specs/alliance-carrier.json (decision 106): the carrier has
+# Generates src/data/models/alliance-carrier.json (decision 106): the carrier has
 # hundreds of deck parts, so its spec is written by this script. Run:
-#   python3 tools/models/carrier.py src/render/common/models/specs/alliance-carrier.json
+#   python3 tools/models/carrier.py src/data/models/alliance-carrier.json
 import json, sys
 parts=[]
 def box(g,c,s,**k): parts.append(dict(type='box',group=g,center=c,size=s,**k))

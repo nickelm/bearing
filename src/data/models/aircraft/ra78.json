@@ -1,0 +1,44 @@
+{
+  "name": "Ra-78 Rodnik",
+  "class": "bomber",
+  "scheme": "pact-air",
+  "airWar": {
+    "id": "ra78",
+    "order": 26,
+    "side": "pact",
+    "role": "tanker",
+    "reference": "Il-78",
+    "crew": 6,
+    "flightSize": 1,
+    "cruiseSpeedKt": 420,
+    "lowLevelSpeedKt": 300,
+    "maxSpeedKt": 460,
+    "cruiseAltitude": 9000,
+    "ceiling": 12000,
+    "climbRate": 12,
+    "combatRadiusKm": 1500,
+    "stationTimeMin": 120,
+    "fuel": 90000,
+    "turnaroundH": 6,
+    "loadouts": [
+      {
+        "id": "tanker",
+        "stores": "transfer fuel through three hose-and-drogue pods",
+        "radiusFactor": 1
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "pact",
+    "roundScopes": false,
+    "systems": ["rwr"],
+    "slots": {
+      "leftMfd": ["moving-map", "engines"],
+      "rightMfd": ["engines"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": false,
+    "crew": ["nav"]
+  }
+}

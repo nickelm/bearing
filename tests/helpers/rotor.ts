@@ -1,6 +1,6 @@
 /** Rotorcraft test fixtures: the two H1 types' flight blocks and a flat world. */
-import scoutJson from '../../src/render/common/models/specs/alliance-scout-helo.json';
-import utilityJson from '../../src/render/common/models/specs/alliance-utility-helo.json';
+import scoutJson from '../../src/data/models/aircraft/alliance-scout-helo.json';
+import utilityJson from '../../src/data/models/aircraft/alliance-utility-helo.json';
 import { parseRotorcraftSpec } from '../../src/sim/flight/rotor/rotorSpec';
 import type { RotorcraftSpec } from '../../src/sim/flight/rotor/rotorSpec';
 import { RotorcraftModel } from '../../src/sim/flight/rotor/rotorcraftModel';

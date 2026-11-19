@@ -26,7 +26,8 @@ import { modelSpec } from '../render/common/models/library';
 import type { StrategicScene } from '../render/strategic/strategicScene';
 import { FlightDirector, along } from '../sim/flight/flightDirector';
 import type { FlightControls } from '../sim/flight/controlLaws';
-import { FAST_JET_RIG, followAirframe, helicopterRig } from '../render/sim/camera/chaseCamera';
+import { followAirframe, rigFromBundle } from '../render/sim/camera/chaseCamera';
+import { AIRCRAFT_BUNDLES } from '../sim/air/bundles';
 import type { Airframe } from '../sim/flight/airframe';
 import { FLIGHT_STEP, FlightModel } from '../sim/flight/flightModel';
 import { assistsFor } from '../sim/flight/rotor/assists';
@@ -573,7 +574,7 @@ export class FreeFlight {
     // Scene: the aircraft, its shadow, the chase camera.
     const g = this.deps.globe;
     this.showView(AIRCRAFT, () => new AircraftView(this.spec, this.flightSpec.cg, g.lighting));
-    g.chase.rig = FAST_JET_RIG;
+    g.chase.rig = rigFromBundle(AIRCRAFT_BUNDLES[AIRCRAFT]!.rig!);
     g.chase.stickyLook = true;
     this.pose.q = m.q;
     g.cameraMode = 'chase';
@@ -664,7 +665,7 @@ export class FreeFlight {
     this.showView(id, () => new AircraftView(spec.model, spec.flight.cg, g.lighting));
     this.pose.q = m.q;
     g.cameraMode = 'chase';
-    g.chase.rig = helicopterRig(spec.flight.main.radius);
+    g.chase.rig = rigFromBundle(AIRCRAFT_BUNDLES[id]!.rig!, spec.flight.main.radius);
     g.chase.stickyLook = false;
     // A new sortie looks ahead; the zoom the player chose carries over (decision 160).
     const zoom = g.chase.zoom;

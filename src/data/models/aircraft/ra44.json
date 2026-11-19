@@ -1,0 +1,44 @@
+{
+  "name": "Ra-44 Vol",
+  "class": "bomber",
+  "scheme": "pact-air",
+  "airWar": {
+    "id": "ra44",
+    "order": 27,
+    "side": "pact",
+    "role": "airlift",
+    "reference": "An-12",
+    "crew": 5,
+    "flightSize": 2,
+    "cruiseSpeedKt": 310,
+    "lowLevelSpeedKt": 250,
+    "maxSpeedKt": 350,
+    "cruiseAltitude": 7500,
+    "ceiling": 10000,
+    "climbRate": 10,
+    "combatRadiusKm": 1500,
+    "stationTimeMin": 10,
+    "fuel": 18000,
+    "turnaroundH": 4,
+    "loadouts": [
+      {
+        "id": "cargo",
+        "stores": "20 t of cargo or 60 paratroops",
+        "radiusFactor": 1
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "pact",
+    "roundScopes": false,
+    "systems": ["rwr", "airdrop"],
+    "slots": {
+      "leftMfd": ["moving-map", "engines"],
+      "rightMfd": ["airdrop", "engines"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": false,
+    "crew": ["nav", "loadmaster"]
+  }
+}

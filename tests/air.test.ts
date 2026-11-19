@@ -112,7 +112,7 @@ describe('aircraft types', () => {
   it('names model specs that exist', () => {
     for (const t of AIRCRAFT_TYPES) {
       if (t.model)
-        expect(existsSync(`src/render/common/models/specs/${t.model}.json`), t.id).toBe(true);
+        expect(existsSync(`src/data/models/aircraft/${t.model}.json`), t.id).toBe(true);
     }
   });
 });

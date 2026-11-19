@@ -1,0 +1,45 @@
+{
+  "name": "Ve-28 Shershen",
+  "class": "helicopter",
+  "scheme": "pact-air",
+  "airWar": {
+    "id": "ve28",
+    "order": 29,
+    "side": "pact",
+    "role": "attack-helicopter",
+    "reference": "Mi-24V",
+    "helicopter": true,
+    "crew": 2,
+    "flightSize": 4,
+    "cruiseSpeedKt": 145,
+    "lowLevelSpeedKt": 135,
+    "maxSpeedKt": 180,
+    "cruiseAltitude": 150,
+    "ceiling": 4500,
+    "climbRate": 5,
+    "combatRadiusKm": 160,
+    "stationTimeMin": 20,
+    "fuel": 1700,
+    "turnaroundH": 2,
+    "loadouts": [
+      {
+        "id": "cas",
+        "stores": "4 anti-tank missiles, rocket pods, 12.7 mm gun",
+        "radiusFactor": 1
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "pact",
+    "roundScopes": false,
+    "systems": ["rwr", "sight", "stores-management"],
+    "slots": {
+      "leftMfd": ["moving-map", "stores", "engines"],
+      "rightMfd": ["gunner-sight"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": true,
+    "crew": ["operator"]
+  }
+}

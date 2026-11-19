@@ -1,0 +1,44 @@
+{
+  "name": "B-40 Albatross",
+  "class": "bomber",
+  "scheme": "alliance-air",
+  "airWar": {
+    "id": "b40",
+    "order": 10,
+    "side": "alliance",
+    "role": "bomber",
+    "reference": "B-52G",
+    "crew": 5,
+    "flightSize": 3,
+    "cruiseSpeedKt": 450,
+    "lowLevelSpeedKt": 350,
+    "maxSpeedKt": 550,
+    "cruiseAltitude": 11000,
+    "ceiling": 15000,
+    "climbRate": 15,
+    "combatRadiusKm": 4000,
+    "stationTimeMin": 10,
+    "fuel": 140000,
+    "turnaroundH": 8,
+    "loadouts": [
+      {
+        "id": "strike",
+        "stores": "27 × 340 kg bombs, cruise missiles on the pylons",
+        "radiusFactor": 1
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "alliance",
+    "roundScopes": false,
+    "systems": ["rwr", "radar-ag", "terrain-following", "stores-management"],
+    "slots": {
+      "leftMfd": ["moving-map", "engines"],
+      "rightMfd": ["radar-ag", "stores"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": false,
+    "crew": ["nav", "radar-nav", "ewo", "gunner"]
+  }
+}

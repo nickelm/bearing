@@ -1,7 +1,7 @@
 /**
  * Flight-model data (Free Flight, decision 134; Proposal 0002, Flight Model):
  * the tables and constants of one aircraft type. The data lives in a `flight`
- * block of the aircraft's model spec (render/common/models/specs/*.json), next to
+ * block of the aircraft's model spec (data/models/*.json), next to
  * its geometry; the app and the tests pass the parsed block in, since sim code
  * may not import render.
  *

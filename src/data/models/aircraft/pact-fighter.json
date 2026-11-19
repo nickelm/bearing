@@ -47,7 +47,7 @@
           "square": 0.6
         },
         {
-          "x": 0.0,
+          "x": 0,
           "y": 0.3,
           "w": 1.45,
           "h": 0.45,
@@ -61,7 +61,7 @@
           "square": 0.7
         },
         {
-          "x": -6.0,
+          "x": -6,
           "y": 0.3,
           "w": 0.85,
           "h": 0.35,
@@ -122,7 +122,7 @@
       "type": "wing",
       "group": "body",
       "mirror": true,
-      "root": [1.0, 0.25, 1.5],
+      "root": [1, 0.25, 1.5],
       "rootChord": 4.6,
       "tipChord": 1.2,
       "span": 4.2,
@@ -136,7 +136,7 @@
       "root": [4.2, 0.35, 0.55],
       "rootChord": 3.2,
       "tipChord": 0.3,
-      "span": 1.0,
+      "span": 1,
       "sweep": 72,
       "thickness": 0.04
     },
@@ -157,7 +157,7 @@
       "mirror": true,
       "root": [-3.9, 0.55, 1.15],
       "rootChord": 2.9,
-      "tipChord": 1.0,
+      "tipChord": 1,
       "span": 2.7,
       "sweep": 45,
       "vertical": true,
@@ -168,8 +168,8 @@
       "type": "cylinder",
       "group": "store",
       "mirror": true,
-      "from": [-2.9, -0.3, 3.0],
-      "to": [-0.5, -0.3, 3.0],
+      "from": [-2.9, -0.3, 3],
+      "to": [-0.5, -0.3, 3],
       "radius": 0.1,
       "sides": 4
     },
@@ -204,7 +204,51 @@
     },
     {
       "kind": "beacon",
-      "at": [0.0, 0.8, 0]
+      "at": [0, 0.8, 0]
     }
-  ]
+  ],
+  "airWar": {
+    "id": "vo31",
+    "order": 17,
+    "side": "pact",
+    "role": "air-superiority",
+    "reference": "MiG-29",
+    "flightSize": 4,
+    "cruiseSpeedKt": 480,
+    "lowLevelSpeedKt": 480,
+    "maxSpeedKt": 1320,
+    "cruiseAltitude": 9000,
+    "ceiling": 18000,
+    "climbRate": 150,
+    "combatRadiusKm": 700,
+    "stationTimeMin": 15,
+    "fuel": 5000,
+    "loadouts": [
+      {
+        "id": "air-to-air",
+        "stores": "2 medium-range and 4 short-range missiles, centerline tank",
+        "radiusFactor": 1
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "pact",
+    "roundScopes": false,
+    "systems": ["radar-aa", "rwr", "datalink", "stores-management"],
+    "slots": {
+      "leftMfd": ["moving-map", "stores", "engines"],
+      "rightMfd": ["radar-aa", "engines"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": false,
+    "crew": [],
+    "radar": {
+      "kind": "pulse-doppler",
+      "rangeKm": 70,
+      "azimuthDeg": 60,
+      "elevationDeg": 60,
+      "notch": 60
+    }
+  }
 }

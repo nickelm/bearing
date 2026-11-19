@@ -1,0 +1,42 @@
+{
+  "name": "Ar-45R Sapsan",
+  "class": "strike",
+  "scheme": "pact-air",
+  "airWar": {
+    "id": "ar45r",
+    "order": 28,
+    "side": "pact",
+    "role": "recon",
+    "reference": "MiG-25RB",
+    "flightSize": 1,
+    "cruiseSpeedKt": 1150,
+    "lowLevelSpeedKt": 600,
+    "maxSpeedKt": 1640,
+    "cruiseAltitude": 19000,
+    "ceiling": 21000,
+    "climbRate": 150,
+    "combatRadiusKm": 900,
+    "stationTimeMin": 5,
+    "fuel": 14000,
+    "loadouts": [
+      {
+        "id": "recon",
+        "stores": "cameras and an ELINT pod",
+        "radiusFactor": 1
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "pact",
+    "roundScopes": false,
+    "systems": ["radar-ag", "rwr"],
+    "slots": {
+      "leftMfd": ["moving-map", "engines"],
+      "rightMfd": ["radar-ag"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": false,
+    "crew": []
+  }
+}

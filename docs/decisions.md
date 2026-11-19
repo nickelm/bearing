@@ -3944,3 +3944,20 @@ The air war and the weather systems take 1–3 ms per game hour; the hourly weat
 **How it was checked.** `tests/network.test.ts`: `pointAngle` equals `angleBetween` bit for bit; the road graph covers every road cell, keeps the network's length and joins each edge's end nodes; with a bridge cut, the graph's detour between the banks `bridges.ts` chooses equals the recorded detour for all 15 bridges of the river world, and uncut the way across is the bridge; on a generated world a bridge target at 0.51 damage cuts exactly its bridge, and the damage survives a save and restore with the same hash. `tests/networkLink.test.ts` checks the three kinds of aim point.
 
 **Reason:** interdiction, strike effects and supply (R2.1–R2.3) need the networks as a graph in the worker and a place to record what strikes did; keeping the graph's cut identical to the worldgen's detour makes the recorded detours, which already weigh bridge targets, the same numbers the war will feel.
+
+### 238. Aircraft bundles in src/data/models/aircraft/, read by one loader in the sim
+
+**Date:** 2026-11-19
+**Decision:** R1.7's migration. Every aircraft type is one JSON bundle, and its air-war entry, avionics profile and camera rig moved out of code into it.
+
+- **Location.** All model specs move from `src/render/common/models/specs/` to `src/data/models/`, and the aircraft to `src/data/models/aircraft/`. Rule 6 forbids `sim/` any import through a `render` directory, and the sim worker must read the bundles; a data directory both layers may import resolves it, and the subdirectory keeps the worker from bundling every building and tree. Rule 17 and `CLAUDE.md` name the new place. Spec ids are unchanged (`alliance-fighter` is still the Kestrel's model); each bundle's `airWar.id` is its type id (`f21`), and the 26 types without geometry have bundles named by type id. A bundle without parts may name another's geometry (`model`: the Vo-31K draws as the Vo-31). The renderer's library skips bundles without parts.
+- **Loader.** `src/sim/air/bundles.ts` parses and validates every bundle (`AIRCRAFT_BUNDLES`, `bundleOfType`, `bundleGaps`) for the worker and the renderer alike. `AIRCRAFT_TYPES` is now the bundles' `airWar` blocks in their `order`; `TYPE_PROFILES` (by type id) and `AVIONICS_PROFILES` (by model spec, every bundle with its own geometry) are the `avionics` blocks; `typeProfiles.ts` is gone.
+- **Units.** Rule 1 holds at the loader: keys name their units where they are not SI (`cruiseSpeedKt`, `combatRadiusKm`, `stationTimeMin`, `turnaroundH`; radar `rangeKm`, `azimuthDeg`; rig `fovDeg`), and the loader converts with the same expressions the table used. The generator that wrote the bundles checked every value converts back bit for bit.
+- **Rigs.** A bundle's `rig` is a fast jet's numbers or `{ "kind": "helicopter" }`, the rig scaled by the main rotor's radius (`rigFromBundle` in `chaseCamera.ts`). Free Flight takes its rigs from the Kestrel's and the two helicopters' bundles; `FAST_JET_RIG` stays as the camera's default with the Kestrel's numbers.
+- **Blocks still empty.** `pylons` (R2.6) and `calibration` (R2.2) are parsed when present. `tests/bundles.test.ts` checks ids, order, sides, profiles, geometry references and rigs, and pins what the demo roster lacks: the Kestrel pylons and calibration; the Vo-31 and Vo-35 flight data, rigs, pylons and calibration; the A-15 and C-150 everything but their air-war entry and avionics. That list is R2.7's checklist.
+
+**How it was checked.** The loaded entries and profiles equal the old tables field for field, and `tools/war.preview.ts` gives the same state hashes on seeds 4, 10 and 7 as before the move (`ec2bbb1b2a70d821`, `3e637c52ed8d1981`, `977b10bc84968b28`).
+
+The sim worker's chunk grows from 58 kB to 104 kB, since the six bundles with geometry come along whole.
+
+**Reason:** decision 232 makes the bundle the one place a type lives; the sim worker can only read it from outside `render/`.

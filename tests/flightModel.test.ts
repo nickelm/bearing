@@ -29,7 +29,7 @@ import { runwayEnds, runwayFrame, toRunway } from '../src/sim/flight/runway';
 import { spawnInAir, spawnOnRunway } from '../src/sim/flight/spawn';
 import { TestPilot } from '../src/sim/flight/testPilot';
 import { flatGround, kestrel, kestrelSpec, RADIUS, testRunway } from './helpers/flight';
-import specJson from '../src/render/common/models/specs/alliance-fighter.json';
+import specJson from '../src/data/models/aircraft/alliance-fighter.json';
 
 const runway = testRunway();
 const ground = flatGround(runway);

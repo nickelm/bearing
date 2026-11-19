@@ -1,0 +1,45 @@
+{
+  "name": "CH-60 Mule",
+  "class": "helicopter",
+  "scheme": "alliance-air",
+  "airWar": {
+    "id": "ch60",
+    "order": 15,
+    "side": "alliance",
+    "role": "heavy-helicopter",
+    "reference": "CH-47D",
+    "helicopter": true,
+    "crew": 3,
+    "flightSize": 2,
+    "cruiseSpeedKt": 130,
+    "lowLevelSpeedKt": 120,
+    "maxSpeedKt": 160,
+    "cruiseAltitude": 600,
+    "ceiling": 5500,
+    "climbRate": 5,
+    "combatRadiusKm": 300,
+    "stationTimeMin": 10,
+    "fuel": 3000,
+    "turnaroundH": 2,
+    "loadouts": [
+      {
+        "id": "sling",
+        "stores": "10 t under the hook",
+        "radiusFactor": 1
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "alliance",
+    "roundScopes": false,
+    "systems": ["rwr", "hook"],
+    "slots": {
+      "leftMfd": ["moving-map", "engines"],
+      "rightMfd": ["hook-camera", "engines"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": true,
+    "crew": ["crew-chief"]
+  }
+}

@@ -10,7 +10,7 @@ import { throttleStep } from '../src/ui/flight/flightInput';
 import { ChaseCamera } from '../src/render/sim/camera/chaseCamera';
 import { buildAnimatedModel, buildModel } from '../src/render/common/models/builder';
 import { validateSpec } from '../src/render/common/models/spec';
-import specJson from '../src/render/common/models/specs/alliance-fighter.json';
+import specJson from '../src/data/models/aircraft/alliance-fighter.json';
 
 describe('throttle detents', () => {
   /** Holds a throttle key for `seconds` at 0.45/s from `lever`. */

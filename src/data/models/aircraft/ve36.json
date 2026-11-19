@@ -1,0 +1,45 @@
+{
+  "name": "Ve-36 Bizon",
+  "class": "helicopter",
+  "scheme": "pact-air",
+  "airWar": {
+    "id": "ve36",
+    "order": 30,
+    "side": "pact",
+    "role": "heavy-helicopter",
+    "reference": "Mi-26",
+    "helicopter": true,
+    "crew": 5,
+    "flightSize": 1,
+    "cruiseSpeedKt": 135,
+    "lowLevelSpeedKt": 120,
+    "maxSpeedKt": 160,
+    "cruiseAltitude": 600,
+    "ceiling": 4600,
+    "climbRate": 5,
+    "combatRadiusKm": 300,
+    "stationTimeMin": 10,
+    "fuel": 6000,
+    "turnaroundH": 2,
+    "loadouts": [
+      {
+        "id": "sling",
+        "stores": "20 t under the hook",
+        "radiusFactor": 1
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "pact",
+    "roundScopes": false,
+    "systems": ["rwr", "hook"],
+    "slots": {
+      "leftMfd": ["moving-map", "engines"],
+      "rightMfd": ["hook-camera", "engines"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": true,
+    "crew": ["crew-chief"]
+  }
+}

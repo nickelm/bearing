@@ -89,7 +89,7 @@ New code:
 - `src/worldgen/edits/`: edit records (corridor, pad; carve, floodplain and build-up as descriptions of the kernel's work, for the index and the tests), a spatial index by level-7 tile, `TerrainEdits.apply`, the protected-channel minimum. No `three`, no `render`.
 - `src/worldgen/channels/`: regime classification, meander migration, cutoffs and oxbows, the floodplain mask, distributaries. It feeds `RiverIndex`, which keeps profiles, carving segments and its tests.
 - `src/worldgen/networks/`: crossing sites (both tiers), anchors, the router, plan fitting, profiles, earthworks classification, structure records, the spiral template.
-- `src/render/common/models/specs/`: the bridge kit and portals as specs; `render/sim/infra/structureLayer.ts` instances them.
+- `src/data/models/`: the bridge kit and portals as specs; `render/sim/infra/structureLayer.ts` instances them.
 
 ### Edits and the one sampler (N1)
 

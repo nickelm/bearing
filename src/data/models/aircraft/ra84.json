@@ -1,0 +1,49 @@
+{
+  "name": "Ra-84 Burya",
+  "class": "bomber",
+  "scheme": "pact-air",
+  "airWar": {
+    "id": "ra84",
+    "order": 24,
+    "side": "pact",
+    "role": "maritime-bomber",
+    "reference": "Tu-22M3",
+    "crew": 4,
+    "flightSize": 4,
+    "cruiseSpeedKt": 490,
+    "lowLevelSpeedKt": 500,
+    "maxSpeedKt": 1100,
+    "cruiseAltitude": 10000,
+    "ceiling": 13000,
+    "climbRate": 30,
+    "combatRadiusKm": 2400,
+    "stationTimeMin": 5,
+    "fuel": 50000,
+    "turnaroundH": 6,
+    "loadouts": [
+      {
+        "id": "anti-ship",
+        "stores": "2 heavy anti-ship missiles",
+        "radiusFactor": 1
+      },
+      {
+        "id": "strike",
+        "stores": "24 × 250 kg bombs",
+        "radiusFactor": 0.85
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "pact",
+    "roundScopes": false,
+    "systems": ["rwr", "radar-ag", "stores-management"],
+    "slots": {
+      "leftMfd": ["moving-map", "engines"],
+      "rightMfd": ["radar-ag", "stores"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": false,
+    "crew": ["nav", "wso", "gunner"]
+  }
+}

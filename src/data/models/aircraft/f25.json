@@ -1,0 +1,49 @@
+{
+  "name": "F-25 Peregrine",
+  "class": "fighter",
+  "scheme": "alliance-air",
+  "airWar": {
+    "id": "f25",
+    "order": 0,
+    "side": "alliance",
+    "role": "air-superiority",
+    "reference": "F-15C",
+    "flightSize": 4,
+    "cruiseSpeedKt": 500,
+    "lowLevelSpeedKt": 480,
+    "maxSpeedKt": 1430,
+    "cruiseAltitude": 10000,
+    "ceiling": 18000,
+    "climbRate": 150,
+    "combatRadiusKm": 1000,
+    "stationTimeMin": 20,
+    "fuel": 9500,
+    "loadouts": [
+      {
+        "id": "air-to-air",
+        "stores": "4 medium-range and 4 short-range missiles, 3 tanks",
+        "radiusFactor": 1
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "alliance",
+    "roundScopes": false,
+    "systems": ["radar-aa", "rwr", "datalink", "stores-management"],
+    "slots": {
+      "leftMfd": ["moving-map", "stores", "engines"],
+      "rightMfd": ["radar-aa", "engines"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": false,
+    "crew": [],
+    "radar": {
+      "kind": "pulse-doppler",
+      "rangeKm": 100,
+      "azimuthDeg": 60,
+      "elevationDeg": 60,
+      "notch": 40
+    }
+  }
+}

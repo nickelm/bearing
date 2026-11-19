@@ -77,12 +77,12 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 
 ### R1.7 Aircraft bundles and roster data
 
-- [ ] Bundle schema: the model spec gains `avionics`, `airWar` (role tags, performance, crew roles, faction, name, skin), `pylons`, `rig` and `calibration` blocks; geometry optional; validation
-- [ ] One bundle loader usable by the sim worker (no render imports) and the renderer
-- [ ] Move the 31 avionics profiles from `typeProfiles.ts` into the bundles; `tests/typeProfiles.test.ts` passes on the loaded data
-- [ ] Move the air-war table from `sim/air/aircraft.ts` into the bundles; the air war's determinism hash is unchanged
-- [ ] Camera rigs into the bundles (`FAST_JET_RIG`, `helicopterRig` become per-type data)
-- [ ] Bundle test: list what each type lacks; fail on duplicate or inconsistent ids
+- [x] Bundle schema: the model spec gains `avionics`, `airWar` (role tags, performance, crew roles, faction, name, skin), `pylons`, `rig` and `calibration` blocks; geometry optional; validation (decision 238)
+- [x] One bundle loader usable by the sim worker (no render imports) and the renderer (`src/sim/air/bundles.ts`; bundles in `src/data/models/aircraft/`)
+- [x] Move the 31 avionics profiles from `typeProfiles.ts` into the bundles; `tests/typeProfiles.test.ts` passes on the loaded data
+- [x] Move the air-war table from `sim/air/aircraft.ts` into the bundles; the air war's determinism hash is unchanged
+- [x] Camera rigs into the bundles (`FAST_JET_RIG`, `helicopterRig` become per-type data)
+- [x] Bundle test: list what each type lacks; fail on duplicate or inconsistent ids
 - [ ] Rename the UH-68 "Buzzard" helicopter (clash with the A-15 Buzzard)
 - [ ] Utility helicopter role: a Black Hawk analogue and an Mi-8 analogue in `sim/air/aircraft.ts` with avionics profiles; a decision for the change to every world's cast
 - [ ] Pilots per squadron in the order of battle (count, names from a fork); the hash change recorded

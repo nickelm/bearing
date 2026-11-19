@@ -18,7 +18,7 @@
       "stations": [
         {
           "x": 2.12,
-          "y": 1.0,
+          "y": 1,
           "w": 0,
           "h": 0
         },
@@ -76,7 +76,7 @@
       "type": "blob",
       "group": "canopy",
       "center": [1.2, 1.34, 0],
-      "radius": [1.0, 0.66, 0.74],
+      "radius": [1, 0.66, 0.74],
       "detail": 1
     },
     {
@@ -89,7 +89,7 @@
     {
       "type": "cylinder",
       "group": "rotor",
-      "from": [0, 2.0, 0],
+      "from": [0, 2, 0],
       "to": [0, 2.55, 0],
       "radius": 0.08,
       "sides": 6
@@ -217,7 +217,7 @@
   "rotors": [
     {
       "hub": [0, 2.6, 0],
-      "radius": 4.0,
+      "radius": 4,
       "blades": 5,
       "chord": 0.17,
       "direction": 1,
@@ -248,7 +248,7 @@
     },
     {
       "kind": "beacon",
-      "at": [-1.0, 2.15, 0]
+      "at": [-1, 2.15, 0]
     }
   ],
   "flight": {
@@ -311,11 +311,11 @@
       "fin": {
         "at": [-4.3, 1.5, 0],
         "area": 0.45,
-        "slope": 3.0,
+        "slope": 3,
         "incidence": 0
       },
       "stabilizer": {
-        "at": [-4.35, 2.0, 0],
+        "at": [-4.35, 2, 0],
         "area": 0.7,
         "slope": 3.5,
         "incidence": 3
@@ -360,7 +360,7 @@
     },
     "contacts": [
       [1.9, 0.5, 0],
-      [-5.1, 1.0, 0],
+      [-5.1, 1, 0],
       [-4.4, 0.95, 0]
     ],
     "limits": {
@@ -375,5 +375,20 @@
       "maxClimbRate": 8,
       "maxSideSpeed": 8
     }
+  },
+  "avionics": {
+    "skin": "alliance",
+    "roundScopes": false,
+    "systems": ["rwr"],
+    "slots": {
+      "leftMfd": ["moving-map", "engines"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": true,
+    "crew": []
+  },
+  "rig": {
+    "kind": "helicopter"
   }
 }

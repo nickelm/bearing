@@ -1,10 +1,10 @@
 """
 Generates the ground cover kit's model specs (decision 172): grass tufts, flower
 tufts, tussocks, reeds, bushes, boulders, a slab and pebbles, as JSON specs in
-src/render/common/models/specs/cover-*.json. Blades are three-sided cylinders
+src/data/models/cover-*.json. Blades are three-sided cylinders
 tapering to a point, laid out round each tuft from a fixed pattern, so the specs
 are reproducible: run `python3 tools/models/cover.py`, then `npx prettier --write
-"src/render/common/models/specs/cover-*.json"`, after editing this file.
+"src/data/models/cover-*.json"`, after editing this file.
 """
 import json, math, os
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'src', 'render', 'common', 'models', 'specs')

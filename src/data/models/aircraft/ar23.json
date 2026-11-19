@@ -1,0 +1,53 @@
+{
+  "name": "Ar-23 Yastreb",
+  "class": "fighter",
+  "scheme": "pact-air",
+  "airWar": {
+    "id": "ar23",
+    "order": 19,
+    "side": "pact",
+    "role": "multirole",
+    "reference": "MiG-23ML",
+    "flightSize": 4,
+    "cruiseSpeedKt": 470,
+    "lowLevelSpeedKt": 500,
+    "maxSpeedKt": 1350,
+    "cruiseAltitude": 9000,
+    "ceiling": 17000,
+    "climbRate": 120,
+    "combatRadiusKm": 700,
+    "stationTimeMin": 15,
+    "fuel": 6000,
+    "loadouts": [
+      {
+        "id": "air-to-air",
+        "stores": "2 medium-range and 4 short-range missiles, centerline tank",
+        "radiusFactor": 1
+      },
+      {
+        "id": "strike",
+        "stores": "4 × 500 kg bombs, centerline tank",
+        "radiusFactor": 0.8
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "pact",
+    "roundScopes": true,
+    "systems": ["radar-aa", "rwr", "datalink", "stores-management"],
+    "slots": {
+      "rightMfd": ["radar-aa"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": false,
+    "crew": [],
+    "radar": {
+      "kind": "pulse-doppler",
+      "rangeKm": 55,
+      "azimuthDeg": 50,
+      "elevationDeg": 50,
+      "notch": 90
+    }
+  }
+}

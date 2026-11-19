@@ -4,8 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { AIRCRAFT_TYPES } from '../src/sim/air/aircraft';
-import { AVIONICS_PROFILES, profileProblems } from '../src/sim/avionics/profiles';
-import { TYPE_PROFILES } from '../src/sim/avionics/typeProfiles';
+import { AVIONICS_PROFILES, profileProblems, TYPE_PROFILES } from '../src/sim/avionics/profiles';
 
 describe('avionics profiles by aircraft type (decision 224)', () => {
   it('cover every type of the table and nothing else', () => {

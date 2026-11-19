@@ -18,7 +18,7 @@ import { neutralRotorControls } from '../src/sim/flight/rotor/rotorcraftModel';
 import type { RotorcraftModel } from '../src/sim/flight/rotor/rotorcraftModel';
 import { parseRotorcraftSpec, solidity } from '../src/sim/flight/rotor/rotorSpec';
 import { sinkWarning } from '../src/ui/flight/hud';
-import scoutJson from '../src/render/common/models/specs/alliance-scout-helo.json';
+import scoutJson from '../src/data/models/aircraft/alliance-scout-helo.json';
 import { flatGround, RADIUS, testRunway } from './helpers/flight';
 import { scout, scoutSpec, utility, utilitySpec } from './helpers/rotor';
 

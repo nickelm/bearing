@@ -1,0 +1,55 @@
+{
+  "name": "F-30 Petrel",
+  "class": "fighter",
+  "scheme": "alliance-air",
+  "airWar": {
+    "id": "f30",
+    "order": 3,
+    "side": "alliance",
+    "role": "multirole",
+    "reference": "F/A-18C",
+    "carrier": true,
+    "flightSize": 2,
+    "cruiseSpeedKt": 470,
+    "lowLevelSpeedKt": 480,
+    "maxSpeedKt": 1030,
+    "cruiseAltitude": 9000,
+    "ceiling": 15000,
+    "climbRate": 100,
+    "combatRadiusKm": 600,
+    "stationTimeMin": 15,
+    "fuel": 7000,
+    "loadouts": [
+      {
+        "id": "air-to-air",
+        "stores": "4 medium-range and 2 short-range missiles, 2 tanks",
+        "radiusFactor": 1
+      },
+      {
+        "id": "strike",
+        "stores": "4 × 450 kg bombs, 2 short-range missiles, 2 tanks",
+        "radiusFactor": 0.85
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "alliance",
+    "roundScopes": false,
+    "systems": ["radar-aa", "radar-ag", "rwr", "datalink", "targeting-pod", "stores-management"],
+    "slots": {
+      "leftMfd": ["moving-map", "stores", "engines"],
+      "rightMfd": ["radar-aa", "radar-ag", "targeting-pod", "engines"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": false,
+    "crew": [],
+    "radar": {
+      "kind": "pulse-doppler",
+      "rangeKm": 80,
+      "azimuthDeg": 60,
+      "elevationDeg": 60,
+      "notch": 40
+    }
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "name": "F-28 Skua",
+  "class": "fighter",
+  "scheme": "alliance-air",
+  "airWar": {
+    "id": "f28",
+    "order": 2,
+    "side": "alliance",
+    "role": "air-superiority",
+    "reference": "F-14A",
+    "carrier": true,
+    "crew": 2,
+    "flightSize": 2,
+    "cruiseSpeedKt": 480,
+    "lowLevelSpeedKt": 450,
+    "maxSpeedKt": 1340,
+    "cruiseAltitude": 10000,
+    "ceiling": 16000,
+    "climbRate": 120,
+    "combatRadiusKm": 900,
+    "stationTimeMin": 30,
+    "fuel": 10000,
+    "loadouts": [
+      {
+        "id": "air-to-air",
+        "stores": "6 long-range and 2 short-range missiles, 2 tanks",
+        "radiusFactor": 1
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "alliance",
+    "roundScopes": false,
+    "systems": ["radar-aa", "rwr", "datalink", "stores-management"],
+    "slots": {
+      "leftMfd": ["moving-map", "stores", "engines"],
+      "rightMfd": ["radar-aa", "engines"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": false,
+    "crew": ["rio"],
+    "radar": {
+      "kind": "pulse-doppler",
+      "rangeKm": 150,
+      "azimuthDeg": 65,
+      "elevationDeg": 65,
+      "notch": 40
+    }
+  }
+}

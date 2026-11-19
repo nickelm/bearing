@@ -1,0 +1,44 @@
+{
+  "name": "Ra-60 Zarya",
+  "class": "bomber",
+  "scheme": "pact-air",
+  "airWar": {
+    "id": "ra60",
+    "order": 25,
+    "side": "pact",
+    "role": "aew",
+    "reference": "A-50",
+    "crew": 15,
+    "flightSize": 1,
+    "cruiseSpeedKt": 420,
+    "lowLevelSpeedKt": 300,
+    "maxSpeedKt": 450,
+    "cruiseAltitude": 9000,
+    "ceiling": 12000,
+    "climbRate": 12,
+    "combatRadiusKm": 1000,
+    "stationTimeMin": 240,
+    "fuel": 60000,
+    "turnaroundH": 6,
+    "loadouts": [
+      {
+        "id": "aew",
+        "stores": "rotodome surveillance radar",
+        "radiusFactor": 1
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "pact",
+    "roundScopes": false,
+    "systems": ["rwr", "datalink"],
+    "slots": {
+      "leftMfd": ["moving-map", "engines"],
+      "rightMfd": ["engines"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": false,
+    "crew": ["mission-crew"]
+  }
+}

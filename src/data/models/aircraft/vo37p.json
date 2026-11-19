@@ -1,0 +1,44 @@
+{
+  "name": "Vo-37P Grom",
+  "class": "strike",
+  "scheme": "pact-air",
+  "airWar": {
+    "id": "vo37p",
+    "order": 21,
+    "side": "pact",
+    "role": "sead",
+    "reference": "Su-24M with anti-radiation missiles",
+    "crew": 2,
+    "flightSize": 2,
+    "cruiseSpeedKt": 480,
+    "lowLevelSpeedKt": 560,
+    "maxSpeedKt": 1200,
+    "cruiseAltitude": 8000,
+    "ceiling": 11000,
+    "climbRate": 50,
+    "combatRadiusKm": 900,
+    "stationTimeMin": 15,
+    "fuel": 13000,
+    "turnaroundH": 4,
+    "loadouts": [
+      {
+        "id": "sead",
+        "stores": "4 anti-radiation missiles, 2 tanks",
+        "radiusFactor": 1
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "pact",
+    "roundScopes": false,
+    "systems": ["radar-ag", "terrain-following", "rwr", "stores-management", "targeting-pod"],
+    "slots": {
+      "leftMfd": ["moving-map", "stores", "engines"],
+      "rightMfd": ["radar-ag", "targeting-pod", "engines"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": false,
+    "crew": ["wso"]
+  }
+}

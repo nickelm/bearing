@@ -1,0 +1,50 @@
+{
+  "name": "Vo-33 Krechet",
+  "class": "fighter",
+  "scheme": "pact-air",
+  "airWar": {
+    "id": "vo33",
+    "order": 16,
+    "side": "pact",
+    "role": "air-superiority",
+    "reference": "Su-27",
+    "flightSize": 4,
+    "cruiseSpeedKt": 490,
+    "lowLevelSpeedKt": 480,
+    "maxSpeedKt": 1350,
+    "cruiseAltitude": 10000,
+    "ceiling": 18500,
+    "climbRate": 150,
+    "combatRadiusKm": 1300,
+    "stationTimeMin": 20,
+    "fuel": 9400,
+    "loadouts": [
+      {
+        "id": "air-to-air",
+        "stores": "6 medium-range and 4 short-range missiles",
+        "radiusFactor": 1
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "pact",
+    "roundScopes": false,
+    "systems": ["radar-aa", "rwr", "datalink", "stores-management"],
+    "slots": {
+      "leftMfd": ["moving-map", "stores", "engines"],
+      "rightMfd": ["radar-aa", "engines"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": false,
+    "crew": [],
+    "hudRadar": true,
+    "radar": {
+      "kind": "pulse-doppler",
+      "rangeKm": 100,
+      "azimuthDeg": 60,
+      "elevationDeg": 60,
+      "notch": 50
+    }
+  }
+}

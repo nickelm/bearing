@@ -1,14 +1,22 @@
 /**
- * Every model spec in specs/*.json (decision 106), validated, by id. Vite bundles the
+ * Every model spec in src/data/models/*.json (decision 106), validated, by id. Vite bundles the
  * JSON; in dev a changed spec hot-reloads the modules that import this one.
  */
 import { validateSpec } from './spec';
 import type { ModelSpec } from './spec';
 
-const files = import.meta.glob<unknown>('./specs/*.json', { eager: true, import: 'default' });
+const files = import.meta.glob<unknown>('../../../data/models/**/*.json', {
+  eager: true,
+  import: 'default',
+});
 
+/** Specs with geometry; aircraft bundles without parts (types with no model yet, R1.7) are left out. */
 export const MODEL_SPECS: Record<string, ModelSpec> = Object.fromEntries(
   Object.entries(files)
+    .filter(([, json]) => {
+      const parts = (json as { parts?: unknown }).parts;
+      return Array.isArray(parts) && parts.length > 0;
+    })
     .map(([path, json]) => {
       const id = path.replace(/^.*\//, '').replace(/\.json$/, '');
       return [id, validateSpec(json, id)] as const;

@@ -1,0 +1,45 @@
+{
+  "name": "AH-70 Lancer",
+  "class": "helicopter",
+  "scheme": "alliance-air",
+  "airWar": {
+    "id": "ah70",
+    "order": 14,
+    "side": "alliance",
+    "role": "attack-helicopter",
+    "reference": "AH-64A",
+    "helicopter": true,
+    "crew": 2,
+    "flightSize": 4,
+    "cruiseSpeedKt": 140,
+    "lowLevelSpeedKt": 130,
+    "maxSpeedKt": 160,
+    "cruiseAltitude": 150,
+    "ceiling": 6000,
+    "climbRate": 5,
+    "combatRadiusKm": 150,
+    "stationTimeMin": 30,
+    "fuel": 1200,
+    "turnaroundH": 2,
+    "loadouts": [
+      {
+        "id": "cas",
+        "stores": "16 anti-tank missiles, 30 mm cannon",
+        "radiusFactor": 1
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "alliance",
+    "roundScopes": false,
+    "systems": ["rwr", "sight", "stores-management"],
+    "slots": {
+      "leftMfd": ["moving-map", "stores", "engines"],
+      "rightMfd": ["gunner-sight"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": true,
+    "crew": ["cpg"]
+  }
+}

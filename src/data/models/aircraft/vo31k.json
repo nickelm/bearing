@@ -1,0 +1,56 @@
+{
+  "name": "Vo-31K Strizh",
+  "class": "fighter",
+  "scheme": "pact-air",
+  "model": "pact-fighter",
+  "airWar": {
+    "id": "vo31k",
+    "order": 18,
+    "side": "pact",
+    "role": "air-superiority",
+    "reference": "MiG-29K",
+    "carrier": true,
+    "flightSize": 2,
+    "cruiseSpeedKt": 480,
+    "lowLevelSpeedKt": 480,
+    "maxSpeedKt": 1250,
+    "cruiseAltitude": 9000,
+    "ceiling": 17000,
+    "climbRate": 140,
+    "combatRadiusKm": 750,
+    "stationTimeMin": 20,
+    "fuel": 5500,
+    "loadouts": [
+      {
+        "id": "air-to-air",
+        "stores": "4 medium-range and 2 short-range missiles, centerline tank",
+        "radiusFactor": 1
+      },
+      {
+        "id": "anti-ship",
+        "stores": "2 anti-ship missiles, 2 short-range missiles",
+        "radiusFactor": 0.8
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "pact",
+    "roundScopes": false,
+    "systems": ["radar-aa", "rwr", "datalink", "stores-management"],
+    "slots": {
+      "leftMfd": ["moving-map", "stores", "engines"],
+      "rightMfd": ["radar-aa", "engines"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": false,
+    "crew": [],
+    "radar": {
+      "kind": "pulse-doppler",
+      "rangeKm": 70,
+      "azimuthDeg": 60,
+      "elevationDeg": 60,
+      "notch": 60
+    }
+  }
+}

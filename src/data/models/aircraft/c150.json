@@ -1,0 +1,44 @@
+{
+  "name": "C-150 Drover",
+  "class": "bomber",
+  "scheme": "alliance-air",
+  "airWar": {
+    "id": "c150",
+    "order": 13,
+    "side": "alliance",
+    "role": "airlift",
+    "reference": "C-130H",
+    "crew": 5,
+    "flightSize": 2,
+    "cruiseSpeedKt": 290,
+    "lowLevelSpeedKt": 250,
+    "maxSpeedKt": 320,
+    "cruiseAltitude": 7000,
+    "ceiling": 10000,
+    "climbRate": 10,
+    "combatRadiusKm": 1800,
+    "stationTimeMin": 10,
+    "fuel": 20000,
+    "turnaroundH": 4,
+    "loadouts": [
+      {
+        "id": "cargo",
+        "stores": "18 t of cargo or 64 paratroops",
+        "radiusFactor": 1
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "alliance",
+    "roundScopes": false,
+    "systems": ["rwr", "airdrop"],
+    "slots": {
+      "leftMfd": ["moving-map", "engines"],
+      "rightMfd": ["airdrop", "engines"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": false,
+    "crew": ["nav", "loadmaster"]
+  }
+}
