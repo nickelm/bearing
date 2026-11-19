@@ -111,6 +111,8 @@ export interface TargetSite {
   /** Target value 0..1 for the ATO's priority score (decision 50). */
   value: number;
   settlement: number;
+  /** A bridge target's bridge: its list (the civilian roads, the railways or the spurs) and index there. */
+  bridge?: { list: 'road' | 'rail' | 'spur'; index: number };
 }
 
 export interface Infrastructure {
@@ -707,7 +709,8 @@ function placeTargets(
   // and the longer the way round if it falls. Railways' bridges weigh more: they cannot
   // be bypassed by a road convoy.
   const maxTraffic = Math.max(1, ...graph.bridges.traffic, ...spurBridges.traffic);
-  const addBridges = (b: BridgeList, rail: boolean) => {
+  const addBridges = (b: BridgeList, list: 'road' | 'rail' | 'spur') => {
+    const rail = list === 'rail';
     for (let i = 0; i < b.cells.length; i++) {
       const c = b.cells[i]!;
       const side = sideOf(territory.owner[c]!);
@@ -728,12 +731,13 @@ function placeTargets(
         // round: there are hundreds of bridges to a few dozen other targets.
         value: Math.min(1, (rail ? 0.2 : 0.1) + 0.35 * traffic + 0.25 * detour),
         settlement: nearestIn(s, point, R, 20e3),
+        bridge: { list, index: i },
       });
     }
   };
-  addBridges(graph.bridges, false);
-  addBridges(graph.railways.bridges, true);
-  addBridges(spurBridges, false);
+  addBridges(graph.bridges, 'road');
+  addBridges(graph.railways.bridges, 'rail');
+  addBridges(spurBridges, 'spur');
   return out;
 }
 

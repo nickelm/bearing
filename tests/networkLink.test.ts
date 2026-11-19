@@ -13,6 +13,8 @@ import {
   alignedPoint,
   alignmentCorridors,
   alignmentStats,
+  BridgeAim,
+  bridgeAimPoints,
   matchBridges,
   packAlignments,
 } from '../src/worldgen/networks/alignments';
@@ -190,6 +192,39 @@ describe('rivers', () => {
     expect(m.matched).toBe(1);
     expect(al.crossingBridge[0]).toBe(0);
     expect(m.unmatchedNetwork).toBe(1);
+  });
+
+  it('aims at the matched crossing, else the aligned road, else the coarse point', () => {
+    const al = packAlignments([link], R, { ms: 0, tiles: 0 });
+    const p = new Vec3d(al.crossings[1]!, al.crossings[2]!, al.crossings[3]!);
+    const near = frame.toSphere(
+      ...(frame.toPlane(p).map((v, i) => v + (i ? 3000 : 0)) as [number, number]),
+    );
+    const off = frame.toSphere(4000, 2500);
+    const list = (road: number[], pts: Vec3d[]) =>
+      ({
+        road: Int32Array.from(road),
+        points: Float64Array.from(pts.flatMap((q) => [q.x, q.y, q.z])),
+      }) as never;
+    const nb = {
+      // Two bridges on line 7 (one crossing to match), one on line 9 (no link).
+      road: list([7, 7, 9], [near, off, near]),
+      rail: list([], []),
+      spur: list([], []),
+    };
+    matchBridges(al, nb);
+    const aims = bridgeAimPoints(al, nb).road;
+    expect(Array.from(aims.how)).toEqual([BridgeAim.Matched, BridgeAim.OnRoute, BridgeAim.Coarse]);
+    expect(Array.from(aims.points.subarray(0, 3))).toEqual([p.x, p.y, p.z]);
+    expect(Array.from(aims.points.subarray(6, 9))).toEqual([near.x, near.y, near.z]);
+    // The second sits on the aligned road, at its point nearest the bridge.
+    const aim = new Vec3d(aims.points[3]!, aims.points[4]!, aims.points[5]!);
+    const q = new Vec3d();
+    let nearest = Infinity;
+    for (let i = al.offsets[0]!; i < al.offsets[1]!; i++) {
+      nearest = Math.min(nearest, alignedPoint(al, 0, i, q).distanceTo(off));
+    }
+    expect(aim.distanceTo(off)).toBe(nearest);
   });
 });
 

@@ -45,6 +45,8 @@ export interface Stateful {
   save(): unknown;
   /** Restores a state `save()` returned, into a part built from the same configuration. */
   load(state: unknown): void;
+  /** Adds the part's state to a determinism hash (processes hash through TickProcess.hash). */
+  hash?(h: StateHasher): void;
 }
 
 /** A process stepped at a fixed period of game time. */
@@ -296,6 +298,12 @@ export class Simulation {
     for (const p of this.processes) {
       h.string(p.name);
       p.hash?.(h);
+    }
+    const processes = new Set<Stateful>(this.processes as Stateful[]);
+    for (const [name, part] of this.parts) {
+      if (processes.has(part)) continue;
+      h.string(name);
+      part.hash?.(h);
     }
     this.log.hash(h);
     return h.digest();

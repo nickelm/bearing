@@ -304,3 +304,74 @@ export function matchBridges(al: Alignments, nb: NetworkBridges, reach = 25_000)
     crossings,
   };
 }
+
+/** How a bridge's aim point was found (`bridgeAimPoints`). */
+export const BridgeAim = {
+  /** At the river crossing matched to it. */
+  Matched: 0,
+  /** At the nearest point of its aligned road or railway: no crossing matched. */
+  OnRoute: 1,
+  /** At its coarse point: its polyline has no aligned link. */
+  Coarse: 2,
+} as const;
+export type BridgeAim = (typeof BridgeAim)[keyof typeof BridgeAim];
+
+/** Aim points of one bridge list: unit directions, xyz interleaved, and how each was found. */
+export interface BridgeAims {
+  points: Float64Array;
+  how: Uint8Array;
+}
+
+/**
+ * Where each network bridge stands in the simulation view and where strikes
+ * aim (owner decision 7, roadmap R1.8): at its matched crossing (`matchBridges`
+ * must have run), else at the nearest point of the link that aligns its
+ * polyline, else at its coarse point. Main thread only: the campaign keeps the
+ * coarse point.
+ */
+export function bridgeAimPoints(
+  al: Alignments,
+  nb: NetworkBridges,
+): Record<keyof NetworkBridges, BridgeAims> {
+  const out = {} as Record<keyof NetworkBridges, BridgeAims>;
+  const p = new Vec3d();
+  const q = new Vec3d();
+  for (const [key, network] of [
+    ['road', NETWORK.Road],
+    ['rail', NETWORK.Rail],
+    ['spur', NETWORK.Spur],
+  ] as const) {
+    const list = nb[key];
+    const n = list.road.length;
+    const points = new Float64Array(n * 3);
+    const how = new Uint8Array(n).fill(BridgeAim.Coarse);
+    points.set(list.points.subarray(0, n * 3));
+    const links = linksByLine(al, network);
+    // Matched crossings first.
+    for (let c = 0; c < al.crossingBridge.length; c++) {
+      const b = al.crossingBridge[c]!;
+      if (b < 0 || al.network[al.crossingLink[c]!] !== network) continue;
+      const o = c * CROSSING_FIELDS;
+      points.set([al.crossings[o + 1]!, al.crossings[o + 2]!, al.crossings[o + 3]!], b * 3);
+      how[b] = BridgeAim.Matched;
+    }
+    for (let b = 0; b < n; b++) {
+      if (how[b] === BridgeAim.Matched) continue;
+      const k = links.get(list.road[b]!);
+      if (k === undefined) continue;
+      p.set(list.points[b * 3]!, list.points[b * 3 + 1]!, list.points[b * 3 + 2]!);
+      let best = Infinity;
+      for (let i = al.offsets[k]!; i < al.offsets[k + 1]!; i++) {
+        alignedPoint(al, k, i, q);
+        const d = p.distanceTo(q);
+        if (d < best) {
+          best = d;
+          points.set([q.x, q.y, q.z], b * 3);
+        }
+      }
+      how[b] = BridgeAim.OnRoute;
+    }
+    out[key] = { points, how };
+  }
+  return out;
+}

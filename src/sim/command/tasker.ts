@@ -581,7 +581,6 @@ export class InterimTasker implements TickProcess {
   hash(h: StateHasher): void {
     for (const [k, v] of [...this.struck].sort()) h.string(k).number(v);
     for (const [k, v] of [...this.covered].sort()) h.string(k).number(v);
-    this.air.hash(h);
   }
 }
 

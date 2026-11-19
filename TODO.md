@@ -89,11 +89,11 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 
 ### R1.8 Network data for the sim
 
-- [ ] Road and rail networks as a node and edge graph in the campaign input: junctions as nodes, polylines as edges with class and length
-- [ ] Bridges as edges that can be cut: split polylines at bridges in the graph object (not in the stored polylines)
-- [ ] A damage state for target sites and bridges in the sim, saved with R1.2's snapshot
-- [ ] Detour test: cut a bridge, compare the graph's detour with the bridge's recorded detour
-- [ ] Bridge aim points on the main thread: matched crossing, or the nearest point of the aligned road where none matches (owner decision 7)
+- [x] Road and rail networks as a node and edge graph in the campaign input: junctions as nodes, polylines as edges with class and length (decision 237)
+- [x] Bridges as edges that can be cut: split polylines at bridges in the graph object (not in the stored polylines)
+- [x] A damage state for target sites and bridges in the sim, saved with R1.2's snapshot
+- [x] Detour test: cut a bridge, compare the graph's detour with the bridge's recorded detour (15 of 15 equal)
+- [x] Bridge aim points on the main thread: matched crossing, or the nearest point of the aligned road where none matches (owner decision 7); `bridgeAimPoints`, used from R2.6
 
 ## R2. One day of war (tech demo)
 

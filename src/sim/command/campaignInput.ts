@@ -9,6 +9,12 @@ import type { CarrierGroupCast, Cast, Side, Theater } from '../../campaign/cast'
 import type { Dir } from '../../core/greatCircle';
 import type { StrategicGraph } from '../../worldgen/strategic/graph';
 import type { Airbase, Infrastructure, TargetSite } from '../../worldgen/strategic/infrastructure';
+import { buildNetworkInput } from '../ground/network';
+import type { NetworkInput } from '../ground/network';
+
+/** Source lists of the road graph's bridges, in the order `campaignInput` gives them (R1.8). */
+export const ROAD_BRIDGE_LISTS = ['road', 'spur'] as const;
+export const RAIL_BRIDGE_LISTS = ['rail'] as const;
 
 /** A continental front's start line, with a point deep on each side. */
 export interface FrontInput {
@@ -28,6 +34,9 @@ export interface CampaignInput {
   targets: TargetSite[];
   carriers: CarrierGroupCast[];
   fronts: FrontInput[];
+  /** The civilian roads with the airbase and port spurs, and the railways, as graphs (R1.8). */
+  roads: NetworkInput;
+  rail: NetworkInput;
 }
 
 export function campaignInput(
@@ -55,8 +64,19 @@ export function campaignInput(
     rangeFactor: cast.rangeFactor,
     theaters: cast.theaters.map((t) => ({ ...t, nodes: [...t.nodes] })),
     airbases: infra.airbases.map((a) => ({ ...a, point: [...a.point] })),
-    targets: infra.targets.map((x) => ({ ...x, point: [...x.point] })),
+    targets: infra.targets.map((x) => ({
+      ...x,
+      point: [...x.point],
+      ...(x.bridge ? { bridge: { ...x.bridge } } : {}),
+    })),
     carriers: (cast.carriers ?? []).map((c) => ({ ...c, track: [...c.track] })),
     fronts,
+    roads: buildNetworkInput(
+      'road',
+      graph.radius,
+      [graph.roads, infra.spurs],
+      [graph.bridges, infra.spurBridges],
+    ),
+    rail: buildNetworkInput('rail', graph.radius, [graph.railways.lines], [graph.railways.bridges]),
   };
 }
