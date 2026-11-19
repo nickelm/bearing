@@ -198,14 +198,15 @@ describe.skipIf(!gpu)('sky-view LUT (TSL on Dawn)', () => {
       );
       // By day a third of a pixel never changes the sky by more than 3% (the glow low
       // toward a low sun is that steep), and where the slope changes from one texel to
-      // the next the bend is under 0.3% of the brightness: less than one 8-bit step,
-      // which the pipeline's dither covers. In twilight the edge of the planet's shadow
+      // the next the bend is under one 8-bit step of the brightness (1/255, 0.39%),
+      // which the pipeline's dither covers (decision 244: 0.32% on the owner's GPU,
+      // whose transcendentals round differently from lavapipe's). In twilight the edge of the planet's shadow
       // opposite the sun is steeper than the LUT's rows resolve (0.65° apart there):
       // it is drawn as a few straight ramps, with bends of up to 2%. The grade takes the
       // blue out of the orange next to a low sun: where that channel reaches zero its
       // slope ends, a bend of under 1% of the brightness in a channel that is gone.
       expect(w.jump).toBeLessThan(w.sunElevation >= 0 ? 0.03 : w.graded ? 0.07 : 0.05);
-      expect(w.kink).toBeLessThan(w.sunElevation < 0 ? 0.02 : w.graded ? 0.01 : 0.003);
+      expect(w.kink).toBeLessThan(w.sunElevation < 0 ? 0.02 : w.graded ? 0.01 : 1 / 255);
     }
   }, 240_000);
 

@@ -4029,3 +4029,13 @@ The sim worker's chunk grows from 58 kB to 104 kB, since the six bundles with ge
 **How it was checked.** `tests/flownAircraft.test.ts`: the scripted pilot's whole circuit, flown through `FlownAircraft` in 60 Hz frames from a lineup built by `fixedWingFromState`, ends bit for bit where the airframe stepped directly ends, fuel included; a jet built from an air state at 320 kt holds course, height and speed under the flight director for a minute; the step cap holds. `tests/flightLockstep.test.ts` passes unchanged. `tools/freeflight.session.mjs` passes everything but the known "drizzle: wet at once" check (decision 217), before and after the change.
 
 **Reason:** proposal 0008 lets the player take over any campaign flight; that needs the flown aircraft, its controls and its avionics as one object outside the sandbox, with the same physics path for the player and the AI (rule 12).
+
+### 244. Two GPU tests' bounds from what the owner's GPU rounds
+
+**Date:** 2026-11-19
+**Decision:** The owner's run of the GPU suite on Windows passed 96 of 98 tests, the cube-face seam (decision 233) among them. Two tests that pass on lavapipe failed there, by rounding; neither the tests nor the code they cover had changed since the audit.
+
+- `tests/gpu/faceShading.test.ts` asked a child tile at morph 0 for its parent's face hash bit for bit; on the owner's GPU it differs by 7·10⁻⁹ (one float32 step), as a compiler may fuse the same arithmetic differently where the child inlines it. The jitter picks a facet's shade from [0, 1), so the difference cannot show; the test now asks for six decimals.
+- `tests/gpu/skyView.test.ts` bounded the daytime bend of the sky's brightness from one LUT texel to the next at 0.3%, reasoned in the test as less than one 8-bit step, which the dither covers. One step is 1/255 (0.39%); the owner's GPU, whose transcendentals round differently from lavapipe's, gives 0.32%. The bound is now 1/255, the reason the test already gave.
+
+**Reason:** the tests guard visible properties (no facet pops at a split, no texel structure in the sky); their bounds now say what is visible rather than what lavapipe happens to compute. Whether these two failed every time on the owner's GPU or only once is for R1.1's ten runs there to say.

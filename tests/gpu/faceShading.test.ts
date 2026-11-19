@@ -97,7 +97,9 @@ describe.skipIf(!gpu)('per-face shading (TSL on Dawn)', () => {
       // At morph 0 the child evaluates the parent's face: its centroid, hash and facet size.
       expect(corner[0]! + z[0]! / 2).toBeCloseTo(p[0]!, 4);
       expect(corner[1]! + z[1]! / 2).toBeCloseTo(p[1]!, 4);
-      expect(z[2]).toBe(p[2]);
+      // The same hash, to within float32 rounding: a GPU compiler may fuse the parent's
+      // hash differently where the child inlines it (decision 244: 7e-9 on the owner's GPU).
+      expect(z[2]).toBeCloseTo(p[2]!, 6);
       expect(z[3]).toBeCloseTo(p[3]!, 6);
       expect(p[3]).toBeCloseTo(vertexSpacing(parent.level, R), 1);
       // At morph 1, its own face.
