@@ -4141,3 +4141,32 @@ The interim tasker flew 180 missions a day per seed with about 37 aircraft in th
 About 150 missions a day per seed lose 9–35 aircraft in all, roughly 1–4% of aircraft sorties, the attrition Cold War planning assumed for the opening days. The worker's cost stays at 0.05–0.06% of real time at 64×.
 
 **Reason:** proposal 0008's loop needs its resolve and consequence steps: without losses, damage and deliveries the order had nothing to react to, and R2.3's ground war needs the attacks and the cut bridges.
+
+### 251. The ground war in aggregate: battalions, Lanchester by segment, supply by road, a moving front
+
+**Date:** 2026-11-19
+**Decision:** R2.3. A `GroundWar` process (`src/sim/ground/war.ts`, ticking every game minute) fights each continental front segment by segment and moves it.
+
+- **Order of battle** (`sim/ground/orbat.ts`). Per side and front, one division per 60 km of front (Alliance) or 45 km (Pact: mass), at least two. A division has three brigades (Alliance: an armored brigade of two tank and two mechanized battalions, two mechanized brigades) or regiments (Pact: a tank regiment of three tank battalions, two motor-rifle regiments of three mechanized), and two artillery, one air defense and one logistics battalion. Battalions carry a kind, a strength and a seed from rng(seed, "ground") for R2.8's promotion. Values per battalion: tank 1.2, mechanized 1, artillery 0.9, air defense 0.2, logistics 0.05 battalion equivalents. Seed 4 fields 542 battalions, seed 7 629, seed 10 (a short front) 71.
+- **Deployment.** Brigades go to front segments (R2.1's segments of about 80 km) by largest remainder: the attacker by 0.15 + 1.5 · pressure² (a screen everywhere, mass on its main axes at the corridors), the defender by 0.6 + 0.4 · pressure. Support battalions follow their division's first brigade. Battalions stay on their segment; reserves and their commitment wait for R3.6.
+- **Combat.** Each minute on each segment, power is value × strength × (0.4 + 0.6 · supply). The defender's multiplier is 1 + 0.8 · terrain + 0.2 (terrain: the start line's barrier strength over the segment, now in `FrontInput.strength`). Losses follow Lanchester's square law at 0.08 per day times the other side's power (the defender's raised by the multiplier on the attacker, the attacker's lowered by it on the defender), times the intensity: 1 on the offensive, 0.15 elsewhere. Offensives open where the corridors' pressure is 0.5 or more and culminate when the attacker there falls below half its starting power.
+- **Movement.** A segment's offset changes at 25 km a day × (r − 1)/(r + 1) · 2 (clamped to −0.5..1) × intensity × (1 − 0.6 · terrain), r = attacker / (defender × multiplier), within 200 km of the start line and 60 km of its neighbors. The front line is the start line's points moved toward the defender's (or the attacker's) centroid by the offset interpolated between segment centers.
+- **Supply**, hourly per segment and side: the best of the side's depots and rear cities (`supplySources`, shared with R2.1's supply lines) by the road graph with cut bridges: min(1, 1.5 × straight distance / road distance) × the depot's undamaged share × (1 − half the worst road-edge damage on the way), at least 0.25.
+- **Air support.** Each attack on troops R2.2 records kills 0.04 battalion equivalents per unit on the enemy's nearest segment; a CAS flight of four is about 0.1. Interdiction acts through supply.
+- **The ATO** reads the ground war: segments at the moved line with the pressure of the fighting there (intensity × both sides' power), front points for stations and CAS from the moved line, supply lines to the moved front. `SimConfig.suppressAirSupport` (tools only) keeps one side's strike and ground-support plug-ins out of its orders.
+- **The map.** The worker sends a `GroundPicture` hourly (each front's line now, brigades and regiments with their strength behind it); `buildMilitaryOverlays` draws the live line in place of the start line, and `buildGroundOverlays` draws each brigade or regiment as a square badge in its side's color with an oval (armor) or an oval with an X (mechanized), at the Region band, smaller below 60% strength and gone below 15%. The roadmap asked for battalion symbols; at the Region band a view would hold more than a hundred of them, so the map shows their brigades and regiments, tens in a view, and the battalions stay the sim's units. Echelon marks wait for R3.6. The viewing side's filter applies as for flights (decision 48).
+- `SIM_STATE_FORMAT` stays 3: the ground war is a new saved part.
+
+**How it was checked.** `tests/groundWar.test.ts`: the order of battle on both sides, the Pact's more divisions, its determinism and the attacker's mass at the pressure; a day that moves the front within its limits and costs both sides strength; the ATO's front points on the moved line; CAS kills where it attacks; supply falling behind cut bridges and damaged depots; a day without the attacker's air support ending with a different front; the map's symbols by side and shape. `tests/demoSeeds.test.ts`: the front moves more than 1 km on each demo seed over 26 hours (synthetic weather) and both sides lose aircraft over the three seeds. `tools/airSupport.preview.ts` (24 h, real climate), the largest segment offset (km, + toward the defender; the Pact attacks on all three):
+
+| Seed | Full air war | Without Alliance air support | Without Pact air support |
+| --- | --- | --- | --- |
+| 4 | 15.4 | 14.3 | 0.7 |
+| 10 | 8.6 | −0.1 | −0.9 |
+| 7 | 9.9 | 19.8 | 9.7 |
+
+On seed 4 the Pact's breakthrough at its main corridor depends on its air support; on seed 7 the Alliance's air support halves the Pact's advance. Seed 10's response is not monotonic: without either side's strikes the air war's allocation shifts (more CAP, different intercepts) and the Pact's advance stalls in both runs; this is in TODO.
+
+`tools/war.preview.ts` at 64× and 256× gives the same end states as one jump on all three seeds (`fad81879ba800bb1`, `cae2d1f160e53708`, `7bfa74c80a16f4d3`): 26–38 ms per game hour, 0.05–0.07% of real time at 64× and 0.19–0.24% at 256×; the worst single step is about 200 ms on seed 4, the hour when the weather fields, an order revision and the supply update coincide.
+
+**Reason:** the demo's loop needs a war on the ground that the air war changes and that changes the air war, and R2.4's follow and R2.8's promotion need battalions with seeds at places along a front the player can see move.

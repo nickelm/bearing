@@ -6,6 +6,7 @@
  */
 import type { CampaignCalendar, OrbitParams } from '../core/calendar';
 import type { GameTime } from '../core/units';
+import type { GroundPicture } from '../sim/ground/war';
 import type { Mission } from '../sim/air/mission';
 import type { HostState } from '../sim/host';
 import type { CampaignInputEvent } from '../sim/eventLog';
@@ -149,6 +150,8 @@ export interface SnapshotMessage {
    * thread computes positions and phases for any display time itself.
    */
   missions?: Mission[];
+  /** The ground war's front lines and units (R2.3), sent when they change (hourly) and after init or seek. */
+  ground?: GroundPicture;
 }
 
 export interface SimErrorMessage {

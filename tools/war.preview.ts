@@ -184,6 +184,18 @@ function day(seed: number): Report {
       `damage: ${sites.length} sites hit (${cut} bridges cut), ${dmg.damagedRoads().length} road edges, ` +
         `${dmg.attacks.length} attacks on troops; aborts ${sw.sim.log.entries.filter((e) => e.source === 'decision' && e.kind === 'mission-aborted').length}`,
     );
+    const g = sw.ground!;
+    for (const f of campaign.fronts) {
+      const off = g.frontOffsets(f.theater);
+      const km = off.map((x) => Math.round(x / 1000));
+      const att = f.attacker;
+      const def = att === 'alliance' ? 'pact' : 'alliance';
+      report.war.push(
+        `front ${f.theater} (attacker ${att}): offsets ${km.join(', ')} km; strength ` +
+          `${att} ${g.strengthOf(f.theater, att).toFixed(1)}, ${def} ${g.strengthOf(f.theater, def).toFixed(1)} ` +
+          `battalion equivalents; ${g.orbat.battalions.filter((b) => b.theater === f.theater).length} battalions`,
+      );
+    }
     const ato = sw.ato!;
     for (const side of ['alliance', 'pact'] as const) {
       const st = ato.stats[side];

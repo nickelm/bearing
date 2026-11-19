@@ -125,7 +125,9 @@ export type MarkShape =
   | 'bridge'
   | 'star'
   | 'aircraft'
-  | 'carrier';
+  | 'carrier'
+  | 'unit-armor'
+  | 'unit-mech';
 export const MARK_SHAPES: readonly MarkShape[] = [
   'arrowhead',
   'diamond',
@@ -141,6 +143,8 @@ export const MARK_SHAPES: readonly MarkShape[] = [
   'star',
   'aircraft',
   'carrier',
+  'unit-armor',
+  'unit-mech',
 ];
 
 /** A mark lying on the map at a point: its own frame is `axis` (along) and the left of it. */
@@ -235,6 +239,8 @@ export function buildMilitaryOverlays(
   graph: StrategicGraph,
   cast: Cast | null,
   territory: TerritoryLookup | null,
+  /** The ground war's front lines now, by theater (R2.3): drawn in place of the start lines. */
+  live: ReadonlyMap<number, readonly number[]> | null = null,
 ): MilitaryOverlays {
   const lines: OverlayLine[] = [];
   const marks: OverlayMark[] = [];
@@ -249,7 +255,8 @@ export function buildMilitaryOverlays(
     // The attacker's line side (0 or 1): the cast's split records the Pact's side.
     const pactSide = owner?.kind === 'split' ? owner.pactSide : f.forwardSide;
     const attackerSide = attacker === 'pact' ? pactSide : pactSide === 0 ? 1 : 0;
-    const points = densify(start.points);
+    const liveLine = live?.get(t.id);
+    const points = densify(liveLine ? Float64Array.from(liveLine) : start.points);
     lines.push({
       layer: 'front',
       points,

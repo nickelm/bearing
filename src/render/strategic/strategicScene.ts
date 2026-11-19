@@ -53,6 +53,9 @@ import { layoutGlyphs } from './glyphLayout';
 import { CubeGrid as FeatureGrid } from '../../core/cubeGrid';
 import { MilitaryLayer } from './overlays/militaryLayer';
 import { buildMilitaryOverlays, OVERLAY_LAYERS } from './overlays/militaryModel';
+import { buildGroundOverlays, GROUND_LAYERS } from './overlays/groundModel';
+import type { GroundLayer } from './overlays/groundModel';
+import type { GroundPicture } from '../../sim/ground/war';
 import type { MilitaryOverlays, OverlayLayer } from './overlays/militaryModel';
 import { Biome } from '../../worldgen/biomes';
 import { buildInfraOverlays, INFRA_LAYERS } from './infra/infraModel';
@@ -114,6 +117,11 @@ export class StrategicScene {
   readonly infraSites: MilitaryLayer<InfraLayer>;
   /** Flights, their trails and routes, and carrier groups (C2), moving with the game clock. */
   readonly air: MilitaryLayer<AirLayer>;
+  /** The ground war's unit symbols (R2.3); its front line moves in `military`. */
+  readonly groundLayer: MilitaryLayer<GroundLayer>;
+  private groundPicture: GroundPicture | null = null;
+  private groundRevision = 0;
+  private groundDrawn = '';
   /** What the air layer shows (decision 48: the side is a view). */
   readonly airView: AirViewOptions = { side: 'both', routes: false };
   /** CPU time per section of `render` (R1.1): `?dev&cputime=1` in the app, `PERF` in the preview. */
@@ -227,6 +235,12 @@ export class StrategicScene {
       { exaggeration: this.relief.exaggeration },
       { layers: AIR_LAYERS, renderOrder: 60 },
     );
+    // Under the flights, over the front: units stand behind the line.
+    this.groundLayer = new MilitaryLayer<GroundLayer>(
+      options.radius,
+      { exaggeration: this.relief.exaggeration },
+      { layers: GROUND_LAYERS, renderOrder: 55 },
+    );
     this.lights = new MapLights(options.radius, this.relief.exaggeration);
     this.glyphs = new GlyphLayer(options.radius, {
       exaggeration: this.relief.exaggeration,
@@ -254,6 +268,7 @@ export class StrategicScene {
       this.infraLines.group,
       this.infraSites.group,
       this.military.group,
+      this.groundLayer.group,
       this.air.group,
     );
     this.overlayScene.add(this.labels.group);
@@ -403,6 +418,8 @@ export class StrategicScene {
       graph && cast ? (cast.carriers ?? []).map((c) => carrierTrack(c, graph.radius)) : [];
     this.missions = [];
     this.airRevision++;
+    this.groundPicture = null;
+    this.groundRevision++;
     this.lightsDirty = true;
   }
 
@@ -410,6 +427,31 @@ export class StrategicScene {
   setMissions(missions: readonly Mission[]): void {
     this.missions = missions;
     this.airRevision++;
+  }
+
+  /**
+   * The ground war's picture from the worker (R2.3): the front lines move in the
+   * military overlays and the unit symbols follow.
+   */
+  setGround(picture: GroundPicture | null): void {
+    this.groundPicture = picture;
+    this.groundRevision++;
+    const d = this.strategicData;
+    const dry = this.dryHeight;
+    if (d && dry) this.military.setOverlays(this.militaryOverlays(d.graph, d.cast, d.infra), dry);
+  }
+
+  /** Rebuilds the unit symbols when the picture or the viewing side changed. */
+  private updateGround(): void {
+    const height = this.dryHeight;
+    if (!height) return;
+    const key = `${this.groundRevision}:${this.airView.side}`;
+    if (key === this.groundDrawn) return;
+    this.groundDrawn = key;
+    this.groundLayer.updateOverlays(
+      buildGroundOverlays(this.groundPicture, { side: this.airView.side }),
+      height,
+    );
   }
 
   /** Game time the air layer shows (the display clock). */
@@ -513,7 +555,10 @@ export class StrategicScene {
             cellAngle: Math.PI / 2 / grid.n,
           }
         : null;
-    return buildMilitaryOverlays(graph, cast, territory);
+    const live = this.groundPicture
+      ? new Map(this.groundPicture.fronts.map((f) => [f.theater, f.points]))
+      : null;
+    return buildMilitaryOverlays(graph, cast, territory, live);
   }
 
   /** Shows or hides roads, railways or site symbols (decision 104); route names go with roads. */
@@ -597,6 +642,7 @@ export class StrategicScene {
         const dry = (p: Readonly<[number, number, number]>) => Math.max(0, heightAt(p));
         this.dryHeight = dry;
         this.airDrawn = null;
+        this.groundDrawn = '';
         this.military.setOverlays(military, dry);
         const infra = buildInfraOverlays(d.graph, d.infra);
         this.infraLines.setOverlays(infra, dry);
@@ -611,6 +657,7 @@ export class StrategicScene {
         this.infraLines.setOverlays(null, () => 0);
         this.infraSites.setOverlays(null, () => 0);
         this.air.setOverlays(null, () => 0);
+        this.groundLayer.setOverlays(null, () => 0);
         this.dryHeight = null;
         this.labels.setLabels(null);
       }
@@ -703,6 +750,8 @@ export class StrategicScene {
     cpu.lap('infra lines');
     this.infraSites.update(o.eye, cssPixelAngle, o.range * cssPixelAngle, fades, o.up);
     cpu.lap('infra sites');
+    this.updateGround();
+    this.groundLayer.update(o.eye, cssPixelAngle, o.range * cssPixelAngle, fades, o.up);
     this.updateAir();
     this.air.update(o.eye, cssPixelAngle, o.range * cssPixelAngle, fades, o.up);
     cpu.lap('air');
@@ -838,6 +887,7 @@ export class StrategicScene {
     this.infraLines.dispose();
     this.infraSites.dispose();
     this.air.dispose();
+    this.groundLayer.dispose();
     this.lights.dispose();
     this.glyphs.dispose();
     this.labels.dispose();

@@ -19,6 +19,8 @@ import { AirTaskingOrders } from './command/ato';
 import { isPending } from './command/missions/plugin';
 import { missionPlugin } from './command/missions/registry';
 import { MissionResolution } from './air/resolution';
+import { GroundWar } from './ground/war';
+import type { Side } from '../campaign/cast';
 import { Simulation } from './simulation';
 import { WeatherModel } from './weather/model';
 import type { WeatherConfig } from './weather/model';
@@ -35,6 +37,11 @@ export interface SimConfig extends WeatherConfig {
    * never reads it (rule 9).
    */
   ground?: { height: Float32Array; n: number } | null;
+  /**
+   * A side that flies no strikes and no ground support (R2.3's comparison of a
+   * war with and without one side's air support). Tools only; the app never sets it.
+   */
+  suppressAirSupport?: Side | null;
 }
 
 export interface SimWorld {
@@ -45,6 +52,8 @@ export interface SimWorld {
   readonly ato: AirTaskingOrders | null;
   /** Engagements and mission outcomes (R2.2); null without a campaign. */
   readonly resolution: MissionResolution | null;
+  /** The ground war in aggregate (R2.3); null without a campaign. */
+  readonly ground: GroundWar | null;
   /** The road and rail graphs (R1.8); null without a campaign. */
   readonly networks: { road: NetworkGraph; rail: NetworkGraph } | null;
   /** Damage to target sites and bridges (R1.8); null without a campaign. */
@@ -66,6 +75,7 @@ export function createSimWorld(config: SimConfig): SimWorld {
   let damage: DamageState | null = null;
   let ato: AirTaskingOrders | null = null;
   let resolution: MissionResolution | null = null;
+  let ground: GroundWar | null = null;
   if (config.campaign) {
     air = new AirOps(
       config.campaign,
@@ -79,7 +89,11 @@ export function createSimWorld(config: SimConfig): SimWorld {
     };
     damage = new DamageState(config.campaign.targets);
     sim.addState('damage', damage);
+    ground = new GroundWar(config.campaign, config.seed, networks, damage);
+    sim.addProcess(ground);
     ato = new AirTaskingOrders({
+      ground,
+      suppressAirSupport: config.suppressAirSupport ?? null,
       air,
       input: config.campaign,
       seed: config.seed,
@@ -105,7 +119,7 @@ export function createSimWorld(config: SimConfig): SimWorld {
     air.resolution = resolution;
     sim.addState('resolution', resolution);
   }
-  return { sim, weather, air, ato, resolution, networks, damage, terrain: null };
+  return { sim, weather, air, ato, resolution, ground, networks, damage, terrain: null };
 }
 
 /** Schedules a player alarm (flagged, so it triggers auto-slowdown). */

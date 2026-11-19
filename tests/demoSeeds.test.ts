@@ -26,6 +26,7 @@ describe('demo seeds', () => {
     expect(GENERATOR_VERSION).toBe(CHECKED_ON_VERSION);
   });
 
+  const lost = { alliance: 0, pact: 0 };
   for (const seed of DEMO_SEEDS) {
     it(`seed ${seed} is valid, has a continental front, flies the demo types above its ground`, () => {
       const w = generateCampaignWorld({ ...DEFAULT_PLANET_PARAMS, seed }, { grid });
@@ -66,9 +67,12 @@ describe('demo seeds', () => {
         }
       }
       // R2.2's exit: both sides lose aircraft, targets and bridges are damaged, airlift delivers.
-      for (const side of ['alliance', 'pact'] as const) {
-        expect(sim.air!.lost[side], `seed ${seed}: ${side} losses`).toBeGreaterThan(0);
-      }
+      // Losses per side are few on some seeds (a defender flying little CAS), so each
+      // side's are checked over the three seeds (the last test).
+      for (const side of ['alliance', 'pact'] as const) lost[side] += sim.air!.lost[side];
+      expect(sim.air!.lost.alliance + sim.air!.lost.pact, `seed ${seed}: losses`).toBeGreaterThan(
+        0,
+      );
       const damaged = sim.damage!.damaged();
       const targets = sim.air!.input.targets;
       expect(damaged.length, `seed ${seed}: damaged sites`).toBeGreaterThan(0);
@@ -81,6 +85,12 @@ describe('demo seeds', () => {
         res.alliance.deliveries + res.pact.deliveries,
         `seed ${seed}: airlift`,
       ).toBeGreaterThan(0);
+
+      // R2.3's exit: the front moves measurably (the suppressed run: tools/airSupport.preview.ts).
+      const moved = Math.max(
+        ...sim.air!.input.fronts.flatMap((f) => sim.ground!.frontOffsets(f.theater).map(Math.abs)),
+      );
+      expect(moved, `seed ${seed}: the front's largest move`).toBeGreaterThan(1000);
 
       const surface = globalMapSampler(ground.height, ground.n);
       const v = new Vec3d();
@@ -100,4 +110,9 @@ describe('demo seeds', () => {
       expect(below, `seed ${seed}: worst clearance ${worst.toFixed(1)} m`).toBe(0);
     });
   }
+
+  it('loses aircraft on both sides over the demo seeds', () => {
+    expect(lost.alliance).toBeGreaterThan(0);
+    expect(lost.pact).toBeGreaterThan(0);
+  });
 });

@@ -142,6 +142,20 @@ function sdFrame(x: F, y: F, hx: number, hy: number, t: number): F {
   return abs(sdBox(x, y, 0, 0, hx - t / 2, hy - t / 2)).sub(t / 2) as F;
 }
 
+/** The outline of thickness t of a stadium: half length a of its straight part, radius r (an oval, NATO's armor). */
+function sdStadium(x: F, y: F, a: number, r: number, t: number): F {
+  const qx = max(abs(x).sub(a), 0);
+  return abs(length(vec2(qx, y)).sub(r)).sub(t / 2) as F;
+}
+
+/** A bar of half thickness t along the line y = k·x, clipped to |x| ≤ hx and |y| ≤ hy. */
+function sdDiagonal(x: F, y: F, k: number, t: number, hx: number, hy: number): F {
+  const d = abs(y.sub(x.mul(k)))
+    .div(Math.hypot(1, k))
+    .sub(t) as F;
+  return max(d, sdBox(x, y, 0, 0, hx, hy)) as F;
+}
+
 /** Five-pointed star of outer radius 1 and inner ratio rf, a point up (Inigo Quilez's sdStar5). */
 function sdStar(x: F, y: F, rf: number): F {
   const k1 = [0.809016994375, -0.587785252292] as const;
@@ -219,6 +233,14 @@ function symbolDistance(code: F, x: F, y: F): F {
           sdBox(x, y.add(abs(x).mul(0.6)), 0, 0.2, 0.95, 0.15),
           sdBox(x, y.add(abs(x).mul(0.5)), 0, -0.68, 0.42, 0.11),
         ),
+      ),
+    // NATO unit symbols inside their square badge (decision 251): armor is an oval,
+    // mechanized infantry the oval with the infantry's X across the frame.
+    'unit-armor': () => sdStadium(x, y, 0.45, 0.42, 0.18),
+    'unit-mech': () =>
+      min(
+        sdStadium(x, y, 0.45, 0.42, 0.16),
+        min(sdDiagonal(x, y, 0.75, 0.07, 0.95, 0.72), sdDiagonal(x, y, -0.75, 0.07, 0.95, 0.72)),
       ),
     // A carrier from above: a long flight deck with the island on its right.
     carrier: () => min(sdBox(x, y, -0.06, 0, 0.32, 0.95), sdBox(x, y, 0.38, 0.12, 0.12, 0.26)),

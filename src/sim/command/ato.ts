@@ -52,6 +52,7 @@ import { routeTimeline } from '../air/route';
 import type { Route } from '../air/route';
 import { clearanceFor, floorRoute } from '../air/terrainFloor';
 import type { DamageState } from '../ground/damage';
+import type { GroundWar } from '../ground/war';
 import type { NetworkGraph } from '../ground/network';
 import type { CampaignInput } from './campaignInput';
 import { ROAD_BRIDGE_LISTS, RAIL_BRIDGE_LISTS } from './campaignInput';
@@ -163,6 +164,10 @@ export interface AtoWorld {
   calendar: CampaignCalendar | null;
   networks: { road: NetworkGraph; rail: NetworkGraph } | null;
   damage: DamageState | null;
+  /** The ground war (R2.3): the front as it moves and the fighting's pressure; null: the start line. */
+  ground?: GroundWar | null;
+  /** A side flying no strikes and no ground support (the comparison tool's suppressed run, R2.3). */
+  suppressAirSupport?: Side | null;
 }
 
 function emptyStats(): AtoStats {
@@ -249,7 +254,9 @@ export class AirTaskingOrders implements TickProcess {
 
     // 1. Needs from every plug-in.
     const needs: Need[] = [];
+    const suppressed = this.w.suppressAirSupport === side;
     for (const p of MISSION_PLUGINS) {
+      if (suppressed && (p.category === 'strike' || p.category === 'ground-support')) continue;
       if (!isPending(p.planner)) needs.push(...p.planner(ctx));
     }
     const byKey = new Map(needs.map((n) => [n.key, n]));
@@ -686,13 +693,26 @@ export class AirTaskingOrders implements TickProcess {
       this.w.damage?.cutBridges(nets.road.input, ROAD_BRIDGE_LISTS) ?? new Set<number>();
     const cutRail =
       this.w.damage?.cutBridges(nets.rail.input, RAIL_BRIDGE_LISTS) ?? new Set<number>();
-    const key = `${side}|${[...cutRoad].sort((a, b) => a - b).join(',')}|${[...cutRail].sort((a, b) => a - b).join(',')}`;
+    const ground = this.w.ground ?? null;
+    const key = `${side}|${ground?.revision ?? 0}|${[...cutRoad].sort((a, b) => a - b).join(',')}|${[...cutRail].sort((a, b) => a - b).join(',')}`;
     let s = this.supplyCache.get(key);
     if (!s) {
-      s = supplyLines(this.w.input, side, this.segments, { ...nets, cutRoad, cutRail });
+      if (this.supplyCache.size > 64) this.supplyCache.clear();
+      s = supplyLines(
+        this.w.input,
+        side,
+        this.currentSegments(),
+        { ...nets, cutRoad, cutRail },
+        ground ? (t, f, sd, b) => ground.frontPoint(t, f, sd, b) : null,
+      );
       this.supplyCache.set(key, s);
     }
     return s;
+  }
+
+  /** Every front's segments: the ground war's, at the line now, or the start line's. */
+  private currentSegments(): FrontSegment[] {
+    return this.w.ground?.segments() ?? this.segments;
   }
 
   /** The planner's view for one side at one revision. */
@@ -723,11 +743,12 @@ export class AirTaskingOrders implements TickProcess {
       dayStart,
       dayLength: this.dayLength,
       env,
-      segments: this.segments,
+      segments: this.currentSegments(),
       get enemySupply() {
         return supplyOf();
       },
       frontPoint(theater, frac, setback) {
+        if (w.ground) return w.ground.frontPoint(theater, frac, side, setback);
         const f = input.fronts.find((x) => x.theater === theater);
         if (!f) return null;
         return frontPoint(f, stations.get(theater)!, frac, side, setback, R);

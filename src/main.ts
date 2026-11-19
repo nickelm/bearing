@@ -347,6 +347,7 @@ async function main(): Promise<void> {
   };
   sim.onWeather = showWeather;
   sim.onMissions = () => strategicView.setMissions(sim.missions);
+  sim.onGround = () => strategicView.setGround(sim.ground);
 
   let grid = new CubeGrid(worldParams.resolution);
   const globe = new GlobeScene(renderer, { radius: DEFAULT_PLANET_PARAMS.radius, grid });

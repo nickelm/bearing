@@ -87,11 +87,49 @@ function edgeMiddle(g: NetworkGraph, e: number): Dir {
 }
 
 /** A side's supply lines to its segments of every front. */
+/**
+ * Where a side's supply to its segments comes from by road: its supply and fuel
+ * depots (`site` is the target id) and its REAR_SOURCES largest cities between
+ * REAR_DEPTH from the front (`site` −1).
+ */
+export function supplySources(
+  input: CampaignInput,
+  side: Side,
+  segments: readonly FrontSegment[],
+): { point: Dir; site: number }[] {
+  const R = input.radius;
+  const depth = (p: Readonly<Dir>) => {
+    let d = Infinity;
+    for (const s of segments) d = Math.min(d, arcDistance(p, s.point, R));
+    return d;
+  };
+  const depots = input.targets
+    .filter((x) => x.side === side && (x.kind === 'supply-depot' || x.kind === 'fuel-depot'))
+    .map((x) => ({ point: [...x.point] as Dir, site: x.id }));
+  const rear = input.places
+    .filter((p) => p.side === side)
+    .map((p) => ({ p, d: depth(p.point) }))
+    .filter((x) => x.d >= REAR_DEPTH[0] && x.d <= REAR_DEPTH[1])
+    .sort((a, b) => b.p.population - a.p.population || a.d - b.d)
+    .slice(0, REAR_SOURCES)
+    .map((x) => ({ point: [...x.p.point] as Dir, site: -1 }));
+  return [...depots, ...rear];
+}
+
+/** A front point now: on the start line, or on the ground war's moved line (R2.3). */
+export type FrontPointOf = (
+  theater: number,
+  frac: number,
+  side: Side,
+  setback: number,
+) => { point: Dir } | null;
+
 export function supplyLines(
   input: CampaignInput,
   side: Side,
   segments: readonly FrontSegment[],
   nets: SupplyNetworks,
+  frontPointOf: FrontPointOf | null = null,
 ): SupplyLines {
   const R = input.radius;
   const roadUse = new Float64Array(nets.road.edgeCount);
@@ -111,18 +149,9 @@ export function supplyLines(
   const sourceNodes = sources.map((x) =>
     snap(x.kind === 'rail-yard' ? nets.rail : nets.road, x.point),
   );
-  const depth = (p: Readonly<Dir>) => {
-    let d = Infinity;
-    for (const s of segments) d = Math.min(d, arcDistance(p, s.point, R));
-    return d;
-  };
-  const rear = input.places
-    .filter((p) => p.side === side)
-    .map((p) => ({ p, d: depth(p.point) }))
-    .filter((x) => x.d >= REAR_DEPTH[0] && x.d <= REAR_DEPTH[1])
-    .sort((a, b) => b.p.population - a.p.population || a.d - b.d)
-    .slice(0, REAR_SOURCES)
-    .map((x) => snap(nets.road, x.p.point))
+  const rear = supplySources(input, side, segments)
+    .filter((x) => x.site < 0)
+    .map((x) => snap(nets.road, x.point))
     .filter((n) => n >= 0);
   const stations = new Map<number, Float64Array>();
   const sinks: Dir[] = [];
@@ -131,7 +160,10 @@ export function supplyLines(
     if (!f) continue;
     let st = stations.get(f.theater);
     if (!st) stations.set(f.theater, (st = polylineStations(f.points, R)));
-    const sink = frontPoint(f, st, (seg.from + seg.to) / 2, side, SUPPLY_SETBACK, R).point;
+    const frac = (seg.from + seg.to) / 2;
+    const sink =
+      frontPointOf?.(f.theater, frac, side, SUPPLY_SETBACK)?.point ??
+      frontPoint(f, st, frac, side, SUPPLY_SETBACK, R).point;
     sinks.push(sink);
     for (const [g, nodeUse, rail] of [
       [nets.road, roadNodeUse, false],

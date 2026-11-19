@@ -159,17 +159,21 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 
 ### R2.3 The ground war in aggregate
 
-- [ ] Order of battle: divisions, brigades or regiments, battalions with per-unit seeds
-- [ ] Deployment along the start line by corridor and terrain
-- [ ] Lanchester attrition per game minute with terrain, posture and supply
-- [ ] Air support: CAS reduces strength; interdiction cuts supply
-- [ ] Supply over the road graph; cut bridges force detours
-- [ ] Front segments move by local force balance, slowed by barriers
-- [ ] Offensives along the invasion corridors by cast posture
-- [ ] CAS and interdiction needs from the ground state (feeds R2.1)
-- [ ] The moving front on the strategic map; battalion symbols (NATO style)
-- [ ] Comparison tool: one side's air support suppressed; report the front's difference
-- [ ] Benchmark: battalions plus weather plus air war in the worker at 64× and 256×
+- [x] Order of battle: divisions, brigades or regiments, battalions with per-unit seeds (`sim/ground/orbat.ts`)
+- [x] Deployment along the start line by corridor (the attacker massed by pressure squared) and terrain (the start line's barrier strength per segment)
+- [x] Lanchester attrition per game minute with terrain, posture and supply (`sim/ground/war.ts`)
+- [x] Air support: CAS reduces strength; interdiction cuts supply
+- [x] Supply over the road graph; cut bridges force detours; damaged depots and roads lower it
+- [x] Front segments move by local force balance, slowed by barriers
+- [x] Offensives along the invasion corridors by cast posture, culminating at half strength
+- [x] CAS and interdiction needs from the ground state (the ATO plans at the moved front with the fighting's pressure)
+- [x] The moving front on the strategic map; brigade and regiment symbols (NATO style) at the Region band
+- [x] Comparison tool: one side's air support suppressed; report the front's difference (`tools/airSupport.preview.ts`)
+- [x] Benchmark: battalions plus weather plus air war in the worker at 64× and 256× (decision 251)
+- [ ] Owner: the moving front and the unit symbols on the map (`npm run dev`, seed 4, Region band over the front, run at 64× for a few hours)
+- [ ] Part II's check of the unit symbols (preview views with `SCENE=strategic`; needs the ground picture in `tools/render.preview.ts`)
+- [ ] Reserves and their commitment, motorized infantry, echelon marks on the symbols (R3.6)
+- [ ] Seed 10's response to suppressed air support is not monotonic (both suppressed runs stall the Pact's advance): look at how the air war's allocation shifts when a category is removed
 
 ### R2.4 Follow
 

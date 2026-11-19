@@ -32,6 +32,7 @@ Guidance for Claude Code sessions in this repository. **`docs/roadmap.md` is the
 | World diversity metrics  | `npx vitest run --config vitest.tools.config.ts tools/diversity.preview.ts` (env: `SEEDS` or `FROM`/`COUNT`, `GLOBAL=1` for eroded worlds, `GLOBAL_SEEDS`, `GRES`, `OUT`) → `tools/out/diversity.md`: proposal 0007's criteria over 20 seeds (decision 204) |
 | Airfield siting          | `npx vitest run --config vitest.tools.config.ts tools/airbaseWater.preview.ts --disable-console-intercept` (env: `SEEDS`, `GRES`, `ALL=1`): each airbase's pad on the eroded world before and after siting (decision 220) |
 | Headless day of war      | `npx vitest run --config vitest.tools.config.ts tools/war.preview.ts --disable-console-intercept` (env: `SEEDS`, `HOURS`, `RATE`, `OUT`) → `tools/out/war.md`: the campaign on the demo seeds, stepped at 64× and in one jump, with the worker's cost (decision 236), missions by type and side, and each side's orders, revisions, cancellations and unfilled requests by reason (decision 249) |
+| Air support comparison   | `npx vitest run --config vitest.tools.config.ts tools/airSupport.preview.ts --disable-console-intercept` (env: `SEEDS`, `HOURS`, `OUT`) → `tools/out/air-support.md`: the front after a day with full air war and with each side's strikes and ground support suppressed (decision 251) |
 | Ground map               | `npx vitest run --config vitest.tools.config.ts tools/groundMap.preview.ts` (env: `SEED`, `LAT`/`LON`, `KM`, `ALT`, `RANGES`) → `tools/out/groundmap-<nm>.png` and `.json` (decision 226) |
 | Map CPU and GPU timings  | In the app: `?dev&cputime=1` logs the map's CPU per section and the app's frame every 5 s; `?dev&gputime=1` GPU time per view and pass (decisions 242, 245). Headless: `SCENE=strategic PERF=1 MOVE=1` in `tools/render.preview.ts` prints the map's CPU per section, still and panning |
 | Browser smoke test       | `npm run build && npm run preview`, then `node tools/browser.smoke.mjs` (env: `MODE`, `WORLD`, `ONLY`, `SCENES`, `OUT`) → `tools/out/browser/` (decision 144) |
@@ -96,8 +97,9 @@ src/sim/            headless simulation; runs in a worker: event queue + fixed t
                     consequences), resolvers.ts (the demo types' resolvers), outcome.ts, calibration.ts (combat values:
                     fitted or the prior; decision 250)
   naval/            carrier groups on their patrol tracks (analytic position); convoys, amphibious and surface groups in R4 (docs/roadmap.md)
-  ground/           road and rail graphs with bridge cuts (network.ts) and damage to targets (damage.ts; decision 237);
-                    battalions in R2.3
+  ground/           road and rail graphs with bridge cuts (network.ts), damage to targets, road edges and attacks on
+                    troops (damage.ts; decisions 237, 250), the ground order of battle (orbat.ts) and the ground war in
+                    aggregate (war.ts: Lanchester per minute, supply, the moving front; decision 251)
   avionics/         avionics state per aircraft (master mode and its triggers, master arm, acknowledged cautions; later
                     radar mode, locks, designations, stores) changed only by avionics commands, and avionics profiles
                     (decisions 189, 199), each type's from its bundle (decisions 224, 238)

@@ -6,6 +6,7 @@
  */
 import type { CampaignCalendar, OrbitParams } from '../core/calendar';
 import type { GameTime } from '../core/units';
+import type { GroundPicture } from '../sim/ground/war';
 import type { Mission } from '../sim/air/mission';
 import type { CampaignInput } from '../sim/command/campaignInput';
 import type { HostState } from '../sim/host';
@@ -55,6 +56,9 @@ export class SimClient {
   started = false;
   /** Live missions of both sides from the last update (decision 48: the view filters by side). */
   missions: Mission[] = [];
+  /** The ground war's front lines and units from the last update that carried them (R2.3). */
+  ground: GroundPicture | null = null;
+  onGround?: () => void;
   /** Called when the weather frames change. */
   onWeather: (() => void) | null = null;
   /** Called when the mission list changes. */
@@ -98,6 +102,7 @@ export class SimClient {
     this.seekTarget = null;
     this.weather.clear();
     this.missions = [];
+    this.ground = null;
     this.onMissions?.();
     this.snapshotTime = this.lastDisplay = 0;
     this.receivedAt = performance.now();
@@ -250,6 +255,10 @@ export class SimClient {
     if (msg.missions) {
       this.missions = msg.missions;
       this.onMissions?.();
+    }
+    if (msg.ground) {
+      this.ground = msg.ground;
+      this.onGround?.();
     }
   }
 }

@@ -35,6 +35,7 @@ let lastSentRate = NaN;
 let sentHours = new Set<number>();
 /** Air revision last sent (missions go out when it changes). */
 let sentAirRevision = -1;
+let sentGroundRevision = -1;
 let timer: ReturnType<typeof setTimeout> | null = null;
 
 function init(msg: InitMessage): void {
@@ -60,6 +61,7 @@ function init(msg: InitMessage): void {
   host.autoSlowdown = autoSlowdown;
   sentHours = new Set();
   sentAirRevision = -1;
+  sentGroundRevision = -1;
   lastSentTime = NaN;
   post([], false, true);
   lastReal = performance.now();
@@ -102,7 +104,16 @@ function post(
   const unchanged = time === lastSentTime && host.rate === lastSentRate;
   const air = world.air;
   const airChanged = air !== null && (force || air.revision !== sentAirRevision);
-  if (!force && weather.length === 0 && flagged.length === 0 && unchanged && !airChanged) return;
+  const groundMoved = world.ground !== null && world.ground.revision !== sentGroundRevision;
+  if (
+    !force &&
+    weather.length === 0 &&
+    flagged.length === 0 &&
+    unchanged &&
+    !airChanged &&
+    !groundMoved
+  )
+    return;
   sentHours = new Set(available);
   const header = new Float64Array(SNAPSHOT_FIELDS);
   const stats = world.sim.stats;
@@ -117,6 +128,10 @@ function post(
   header[SnapshotField.AirborneAlliance] = air?.airborneAt('alliance', time) ?? 0;
   header[SnapshotField.AirbornePact] = air?.airborneAt('pact', time) ?? 0;
   const missions = airChanged ? air.liveMissions() : undefined;
+  const groundWar = world.ground;
+  const groundChanged = groundWar !== null && (force || groundWar.revision !== sentGroundRevision);
+  const ground = groundChanged ? groundWar.picture() : undefined;
+  if (groundChanged) sentGroundRevision = groundWar.revision;
   if (airChanged) sentAirRevision = air.revision;
   lastSentTime = time;
   lastSentRate = host.rate;
@@ -130,6 +145,7 @@ function post(
       slowed,
       hash: force ? world.sim.hash() : undefined,
       missions,
+      ground,
     },
     [header.buffer, ...weather.map((f) => f.data.buffer)],
   );
@@ -154,6 +170,7 @@ ctx.onmessage = (e) => {
           // Backward seeks restore a checkpoint into a new world: send its frames again.
           if (msg.time < host.time) sentHours = new Set();
           sentAirRevision = -1;
+          sentGroundRevision = -1;
           host.seek(msg.time);
           post([], false, true);
         } catch (err) {
@@ -204,6 +221,7 @@ ctx.onmessage = (e) => {
           host.load(msg.state);
           sentHours = new Set();
           sentAirRevision = -1;
+          sentGroundRevision = -1;
           post([], false, true);
         } catch (err) {
           ctx.postMessage({ type: 'error', session, message: String(err) });

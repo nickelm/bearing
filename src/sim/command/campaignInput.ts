@@ -21,6 +21,8 @@ export interface FrontInput {
   theater: number;
   /** The start line, unit directions, xyz interleaved. */
   points: number[];
+  /** Barrier strength 0..1 at each point of the start line (terrain for the ground war, R2.3). */
+  strength: number[];
   /** Centroid of the land each side holds. */
   centroid: Record<Side, Dir>;
   attacker: Side;
@@ -74,6 +76,7 @@ export function campaignInput(
     fronts.push({
       theater: t.id,
       points: Array.from(line.points),
+      strength: Array.from(line.strength),
       centroid: { pact: [...pact], alliance: [...alliance] },
       attacker: t.attacker === 'mutual' ? 'pact' : t.attacker,
       corridors: graph.fronts[t.front]!.corridors.filter((c) => c.line === f.start).map((c) => ({
