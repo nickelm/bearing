@@ -565,6 +565,19 @@ export class InterimTasker implements TickProcess {
     return `${ALLIANCE_CALLSIGNS[r.int(ALLIANCE_CALLSIGNS.length)]} ${1 + r.int(9)}${1 + r.int(9)}`;
   }
 
+  /** When each target was last struck and each standing station is covered until (R1.2). */
+  save(): { struck: [string, number][]; covered: [string, number][] } {
+    return { struck: [...this.struck], covered: [...this.covered] };
+  }
+
+  load(state: unknown): void {
+    const s = state as ReturnType<InterimTasker['save']>;
+    this.struck.clear();
+    this.covered.clear();
+    for (const [k, v] of s.struck) this.struck.set(k, v);
+    for (const [k, v] of s.covered) this.covered.set(k, v);
+  }
+
   hash(h: StateHasher): void {
     for (const [k, v] of [...this.struck].sort()) h.string(k).number(v);
     for (const [k, v] of [...this.covered].sort()) h.string(k).number(v);

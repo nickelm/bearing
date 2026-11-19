@@ -81,6 +81,14 @@ export interface WeatherSystem {
   readonly drift: number;
 }
 
+/** The weather model's saved state (R1.2). */
+export interface WeatherModelState {
+  latestHour: number;
+  nextId: number;
+  latest: WeatherSystem[];
+  previous: WeatherSystem[] | null;
+}
+
 export interface WeatherConfig {
   seed: WorldSeed;
   radius: Meters;
@@ -309,6 +317,27 @@ export class WeatherModel implements TickProcess {
       v.add({ hour: h, data: this.frameData(h) });
     }
     return v;
+  }
+
+  /** The systems and counters (R1.2); the frame cache is rebuilt on demand. */
+  save(): WeatherModelState {
+    return {
+      latestHour: this.latestHour,
+      nextId: this.nextId,
+      latest: this.latest.map((x) => ({ ...x })),
+      previous: this.previous ? this.previous.map((x) => ({ ...x })) : null,
+    };
+  }
+
+  load(state: unknown): void {
+    const s = state as WeatherModelState;
+    this.latestHour = s.latestHour;
+    this.nextId = s.nextId;
+    this.latest = s.latest.map((x) => ({ ...x }));
+    this.previous = s.previous ? s.previous.map((x) => ({ ...x })) : null;
+    this.cache.clear();
+    this.partial = null;
+    this.viewState.clear();
   }
 
   hash(h: StateHasher): void {

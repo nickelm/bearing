@@ -6,7 +6,7 @@
  */
 import { rng } from '../core/rng';
 import { SimHost } from '../sim/host';
-import { createSimWorld, scheduleAlarm } from '../sim/world';
+import { applyInput, createSimWorld } from '../sim/world';
 import type { SimWorld } from '../sim/world';
 import type { FromSimWorker, InitMessage, ToSimWorker } from './protocol';
 import { PING_STREAM, SNAPSHOT_FIELDS, SnapshotField } from './protocol';
@@ -42,7 +42,7 @@ function init(msg: InitMessage): void {
     campaign: msg.campaign,
   };
   const autoSlowdown = host?.autoSlowdown ?? true;
-  host = new SimHost(() => createSimWorld(config));
+  host = new SimHost(() => createSimWorld(config), applyInput);
   host.autoSlowdown = autoSlowdown;
   sentHours = new Set();
   sentAirRevision = -1;
@@ -133,7 +133,7 @@ ctx.onmessage = (e) => {
     case 'seek':
       if (host) {
         try {
-          // Backward seeks rebuild the world: send its frames again.
+          // Backward seeks restore a checkpoint into a new world: send its frames again.
           if (msg.time < host.time) sentHours = new Set();
           sentAirRevision = -1;
           host.seek(msg.time);
@@ -144,10 +144,33 @@ ctx.onmessage = (e) => {
       }
       break;
     case 'alarm':
-      if (host) scheduleAlarm(host.world, msg.at, msg.label);
+      if (host) host.input({ kind: 'alarm', at: msg.at, label: msg.label });
       break;
     case 'autoSlowdown':
       if (host) host.autoSlowdown = msg.enabled;
+      break;
+    case 'saveState':
+      if (host) {
+        ctx.postMessage({
+          type: 'state',
+          session,
+          request: msg.request,
+          state: host.save(),
+          hash: host.world.sim.hash(),
+        });
+      }
+      break;
+    case 'loadState':
+      if (host) {
+        try {
+          host.load(msg.state);
+          sentHours = new Set();
+          sentAirRevision = -1;
+          post([], false, true);
+        } catch (err) {
+          ctx.postMessage({ type: 'error', session, message: String(err) });
+        }
+      }
       break;
   }
 };

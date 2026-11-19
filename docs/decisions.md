@@ -3885,3 +3885,31 @@ Two aids stay. While `frontTrace.sink` is set, `buildFronts` appends one line pe
 - **The fix.** With `lineSides`, 1,000 fresh processes on Node 24 agree (the old code's rate predicts about 45 divergences). `tests/militaryOverlays.test.ts` passed 100 of 100 runs on Node 24 both before and after, so whether its CI failures share this cause is open; the CI job runs it too.
 
 **Reason:** the fault is in V8, so the fix avoids the code shape that triggers it. A small closure created per call, holding a hot loop, is what on-stack replacement got wrong. A plain function with explicit arguments gives the same sums without depending on the engine. Other closures with hot loops may hide the same fault, which is why the trace and the CI job stay: the trace names the first step that differs, and fresh processes are what expose this kind of fault. The job can go once CI has been clean for a few weeks.
+
+### 235. Campaign state that can be saved: one structured-cloneable state, checkpoints and an input timeline
+
+**Date:** 2026-11-19
+**Decision:** R1.2. Every part of the campaign simulation saves and restores its state, and seeking uses saved states instead of rebuilding the world.
+
+- **State inventory.** What changes as the campaign runs, and where it is saved:
+
+  | Owner | Saved state | Rebuilt from the configuration |
+  | --- | --- | --- |
+  | `Simulation` | clock, events and ticks run, live queue entries with their sequence numbers (ticks name their process) | handlers, processes |
+  | `EventLog` (`sim.log`, new) | every input and decision | — |
+  | `WeatherModel` | systems of the latest hour and the hour before, the hour, the next system id | noise, grid, frame cache, view |
+  | `AirOps` | squadron strength and availability, base stocks, live missions in launch order, launched and completed counts, aircraft in turnaround, next mission and package ids, revision | order of battle's structure, carrier tracks (analytic) |
+  | `InterimTasker` | when each target was last struck, how long each standing station is covered | front stations |
+  | `SimHost` | input timeline, checkpoints | rate and auto-slowdown are player settings, not campaign state |
+
+  The flight, avionics and sensor state of Free Flight is not in the campaign yet; R1.5 moves it into the sim.
+- **RNG.** Every draw in the campaign sim already comes from a fork keyed by its path (`ato/<side>/hour-<k>`, `weather/h<k>`, the order of battle's forks), and a fork depends only on the seed and the path. No generator state needs saving, so none is exported.
+- **Saving.** `Stateful` (`save`, `load`) is implemented by the weather model, the tasker and `AirOps` (registered with `sim.addState('air', …)`); processes with both methods register themselves. `Simulation.save()` returns a `SimState`: format, clock, counters, queue and each part's state by name, copied with `structuredClone`. `Simulation.load()` puts it into a world built from the same configuration and refuses a state with another format, an unknown process or a missing part. `EventQueue.save`/`load` keep sequence numbers, so ties still break in scheduling order.
+- **Event log.** `src/sim/eventLog.ts` types the log: player inputs (`alarm` for now) and campaign decisions (`mission-launched`, logged by `AirOps.launch`). Inputs are replayed, decisions only recorded, so a replay that logs another decision has diverged and the log shows where. The log is in the saved state and the state hash.
+- **Host.** `SimHost` takes an input handler (`applyInput` in `world.ts`) and records every player input on a timeline. It saves a checkpoint at campaign start and at each multiple of six game hours, keeping at most 64 and thinning every second one past that. A backward seek restores the latest checkpoint at or before the target and replays the timeline's inputs; this fixes the alarms that the rebuild from campaign start used to drop. A seek moves along one timeline and does not branch it: inputs after the target apply again when the clock passes them, and an input made after a backward seek joins the timeline in time order and drops the checkpoints after it. `SimHost.save()`/`load()` hold a whole campaign (the state, the timeline and how much of it is applied); a loaded campaign seeks no further back than its saved time.
+- **Flagged stops.** `advanceTo(…, stopOnFlag)` now finishes every entry at the flagged event's time before returning, so a stopped simulation is in a state that `advanceTo(time)` also reaches, and an input made there replays exactly.
+- **Worker.** `saveState` asks for the host's state and is answered by a `state` message with the hash (`SimClient.saveState()` returns a promise); `loadState` replaces the campaign and is followed by a snapshot with a hash. Alarms go through `host.input`.
+
+**How it was checked.** `tests/simState.test.ts`: 6 h, save, restore, 6 h more gives the 12 h hash on a generated world with the air war, in steps of 1 s, 16 s (64× at the worker's longest step) and 10 min; a saved state is independent of its simulation and loads twice alike; a mismatched state is refused; a restored run logs the same launches; an alarm survives a backward seek before it goes off and is set again by a seek to before it was made, and a seek back and forth reaches the straight run's hash; auto-slowdown stops at the alarm in the straight run's state; checkpoints are taken and thinned, and a seek to the middle of 17 days reaches the straight state; a saved host loads and runs on alike.
+
+**Reason:** rule 19 asks that nothing outside the log changes campaign state and that replaying the log from a snapshot reproduces it. The sim already kept events as data and drew randomness from keyed forks, so saving needs only each part's mutable data. Checkpoints keep a backward seek short at any campaign length (six game hours of replay at most, about a second of worker time today).

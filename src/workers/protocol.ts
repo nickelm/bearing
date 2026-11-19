@@ -7,6 +7,7 @@
 import type { CampaignCalendar, OrbitParams } from '../core/calendar';
 import type { GameTime } from '../core/units';
 import type { Mission } from '../sim/air/mission';
+import type { HostState } from '../sim/host';
 import type { CampaignInput } from '../sim/command/campaignInput';
 import type { WeatherClimate } from '../sim/weather/climate';
 
@@ -36,7 +37,7 @@ export interface SetRateMessage {
   rate: number;
 }
 
-/** Jumps to a game time; backward replays from campaign start. */
+/** Jumps to a game time; backward restores the latest checkpoint before it and replays (R1.2). */
 export interface SeekMessage {
   type: 'seek';
   time: GameTime;
@@ -53,8 +54,28 @@ export interface AutoSlowdownMessage {
   enabled: boolean;
 }
 
+/** Asks for the whole campaign state (R1.2); answered by a StateMessage. */
+export interface SaveStateMessage {
+  type: 'saveState';
+  /** Echoed in the answer. */
+  request: number;
+}
+
+/** Replaces the campaign with a saved state (same init configuration); a snapshot with a hash follows. */
+export interface LoadStateMessage {
+  type: 'loadState';
+  state: HostState;
+}
+
 export type ToSimWorker =
-  PingMessage | InitMessage | SetRateMessage | SeekMessage | AlarmMessage | AutoSlowdownMessage;
+  | PingMessage
+  | InitMessage
+  | SetRateMessage
+  | SeekMessage
+  | AlarmMessage
+  | AutoSlowdownMessage
+  | SaveStateMessage
+  | LoadStateMessage;
 
 export interface PongMessage {
   type: 'pong';
@@ -109,6 +130,15 @@ export interface SimErrorMessage {
   message: string;
 }
 
-export type FromSimWorker = PongMessage | SnapshotMessage | SimErrorMessage;
+/** The campaign state a SaveStateMessage asked for, with its determinism hash. */
+export interface StateMessage {
+  type: 'state';
+  session: number;
+  request: number;
+  state: HostState;
+  hash: string;
+}
+
+export type FromSimWorker = PongMessage | SnapshotMessage | SimErrorMessage | StateMessage;
 
 export const PING_STREAM = 'worker-ping';

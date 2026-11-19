@@ -26,11 +26,25 @@ import type { CarrierTrack } from '../naval/carrierGroup';
 import { aircraftType } from './aircraft';
 import type { BaseRef, Mission, MissionPhase } from './mission';
 import { buildOrderOfBattle, baseIndex } from './orbat';
-import type { AirBaseRecord, OrderOfBattle, Squadron } from './orbat';
+import type { AirBaseRecord, BaseStocks, OrderOfBattle, Squadron } from './orbat';
 import { routeState } from './route';
 
 export const AIR_PHASE_EVENT = 'air:phase';
 export const AIR_READY_EVENT = 'air:ready';
+
+/** AirOps' saved state (R1.2). */
+export interface AirOpsState {
+  /** Per squadron: aircraft on strength, aircraft available. */
+  squadrons: [number, number][];
+  stocks: BaseStocks[];
+  missions: Mission[];
+  launched: Record<Side, number>;
+  completed: Record<Side, number>;
+  turnaround: number[];
+  nextMission: number;
+  nextPackage: number;
+  revision: number;
+}
 
 interface PhaseEvent {
   mission: number;
@@ -79,10 +93,54 @@ export class AirOps {
     this.turnaround = this.orbat.squadrons.map(() => 0);
   }
 
-  /** Registers the event handlers with the simulation. */
+  /** Registers the event handlers and the saved state with the simulation. */
   register(sim: Simulation): void {
     sim.on(AIR_PHASE_EVENT, (e, s) => this.onPhase(e.data as PhaseEvent, s));
     sim.on(AIR_READY_EVENT, (e) => this.onReady(e.data as ReadyEvent));
+    sim.addState('air', this);
+  }
+
+  /**
+   * What changes as the war runs (R1.2): squadron strengths, base stocks, live
+   * missions in launch order, the counters. The order of battle's structure and
+   * the carrier tracks come from the campaign input and the seed.
+   */
+  save(): AirOpsState {
+    return {
+      squadrons: this.orbat.squadrons.map((s) => [s.aircraft, s.available]),
+      stocks: this.orbat.bases.map((b) => ({ ...b.stocks })),
+      missions: [...this.missions.values()],
+      launched: { ...this.launched },
+      completed: { ...this.completed },
+      turnaround: [...this.turnaround],
+      nextMission: this.nextMission,
+      nextPackage: this.nextPackage,
+      revision: this.revision,
+    };
+  }
+
+  load(state: unknown): void {
+    const s = state as AirOpsState;
+    if (
+      s.squadrons.length !== this.orbat.squadrons.length ||
+      s.stocks.length !== this.orbat.bases.length
+    ) {
+      throw new Error('Saved air state does not match this order of battle');
+    }
+    s.squadrons.forEach(([aircraft, available], i) => {
+      const sq = this.orbat.squadrons[i]!;
+      sq.aircraft = aircraft;
+      sq.available = available;
+    });
+    s.stocks.forEach((st, i) => Object.assign(this.orbat.bases[i]!.stocks, st));
+    this.missions.clear();
+    for (const m of s.missions) this.missions.set(m.id, m);
+    Object.assign(this.launched, s.launched);
+    Object.assign(this.completed, s.completed);
+    this.turnaround.splice(0, this.turnaround.length, ...s.turnaround);
+    this.nextMission = s.nextMission;
+    this.nextPackage = s.nextPackage;
+    this.revision = s.revision;
   }
 
   get squadrons(): readonly Squadron[] {
@@ -134,6 +192,14 @@ export class AirOps {
     base.stocks.munitions -= d.munitions;
     this.missions.set(m.id, m);
     this.launched[m.side]++;
+    sim.log.decision(sim.time, {
+      kind: 'mission-launched',
+      mission: m.id,
+      side: m.side,
+      type: m.type,
+      squadron: m.squadron,
+      aircraft: m.aircraft,
+    });
     this.revision++;
     for (const e of m.timeline) {
       sim.schedule(Math.max(e.time, sim.time), AIR_PHASE_EVENT, { mission: m.id, phase: e.phase });

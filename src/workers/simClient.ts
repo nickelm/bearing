@@ -8,6 +8,7 @@ import type { CampaignCalendar, OrbitParams } from '../core/calendar';
 import type { GameTime } from '../core/units';
 import type { Mission } from '../sim/air/mission';
 import type { CampaignInput } from '../sim/command/campaignInput';
+import type { HostState } from '../sim/host';
 import { climateBuffers } from '../sim/weather/climate';
 import type { WeatherClimate } from '../sim/weather/climate';
 import { WeatherView } from '../sim/weather/frame';
@@ -36,6 +37,11 @@ export class SimClient {
   private expectedPong = -1;
   /** The time of a seek the worker has not answered yet. */
   private seekTarget: GameTime | null = null;
+  private nextRequest = 0;
+  private readonly pendingStates = new Map<
+    number,
+    (r: { state: HostState; hash: string }) => void
+  >();
   /** Weather frames bracketing the sim clock. */
   readonly weather = new WeatherView(new WeatherGrid());
   /** Game seconds per real second, as last reported by the worker. */
@@ -123,6 +129,20 @@ export class SimClient {
     this.send({ type: 'autoSlowdown', enabled });
   }
 
+  /** The whole campaign state and its hash (R1.2), as the worker holds it now. */
+  saveState(): Promise<{ state: HostState; hash: string }> {
+    const request = this.nextRequest++;
+    return new Promise((resolve) => {
+      this.pendingStates.set(request, resolve);
+      this.send({ type: 'saveState', request });
+    });
+  }
+
+  /** Replaces the campaign with a saved state; the next snapshot carries its hash. */
+  loadState(state: HostState): void {
+    this.send({ type: 'loadState', state });
+  }
+
   /** Game time to display at real time `nowMs`: the sim clock, extrapolated smoothly. */
   displayTime(nowMs: number): GameTime {
     const ahead = Math.min((nowMs - this.receivedAt) / 1000, MAX_EXTRAPOLATION) * this.rate;
@@ -146,6 +166,12 @@ export class SimClient {
       case 'snapshot':
         if (msg.session === this.session) this.snapshot(msg);
         break;
+      case 'state': {
+        const done = this.pendingStates.get(msg.request);
+        this.pendingStates.delete(msg.request);
+        if (msg.session === this.session) done?.({ state: msg.state, hash: msg.hash });
+        break;
+      }
       case 'error':
         if (msg.session === this.session) {
           this.onStatus?.('error (see console)');

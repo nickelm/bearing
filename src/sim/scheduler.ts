@@ -81,6 +81,26 @@ export class EventQueue<T> {
       .sort((a, b) => (before(a, b) ? -1 : before(b, a) ? 1 : 0));
   }
 
+  /** The live entries and the next sequence number, for saving (R1.2). Entries are shared, not copied. */
+  save(): { nextSeq: number; entries: QueueEntry<T>[] } {
+    return { nextSeq: this.nextSeq, entries: this.entries() };
+  }
+
+  /**
+   * Replaces the queue's contents with saved entries, keeping their sequence
+   * numbers, so ties pop in the order they would have.
+   */
+  load(saved: { nextSeq: number; entries: readonly QueueEntry<T>[] }): void {
+    // Entries in pop order already form a valid binary heap.
+    this.heap = [...saved.entries].sort((a, b) => (before(a, b) ? -1 : before(b, a) ? 1 : 0));
+    this.cancelled.clear();
+    this.nextSeq = saved.nextSeq;
+    for (const e of this.heap) {
+      if (e.seq >= this.nextSeq)
+        throw new RangeError(`Entry ${e.seq} is past next sequence ${this.nextSeq}`);
+    }
+  }
+
   private dropCancelled(): void {
     while (this.heap.length > 0 && this.cancelled.has(this.heap[0]!.seq)) {
       this.cancelled.delete(this.heap[0]!.seq);

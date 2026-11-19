@@ -29,15 +29,15 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 
 ### R1.2 Campaign state that can be saved
 
-- [ ] Inventory every piece of sim state (queue, clock, `AirOps`, tasker maps, weather systems and caches, carrier groups) with its owner and type
-- [ ] RNG: export and restore the xoshiro state, or move every draw to a fork keyed by game time; test
-- [ ] `save()`/`load()` for the event queue and clock (events are data already)
-- [ ] `save()`/`load()` for `AirOps` and the interim tasker
-- [ ] `save()`/`load()` for the weather model (systems, not the frame cache)
-- [ ] Snapshot message in the worker protocol; a state hash for comparisons
-- [ ] Round-trip test: run 6 h, snapshot, restore, run 6 h more, compare with 12 h uninterrupted, at 1× and 64×
-- [ ] Event log skeleton: typed, timestamped events for player inputs to the campaign and campaign-level decisions; stored with the snapshot
-- [ ] `SimHost.seek` through snapshot plus log; test that scheduled alarms survive a backward seek
+- [x] Inventory every piece of sim state (queue, clock, `AirOps`, tasker maps, weather systems and caches, carrier groups) with its owner and type (decision 235's table)
+- [x] RNG: export and restore the xoshiro state, or move every draw to a fork keyed by game time; test (every draw was already a keyed fork; the round-trip test covers it)
+- [x] `save()`/`load()` for the event queue and clock (events are data already)
+- [x] `save()`/`load()` for `AirOps` and the interim tasker
+- [x] `save()`/`load()` for the weather model (systems, not the frame cache)
+- [x] Snapshot message in the worker protocol; a state hash for comparisons (`saveState`/`state`/`loadState`)
+- [x] Round-trip test: run 6 h, snapshot, restore, run 6 h more, compare with 12 h uninterrupted, at 1× and 64×
+- [x] Event log skeleton: typed, timestamped events for player inputs to the campaign and campaign-level decisions; stored with the snapshot (`src/sim/eventLog.ts`)
+- [x] `SimHost.seek` through snapshot plus log; test that scheduled alarms survive a backward seek (checkpoints every 6 game hours)
 
 ### R1.3 A headless day of war
 

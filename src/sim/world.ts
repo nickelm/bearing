@@ -6,6 +6,7 @@
  * (C3) register here too.
  */
 import type { GameTime } from '../core/units';
+import type { CampaignInputEvent } from './eventLog';
 import { AirOps } from './air/airOps';
 import type { CampaignInput } from './command/campaignInput';
 import { InterimTasker } from './command/tasker';
@@ -44,4 +45,13 @@ export function createSimWorld(config: SimConfig): SimWorld {
 /** Schedules a player alarm (flagged, so it triggers auto-slowdown). */
 export function scheduleAlarm(world: SimWorld, at: GameTime, label: string): number {
   return world.sim.schedule(Math.max(at, world.sim.time), ALARM_EVENT, null, { flag: label });
+}
+
+/** Carries out a player input to the campaign (SimHost's input handler, R1.2). */
+export function applyInput(world: SimWorld, input: CampaignInputEvent): void {
+  switch (input.kind) {
+    case 'alarm':
+      scheduleAlarm(world, input.at, input.label);
+      break;
+  }
 }
