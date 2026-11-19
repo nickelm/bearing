@@ -70,11 +70,25 @@ export const MISSION_LABELS: Record<MissionType, string> = {
   'anti-shipping': 'Anti-shipping',
   'strategic-bombing': 'Strategic bombing',
   recon: 'Reconnaissance',
-  support: 'Support',
+  // Filters list the type; rows name AEW and tankers (missionLabel).
+  support: 'Support (AEW, tanker)',
   airlift: 'Airlift resupply',
   airdrop: 'Combat airdrop',
   'sling-load': 'Sling-load resupply',
 };
+
+/**
+ * A mission's name for people: its type's label, except that a support mission is
+ * named by what its aircraft does (an AEW orbit or a tanker track); "Support" alone
+ * read like close air support in mission search (decision 248).
+ */
+export function missionLabel(type: MissionType, role: AircraftRole): string {
+  if (type === 'support') {
+    if (role === 'aew') return 'Airborne early warning';
+    if (role === 'tanker') return 'Tanker';
+  }
+  return MISSION_LABELS[type];
+}
 
 /**
  * How a mission type flies.

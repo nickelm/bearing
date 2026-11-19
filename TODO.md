@@ -61,7 +61,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] Focus the strategic camera on a selected mission and draw its route
 - [x] Subscriptions: a saved query plus a phase; phase events flagged for auto-slowdown; an offer to follow at 1× (the offer shows the mission; following is R2.4)
 - [x] Tests: filter logic on display models; a subscription drops 64× to 1× at its phase
-- [ ] Owner: find the next CAS mission over the front; subscribe to strikes on own airbases
+- [x] Owner: find the next CAS mission over the front (Pontiac 35 on seed 4, decision 248); subscribing to strikes on own airbases needs the intelligence picture (below)
 - [ ] Subscriptions to the enemy's missions ("strikes on our airbases"): a target-side and target-kind query on what the side knows; needs the intelligence picture (R3), since the side cannot see enemy missions yet (decision 241)
 
 ### R1.5 The flown aircraft leaves Free Flight

@@ -17,7 +17,7 @@ import type { GameTime } from '../../core/units';
 import { aircraftType } from '../../sim/air/aircraft';
 import {
   jumpInWindow,
-  MISSION_LABELS,
+  missionLabel,
   MISSION_PHASES,
   missionPhase,
   phaseTime,
@@ -157,7 +157,7 @@ export function missionRows(
       key: `mission:${m.id}`,
       callsign: m.callsign,
       type: m.type,
-      typeLabel: MISSION_LABELS[m.type],
+      typeLabel: missionLabel(m.type, aircraftType(m.aircraftType).role),
       aircraft: `${aircraftType(m.aircraftType).name} × ${m.aircraft}`,
       unit: m.unit,
       theater: theaterNames[m.theater] ?? 'strategic',

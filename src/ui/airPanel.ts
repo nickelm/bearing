@@ -9,7 +9,7 @@ import { SIDE_LABELS } from '../campaign/cast';
 import { KNOT, MINUTE } from '../core/units';
 import type { GameTime } from '../core/units';
 import { aircraftType } from '../sim/air/aircraft';
-import { MISSION_LABELS, MISSION_PHASES, missionPhase } from '../sim/air/mission';
+import { MISSION_PHASES, missionLabel, missionPhase } from '../sim/air/mission';
 import type { Mission, MissionPhase } from '../sim/air/mission';
 import { routeState } from '../sim/air/route';
 import { carrierState, carrierTrack } from '../sim/naval/carrierGroup';
@@ -123,7 +123,7 @@ export class AirPanel {
     const step = MISSION_PHASES.indexOf(phase as MissionPhase) + 1;
     return [
       `${m.callsign}: ${m.aircraft} × ${type.name}`,
-      `${MISSION_LABELS[m.type]} for the ${SIDE_LABELS[m.side]}. ${m.need}.`,
+      `${missionLabel(m.type, aircraftType(m.aircraftType).role)} for the ${SIDE_LABELS[m.side]}. ${m.need}.`,
       `Phase: ${PHASE_LABELS[phase]}${step > 0 ? ` (${step} of ${MISSION_PHASES.length - 1})` : ''}${flying}. ${timing}.`,
       `${m.unit}, from ${this.baseName(m)}. Target: ${m.target.name}.`,
       `Priority ${m.score.toFixed(2)}, package ${m.package}.`,

@@ -4085,4 +4085,7 @@ The sim worker's chunk grows from 58 kB to 104 kB, since the six bundles with ge
 - **The war tool counts missions by type** (`tools/war.preview.ts`, every mission seen live, both sides). Six hours: seed 4 flew 13 CAS missions, seed 10 15, seed 7 8, seed 1983 none.
 - **Mission search.** The dropdown lists were white text on the browser's white list: the panel now declares `color-scheme: dark` and colors its options. The high-threat mark (▲) was a third flex item in the row's head, which centered the title; the title is now its own span and carries the mark.
 
+- **Support missions are named by their aircraft** in mission search and the flight panel (`missionLabel`): "Airborne early warning" or "Tanker". "Support" alone read as close air support. The type filter lists it as "Support (AEW, tanker)".
+- **R1 closes.** On seed 4 the owner found the next CAS mission over the front (Pontiac 35, A-15 Buzzards, Lynvania front), R1.4's exit criterion; every R1 milestone is done.
+
 **Reason:** the owner's R1.4 check on the default world.

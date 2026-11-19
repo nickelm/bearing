@@ -14,7 +14,7 @@ _Adopted 2026-11-18 with Proposal 0008 (`docs/proposals/0008-game-loop-and-campa
 | Phase                   | Goal                                                                         | Milestones | State             |
 | ----------------------- | ---------------------------------------------------------------------------- | ---------- | ----------------- |
 | R0. Audit and reconcile | Know what exists; documents match the code                                   | —          | done (this audit) |
-| R1. Consolidation       | What the demo needs from earlier tracks, and nothing more                    | R1.1–R1.8  | done but R1.4's check |
+| R1. Consolidation       | What the demo needs from earlier tracks, and nothing more                    | R1.1–R1.8  | done              |
 | R2. One day of war      | The thin, complete loop: the tech demo                                       | R2.1–R2.12 |                   |
 | R3. Combat depth        | Sensors, weapons, air combat, air defense, ground entities                   | R3.1–R3.6  |                   |
 | R4. Breadth             | Roster, mission catalog, helicopters, transport, crews, naval war            | R4.1–R4.7  |                   |
@@ -80,7 +80,7 @@ _Needed by R2.4 (follow) and R2.5 (take over)._
 
 **Exit:** the owner finds the next CAS mission over the front in under ten seconds, and a subscription drops 64× to 1× when its mission reaches the chosen phase.
 
-**State (2026-11-19):** built (decision 241); the subscription criterion holds in a test. Open: the owner's ten-second check, the last item of R1.
+**State (2026-11-19):** done (decisions 241, 248). The subscription criterion holds in a test; the owner found the next CAS mission over the front (Pontiac 35, seed 4) once the campaign opened on a demo seed.
 
 ### R1.5 The Flown Aircraft Leaves Free Flight — large
 
