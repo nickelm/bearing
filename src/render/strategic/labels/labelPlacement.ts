@@ -116,7 +116,25 @@ export interface TextRun {
 }
 
 /** Sets text in a style: pen positions (px) from the start, kerning and tracking applied. */
+/**
+ * Runs without extra spacing, per atlas and style: shaping a name does not depend
+ * on the view, and labels were shaped again every frame (R1.1: 11–15 ms a frame at
+ * the theater band). Spread area labels vary with the view and are not kept.
+ */
+const runCache = new WeakMap<FontAtlas, Map<LabelStyle, Map<string, TextRun>>>();
+
 export function layoutText(atlas: FontAtlas, style: LabelStyle, text: string, extra = 0): TextRun {
+  if (extra !== 0) return shapeText(atlas, style, text, extra);
+  let byStyle = runCache.get(atlas);
+  if (!byStyle) runCache.set(atlas, (byStyle = new Map()));
+  let runs = byStyle.get(style);
+  if (!runs) byStyle.set(style, (runs = new Map()));
+  let run = runs.get(text);
+  if (!run) runs.set(text, (run = shapeText(atlas, style, text, 0)));
+  return run;
+}
+
+function shapeText(atlas: FontAtlas, style: LabelStyle, text: string, extra: number): TextRun {
   const font = atlas.fonts[style.font];
   const s = style.uppercase ? text.toUpperCase() : text;
   const chars: TextRun['chars'] = [];

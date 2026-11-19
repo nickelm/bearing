@@ -46,6 +46,7 @@ import {
   vec4,
 } from 'three/tsl';
 import { srgbToLinear } from '../../common/palette';
+import { ZOOM_BANDS } from '../zoomBands';
 import type { ZoomBand } from '../zoomBands';
 import { EM_PX, SPREAD } from './fontAtlas';
 import type { FontAtlas } from './fontAtlas';
@@ -111,6 +112,12 @@ export class LabelLayer {
   private attrs: InstancedBufferAttribute[] = [];
   private readonly atlasNode = texture(new DataTexture(new Uint8Array(1), 1, 1, RedFormat));
   private dirty = true;
+  /** The view of the last redraw (R1.1): unchanged and still, the buffers stand. */
+  private lastWidth = 0;
+  private lastHeight = 0;
+  private lastFades = '';
+  /** Whether a label was fading in or out at the last redraw. */
+  private fading = false;
   private band: ZoomBand | null = null;
   /** Overlay layers whose labels are hidden (MapLabel.layer); change through `setHidden`. */
   private hidden = new Set<string>();
@@ -195,6 +202,7 @@ export class LabelLayer {
     this.texture = t;
     this.atlasNode.value = t;
     this.dirty = true;
+    this.lastFades = '';
   }
 
   setLabels(labels: MapLabel[] | null): void {
@@ -202,6 +210,8 @@ export class LabelLayer {
     this.placements.clear();
     this.live.clear();
     this.dirty = true;
+    // What is drawn no longer matches: redraw on the next update.
+    this.lastFades = '';
   }
 
   /** Hides the labels of these overlay layers (decision 101); they fade out on the next pass. */
@@ -210,11 +220,13 @@ export class LabelLayer {
     if (next.size === this.hidden.size && [...next].every((l) => this.hidden.has(l))) return;
     this.hidden = next;
     this.dirty = true;
+    this.lastFades = '';
   }
 
   /** Forces a collision pass on the next update. */
   invalidate(): void {
     this.dirty = true;
+    this.lastFades = '';
   }
 
   /**
@@ -227,6 +239,8 @@ export class LabelLayer {
     bandFade: (b: ZoomBand) => number,
     dt: number,
     settled: boolean,
+    /** The camera has not moved since the last call: the labels' screen places stand. */
+    still = false,
   ): void {
     this.viewport.value.set(view.width, view.height);
     const atlas = this.atlas;
@@ -258,8 +272,21 @@ export class LabelLayer {
         } else this.live.set(id, { candidate: p.candidate, opacity: 0, target: 1 });
       }
     }
+    // Nothing to redraw (R1.1): the same view and band fades, no placement, no label
+    // fading. The instance buffers from the last frame stand as they are.
+    const fades = ZOOM_BANDS.map(bandFade).join(',');
+    const sameView =
+      still &&
+      view.width === this.lastWidth &&
+      view.height === this.lastHeight &&
+      fades === this.lastFades;
+    this.lastWidth = view.width;
+    this.lastHeight = view.height;
+    this.lastFades = fades;
+    if (!fresh && sameView && !this.fading) return;
     const step = dt > 0 ? dt / LABEL_FADE_TIME : Infinity;
     let n = 0;
+    let fading = false;
     for (const [id, e] of this.live) {
       e.opacity =
         e.target > e.opacity
@@ -269,6 +296,7 @@ export class LabelLayer {
         this.live.delete(id);
         continue;
       }
+      if (e.opacity !== e.target) fading = true;
       const label = this.labels[id]!;
       const fade =
         Math.max(...label.bands.map(bandFade)) * e.opacity * e.opacity * (3 - 2 * e.opacity);
@@ -277,6 +305,7 @@ export class LabelLayer {
       if (!quads) continue;
       n = this.write(n, quads, label, fade, atlas);
     }
+    this.fading = fading;
     this.geometry.instanceCount = n;
     for (const a of this.attrs) {
       a.needsUpdate = true;

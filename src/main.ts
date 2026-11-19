@@ -104,6 +104,7 @@ import { BuildStamp } from './ui/buildStamp';
 import { CampaignPanel } from './ui/campaignPanel';
 import { AirPanel } from './ui/airPanel';
 import { GpuTiming } from './render/common/gpuTiming';
+import { SectionTimer } from './render/common/sectionTimer';
 import { MissionSearchPanel } from './ui/missionSearch/panel';
 import { SidePanel } from './ui/sidePanel';
 import { routeState } from './sim/air/route';
@@ -193,6 +194,13 @@ async function main(): Promise<void> {
   container.appendChild(renderer.domElement);
   await renderer.init();
   const gpuTiming = timeGpu ? new GpuTiming(renderer) : null;
+  // The map's CPU time per section (R1.1), with ?dev&cputime=1.
+  const timeCpu = startQuery.has('dev') && startQuery.get('cputime') === '1';
+  let cpuReportAt = 0;
+  // The app's frame around the map's render, for the same log.
+  const appCpu = new SectionTimer();
+  appCpu.enabled = timeCpu;
+  let frameSum = 0;
   if (gpuTiming && !gpuTiming.supported)
     console.warn('GPU timing: the device has no timestamp queries');
   // Adaptive resolution (decision 69): the canvas backing store follows the frame time.
@@ -362,6 +370,7 @@ async function main(): Promise<void> {
     weather: globe.clouds,
   });
   strategicView.setFaceSeed(worldParams.seed);
+  strategicView.cpu.enabled = timeCpu;
   // Label fonts load in the background; the map draws names once the atlas exists (decision 98).
   void fetchLabelFonts()
     .then((fonts) => {
@@ -1452,6 +1461,8 @@ async function main(): Promise<void> {
     last = now;
     // Nothing is drawn or simulated behind the build screen (decision 186).
     if (buildScreen.active) return;
+    appCpu.begin();
+    frameSum += frameMs;
     overlay.record(frameMs, now);
     if (viewParams.renderScale === 'auto') {
       const scale = renderScale.record(frameMs, now);
@@ -1511,8 +1522,25 @@ async function main(): Promise<void> {
       (freeFlight ? freeFlight.temperatureShift : presetTemperatureShift);
     touchControls.visible =
       touchDevice && activeView === 'simulation' && globe.cameraMode === 'observer';
-    if (activeView === 'strategic') strategicView.render(dt);
-    else globe.render(dt);
+    appCpu.lap('app before');
+    if (activeView === 'strategic') {
+      strategicView.render(dt);
+      // CPU time per section of the map's frame and of the app's frame around it (R1.1),
+      // every five seconds, then afresh, so a section that grows over a session shows.
+      const cpu = strategicView.cpu;
+      if (cpu.enabled && cpu.frames >= 1 && now - cpuReportAt > 5000) {
+        cpuReportAt = now;
+        const interval = frameSum / Math.max(1, appCpu.frames);
+        console.info(
+          `Map CPU: ${cpu.describe()}\nApp CPU: ${appCpu.describe()}; ` +
+            `${interval.toFixed(1)} ms between frames`,
+        );
+        cpu.reset();
+        appCpu.reset();
+        frameSum = 0;
+      }
+    } else globe.render(dt);
+    appCpu.lap(activeView === 'strategic' ? 'map render' : 'view render');
     gpuTiming?.frame(freeFlight && activeView === 'simulation' ? 'freeflight' : activeView, now);
     if (freeFlight && activeView === 'simulation') freeFlight.drawHud(globe.camera);
     // Rain, wind and dust where the camera is; silence over the map.
@@ -1586,6 +1614,8 @@ async function main(): Promise<void> {
         : tilesOn
           ? tileText
           : 'off';
+    appCpu.lap('app after');
+    appCpu.end();
   });
 }
 

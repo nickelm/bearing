@@ -2431,11 +2431,26 @@ async function renderStrategic(
       // only ratios between views mean anything).
       const frames = 20;
       const p0 = performance.now();
+      scene.cpu.enabled = true;
+      scene.cpu.reset();
       for (let f = 0; f < frames; f++) {
         scene.render(0);
         await gpu.finish();
       }
       const ms = (performance.now() - p0) / frames;
+      // CPU time per section of the map's frame (R1.1); MOVE=1 also pans the camera a
+      // little every frame, as the player does, which keeps the labels from settling.
+      console.log(`  map CPU ${v.name}, still: ${scene.cpu.describe()}`);
+      if (process.env.MOVE === '1') {
+        scene.cpu.reset();
+        for (let f = 0; f < frames; f++) {
+          scene.orbit.move(scene.orbit.altitude * 0.004, 0);
+          scene.render(1 / 60);
+          await gpu.finish();
+        }
+        console.log(`  map CPU ${v.name}, panning: ${scene.cpu.describe()}`);
+      }
+      scene.cpu.enabled = false;
       const rgb = await head.readRgb();
       const base = join(outDir, `render-${o.seed}-strategic-${v.name}`);
       writeFileSync(`${base}.png`, encodePng(width, height, rgb));

@@ -11,6 +11,7 @@
  * There is no physical sky, aerial perspective or atmosphere here (Part II), only a
  * flat background. Everything is placed camera-relative (common/cameraRelative.ts).
  */
+import { SectionTimer } from '../common/sectionTimer';
 import type { ZoneRecord } from '../../worldgen/zones';
 import {
   AmbientLight,
@@ -115,6 +116,8 @@ export class StrategicScene {
   readonly air: MilitaryLayer<AirLayer>;
   /** What the air layer shows (decision 48: the side is a view). */
   readonly airView: AirViewOptions = { side: 'both', routes: false };
+  /** CPU time per section of `render` (R1.1): `?dev&cputime=1` in the app, `PERF` in the preview. */
+  readonly cpu = new SectionTimer();
   /** Urban fills and settlement glyphs (GUI toggle; decision 104). */
   showTowns = true;
   /** Settlement, base and industry lights on the night side (decision 88). */
@@ -548,6 +551,8 @@ export class StrategicScene {
 
   /** Advances camera easing and renders one frame. `dt` is real seconds since the last frame. */
   render(dt: number): void {
+    const cpu = this.cpu;
+    cpu.begin();
     if (this.pendingGrid) {
       if (this.pendingGrid.n !== this.globe.resolution) this.globe.setGrid(this.pendingGrid);
       this.grid = this.pendingGrid;
@@ -609,6 +614,7 @@ export class StrategicScene {
         this.labels.setLabels(null);
       }
     }
+    cpu.lap('world');
 
     const o = this.orbit;
     o.terrainMaxHeight = this.globe.maxDisplayedHeight;
@@ -662,6 +668,7 @@ export class StrategicScene {
     this.lights.strength.value = this.relief.nightStrength.value;
     this.relief.belowGlobe.value = this.bands.fade('theater') + this.bands.fade('region');
 
+    cpu.lap('camera');
     const tiles = this.useTiles && this.relief.hasWorld;
     this.globe.group.visible = !tiles;
     this.relief.group.visible = tiles;
@@ -678,6 +685,7 @@ export class StrategicScene {
         maxHeight: this.globe.maxDisplayedHeight,
       });
     }
+    cpu.lap('relief');
     this.overlay.update(o.eye, this.globe.maxDisplayedHeight + 2000);
     // Military overlays in CSS pixels, like the labels (decision 101).
     const cssPixelAngle = fovY / this.viewportHeight;
@@ -687,11 +695,16 @@ export class StrategicScene {
       theater: this.bands.fade('theater'),
       region: this.bands.fade('region'),
     };
+    cpu.lap('graph overlay');
     this.military.update(o.eye, cssPixelAngle, o.range * cssPixelAngle, fades);
+    cpu.lap('military');
     this.infraLines.update(o.eye, cssPixelAngle, o.range * cssPixelAngle, fades, o.up);
+    cpu.lap('infra lines');
     this.infraSites.update(o.eye, cssPixelAngle, o.range * cssPixelAngle, fades, o.up);
+    cpu.lap('infra sites');
     this.updateAir();
     this.air.update(o.eye, cssPixelAngle, o.range * cssPixelAngle, fades, o.up);
+    cpu.lap('air');
     this.relief.urbanOn.value = this.showTowns ? 1 : 0;
     for (const k of SETTLEMENT_GLYPHS) {
       if (this.showTowns) this.glyphs.hidden.delete(k);
@@ -702,6 +715,7 @@ export class StrategicScene {
       theater: this.bands.fade('theater'),
       region: this.bands.fade('region'),
     });
+    cpu.lap('glyphs');
     // Labels: the collision pass runs once the camera has been still for a moment.
     const moved =
       this.lastEye.distanceTo(o.eye) > 1e-4 * o.altitude ||
@@ -717,9 +731,12 @@ export class StrategicScene {
       (b) => this.bands.fade(b),
       dt,
       this.forceSettle || this.stillTime >= SETTLE_TIME,
+      !moved,
     );
+    cpu.lap('labels');
     // Weather moves with game time: re-bake the cloud field while the map is on screen.
     this.weather?.bake(this.renderer, performance.now());
+    cpu.lap('weather');
     // No tone curve on the map (Part II, decision 99): the simulation view's AgX would
     // lift the dark background and pale every Part II color. Restored for that view.
     const toneMapping = this.renderer.toneMapping;
@@ -729,8 +746,11 @@ export class StrategicScene {
     } finally {
       this.renderer.toneMapping = toneMapping;
     }
+    cpu.lap('render');
     if (this.showLabels && this.labels.hasFonts)
       drawOverlay(this.renderer, this.overlayScene, this.camera);
+    cpu.lap('label overlay');
+    cpu.end();
   }
 
   /**
