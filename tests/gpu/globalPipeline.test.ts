@@ -34,7 +34,9 @@ describe.skipIf(!gpu)('global pass (GPU + in-process CPU)', () => {
     for (const h of g.height) if (h > 0) land++;
     expect(Math.abs(land / g.height.length - world.info.landFraction)).toBeLessThan(0.05);
     g.grid.dispose();
-  });
+    // About 9 s alone on the owner's GPU; beside the other GPU files it passed 30 s in 3 of
+    // 10 parallel runs (2026-11-19).
+  }, 120_000);
 
   it('can be cancelled between steps', async () => {
     let calls = 0;

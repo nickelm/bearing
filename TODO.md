@@ -19,7 +19,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] Front generator determinism: run `tests/campaign.test.ts` and `tests/infrastructure.test.ts` 50 times under parallel load on Node 22 and 24; if a divergence recurs, quantize the band cut's axis coordinate (decision 86). Reproduced on Node 24 only (2 of 50 runs; 9 of 200 fresh processes): a V8 on-stack-replacement fault in `lineFromPath`'s side sums, worked around with `lineSides` (decision 234); quantizing would not have helped
 - [ ] Watch the CI `determinism` job for a few weeks after decision 234; remove it once clean
 - [x] GPU determinism flake (`detailStage`, `tileSynth`): run the GPU suite ten times with and without `--no-file-parallelism` on lavapipe and on the owner's GPU; record the rate. Lavapipe, 2026-11-19: 0 failures in 5 runs with file parallelism (85–140 s) and 5 without (144–153 s), 98 tests each
-- [ ] Owner: the same ten runs on the owner's GPU, where the flake was seen (about 1 run in 5–10). First run 2026-11-19: 96 of 98 pass, the seam test included; `faceShading` and `skyView` failed by rounding and now have bounds from what is visible (decision 244)
+- [x] Owner: the same ten runs on the owner's GPU, where the flake was seen (about 1 run in 5–10). First run 2026-11-19: 96 of 98 pass, the seam test included; `faceShading` and `skyView` failed by rounding and now have bounds from what is visible (decision 244). Twenty runs 2026-11-19 (10 parallel, 10 sequential): no determinism failure in `detailStage` or `tileSynth`; `faceShading` and `skyView` failed 20 of 20 on the old bounds and pass on the new; `globalPipeline` timed out at 30 s in 3 of the 10 parallel runs (now 120 s)
 - [x] Pin the demo seeds 4, 10 and 7: a test that each keeps a continental front and passes validity on the current `GENERATOR_VERSION` (`DEMO_SEEDS` in `src/campaign/demoSeeds.ts`, `tests/demoSeeds.test.ts`: valid, a continental front with fit ≥ 0.9, and a reminder to re-check on a version bump)
 - [ ] Strategic map frame rate (10–15 fps): profile labels, the zone list and glyph rebuilds; fix the hot path
 - [ ] Frame-rate decay over a session: check tile and mesh caches, undisposed geometries and textures, label rebuilds; a soak test that counts GPU objects after 20 view switches
@@ -280,6 +280,6 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 ## Known issues
 
 - [ ] `tests/militaryOverlays.test.ts` "shows the lanes and chokepoints in play" fails in CI now and then (5 of 174 runs, always 2 lanes for 3 theaters on seed 1); not reproduced in 100 local Node 24 runs before or after decision 234's fix; the CI `determinism` job runs it in fresh processes
-- [ ] Intermittent GPU determinism flake in `detailStage` and `tileSynth` (about 1 run in 5–10 on the owner's GPU; none in 10 runs on lavapipe, 2026-11-19); R1.1. History in the archived TODO
+- [ ] GPU determinism flake in `detailStage` and `tileSynth` (about 1 run in 5–10 on record): not reproduced in 20 runs on the owner's GPU and 10 on lavapipe (2026-11-19), nothing changed to fix it; close if it stays away. History in the archived TODO
 - [ ] The Free Flight session's "drizzle: wet at once" check fails (decision 217); not investigated
 - [ ] Stale code comments listed in the audit's "Left in the Code"; fix when the files are next touched
