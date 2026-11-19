@@ -42,7 +42,7 @@ _Needed by every R2 milestone: R2's exit criteria include determinism, three see
 
 **Exit:** green CPU and GPU suites, three pinned seeds, a strategic map at its frame budget on the owner's machine, and a recorded GPU baseline for the standard views.
 
-**State (2026-11-19):** in progress. Done: the seam (decision 233), the front generator's flake (decision 234), the demo seeds pinned, the GPU flake measured on lavapipe (none in 10 runs), `networkLink`'s timeout, the GPU timing tool (decision 242). Open: the strategic map's frame rate and the session-long decay (need the owner's GPU), the owner's `MODE=gpu` baseline and GPU-flake runs, the desktop alignment rerun.
+**State (2026-11-19):** in progress. Done: the seam (decision 233), the front generator's flake (decision 234), the demo seeds pinned, the GPU flake measured on lavapipe (none in 10 runs), `networkLink`'s timeout, the GPU timing tool (decision 242). The CPU and GPU suites are green on the owner's GPU (2026-11-19: 96 passed, 2 skipped; the old GPU flake not seen in 20 runs; decision 244). Open: the strategic map's frame rate and the session-long decay (need the owner's GPU), the owner's `MODE=gpu` baseline, the desktop alignment rerun.
 
 ### R1.2 Campaign State That Can Be Saved — medium
 
