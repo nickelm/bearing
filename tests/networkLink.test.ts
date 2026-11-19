@@ -232,6 +232,9 @@ describe('the stage', () => {
       line: id,
     }));
     let calls = 0;
+    // The tiles are what this test checks; one aligned link stands in for every task's,
+    // since aligning forty took 10–30 s and timed out on a loaded machine (R1.1).
+    const aligned = alignLink(task([-9000, -1000]), ridge, R);
     const al = await buildAlignments({
       tasks,
       radius: R,
@@ -245,7 +248,7 @@ describe('the stage', () => {
       run: async (tk, tiles) => {
         for (const [key, h] of tiles) expect(h?.height, key).toBeInstanceOf(Float32Array);
         await new Promise((r) => setTimeout(r, 1 + (tk.id % 4)));
-        return alignLink(tk, ridge, R);
+        return { ...aligned, id: tk.id, line: tk.line };
       },
     });
     expect(al.count).toBe(40);

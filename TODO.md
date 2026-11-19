@@ -19,13 +19,13 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] Front generator determinism: run `tests/campaign.test.ts` and `tests/infrastructure.test.ts` 50 times under parallel load on Node 22 and 24; if a divergence recurs, quantize the band cut's axis coordinate (decision 86). Reproduced on Node 24 only (2 of 50 runs; 9 of 200 fresh processes): a V8 on-stack-replacement fault in `lineFromPath`'s side sums, worked around with `lineSides` (decision 234); quantizing would not have helped
 - [ ] Watch the CI `determinism` job for a few weeks after decision 234; remove it once clean
 - [ ] GPU determinism flake (`detailStage`, `tileSynth`): run the GPU suite ten times with and without `--no-file-parallelism` on lavapipe and on the owner's GPU; record the rate
-- [ ] Pin the demo seeds 4, 10 and 7: a test that each keeps a continental front and passes validity on the current `GENERATOR_VERSION`
+- [x] Pin the demo seeds 4, 10 and 7: a test that each keeps a continental front and passes validity on the current `GENERATOR_VERSION` (`DEMO_SEEDS` in `src/campaign/demoSeeds.ts`, `tests/demoSeeds.test.ts`: valid, a continental front with fit ≥ 0.9, and a reminder to re-check on a version bump)
 - [ ] Strategic map frame rate (10–15 fps): profile labels, the zone list and glyph rebuilds; fix the hot path
 - [ ] Frame-rate decay over a session: check tile and mesh caches, undisposed geometries and textures, label rebuilds; a soak test that counts GPU objects after 20 view switches
 - [ ] GPU timing tool: timestamp queries per pass in the app behind `?dev`, logged per view
 - [ ] Owner: run `tools/browser.smoke.mjs` with `MODE=gpu` and the timing tool on the owner's machine; record the standard views in the audit's performance baseline
 - [ ] Rerun the whole-world alignment on a desktop after the tile-cache fix; record time, forced pieces, viaduct and tunnel totals
-- [ ] Remove `networkLink`'s timeout under load (raise the budget or split the test)
+- [x] Remove `networkLink`'s timeout under load (raise the budget or split the test): the eviction test reuses one aligned link instead of aligning forty (9.4 s → 0.2 s)
 
 ### R1.2 Campaign state that can be saved
 
