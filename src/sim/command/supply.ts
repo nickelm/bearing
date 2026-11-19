@@ -1,8 +1,10 @@
 /**
  * Supply lines behind the fronts (roadmap R2.1): what interdiction plans
  * against. Each side supplies each of its front segments (front.ts) from its
- * depots over the road graph and from its rail yards over the railway graph
- * (R1.8), by the shortest way with cut bridges left out. Every bridge, depot,
+ * depots and its largest rear cities over the road graph and from its rail
+ * yards over the railway graph (R1.8), by the shortest way with cut bridges
+ * left out. The cities (REAR_SOURCES, R2.2) are where supply enters the
+ * theater; they carry it but are no targets themselves. Every bridge, depot,
  * rail yard and road edge on those ways carries the supply of the segments it
  * serves, weighted by their pressure; the most used element of a side carries 1.
  *
@@ -25,6 +27,9 @@ export const SUPPLY_SETBACK = 30e3;
 export const NETWORK_SNAP = 40e3;
 /** Longest supply way searched (m). */
 export const SUPPLY_REACH = 600e3;
+/** Rear cities that feed the front: the largest REAR_SOURCES of a side between these distances from it (m). */
+export const REAR_SOURCES = 3;
+export const REAR_DEPTH: readonly [number, number] = [100e3, 500e3];
 /** Road edges worth striking lie this far behind the front (m). */
 export const ROAD_DEPTH: readonly [number, number] = [15e3, 120e3];
 /** At most this many road edges per side, at least ROAD_SPACING apart. */
@@ -106,6 +111,19 @@ export function supplyLines(
   const sourceNodes = sources.map((x) =>
     snap(x.kind === 'rail-yard' ? nets.rail : nets.road, x.point),
   );
+  const depth = (p: Readonly<Dir>) => {
+    let d = Infinity;
+    for (const s of segments) d = Math.min(d, arcDistance(p, s.point, R));
+    return d;
+  };
+  const rear = input.places
+    .filter((p) => p.side === side)
+    .map((p) => ({ p, d: depth(p.point) }))
+    .filter((x) => x.d >= REAR_DEPTH[0] && x.d <= REAR_DEPTH[1])
+    .sort((a, b) => b.p.population - a.p.population || a.d - b.d)
+    .slice(0, REAR_SOURCES)
+    .map((x) => snap(nets.road, x.p.point))
+    .filter((n) => n >= 0);
   const stations = new Map<number, Float64Array>();
   const sinks: Dir[] = [];
   for (const seg of segments) {
@@ -122,17 +140,20 @@ export function supplyLines(
       const root = snap(g, sink);
       if (root < 0) continue;
       const tree = g.tree(root, rail ? nets.cutRail : nets.cutRoad, SUPPLY_REACH);
-      sources.forEach((x, i) => {
-        if ((x.kind === 'rail-yard') !== rail) return;
-        const n = sourceNodes[i]!;
-        if (n < 0 || !Number.isFinite(tree.dist[n]!)) return;
-        siteUse.set(x.id, (siteUse.get(x.id) ?? 0) + seg.pressure);
+      const walk = (n: number): boolean => {
+        if (n < 0 || !Number.isFinite(tree.dist[n]!)) return false;
         for (let y = n; y >= 0; y = tree.prev[y]!) {
           nodeUse[y]! += seg.pressure;
           const e = tree.prevEdge[y]!;
           if (e >= 0 && !rail) roadUse[e]! += seg.pressure;
         }
+        return true;
+      };
+      sources.forEach((x, i) => {
+        if ((x.kind === 'rail-yard') !== rail) return;
+        if (walk(sourceNodes[i]!)) siteUse.set(x.id, (siteUse.get(x.id) ?? 0) + seg.pressure);
       });
+      if (!rail) for (const n of rear) walk(n);
     }
   }
   // Bridges carry what passes their node.

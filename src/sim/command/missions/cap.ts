@@ -2,20 +2,27 @@
  * Combat air patrol (demo type; roadmap R2.1). Standing stations, each kept
  * covered by flights that relieve each other:
  *
- * - CAP_STATIONS along each front, CAP_SETBACK into own ground;
+ * - stations along each front, one per CAP_SPACING of its length (CAP_STATIONS
+ *   at least, MAX_CAP_STATIONS at most), CAP_SETBACK into own ground, each
+ *   scored by the pressure on the front segment nearest it, so the stations
+ *   by the corridors are manned first (R2.2: two stations left long fronts open);
  * - over the side's AEW orbit behind each front, when it flies AEW (a
  *   high-value asset, design step 1);
  * - over each own carrier group, flown by its own air wing;
  * - over the first island or forward field of each theater at sea.
  */
 import { capBriefing } from '../../../campaign/missionBriefings';
+import { polylineStations } from '../../../core/greatCircle';
 import { HOUR } from '../../../core/units';
 import { DEFAULT_JUMP_IN } from '../../air/mission';
+import { capResolver } from '../../air/resolvers';
 import { carrierState } from '../../naval/carrierGroup';
 import { phases, plannedStation, station, the } from './common';
 import type { MissionPlugin, Need, PlanContext } from './plugin';
 
 export const CAP_STATIONS = 2;
+export const MAX_CAP_STATIONS = 4;
+export const CAP_SPACING = 250e3;
 export const CAP_SETBACK = 40e3;
 /** The AEW orbit's place behind the front (support's SUPPORT_SETBACK), and its CAP's. */
 export const AEW_SETBACK = 150e3;
@@ -26,16 +33,21 @@ function needs(ctx: PlanContext): Need[] {
   for (const f of ctx.input.fronts) {
     const w = ctx.theaterWeight(f.theater);
     const name = ctx.theaterName(f.theater);
-    for (let j = 0; j < CAP_STATIONS; j++) {
-      const p = ctx.frontPoint(f.theater, (j + 1) / (CAP_STATIONS + 1), CAP_SETBACK);
+    const segments = ctx.segments.filter((x) => x.theater === f.theater);
+    const length = polylineStations(f.points, ctx.input.radius).at(-1)!;
+    const n = Math.min(MAX_CAP_STATIONS, Math.max(CAP_STATIONS, Math.round(length / CAP_SPACING)));
+    for (let j = 0; j < n; j++) {
+      const frac = (j + 0.5) / n;
+      const p = ctx.frontPoint(f.theater, frac, CAP_SETBACK);
       if (!p) continue;
+      const seg = segments.find((x) => frac >= x.from && frac < x.to);
       const label = `CAP station ${j + 1}, ${name}`;
       out.push({
         key: `cap:front:${f.theater}:${j}`,
         type: 'cap',
         label: `CAP over ${the(name)}`,
         theater: f.theater,
-        score: 0.9 * w,
+        score: 0.9 * w * (0.7 + 0.3 * (seg?.pressure ?? 0)),
         target: station(label, p.point),
         places: { theater: the(name), target: label, front: the(name), town: ctx.town(p.point) },
         orbitHeading: p.heading,
@@ -103,9 +115,10 @@ export const CAP: MissionPlugin = {
   type: 'cap',
   status: 'demo',
   category: 'counter-air',
+  engagement: 'cap',
   planner: needs,
   package: () => [{ role: 'lead', type: 'cap', offset: 0 }],
-  resolver: { pending: 'R2.2' },
+  resolver: capResolver,
   behavior: { pending: 'R2.5' },
   jumpIn: DEFAULT_JUMP_IN,
   success: {

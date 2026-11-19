@@ -136,15 +136,26 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 
 ### R2.2 Resolution and consequences
 
-- [ ] Hook from mission phase events to resolvers; keep event ids so aborts can cancel later phases
-- [ ] Air-to-air resolver: packages against CAP and escorts by type, numbers and calibration tables
-- [ ] Point defenses at targets: an abstract air defense value per site
-- [ ] Strike resolver: damage to targets and bridges
-- [ ] Airlift resolver: deliveries into base stocks
-- [ ] Losses lower squadron strength; ejections create survivors (R2.9's records)
-- [ ] Aborts and returns; turnaround with fewer aircraft
-- [ ] Revisions read the outcomes: damaged targets, lost squadrons, stocks
-- [ ] 24 h test on the three seeds: losses on both sides, damaged targets and bridges, delivered airlift
+- [x] Combat values per type: the bundle's `calibration` block (air, strike, survival) when present, else a prior from the type's role and radar until R2.10 fits them (rule 18)
+- [x] AirOps keeps turnaround returns with their ready times (replaces the counter and the ATO's own returns); the ATO's ledger reads live missions and returns
+- [x] Hook from mission phase events to resolution (`MissionResolution`, set on AirOps); keep phase event ids so an abort cancels later phases
+- [x] Abort and return: a route home from the flight's position at any time (`returnRoute`), new phase events, the abort logged
+- [x] Losses: lower the flight's and the squadron's aircraft; crews eject or are killed; survivors as records (pilot, side, point, time) for R2.9; the pilot leaves the roster
+- [x] Air-to-air resolver: a package entering an enemy CAP station's reach meets it; escorts, CAP and the strike flight by their air values; draws from forks keyed by mission
+- [x] Point defenses: an abstract air-defense value per target kind and value; losses on target, halved with SEAD in the package
+- [x] Strike resolver: damage to target sites and bridges, road edges (new in the damage state); interdiction's plug-in resolver
+- [x] CAS resolver: ground attacks recorded per theater and point for R2.3
+- [x] Airlift resolver: deliveries into the destination's stocks, drawn from the origin's
+- [x] CAP resolver: time on station held, kills
+- [x] Outcomes logged (`mission-resolved`, `aircraft-lost`, `mission-aborted`) and their consequences applied through one function
+- [x] Revisions read the outcomes: damaged targets, depleted squadrons, stocks; tests that each changes the next revision
+- [x] 24 h test on the three seeds: losses on both sides, damaged targets and bridges, delivered airlift; war tool reports them
+- [x] Decision, design and roadmap state (decision 250)
+- [x] CAP stations by front length (one per 250 km, two to four), scored by the pressure near them (discovered: two stations left long fronts open, so almost no interceptions)
+- [x] Rear cities as supply sources (discovered: seed 10's Alliance had no depots on its supply lines)
+- [ ] R2.10 replaces the priors: each type's `calibration` block and the resolvers' constants (KILL_RATE, AD_RATE, P_HIT, DAMAGE_PER_HIT)
+- [ ] Strikes on airbases (deep strike, provisional) have no effect until R4.2: aircraft on the ground, stocks and runways
+- [ ] A strike's damage does not yet change supply beyond cut bridges (depots, rail yards and road edges feed R2.3's supply)
 
 ### R2.3 The ground war in aggregate
 

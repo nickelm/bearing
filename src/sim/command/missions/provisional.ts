@@ -13,6 +13,7 @@ import { AEW_SETBACK } from './cap';
 import { bySegment, restrike, the } from './common';
 import type { Category } from '../doctrine';
 import type { Minimums } from '../environment';
+import type { Engagement } from '../../air/outcome';
 import type { MissionPlugin, Need, PackageTemplate, PlanContext, PlannerRule } from './plugin';
 
 export const TANKER_SETBACK = 220e3;
@@ -31,12 +32,14 @@ function provisional(
   pkg: PackageTemplate,
   minimums: Minimums,
   category: Category,
+  engagement: Engagement,
   helicopter = false,
 ): MissionPlugin {
   return {
     type,
     status: 'provisional',
     category,
+    engagement,
     planner,
     package: pkg,
     resolver: { pending: 'R4.2' },
@@ -239,9 +242,9 @@ function heloCas(ctx: PlanContext): Need[] {
 }
 
 export const PROVISIONAL: MissionPlugin[] = [
-  provisional('support', support, lead('support'), ANY, 'support'),
-  provisional('escort', () => [], lead('escort'), ANY, 'counter-air'),
-  provisional('sead', () => [], lead('sead'), ANY, 'strike'),
+  provisional('support', support, lead('support'), ANY, 'support', 'none'),
+  provisional('escort', () => [], lead('escort'), ANY, 'counter-air', 'escort'),
+  provisional('sead', () => [], lead('sead'), ANY, 'strike', 'suppression'),
   provisional(
     'deep-strike',
     (ctx) =>
@@ -249,6 +252,7 @@ export const PROVISIONAL: MissionPlugin[] = [
     strikePackage('deep-strike'),
     ANY,
     'strike',
+    'target',
   ),
   provisional(
     'strategic-bombing',
@@ -264,6 +268,7 @@ export const PROVISIONAL: MissionPlugin[] = [
     strikePackage('strategic-bombing'),
     ANY,
     'strike',
+    'target',
   ),
   provisional(
     'recon',
@@ -271,6 +276,7 @@ export const PROVISIONAL: MissionPlugin[] = [
     lead('recon'),
     { daylight: 'day', target: { ceiling: 1500, visibility: 8000 } },
     'strike',
+    'target',
   ),
   provisional(
     'helo-cas',
@@ -278,6 +284,7 @@ export const PROVISIONAL: MissionPlugin[] = [
     lead('helo-cas'),
     { daylight: 'any', target: { ceiling: 150, visibility: 1500 } },
     'ground-support',
+    'target',
     true,
   ),
 ];

@@ -81,7 +81,7 @@ type Entry =
   | { type: 'event'; kind: string; data?: unknown; flag?: string };
 
 /** Format of `SimState`; bump it when the saved layout changes. */
-export const SIM_STATE_FORMAT = 2;
+export const SIM_STATE_FORMAT = 3;
 
 /** A saved simulation (R1.2): structured-cloneable, independent of the live one. */
 export interface SimState {

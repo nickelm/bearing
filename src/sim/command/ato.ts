@@ -150,8 +150,6 @@ export interface AtoState {
   covered: [string, number][];
   /** Requests committed this day, `side:request`. */
   filled: string[];
-  /** Committed flights' aircraft until they are ready again: squadron, time, aircraft. */
-  returns: [number, number, number][];
   stats: Record<Side, AtoStats>;
 }
 
@@ -182,7 +180,6 @@ export class AirTaskingOrders implements TickProcess {
   private readonly struck = new Map<string, number>();
   private readonly covered = new Map<string, number>();
   private readonly filled = new Set<string>();
-  private returns: [number, number, number][] = [];
   /** Why the last flight could not be planned. */
   private failure = '';
   private readonly root: Rng;
@@ -261,12 +258,14 @@ export class AirTaskingOrders implements TickProcess {
 
     // 2. What is promised already: committed missions, and the planned sorties that still stand.
     const ledger = new Ledger();
-    this.returns = this.returns.filter((r) => r[1] > now);
-    for (const [sq, until, n] of this.returns) {
-      if (air.squadrons[sq]!.side === side) ledger.hold(sq, now, until, n);
-    }
     for (const m of air.missions.values()) {
-      if (m.side === side) ledger.fly(side, m.route, m.aircraft, missionPlugin(m.type).category);
+      if (m.side !== side) continue;
+      const end = m.timeline[m.timeline.length - 1]!.time + aircraftType(m.aircraftType).turnaround;
+      ledger.hold(m.squadron, Math.max(now, m.timeline[0]!.time), end, m.aircraft);
+      ledger.fly(side, m.route, m.aircraft, missionPlugin(m.type).category);
+    }
+    for (const [sq, until, n] of air.ready) {
+      if (air.squadrons[sq]!.side === side && until > now) ledger.hold(sq, now, until, n);
     }
     const kept: Sortie[] = [];
     let cancelled = 0;
@@ -652,11 +651,6 @@ export class AirTaskingOrders implements TickProcess {
       m.timeline = routeTimeline(m.route);
       m.id = air.newMissionId();
       air.launch(m, sim);
-      this.returns.push([
-        m.squadron,
-        m.timeline[m.timeline.length - 1]!.time + at.turnaround,
-        m.aircraft,
-      ]);
       this.stats[side].committed++;
       this.filled.add(`${side}:${s.request}`);
       if (s.standing && s.role === 'lead') {
@@ -777,7 +771,6 @@ export class AirTaskingOrders implements TickProcess {
       struck: [...this.struck],
       covered: [...this.covered],
       filled: [...this.filled],
-      returns: this.returns,
       stats: this.stats,
     });
   }
@@ -792,7 +785,6 @@ export class AirTaskingOrders implements TickProcess {
     for (const [k, v] of s.struck) this.struck.set(k, v);
     for (const [k, v] of s.covered) this.covered.set(k, v);
     for (const k of s.filled) this.filled.add(k);
-    this.returns = s.returns;
     this.stats.alliance = s.stats.alliance;
     this.stats.pact = s.stats.pact;
   }
@@ -812,7 +804,6 @@ export class AirTaskingOrders implements TickProcess {
     for (const [k, v] of [...this.struck].sort()) h.string(k).number(v);
     for (const [k, v] of [...this.covered].sort()) h.string(k).number(v);
     for (const k of [...this.filled].sort()) h.string(k);
-    for (const [sq, until, n] of this.returns) h.number(sq).number(until).number(n);
   }
 }
 

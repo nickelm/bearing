@@ -7,6 +7,7 @@
  */
 import { casBriefing } from '../../../campaign/missionBriefings';
 import { DEFAULT_JUMP_IN } from '../../air/mission';
+import { casResolver } from '../../air/resolvers';
 import { bySegment, phases, plannedStation, the } from './common';
 import type { MissionPlugin, Need, PlanContext } from './plugin';
 
@@ -58,9 +59,10 @@ export const CAS: MissionPlugin = {
   type: 'cas',
   status: 'demo',
   category: 'ground-support',
+  engagement: 'target',
   planner: needs,
   package: () => [{ role: 'lead', type: 'cas', offset: 0 }],
-  resolver: { pending: 'R2.2' },
+  resolver: casResolver,
   behavior: { pending: 'R2.5' },
   jumpIn: DEFAULT_JUMP_IN,
   success: {

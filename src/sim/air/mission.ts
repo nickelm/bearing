@@ -293,6 +293,15 @@ export interface Mission {
   score: number;
   /** Named places for the briefing (R2.1); absent on missions planned before the ATO. */
   places?: Places;
+  /** Why the flight turned home early (R2.2), if it did. */
+  aborted?: string;
+  /** Resolution's marks (R2.2): intercepted once, outcome resolved, CAP engagements fought. */
+  engaged?: boolean;
+  resolved?: boolean;
+  engagements?: number;
+  /** Aircraft it lost and enemy aircraft it shot down (R2.2). */
+  losses?: number;
+  kills?: number;
   /** Seed for promotion: the flight's aircraft expand from it (uint32). */
   seed: number;
   route: Route;

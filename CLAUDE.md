@@ -91,7 +91,10 @@ src/sim/            headless simulation; runs in a worker: event queue + fixed t
                     standalone weather for Free Flight (decision 137)
   air/              the air war (C2, decision 132): the bundle loader (bundles.ts) and the type table it fills,
                     order of battle, missions,
-                    analytic routes (great-circle legs, racetracks, fuel) and AirOps (live missions, phase events)
+                    analytic routes (great-circle legs, racetracks, fuel, the turn home) and AirOps (live missions, phase
+                    events, losses, survivors, aborts); resolution.ts (interception, point defenses, outcomes and their
+                    consequences), resolvers.ts (the demo types' resolvers), outcome.ts, calibration.ts (combat values:
+                    fitted or the prior; decision 250)
   naval/            carrier groups on their patrol tracks (analytic position); convoys, amphibious and surface groups in R4 (docs/roadmap.md)
   ground/           road and rail graphs with bridge cuts (network.ts) and damage to targets (damage.ts; decision 237);
                     battalions in R2.3

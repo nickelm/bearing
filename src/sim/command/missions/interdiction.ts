@@ -10,6 +10,7 @@
 import { interdictionBriefing } from '../../../campaign/missionBriefings';
 import { arcDistance } from '../../../core/greatCircle';
 import { DEFAULT_JUMP_IN } from '../../air/mission';
+import { strikeResolver } from '../../air/resolvers';
 import type { MissionTarget, Places } from '../../air/mission';
 import { phases, restrike, standing, the } from './common';
 import type { MissionPlugin, Need, PlanContext } from './plugin';
@@ -96,12 +97,13 @@ export const INTERDICTION: MissionPlugin = {
   type: 'interdiction',
   status: 'demo',
   category: 'strike',
+  engagement: 'target',
   planner: needs,
   package: (n) => [
     { role: 'lead', type: 'interdiction', offset: 0 },
     ...(n.defended ? [{ role: 'escort' as const, type: 'escort' as const, offset: 0 }] : []),
   ],
-  resolver: { pending: 'R2.2' },
+  resolver: strikeResolver,
   behavior: { pending: 'R2.5' },
   jumpIn: DEFAULT_JUMP_IN,
   success: {

@@ -53,6 +53,30 @@ export type CampaignDecision =
       added: number;
       cancelled: number;
     }
+  /** Aircraft of a flight lost (R2.2): to what, and how many crew ejected or were killed. */
+  | {
+      kind: 'aircraft-lost';
+      mission: number;
+      side: string;
+      type: string;
+      aircraft: number;
+      cause: string;
+      ejected: number;
+      killed: number;
+    }
+  /** A flight turned home early (R2.2), and why. */
+  | { kind: 'mission-aborted'; mission: number; side: string; type: string; reason: string }
+  /** A mission's outcome as its resolver judged it (R2.2). */
+  | {
+      kind: 'mission-resolved';
+      mission: number;
+      side: string;
+      type: string;
+      success: boolean;
+      effect: number;
+      kills: number;
+      losses: number;
+    }
   /** A planned sortie cancelled when it was due to be committed (R2.1), and why. */
   | { kind: 'sortie-cancelled'; side: string; sortie: string; type: string; reason: string };
 

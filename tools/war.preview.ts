@@ -60,6 +60,8 @@ interface Report {
   ato: string[];
   /** Missions seen by type and side, for the four demo types. */
   demo: string;
+  /** Resolution (R2.2): losses, intercepts, outcomes, damage, deliveries. */
+  war: string[];
   error: string | null;
 }
 
@@ -109,6 +111,7 @@ function day(seed: number): Report {
     logEntries: 0,
     ato: [],
     demo: '',
+    war: [],
     error: null,
   };
   try {
@@ -164,6 +167,23 @@ function day(seed: number): Report {
     report.demo = ['cap', 'interdiction', 'cas', 'airlift']
       .map((t) => `${t} ${bySide.get(`alliance:${t}`) ?? 0}/${bySide.get(`pact:${t}`) ?? 0}`)
       .join(', ');
+    const res = sw.resolution!;
+    for (const side of ['alliance', 'pact'] as const) {
+      const st = res.stats[side];
+      report.war.push(
+        `${side}: ${air.lost[side]} aircraft lost (${air.killed[side]} aircrew killed), ` +
+          `${air.survivors.filter((x) => x.side === side).length} survivors down; ` +
+          `${st.intercepts} intercepts by its CAP; ${st.resolved} missions resolved, ${st.successes} successful; ` +
+          `${st.hits} target hits, ${st.deliveries} deliveries`,
+      );
+    }
+    const dmg = sw.damage!;
+    const sites = dmg.damaged();
+    const cut = sites.filter((x) => campaign.targets[x.id]!.bridge && x.damage >= 0.5).length;
+    report.war.push(
+      `damage: ${sites.length} sites hit (${cut} bridges cut), ${dmg.damagedRoads().length} road edges, ` +
+        `${dmg.attacks.length} attacks on troops; aborts ${sw.sim.log.entries.filter((e) => e.source === 'decision' && e.kind === 'mission-aborted').length}`,
+    );
     const ato = sw.ato!;
     for (const side of ['alliance', 'pact'] as const) {
       const st = ato.stats[side];
@@ -226,6 +246,8 @@ it('runs a day of war on the demo seeds', () => {
   for (const r of reports) lines.push(`- Seed ${r.seed}: ${r.byType || 'none'}`);
   lines.push('', 'The demo types by side (Alliance/Pact):', '');
   for (const r of reports) lines.push(`- Seed ${r.seed}: ${r.demo}`);
+  lines.push('', 'Resolution:', '');
+  for (const r of reports) for (const a of r.war) lines.push(`- Seed ${r.seed}, ${a}`);
   lines.push('', 'Air tasking orders:', '');
   for (const r of reports) for (const a of r.ato) lines.push(`- Seed ${r.seed}, ${a}`);
   for (const r of reports)

@@ -36,6 +36,14 @@ import type {
 } from '../../air/mission';
 export type { Places } from '../../air/mission';
 import type { BaseStocks } from '../../air/orbat';
+import type { AggregateResolver, Engagement, MissionOutcome, WorldEffect } from '../../air/outcome';
+export type {
+  AggregateResolver,
+  Engagement,
+  MissionOutcome,
+  ResolveContext,
+  WorldEffect,
+} from '../../air/outcome';
 import type { MasterMode } from '../../avionics/avionics';
 import type { FormatId, SlotId } from '../../avionics/profiles';
 import type { CampaignInput } from '../campaignInput';
@@ -152,38 +160,11 @@ export interface PackageMember {
 /** A need's flights: the lead first (design, "Air Tasking", step 3). */
 export type PackageTemplate = (need: Need, ctx: PlanContext) => PackageMember[];
 
-/** What happened to a mission, as a resolver or a full-fidelity session reports it (R2.2, R2.5). */
-export interface MissionOutcome {
-  completed: boolean;
-  aborted: boolean;
-  /** Time held on station or over the target (s). */
-  onStation: number;
-  /** Effect on the target, 0..1 (a strike's damage, a CAS flight's attrition). */
-  effect: number;
-  /** Share of the cargo delivered, 0..1. */
-  delivered: number;
-  losses: number;
-  kills: number;
-}
-
-/** A change to the world a mission's outcome causes; R2.2 applies them, R2.3 reads the ground ones. */
-export type WorldEffect =
-  | { kind: 'damage'; target: number; amount: number }
-  | { kind: 'road'; edge: number; amount: number }
-  | { kind: 'stocks'; base: BaseRef; fuel: number; munitions: number }
-  | { kind: 'ground-attack'; theater: number; point: Dir; amount: number }
-  | { kind: 'station-held'; key: string; seconds: number };
-
 export interface SuccessCriteria {
   /** What counts as success, in words. */
   text: string;
   success(m: Mission, o: MissionOutcome): boolean;
   consequences(m: Mission, o: MissionOutcome): WorldEffect[];
-}
-
-/** R2.2: a mission's outcome when no one watches. Defined there. */
-export interface AggregateResolver {
-  resolve(m: Mission, ...args: unknown[]): MissionOutcome;
 }
 
 /** R2.5: the AI pilots' behavior on the director, phase by phase. Defined there. */
@@ -240,6 +221,12 @@ export interface MissionPlugin {
   minimums: Minimums;
   /** The apportionment category its flights count in (doctrine.ts). */
   category: Category;
+  /**
+   * How its flights take part in air-to-air engagements (R2.2): a target enemy
+   * CAP intercepts, an escort that fights for its package, a CAP that
+   * intercepts, or none.
+   */
+  engagement: Engagement;
 }
 
 /** The eight parts, in the table's order. */

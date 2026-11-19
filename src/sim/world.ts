@@ -16,6 +16,9 @@ import { DamageState } from './ground/damage';
 import { NetworkGraph } from './ground/network';
 import type { CampaignInput } from './command/campaignInput';
 import { AirTaskingOrders } from './command/ato';
+import { isPending } from './command/missions/plugin';
+import { missionPlugin } from './command/missions/registry';
+import { MissionResolution } from './air/resolution';
 import { Simulation } from './simulation';
 import { WeatherModel } from './weather/model';
 import type { WeatherConfig } from './weather/model';
@@ -40,6 +43,8 @@ export interface SimWorld {
   readonly air: AirOps | null;
   /** Each side's air tasking order (R2.1); null without a campaign. */
   readonly ato: AirTaskingOrders | null;
+  /** Engagements and mission outcomes (R2.2); null without a campaign. */
+  readonly resolution: MissionResolution | null;
   /** The road and rail graphs (R1.8); null without a campaign. */
   readonly networks: { road: NetworkGraph; rail: NetworkGraph } | null;
   /** Damage to target sites and bridges (R1.8); null without a campaign. */
@@ -60,6 +65,7 @@ export function createSimWorld(config: SimConfig): SimWorld {
   let networks: SimWorld['networks'] = null;
   let damage: DamageState | null = null;
   let ato: AirTaskingOrders | null = null;
+  let resolution: MissionResolution | null = null;
   if (config.campaign) {
     air = new AirOps(
       config.campaign,
@@ -84,8 +90,22 @@ export function createSimWorld(config: SimConfig): SimWorld {
       damage,
     });
     sim.addProcess(ato);
+    // Engagements and outcomes at phase events (R2.2), from each type's plug-in.
+    resolution = new MissionResolution(air, damage, config.campaign, config.seed, (type) => {
+      const p = missionPlugin(type);
+      const success = p.success;
+      return {
+        engagement: p.engagement,
+        resolver: isPending(p.resolver) ? null : p.resolver,
+        judge: isPending(success)
+          ? null
+          : (m, o) => ({ success: success.success(m, o), effects: success.consequences(m, o) }),
+      };
+    });
+    air.resolution = resolution;
+    sim.addState('resolution', resolution);
   }
-  return { sim, weather, air, ato, networks, damage, terrain: null };
+  return { sim, weather, air, ato, resolution, networks, damage, terrain: null };
 }
 
 /** Schedules a player alarm (flagged, so it triggers auto-slowdown). */

@@ -391,3 +391,67 @@ export class RouteBuilder {
     return { segments: this.segments, fuel: startFuel, reserve: startFuel * FUEL_RESERVE };
   }
 }
+
+/**
+ * The route cut at game time `t` and turned home (an abort, R2.2): the segments
+ * before `t` as flown, the current one cut at `t`, then a climb or descent to
+ * cruise altitude toward `home`, cruise, the approach and the recovery on the
+ * ground. Fuel carries on from the cut. A flight on the ground at `t` stays
+ * there and ends.
+ */
+export function returnRoute(
+  route: Route,
+  t: GameTime,
+  home: Readonly<Dir>,
+  type: AircraftType,
+  radius: Meters,
+  recovery: number,
+): Route {
+  const s = routeState(route, t, radius);
+  const kept: RouteSegment[] = [];
+  for (const seg of route.segments) {
+    if (seg.t1 <= t) {
+      kept.push(seg);
+      continue;
+    }
+    if (seg.t0 < t) {
+      const cut = { ...seg, t1: t };
+      if (seg.kind === 'leg') {
+        cut.b = [...s.point];
+        cut.alt1 = s.altitude;
+      } else if (seg.kind === 'ground') {
+        cut.alt1 = 0;
+      }
+      // An orbit cut keeps its center and axis; routeState stops at t1.
+      kept.push(cut);
+    }
+    break;
+  }
+  // The cruise flow with the loadout, from any segment that burns fuel.
+  const burning = route.segments.find((x) => FLOW[x.regime] > 0);
+  const flow = burning ? burning.flow / FLOW[burning.regime] : 0;
+  const b = new RouteBuilder(type, radius, flow, s.point, t, s.fuel);
+  b.altitude = s.altitude;
+  b.heading = s.heading;
+  if (!s.airborne && s.altitude <= 0 && arcDistance(s.point, home, radius) < 5e3) {
+    b.ground(recovery, 'recovery');
+  } else {
+    const alt = type.cruiseAltitude;
+    b.changeAltitudeToward(home, alt, type.cruiseSpeed * 0.7, 'climb', 'egress');
+    const rate = Math.max(type.climbRate, 15);
+    const descent = (b.altitude / rate) * type.cruiseSpeed * 0.8;
+    const d = arcDistance(b.point, home, radius);
+    if (d > descent) {
+      b.leg(
+        toward(b.point, home, d - descent, radius),
+        b.altitude,
+        type.cruiseSpeed,
+        'cruise',
+        'egress',
+      );
+    }
+    b.leg(home, 0, type.cruiseSpeed * 0.8, 'descent', 'approach');
+    b.ground(recovery, 'recovery');
+  }
+  return { segments: [...kept, ...b.segments], fuel: route.fuel, reserve: route.reserve };
+}

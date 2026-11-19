@@ -65,6 +65,23 @@ describe('demo seeds', () => {
           ).toBe(true);
         }
       }
+      // R2.2's exit: both sides lose aircraft, targets and bridges are damaged, airlift delivers.
+      for (const side of ['alliance', 'pact'] as const) {
+        expect(sim.air!.lost[side], `seed ${seed}: ${side} losses`).toBeGreaterThan(0);
+      }
+      const damaged = sim.damage!.damaged();
+      const targets = sim.air!.input.targets;
+      expect(damaged.length, `seed ${seed}: damaged sites`).toBeGreaterThan(0);
+      expect(
+        damaged.some((x) => targets[x.id]!.bridge),
+        `seed ${seed}: a damaged bridge`,
+      ).toBe(true);
+      const res = sim.resolution!.stats;
+      expect(
+        res.alliance.deliveries + res.pact.deliveries,
+        `seed ${seed}: airlift`,
+      ).toBeGreaterThan(0);
+
       const surface = globalMapSampler(ground.height, ground.n);
       const v = new Vec3d();
       const R = DEFAULT_PLANET_PARAMS.radius;

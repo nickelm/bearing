@@ -3,10 +3,12 @@
  * munitions from the airlift squadrons' bases to the side's forward and island
  * fields. Each such field asks for one landing a day, a second below
  * LOW_STOCK of its stocks at the outbreak and a third below VERY_LOW_STOCK,
- * spread through the day; the lower its stocks, the higher the score.
+ * spread through the day. Routine resupply ranks with CAS (decision 250); the
+ * lower its stocks, the higher the score.
  */
 import { airliftBriefing } from '../../../campaign/missionBriefings';
 import { DEFAULT_JUMP_IN } from '../../air/mission';
+import { airliftResolver } from '../../air/resolvers';
 import { phases, the } from './common';
 import type { MissionPlugin, Need, PlanContext } from './plugin';
 
@@ -37,7 +39,7 @@ function needs(ctx: PlanContext): Need[] {
       type: 'airlift',
       label: `Airlift to ${a.name}`,
       theater: a.theater,
-      score: (0.35 + 0.5 * (1 - share)) * Math.max(0.5, ctx.theaterWeight(a.theater)),
+      score: (0.6 + 0.35 * (1 - share)) * Math.max(0.5, ctx.theaterWeight(a.theater)),
       target: { kind: 'airbase', id: a.id, name: a.name, point: [...a.point] },
       places: { theater: the(theater), target: a.name, town: ctx.town(a.point) },
       notFrom: ref,
@@ -52,25 +54,25 @@ export const AIRLIFT: MissionPlugin = {
   type: 'airlift',
   status: 'demo',
   category: 'airlift',
+  engagement: 'target',
   planner: needs,
   package: () => [{ role: 'lead', type: 'airlift', offset: 0 }],
-  resolver: { pending: 'R2.2' },
+  resolver: airliftResolver,
   behavior: { pending: 'R2.5' },
   jumpIn: DEFAULT_JUMP_IN,
   success: {
     text: 'At least 90% of the cargo delivered at the destination.',
     success: (_m, o) => o.delivered >= 0.9,
-    consequences: (m, o) =>
-      o.delivered > 0 && m.target.kind === 'airbase'
-        ? [
-            {
-              kind: 'stocks',
-              base: { kind: 'airbase', id: m.target.id },
-              fuel: AIRLIFT_CARGO.fuel * m.aircraft * o.delivered,
-              munitions: Math.floor(AIRLIFT_CARGO.munitions * m.aircraft * o.delivered),
-            },
-          ]
-        : [],
+    consequences: (m, o) => {
+      if (o.delivered <= 0 || m.target.kind !== 'airbase') return [];
+      const fuel = AIRLIFT_CARGO.fuel * m.aircraft;
+      const munitions = AIRLIFT_CARGO.munitions * m.aircraft;
+      // The cargo leaves the origin's stocks and arrives in the destination's.
+      return [
+        { kind: 'stocks', base: { kind: 'airbase', id: m.target.id }, fuel, munitions },
+        { kind: 'stocks', base: m.base, fuel: -fuel, munitions: -munitions },
+      ];
+    },
   },
   briefing: airliftBriefing,
   interface: phases({
