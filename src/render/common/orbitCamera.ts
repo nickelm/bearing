@@ -18,20 +18,19 @@ import { latLonToDirection } from '../../core/coords';
 import { DEG, KM, PLANET_RADIUS } from '../../core/units';
 import type { Meters, Radians } from '../../core/units';
 import { Vec3d } from '../../core/vec3d';
+import { moveOnSphere } from './sphereMove';
 
 export interface OrbitCameraLimits {
   /** Lowest altitude above the ground under the camera (or above the highest terrain if unknown). */
   minAltitude: Meters;
   maxAltitude: Meters;
   maxTilt: Radians;
-  maxLatitude: Radians;
 }
 
 export const DEFAULT_ORBIT_LIMITS: OrbitCameraLimits = {
   minAltitude: 500,
   maxAltitude: 5000 * KM,
   maxTilt: 75 * DEG,
-  maxLatitude: 89.9 * DEG,
 };
 
 /** Below this altitude the camera may tilt nearly to the horizon. */
@@ -126,18 +125,8 @@ export class OrbitCamera implements CameraControls {
 
   /** Moves the camera over the ground: `forwardM` along the heading, `rightM` to the right. */
   move(forwardM: Meters, rightM: Meters): void {
-    this.frame();
-    const p = this.radial
-      .clone()
-      .addScaled(this.ahead, forwardM / this.radius)
-      .addScaled(this.side, rightM / this.radius)
-      .normalize();
-    this.lat = clamp(
-      Math.asin(clamp(p.y, -1, 1)),
-      -this.limits.maxLatitude,
-      this.limits.maxLatitude,
-    );
-    this.lon = wrapAngle(Math.atan2(p.x, p.z));
+    // Along a great circle, carrying the heading: smooth over the poles (decision 246).
+    moveOnSphere(this, forwardM, rightM, this.radius);
   }
 
   /** Rotates the globe under the camera by a screen drag. `radPerPixel` = vertical FOV / viewport height. */

@@ -19,6 +19,7 @@ import { latLonToDirection } from '../../core/coords';
 import { DEG, KM } from '../../core/units';
 import type { Meters, Radians } from '../../core/units';
 import { Vec3d } from '../../core/vec3d';
+import { moveOnSphere } from '../common/sphereMove';
 import type { CameraControls, OrbitInput } from '../common/orbitCamera';
 
 export interface StrategicCameraLimits {
@@ -30,7 +31,6 @@ export interface StrategicCameraLimits {
   maxTilt: Radians;
   /** At and above this altitude the camera looks straight down. */
   tiltStart: Meters;
-  maxLatitude: Radians;
 }
 
 /** The zoom floor (Part II; tunable). */
@@ -47,7 +47,6 @@ export const STRATEGIC_CAMERA_LIMITS: StrategicCameraLimits = {
   ceiling: STRATEGIC_CEILING,
   maxTilt: STRATEGIC_MAX_TILT,
   tiltStart: STRATEGIC_TILT_START,
-  maxLatitude: 89.9 * DEG,
 };
 
 /** Tilt for an eye altitude: 0 at and above `tiltStart`, `maxTilt` at and below the floor. */
@@ -113,18 +112,8 @@ export class StrategicCamera implements CameraControls {
 
   /** Moves the focus over the ground: `forwardM` up the screen, `rightM` to the right. */
   move(forwardM: Meters, rightM: Meters): void {
-    this.frame();
-    const p = this.radial
-      .clone()
-      .addScaled(this.ahead, forwardM / this.radius)
-      .addScaled(this.side, rightM / this.radius)
-      .normalize();
-    this.lat = clamp(
-      Math.asin(clamp(p.y, -1, 1)),
-      -this.limits.maxLatitude,
-      this.limits.maxLatitude,
-    );
-    this.lon = wrapAngle(Math.atan2(p.x, p.z));
+    // Along a great circle, carrying the heading: smooth over the poles (decision 246).
+    moveOnSphere(this, forwardM, rightM, this.radius);
   }
 
   /**

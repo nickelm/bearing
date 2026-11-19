@@ -48,7 +48,6 @@ describe.skipIf(!gpu)('TerrainRenderer (Dawn synthesis, no drawing)', () => {
       minAltitude: 500,
       maxAltitude: 10_000 * KM,
       maxTilt: 80 * DEG,
-      maxLatitude: 89 * DEG,
     });
     cam.lat = Math.asin(main.y);
     cam.lon = Math.atan2(main.x, main.z);

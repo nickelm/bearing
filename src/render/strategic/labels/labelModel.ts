@@ -65,7 +65,28 @@ export interface MapLabel {
   bands: readonly ZoomBand[];
   /** Military overlay layer the label belongs to, hidden with it (decision 101). */
   layer?: string;
+  /**
+   * A budgeted group (decision 246): at most LABEL_BUDGET[group] of its names show at
+   * once, the most important and most central first. Land areas (zones, salt pans,
+   * hills, wetlands, deserts, forests, plateaus, plains) and named peaks.
+   */
+  group?: LabelGroup;
+  /** Size across (m) of a land area: its name shows only where it spans AREA_MIN_PX on screen. */
+  extent?: number;
 }
+
+export type LabelGroup = 'area' | 'peak';
+
+/** Feature kinds whose names share the land-area budget (decision 246). */
+const AREA_GROUP: ReadonlySet<FeatureKind> = new Set([
+  FeatureKind.Hills,
+  FeatureKind.Plain,
+  FeatureKind.Plateau,
+  FeatureKind.Desert,
+  FeatureKind.Forest,
+  FeatureKind.Wetland,
+  FeatureKind.SaltFlat,
+]);
 
 type Row = Partial<Record<ZoomBand, number>>;
 /** Least importance per band; a band missing from a row does not show the class. */
@@ -262,6 +283,11 @@ export function buildLabels(
       path: path.length >= 6 ? Float64Array.from(path) : null,
       gap: kind === FeatureKind.Peak ? 5 : 0,
       bands,
+      ...(AREA_GROUP.has(kind)
+        ? { group: 'area' as const, extent: 2 * f.extent[i]! }
+        : kind === FeatureKind.Peak
+          ? { group: 'peak' as const }
+          : {}),
     });
   }
   const zoneBandList = zones ? zoneBands(zones, graph.radius) : [];
@@ -282,6 +308,8 @@ export function buildLabels(
       path: null,
       gap: 0,
       bands,
+      group: 'area',
+      extent: z.diameter,
     });
   }
   const s = graph.settlements;

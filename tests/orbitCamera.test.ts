@@ -128,7 +128,8 @@ describe('OrbitCamera', () => {
     cam.rotateAt(Math.PI / 2, 100, 0, rpp);
     // Heading is now west, so screen-right points north: the target must sit
     // 100 px north of the camera, which puts the camera 100 px south of it.
-    expect(cam.heading).toBeCloseTo(-Math.PI / 2, 12);
+    // The drag carries the heading along its great circle (decision 246): off by its tiny convergence.
+    expect(cam.heading).toBeCloseTo(-Math.PI / 2, 4);
     expect((cam.lon * R) / k).toBeCloseTo(target.east / k, 2);
     expect((cam.lat * R) / k).toBeCloseTo(target.north / k - 100, 2);
   });

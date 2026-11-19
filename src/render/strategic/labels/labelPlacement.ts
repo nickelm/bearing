@@ -24,7 +24,7 @@
  */
 import { EM_PX, SPREAD } from './fontAtlas';
 import type { FontAtlas, GlyphMetrics } from './fontAtlas';
-import type { MapLabel } from './labelModel';
+import type { LabelGroup, MapLabel } from './labelModel';
 import { LABEL_STYLES } from './labelStyles';
 import type { LabelStyle } from './labelStyles';
 import type { Point } from '../../../worldgen/strategic/graph';
@@ -34,6 +34,8 @@ export interface LabelView {
   width: number;
   height: number;
   project(p: Readonly<Point>, height: number): [number, number] | null;
+  /** Screen pixels per meter of ground at a point (0 if hidden); without it, every zone has room. */
+  pixelsPerMeter?(p: Readonly<Point>, height: number): number;
 }
 
 type V3 = { readonly x: number; readonly y: number; readonly z: number };
@@ -78,6 +80,11 @@ export function perspectiveView(c: {
       const sy = (x * u.x + y * u.y + z * u.z) / (depth * ty);
       return [((sx + 1) / 2) * W, ((1 - sy) / 2) * H];
     },
+    pixelsPerMeter: (p, h) => {
+      const r = R + Math.max(0, h) * c.exaggeration;
+      const depth = (p[0] * r - eye.x) * f.x + (p[1] * r - eye.y) * f.y + (p[2] * r - eye.z) * f.z;
+      return depth > c.near ? H / (2 * ty * depth) : 0;
+    },
   };
 }
 
@@ -107,6 +114,17 @@ const STATIONS = [0.5, 0.35, 0.65, 0.2, 0.8];
 export const GRAZING = 0.2;
 /** Viewport margin (px). */
 const MARGIN = 3;
+/**
+ * Label budgets (decision 246). A land area (zone, salt pan, hills, wetland,
+ * desert, forest, plateau, plain) is named only where it spans at least
+ * AREA_MIN_PX across on screen, so the larger areas carry names when the map is
+ * far out and smaller ones join as it closes in. A budgeted group shows at most
+ * LABEL_BUDGET names at once, the most important first and, among near equals,
+ * those nearer the screen's center (up to CENTER_BONUS of importance).
+ */
+export const AREA_MIN_PX = 120;
+export const LABEL_BUDGET: Record<LabelGroup, number> = { area: 8, peak: 5 };
+export const CENTER_BONUS = 0.1;
 
 export interface TextRun {
   chars: { ch: string; x: number; m: GlyphMetrics }[];
@@ -409,14 +427,30 @@ export function placeLabels(
   view: LabelView,
   previous: ReadonlyMap<number, Placement> = new Map(),
 ): Map<number, Placement> {
-  const order = [...labels].sort((a, b) => {
-    const ka = a.importance + (previous.has(a.id) ? STICKY : 0);
-    const kb = b.importance + (previous.has(b.id) ? STICKY : 0);
-    return kb - ka || a.id - b.id;
+  // Areas too small on screen to name; budgeted labels gain a little for being central.
+  const key = new Map<number, number>();
+  const cx = view.width / 2;
+  const cy = view.height / 2;
+  const halfDiagonal = Math.hypot(cx, cy);
+  const kept = labels.filter((l) => {
+    let k = l.importance + (previous.has(l.id) ? STICKY : 0);
+    if (l.extent !== undefined) {
+      const ppm = view.pixelsPerMeter?.(l.anchor, l.height) ?? Infinity;
+      if (l.extent * ppm < AREA_MIN_PX) return false;
+    }
+    if (l.group !== undefined) {
+      const at = view.project(l.anchor, l.height);
+      if (at) k += CENTER_BONUS * (1 - Math.hypot(at[0] - cx, at[1] - cy) / halfDiagonal);
+    }
+    key.set(l.id, k);
+    return true;
   });
+  const order = kept.sort((a, b) => key.get(b.id)! - key.get(a.id)! || a.id - b.id);
   const index = new BoxIndex();
   const out = new Map<number, Placement>();
+  const used: Record<LabelGroup, number> = { area: 0, peak: 0 };
   for (const label of order) {
+    if (label.group !== undefined && used[label.group] >= LABEL_BUDGET[label.group]) continue;
     const style = LABEL_STYLES[label.style];
     const prev = previous.get(label.id)?.candidate;
     const cands = candidates(label);
@@ -435,6 +469,7 @@ export function placeLabels(
       if (!inside || boxes.some((b) => index.hits(b))) continue;
       for (const b of boxes) index.add(b);
       out.set(label.id, { candidate: cand, quads });
+      if (label.group !== undefined) used[label.group]++;
       break;
     }
   }

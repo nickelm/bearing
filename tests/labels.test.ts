@@ -17,6 +17,8 @@ import {
   MAX_BEND,
   perspectiveView,
   placeLabels,
+  AREA_MIN_PX,
+  LABEL_BUDGET,
 } from '../src/render/strategic/labels/labelPlacement';
 import type { LabelView, Placement } from '../src/render/strategic/labels/labelPlacement';
 import { LABEL_STYLES } from '../src/render/strategic/labels/labelStyles';
@@ -119,6 +121,61 @@ describe('font atlas', () => {
 });
 
 describe('label placement', () => {
+  it('names zones by their size on screen, at most LABEL_BUDGET.area at once (decision 246)', () => {
+    // 1 px per km: a zone needs AREA_MIN_PX km across for a name.
+    const view: LabelView = { ...flatView(1600, 1200), pixelsPerMeter: () => 1 / KM };
+    const zones: MapLabel[] = [];
+    for (let i = 0; i < 40; i++) {
+      zones.push(
+        label(i, {
+          style: 'landformSmall',
+          placement: 'area',
+          gap: 0,
+          text: `Zone ${i}`,
+          anchor: dir(((i * 13) % 21) * 2 - 20, ((i * 7) % 29) * 2.5 - 35),
+          group: 'area',
+          extent: (60 + i * 5) * KM,
+          importance: 0.3 + i * 0.008,
+        }),
+      );
+    }
+    const placed = placeLabels(atlas, zones, view);
+    expect(placed.size).toBeGreaterThan(0);
+    expect(placed.size).toBeLessThanOrEqual(LABEL_BUDGET.area);
+    for (const id of placed.keys()) expect(zones[id]!.extent!).toBeGreaterThanOrEqual(AREA_MIN_PX * KM);
+    // Closer in, small zones qualify; a settlement label is not counted against the budget.
+    const near: LabelView = { ...view, pixelsPerMeter: () => 10 / KM };
+    const town = label(99, { anchor: dir(30, 60), text: 'Kessar' });
+    const all = placeLabels(atlas, [...zones, town], near);
+    expect(all.has(99)).toBe(true);
+    expect([...all.keys()].filter((id) => id !== 99).length).toBeLessThanOrEqual(LABEL_BUDGET.area);
+    // A small zone alone: no name from far out, a name closer in.
+    const small = [zones[0]!];
+    expect(placeLabels(atlas, small, view).size).toBe(0);
+    expect(placeLabels(atlas, small, near).size).toBe(1);
+  });
+
+  it('prefers the zone nearer the center among equals (decision 246)', () => {
+    const view: LabelView = { ...flatView(), pixelsPerMeter: () => 1 / KM };
+    const zones = Array.from({ length: LABEL_BUDGET.area + 4 }, (_, i) =>
+      label(i, {
+        style: 'landformSmall',
+        placement: 'area',
+        gap: 0,
+        text: `Z${i}`,
+        anchor: dir(0, (i % 2 === 0 ? 1 : -1) * (2 + i * 2.5)),
+        group: 'area',
+        extent: 500 * KM,
+        importance: 0.5,
+      }),
+    );
+    const placed = placeLabels(atlas, zones, view);
+    const far = Math.max(...[...placed.keys()].map((id) => Math.abs(2 + id * 2.5)));
+    const left = zones.filter((z) => !placed.has(z.id)).map((z) => Math.abs(2 + z.id * 2.5));
+    expect(placed.size).toBeLessThanOrEqual(LABEL_BUDGET.area);
+    for (const d of left) expect(d).toBeGreaterThanOrEqual(far - 2.5);
+  });
+
   it('places point labels without overlaps, more important first', () => {
     const labels: MapLabel[] = [];
     for (let i = 0; i < 400; i++) {

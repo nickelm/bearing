@@ -104,6 +104,7 @@ import { BuildStamp } from './ui/buildStamp';
 import { CampaignPanel } from './ui/campaignPanel';
 import { AirPanel } from './ui/airPanel';
 import { GpuTiming } from './render/common/gpuTiming';
+import { START_ALTITUDE, startFocus } from './render/strategic/startFocus';
 import { SectionTimer } from './render/common/sectionTimer';
 import { MissionSearchPanel } from './ui/missionSearch/panel';
 import { SidePanel } from './ui/sidePanel';
@@ -262,7 +263,8 @@ async function main(): Promise<void> {
     nightLights: 3,
     renderScale: 'auto',
     targetFps: 30,
-    scene: query.get('view') === 'strategic' || freeFlightMode ? 'strategic' : 'simulation',
+    // The campaign opens on the map (decision 246); ?view=simulation opens the simulation view.
+    scene: query.get('view') === 'simulation' && !freeFlightMode ? 'simulation' : 'strategic',
     simCamera: 'observer',
     station: '',
   };
@@ -483,6 +485,15 @@ async function main(): Promise<void> {
   };
   onCampaignStart = (s) => {
     theaterNames = s.campaign.cast.theaters.map((t) => t.name);
+    // The map opens over the war (decision 246).
+    const focus = startFocus(s.graph, s.campaign.cast);
+    if (focus) {
+      const o = strategicView.orbit;
+      o.lat = Math.asin(Math.max(-1, Math.min(1, focus[1])));
+      o.lon = Math.atan2(focus[0], focus[2]);
+      o.heading = 0;
+      o.targetAltitude = START_ALTITUDE;
+    }
     missionSearch.setCampaign(mapParams.viewingSide, theaterNames);
     sidePanel.show(String(s.seed), s.campaign.cast);
   };
@@ -1043,7 +1054,7 @@ async function main(): Promise<void> {
     cameraChanged: () => applyCamera(),
   };
   const gui = new DebugGui(worldParams, viewParams, COLOR_MODES, guiCallbacks, { devCamera });
-  setActiveView(viewParams.scene); // ?view=strategic opens the map
+  setActiveView(viewParams.scene); // the map, unless ?view=simulation
   gui.status.backend = `WebGPU on ${describeAdapter(probe.adapter)}`;
   console.info(`WebGPU adapter: ${describeAdapter(probe.adapter)}`, probe.adapter.info);
   // Seed browser: its own worker, so scanning does not cancel the displayed world.

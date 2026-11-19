@@ -518,7 +518,7 @@ async function helicopter() {
 
 /** The campaign: the simulation view, a weather override, the map and back, the time controls. */
 async function campaign() {
-  await open(`seed=${seed}`);
+  await open(`seed=${seed}&view=simulation`);
   await until(() => window.bearing?.globe.terrainReady === true, 900);
   await page.evaluate(() => window.__probe.countThunder());
   await fixScale();

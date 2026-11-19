@@ -24,7 +24,7 @@ const R = PLANET_RADIUS;
 function viewAt(altitude: number, tilt = 0): LodView {
   const cam = new OrbitCamera(
     R,
-    { minAltitude: 100, maxAltitude: 10_000 * KM, maxTilt: 89 * DEG, maxLatitude: 89 * DEG },
+    { minAltitude: 100, maxAltitude: 10_000 * KM, maxTilt: 89 * DEG },
     altitude,
   );
   cam.lat = 40 * DEG;
