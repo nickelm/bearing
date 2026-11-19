@@ -13,7 +13,7 @@ import {
   HOVER_VECTOR_TIME,
   hoverSymbols,
   hoverVectorLength,
-} from '../src/freeflight/hudFrame';
+} from '../src/ui/flight/hudFrame';
 import { hoverDistance, sinkWarning, verticalSpeedText } from '../src/ui/flight/hud';
 
 const R = 1_000_000;

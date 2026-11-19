@@ -15,7 +15,7 @@ import {
 } from '../src/sim/sensors/sensors';
 import type { OwnShip, RadarSpec, SensorEnv, SensorTarget } from '../src/sim/sensors/sensors';
 import { applyCommand, initialAvionics } from '../src/sim/avionics/avionics';
-import { relativePicture } from '../src/freeflight/snapshot';
+import { relativePicture } from '../src/ui/displays/aircraftSnapshot';
 import { lineOfSight } from '../src/sim/sensors/lineOfSight';
 import { buildTraffic, trafficState, trafficTargets } from '../src/freeflight/traffic';
 

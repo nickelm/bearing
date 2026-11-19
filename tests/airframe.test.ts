@@ -12,7 +12,7 @@ import { Vec3d } from '../src/core/vec3d';
 import type { Airframe, AirframeTelemetry } from '../src/sim/flight/airframe';
 import { followAirframe } from '../src/render/sim/camera/chaseCamera';
 import type { ChaseTarget } from '../src/render/sim/camera/chaseCamera';
-import { landingAid } from '../src/freeflight/hudFrame';
+import { landingAid } from '../src/ui/flight/hudFrame';
 import { G0 } from '../src/sim/flight/atmosphere';
 import {
   hardPointHit,

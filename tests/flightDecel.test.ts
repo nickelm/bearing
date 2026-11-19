@@ -13,7 +13,7 @@ import { lookup, lookup2 } from '../src/sim/flight/flightSpec';
 import { flightWarnings } from '../src/sim/flight/outcomes';
 import { TOUCHDOWN_ZONE } from '../src/sim/flight/runway';
 import { approachEnergy, approachSpeed, distanceToSlow } from '../src/sim/flight/energy';
-import { aoaBracket, buildHudFrame } from '../src/freeflight/hudFrame';
+import { aoaBracket, buildHudFrame } from '../src/ui/flight/hudFrame';
 import { kestrelSpec } from './helpers/flight';
 import {
   decelTime,

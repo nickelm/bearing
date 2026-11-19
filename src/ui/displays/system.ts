@@ -1,8 +1,8 @@
 /**
- * The display system's controller for a flown aircraft (decision 199): holds
- * the avionics state (in Free Flight, which has no simulation worker; in the
- * campaign it will live with the aircraft in the simulation) and the display
- * state, runs the master modes' triggers, and turns commands from clicks, hot
+ * The display system's controller for a flown aircraft (decision 199): reads
+ * and changes the avionics state of the aircraft it is attached to (the state
+ * lives with the flown aircraft in sim/flight, R1.5; its own until one attaches),
+ * holds the display state, runs the master modes' triggers, and turns commands from clicks, hot
  * keys and (later) the crew into new states. Formats and the strip are pure
  * functions of the snapshot it is given; the view only draws.
  *
@@ -39,7 +39,8 @@ const MANUAL_MODES: Record<'jet' | 'helicopter', MasterMode[]> = {
 };
 
 export class DisplaySystem {
-  avionics: AvionicsState;
+  /** Where the avionics state lives: the attached aircraft (R1.5), or the system itself. */
+  private holder: { avionics: AvionicsState };
   display: DisplayState | null = null;
   /** Commands for the flight controls (gear, brakes, hover hold, the mouse). */
   onControls: ((a: ControlsAction) => void) | null = null;
@@ -55,7 +56,7 @@ export class DisplaySystem {
   private readonly detach: () => void;
 
   constructor(parent?: HTMLElement) {
-    this.avionics = initialAvionics(true);
+    this.holder = { avionics: initialAvionics(true) };
     this.view = new DisplaysView(parent);
     this.view.onCommand = (c) => this.command(c);
     for (const [a, codes] of Object.entries(DISPLAY_BINDINGS) as [DisplayHotAction, string[]][])
@@ -68,6 +69,20 @@ export class DisplaySystem {
     };
     window.addEventListener('keydown', kd);
     this.detach = () => window.removeEventListener('keydown', kd);
+  }
+
+  /** The attached aircraft's avionics state; avionics commands change it. */
+  get avionics(): AvionicsState {
+    return this.holder.avionics;
+  }
+
+  set avionics(a: AvionicsState) {
+    this.holder.avionics = a;
+  }
+
+  /** Reads and writes the avionics state of `aircraft` from now on (a flown aircraft, R1.5). */
+  attach(aircraft: { avionics: AvionicsState }): void {
+    this.holder = aircraft;
   }
 
   /** Starts a sortie: fresh avionics and display state. */

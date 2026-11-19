@@ -4,13 +4,13 @@
  * read, so the flight model is read in one place. Joker and bingo are Free
  * Flight's defaults (35% and 20% of the internal fuel) until missions set them.
  */
-import type { AvionicsState } from '../sim/avionics/avionics';
-import type { AvionicsProfile } from '../sim/avionics/profiles';
-import type { HudFrame } from '../ui/flight/hud';
-import type { AircraftSnapshot, SnapshotMessage, SnapshotSensors } from '../ui/displays/snapshot';
-import { Vec3d } from '../core/vec3d';
-import { radarDisplayRange } from '../sim/avionics/avionics';
-import type { RadarSpec, SensorPicture } from '../sim/sensors/sensors';
+import type { AvionicsState } from '../../sim/avionics/avionics';
+import type { AvionicsProfile } from '../../sim/avionics/profiles';
+import type { HudFrame } from '../flight/hud';
+import type { AircraftSnapshot, SnapshotMessage, SnapshotSensors } from './snapshot';
+import { Vec3d } from '../../core/vec3d';
+import { radarDisplayRange } from '../../sim/avionics/avionics';
+import type { RadarSpec, SensorPicture } from '../../sim/sensors/sensors';
 
 /**
  * The sensor picture relative to the aircraft at `pos` with nose `forward` and canopy

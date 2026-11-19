@@ -7,11 +7,11 @@
  * ground-plane velocity vector, the acceleration cue, radar altitude, torque,
  * rotor speed and the modes. No DOM and no three.js.
  */
-import { Vec3d } from '../core/vec3d';
-import type { GroundQuery } from '../sim/flight/contact';
-import type { HeloCommand, HeloLaws } from '../sim/flight/rotor/heloLaws';
-import type { RotorControls, RotorcraftModel } from '../sim/flight/rotor/rotorcraftModel';
-import type { HudFrame, HudLandingAid } from '../ui/flight/hud';
+import { Vec3d } from '../../core/vec3d';
+import type { GroundQuery } from '../../sim/flight/contact';
+import type { HeloCommand, HeloLaws } from '../../sim/flight/rotor/heloLaws';
+import type { RotorControls, RotorcraftModel } from '../../sim/flight/rotor/rotorcraftModel';
+import type { HudFrame, HudLandingAid } from './hud';
 import { hoverSymbols } from './hudFrame';
 
 /** The model's ground acceleration, from velocity samples a frame apart (world, m/s²). */

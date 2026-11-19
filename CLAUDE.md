@@ -103,7 +103,9 @@ src/sim/            headless simulation; runs in a worker: event queue + fixed t
   crew/             (R4, planned) AI crewmates: roles, format ownership, tasks, callouts; act through avionics commands
   command/          per-side command layer (graph and cast only): campaign input from the main thread, the interim
                     tasker (until the ATO), later the intelligence picture and the ATO
-  flight/           flight model, control laws, ground model, runways, outcomes, flight director and a
+  clock.ts          the one clock's rules: flight step, real-step cap, time rates (decision 243)
+  flight/           flownAircraft.ts (the flown aircraft: airframe, controls, input source, avionics state,
+                    stepping; decision 243); flight model, control laws, ground model, runways, outcomes, flight director and a
                     scripted test pilot, to be shared by AI and player (Free Flight, decision 134; R2 extends it to
                     campaign aircraft; the sensor model is in sensors/, decision 218); wind and gusts from the weather (wind.ts, decision 143);
                     the track hold on the wheels with free pedals (controlLaws.ts, decision 145);
@@ -150,7 +152,9 @@ src/ui/             displays/ (P2, decisions 195, 199): layout.ts (the slots' re
                     (hot keys), system.ts (the controller) and draw/ (the HTML, CSS and Canvas 2D view);
                     lil-gui debug panel (atmosphereSettings.ts maps its Atmosphere folder to the scene),
                     overlays, time controls, the time bar's weather line; flight/ (Free Flight's start screen, input
-                    bindings, HUD, pause menu and cards; decisions 134, 135); audio/ (synthesized thunder,
+                    bindings, HUD and the HUD frame built from an airframe, pause menu and cards; decisions 134,
+                    135); missionSearch/ (the search model and panel, decision 241); sidePanel.ts; the aircraft
+                    snapshot for the displays (displays/aircraftSnapshot.ts, R1.5); audio/ (synthesized thunder,
                     rain and wind, no files; decision 142)
 src/freeflight/     the Free Flight mode's glue on the main thread: world and runways, ground query, clock,
                     session flow (?mode=freeflight; decision 134), its weather (a StandaloneWeather feed and

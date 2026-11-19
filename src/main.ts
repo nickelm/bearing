@@ -1495,6 +1495,7 @@ async function main(): Promise<void> {
     strategicView.sun.copy(globe.sun);
     strategicView.relief.seasonPhase.value = globe.terrain.land.seasonPhase.value;
     strategicView.setAirTime(gameTime);
+    missionSearch.active = activeView === 'strategic' && !freeFlight;
     if (activeView === 'strategic') {
       airPanel.update(sim.missions, gameTime, now);
       missionSearch.update(sim.missions, gameTime, now);

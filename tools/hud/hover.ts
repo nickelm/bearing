@@ -14,7 +14,7 @@
 import { STICK_DEADZONE, STICK_FULL } from '../../src/ui/flight/flightInput';
 import { DEG, KNOT } from '../../src/core/units';
 import { Vec3d } from '../../src/core/vec3d';
-import { hoverSymbols } from '../../src/freeflight/hudFrame';
+import { hoverSymbols } from '../../src/ui/flight/hudFrame';
 import { ChaseCamera, helicopterRig } from '../../src/render/sim/camera/chaseCamera';
 import { Hud, matrixProjector } from '../../src/ui/flight/hud';
 import type { HudFrame, HudLandingAid, Projector } from '../../src/ui/flight/hud';

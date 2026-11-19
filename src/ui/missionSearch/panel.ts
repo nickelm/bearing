@@ -51,6 +51,8 @@ export class MissionSearchPanel {
   private choicesKey = '';
   private readonly selects = new Map<string, HTMLSelectElement>();
   private triggerPhase: MissionPhase = 'on-target';
+  private shown = false;
+  private isActive = true;
   /** A row was chosen: focus the map on the mission and select it. */
   onFocus: ((missionId: number) => void) | null = null;
   /** A campaign input (subscribe, unsubscribe) for the sim. */
@@ -77,17 +79,32 @@ export class MissionSearchPanel {
     window.addEventListener('keydown', (e) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      // Only over the map: in flight M steps the master mode (ui/displays/bindings.ts).
+      if (!this.isActive) return;
       if (e.code === 'KeyM' && !e.ctrlKey && !e.metaKey && !e.altKey) this.visible = !this.visible;
     });
   }
 
   get visible(): boolean {
-    return !this.el.hidden;
+    return this.shown;
   }
 
   set visible(v: boolean) {
-    this.el.hidden = !v;
-    document.body.classList.toggle('search-open', v);
+    this.shown = v;
+    this.apply();
+  }
+
+  /** Whether the map is on screen: the panel shows and takes M only then. */
+  set active(a: boolean) {
+    if (a === this.isActive) return;
+    this.isActive = a;
+    this.apply();
+  }
+
+  private apply(): void {
+    const on = this.shown && this.isActive;
+    this.el.hidden = !on;
+    document.body.classList.toggle('search-open', on);
     this.last = 0;
   }
 

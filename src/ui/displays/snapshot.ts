@@ -2,7 +2,7 @@
  * The aircraft snapshot (decision 199): the only thing formats and the strip
  * read. Plain, structured-clone-able data, built once per display update for
  * the flown or followed aircraft, from what that aircraft and its crew know
- * (rule 12). Free Flight builds it from the HUD's frame (freeflight/snapshot.ts).
+ * (rule 12). It is built from the HUD's frame (ui/displays/aircraftSnapshot.ts, R1.5).
  */
 import type { AvionicsState } from '../../sim/avionics/avionics';
 import type { AvionicsProfile } from '../../sim/avionics/profiles';

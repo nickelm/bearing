@@ -34,6 +34,8 @@ import { FLIGHT_STEP, FlightModel } from '../sim/flight/flightModel';
 import { assistsFor } from '../sim/flight/rotor/assists';
 import { HeloLaws } from '../sim/flight/rotor/heloLaws';
 import { neutralRotorControls, RotorcraftModel } from '../sim/flight/rotor/rotorcraftModel';
+import type { RotorControls } from '../sim/flight/rotor/rotorcraftModel';
+import { FlownAircraft } from '../sim/flight/flownAircraft';
 import { rotorDownwash } from '../sim/flight/rotor/downwash';
 import type { Downwash } from '../sim/flight/rotor/downwash';
 import { parseRotorcraftSpec } from '../sim/flight/rotor/rotorSpec';
@@ -70,7 +72,7 @@ import { MouseCapture } from '../ui/flight/mouseCapture';
 import { clearPresetEdits, DisplaySystem } from '../ui/displays/system';
 import type { ControlsAction } from '../ui/displays/model';
 import { AVIONICS_PROFILES } from '../sim/avionics/profiles';
-import { relativePicture, snapshotFromHud } from './snapshot';
+import { relativePicture, snapshotFromHud } from '../ui/displays/aircraftSnapshot';
 import type { SnapshotSensors, SnapshotTerrain } from '../ui/displays/snapshot';
 import { ACM_CONE, acmAcquire, SensorModel } from '../sim/sensors/sensors';
 import { threatCalls } from '../ui/displays/calls';
@@ -102,8 +104,8 @@ import { flightStartTime } from './clock';
 import { writeFreeFlightParams } from './url';
 import type { FreeFlightUrl } from './url';
 import { FlightWeather } from './flightWeather';
-import { buildHudFrame, landingAid } from './hudFrame';
-import { buildHeloHudFrame } from './heloHud';
+import { buildHudFrame, landingAid } from '../ui/flight/hudFrame';
+import { buildHeloHudFrame } from '../ui/flight/heloHud';
 import { AirfieldGround, runwaysOf } from './ground';
 
 export { parseFreeFlightUrl } from './url';
@@ -234,13 +236,12 @@ export class FreeFlight {
   private baseId: number | null = null;
   private pendingBase: number | null;
   private readonly autopilot: boolean;
-  private acc = 0;
   private debug = false;
   private frameMs = 0;
   private physicsMs = 0;
   private steps = 0;
-  private flightTime = 0;
-  private distance = 0;
+  /** The flown aircraft (R1.5): the airframe, its controls and the stepping, for either kind. */
+  private flown: FlownAircraft<FlightControls> | FlownAircraft<RotorControls> | null = null;
   private crashAt = 0;
   private readonly spec = modelSpec(AIRCRAFT);
   private readonly flightSpec = parseFlightSpec(this.spec.flight, AIRCRAFT);
@@ -570,9 +571,19 @@ export class FreeFlight {
     this.weather.preset = this.options.weather;
     this.weather.finish(this.gameTime);
     this.temperatureShift = this.weather.temperatureShift(r.center, this.gameTime);
-    this.acc = 0;
-    this.flightTime = 0;
-    this.distance = 0;
+    // The input source: the scripted pilot, mouse aim in the air once engaged, else the keys.
+    const flown = new FlownAircraft(m, this.input.controls, AIRCRAFT);
+    flown.pilot = (_a, ctl, dt) => {
+      if (this.pilot) this.pilot.fly(m, ctl, dt);
+      else if (
+        this.input.mode === 'mouse-aim' &&
+        this.aimEngaged &&
+        this.state === 'flying' &&
+        !m.onGround
+      )
+        this.mouseAim(m, ctl);
+    };
+    this.attach(flown);
     this.crashAt = 0;
     // Scene: the aircraft, its shadow, the chase camera.
     const g = this.deps.globe;
@@ -660,9 +671,14 @@ export class FreeFlight {
     this.weather.preset = this.options.weather;
     this.weather.finish(this.gameTime);
     this.temperatureShift = this.weather.temperatureShift(r.center, this.gameTime);
-    this.acc = 0;
-    this.flightTime = 0;
-    this.distance = 0;
+    // The helicopter's laws turn the player's command into controls before every step.
+    const flown = new FlownAircraft(m, this.heloControls, id);
+    flown.pilot = (_a, ctl, dt) => {
+      if (this.state === 'flying')
+        this.laws.update(m, this.heloInput.command, this.assists, dt, ctl);
+      this.heloInput.consumed();
+    };
+    this.attach(flown);
     this.crashAt = 0;
     const g = this.deps.globe;
     this.showView(id, () => new AircraftView(spec.model, spec.flight.cg, g.lighting));
@@ -750,22 +766,7 @@ export class FreeFlight {
     const t0 = performance.now();
     let steps = 0;
     if (this.state === 'flying' || this.state === 'summary') {
-      this.acc += Math.min(dt, 0.25);
-      while (this.acc >= FLIGHT_STEP && steps < MAX_STEPS) {
-        this.acc -= FLIGHT_STEP;
-        steps++;
-        if (this.state === 'flying')
-          this.laws.update(m, inp.command, this.assists, FLIGHT_STEP, this.heloControls);
-        inp.consumed();
-        const p0 = m.pos.clone();
-        this.setWind(m);
-        m.step(this.heloControls, this.ground!);
-        this.distance += p0.distanceTo(m.pos);
-        if (!m.crashed) this.flightTime += FLIGHT_STEP;
-        this.gameTime += FLIGHT_STEP;
-        for (const e of this.monitor!.update(m, FLIGHT_STEP)) this.event(e);
-      }
-      if (steps >= MAX_STEPS) this.acc = 0;
+      steps = this.flown!.advance(dt, this.ground!, MAX_STEPS);
     }
     this.steps = steps;
     this.physicsMs = performance.now() - t0;
@@ -783,6 +784,17 @@ export class FreeFlight {
       const cam = this.deps.globe.camera;
       this.view.radPerPixel = (cam.fov * DEG) / Math.max(1, window.innerHeight);
     }
+  }
+
+  /** Makes `flown` this sortie's aircraft: wind, game time and outcomes on every step. */
+  private attach(flown: FlownAircraft<FlightControls> | FlownAircraft<RotorControls>): void {
+    const f = flown as FlownAircraft<unknown>;
+    f.wind = (a) => this.setWind(a);
+    f.onStep = (a, dt) => {
+      this.gameTime += dt;
+      for (const e of this.monitor!.update(a, dt)) this.event(e);
+    };
+    this.flown = flown;
   }
 
   private toMenu(): void {
@@ -1009,28 +1021,7 @@ export class FreeFlight {
     const t0 = performance.now();
     let steps = 0;
     if (this.state === 'flying' || this.state === 'summary') {
-      this.acc += Math.min(dt, 0.25);
-      const ctl = this.input.controls;
-      while (this.acc >= FLIGHT_STEP && steps < MAX_STEPS) {
-        this.acc -= FLIGHT_STEP;
-        steps++;
-        if (this.pilot) this.pilot.fly(m, ctl, FLIGHT_STEP);
-        else if (
-          this.input.mode === 'mouse-aim' &&
-          this.aimEngaged &&
-          this.state === 'flying' &&
-          !m.onGround
-        )
-          this.mouseAim(m, ctl);
-        const p0 = m.pos.clone();
-        this.setWind(m);
-        m.step(ctl, this.ground);
-        this.distance += p0.distanceTo(m.pos);
-        if (!m.crashed) this.flightTime += FLIGHT_STEP;
-        this.gameTime += FLIGHT_STEP;
-        for (const e of this.monitor.update(m, FLIGHT_STEP)) this.event(e);
-      }
-      if (steps >= MAX_STEPS) this.acc = 0;
+      steps = this.flown!.advance(dt, this.ground, MAX_STEPS);
       // Gear doors failed in an overspeed (decision 207): said once; the strip keeps the caution.
       if (m.gearDamaged && !this.gearDamageTold) {
         this.gearDamageTold = true;
@@ -1158,8 +1149,8 @@ export class FreeFlight {
       landing: this.monitor!.lastTouchdown,
       stoppedAt: stopped ? { id: stopped.id, name: stopped.name } : null,
       homeId: this.baseId!,
-      flightTime: this.flightTime,
-      distance: this.distance,
+      flightTime: this.flown?.flightTime ?? 0,
+      distance: this.flown?.distance ?? 0,
     });
     this.state = 'summary';
     this.input.enabled = false;
@@ -1250,6 +1241,8 @@ export class FreeFlight {
 
   /** Starts the displays for a sortie in the aircraft of model spec `model` (decision 199). */
   private startDisplays(model: string, onGround: boolean): void {
+    // The avionics state lives with the flown aircraft (R1.5); the displays read it there.
+    if (this.flown) this.displays.attach(this.flown);
     this.displays.reset(onGround);
     this.displays.enabled = true;
     this.displays.visible = true;
@@ -1628,17 +1621,17 @@ export class FreeFlight {
   advance(seconds: number, stop?: (phase: string | null) => boolean): number {
     const m = this.model;
     if (!m || !this.ground || !this.monitor) return 0;
+    const flown = this.flown as FlownAircraft<FlightControls> | null;
+    if (!flown) return 0;
+    // The scripted pilot or the held controls fly; mouse aim takes no part.
+    const pilot = this.pilot;
+    const scripted = pilot
+      ? (_a: unknown, ctl: FlightControls, dt: number) => pilot.fly(m, ctl, dt)
+      : null;
     let t = 0;
     while (t < seconds && !(stop?.(this.pilot?.phase ?? null) ?? false)) {
-      if (this.pilot) this.pilot.fly(m, this.input.controls, FLIGHT_STEP);
-      const p0 = m.pos.clone();
-      this.setWind(m);
-      m.step(this.input.controls, this.ground);
-      this.distance += p0.distanceTo(m.pos);
-      if (!m.crashed) this.flightTime += FLIGHT_STEP;
-      this.gameTime += FLIGHT_STEP;
+      flown.step(this.ground, scripted);
       t += FLIGHT_STEP;
-      for (const e of this.monitor.update(m, FLIGHT_STEP)) this.event(e);
     }
     this.syncPose();
     this.updateChase();

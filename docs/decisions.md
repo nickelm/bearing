@@ -4013,3 +4013,19 @@ The sim worker's chunk grows from 58 kB to 104 kB, since the six bundles with ge
 - **Smoke test here.** In this session's container the smoke test on lavapipe loses the WebGPU device about 160 s into Free Flight's start screen, while the terrain synthesizes ("A valid external Instance reference no longer exists"). The session's starting commit (`0c81707`) fails the same way at 166 s, so it comes from the container, not from today's changes. Free Flight could not be checked in a browser in this session.
 
 **Reason:** R2 needs a GPU baseline per view and per pass, measured on the owner's machine with the same tool that runs the smoke test.
+
+### 243. The flown aircraft leaves Free Flight: FlownAircraft, the avionics state with it, one clock
+
+**Date:** 2026-11-19
+**Decision:** R1.5.
+
+- **The split.** Free Flight's responsibilities, mapped: session flow (start screen, pause, summary, URL), input (keys, mouse aim, mouse capture), the airframe and its stepping, the director and scripted pilot, sensors and traffic, the HUD frame, the displays, the chase camera, weather. The airframe and its stepping, the input source, the avionics state and the clock's rules are what a campaign flight needs at full fidelity (R2.4, R2.5); they move out. Session flow, input devices, traffic and the camera stay in `freeflight/` and the UI.
+- **FlownAircraft** (`src/sim/flight/flownAircraft.ts`): an airframe of either kind with its controls, an input source (`pilot`: an AI or the scripted pilot, mouse aim, or the helicopter's laws turning the player's command into controls; none: the controls as the player left them), a wind hook, `onStep` (game time, outcomes), the flight time and distance, and the avionics state. `advance` turns real time into whole 1/120 s steps with the cap and step limit Free Flight had; `step` takes one. No DOM, render or worker imports. `fixedWingFromState` builds a jet from a position, velocity and fuel (nose on the flight path plus about the 1-g angle of attack, gear and power by whether it flies, real fuel), as R2.5's promotion will.
+- **Free Flight on it.** The jet's and the helicopter's loops and the tools' `advance` were three copies of one step; all three now go through one `FlownAircraft` per sortie, which replaces Free Flight's own accumulator and counters. The `model`/`helo` fields stay for the HUD and the camera, which still read the airframe by kind.
+- **Avionics state** lives on the flown aircraft; the display system attaches to it (`DisplaySystem.attach`) and reads and changes it there, keeping its own only until an aircraft attaches.
+- **Snapshot and HUD frame** builders move from `freeflight/` to `ui/flight/hudFrame.ts`, `ui/flight/heloHud.ts` and `ui/displays/aircraftSnapshot.ts`: they read an airframe and the sensors, not Free Flight, so a followed aircraft (R2.4) can use them.
+- **One clock.** `src/sim/clock.ts` holds the rules both clocks follow: the flight step, the 0.25 s real-step cap, the time rates and `gameStep`, which `SimHost` and `FlownAircraft` both use; the flown aircraft's own rate is 1× until R2.5's cruise acceleration (`FLOWN_MAX_RATE`).
+
+**How it was checked.** `tests/flownAircraft.test.ts`: the scripted pilot's whole circuit, flown through `FlownAircraft` in 60 Hz frames from a lineup built by `fixedWingFromState`, ends bit for bit where the airframe stepped directly ends, fuel included; a jet built from an air state at 320 kt holds course, height and speed under the flight director for a minute; the step cap holds. `tests/flightLockstep.test.ts` passes unchanged. `tools/freeflight.session.mjs` passes everything but the known "drizzle: wet at once" check (decision 217), before and after the change.
+
+**Reason:** proposal 0008 lets the player take over any campaign flight; that needs the flown aircraft, its controls and its avionics as one object outside the sandbox, with the same physics path for the player and the AI (rule 12).

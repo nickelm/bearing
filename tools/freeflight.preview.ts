@@ -35,7 +35,7 @@ import { Vec3d } from '../src/core/vec3d';
 import { flightStartTime, freeFlightDay } from '../src/freeflight/clock';
 import { FlightWeather } from '../src/freeflight/flightWeather';
 import { AirfieldGround, runwaysOf } from '../src/freeflight/ground';
-import { buildHudFrame, landingAid } from '../src/freeflight/hudFrame';
+import { buildHudFrame, landingAid } from '../src/ui/flight/hudFrame';
 import { modelSpec } from '../src/render/common/models/library';
 import { helicopterRig } from '../src/render/sim/camera/chaseCamera';
 import { RotorcraftModel } from '../src/sim/flight/rotor/rotorcraftModel';

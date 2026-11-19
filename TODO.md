@@ -61,14 +61,15 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 
 ### R1.5 The flown aircraft leaves Free Flight
 
-- [ ] Map `freeflight/freeFlight.ts`'s responsibilities (session flow, input, airframe, director, sensors, traffic, HUD frame, displays) and draw the split
-- [ ] `FlownAircraft` in `src/sim/flight/`: airframe, control laws, director target, input source (player or AI), fuel and configuration; no DOM or render imports
-- [ ] Move `AvionicsState` from `ui/displays/system.ts` into per-aircraft sim state; the display system reads it
-- [ ] Build the aircraft snapshot outside `freeflight/` from `FlownAircraft` and sensors
-- [ ] One flown-aircraft abstraction for both kinds (replaces Free Flight's `model`/`helo` branching)
-- [ ] One clock: Free Flight's `clock.ts` and the campaign clock share stepping rules (120 Hz, substeps, rates)
-- [ ] Free Flight on `FlownAircraft`; `tests/flightLockstep.test.ts` passes unchanged; `tools/freeflight.session.mjs` passes
-- [ ] Test: a `FlownAircraft` created from a position, velocity and fuel holds the scripted pilot's route
+- [x] Map `freeflight/freeFlight.ts`'s responsibilities (session flow, input, airframe, director, sensors, traffic, HUD frame, displays) and draw the split (decision 243)
+- [x] `FlownAircraft` in `src/sim/flight/`: airframe, control laws, director target, input source (player or AI), fuel and configuration; no DOM or render imports (the director target lives in the pilot hook)
+- [x] Move `AvionicsState` from `ui/displays/system.ts` into per-aircraft sim state; the display system reads it
+- [x] Build the aircraft snapshot outside `freeflight/` from `FlownAircraft` and sensors (`ui/displays/aircraftSnapshot.ts`, `ui/flight/hudFrame.ts`)
+- [x] One flown-aircraft abstraction for both kinds (replaces Free Flight's `model`/`helo` branching): the stepping; the HUD and camera still branch by kind
+- [ ] The HUD frame and the chase camera from `FlownAircraft` instead of `model`/`helo` (with R2.4's followed aircraft)
+- [x] One clock: Free Flight's `clock.ts` and the campaign clock share stepping rules (120 Hz, substeps, rates): `src/sim/clock.ts`
+- [x] Free Flight on `FlownAircraft`; `tests/flightLockstep.test.ts` passes unchanged; `tools/freeflight.session.mjs` passes (but for the known drizzle check)
+- [x] Test: a `FlownAircraft` created from a position, velocity and fuel holds the scripted pilot's route
 
 ### R1.6 Terrain for the execution layer
 

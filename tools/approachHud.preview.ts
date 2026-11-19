@@ -12,7 +12,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { PerspectiveCamera, Vector3 } from 'three';
 import { test } from 'vitest';
-import { buildHudFrame, landingAid } from '../src/freeflight/hudFrame';
+import { buildHudFrame, landingAid } from '../src/ui/flight/hudFrame';
 import { straightInApproach } from '../tests/helpers/decel';
 import { encodePng } from './png';
 

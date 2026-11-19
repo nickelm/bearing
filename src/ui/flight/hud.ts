@@ -98,7 +98,7 @@ export interface HoverHud {
   /**
    * World-anchored: the point on the ground under the aircraft, and the tips of
    * the velocity vector and acceleration cue on the ground plane, each relative
-   * to the camera eye (m). `hoverSymbols` in freeflight/hudFrame.ts builds them.
+   * to the camera eye (m). `hoverSymbols` in ui/flight/hudFrame.ts builds them.
    */
   groundPoint: Vec3d;
   velocityTip: Vec3d;

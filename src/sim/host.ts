@@ -17,15 +17,13 @@
  *   checkpoints after it, which no longer describe the future.
  */
 import type { GameTime, Seconds } from '../core/units';
+import { gameStep } from './clock';
 import { HOUR } from '../core/units';
 import type { CampaignInputEvent } from './eventLog';
 import type { SimEvent, SimState, Simulation } from './simulation';
 
-/** Clock rates offered to the player: paused, then game seconds per real second. */
-export const TIME_RATES = [0, 1, 4, 16, 64, 256] as const;
-
-/** Longest real-time step taken at once (s): a stalled tab does not leap ahead. */
-export const MAX_REAL_STEP: Seconds = 0.25;
+// The clock's rules are shared with the flown aircraft (clock.ts, R1.5).
+export { MAX_REAL_STEP, TIME_RATES } from './clock';
 
 /** Game time between checkpoints. */
 export const CHECKPOINT_PERIOD: Seconds = 6 * HOUR;
@@ -105,12 +103,12 @@ export class SimHost<W extends { readonly sim: Simulation }> {
 
   /** Advances by `realDt` real seconds at the current rate. */
   step(realDt: Seconds): HostStep {
-    const dt = Math.min(Math.max(realDt, 0), MAX_REAL_STEP);
     const sim = this.current.sim;
+    const game = gameStep(realDt, this.rate);
     let flagged: SimEvent[] = [];
     let slowed = false;
-    if (this.rate > 0 && dt > 0) {
-      flagged = this.advance(sim.time + this.rate * dt, this.autoSlowdown);
+    if (game > 0) {
+      flagged = this.advance(sim.time + game, this.autoSlowdown);
       if (this.autoSlowdown && flagged.length > 0 && this.rate > 1) {
         this.rate = 1;
         slowed = true;

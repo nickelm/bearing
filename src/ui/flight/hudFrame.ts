@@ -4,13 +4,13 @@
  * the landing aid for the destination runway. No DOM and no three.js, so the
  * preview tool builds the same frames headlessly.
  */
-import { DEG } from '../core/units';
-import { Vec3d } from '../core/vec3d';
-import type { FlightControls } from '../sim/flight/controlLaws';
-import type { Airframe } from '../sim/flight/airframe';
-import { approachEnergy, approachSpeed, ON_SPEED_MARGIN } from '../sim/flight/energy';
-import type { FlightModel } from '../sim/flight/flightModel';
-import { flightWarnings } from '../sim/flight/outcomes';
+import { DEG } from '../../core/units';
+import { Vec3d } from '../../core/vec3d';
+import type { FlightControls } from '../../sim/flight/controlLaws';
+import type { Airframe } from '../../sim/flight/airframe';
+import { approachEnergy, approachSpeed, ON_SPEED_MARGIN } from '../../sim/flight/energy';
+import type { FlightModel } from '../../sim/flight/flightModel';
+import { flightWarnings } from '../../sim/flight/outcomes';
 import {
   AIM_POINT,
   endFor,
@@ -21,10 +21,10 @@ import {
   runwayFrame,
   runwayPoint,
   toRunway,
-} from '../sim/flight/runway';
-import type { Runway, RunwayEnd } from '../sim/flight/runway';
-import type { ControlCursor } from '../ui/flight/controlCursor';
-import type { HoverHud, HudEnergy, HudFrame, HudLandingAid } from '../ui/flight/hud';
+} from '../../sim/flight/runway';
+import type { Runway, RunwayEnd } from '../../sim/flight/runway';
+import type { ControlCursor } from './controlCursor';
+import type { HoverHud, HudEnergy, HudFrame, HudLandingAid } from './hud';
 
 /** The speed trend vector looks this far ahead (s). */
 export const TREND_TIME = 10;
