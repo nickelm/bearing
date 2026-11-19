@@ -178,12 +178,14 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 
 ### R2.4 Follow
 
-- [ ] Campaign aircraft in the simulation view: instanced models, a level of detail for packages, shadows near the camera
-- [ ] *Follow* from mission search and from a subscription offer: a cut and a chase-camera settle
-- [ ] Return to the map above the flight's position
-- [ ] Read-only HUD for the followed aircraft from its analytic state
-- [ ] Spectator displays: the followed aircraft's own picture, read-only
-- [ ] Per-type camera rigs from the bundles, including a transport rig
+- [x] The followed flight's pose from its analytic route: position, nose and top, velocity, the turns at waypoints smoothed into banked turns, formation slots (`sim/air/analyticPose.ts`)
+- [ ] Campaign aircraft in the simulation view: the followed flight's aircraft from their bundles' models, posed by the analytic pose (one model per aircraft, the flight in formation)
+- [ ] Other flights near the camera, instanced by type, with a level of detail for packages; shadows near the camera
+- [ ] Chase camera on an analytic target (`ChaseTarget` from the pose); the rig from the followed type's bundle, including a transport rig
+- [ ] *Follow* from mission search and from a subscription offer: a cut into the simulation view with a chase-camera settle (owner decision 12)
+- [ ] Return to the map above the flight's position (a key and a button)
+- [ ] Read-only HUD for the followed aircraft from its analytic state (`hudFrame` from the pose)
+- [ ] Spectator displays: the followed aircraft's own formats, read-only
 - [ ] Retire the debug free camera behind `?dev` only
 - [ ] Acceptance checks 7 and 10 as scripted sequences
 - [ ] Owner: follow a mission of each demo type and return
@@ -292,6 +294,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 
 - [ ] R5.1 Logistics (large)
 - [ ] R5.2 Morale and reputation (medium)
+- [ ] Operational movement (owner, 2026-11-19; with R5.3, before its breakthrough end condition): reserves committed where an offensive succeeds; exploitation when a defending segment collapses (faster advance, the shear limit loosened behind it); pockets cut off from supply. The defender scrambles to cut the spearhead off: CAS and interdiction against it, blowing bridges and destroying supplies in its path (demolitions as a ground action, not only air strikes)
 - [ ] R5.3 Weeks of war (medium)
 - [ ] R5.4 Save and load (medium)
 - [ ] R5.5 Consequence visibility (medium)
