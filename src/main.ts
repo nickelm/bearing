@@ -104,6 +104,7 @@ import { BuildStamp } from './ui/buildStamp';
 import { CampaignPanel } from './ui/campaignPanel';
 import { AirPanel } from './ui/airPanel';
 import { GpuTiming } from './render/common/gpuTiming';
+import { DEMO_SEEDS } from './campaign/demoSeeds';
 import { START_ALTITUDE, startFocus } from './render/strategic/startFocus';
 import { SectionTimer } from './render/common/sectionTimer';
 import { MissionSearchPanel } from './ui/missionSearch/panel';
@@ -227,7 +228,9 @@ async function main(): Promise<void> {
   const queryRes = Number(query.get('res'));
   const queryGres = Number(query.get('gres'));
   const worldParams: WorldGuiParams = {
-    seed: query.get('seed') ?? String(DEFAULT_PLANET_PARAMS.seed),
+    // The campaign opens on the first demo seed, which has a land front and so close air
+    // support (decision 248); Free Flight keeps the long-standing default world.
+    seed: query.get('seed') ?? String(freeFlightMode ? DEFAULT_PLANET_PARAMS.seed : DEMO_SEEDS[0]),
     resolution: (RESOLUTIONS as readonly number[]).includes(queryRes) ? queryRes : 256,
     globalResolution: (GLOBAL_RESOLUTIONS as readonly number[]).includes(queryGres)
       ? queryGres

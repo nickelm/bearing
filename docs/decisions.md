@@ -4075,3 +4075,14 @@ The sim worker's chunk grows from 58 kB to 104 kB, since the six bundles with ge
 - **R1's state.** R1.1 is done: the map runs at 50 fps and more on the owner's machine (from 10–15) with no decay over a session; a steady 60 fps (the main pass's GPU time) and the desktop alignment rerun move to R6.4, as neither gates R2. R1.6 is done, its handover criterion moving to R2.5, where a flight is first handed over. R1.2, R1.3, R1.5, R1.7 and R1.8 were done. What remains is R1.4's exit criterion, the owner finding the next CAS mission over the front in under ten seconds.
 
 **Reason:** the owner asked whether airbases should be named on the map (they should: they are where missions start and what strikes target) and whether R1 could close.
+
+### 248. The campaign opens on a demo seed; mission search's dropdowns and threat mark
+
+**Date:** 2026-11-19
+**Decision:**
+
+- **Default seed.** The campaign opened on world seed 1983, an island campaign without a continental front. The interim tasker flies close air support only over fronts, so the owner's ten-second check (R1.4) found none: in six game hours seed 1983 flies CAP, airlift, deep strikes and escorts, and no CAS. The campaign now opens on `DEMO_SEEDS[0]` (seed 4: a front, a sea lane, the strategic theater) unless the URL names a seed; Free Flight keeps 1983, which its tools and smoke test use. `DEFAULT_PLANET_PARAMS.seed` stays 1983, so tests and caches are unchanged.
+- **The war tool counts missions by type** (`tools/war.preview.ts`, every mission seen live, both sides). Six hours: seed 4 flew 13 CAS missions, seed 10 15, seed 7 8, seed 1983 none.
+- **Mission search.** The dropdown lists were white text on the browser's white list: the panel now declares `color-scheme: dark` and colors its options. The high-threat mark (▲) was a third flex item in the row's head, which centered the title; the title is now its own span and carries the mark.
+
+**Reason:** the owner's R1.4 check on the default world.

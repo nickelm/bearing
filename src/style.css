@@ -466,6 +466,13 @@ body.ff-flying.ff-no-fps .frame-overlay {
   border-radius: 4px;
   font-size: 13px;
   line-height: 1.4;
+  /* Native dropdown lists in dark colors: white option text was drawn on white. */
+  color-scheme: dark;
+}
+
+.mission-search option {
+  color: #fff;
+  background: #1e1e1e;
 }
 
 .mission-search[hidden],
@@ -552,7 +559,7 @@ body.ff-flying.ff-no-fps .frame-overlay {
   font-size: 12px;
 }
 
-.mission-search .threat-high .head::before {
+.mission-search .threat-high .title::before {
   content: '▲ ';
   color: #ff7a59;
 }

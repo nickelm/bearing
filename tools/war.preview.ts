@@ -48,6 +48,8 @@ interface Report {
   hash: string;
   same: boolean;
   launched: string;
+  /** Missions seen live, by type (sampled every step). */
+  byType: string;
   completed: string;
   meanAirborne: number;
   maxAirborne: number;
@@ -94,6 +96,7 @@ function day(seed: number): Report {
     hash: '',
     same: false,
     launched: '',
+    byType: '',
     completed: '',
     meanAirborne: 0,
     maxAirborne: 0,
@@ -106,6 +109,7 @@ function day(seed: number): Report {
     const stepped = new SimHost(make, applyInput);
     stepped.rate = RATE;
     stepped.autoSlowdown = false;
+    const seen = new Map<string, string>();
     let airborne = 0;
     let samples = 0;
     let nextSample = 0;
@@ -123,6 +127,7 @@ function day(seed: number): Report {
       }
       report.worstStepMs = Math.max(report.worstStepMs, performance.now() - a);
       const air = stepped.world.air!;
+      for (const m of air.missions.values()) seen.set(`${m.side}:${m.id}`, m.type);
       if (stepped.time >= nextSample) {
         const n = air.airborneAt('alliance', stepped.time) + air.airborneAt('pact', stepped.time);
         airborne += n;
@@ -143,6 +148,9 @@ function day(seed: number): Report {
     const air = sw.air!;
     report.launched = `${air.launched.alliance}/${air.launched.pact}`;
     report.completed = `${air.completed.alliance}/${air.completed.pact}`;
+    const counts = new Map<string, number>();
+    for (const t of seen.values()) counts.set(t, (counts.get(t) ?? 0) + 1);
+    report.byType = [...counts].sort((x, y) => y[1] - x[1]).map(([t, n]) => `${t} ${n}`).join(', ');
     report.squadrons = air.squadrons.length;
     report.weatherSystems = sw.weather.systems.length;
     report.logEntries = sw.sim.log.size;
@@ -176,6 +184,8 @@ it('runs a day of war on the demo seeds', () => {
         `${r.logEntries} | \`${r.hash}\` | ${r.same ? 'yes' : '**no**'} |`,
     );
   }
+  lines.push('', 'Missions seen by type, both sides:', '');
+  for (const r of reports) lines.push(`- Seed ${r.seed}: ${r.byType || 'none'}`);
   for (const r of reports)
     if (r.error) lines.push('', `Seed ${r.seed} failed:`, '', '```', r.error, '```');
   const text = lines.join('\n') + '\n';

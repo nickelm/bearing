@@ -217,7 +217,11 @@ export class MissionSearchPanel {
       li.tabIndex = 0;
       const head = document.createElement('div');
       head.className = 'head';
-      head.textContent = `${r.callsign} · ${r.typeLabel}`;
+      // The title in its own span: the threat mark before it stays at the left.
+      const title = document.createElement('span');
+      title.className = 'title';
+      title.textContent = `${r.callsign} · ${r.typeLabel}`;
+      head.appendChild(title);
       const when = document.createElement('span');
       when.className = 'when';
       when.textContent = r.action;
