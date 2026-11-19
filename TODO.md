@@ -25,7 +25,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] Frame-rate decay over a session: check tile and mesh caches, undisposed geometries and textures, label rebuilds; a soak test that counts GPU objects after 20 view switches
 - [x] GPU timing tool: timestamp queries per pass in the app behind `?dev`, logged per view (`?dev&gputime=1`, `GPU_TIMING=1` in the smoke test; decision 242)
 - [ ] Owner: run `tools/browser.smoke.mjs` with `MODE=gpu` and the timing tool on the owner's machine; record the standard views in the audit's performance baseline (`MODE=gpu GPU_TIMING=1 node tools/browser.smoke.mjs`)
-- [ ] The lavapipe smoke test loses its device about 160 s into Free Flight's start screen in cloud containers, also at `0c81707` (decision 242); find out whether it is memory or the shim
+- [ ] The lavapipe smoke test loses its device about 160 s into Free Flight's start screen in cloud containers, also at `0c81707` (decision 242); most likely the container's memory limit killing Chromium's GPU process (the kernel reported out-of-memory kills during the runs)
 - [ ] Rerun the whole-world alignment on a desktop after the tile-cache fix; record time, forced pieces, viaduct and tunnel totals
 - [x] Remove `networkLink`'s timeout under load (raise the budget or split the test): the eviction test reuses one aligned link instead of aligning forty (9.4 s → 0.2 s)
 
