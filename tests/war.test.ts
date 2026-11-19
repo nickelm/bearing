@@ -6,6 +6,7 @@ import { Vec3d } from '../src/core/vec3d';
 import { campaignInput } from '../src/sim/command/campaignInput';
 import { SimHost } from '../src/sim/host';
 import { applyInput, createSimWorld } from '../src/sim/world';
+import type { SimWorld } from '../src/sim/world';
 import { buildWeatherClimate } from '../src/sim/weather/climate';
 import { WeatherGrid } from '../src/sim/weather/grid';
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
@@ -47,5 +48,39 @@ describe('a generated world at war', () => {
     expect(stepped.world.weather.systems.length).toBeGreaterThan(0);
     const frame = stepped.world.weather.frameData(stepped.world.weather.hour);
     expect(frame.every(Number.isFinite)).toBe(true);
+  });
+
+  // R2.1's exit: the orders are the same at any time acceleration and for either viewing side.
+  it('issues the same orders at 1× steps, at 64× and in one jump, whichever side the player takes', () => {
+    const end = 26 * HOUR;
+    const orders = (host: SimHost<SimWorld>) => {
+      const w = host.world;
+      return JSON.stringify({ ato: w.ato!.save(), air: w.air!.save() });
+    };
+    // 1×: the worker's frame step at real time, here in 1 s steps (a frame is 1/30 s;
+    // 1 s already splits every hour into thousands of steps).
+    const slow = new SimHost(make, applyInput);
+    slow.input({ kind: 'side', side: 'alliance' });
+    for (let t = 1; t <= end; t += 1) slow.world.sim.advanceTo(t);
+    const fast = new SimHost(make, applyInput);
+    fast.input({ kind: 'side', side: 'pact' });
+    fast.rate = 64;
+    fast.autoSlowdown = false;
+    while (fast.time < end) fast.step(Math.min(1 / 30, (end - fast.time) / 64));
+    const jump = new SimHost(make, applyInput);
+    jump.seek(end);
+    expect(fast.time).toBe(end);
+    expect(orders(fast)).toBe(orders(slow));
+    expect(orders(jump)).toBe(orders(slow));
+    const ato = jump.world.ato!;
+    for (const side of ['alliance', 'pact'] as const) {
+      expect(ato.stats[side].orders, side).toBe(2);
+      expect(ato.stats[side].revisions, side).toBeGreaterThan(2);
+      // Each revision is a logged decision (rule 19).
+      const logged = jump.world.sim.log.entries.filter(
+        (e) => e.source === 'decision' && e.kind === 'ato-revised' && e.side === side,
+      );
+      expect(logged.length).toBe(ato.stats[side].revisions);
+    }
   });
 });

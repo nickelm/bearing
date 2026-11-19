@@ -18,8 +18,11 @@
  *   never the flows (decision 51): a route is feasible while fuel stays above
  *   the reserve.
  *
- * Winds aloft are not applied yet (ATO weather task); speeds are true
- * airspeeds used as ground speeds.
+ * - **Winds aloft** (R2.1): with a wind source, each leg flies at its ground
+ *   speed, the true airspeed less the crosswind's crab plus the wind along the
+ *   track, from the wind at the leg's middle and mean altitude; time, and so
+ *   fuel, follows. Orbits fly at their airspeed (the wind's effect around a
+ *   racetrack averages out). Without one, airspeed is ground speed.
  */
 import {
   arcDistance,
@@ -34,6 +37,7 @@ import {
 } from '../../core/greatCircle';
 import type { Dir } from '../../core/greatCircle';
 import type { GameTime, Meters } from '../../core/units';
+import type { Wind } from '../weather/frame';
 import { FLOW, FUEL_RESERVE } from './aircraft';
 import type { AircraftType, FlowRegime } from './aircraft';
 import type { MissionPhase } from './mission';
@@ -81,6 +85,23 @@ export interface RouteState {
   /** Index of the segment, or −1 before the start or after the end. */
   segment: number;
   airborne: boolean;
+}
+
+/** Wind at a point and altitude above sea level (m/s east and north), or null in calm air. */
+export type WindSource = (p: Readonly<Dir>, altitude: Meters) => Wind | null;
+
+/** Least ground speed as a share of airspeed, whatever the wind. */
+export const MIN_GROUND_SPEED = 0.3;
+
+/** Ground speed along a track `heading` (rad) at airspeed `tas` in wind `w`. */
+export function groundSpeed(tas: number, heading: number, w: Wind | null): number {
+  if (!w) return tas;
+  const sh = Math.sin(heading);
+  const ch = Math.cos(heading);
+  const along = w.east * sh + w.north * ch;
+  const cross = w.east * ch - w.north * sh;
+  const lo = MIN_GROUND_SPEED * tas;
+  return Math.max(lo, Math.sqrt(Math.max(lo * lo, tas * tas - cross * cross)) + along);
 }
 
 /** Length of each straight leg of a racetrack orbit (m). */
@@ -222,6 +243,8 @@ export class RouteBuilder {
   time: GameTime;
   fuel: number;
   heading = 0;
+  /** Winds aloft for leg ground speeds (R2.1); null: airspeed is ground speed. */
+  wind: WindSource | null = null;
 
   constructor(
     readonly type: AircraftType,
@@ -274,6 +297,14 @@ export class RouteBuilder {
     const d = arcDistance(this.point, to, this.radius);
     if (d < 1) return this;
     this.heading = initialHeading(this.point, to);
+    if (this.wind) {
+      const mid = slerp(this.point, to, 0.5);
+      speed = groundSpeed(
+        speed,
+        initialHeading(mid, to),
+        this.wind(mid, (this.altitude + alt) / 2),
+      );
+    }
     this.push({
       kind: 'leg',
       phase,

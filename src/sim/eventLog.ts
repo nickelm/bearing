@@ -34,14 +34,27 @@ export type CampaignInputEvent =
   | { kind: 'unsubscribe'; id: number };
 
 /** A campaign-level decision. Later phases add their kinds here. */
-export type CampaignDecision = {
-  kind: 'mission-launched';
-  mission: number;
-  side: string;
-  type: string;
-  squadron: number;
-  aircraft: number;
-};
+export type CampaignDecision =
+  | {
+      kind: 'mission-launched';
+      mission: number;
+      side: string;
+      type: string;
+      squadron: number;
+      aircraft: number;
+    }
+  /** A side's air tasking order issued (revision 0) or revised (R2.1): sorties kept, added, cancelled. */
+  | {
+      kind: 'ato-revised';
+      side: string;
+      day: number;
+      revision: number;
+      kept: number;
+      added: number;
+      cancelled: number;
+    }
+  /** A planned sortie cancelled when it was due to be committed (R2.1), and why. */
+  | { kind: 'sortie-cancelled'; side: string; sortie: string; type: string; reason: string };
 
 export type LogEntry =
   | ({ source: 'input'; time: GameTime; seq: number } & CampaignInputEvent)

@@ -56,6 +56,10 @@ interface Report {
   squadrons: number;
   weatherSystems: number;
   logEntries: number;
+  /** The air tasking orders (R2.1), per side: orders, revisions, sorties planned and committed, cancellations by reason. */
+  ato: string[];
+  /** Missions seen by type and side, for the four demo types. */
+  demo: string;
   error: string | null;
 }
 
@@ -103,6 +107,8 @@ function day(seed: number): Report {
     squadrons: 0,
     weatherSystems: 0,
     logEntries: 0,
+    ato: [],
+    demo: '',
     error: null,
   };
   try {
@@ -127,7 +133,7 @@ function day(seed: number): Report {
       }
       report.worstStepMs = Math.max(report.worstStepMs, performance.now() - a);
       const air = stepped.world.air!;
-      for (const m of air.missions.values()) seen.set(`${m.side}:${m.id}`, m.type);
+      for (const m of air.missions.values()) seen.set(`${m.side}:${m.id}`, `${m.side}:${m.type}`);
       if (stepped.time >= nextSample) {
         const n = air.airborneAt('alliance', stepped.time) + air.airborneAt('pact', stepped.time);
         airborne += n;
@@ -149,8 +155,40 @@ function day(seed: number): Report {
     report.launched = `${air.launched.alliance}/${air.launched.pact}`;
     report.completed = `${air.completed.alliance}/${air.completed.pact}`;
     const counts = new Map<string, number>();
-    for (const t of seen.values()) counts.set(t, (counts.get(t) ?? 0) + 1);
-    report.byType = [...counts].sort((x, y) => y[1] - x[1]).map(([t, n]) => `${t} ${n}`).join(', ');
+    const bySide = new Map<string, number>();
+    for (const st of seen.values()) {
+      const t = st.slice(st.indexOf(':') + 1);
+      counts.set(t, (counts.get(t) ?? 0) + 1);
+      bySide.set(st, (bySide.get(st) ?? 0) + 1);
+    }
+    report.demo = ['cap', 'interdiction', 'cas', 'airlift']
+      .map((t) => `${t} ${bySide.get(`alliance:${t}`) ?? 0}/${bySide.get(`pact:${t}`) ?? 0}`)
+      .join(', ');
+    const ato = sw.ato!;
+    for (const side of ['alliance', 'pact'] as const) {
+      const st = ato.stats[side];
+      const cancelled = Object.entries(st.cancelled)
+        .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+        .map(([k, n]) => `${k} ${n}`)
+        .join(', ');
+      const unfilled = Object.entries(st.unfilled)
+        .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+        .map(
+          ([t, rs]) =>
+            `${t} (${Object.entries(rs)
+              .map(([k, n]) => `${k} ${n}`)
+              .join(', ')})`,
+        )
+        .join('; ');
+      report.ato.push(
+        `${side}: ${st.orders} orders, ${st.revisions} revisions, ${st.planned} sorties planned, ` +
+          `${st.committed} committed; cancelled: ${cancelled || 'none'}; unfilled: ${unfilled || 'none'}`,
+      );
+    }
+    report.byType = [...counts]
+      .sort((x, y) => y[1] - x[1])
+      .map(([t, n]) => `${t} ${n}`)
+      .join(', ');
     report.squadrons = air.squadrons.length;
     report.weatherSystems = sw.weather.systems.length;
     report.logEntries = sw.sim.log.size;
@@ -186,6 +224,10 @@ it('runs a day of war on the demo seeds', () => {
   }
   lines.push('', 'Missions seen by type, both sides:', '');
   for (const r of reports) lines.push(`- Seed ${r.seed}: ${r.byType || 'none'}`);
+  lines.push('', 'The demo types by side (Alliance/Pact):', '');
+  for (const r of reports) lines.push(`- Seed ${r.seed}: ${r.demo}`);
+  lines.push('', 'Air tasking orders:', '');
+  for (const r of reports) for (const a of r.ato) lines.push(`- Seed ${r.seed}, ${a}`);
   for (const r of reports)
     if (r.error) lines.push('', `Seed ${r.seed} failed:`, '', '```', r.error, '```');
   const text = lines.join('\n') + '\n';

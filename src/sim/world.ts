@@ -2,7 +2,7 @@
  * The simulated world: the simulation core with every process registered.
  * C1 has the weather and player alarms; C2 adds the air war (the order of
  * battle, carrier groups and missions in air/, planned by the command
- * layer's tasker) when the campaign is given. Ground and naval aggregates
+ * layer's air tasking orders, R2.1) when the campaign is given. Ground and naval aggregates
  * (C3) register here too.
  */
 import type { GameTime } from '../core/units';
@@ -15,7 +15,7 @@ import type { HeightService } from '../worldgen/edits/heightService';
 import { DamageState } from './ground/damage';
 import { NetworkGraph } from './ground/network';
 import type { CampaignInput } from './command/campaignInput';
-import { InterimTasker } from './command/tasker';
+import { AirTaskingOrders } from './command/ato';
 import { Simulation } from './simulation';
 import { WeatherModel } from './weather/model';
 import type { WeatherConfig } from './weather/model';
@@ -38,6 +38,8 @@ export interface SimWorld {
   readonly sim: Simulation;
   readonly weather: WeatherModel;
   readonly air: AirOps | null;
+  /** Each side's air tasking order (R2.1); null without a campaign. */
+  readonly ato: AirTaskingOrders | null;
   /** The road and rail graphs (R1.8); null without a campaign. */
   readonly networks: { road: NetworkGraph; rail: NetworkGraph } | null;
   /** Damage to target sites and bridges (R1.8); null without a campaign. */
@@ -57,6 +59,7 @@ export function createSimWorld(config: SimConfig): SimWorld {
   let air: AirOps | null = null;
   let networks: SimWorld['networks'] = null;
   let damage: DamageState | null = null;
+  let ato: AirTaskingOrders | null = null;
   if (config.campaign) {
     air = new AirOps(
       config.campaign,
@@ -64,15 +67,25 @@ export function createSimWorld(config: SimConfig): SimWorld {
       config.ground ? groundSource(config.ground) : null,
     );
     air.register(sim);
-    sim.addProcess(new InterimTasker(air, config.campaign, config.seed));
     networks = {
       road: new NetworkGraph(config.campaign.roads),
       rail: new NetworkGraph(config.campaign.rail),
     };
     damage = new DamageState(config.campaign.targets);
     sim.addState('damage', damage);
+    ato = new AirTaskingOrders({
+      air,
+      input: config.campaign,
+      seed: config.seed,
+      weather,
+      orbit: config.orbit,
+      calendar: config.calendar,
+      networks,
+      damage,
+    });
+    sim.addProcess(ato);
   }
-  return { sim, weather, air, networks, damage, terrain: null };
+  return { sim, weather, air, ato, networks, damage, terrain: null };
 }
 
 /** Schedules a player alarm (flagged, so it triggers auto-slowdown). */

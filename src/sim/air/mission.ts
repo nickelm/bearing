@@ -246,11 +246,24 @@ export interface BaseRef {
   id: number;
 }
 
-export type TargetKind = 'site' | 'airbase' | 'station' | 'front';
+/** A target site, an airbase, an orbit station, a point on a front, or a road graph edge (R2.1). */
+export type TargetKind = 'site' | 'airbase' | 'station' | 'front' | 'road';
+
+/** Named places of a mission, for its label, the mission panel and the briefing (R2.1). */
+export interface Places {
+  theater: string;
+  target: string;
+  /** The front's name ("the Lynvania front"), on fronts. */
+  front?: string;
+  /** The corridor in a front segment ("the Kessar Gap"). */
+  corridor?: string;
+  /** The nearest town to the target or station. */
+  town?: string;
+}
 
 export interface MissionTarget {
   kind: TargetKind;
-  /** Target site or airbase id; −1 for stations and front points. */
+  /** Target site, airbase or road edge id; −1 for stations and front points. */
   id: number;
   name: string;
   point: Dir;
@@ -278,6 +291,8 @@ export interface Mission {
   need: string;
   needKey: string;
   score: number;
+  /** Named places for the briefing (R2.1); absent on missions planned before the ATO. */
+  places?: Places;
   /** Seed for promotion: the flight's aircraft expand from it (uint32). */
   seed: number;
   route: Route;

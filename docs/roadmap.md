@@ -15,7 +15,7 @@ _Adopted 2026-11-18 with Proposal 0008 (`docs/proposals/0008-game-loop-and-campa
 | ----------------------- | ---------------------------------------------------------------------------- | ---------- | ----------------- |
 | R0. Audit and reconcile | Know what exists; documents match the code                                   | —          | done (this audit) |
 | R1. Consolidation       | What the demo needs from earlier tracks, and nothing more                    | R1.1–R1.8  | done              |
-| R2. One day of war      | The thin, complete loop: the tech demo                                       | R2.1–R2.12 |                   |
+| R2. One day of war      | The thin, complete loop: the tech demo                                       | R2.1–R2.12 | R2.1 done         |
 | R3. Combat depth        | Sensors, weapons, air combat, air defense, ground entities                   | R3.1–R3.6  |                   |
 | R4. Breadth             | Roster, mission catalog, helicopters, transport, crews, naval war            | R4.1–R4.7  |                   |
 | R5. Dynamic campaign    | Logistics, morale, weeks of war, saves, consequences                         | R5.1–R5.6  |                   |
@@ -147,6 +147,8 @@ _Depends on R1.2, R1.3, R1.7, R1.8._
 - The interim tasker retires.
 
 **Exit:** both sides generate and revise orders with all four types on the three seeds; the orders are identical at 1× and 64× and independent of the viewing side.
+
+**State (2026-11-19):** done (decision 249). The demo types' resolvers (R2.2) and AI behavior (R2.5) are pending markers in their plug-ins; the interim tasker's other types fly as provisional plug-ins until R4.2.
 
 ### R2.2 Resolution and Consequences — large
 

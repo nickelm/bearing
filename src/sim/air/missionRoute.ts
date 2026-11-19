@@ -16,6 +16,8 @@
  *   DESCENT_SPEED of cruise speed to the recovery base.
  * - **Station time** is the profile's wanted time, cut to what the fuel allows;
  *   below the profile's least time the plan fails (returns null).
+ * - **Winds aloft** (R2.1) set each leg's ground speed (route.ts), so a
+ *   headwind lengthens the flight and costs fuel.
  * - **Carriers.** The recovery point is the group's predicted position at the
  *   landing time, found by planning twice (the group moves slowly, so the
  *   second plan's landing time is within seconds of the first).
@@ -30,7 +32,7 @@ import type { GroundSource } from './terrainFloor';
 import type { AircraftType, Loadout } from './aircraft';
 import type { MissionProfile } from './mission';
 import { RouteBuilder, routeEndFuel, routeFeasible } from './route';
-import type { Route } from './route';
+import type { Route, WindSource } from './route';
 
 export const FENCE_IN = 40e3;
 export const LOW_FENCE_IN = 120e3;
@@ -61,6 +63,8 @@ export interface RoutePlanInput {
   orbitHeading?: number;
   /** The ground under the route, for its terrain floor (terrainFloor.ts, R1.6); none: sea level. */
   ground?: GroundSource | null;
+  /** Winds aloft (R2.1): legs fly at their ground speed; none: airspeed is ground speed. */
+  wind?: WindSource | null;
 }
 
 /** Ground time before takeoff (taxi, takeoff, join-up) and after landing (s). */
@@ -79,6 +83,7 @@ function build(p: RoutePlanInput, stationTime: number, recovery: Dir): Route {
   const start = p.basePoint(p.launch);
   const g = groundTimes(t, p.carrierBased);
   const b = new RouteBuilder(t, R, flow, start, p.launch, fuel);
+  b.wind = p.wind ?? null;
   const cruise = t.cruiseSpeed;
   const low = p.profile.low;
   const lowAlt = t.helicopter ? HELICOPTER_LOW_ALTITUDE : LOW_ALTITUDE;

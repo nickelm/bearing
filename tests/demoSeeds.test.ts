@@ -27,7 +27,7 @@ describe('demo seeds', () => {
   });
 
   for (const seed of DEMO_SEEDS) {
-    it(`seed ${seed} is valid, has a continental front, and flies above its ground`, () => {
+    it(`seed ${seed} is valid, has a continental front, flies the demo types above its ground`, () => {
       const w = generateCampaignWorld({ ...DEFAULT_PLANET_PARAMS, seed }, { grid });
       expect(w.campaign.validity.valid).toBe(true);
       const front = w.campaign.cast.theaters.find((t) => t.kind === 'continental-front');
@@ -39,7 +39,7 @@ describe('demo seeds', () => {
       expect(w.graph.fronts.length).toBeGreaterThan(0);
 
       // R1.6: no analytic route passes below the coarse ground (the bilinear surface),
-      // sampled every 20 s of flight over 12 game hours of the air war.
+      // sampled every 20 s of flight over 26 game hours of the air war.
       const ground = { height: w.world.maps.height, n: w.world.info.resolution };
       const sim = createSimWorld({
         ...syntheticConfig(seed),
@@ -48,11 +48,23 @@ describe('demo seeds', () => {
         ground,
       });
       const seen = new Map<number, Mission>();
-      for (let t = 10 * MINUTE; t <= 12 * HOUR; t += 10 * MINUTE) {
+      for (let t = 10 * MINUTE; t <= 26 * HOUR; t += 10 * MINUTE) {
         sim.sim.advanceTo(t);
         for (const m of sim.air!.liveMissions()) seen.set(m.id, m);
       }
-      expect(seen.size).toBeGreaterThan(50);
+      expect(seen.size).toBeGreaterThan(100);
+      // R2.1's exit: both sides issue and revise orders and fly all four demo types.
+      for (const side of ['alliance', 'pact'] as const) {
+        const st = sim.ato!.stats[side];
+        expect(st.orders, side).toBe(2);
+        expect(st.revisions, side).toBeGreaterThan(st.orders);
+        for (const type of ['cap', 'interdiction', 'cas', 'airlift']) {
+          expect(
+            [...seen.values()].some((m) => m.side === side && m.type === type),
+            `seed ${seed}: ${side} ${type}`,
+          ).toBe(true);
+        }
+      }
       const surface = globalMapSampler(ground.height, ground.n);
       const v = new Vec3d();
       const R = DEFAULT_PLANET_PARAMS.radius;

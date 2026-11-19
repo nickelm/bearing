@@ -29,7 +29,7 @@ import { ORBIT_LEG, ORBIT_TURN, routeEndFuel, routeState } from '../src/sim/air/
 import type { Route } from '../src/sim/air/route';
 import { campaignInput } from '../src/sim/command/campaignInput';
 import type { CampaignInput } from '../src/sim/command/campaignInput';
-import { MAX_AIRBORNE } from '../src/sim/command/tasker';
+import { DOCTRINE } from '../src/sim/command/doctrine';
 import { carrierState, carrierTrack, PATROL_SPEED } from '../src/sim/naval/carrierGroup';
 import { createSimWorld } from '../src/sim/world';
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
@@ -305,7 +305,7 @@ describe('air operations', () => {
       for (const m of air.liveMissions()) seen.set(m.id, m);
       if (t > 3 * HOUR) airborne.push(air.airborneAt('alliance', t) + air.airborneAt('pact', t));
       for (const side of ['alliance', 'pact'] as const) {
-        expect(air.airborneAt(side, t)).toBeLessThanOrEqual(MAX_AIRBORNE);
+        expect(air.airborneAt(side, t)).toBeLessThanOrEqual(DOCTRINE[side].maxAirborne);
       }
       // Conservation: available + on missions + in turnaround = strength.
       const flying = new Map<number, number>();
@@ -320,7 +320,9 @@ describe('air operations', () => {
     // C2: 20–50 aircraft in the air once the war is under way.
     const mean = airborne.reduce((a, b) => a + b, 0) / airborne.length;
     expect(mean).toBeGreaterThanOrEqual(20);
-    expect(Math.max(...airborne)).toBeLessThanOrEqual(2 * MAX_AIRBORNE);
+    expect(Math.max(...airborne)).toBeLessThanOrEqual(
+      DOCTRINE.alliance.maxAirborne + DOCTRINE.pact.maxAirborne,
+    );
     // Every mission lands back at its base, carriers included (at the landing time:
     // the group sails on while the flight is recovered).
     for (const m of seen.values()) {

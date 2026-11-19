@@ -24,7 +24,24 @@ export interface FrontInput {
   /** Centroid of the land each side holds. */
   centroid: Record<Side, Dir>;
   attacker: Side;
+  /**
+   * The start line's weak segments, where an offensive would go through (the
+   * graph's corridors on that line): center, length along the line (m), mean
+   * barrier strength, road crossings weighted by class, and name (R2.1).
+   */
+  corridors: { point: Dir; width: number; strength: number; roadScore: number; name: string }[];
 }
+
+/** A named place for briefings and need labels (R2.1): a settlement with its holder. */
+export interface PlaceInput {
+  name: string;
+  point: Dir;
+  population: number;
+  side: Side | null;
+}
+
+/** Settlements smaller than this are left out of the campaign input's places. */
+export const PLACE_MIN_POPULATION = 2_000;
 
 export interface CampaignInput {
   radius: number;
@@ -34,6 +51,8 @@ export interface CampaignInput {
   targets: TargetSite[];
   carriers: CarrierGroupCast[];
   fronts: FrontInput[];
+  /** Settlements by name (PLACE_MIN_POPULATION and up), for named places (R2.1). */
+  places: PlaceInput[];
   /** The civilian roads with the airbase and port spurs, and the railways, as graphs (R1.8). */
   roads: NetworkInput;
   rail: NetworkInput;
@@ -57,6 +76,13 @@ export function campaignInput(
       points: Array.from(line.points),
       centroid: { pact: [...pact], alliance: [...alliance] },
       attacker: t.attacker === 'mutual' ? 'pact' : t.attacker,
+      corridors: graph.fronts[t.front]!.corridors.filter((c) => c.line === f.start).map((c) => ({
+        point: [...c.point],
+        width: c.width,
+        strength: c.strength,
+        roadScore: c.roadScore,
+        name: c.name,
+      })),
     });
   }
   return {
@@ -71,6 +97,7 @@ export function campaignInput(
     })),
     carriers: (cast.carriers ?? []).map((c) => ({ ...c, track: [...c.track] })),
     fronts,
+    places: places(graph, infra),
     roads: buildNetworkInput(
       'road',
       graph.radius,
@@ -79,4 +106,19 @@ export function campaignInput(
     ),
     rail: buildNetworkInput('rail', graph.radius, [graph.railways.lines], [graph.railways.bridges]),
   };
+}
+
+function places(graph: StrategicGraph, infra: Infrastructure): PlaceInput[] {
+  const s = graph.settlements;
+  const out: PlaceInput[] = [];
+  for (let i = 0; i < s.names.length; i++) {
+    if (s.population[i]! < PLACE_MIN_POPULATION) continue;
+    out.push({
+      name: s.names[i]!,
+      point: [s.points[i * 3]!, s.points[i * 3 + 1]!, s.points[i * 3 + 2]!],
+      population: s.population[i]!,
+      side: infra.settlementSide[i] ?? null,
+    });
+  }
+  return out;
 }

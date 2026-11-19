@@ -109,20 +109,30 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 
 ### R2.1 Mission plug-ins and the air tasking order
 
-- [ ] `MissionType` plug-in interface with the eight parts; registry and a completeness test
-- [ ] Need collection from the front: segments under pressure, supply lines behind it
-- [ ] Need collection from bases and high-value assets: CAP stations, airlift between bases
-- [ ] Priority score with stable tie-breaking; per-side, per-day forks
-- [ ] Package builder: flights from squadrons in range, escorts for strikes
-- [ ] Doctrine scheduler: Pact waves, Alliance spread; one order per game day, revisions every two to four hours
-- [ ] Weather and daylight minimums; winds aloft in ground speed
-- [ ] CAP plug-in
-- [ ] Interdiction plug-in (fixed targets: bridges, depots, rail yards, road segments)
-- [ ] CAS plug-in (fixed-wing)
-- [ ] Airlift plug-in
-- [ ] Briefing templates with named places for the four types
-- [ ] Retire the interim tasker
-- [ ] Determinism tests: the same orders at 1× and 64×, independent of the viewing side
+- [x] `MissionPlugin` interface with the eight parts (a part a later milestone builds is a `pending` marker naming it); `MISSION_PLUGINS` registry; completeness test that lists every pending part and pins the list
+- [x] Campaign input for planning: each front's corridors (named weak segments) and the settlements' names and points, for front segments and named places (rule 9: from the strategic graph)
+- [x] Front segments with pressure: the start line cut into segments, pressure from the corridors and the attacker until the ground war (R2.3) replaces it
+- [x] Supply lines: shortest-path trees over the road and rail graphs from each side's depots and rail yards to its front segments, cut bridges left out; how much supply each bridge, depot, rail yard and road edge carries
+- [x] Environment for the planner: sun elevation at a point and time; a persistence forecast of ceiling, visibility, storm and surface wind from the weather view; minimums per plug-in (daylight, target and base weather)
+- [x] Winds aloft in route ground speeds (`planMissionRoute`'s wind; the fuel follows the time)
+- [x] Squadron ledger: committed and planned sorties as occupancy over time against strength, and the airborne cap
+- [x] Package builder: flights from squadrons in range by role preference and distance, escort and SEAD by the package template, one package id
+- [x] Doctrine scheduler: times on target in a window (Alliance spread with jitter, Pact waves), revision periods by side (Alliance 2 h, Pact 4 h); per-side, per-day forks keyed by need
+- [x] The ATO process: one order per game day, revisions, commitment of sorties departing within the commit window, cancellations with reasons; decisions logged; save, load and hash
+- [x] CAP plug-in: front stations, carriers, fields at sea, the AEW orbit (high-value asset)
+- [x] Interdiction plug-in (fixed targets: bridges, depots, rail yards, road segments) ranked by supply carried
+- [x] CAS plug-in (fixed-wing) by segment pressure, daylight only
+- [x] Airlift plug-in: forward and island bases by stock, from the airlift squadrons' bases
+- [x] Provisional plug-ins for the interim tasker's other types (support, escort, SEAD, low-level strike, strategic bombing, reconnaissance, attack helicopters): planner rule and package template ported, other parts pending R4.2
+- [x] Briefing templates with named places for the four types (`src/campaign/missionBriefings.ts`)
+- [x] Interface defaults per phase for the four types (data in the plug-in; R2.6 applies them through `presets.ts`)
+- [x] Retire the interim tasker; tests and `tools/war.preview.ts` on the ATO (orders, revisions, cancellations, missions by type)
+- [x] Determinism tests: the same orders at 1× and 64×, independent of the viewing side; all four types on both sides on the three seeds
+- [x] Decision, `design.md` (Air Tasking), roadmap state, `CLAUDE.md` directory map (decision 249)
+- [x] Apportionment of airborne aircraft by mission category (discovered: without it standing CAP filled the cap for the whole day)
+- [ ] Interdiction volume differs by seed (seed 10: 5 Alliance and 1 Pact a day): look at the supply lines there (few depots or rail yards reached?) and the airborne cap
+- [ ] The Pact's helicopter CAS finds no squadron in range on all three seeds, and its AEW route fails (fuel or station time): check the provisional plug-ins' reach before R4.2
+- [ ] Mission search: show a mission's briefing (`missionBriefing`) and the order's cancelled sorties with their reasons (R2.4 or R6.2)
 
 ### R2.2 Resolution and consequences
 

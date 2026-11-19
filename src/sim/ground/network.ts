@@ -17,6 +17,7 @@
  * Polyline points are cell centers, and lengths use CubeGrid.angleBetween's
  * formula, so distances agree with the worldgen's to the bit.
  */
+import type { Dir } from '../../core/greatCircle';
 import { MinHeap } from '../../core/heap';
 import type { BridgeList, RoadNetwork } from '../../worldgen/strategic/graph';
 
@@ -313,5 +314,64 @@ export class NetworkGraph {
       path.reverse();
     }
     return dist[to]!;
+  }
+
+  /**
+   * Shortest-path tree from node `from` (R2.1's supply lines): distance to every
+   * node (Infinity beyond `reach` or cut off), and each node's previous node and
+   * the edge to it (−1 at the root and where unreached), with the bridges in
+   * `cut` impassable.
+   */
+  tree(
+    from: number,
+    cut: ReadonlySet<number> = new Set(),
+    reach = Infinity,
+  ): { dist: Float64Array; prev: Int32Array; prevEdge: Int32Array } {
+    const n = this.nodeCount;
+    const dist = new Float64Array(n).fill(Infinity);
+    const prev = new Int32Array(n).fill(-1);
+    const prevEdge = new Int32Array(n).fill(-1);
+    const heap = new MinHeap();
+    const cutNodes = new Set([...cut].map((b) => this.input.bridgeNode[b]!));
+    dist[from] = 0;
+    heap.push(0, from);
+    while (heap.size > 0) {
+      const d = heap.peekKey();
+      const x = heap.pop();
+      if (d > dist[x]!) continue;
+      if (cutNodes.has(x)) continue;
+      for (let k = this.nodeOffsets[x]!; k < this.nodeOffsets[x + 1]!; k++) {
+        const e = this.nodeEdges[k]!;
+        const y = this.input.edgeA[e] === x ? this.input.edgeB[e]! : this.input.edgeA[e]!;
+        if (cutNodes.has(y)) continue;
+        const nd = d + this.input.edgeLength[e]!;
+        if (nd > reach) continue;
+        if (nd < dist[y]!) {
+          dist[y] = nd;
+          prev[y] = x;
+          prevEdge[y] = e;
+          heap.push(nd, y);
+        }
+      }
+    }
+    return { dist, prev, prevEdge };
+  }
+
+  /** The node nearest a unit direction, and its distance (m); −1 for an empty network. */
+  nearestNode(d: Readonly<Dir>): { node: number; distance: number } {
+    const p = this.input.nodePoint;
+    let best = -1;
+    let bestDot = -2;
+    for (let i = 0; i < this.nodeCount; i++) {
+      const c = p[i * 3]! * d[0] + p[i * 3 + 1]! * d[1] + p[i * 3 + 2]! * d[2];
+      if (c > bestDot) {
+        bestDot = c;
+        best = i;
+      }
+    }
+    return {
+      node: best,
+      distance: best < 0 ? Infinity : Math.acos(Math.min(1, bestDot)) * this.input.radius,
+    };
   }
 }

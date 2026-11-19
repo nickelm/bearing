@@ -31,7 +31,7 @@ Guidance for Claude Code sessions in this repository. **`docs/roadmap.md` is the
 | Displays, checks 12–13   | `node tools/displays.screens.mjs` with `npm run dev` up: every master mode, both skins, 1366 × 768 and 1920 × 1080, color-vision views (env: `MODES`, `SIZES`, `CVD=0`, `OUT_DIR`) → `tools/out/displays/` (decision 200) |
 | World diversity metrics  | `npx vitest run --config vitest.tools.config.ts tools/diversity.preview.ts` (env: `SEEDS` or `FROM`/`COUNT`, `GLOBAL=1` for eroded worlds, `GLOBAL_SEEDS`, `GRES`, `OUT`) → `tools/out/diversity.md`: proposal 0007's criteria over 20 seeds (decision 204) |
 | Airfield siting          | `npx vitest run --config vitest.tools.config.ts tools/airbaseWater.preview.ts --disable-console-intercept` (env: `SEEDS`, `GRES`, `ALL=1`): each airbase's pad on the eroded world before and after siting (decision 220) |
-| Headless day of war      | `npx vitest run --config vitest.tools.config.ts tools/war.preview.ts --disable-console-intercept` (env: `SEEDS`, `HOURS`, `RATE`, `OUT`) → `tools/out/war.md`: the campaign on the demo seeds, stepped at 64× and in one jump, with the worker's cost (decision 236) |
+| Headless day of war      | `npx vitest run --config vitest.tools.config.ts tools/war.preview.ts --disable-console-intercept` (env: `SEEDS`, `HOURS`, `RATE`, `OUT`) → `tools/out/war.md`: the campaign on the demo seeds, stepped at 64× and in one jump, with the worker's cost (decision 236), missions by type and side, and each side's orders, revisions, cancellations and unfilled requests by reason (decision 249) |
 | Ground map               | `npx vitest run --config vitest.tools.config.ts tools/groundMap.preview.ts` (env: `SEED`, `LAT`/`LON`, `KM`, `ALT`, `RANGES`) → `tools/out/groundmap-<nm>.png` and `.json` (decision 226) |
 | Map CPU and GPU timings  | In the app: `?dev&cputime=1` logs the map's CPU per section and the app's frame every 5 s; `?dev&gputime=1` GPU time per view and pass (decisions 242, 245). Headless: `SCENE=strategic PERF=1 MOVE=1` in `tools/render.preview.ts` prints the map's CPU per section, still and panning |
 | Browser smoke test       | `npm run build && npm run preview`, then `node tools/browser.smoke.mjs` (env: `MODE`, `WORLD`, `ONLY`, `SCENES`, `OUT`) → `tools/out/browser/` (decision 144) |
@@ -81,7 +81,7 @@ src/worldgen/       planet generation pipeline stages (may use GPU compute); can
   names/            toponymy generator from rng("names"): flavors, generic terms; names features,
                     settlements and corridors (route numbering in S4)
 src/campaign/       theater detection, casting (carrier groups in carriers.ts), briefing, validity check (reads the
-                    strategic graph only)
+                    strategic graph only); missionBriefings.ts, the mission plug-ins' briefing templates
 src/data/models/    model specs (JSON, decision 106) of everything drawn; aircraft/ holds one bundle per aircraft
                     type (rule 17, decision 238): geometry, flight data, air-war entry, avionics profile, rig
 src/sim/            headless simulation; runs in a worker: event queue + fixed ticks (simulation.ts),
@@ -102,8 +102,10 @@ src/sim/            headless simulation; runs in a worker: event queue + fixed t
                     the filtered picture that displays read and the AI is to read (R3); lineOfSight.ts over the ground; groundMap.ts,
                     the air-to-ground radar's ground map (decision 226)
   crew/             (R4, planned) AI crewmates: roles, format ownership, tasks, callouts; act through avionics commands
-  command/          per-side command layer (graph and cast only): campaign input from the main thread, the interim
-                    tasker (until the ATO), later the intelligence picture and the ATO
+  command/          per-side command layer (graph and cast only): campaign input from the main thread, the air tasking
+                    orders (ato.ts; decision 249) with front segments, supply lines, doctrine, the planning environment
+                    (weather and daylight) and the squadron ledger; missions/ holds the mission plug-ins and their registry
+                    (rule 16); later the intelligence picture
   clock.ts          the one clock's rules: flight step, real-step cap, time rates (decision 243)
   flight/           flownAircraft.ts (the flown aircraft: airframe, controls, input source, avionics state,
                     stepping; decision 243); flight model, control laws, ground model, runways, outcomes, flight director and a
