@@ -60,6 +60,13 @@ const OPERATION_WORDS = [
   'Zenith',
 ];
 
+/** Surname endings by side, for invented aircrew names. */
+const SURNAME_ENDINGS: Record<'alliance' | 'pact', readonly string[]> = {
+  alliance: ['son', 'er', 'ley', 'ton', 'ard', 'well', 'ford', 'by', 'ett', 'man', 'ing', 'wick'],
+  pact: ['ov', 'in', 'enko', 'ski', 'ev', 'ich', 'yuk', 'ak', 'ovich', 'ets'],
+};
+const INITIALS = 'ABCDEFGHIJKLMNOPRSTVWY';
+
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
@@ -99,6 +106,20 @@ export class NameGenerator {
     return this.unique(() =>
       capitalize(this.syllable() + this.r.pick(['a', 'o', 'en', 'is', 'ar'])),
     );
+  }
+
+  /** An aircrew member's name for a side, an initial and a surname, e.g. "R. Kessley" or "T. Drauvenko". */
+  person(side: 'alliance' | 'pact'): string {
+    return this.unique(() => {
+      const initial = INITIALS[this.r.int(INITIALS.length)]!;
+      // Open syllables, then a soft coda that does not double the ending's first letter.
+      const open = () => this.r.pick(ONSETS) + this.r.pick(VOWELS);
+      let stem = open() + (this.r.chance(0.3) ? open() : '');
+      const ending = this.r.pick(SURNAME_ENDINGS[side]);
+      const coda = this.r.pick(['', 'n', 'r', 'l', 's', 'nd', 'rk']);
+      if (!'aeiou'.includes(ending[0]!) && coda && coda.at(-1) !== ending[0]) stem += coda;
+      return `${initial}. ${capitalize(stem + ending)}`;
+    });
   }
 
   /** An operation name, e.g. "Operation Granite Vigil". */

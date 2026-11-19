@@ -4,7 +4,7 @@
   "scheme": "pact-air",
   "airWar": {
     "id": "ra84",
-    "order": 24,
+    "order": 25,
     "side": "pact",
     "role": "maritime-bomber",
     "reference": "Tu-22M3",
@@ -28,7 +28,7 @@
       },
       {
         "id": "strike",
-        "stores": "24 × 250 kg bombs",
+        "stores": "24 \u00d7 250 kg bombs",
         "radiusFactor": 0.85
       }
     ]

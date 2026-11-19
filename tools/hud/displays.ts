@@ -32,7 +32,7 @@ export async function drawDisplays(q: URLSearchParams): Promise<void> {
   const snap: AircraftSnapshot = {
     time: 412,
     kind: helo ? 'helicopter' : 'jet',
-    name: helo ? 'UH-68 Buzzard' : 'F-21 Kestrel',
+    name: helo ? 'UH-68 Heron' : 'F-21 Kestrel',
     profile,
     avionics: initialAvionics(ground),
     position: { lat: 0.8, lon: 0.3, radius: 1_000_000 },

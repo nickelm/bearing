@@ -4,7 +4,7 @@
   "scheme": "pact-air",
   "airWar": {
     "id": "vo37",
-    "order": 20,
+    "order": 21,
     "side": "pact",
     "role": "deep-strike",
     "reference": "Su-24M",
@@ -23,7 +23,7 @@
     "loadouts": [
       {
         "id": "strike",
-        "stores": "6 × 500 kg bombs, 2 tanks",
+        "stores": "6 \u00d7 500 kg bombs, 2 tanks",
         "radiusFactor": 0.9
       }
     ]

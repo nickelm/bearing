@@ -1,5 +1,5 @@
 {
-  "name": "UH-68 Buzzard",
+  "name": "UH-68 Heron",
   "class": "helicopter",
   "scheme": "alliance-woodland",
   "groups": {
@@ -280,7 +280,7 @@
   ],
   "flight": {
     "kind": "rotorcraft",
-    "notes": "UH-68 Buzzard, a utility transport analogue of the UH-60A Black Hawk. Figures from NASA CR-166309 (Howlett, GenHel), NASA TM-85890 and Army manuals as quoted in public sources: rotor geometry, speed, hinge offset, engines, transmission, inertias, flat-plate area, tail rotor cant. Twist is the nonlinear -18 deg as linear -16; hub stiffness from a 0.381 m hinge offset and 115 kg blades; drag areas off the x axis and tail surfaces are tuning values. Model frame: x forward, y up, z starboard, origin on the ground under the main rotor shaft; the model's hub stands at 4.0 m (the real 3.76 m), so the CG is 1.7 m under it.",
+    "notes": "UH-68 Heron, a utility transport analogue of the UH-60A Black Hawk. Figures from NASA CR-166309 (Howlett, GenHel), NASA TM-85890 and Army manuals as quoted in public sources: rotor geometry, speed, hinge offset, engines, transmission, inertias, flat-plate area, tail rotor cant. Twist is the nonlinear -18 deg as linear -16; hub stiffness from a 0.381 m hinge offset and 115 kg blades; drag areas off the x axis and tail surfaces are tuning values. Model frame: x forward, y up, z starboard, origin on the ground under the main rotor shaft; the model's hub stands at 4.0 m (the real 3.76 m), so the CG is 1.7 m under it.",
     "mass": {
       "empty": 5100,
       "fuel": 1000,
@@ -416,5 +416,42 @@
   },
   "rig": {
     "kind": "helicopter"
+  },
+  "airWar": {
+    "id": "uh68",
+    "order": 16,
+    "side": "alliance",
+    "role": "utility-helicopter",
+    "reference": "UH-60A",
+    "helicopter": true,
+    "crew": 4,
+    "flightSize": 4,
+    "cruiseSpeedKt": 150,
+    "lowLevelSpeedKt": 140,
+    "maxSpeedKt": 193,
+    "cruiseAltitude": 150,
+    "ceiling": 5800,
+    "climbRate": 4,
+    "combatRadiusKm": 220,
+    "stationTimeMin": 15,
+    "fuel": 1100,
+    "turnaroundH": 2,
+    "loadouts": [
+      {
+        "id": "troops",
+        "stores": "11 troops or 1.2 t of cargo, door guns",
+        "radiusFactor": 1
+      },
+      {
+        "id": "rescue",
+        "stores": "Rescue hoist, door guns, a pararescue team",
+        "radiusFactor": 1
+      },
+      {
+        "id": "sling",
+        "stores": "3.6 t under the hook",
+        "radiusFactor": 0.7
+      }
+    ]
   }
 }

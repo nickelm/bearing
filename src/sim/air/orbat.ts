@@ -24,6 +24,7 @@
  *   Resupply arrives with C3's convoys and airlift.
  */
 import type { Side } from '../../campaign/cast';
+import { NameGenerator } from '../../core/names';
 import { rng } from '../../core/rng';
 import type { Rng, WorldSeed } from '../../core/rng';
 import type { CampaignInput } from '../command/campaignInput';
@@ -41,6 +42,11 @@ export interface Squadron {
   /** Aircraft on strength (losses lower it from C3 on) and aircraft ready to fly now. */
   aircraft: number;
   available: number;
+  /**
+   * The squadron's aircrew by name, PILOTS_PER_SEAT per crew seat (R1.7; data
+   * only until R2.2's losses and R2.9's survivors use them).
+   */
+  pilots: string[];
 }
 
 export interface BaseStocks {
@@ -66,6 +72,9 @@ export interface OrderOfBattle {
   bases: AirBaseRecord[];
 }
 
+/** Aircrew per crew seat of a squadron's aircraft. */
+export const PILOTS_PER_SEAT = 1.25;
+
 export const STOCK_DAYS = 30;
 export const CARRIER_STOCK_DAYS = 10;
 export const SORTIES_PER_DAY = 2;
@@ -90,6 +99,7 @@ export const STRENGTH: Record<AircraftRole, Record<Side, number>> = {
   tanker: { alliance: 6, pact: 6 },
   airlift: { alliance: 12, pact: 12 },
   'heavy-helicopter': { alliance: 12, pact: 10 },
+  'utility-helicopter': { alliance: 16, pact: 20 },
   recon: { alliance: 12, pact: 12 },
 };
 
@@ -108,6 +118,7 @@ const UNIT_WORD: Record<AircraftRole, Record<Side, string>> = {
   tanker: { alliance: 'Air Refueling', pact: 'Tanker' },
   airlift: { alliance: 'Airlift', pact: 'Transport' },
   'heavy-helicopter': { alliance: 'Heavy Helicopter', pact: 'Transport Helicopter' },
+  'utility-helicopter': { alliance: 'Assault Helicopter', pact: 'Combat Transport Helicopter' },
   recon: { alliance: 'Reconnaissance', pact: 'Reconnaissance' },
 };
 
@@ -123,6 +134,7 @@ const SPECIAL_ROLES: readonly AircraftRole[] = [
   'deep-strike',
   'bomber',
   'maritime-bomber',
+  'utility-helicopter',
 ];
 
 const ALLIANCE_WING: readonly string[] = ['f28', 'f30', 'f30', 'a14'];
@@ -139,7 +151,8 @@ function baseRoles(kind: string, depth: number, side: Side, r: Rng): AircraftRol
     case 'island':
       return side === 'pact' ? ['multirole', 'maritime-bomber'] : ['multirole', 'air-superiority'];
     case 'forward':
-      return ['cas', 'attack-helicopter', 'multirole'];
+      // Utility helicopters last, so the earlier picks keep their draws (decision 239).
+      return ['cas', 'attack-helicopter', 'multirole', 'utility-helicopter'];
     case 'bomber':
       return side === 'pact' ? ['bomber', 'maritime-bomber', 'tanker'] : ['bomber', 'tanker'];
     default:
@@ -156,6 +169,7 @@ function baseRoles(kind: string, depth: number, side: Side, r: Rng): AircraftRol
 export function buildOrderOfBattle(input: CampaignInput, seed: WorldSeed): OrderOfBattle {
   const root = rng(seed, 'orbat');
   const names = root.fork('names');
+  const pilots = root.fork('pilots');
   const usedNumbers: Record<Side, Set<number>> = { alliance: new Set(), pact: new Set() };
   const squadrons: Squadron[] = [];
   const bases: AirBaseRecord[] = [];
@@ -178,14 +192,20 @@ export function buildOrderOfBattle(input: CampaignInput, seed: WorldSeed): Order
   const addSquadron = (base: AirBaseRecord, typeId: string): void => {
     const t = aircraftType(typeId);
     const n = STRENGTH[t.role][t.side];
+    const id = squadrons.length;
+    // Aircrew names from the squadron's own fork, so adding pilots draws nothing else.
+    const crew = new NameGenerator(pilots.fork(`squadron-${id}`));
     const s: Squadron = {
-      id: squadrons.length,
+      id,
       side: t.side,
       name: unitName(t.side, t.role, base.ref.kind === 'carrier'),
       type: t.id,
       base: base.ref,
       aircraft: n,
       available: n,
+      pilots: Array.from({ length: Math.ceil(n * t.crew * PILOTS_PER_SEAT) }, () =>
+        crew.person(t.side),
+      ),
     };
     squadrons.push(s);
     base.squadrons.push(s.id);

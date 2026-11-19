@@ -24,7 +24,7 @@ import {
 import { MISSION_PROFILES, phaseTime } from '../src/sim/air/mission';
 import type { Mission } from '../src/sim/air/mission';
 import { planMissionRoute, timeOnTarget } from '../src/sim/air/missionRoute';
-import { buildOrderOfBattle } from '../src/sim/air/orbat';
+import { buildOrderOfBattle, PILOTS_PER_SEAT } from '../src/sim/air/orbat';
 import { ORBIT_LEG, ORBIT_TURN, routeEndFuel, routeState } from '../src/sim/air/route';
 import type { Route } from '../src/sim/air/route';
 import { campaignInput } from '../src/sim/command/campaignInput';
@@ -111,8 +111,7 @@ describe('aircraft types', () => {
 
   it('names model specs that exist', () => {
     for (const t of AIRCRAFT_TYPES) {
-      if (t.model)
-        expect(existsSync(`src/data/models/aircraft/${t.model}.json`), t.id).toBe(true);
+      if (t.model) expect(existsSync(`src/data/models/aircraft/${t.model}.json`), t.id).toBe(true);
     }
   });
 });
@@ -273,8 +272,15 @@ describe('order of battle', () => {
         'deep-strike',
         'cas',
         'air-superiority',
+        'utility-helicopter',
       ] as const)
         expect(roles.has(r), `${side} ${r}`).toBe(true);
+    }
+    // Aircrew: PILOTS_PER_SEAT per seat, distinct within a squadron (decision 239).
+    for (const s of o.squadrons) {
+      const t = aircraftType(s.type);
+      expect(s.pilots.length).toBe(Math.ceil(s.aircraft * t.crew * PILOTS_PER_SEAT));
+      expect(new Set(s.pilots).size).toBe(s.pilots.length);
     }
     expect(JSON.stringify(buildOrderOfBattle(inp, 7))).toBe(JSON.stringify(o));
   });

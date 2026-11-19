@@ -3961,3 +3961,15 @@ The air war and the weather systems take 1–3 ms per game hour; the hourly weat
 The sim worker's chunk grows from 58 kB to 104 kB, since the six bundles with geometry come along whole.
 
 **Reason:** decision 232 makes the bundle the one place a type lives; the sim worker can only read it from outside `render/`.
+
+### 239. Utility helicopters in every world's cast; the UH-68 Heron; aircrew by name
+
+**Date:** 2026-11-19
+**Decision:** R1.7's roster items (owner decisions 3 and 4). These change every world's order of battle.
+
+- **Rename.** The UH-68 "Buzzard" becomes the **UH-68 Heron**, ending its clash with the A-15 Buzzard (menu, bundle, display tools).
+- **Utility role.** A new role, `utility-helicopter`, with two types: the UH-68 Heron (`uh68`, UH-60A analogue; its bundle already had geometry, flight data, avionics and a rig, and now has its air-war entry) and the **Ve-18 Shmel** (`ve18`, Mi-8MT analogue; a bundle without geometry, its Pact avionics a moving map, the hook camera, a navigator and a flight engineer). Loadouts are troops, rescue (hoist and door guns) and sling. Squadrons of 16 (Alliance) and 20 (Pact) aircraft go to every forward base, after its other roles so the earlier picks keep their draws, and each side keeps at least one (special roles). No mission type uses them until CSAR (R2.9); they fly nothing yet, so missions flown on the demo seeds are unchanged.
+- **Aircrew.** Every squadron carries its aircrew by name: `PILOTS_PER_SEAT` (1.25) per crew seat of its aircraft, named by `NameGenerator.person(side)` (an initial and an invented surname with a side-flavored ending) from `rng(seed, "orbat")/pilots/squadron-<id>`, so the names draw from nothing else. They are data until R2.2's losses and R2.9's survivors use them.
+- **Effect.** The demo seeds gain 4–8 squadrons each (seed 4: 177 → 185, seed 10: 171 → 175, seed 7: 182 → 189), and the state hashes change (`0727ebb98b3b0565`, `0116e1a64fcc4068`, `732e0ae45e9cc621`). The Pact types' table order moves one place to fit the UH-68 after the Alliance's types.
+
+**Reason:** CSAR, which the demo needs (design, *Ejection and CSAR*), and the design's roster both call for utility helicopters on both sides; pilots are what squadrons lose and recover.

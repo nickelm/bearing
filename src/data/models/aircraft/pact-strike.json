@@ -206,7 +206,7 @@
   ],
   "airWar": {
     "id": "vo35",
-    "order": 22,
+    "order": 23,
     "side": "pact",
     "role": "cas",
     "reference": "Su-25",
@@ -224,7 +224,7 @@
     "loadouts": [
       {
         "id": "cas",
-        "stores": "rocket pods, 4 × 250 kg bombs, cannon",
+        "stores": "rocket pods, 4 \u00d7 250 kg bombs, cannon",
         "radiusFactor": 0.9
       }
     ]

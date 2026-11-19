@@ -1,0 +1,55 @@
+{
+  "name": "Ve-18 Shmel",
+  "class": "helicopter",
+  "scheme": "pact-air",
+  "airWar": {
+    "id": "ve18",
+    "order": 32,
+    "side": "pact",
+    "role": "utility-helicopter",
+    "reference": "Mi-8MT",
+    "helicopter": true,
+    "crew": 3,
+    "flightSize": 4,
+    "cruiseSpeedKt": 124,
+    "lowLevelSpeedKt": 115,
+    "maxSpeedKt": 135,
+    "cruiseAltitude": 150,
+    "ceiling": 6000,
+    "climbRate": 5,
+    "combatRadiusKm": 200,
+    "stationTimeMin": 15,
+    "fuel": 1900,
+    "turnaroundH": 2,
+    "loadouts": [
+      {
+        "id": "troops",
+        "stores": "24 troops or 4 t of cargo, a 12.7 mm gun",
+        "radiusFactor": 1
+      },
+      {
+        "id": "rescue",
+        "stores": "Rescue hoist, a search team",
+        "radiusFactor": 1
+      },
+      {
+        "id": "sling",
+        "stores": "3 t under the hook",
+        "radiusFactor": 0.7
+      }
+    ]
+  },
+  "avionics": {
+    "skin": "pact",
+    "roundScopes": false,
+    "systems": ["rwr", "hook"],
+    "slots": {
+      "leftMfd": ["moving-map", "engines"],
+      "rightMfd": ["hook-camera", "engines"],
+      "threat": ["threat"],
+      "messages": ["messages"]
+    },
+    "rotorGauges": true,
+    "crew": ["navigator", "flight-engineer"]
+  }
+}

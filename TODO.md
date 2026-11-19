@@ -83,9 +83,9 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] Move the air-war table from `sim/air/aircraft.ts` into the bundles; the air war's determinism hash is unchanged
 - [x] Camera rigs into the bundles (`FAST_JET_RIG`, `helicopterRig` become per-type data)
 - [x] Bundle test: list what each type lacks; fail on duplicate or inconsistent ids
-- [ ] Rename the UH-68 "Buzzard" helicopter (clash with the A-15 Buzzard)
-- [ ] Utility helicopter role: a Black Hawk analogue and an Mi-8 analogue in `sim/air/aircraft.ts` with avionics profiles; a decision for the change to every world's cast
-- [ ] Pilots per squadron in the order of battle (count, names from a fork); the hash change recorded
+- [x] Rename the UH-68 "Buzzard" helicopter (clash with the A-15 Buzzard): the UH-68 Heron (decision 239)
+- [x] Utility helicopter role: a Black Hawk analogue and an Mi-8 analogue in `sim/air/aircraft.ts` with avionics profiles; a decision for the change to every world's cast (UH-68 Heron, Ve-18 Shmel; decision 239)
+- [x] Pilots per squadron in the order of battle (count, names from a fork); the hash change recorded (decision 239)
 
 ### R1.8 Network data for the sim
 

@@ -33,6 +33,7 @@ export type AircraftRole =
   | 'tanker'
   | 'airlift'
   | 'heavy-helicopter'
+  | 'utility-helicopter'
   | 'recon';
 
 export const AIRCRAFT_ROLES: readonly AircraftRole[] = [
@@ -50,6 +51,7 @@ export const AIRCRAFT_ROLES: readonly AircraftRole[] = [
   'tanker',
   'airlift',
   'heavy-helicopter',
+  'utility-helicopter',
   'recon',
 ];
 

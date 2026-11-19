@@ -4,7 +4,7 @@
   "scheme": "pact-air",
   "airWar": {
     "id": "ar23",
-    "order": 19,
+    "order": 20,
     "side": "pact",
     "role": "multirole",
     "reference": "MiG-23ML",
@@ -26,7 +26,7 @@
       },
       {
         "id": "strike",
-        "stores": "4 × 500 kg bombs, centerline tank",
+        "stores": "4 \u00d7 500 kg bombs, centerline tank",
         "radiusFactor": 0.8
       }
     ]

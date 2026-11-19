@@ -17,7 +17,7 @@ export type AircraftChoice = 'kestrel' | 'scout' | 'utility';
 export const AIRCRAFT_CHOICES: { id: AircraftChoice; label: string; note: string }[] = [
   { id: 'kestrel', label: 'F-21 Kestrel', note: 'Fighter (F-16 analogue)' },
   { id: 'scout', label: 'MH-14 Wren', note: 'Light scout helicopter (Little Bird analogue)' },
-  { id: 'utility', label: 'UH-68 Buzzard', note: 'Utility helicopter (Black Hawk analogue)' },
+  { id: 'utility', label: 'UH-68 Heron', note: 'Utility helicopter (Black Hawk analogue)' },
 ];
 
 export interface FreeFlightOptions {

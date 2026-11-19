@@ -1,7 +1,7 @@
 /**
  * Part I's acceptance checks 12 and 13 for the displays and the status strip
  * (decision 200): the real DisplaySystem over the stand-in scene in each master
- * mode, for the Kestrel and the Buzzard, in both faction skins, at 1366 × 768 and
+ * mode, for the Kestrel and the Heron, in both faction skins, at 1366 × 768 and
  * 1920 × 1080, and each also as seen with protanopia, deuteranopia and tritanopia
  * (Chromium's own emulation). With the dev server up (npm run dev):
  *
