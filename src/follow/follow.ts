@@ -375,7 +375,13 @@ export class Follow {
     // Posted after the take-over in any case: the worker applies them in order.
     if (m) {
       const h = f.flight.handback();
-      this.deps.post({ kind: 'hand-back', mission: m.id, fix: h.fix, lost: h.lost });
+      this.deps.post({
+        kind: 'hand-back',
+        mission: m.id,
+        fix: h.fix,
+        lost: h.lost,
+        stores: h.stores,
+      });
     }
     if (a) a.flown.pilot = null;
     f.handBack();

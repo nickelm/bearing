@@ -32,7 +32,7 @@ import type { CampaignInput } from '../command/campaignInput';
 import { carrierState, carrierTrack } from '../naval/carrierGroup';
 import type { CarrierTrack } from '../naval/carrierGroup';
 import { aircraftType } from './aircraft';
-import type { HandbackFix, HandbackLoss } from '../eventLog';
+import type { HandbackFix, HandbackLoss, HandbackStores } from '../eventLog';
 import { jumpInOpen, MISSION_PROFILES } from './mission';
 import type { BaseRef, Mission, MissionPhase } from './mission';
 import { rejoinRoute } from './missionRoute';
@@ -396,9 +396,36 @@ export class AirOps {
    * from the fix (`rejoinRoute`), carrying on the mission from its phase there; the
    * phases after now are scheduled again. A flight with no aircraft left ends.
    */
-  release(m: Mission, fix: HandbackFix, lost: readonly HandbackLoss[], sim: Simulation): void {
+  release(
+    m: Mission,
+    fix: HandbackFix,
+    lost: readonly HandbackLoss[],
+    sim: Simulation,
+    stores: readonly HandbackStores[] = [],
+  ): void {
     if (!this.missions.has(m.id) || !m.flown) return;
+    const flown = m.flown;
     delete m.flown;
+    // The session's consequences (decision 275): the survivors' stores, by their new slots.
+    const gone = new Set(lost.map((l) => l.slot));
+    const kept = [...stores].filter((x) => !gone.has(x.slot)).sort((a, b) => a.slot - b.slot);
+    if (kept.some((x) => Object.keys(x.expended).length > 0))
+      m.expended = kept.map((x) => ({ ...x.expended }));
+    const total: Record<string, number> = {};
+    for (const x of stores)
+      for (const [k, n] of Object.entries(x.expended)) total[k] = (total[k] ?? 0) + n;
+    sim.log.decision(sim.time, {
+      kind: 'flight-session',
+      mission: m.id,
+      side: m.side,
+      type: m.type,
+      slot: flown.slot,
+      since: flown.since,
+      lost: lost.length,
+      aircraft: Math.max(0, m.aircraft - lost.length),
+      fuel: fix.fuel,
+      expended: total,
+    });
     // The input lands at the worker's time, a frame or so from the fix's: the fix counts as now,
     // so the phases after now are scheduled exactly once, on replay too.
     fix = { ...fix, time: sim.time };
@@ -507,6 +534,7 @@ export class AirOps {
       h.number(m.id).string(m.type).number(m.squadron).number(m.aircraft).number(m.seed);
       h.string(m.aborted ?? '');
       h.number(m.flown ? m.flown.slot : -1);
+      for (const e of m.expended ?? []) for (const n of Object.values(e)) h.number(n);
       for (const e of m.timeline) h.number(e.time);
       // The route's shape too, so its terrain floor (R1.6) is in the hash.
       h.number(m.route.segments.length);

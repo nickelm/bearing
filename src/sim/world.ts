@@ -149,7 +149,7 @@ export function applyInput(world: SimWorld, input: CampaignInputEvent): void {
     }
     case 'hand-back': {
       const m = world.air?.missions.get(input.mission);
-      if (m) world.air!.release(m, input.fix, input.lost, world.sim);
+      if (m) world.air!.release(m, input.fix, input.lost, world.sim, input.stores);
       break;
     }
   }

@@ -328,6 +328,11 @@ export interface Mission {
    * handback rebuilds its route from where the flight is and clears it.
    */
   flown?: { slot: number; since: GameTime };
+  /**
+   * Stores each aircraft has expended at full fidelity, by its slot in the flight now
+   * (decision 275): promotion starts from them, so a store fired once stays fired.
+   */
+  expended?: Record<string, number>[];
   /** Seed for promotion: the flight's aircraft expand from it (uint32). */
   seed: number;
   route: Route;

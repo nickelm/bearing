@@ -57,7 +57,7 @@ export interface PromotedAircraft {
 /** The mission fields promotion reads. */
 export type PromotedMission = Pick<
   Mission,
-  'id' | 'aircraftType' | 'aircraft' | 'loadout' | 'route'
+  'id' | 'aircraftType' | 'aircraft' | 'loadout' | 'route' | 'expended'
 >;
 
 /** Pitch above the flight path a promoted aircraft starts at: about its 1-g angle of attack. */
@@ -129,7 +129,8 @@ export function promoteFlight(
   return poses.slice(0, mission.aircraft).map((p, slot) => ({
     slot,
     flown: aircraftFromPose(spec, radius, p, fuel, mission.aircraftType),
-    stores: { loadout: mission.loadout, expended: {} },
+    // What full fidelity expended before stays expended (decision 275).
+    stores: { loadout: mission.loadout, expended: { ...(mission.expended?.[slot] ?? {}) } },
     damage: 0,
   }));
 }

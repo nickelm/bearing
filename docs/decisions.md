@@ -4338,3 +4338,17 @@ The promoted flight flies in still air: Free Flight's wind from the weather is n
 **How it was checked.** `tests/flightCap.test.ts`: 8× in cruise, 1× with an enemy flight at 100 km, 30 km from the target, at 150 m, with the gear down and on the ground. The unit suite, the type check and lint pass.
 
 **Reason:** design, *Time*: the flight cap; roadmap R2.5.
+
+### 275. A session's consequences at the handback: a logged session record, expended stores kept
+
+**Date:** 2026-11-20
+**Decision:** The hand-back input (decision 257) carries what each surviving aircraft has expended (`stores`: slot and store counts, from `PromotedFlight.handback()`; optional, so logs from before replay unchanged). In `AirOps.release`, before the losses and the rebuilt route:
+
+- the survivors' expended stores go on the mission by their slots after the losses (`Mission.expended`, only when anything was expended), and promotion starts each aircraft from them, so a store fired at full fidelity stays fired through any number of sessions; the hash includes them;
+- a `flight-session` decision is logged: the slot the player flew and since when, the aircraft lost, the aircraft and fuel per aircraft left, and the stores expended in all.
+
+With the losses (`aircraft-lost`, crash) and the rebuilt route (`mission-rejoined`) these are every consequence a session has until R2.6's weapons and damage: hits on other flights and on targets join the hand-back then. Nothing outside the log changes campaign state (rule 19): the record is in the input, and replay from a checkpoint applies it again.
+
+**How it was checked.** `tests/handover.test.ts`: a CAP handed back with its lead crashed and #1 and #2 having fired one and two stores keeps two for the new lead, one record per survivor, and logs a session with one loss and three stores; a promotion after it starts the new lead with them. The other handover tests (hold, rebuild, replay hash, refusals) pass unchanged; a campaign without a take-over has no `expended`, so `tools/war.preview.ts`'s hashes do not move.
+
+**Reason:** roadmap R2.5: a session's consequences return to the worker as logged campaign events (owner decision 1); the exit asks that stores survive both directions.

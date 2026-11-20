@@ -25,7 +25,7 @@
  */
 import type { Dir } from '../../core/greatCircle';
 import type { GameTime, Meters } from '../../core/units';
-import type { HandbackFix, HandbackLoss } from '../eventLog';
+import type { HandbackFix, HandbackLoss, HandbackStores } from '../eventLog';
 import { Vec3d } from '../../core/vec3d';
 import type { AnalyticPose } from '../air/analyticPose';
 import { slotPose } from '../air/formation';
@@ -169,11 +169,15 @@ export class PromotedFlight {
    * is, in the route's terms, and the aircraft full fidelity lost. With none left the fix
    * is where the last one fell, on the ground with nothing in it.
    */
-  handback(): { fix: HandbackFix; lost: HandbackLoss[] } {
+  handback(): { fix: HandbackFix; lost: HandbackLoss[]; stores: HandbackStores[] } {
     const d = this.demote();
     if (d) {
       const { time, point, altitude, heading, fuel, aircraft, airborne } = d;
-      return { fix: { time, point, altitude, heading, fuel, aircraft, airborne }, lost: d.lost };
+      return {
+        fix: { time, point, altitude, heading, fuel, aircraft, airborne },
+        lost: d.lost,
+        stores: d.stores.map((x) => ({ slot: x.slot, expended: { ...x.stores.expended } })),
+      };
     }
     const lost = this.aircraft.map((a) => {
       const u = a.flown.airframe.pos.clone().normalize();
@@ -191,6 +195,7 @@ export class PromotedFlight {
         airborne: false,
       },
       lost,
+      stores: [],
     };
   }
 

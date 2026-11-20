@@ -40,7 +40,20 @@ export type CampaignInputEvent =
    * The player hands a flight back (R2.5): where it is and what full fidelity lost.
    * The worker rebuilds its route from the fix and logs the losses (owner decision 1).
    */
-  | { kind: 'hand-back'; mission: number; fix: HandbackFix; lost: HandbackLoss[] };
+  | {
+      kind: 'hand-back';
+      mission: number;
+      fix: HandbackFix;
+      lost: HandbackLoss[];
+      /** What each surviving aircraft has expended, by slot (absent in logs before decision 275). */
+      stores?: HandbackStores[];
+    };
+
+/** The stores an aircraft full fidelity flew has released or fired, by store id (R2.6 fills them). */
+export interface HandbackStores {
+  slot: number;
+  expended: Record<string, number>;
+}
 
 /** Where a flight is at the handback, in the route's terms (promotion.ts's DemotedFlight). */
 export interface HandbackFix extends FlightFix {
@@ -99,6 +112,23 @@ export type CampaignDecision =
       effect: number;
       kills: number;
       losses: number;
+    }
+  /**
+   * A full-fidelity session ended (R2.5, decision 275): which aircraft the player flew and
+   * from when, the aircraft it lost, what was left (aircraft, fuel per aircraft in the
+   * route's terms) and the stores the flight expended in all.
+   */
+  | {
+      kind: 'flight-session';
+      mission: number;
+      side: string;
+      type: string;
+      slot: number;
+      since: number;
+      lost: number;
+      aircraft: number;
+      fuel: number;
+      expended: Record<string, number>;
     }
   /** A flight handed back (R2.5): its route rebuilt from the fix, with the station time and phase it carries on in. */
   | {

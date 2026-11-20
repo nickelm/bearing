@@ -4,6 +4,9 @@ import { HOUR, MINUTE } from '../src/core/units';
 import { jumpInOpen, missionPhase, phaseTime } from '../src/sim/air/mission';
 import type { Mission } from '../src/sim/air/mission';
 import { routeState } from '../src/sim/air/route';
+import { analyticPose } from '../src/sim/air/analyticPose';
+import { promoteFlight } from '../src/sim/flight/promotion';
+import { kestrelSpec } from './helpers/flight';
 import { campaignInput } from '../src/sim/command/campaignInput';
 import type { HandbackFix } from '../src/sim/eventLog';
 import { SimHost } from '../src/sim/host';
@@ -91,6 +94,42 @@ describe('taking over and handing back in the worker', () => {
     host.seek(done + MINUTE);
     expect(host.world.air!.missions.has(id)).toBe(false);
     expect(log.some((e) => e.kind === 'mission-resolved' && e.mission === id)).toBe(true);
+  }, 120_000);
+
+  it('logs the session and keeps the survivors’ expended stores for the next promotion', () => {
+    const host = new SimHost(make, applyInput);
+    host.seek(2 * HOUR);
+    const m0 = nextCap(host.world, host.time);
+    const take = phaseTime(m0, 'fence-in') + MINUTE;
+    host.seek(take);
+    host.input({ kind: 'take-over', mission: m0.id, slot: 0 });
+    const back = take + 10 * MINUTE;
+    host.seek(back);
+    const m = host.world.air!.missions.get(m0.id)!;
+    const n = m.aircraft;
+    host.input({
+      kind: 'hand-back',
+      mission: m.id,
+      fix: { ...fixOf(m, back), aircraft: n - 1 },
+      lost: [{ slot: 0, point: routeState(m.route, back, R).point, cause: 'crash' }],
+      stores: [
+        { slot: 0, expended: { 'aim-9': 1 } },
+        { slot: 1, expended: { 'aim-9': 2 } },
+        ...Array.from({ length: n - 2 }, (_, k) => ({ slot: k + 2, expended: {} })),
+      ],
+    });
+    // The lead crashed: #2 is the new lead and keeps what it fired.
+    expect(m.aircraft).toBe(n - 1);
+    expect(m.expended?.[0]).toEqual({ 'aim-9': 2 });
+    expect(m.expended).toHaveLength(n - 1);
+    const session = host.world.sim.log.entries.find(
+      (e) => e.kind === 'flight-session' && e.mission === m.id,
+    );
+    expect(session).toMatchObject({ slot: 0, since: take, lost: 1, aircraft: n - 1 });
+    expect((session as { expended: Record<string, number> }).expended).toEqual({ 'aim-9': 3 });
+    // The next promotion starts from it.
+    const f = promoteFlight(m, back + 1, R, kestrelSpec(), [analyticPose(m.route, back + 1, R)]);
+    expect(f[0]!.stores.expended).toEqual({ 'aim-9': 2 });
   }, 120_000);
 
   it('replays to the same state from a checkpoint before the take-over', () => {

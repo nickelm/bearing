@@ -229,7 +229,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] Owner, on the GPU: take over an F-21 on a CAP station with T, fly with mouse aim, hand back with T; the wingman stays on you, and the flight flies back to its station
 - [x] Flight cap: up to 8× in cruise while flying, cancelled on any threat (decision 274)
 - [ ] Flight cap's threats from the sensors once they read campaign contacts (R2.6): RWR contacts and radar sites, not only enemy flights within 120 km; an 8× button in the time controls while flying
-- [ ] Session consequences as logged campaign events at handback
+- [x] Session consequences as logged campaign events at handback: losses, the rebuilt route, a `flight-session` record, the survivors' expended stores kept for the next promotion (decision 275)
 - [ ] Test: take over and hand back at every phase of a CAP mission; the mission completes
 
 ### R2.6 Weapons, damage and interface defaults
