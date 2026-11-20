@@ -202,6 +202,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] The Pact's own carrier model (its carrier draws the Alliance's)
 - [ ] Owner: the karst towers and other landform props are not in the one height function (R3.6), so low flights pass through them; keep, thin out or remove them?
 - [ ] Spectator displays' radar and threat formats are empty until R2.6's sensors read campaign contacts
+- [x] Combat spread a nautical mile abeam, in meters whatever the span (owner; decision 258)
 - [ ] Afterburner, control surfaces and speedbrake of the followed aircraft stay at rest until R2.5's flight model drives them
 
 ### R2.5 Full fidelity and handover
@@ -239,6 +240,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] Route and waypoints on the moving map; HUD steering to the next waypoint; the front on the map
 - [ ] Direct control in cursor mode: an attitude and altitude hold as an assist (design §Cursor mode)
 - [ ] LOW FUEL in the status strip
+- [ ] The player's own flight on the HUD (markers on the other aircraft) and on the moving map and radar by intraflight datalink (owner, decision 258)
 - [ ] Acceptance check 8 with the pipper
 - [ ] Owner: a CAP kill and a bridge hit, both visible in the campaign state
 

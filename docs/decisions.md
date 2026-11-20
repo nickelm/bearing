@@ -4268,3 +4268,18 @@ Left for later (TODO): the worker's protocol (a take-over holds the mission; a h
 Left for later (TODO): while the player flies, the map and other flights' resolution see the held flight on its old route until fixes are posted as it flies; the follow must not end a held flight at its old route's end.
 
 **Reason:** the war must carry on whatever the player does with a flight, and replay must reproduce it from the log alone (rule 19).
+
+### 258. Combat spread a nautical mile abeam; the owner's air-combat, naval and radio direction for later phases
+
+**Date:** 2026-11-20
+**Decision:**
+
+- **Combat spread** is a nautical mile abeam (`SPREAD_ABEAM`, 1,852 m), 30 m back, the second element's wingman two miles out. Decision 253 set it at 60 wingspans, about 570 m for the F-21, which the owner pointed out is far tighter than the doctrine: US Navy combat spread and the US Air Force's line abreast are flown about 1 to 1.5 nm apart, for mutual support by eye and by radar. That distance follows from the tactic, not the airframe, so spread's slots are in meters (`slotMeters`); the other formations stay in wingspans. Formations are presentation and the AI's slots, never campaign facts, so the war's state does not change. The AI wingman in `tests/promotion.test.ts` still holds its slot within 600 m on station at a mile: the racetrack's 1.5°/s turns ask it for about 48 m/s more outside the turn, which it has. A tighter turn at altitude needs combat spread's tactical turns (cross turns, in-place turns) instead of holding the slot; those come with air combat in R3.4.
+- **For later phases** (owner, 2026-11-20), now in the roadmap:
+  - R2.6: the player's own flight always in view, its other aircraft marked on the HUD and shown on the moving map and the radar by intraflight datalink, since a wingman a mile abeam is a speck.
+  - R3.3: radar missiles as semi-active (Sparrow analogues, Fox 1) for most types, the navy fighter's long-range missile (the F-28's Phoenix analogue) against bombers, and active-radar missiles (Fox 3) as a campaign setting for the late era.
+  - R3.4: BVR timelines for the AI and the player's flight (commit, sort, shot, crank, notch, abort and minimum abort ranges by missile and threat) and basic fighter maneuvers in the merge.
+  - R4.6: Backfire (Ra-84) raids on carrier groups with heavy anti-ship missiles, the outer air battle against them, and the vampire calls and point defense when the missiles are inbound, as in *Red Storm Rising*.
+  - R4.5, now *Crews and radio*: check-ins with the strike lead and with AWACS and ground controllers, air traffic control near airfields, brevity in the comms format. Controllers' callsigns are invented per side like the setting's other names, not the real ones (the owner's Darkstar, Magic and Overlord are examples of the kind).
+
+**Reason:** the owner's review of R2.5's start.

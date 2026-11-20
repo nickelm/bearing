@@ -66,7 +66,8 @@ describe('formations', () => {
       const p = slotPose(lead, k, { from: formation, to: formation, blend: 1 }, span);
       return Math.hypot(p.pos[0] - lead.pos[0], p.pos[1] - lead.pos[1], p.pos[2] - lead.pos[2]);
     };
-    expect(pos('spread', 1)).toBeGreaterThan(500);
+    // Combat spread is a nautical mile abeam whatever the span (decision 258).
+    expect(pos('spread', 1)).toBeCloseTo(Math.hypot(30, 1852), 0);
     expect(pos('close', 1)).toBeLessThan(30);
     expect(pos('trail', 1)).toBeGreaterThan(pos('route', 1));
     // Slots past the fourth repeat further back.
@@ -82,7 +83,9 @@ describe('formations', () => {
       const two = slotPose(lead, 1, { from: 'spread', to: 'spread', blend: 1 }, 10);
       worst = Math.max(worst, Math.abs(Math.hypot(...two.pos) - Math.hypot(...lead.pos)));
     }
-    expect(worst).toBeLessThan(1);
+    // The slot is in the lead's tangent plane: a mile abeam it sits d²/2R higher on this
+    // small test planet (1.7 m), and no more for the bank.
+    expect(worst).toBeLessThan(1 + 1852 ** 2 / (2 * R));
   });
 });
 

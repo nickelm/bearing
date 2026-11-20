@@ -13,7 +13,9 @@
  *
  * - **close**: fingertip, about a span apart (departure, climb-out, approach).
  * - **route**: the loose cruise formation, 5 spans back and 8 aside.
- * - **spread**: combat spread, line abreast 60 spans apart (600 m for fighters).
+ * - **spread**: combat spread, line abreast a nautical mile apart (SPREAD_ABEAM; owner,
+ *   decision 258): mutual support by eye and radar sets it, not the wingspan, so its
+ *   slots are in meters; the second element's wingman flies two miles out.
  * - **trail**: in trail 80 spans apart, offset aside out of the wake (attack runs).
  * - **stream**: transports and bombers in trail 30 spans apart.
  *
@@ -28,8 +30,14 @@ import type { MissionPhase } from './mission';
 
 export type Formation = 'close' | 'route' | 'spread' | 'trail' | 'stream';
 
-/** A slot: behind, right and above the lead (spans). */
+/** A slot: behind, right and above the lead (spans, or meters in METER_SLOTS' formations). */
 type Slot = readonly [back: number, right: number, up: number];
+
+/** Combat spread's distance abeam (m): a nautical mile. */
+export const SPREAD_ABEAM = 1852;
+
+/** Formations whose slots are in meters rather than wingspans. */
+const METER_SLOTS: ReadonlySet<Formation> = new Set(['spread']);
 
 const SLOTS: Record<Formation, readonly Slot[]> = {
   close: [
@@ -43,9 +51,9 @@ const SLOTS: Record<Formation, readonly Slot[]> = {
     [10, 16, 0],
   ],
   spread: [
-    [3, 60, 0],
-    [3, -60, 0],
-    [6, 120, 0],
+    [30, SPREAD_ABEAM, 0],
+    [30, -SPREAD_ABEAM, 0],
+    [60, 2 * SPREAD_ABEAM, 0],
   ],
   trail: [
     [80, 6, 2],
@@ -62,7 +70,10 @@ const SLOTS: Record<Formation, readonly Slot[]> = {
 /** Seconds a flight takes to move from one formation to the next. */
 export const FORMATION_CHANGE = 45;
 
-/** A slot's offset (spans) in formation `f`; slots past the first three repeat further back. */
+/**
+ * A slot's offset in formation `f` (spans, or meters where the formation's slots are in
+ * meters: `slotMeters` gives meters for either); slots past the first three repeat further back.
+ */
 export function slotOffset(f: Formation, k: number): [number, number, number] {
   if (k <= 0) return [0, 0, 0];
   const s = SLOTS[f];
@@ -72,6 +83,13 @@ export function slotOffset(f: Formation, k: number): [number, number, number] {
   // A repeated group of three flies behind the first, by the formation's own depth.
   const depth = Math.max(4, s[s.length - 1]![0] + s[0]![0]);
   return [base[0] + repeat * depth, base[1], base[2]];
+}
+
+/** A slot's offset (m) in formation `f` for aircraft of wingspan `span` (m). */
+export function slotMeters(f: Formation, k: number, span: Meters): [number, number, number] {
+  const o = slotOffset(f, k);
+  const scale = METER_SLOTS.has(f) ? 1 : span;
+  return [o[0] * scale, o[1] * scale, o[2] * scale];
 }
 
 /** What a flight flies in at game time t: the formation it leaves, the one it takes up, and how far it is (0..1). */
@@ -118,12 +136,12 @@ export function slotPose(
   span: Meters = 10,
 ): AnalyticPose {
   if (k === 0) return lead;
-  const a = slotOffset(f.from, k);
-  const b = slotOffset(f.to, k);
+  const a = slotMeters(f.from, k, span);
+  const b = slotMeters(f.to, k, span);
   const w = f.blend;
-  const back = (a[0] + (b[0] - a[0]) * w) * span;
-  const side = (a[1] + (b[1] - a[1]) * w) * span;
-  const above = (a[2] + (b[2] - a[2]) * w) * span;
+  const back = a[0] + (b[0] - a[0]) * w;
+  const side = a[1] + (b[1] - a[1]) * w;
+  const above = a[2] + (b[2] - a[2]) * w;
   const r = Math.hypot(...lead.pos);
   const up: Dir = [lead.pos[0] / r, lead.pos[1] / r, lead.pos[2] / r];
   const fw = lead.forward;
