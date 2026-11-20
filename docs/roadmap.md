@@ -201,7 +201,7 @@ _Depends on R1.5, R1.6, R2.4._
 
 **Exit:** take over and hand back at every phase of a CAP mission, with the mission completing; losses and stores survive both directions.
 
-**State (2026-11-20):** begun (decision 256): promotion, demotion with the rejoin route, and the AI pilot (route, formation, station, pass and egress) run headless; the worker's protocol, the follow on full fidelity, take over, the flight cap and the consequences are next (TODO).
+**State (2026-11-20):** begun (decision 256): promotion, demotion with the rejoin route, and the AI pilot (route, formation, station, pass and egress) run headless, and the worker holds a flown flight and rebuilds it at the handback (decision 257); the follow on full fidelity, take over in the view, the flight cap and the consequences are next (TODO).
 
 ### R2.6 Weapons, Damage and Interface Defaults — large
 

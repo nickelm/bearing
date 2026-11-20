@@ -16,6 +16,8 @@
  */
 import type { Side } from '../campaign/cast';
 import type { GameTime } from '../core/units';
+import type { Dir } from '../core/greatCircle';
+import type { FlightFix } from './air/missionRoute';
 import type { Subscription } from './air/subscriptions';
 import type { StateHasher } from './stateHash';
 
@@ -31,7 +33,28 @@ export type CampaignInputEvent =
   | { kind: 'side'; side: Side }
   /** A mission subscription (R1.4), added or replaced by id, or removed. */
   | { kind: 'subscribe'; subscription: Subscription }
-  | { kind: 'unsubscribe'; id: number };
+  | { kind: 'unsubscribe'; id: number }
+  /** The player takes over aircraft `slot` of a flight (R2.5): the mission is held. */
+  | { kind: 'take-over'; mission: number; slot: number }
+  /**
+   * The player hands a flight back (R2.5): where it is and what full fidelity lost.
+   * The worker rebuilds its route from the fix and logs the losses (owner decision 1).
+   */
+  | { kind: 'hand-back'; mission: number; fix: HandbackFix; lost: HandbackLoss[] };
+
+/** Where a flight is at the handback, in the route's terms (promotion.ts's DemotedFlight). */
+export interface HandbackFix extends FlightFix {
+  /** Aircraft still flying, and whether the flight is in the air. */
+  aircraft: number;
+  airborne: boolean;
+}
+
+/** An aircraft full fidelity lost: where and why (a crash; R2.6 adds shoot-downs). */
+export interface HandbackLoss {
+  slot: number;
+  point: Dir;
+  cause: string;
+}
 
 /** A campaign-level decision. Later phases add their kinds here. */
 export type CampaignDecision =
@@ -76,6 +99,16 @@ export type CampaignDecision =
       effect: number;
       kills: number;
       losses: number;
+    }
+  /** A flight handed back (R2.5): its route rebuilt from the fix, with the station time and phase it carries on in. */
+  | {
+      kind: 'mission-rejoined';
+      mission: number;
+      side: string;
+      type: string;
+      phase: string;
+      segments: number;
+      end: number;
     }
   /** A planned sortie cancelled when it was due to be committed (R2.1), and why. */
   | { kind: 'sortie-cancelled'; side: string; sortie: string; type: string; reason: string };

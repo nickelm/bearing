@@ -322,6 +322,12 @@ export interface Mission {
   /** Aircraft it lost and enemy aircraft it shot down (R2.2). */
   losses?: number;
   kills?: number;
+  /**
+   * The player flies one of its aircraft (R2.5): which slot and since when. While it is
+   * set the mission's phase events are held and resolution leaves it alone; the
+   * handback rebuilds its route from where the flight is and clears it.
+   */
+  flown?: { slot: number; since: GameTime };
   /** Seed for promotion: the flight's aircraft expand from it (uint32). */
   seed: number;
   route: Route;
@@ -349,6 +355,12 @@ export function jumpInWindow(m: Mission): { from: GameTime; to: GameTime } | nul
   const from = phaseTime(m, w.from);
   const to = phaseTime(m, w.to);
   return Number.isFinite(from) && Number.isFinite(to) && to > from ? { from, to } : null;
+}
+
+/** Whether the player may take over mission `m`'s flight at game time t (inside its jump-in window). */
+export function jumpInOpen(m: Mission, t: GameTime): boolean {
+  const w = jumpInWindow(m);
+  return w !== null && t >= w.from && t < w.to && m.aircraft > 0;
 }
 
 /** Time the mission starts a phase, or NaN if its route skips it. */

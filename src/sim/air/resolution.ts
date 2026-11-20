@@ -139,7 +139,8 @@ export class MissionResolution implements PhaseHook, Stateful {
     let best = Infinity;
     for (const c of this.air.missions.values()) {
       if (c.side === m.side || this.typeOf(c.type).engagement !== 'cap') continue;
-      if ((c.engagements ?? 0) >= CAP_ENGAGEMENTS || c.aborted) continue;
+      // A flight the player flies fights at full fidelity (R2.6), not here.
+      if ((c.engagements ?? 0) >= CAP_ENGAGEMENTS || c.aborted || c.flown) continue;
       if (missionPhase(c, t) !== 'on-target') continue;
       let d = Infinity;
       for (const p of path) d = Math.min(d, arcDistance(c.target.point, p, R));
@@ -160,6 +161,7 @@ export class MissionResolution implements PhaseHook, Stateful {
           e.side === m.side &&
           e.package === m.package &&
           !e.aborted &&
+          !e.flown &&
           routeState(e.route, t, R).airborne &&
           ['escort', 'suppression'].includes(this.typeOf(e.type).engagement),
       )
@@ -204,6 +206,7 @@ export class MissionResolution implements PhaseHook, Stateful {
         e.package === m.package &&
         e.id !== m.id &&
         !e.aborted &&
+        !e.flown &&
         this.typeOf(e.type).engagement === 'suppression' &&
         routeState(e.route, t, R).airborne,
     );

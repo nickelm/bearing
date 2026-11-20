@@ -212,7 +212,9 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] AI pilot: formation keeping (the slots of `formation.ts` beside the flown lead; `PromotedFlight`)
 - [x] AI pilot: orbit and CAP station (the route's racetrack; flights now join it running the way they arrive)
 - [x] AI pilot: attack run and egress (the route's pass and turn home; weapons release is R2.6)
-- [ ] Worker protocol: a take-over input holds the mission (no aggregate resolution, phase events cancelled); a handback input carries the demoted state, the worker rebuilds the route with `rejoinRoute`, reschedules the phases and logs losses (crashes) and the new route
+- [x] Worker protocol: a take-over input holds the mission (no aggregate resolution, phase events cancelled); a handback input carries the demoted state, the worker rebuilds the route with `rejoinRoute`, reschedules the phases and logs losses (crashes) and the new route (decision 257)
+- [ ] While the player flies, the map and the war see the held flight on its old route: post its position as fixes (inputs every few game seconds) so the map draws it where it is and other flights' resolution can find it
+- [ ] The follow must not end a held flight at its old route's end (`missionPhase` reads the old timeline while it is held)
 - [ ] Follow on `PromotedFlight`: promote a followed flight whose type has flight data inside the window, its lead's reference the drawn route (the fields' shift and the lift over the drawn ground); draw the aircraft from their airframes (surfaces, afterburner, speedbrake); the HUD frame and displays from the airframe; demote at the approach
 - [ ] Ground for promoted flights: the drawn surface with the airfields' grading (Free Flight's `AirfieldGround`)
 - [ ] The route's climb (the air war's 110 m/s for the F-21) is steeper than the Kestrel sustains at its climb speed: the AI follows it up to 4 km late and catches up by the station (R2.10's calibration, or a slower climb in the route)

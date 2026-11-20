@@ -32,7 +32,10 @@ import type { CampaignInput } from '../command/campaignInput';
 import { carrierState, carrierTrack } from '../naval/carrierGroup';
 import type { CarrierTrack } from '../naval/carrierGroup';
 import { aircraftType } from './aircraft';
+import type { HandbackFix, HandbackLoss } from '../eventLog';
+import { jumpInOpen, MISSION_PROFILES } from './mission';
 import type { BaseRef, Mission, MissionPhase } from './mission';
+import { rejoinRoute } from './missionRoute';
 import { buildOrderOfBattle, baseIndex } from './orbat';
 import type { AirBaseRecord, BaseStocks, OrderOfBattle, Squadron } from './orbat';
 import { returnRoute, routeState, routeTimeline } from './route';
@@ -373,6 +376,73 @@ export class AirOps {
     this.revision++;
   }
 
+  /**
+   * The player takes over aircraft `slot` of flight `m` (R2.5): its phase events are
+   * held, so resolution and completion wait, until the handback. Only inside the
+   * mission's jump-in window, and only once.
+   */
+  hold(m: Mission, slot: number, sim: Simulation): boolean {
+    if (!this.missions.has(m.id) || m.flown || !jumpInOpen(m, sim.time)) return false;
+    if (slot < 0 || slot >= m.aircraft) return false;
+    m.flown = { slot, since: sim.time };
+    this.cancelPhases(m, sim);
+    this.revision++;
+    return true;
+  }
+
+  /**
+   * The player hands flight `m` back (R2.5): the aircraft full fidelity lost are lost
+   * here (their crews eject or are killed as in any loss), and the route is rebuilt
+   * from the fix (`rejoinRoute`), carrying on the mission from its phase there; the
+   * phases after now are scheduled again. A flight with no aircraft left ends.
+   */
+  release(m: Mission, fix: HandbackFix, lost: readonly HandbackLoss[], sim: Simulation): void {
+    if (!this.missions.has(m.id) || !m.flown) return;
+    delete m.flown;
+    // The input lands at the worker's time, a frame or so from the fix's: the fix counts as now,
+    // so the phases after now are scheduled exactly once, on replay too.
+    fix = { ...fix, time: sim.time };
+    const byCause = new Map<string, HandbackLoss[]>();
+    for (const l of lost) byCause.set(l.cause, [...(byCause.get(l.cause) ?? []), l]);
+    for (const [cause, ls] of byCause) this.lose(m, ls.length, ls[0]!.point, cause, sim);
+    if (!this.missions.has(m.id)) return;
+    // Aircraft the fix knows and the flight does not are the campaign's losses already.
+    const t = aircraftType(m.aircraftType);
+    const loadout = t.loadouts.find((l) => l.id === m.loadout) ?? t.loadouts[0]!;
+    let route = rejoinRoute({
+      type: t,
+      loadout,
+      profile: MISSION_PROFILES[m.type],
+      radius: this.radius,
+      rangeFactor: this.input.rangeFactor,
+      basePoint: (time) => this.basePoint(m.base, time),
+      carrierBased: m.base.kind === 'carrier',
+      target: m.target.point,
+      ground: this.ground,
+      route: m.route,
+      fix,
+    });
+    if (!fix.airborne) route = m.route;
+    m.route = route;
+    m.timeline = routeTimeline(route);
+    this.schedulePhases(m, sim.time, sim);
+    const now = routeState(route, sim.time, this.radius);
+    sim.log.decision(sim.time, {
+      kind: 'mission-rejoined',
+      mission: m.id,
+      side: m.side,
+      type: m.type,
+      phase: now.segment >= 0 ? now.phase : 'complete',
+      segments: route.segments.length,
+      end: m.timeline[m.timeline.length - 1]!.time,
+    });
+    this.revision++;
+    // A route that ended before now (a fix on the ground at home) completes at once.
+    if (m.timeline[m.timeline.length - 1]!.time <= sim.time) {
+      sim.schedule(sim.time, AIR_PHASE_EVENT, { mission: m.id, phase: 'complete' });
+    }
+  }
+
   private onPhase(e: PhaseEvent, sim: Simulation): void {
     const m = this.missions.get(e.mission);
     if (!m) return;
@@ -436,6 +506,7 @@ export class AirOps {
     for (const m of this.missions.values()) {
       h.number(m.id).string(m.type).number(m.squadron).number(m.aircraft).number(m.seed);
       h.string(m.aborted ?? '');
+      h.number(m.flown ? m.flown.slot : -1);
       for (const e of m.timeline) h.number(e.time);
       // The route's shape too, so its terrain floor (R1.6) is in the hash.
       h.number(m.route.segments.length);

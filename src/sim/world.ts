@@ -142,6 +142,16 @@ export function applyInput(world: SimWorld, input: CampaignInputEvent): void {
     case 'unsubscribe':
       world.air?.subscriptions.remove(input.id);
       break;
+    case 'take-over': {
+      const m = world.air?.missions.get(input.mission);
+      if (m) world.air!.hold(m, input.slot, world.sim);
+      break;
+    }
+    case 'hand-back': {
+      const m = world.air?.missions.get(input.mission);
+      if (m) world.air!.release(m, input.fix, input.lost, world.sim);
+      break;
+    }
   }
 }
 

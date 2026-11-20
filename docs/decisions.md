@@ -4253,3 +4253,18 @@ Left for later (TODO): formation lights at night, off in combat spread; taxi and
 Left for later (TODO): the worker's protocol (a take-over holds the mission; a handback logs the state and rebuilds the route), the follow on full fidelity with its ground, take over and hand back, the flight cap, the session's consequences, the exit test; the abort's own turn home; the route's climb against the Kestrel's.
 
 **Reason:** R2.5 lets the player take over any flight of the war and hand it back; the aircraft must fly at full fidelity on the same physics path whoever flies them (rule 12), and the war must be able to carry a flight on from wherever the player leaves it.
+
+### 257. Taking over and handing back in the worker: the flown flight is held, the handback rebuilds its route
+
+**Date:** 2026-11-20
+**Decision:** R2.5's worker protocol (owner decision 1: the flown aircraft steps on the main thread, its consequences return as logged campaign events).
+
+- **Two inputs** join the event log: `take-over` (a mission and the slot the player flies) and `hand-back` (the mission, the fix where the flight is in the route's terms, from `PromotedFlight.demote()`, and the aircraft full fidelity lost with where and why). Both are player inputs, so a replay from a checkpoint applies them again and reaches the same state.
+- **Holding** (`AirOps.hold`): inside the mission's jump-in window (`jumpInOpen`) and once only, the mission is marked `flown` (slot and time) and its phase events are cancelled, so its aggregate resolution, subscriptions and completion wait. Resolution also leaves a held flight out as another package's interceptor, escort or suppressor: the player's flight fights at full fidelity (R2.6), not in the tables.
+- **Releasing** (`AirOps.release`): the lost aircraft are lost as any loss is (the squadron's strength falls, crews eject or are killed, `aircraft-lost` with the cause, a crash for now), the route is rebuilt from the fix with `rejoinRoute` (decision 256) on the coarse ground's terrain floor, its phases after now are scheduled again, and a `mission-rejoined` decision records the phase it carries on in, its segments and its end. The fix counts as at the worker's time, a frame or so from the main thread's, so the phases after it are scheduled exactly once, on replay too. Winds aloft are left out of the rebuilt route until AirOps can read the planner's weather.
+
+**How it was checked.** `tests/handover.test.ts` on seed 7's campaign world: a CAP taken over a minute after its fence-in is held past its old route's end without resolving or completing; handed back 20 minutes later with #2 crashed, the flight and its squadron are one aircraft short, the crash and the rejoin are in the log, and the mission resolves and completes on its new route; a run with a backward seek past the take-over replays to the same hash as a straight run; a take-over before the climb-out or a second one is refused. The unit suite passes (1,228 tests). `tools/war.preview.ts` (no take-over; the hash now includes the `flown` mark): the same state stepped and in one jump on the demo seeds (`771e7f5ac978d9d2`, `cbc71cc13f9c2da9`, `9d9e377ea91f9131`), aircraft lost (A/P) 18/12, 13/12, 3/4 as in decision 256.
+
+Left for later (TODO): while the player flies, the map and other flights' resolution see the held flight on its old route until fixes are posted as it flies; the follow must not end a held flight at its old route's end.
+
+**Reason:** the war must carry on whatever the player does with a flight, and replay must reproduce it from the log alone (rule 19).
