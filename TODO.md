@@ -195,6 +195,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] Owner's review (decision 253): formations by phase in the plug-ins; penetrators low on interdiction and CAS at 2,500 m; free look orbits the aircraft; HUD only by default, V for displays or a clean view; FPS gauge under the follow bar; aircraft near a base on its sited field; the Kestrel's gear folds inward
 - [ ] Check 10 over truly low flight: the smoke test's `follow` part now follows a flight on a low-level leg (a penetrator on interdiction, a low strike); run it on the GPU
 - [ ] Stretch (R6.6, owner): Follow and jump-in ease from the map's orbit down into the aircraft
+- [ ] Owner: should interdiction take penetrators (F-124, Vo-37) before multirole types? Today its role order puts the F-21 and Ar-23 first, so on seed 4 all interdiction flies at cruise altitude and only deep strikes and reconnaissance fly low
 - [ ] Owner: look at the formations, the low-level interdiction and the orbit (decision 253)
 - [ ] Spectator displays' radar and threat formats are empty until R2.6's sensors read campaign contacts
 - [ ] Afterburner, control surfaces and speedbrake of the followed aircraft stay at rest until R2.5's flight model drives them

@@ -764,24 +764,45 @@ async function followPart() {
     // must stay above the ground. The terrain floor lifts low legs over the ground (decision
     // 240), so the leg's regime finds them, not its height above sea level.
     await page.evaluate(() => window.bearing.sim.setRate(64));
-    const low = await until(
-      () => {
+    // Low legs are short (six to nine game minutes, 5–8 s at 64×) and fly on deep strikes and
+    // reconnaissance; on seed 4 the first comes a few game hours in. Say what it waits for.
+    const findLow = () =>
+      page.evaluate(() => {
         const b = window.bearing;
         const now = b.sim.displayTime(performance.now());
-        const m = b.sim.missions.find((x) => {
-          if (x.aircraft <= 0) return false;
+        let next = Infinity;
+        for (const x of b.sim.missions) {
+          if (x.aircraft <= 0) continue;
           const segs = x.route.segments;
           let i = segs.findIndex((g) => g.t0 <= now && now < g.t1);
-          if (i < 0 || segs[i].regime !== 'lowLevel') return false;
-          while (i + 1 < segs.length && segs[i + 1].regime === 'lowLevel') i++;
-          return segs[i].t1 - now > 120;
-        });
-        return m ? m.id : null;
-      },
-      Number(env('LOW_WAIT', '600')),
-    )
-      .then((h) => h.jsonValue())
-      .catch(() => null);
+          if (i >= 0 && segs[i].regime === 'lowLevel') {
+            while (i + 1 < segs.length && segs[i + 1].regime === 'lowLevel') i++;
+            if (segs[i].t1 - now > 120) return { id: x.id, now, next: now };
+          }
+          for (const g of segs)
+            if (g.regime === 'lowLevel' && g.t0 > now) next = Math.min(next, g.t0);
+        }
+        return { id: null, now, next };
+      });
+    const waitS = Number(env('LOW_WAIT', '600'));
+    const t0 = Date.now();
+    let low = null;
+    let lastLog = 0;
+    while (low === null && Date.now() - t0 < seconds(waitS)) {
+      const r = await findLow();
+      low = r.id;
+      if (low === null && Date.now() - lastLog > 20_000) {
+        lastLog = Date.now();
+        const hours = (r.now / 3600).toFixed(1);
+        log(
+          `check 10: waiting for a low-level leg at T+${hours} h` +
+            (Number.isFinite(r.next)
+              ? `; the next starts at T+${(r.next / 3600).toFixed(1)} h`
+              : '; none among the flights planned yet'),
+        );
+      }
+      if (low === null) await new Promise((res) => setTimeout(res, 250));
+    }
     if (low === null) {
       fail('check 10: no flight on a low-level leg within LOW_WAIT seconds at 64×');
       return;
