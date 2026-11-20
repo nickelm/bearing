@@ -168,9 +168,42 @@ export interface SuccessCriteria {
   consequences(m: Mission, o: MissionOutcome): WorldEffect[];
 }
 
-/** R2.5: the AI pilots' behavior on the director, phase by phase. Defined there. */
+/**
+ * How the lead flies a phase at full fidelity (decision 282): `route`, station keeping
+ * on the point its analytic route gives for the moment, which flies every leg, climb,
+ * racetrack, pass and turn home (decision 256). R3.4's BVR timelines and R2.6's attack
+ * runs add their own laws.
+ */
+export type LeadLaw = 'route';
+/** How the wingmen fly: `slots`, their formation's slots beside the flown lead (formation.ts). */
+export type WingLaw = 'slots';
+/** Which weapons the AI pilots may use in the phase (R2.6 reads it): none, or the work's kind. */
+export type WeaponsState = 'hold' | 'air-to-air' | 'air-to-ground';
+
+export interface PhaseBehavior {
+  lead: LeadLaw;
+  wingmen: WingLaw;
+  weapons: WeaponsState;
+}
+
+/**
+ * R2.5: the AI pilots' behavior on the director, phase by phase (rule 16). A phase it
+ * leaves out is not flown at full fidelity: the follow keeps that phase analytic.
+ */
 export interface FullFidelityBehavior {
-  phases: Partial<Record<MissionPhase, string>>;
+  phases: Partial<Record<MissionPhase, PhaseBehavior>>;
+}
+
+/** The behavior of the airborne phases from the climb-out to the approach, the weapons free in `work`. */
+export function routeBehavior(
+  work: Partial<Record<MissionPhase, WeaponsState>>,
+  selfDefense: WeaponsState = 'hold',
+): FullFidelityBehavior {
+  const airborne: MissionPhase[] = ['climb-out', 'ingress', 'fence-in', 'on-target', 'egress'];
+  const phases: Partial<Record<MissionPhase, PhaseBehavior>> = {};
+  for (const p of airborne)
+    phases[p] = { lead: 'route', wingmen: 'slots', weapons: work[p] ?? selfDefense };
+  return { phases };
 }
 
 /** What a briefing template reads: the mission and its named places. */

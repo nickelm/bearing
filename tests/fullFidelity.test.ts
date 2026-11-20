@@ -5,6 +5,7 @@ import {
   flightSpecOfType,
   FullFidelity,
   fullFidelityWanted,
+  phaseBehavior,
   routeKey,
 } from '../src/follow/fullFidelity';
 import { MODEL_SPECS } from '../src/render/common/models/library';
@@ -64,6 +65,12 @@ describe('a followed flight at full fidelity', () => {
     expect(at(phaseStart(m, 'on-target') + 60, 8)).toBe(true);
     expect(at(phaseStart(m, 'on-target') + 60, 16)).toBe(false);
     expect(at(phaseStart(m, 'approach') + 1)).toBe(false);
+    // Only where the plug-in has the AI pilots' behavior (rule 16): an escort's is pending.
+    const escort = { ...m, type: 'escort' as const };
+    const t = phaseStart(m, 'on-target') + 60;
+    expect(fullFidelityWanted(escort, t, 1, poses(escort, t))).toBe(false);
+    expect(phaseBehavior(m, t)).toEqual({ lead: 'route', wingmen: 'slots', weapons: 'air-to-air' });
+    expect(phaseBehavior(m, phaseStart(m, 'climb-out') + 5)?.weapons).toBe('hold');
   });
 
   it('lifts the lead’s reference over the drawn ground, and not below the route', () => {

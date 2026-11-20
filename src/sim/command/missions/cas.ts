@@ -9,6 +9,7 @@ import { casBriefing } from '../../../campaign/missionBriefings';
 import { DEFAULT_JUMP_IN } from '../../air/mission';
 import { casResolver } from '../../air/resolvers';
 import { bySegment, phases, plannedStation, TACTICAL_FORMATIONS, the } from './common';
+import { routeBehavior } from './plugin';
 import type { MissionPlugin, Need, PlanContext } from './plugin';
 
 export const CAS_PER_DAY: Record<'attacker' | 'defender', number> = { attacker: 24, defender: 12 };
@@ -70,7 +71,8 @@ export const CAS: MissionPlugin = {
   planner: needs,
   package: () => [{ role: 'lead', type: 'cas', offset: 0 }],
   resolver: casResolver,
-  behavior: { pending: 'R2.5' },
+  // On call over the front on the route; weapons on the troops there (decision 282).
+  behavior: routeBehavior({ 'on-target': 'air-to-ground' }),
   jumpIn: DEFAULT_JUMP_IN,
   success: {
     text: 'On call for at least half the planned time, with an effect on the enemy troops.',

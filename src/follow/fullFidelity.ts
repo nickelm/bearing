@@ -28,7 +28,10 @@ import type { AnalyticPose } from '../sim/air/analyticPose';
 import { AIRCRAFT_BUNDLES, bundleOfType } from '../sim/air/bundles';
 import { formationAt } from '../sim/air/formation';
 import type { Formation } from '../sim/air/formation';
-import { jumpInOpen } from '../sim/air/mission';
+import { jumpInOpen, missionPhase } from '../sim/air/mission';
+import { isPending } from '../sim/command/missions/plugin';
+import type { PhaseBehavior } from '../sim/command/missions/plugin';
+import { missionPlugin } from '../sim/command/missions/registry';
 import type { Mission, MissionPhase } from '../sim/air/mission';
 import { routeState } from '../sim/air/route';
 import { FLOWN_MAX_RATE } from '../sim/clock';
@@ -61,6 +64,17 @@ export function flightSpecOfType(
   }
 }
 
+/**
+ * The AI pilots' behavior for mission m's phase at t (its plug-in's, rule 16), or null
+ * where the plug-in has none (a pending part, a phase it leaves out).
+ */
+export function phaseBehavior(m: Readonly<Mission>, t: GameTime): PhaseBehavior | null {
+  const b = missionPlugin(m.type).behavior;
+  const phase = missionPhase(m as Mission, t);
+  if (isPending(b) || phase === 'planned') return null;
+  return b.phases[phase] ?? null;
+}
+
 /** Whether a followed flight should fly at full fidelity at t, not flown by the player. */
 export function fullFidelityWanted(
   m: Readonly<Mission>,
@@ -70,6 +84,7 @@ export function fullFidelityWanted(
 ): boolean {
   return (
     jumpInOpen(m as Mission, t) &&
+    phaseBehavior(m, t) !== null &&
     rate <= FLOWN_MAX_RATE &&
     poses.length > 0 &&
     poses.every((p) => p.airborne)

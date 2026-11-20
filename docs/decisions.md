@@ -4576,3 +4576,12 @@ Decision 256's AI checks had run gear down, and the gear's drag had been slowing
 **How it was checked.** `tests/rejoin.test.ts`: a CAP aborted on a racetrack leg heading away from home turns at its first leg by under 25° and has no corner over 25° to the approach (the corner route's first leg reverses by more than 150°), and its route completes; the rejoin tests pass unchanged. The unit suite, the type check and lint pass. `tools/war.preview.ts`: the same state stepped and in one jump on the demo seeds (`259dee174838e519`, `0bb125cf3ad63693`, `9fdde4dedb89aa66`), aircraft lost (A/P) 18/12, 13/12, 3/4 as in decision 256.
 
 **Reason:** R2.5 (TODO): an abort still turned home at a corner, which the follow draws and full fidelity cannot fly.
+
+### 282. The mission plug-ins' full-fidelity behavior: the route tracker per phase, weapons states for R2.6
+
+**Date:** 2026-11-20
+**Decision:** The `behavior` part of a mission plug-in (rule 16) is a record per phase: how the lead flies (`route`: station keeping on its analytic route, which flies every leg, climb, racetrack, pass and turn home; decision 256), how the wingmen fly (`slots`: the formation's slots beside the flown lead) and which weapons the AI may use (`hold`, `air-to-air`, `air-to-ground`), which R2.6's weapons read. `routeBehavior` fills the airborne phases from the climb-out to the egress. The four demo types have theirs: CAP air-to-air from the fence-in through the egress, interdiction and CAS air-to-ground on target, airlift none. A phase a plug-in leaves out, or a plug-in whose part is still pending (the provisional types, R4.2), is not flown at full fidelity: the follow keeps it on its route (`phaseBehavior`, read by `fullFidelityWanted`). The demo types are now complete in the registry; the pinned list of pending parts holds only the provisional types'.
+
+**How it was checked.** `tests/missions.test.ts`: the registry has no pending part for the demo types. `tests/fullFidelity.test.ts`: a CAP on station has the route law, slots and air-to-air, at the climb-out its weapons are held, and an escort (provisional) is not promoted. The unit suite, the type check and lint pass.
+
+**Reason:** rule 16: a mission type is complete only with all eight parts; R2.5 made the full-fidelity behavior possible.

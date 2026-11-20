@@ -18,6 +18,7 @@ import { DEFAULT_JUMP_IN } from '../../air/mission';
 import { capResolver } from '../../air/resolvers';
 import { carrierState } from '../../naval/carrierGroup';
 import { phases, plannedStation, station, TACTICAL_FORMATIONS, the } from './common';
+import { routeBehavior } from './plugin';
 import type { MissionPlugin, Need, PlanContext } from './plugin';
 
 export const CAP_STATIONS = 2;
@@ -120,7 +121,12 @@ export const CAP: MissionPlugin = {
   planner: needs,
   package: () => [{ role: 'lead', type: 'cap', offset: 0 }],
   resolver: capResolver,
-  behavior: { pending: 'R2.5' },
+  // The station worked on the route's racetrack; air-to-air from the fence-in (decision 282).
+  behavior: routeBehavior({
+    'fence-in': 'air-to-air',
+    'on-target': 'air-to-air',
+    egress: 'air-to-air',
+  }),
   jumpIn: DEFAULT_JUMP_IN,
   success: {
     text: 'The station was held for at least 80% of its planned time, with no more aircraft lost than shot down.',

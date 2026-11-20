@@ -10,6 +10,7 @@ import { airliftBriefing } from '../../../campaign/missionBriefings';
 import { DEFAULT_JUMP_IN } from '../../air/mission';
 import { airliftResolver } from '../../air/resolvers';
 import { phases, STREAM_FORMATIONS, the } from './common';
+import { routeBehavior } from './plugin';
 import type { MissionPlugin, Need, PlanContext } from './plugin';
 
 export const LOW_STOCK = 0.8;
@@ -59,7 +60,8 @@ export const AIRLIFT: MissionPlugin = {
   planner: needs,
   package: () => [{ role: 'lead', type: 'airlift', offset: 0 }],
   resolver: airliftResolver,
-  behavior: { pending: 'R2.5' },
+  // Transports fly the route and carry no weapons (decision 282).
+  behavior: routeBehavior({}),
   jumpIn: DEFAULT_JUMP_IN,
   success: {
     text: 'At least 90% of the cargo delivered at the destination.',

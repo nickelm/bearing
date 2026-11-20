@@ -13,6 +13,7 @@ import { DEFAULT_JUMP_IN } from '../../air/mission';
 import { strikeResolver } from '../../air/resolvers';
 import type { MissionTarget, Places } from '../../air/mission';
 import { phases, restrike, standing, TACTICAL_FORMATIONS, the } from './common';
+import { routeBehavior } from './plugin';
 import type { MissionPlugin, Need, PlanContext } from './plugin';
 
 export const INTERDICTION_PER_DAY = 24;
@@ -106,7 +107,8 @@ export const INTERDICTION: MissionPlugin = {
     ...(n.defended ? [{ role: 'escort' as const, type: 'escort' as const, offset: 0 }] : []),
   ],
   resolver: strikeResolver,
-  behavior: { pending: 'R2.5' },
+  // The pass flown on the route, bombs on it (R2.6); air-to-air in self-defense (decision 282).
+  behavior: routeBehavior({ 'on-target': 'air-to-ground' }),
   jumpIn: DEFAULT_JUMP_IN,
   success: {
     text: 'The target is out of use: a bridge cut, a depot, rail yard or road at half damage or more.',

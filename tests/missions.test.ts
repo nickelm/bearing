@@ -36,7 +36,7 @@ describe('the mission registry', () => {
   });
 
   it('pins the parts still pending, so the list only shrinks', () => {
-    // The demo types lack only the AI pilots' behavior (R2.5).
+    // The demo types are complete (decision 282).
     const provisional = [
       'support',
       'escort',
@@ -47,7 +47,6 @@ describe('the mission registry', () => {
       'helo-cas',
     ];
     expect(pendingParts()).toEqual([
-      ...DEMO.map((t) => `${t}.behavior: R2.5`),
       ...provisional.flatMap((t) => [
         `${t}.resolver: R4.2`,
         `${t}.behavior: R4.2`,
