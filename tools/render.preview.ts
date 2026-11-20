@@ -125,6 +125,7 @@ import { encodePng } from './png';
 import { previewWorld } from './previewWorld';
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
 import { settlementPoint } from '../src/worldgen/strategic/graph';
+import type { StrategicGraph } from '../src/worldgen/strategic/graph';
 import { InfraScene, offsetPoint } from '../src/render/sim/infra/infraScene';
 import { observerStations, wonderStations } from '../src/render/sim/camera/observerStations';
 import { sitedWonders, tileWonders, wonderWet } from '../src/render/common/terrain/tileWonders';
@@ -172,6 +173,7 @@ export interface PreviewView {
     | 'lake'
     | 'forest'
     | 'city'
+    | 'town'
     | 'airbase'
     | 'front'
     | 'capital'
@@ -579,6 +581,51 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     detail: true,
   },
   {
+    // Proposal 0009's standard city views: the largest city from 5 km and 1 km, a town from 300 m.
+    name: 'city5k',
+    dLat: 0,
+    dLon: 0,
+    altitude: 5 * KM,
+    tilt: 55 * DEG,
+    heading: 0,
+    localTime: 10,
+    target: 'city',
+    detail: true,
+  },
+  {
+    name: 'city1k',
+    dLat: 0,
+    dLon: 0,
+    altitude: 1 * KM,
+    tilt: 62 * DEG,
+    heading: 0,
+    localTime: 10,
+    target: 'city',
+    detail: true,
+  },
+  {
+    name: 'town300',
+    dLat: 0,
+    dLon: 0,
+    altitude: 300,
+    tilt: 72 * DEG,
+    heading: 0,
+    localTime: 10,
+    target: 'town',
+    detail: true,
+  },
+  {
+    name: 'citynight',
+    dLat: 0,
+    dLon: 0,
+    altitude: 1.5 * KM,
+    tilt: 65 * DEG,
+    heading: 0,
+    localTime: 22.5,
+    target: 'city',
+    detail: true,
+  },
+  {
     name: 'airbase',
     dLat: 0,
     dLon: 0,
@@ -778,6 +825,20 @@ export const STRATEGIC_PREVIEW_VIEWS: PreviewView[] = [
     height: 1080,
   },
 ];
+
+/** The settlement closest to 20,000 people (log scale): proposal 0009's town view. */
+function townTarget(sp: StrategicGraph['settlements']): Vec3d | null {
+  let best = -1;
+  let score = Infinity;
+  for (let i = 0; i < sp.cells.length; i++) {
+    const d = Math.abs(Math.log(Math.max(sp.population[i]!, 1) / 20_000));
+    if (d < score) {
+      score = d;
+      best = i;
+    }
+  }
+  return best >= 0 ? new Vec3d(...settlementPoint(sp, best)) : null;
+}
 
 /** Draw statistics for PERF lines: visible meshes and triangles per scene group, and layer counts. */
 function drawStats(scene: GlobeScene): string {
@@ -1138,6 +1199,9 @@ it('renders preview views', async () => {
     farmland: null,
     ...checks,
     city: sp.cells.length ? new Vec3d(...settlementPoint(sp, biggest)) : null,
+    // A town of 8,000 to 40,000 people (proposal 0009's town tier): the largest such on the main
+    // continent's node, else the one nearest 20,000.
+    town: townTarget(sp),
     airbase: base ? new Vec3d(...base.point) : null,
     ocean: null,
     hedges: null,
@@ -1734,7 +1798,8 @@ it('renders preview views', async () => {
       const s = scene.terrain.stats;
       const sig = `${s.drawn}/${s.deepest}/${s.meshes}`;
       if (process.env.DEBUG) console.log(v.name, f, JSON.stringify(s), o.tilt, o.altitude);
-      if (process.env.DEBUG_PROPS) console.log('props', scene.props.group.visible, JSON.stringify(scene.props.stats));
+      if (process.env.DEBUG_PROPS)
+        console.log('props', scene.props.group.visible, JSON.stringify(scene.props.stats));
       const treesPending =
         (scene.forest.group.visible ? scene.forest.stats.pending : 0) +
         (scene.structures.group.visible ? scene.structures.stats.pending : 0) +

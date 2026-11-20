@@ -86,7 +86,7 @@ import type { InfraScene } from '../infra/infraScene';
 import type { TerrainEdits } from '../../../worldgen/edits';
 import { HabitabilityTexture } from '../../common/habitabilityTexture';
 import {
-  builtAlbedo,
+  BALLAST,
   LightShading,
   LightTables,
   nightFactor,
@@ -458,11 +458,12 @@ export class TerrainRenderer {
         crop: ground.crop,
         heading: ground.heading,
       });
-      const landAlbedo = mix(
-        ground.albedo.mul(micro.shade),
-        builtAlbedo(planet, footprint, built.y.div(max(built.x.add(built.y), 1e-4))),
-        builtCover,
-      );
+      // The urban ground (proposal 0009, decision 259) in place of the biome under towns.
+      const urban = vec3(0).toVar();
+      If(builtCover.greaterThan(0), () => {
+        urban.assign(lights.urbanGround(planet, lightStart, lightCount, footprint, distance));
+      });
+      const landAlbedo = mix(ground.albedo.mul(micro.shade), urban, builtCover);
       // Falls (decision 126): river water on steep facets is white water.
       // Standing water (a lake or the sea) takes no falls or white water: rivers run on
       // through lakes to their outlets, and their reaches there carry the inflow's
@@ -500,6 +501,7 @@ export class TerrainRenderer {
       const asphalt = vec3(0.195, 0.162, 0.122);
       const concrete = vec3(0.4, 0.39, 0.36);
       const concreteShare = clamp(paved.y.div(max(paved.x, 1e-4)), 0, 1);
+      const ballastShare = clamp(paved.w.div(max(paved.y, 1e-4)), 0, 1);
       // Runway and taxiway paint on the concrete (V3): white, and yellow where negative.
       const paintWhite = vec3(0.8, 0.79, 0.74);
       const paintYellow = vec3(0.7, 0.45, 0.06);
@@ -510,7 +512,11 @@ export class TerrainRenderer {
       );
       // Rain darkens the pavement as it does the ground.
       const roadAlbedo = this.land.wet(
-        mix(asphalt, painted, concreteShare) as unknown as typeof normal,
+        mix(
+          asphalt,
+          mix(painted, BALLAST, ballastShare),
+          concreteShare,
+        ) as unknown as typeof normal,
       );
       const roadRadiance = L.shadeDiffuse(roadAlbedo, normal, positionWorld, at);
       // The dark, wet bank (Part I), then falls and the white water of fast reaches (decision 146).
@@ -657,7 +663,12 @@ export class TerrainRenderer {
       ? new RiverTables(world.infra, world.radius, { coarseMinWidth: 0, coarseCap: 300 })
       : null;
     this.lights = world?.infra
-      ? new LightTables(world.infra.lights, world.radius, world.infra.outlines)
+      ? new LightTables(
+          world.infra.lights,
+          world.radius,
+          world.infra.outlines,
+          world.infra.townInfo,
+        )
       : null;
     const oldHabitability = this.habitability;
     this.habitability = world?.infra
