@@ -1079,7 +1079,12 @@ export class Follow {
     const label = phase === 'planned' ? 'planned' : PHASE_LABELS[phase];
     const who = m.aircraft > 1 ? ` · aircraft ${this.slot + 1} of ${m.aircraft}` : '';
     const stand = this.look?.standIn ? ' (stand-in model)' : '';
-    const full = this.full ? ' · full fidelity' : '';
+    // Why there is no take-over: only types with fixed-wing flight data fly at full fidelity.
+    const full = this.full
+      ? ' · full fidelity (T: take over)'
+      : this.flightSpec
+        ? ''
+        : ' · no flight model yet (follow only)';
     const flown = this.full?.followed(this.slot)?.flown.airframe;
     const speed = Math.round(
       (flown ? flown.telemetry.groundSpeed : (this.poses[this.slot]?.speed ?? 0)) / KNOT,

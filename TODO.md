@@ -226,6 +226,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] An abort (`returnRoute`) still turns home at a corner; give it the rejoin's turn
 - [ ] The plug-ins' `behavior` parts (rule 16): CAP's first, once the follow runs `PromotedFlight` (the route tracker per phase; weapons on the pass in R2.6)
 - [x] Take over inside the jump-in window; hand back with the AI's orders (T or the bar's button, Free Flight's bindings, mouse aim and `MouseCapture`; decision 273)
+- [ ] Owner: on seed 4 no CAP is flown by the F-21 (CAPs are F-25 and F-28; the F-21 flies interdiction, about 7 a day), so take over is open only on F-21 interdiction until R2.7's flight data, or a stand-in flight model for fighters without their own (owner to decide)
 - [ ] Owner, on the GPU: take over an F-21 on a CAP station with T, fly with mouse aim, hand back with T; the wingman stays on you, and the flight flies back to its station
 - [x] Flight cap: up to 8× in cruise while flying, cancelled on any threat (decision 274)
 - [ ] Flight cap's threats from the sensors once they read campaign contacts (R2.6): RWR contacts and radar sites, not only enemy flights within 120 km; an 8× button in the time controls while flying
