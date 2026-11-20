@@ -35,6 +35,7 @@ import { modelSpec } from '../render/common/models/library';
 import type { ChaseRig } from '../render/sim/camera/chaseCamera';
 import type { GlobeScene } from '../render/sim/globeScene';
 import { MovingMap } from '../render/strategic/movingMap';
+import type { HeldFlight } from '../render/strategic/overlays/airModel';
 import type { StrategicScene } from '../render/strategic/strategicScene';
 import { mapRange } from '../ui/displays/formats';
 import type { AnalyticPose } from '../sim/air/analyticPose';
@@ -294,6 +295,24 @@ export class Follow {
   /** Whether the player flies one of the followed flight's aircraft. */
   get flying(): boolean {
     return this.full?.flight.playerSlot != null;
+  }
+
+  /**
+   * The flight the player flies (or the worker still holds), where its lead is, for the
+   * map and the moving map (decision 284); null otherwise.
+   */
+  heldFlight(): HeldFlight | null {
+    const m = this.mission();
+    const f = this.full;
+    if (!m || !f || (!this.flying && !m.flown)) return null;
+    const a = f.flight.alive[0];
+    if (!a) return null;
+    const p = a.flown.airframe.pos.clone().normalize();
+    return {
+      mission: m.id,
+      point: [p.x, p.y, p.z],
+      heading: airframeState(a.flown.airframe as unknown as FlightModel).track,
+    };
   }
 
   /** Whether the player may take over the followed aircraft now: at full fidelity, in its window, not held. */

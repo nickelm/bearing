@@ -1640,6 +1640,8 @@ async function main(): Promise<void> {
     follow?.frame(dt, gameTime);
     // While the player flies, Space and the digits are the jet's and the displays' keys.
     timeControls.keysEnabled = !follow?.flying;
+    // The flight the player flies is drawn where it is, on the map and the moving map (decision 284).
+    strategicView.setHeldFlight(follow?.heldFlight() ?? null);
     // The flight cap (R2.5): up to 8× in cruise while the player flies, back to 1× on any threat.
     if (follow?.flying && sim.rate > 1) {
       const cap = follow.rateCap(gameTime);

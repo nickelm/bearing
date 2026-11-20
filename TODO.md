@@ -214,7 +214,8 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] AI pilot: orbit and CAP station (the route's racetrack; flights now join it running the way they arrive)
 - [x] AI pilot: attack run and egress (the route's pass and turn home; weapons release is R2.6)
 - [x] Worker protocol: a take-over input holds the mission (no aggregate resolution, phase events cancelled); a handback input carries the demoted state, the worker rebuilds the route with `rejoinRoute`, reschedules the phases and logs losses (crashes) and the new route (decision 257)
-- [ ] While the player flies, the map and the war see the held flight on its old route: post its position as fixes (inputs every few game seconds) so the map draws it where it is and other flights' resolution can find it
+- [x] While the player flies, the map and the moving map draw the held flight where it is, without its old route or trail (decision 284)
+- [ ] Other flights' resolution and the enemy's sensors find the held flight where it flies (R2.6–R3: full-fidelity combat around the player, fixes posted to the worker if the aggregate needs them)
 - [x] The follow must not end a held flight at its old route's end (`missionPhase` reads the old timeline while it is held; decision 273)
 - [x] The followed aircraft seemed to slide backward after a racetrack turn at 16×: the chase camera's acceleration lag read speed changes per real second, and the analytic speed stepped from leg to leg (decision 271)
 - [x] Follow on `PromotedFlight`: promote a followed flight whose type has flight data inside the window, its lead's reference the drawn route (the fields' shift and the lift over the drawn ground); draw the aircraft from their airframes (surfaces, afterburner, speedbrake); the HUD frame and displays from the airframe; demote at the approach (decision 272)

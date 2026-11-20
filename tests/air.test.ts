@@ -383,4 +383,29 @@ describe('air operations', () => {
       both.marks.find((m) => m.key === last.key)!.badge!.size,
     );
   });
+
+  it('draws a flight the player flies where it is, without its old route or trail', () => {
+    const w = run(7, 6, HOUR);
+    const air = w.air!;
+    const t = 6 * HOUR;
+    const missions = air.liveMissions();
+    const pick = missions.find((m) => routeState(m.route, t, R).airborne)!;
+    const point: [number, number, number] = [0, 1, 0];
+    const held = { mission: pick.id, point, heading: 1 };
+    const o = buildAirOverlays(missions, air.carriers, t, R, {
+      side: 'both',
+      routes: true,
+      selected: `mission:${pick.id}`,
+      held,
+    });
+    const mark = o.marks.find((m) => m.key === `mission:${pick.id}`)!;
+    expect(mark.point).toEqual(point);
+    const plain = buildAirOverlays(missions, air.carriers, t, R, { side: 'both', routes: true });
+    expect(o.lines.filter((l) => l.layer === 'routes').length).toBe(
+      plain.lines.filter((l) => l.layer === 'routes').length - 1,
+    );
+    expect(o.lines.filter((l) => l.layer === 'trails').length).toBe(
+      plain.lines.filter((l) => l.layer === 'trails').length - 1,
+    );
+  });
 });

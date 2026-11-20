@@ -71,6 +71,18 @@ export interface AirViewOptions {
   routes: boolean;
   /** The selected icon's key ("mission:<id>" or "carrier:<id>"), or null; a selected mission's route shows. */
   selected?: string | null;
+  /**
+   * A flight the player flies (R2.5, decision 284): where it is, which its old route no
+   * longer says. It is drawn there, without the old route or trail.
+   */
+  held?: HeldFlight | null;
+}
+
+/** Where a held flight's lead is: a unit direction and its track (rad from north). */
+export interface HeldFlight {
+  mission: number;
+  point: Dir;
+  heading: number;
 }
 
 export const missionKey = (id: number): string => `mission:${id}`;
@@ -125,9 +137,13 @@ export function buildAirOverlays(
   for (const m of missions) {
     if (!visible(m.side)) continue;
     const color = FACTION_COLORS[m.side];
-    const now = routeState(m.route, t, radius);
+    const held = options.held?.mission === m.id ? options.held : null;
+    const route = routeState(m.route, t, radius);
+    const now = held
+      ? { ...route, point: held.point, heading: held.heading, airborne: true }
+      : route;
     const selected = options.selected === missionKey(m.id);
-    if ((options.routes || selected) && now.segment >= 0) {
+    if ((options.routes || selected) && now.segment >= 0 && !held) {
       const track = routeTrack(m, radius);
       if (track.length >= 2) {
         lines.push({
@@ -140,7 +156,7 @@ export function buildAirOverlays(
     }
     if (!now.airborne) continue;
     const trail: Dir[] = [];
-    for (let k = TRAIL_SAMPLES; k >= 0; k--) {
+    for (let k = held ? -1 : TRAIL_SAMPLES; k >= 0; k--) {
       const s = routeState(m.route, t - (TRAIL_TIME * k) / TRAIL_SAMPLES, radius);
       if (s.airborne) trail.push(s.point);
     }

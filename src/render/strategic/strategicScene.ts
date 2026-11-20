@@ -63,7 +63,7 @@ import type { InfraLayer } from './infra/infraModel';
 import { layoutCityGlyphs } from './infra/cityGlyphs';
 import { SETTLEMENT_GLYPHS } from './glyphLayout';
 import { AIR_LAYERS, buildAirOverlays } from './overlays/airModel';
-import type { AirLayer, AirViewOptions } from './overlays/airModel';
+import type { AirLayer, AirViewOptions, HeldFlight } from './overlays/airModel';
 import type { OverlayMark } from './overlays/militaryModel';
 
 /** Extra reach around an icon's badge for a click to pick it (CSS px). */
@@ -452,6 +452,14 @@ export class StrategicScene {
       buildGroundOverlays(this.groundPicture, { side: this.airView.side }),
       height,
     );
+  }
+
+  /** The flight the player flies, drawn where it is (decision 284), or null. */
+  setHeldFlight(h: HeldFlight | null): void {
+    const was = this.airView.held ?? null;
+    if (!h && !was) return;
+    this.airView.held = h;
+    this.airRevision++;
   }
 
   /** Game time the air layer shows (the display clock). */

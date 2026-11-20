@@ -4594,3 +4594,12 @@ Decision 256's AI checks had run gear down, and the gear's drag had been slowing
 **How it was checked.** `tests/promotion.test.ts`: the AI lead of a CAP pair stays within 2 km of its route from the climb-out (5 km before). `tests/ato.test.ts`'s wind test moves its target 220 km farther out, since the slower climb now reaches the old one's fence-in point before any ingress. The unit suite, the type check and lint pass. `tools/war.preview.ts` (`3c5623019d8c0959`, `5dceaff2ae334be7`, `7dde4a86cbf5f482`; stepped and in one jump the same): aircraft lost (A/P) 18/12, 11/15, 3/4, against 18/12, 13/12, 3/4.
 
 **Reason:** R2.5 (TODO): the route's climb was steeper than the aircraft can fly.
+
+### 284. The flight the player flies is drawn where it is on the map and the moving map
+
+**Date:** 2026-11-20
+**Decision:** While the player flies a flight, or the worker still holds it, the strategic scene draws its badge at the flown lead's position and track (`Follow.heldFlight`, set on the scene every frame; `AirViewOptions.held`), and leaves out its old route and its trail, which the route no longer describes. The moving map in the displays draws from the same scene, so the player sees their own flight there. The worker still knows only the old route: other flights' resolution leaves a held flight out (decision 257), and full-fidelity combat around the player is R2.6–R3's; posting fixes to the worker as logged inputs waits until the aggregate needs them.
+
+**How it was checked.** `tests/air.test.ts`: a held flight's badge stands at the given point, and its route and trail are the ones left out. The unit suite, the type check and lint pass.
+
+**Reason:** R2.5 (TODO): the map drew the held flight on its old route.
