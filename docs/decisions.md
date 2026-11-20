@@ -4533,3 +4533,28 @@ Decision 256's AI checks had run gear down, and the gear's drag had been slowing
 **How it was checked.** `tests/promotion.test.ts`: promoted aircraft have the gear handle up, and a CAP pair flown from the climb-out to the approach keeps its gear up with its doors whole, the lead and the wingman within their bounds. The flight lockstep test passes unchanged (the flight model is untouched); the unit suite, the type check and lint pass.
 
 **Reason:** the owner's report after the first take-over.
+
+### 278. Woods and parks inside planned towns keep their trees and canopy
+
+**Date:** 2026-11-20
+**Decision:** Each plan carries a **built mask**: one bit per 40 m cell over its bounds, set on blocks (except parks and cemeteries), on streets with their sidewalks, and on every building's footprint. It is computed in the worker and packed with the plan (`pack.ts`, `builtMask`), and copied into the city ground's buffer with each plan slot (up to 512 Ki cells per plan).
+
+- **Canopy shell.** Over a planned town the shell is cut only where the mask is set. An unplanned town still cuts it over its whole built-up patch (decision 166). The shell's mesh is lowered the same way (`canopyClear`).
+- **Trees.** Within a planned town they are cleared where the mask is set and along its roads, not over the town's core as before.
+- **Far urban ground.** Where no feature field is loaded yet (beyond 4.5 km), the mask tells built ground (neutral) from natural ground, which shows the terrain's own surface. Before this, the whole chunk drew as neutral built ground.
+
+**Reason:** the owner saw woods inside a town with trees near the camera but no canopy from a distance. Trees were cleared only over a town's core, the shell over its whole patch, so the two disagreed. The plan knows where it builds, so near and far now follow the same mask, and a city keeps its parks and woods at every distance.
+
+### 279. The war's town targets as complexes in their plans; damage by site; a zoom for sensors
+
+**Date:** 2026-11-20
+**Decision:**
+
+- **Sites.** A settlement input may carry *sites* (`SiteAnchor`: id, kind, name), plain data a caller passes: works, power station, refinery, rail yard, depot, fuel depot. The generator still imports nothing of the game (rule 20). `anchorsFromTargets` in `render/sim/city/cityLayer.ts` is the adapter: the infrastructure's targets at a settlement (factory, power plant, refinery, rail yard, supply depot, fuel depot) become its sites, under their own ids and names.
+- **Placement.** Each site takes an unused block of its preferred district: rail yards nearest a railway, depots nearest an arterial, the largest block for the rest. Failing that, it gets a compound of its own just outside the extent, along a road, off water and steep ground. Refineries and fuel depots refill their block with tanks (a new landmark kind) and flare stacks; power stations gain cooling towers where they lack them. The site becomes the plan's candidate target for that block, carrying the site's id and its buildings, and replaces any target the plan had made of that block.
+- **No duplicates.** `InfraScene` no longer draws industrial sites for targets at settlements when plans draw them (`plannedTargets`); targets away from settlements keep their sites.
+- **Damage.** `CityLayer.setSiteDamage(id, damage)` breaks that share of the site's buildings, about half of them into rubble, chosen by a fixed hash so that more damage only adds to what is broken. Damage set before the plan arrives is kept and applied when it does. The sim's `DamageState` holds target damage in the worker. Sending damaged targets to the main thread, so the renderer can call this, is a small change to the sim's snapshot and belongs to the main line (TODO).
+- **Compaction.** Buildings that give way to landmarks or sites are marked and dropped at the end of the plan, with landmarks and targets renumbered. The old in-place splice could leave a landmark pointing at the wrong building.
+- **Zoom.** `CityLayer.zoom` divides the distances that pick a chunk's detail and multiplies the reach for plans. A targeting pod at 8× sees a city 30 km away as boxes, as from about 4 km. Its narrow field keeps the triangle count in the same range.
+
+**Reason:** the owner asked for specific buildings in cities to be strike targets. Campaign logic already plans strikes on the infrastructure's targets (rule 9); this makes each one a particular complex in its town that a pilot can find and see broken. The generator stays the world's: it realizes sites it is given and knows nothing of who asked.

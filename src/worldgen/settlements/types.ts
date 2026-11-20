@@ -105,6 +105,7 @@ export const LandmarkKind = {
   CoolingTower: 8,
   Crane: 9,
   Market: 10,
+  Tank: 11,
 } as const;
 export type LandmarkKind = (typeof LandmarkKind)[keyof typeof LandmarkKind];
 export const LANDMARK_NAMES = [
@@ -119,6 +120,7 @@ export const LANDMARK_NAMES = [
   'cooling tower',
   'crane',
   'market',
+  'tank',
 ] as const;
 
 /** Candidate targets a game layer may read (proposal 0009, *Data for a Game Layer*). */
@@ -129,6 +131,8 @@ export const TargetKind = {
   Depot: 3,
   Port: 4,
   Bridge: 5,
+  Refinery: 6,
+  FuelDepot: 7,
 } as const;
 export type TargetKind = (typeof TargetKind)[keyof typeof TargetKind];
 export const TARGET_NAMES = [
@@ -138,6 +142,8 @@ export const TARGET_NAMES = [
   'depot',
   'port',
   'bridge',
+  'refinery',
+  'fuel depot',
 ] as const;
 
 /** A polyline in the local frame. */
@@ -174,6 +180,8 @@ export interface SettlementInput {
   rivers: { points: number[]; halfWidth: number }[];
   coasts: Polyline[];
   port: boolean;
+  /** Sites to realize as specific complexes (decision 279); none by default. */
+  anchors?: SiteAnchor[];
   ground: SettlementGround;
 }
 
@@ -244,6 +252,21 @@ export interface CandidateTarget {
   y: number;
   /** Footprint polygon in the local frame. */
   footprint: Poly;
+  name: string;
+  /** The caller's site this target realizes (`SiteAnchor.id`), if any (decision 279). */
+  anchor?: number;
+  /** The buildings that make it up (damage states apply to these). */
+  buildings?: number[];
+}
+
+/**
+ * A site a caller asks the plan to realize (decision 279): a works, power station,
+ * refinery, rail yard, depot or fuel depot that some other layer already knows of (a game's
+ * strike target). The generator only places it; the id is the caller's.
+ */
+export interface SiteAnchor {
+  id: number;
+  kind: 'works' | 'power' | 'refinery' | 'rail-yard' | 'depot' | 'fuel-depot';
   name: string;
 }
 

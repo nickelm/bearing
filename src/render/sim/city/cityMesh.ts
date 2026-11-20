@@ -504,6 +504,19 @@ export function writeLandmark(
       w.box(ring(l.size * 0.5, 4, Math.PI / 4), 1.5, l.height, stone, stone, h0);
       return true;
     }
+    case LandmarkKind.Tank: {
+      // A squat storage tank: pale walls, a darker roof (decision 279).
+      const steel = srgb(0xc8c4ba);
+      w.box(
+        ring(l.size, lod === Lod.Kit ? 12 : 8),
+        -PLINTH[lod]!,
+        l.height,
+        steel,
+        dim(steel, 0.8),
+        h0,
+      );
+      return true;
+    }
     case LandmarkKind.Market: {
       const canvas = srgb(0xc8a070);
       w.box(ring(l.size, 4, Math.PI / 4), 3, l.height, canvas, srgb(0xb05a40), h0, 0, 0, true);

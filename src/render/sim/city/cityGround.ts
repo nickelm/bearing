@@ -33,7 +33,14 @@ import {
   vec3,
   vec4,
 } from 'three/tsl';
-import { CHUNK, FIELD_TEXELS, NO_BLOCK } from '../../../worldgen/settlements/pack';
+import {
+  CHUNK,
+  FIELD_TEXELS,
+  MASK_CELL,
+  MASK_MAX_CELLS,
+  NO_BLOCK,
+} from '../../../worldgen/settlements/pack';
+import type { PackedPlan } from '../../../worldgen/settlements/pack';
 import { Ground, StreetKind } from '../../../worldgen/settlements/types';
 
 type F = Node<'float'>;
@@ -48,6 +55,9 @@ export const FIELD_SLOTS = 128;
 const TEXELS = FIELD_TEXELS * FIELD_TEXELS;
 /** Chunk indices are stored biased, so negative ones fit a u32. */
 const BIAS = 1 << 15;
+/** Words per plan slot: chunk grid (i0, j0, across, table base), mask (x0, y0, nx, ny). */
+const PLAN_WORDS = 8;
+const MASK_WORDS = MASK_MAX_CELLS / 32;
 
 const lin = (h: number) => {
   const c = new Color().setHex(h);
@@ -81,14 +91,16 @@ export class CityGround {
   private readonly plansAt: number;
   private readonly chunksAt: number;
   private readonly fieldsAt: number;
+  private readonly masksAt: number;
 
   constructor(
     private readonly lightCount: number,
     private readonly radius: number,
   ) {
     this.plansAt = Math.max(1, lightCount);
-    this.chunksAt = this.plansAt + PLAN_SLOTS * 4;
-    this.fieldsAt = this.chunksAt + PLAN_SLOTS * CHUNKS_PER_PLAN;
+    this.chunksAt = this.plansAt + PLAN_SLOTS * PLAN_WORDS;
+    this.masksAt = this.chunksAt + PLAN_SLOTS * CHUNKS_PER_PLAN;
+    this.fieldsAt = this.masksAt + PLAN_SLOTS * MASK_WORDS;
     this.words = new Uint32Array(this.fieldsAt + FIELD_SLOTS * TEXELS);
     this.attr = new StorageBufferAttribute(this.words, 1);
     this.data = storage(this.attr, 'uint', this.words.length).toReadOnly();
@@ -106,11 +118,36 @@ export class CityGround {
     this.touch(record, 1);
   }
 
-  /** Plan slot `slot` covers chunks from (i0, j0), `across` per row; its table is cleared. */
-  setPlan(slot: number, i0: number, j0: number, across: number): void {
-    const at = this.plansAt + slot * 4;
-    this.words.set([i0 + BIAS, j0 + BIAS, across, slot * CHUNKS_PER_PLAN], at);
-    this.touch(at, 4);
+  /**
+   * Plan slot `slot` covers chunks from (i0, j0), `across` per row, and its built mask
+   * (decision 278); its chunk table is cleared.
+   */
+  setPlan(
+    slot: number,
+    i0: number,
+    j0: number,
+    across: number,
+    mask: Pick<PackedPlan, 'mask' | 'maskX0' | 'maskY0' | 'maskNx' | 'maskNy'>,
+  ): void {
+    const at = this.plansAt + slot * PLAN_WORDS;
+    this.words.set(
+      [
+        i0 + BIAS,
+        j0 + BIAS,
+        across,
+        slot * CHUNKS_PER_PLAN,
+        mask.maskX0 + BIAS,
+        mask.maskY0 + BIAS,
+        mask.maskNx,
+        mask.maskNy,
+      ],
+      at,
+    );
+    this.touch(at, PLAN_WORDS);
+    const m = this.masksAt + slot * MASK_WORDS;
+    this.words.fill(0, m, m + MASK_WORDS);
+    this.words.set(mask.mask.subarray(0, MASK_WORDS), m);
+    this.touch(m, MASK_WORDS);
     const c = this.chunksAt + slot * CHUNKS_PER_PLAN;
     this.words.fill(0, c, c + CHUNKS_PER_PLAN);
     this.touch(c, CHUNKS_PER_PLAN);
@@ -130,6 +167,52 @@ export class CityGround {
     this.touch(at, TEXELS);
   }
 
+  /** Whether local (x, y) of plan slot `slot` is built by its mask (inline in a `Fn`). */
+  private maskBit(slot: I, x: F, y: F): Node<'bool'> {
+    const pa = int(this.plansAt).add(slot.mul(PLAN_WORDS));
+    const mx = int(floor(x.div(MASK_CELL))).sub(int(this.data.element(pa.add(4))).sub(BIAS));
+    const my = int(floor(y.div(MASK_CELL))).sub(int(this.data.element(pa.add(5))).sub(BIAS));
+    const nx = int(this.data.element(pa.add(6)));
+    const ny = int(this.data.element(pa.add(7)));
+    const inside = mx
+      .greaterThanEqual(0)
+      .and(my.greaterThanEqual(0))
+      .and(mx.lessThan(nx))
+      .and(my.lessThan(ny));
+    const k = select(inside, my.mul(nx).add(mx), int(0));
+    const word = this.data.element(
+      int(this.masksAt)
+        .add(slot.mul(MASK_WORDS))
+        .add(k.shiftRight(int(5))),
+    );
+    const bit = word.shiftRight(uint(k.bitAnd(int(31)))).bitAnd(uint(1));
+    return inside.and(bit.equal(uint(1)));
+  }
+
+  /**
+   * For the canopy shell (decision 278): 1 where planned town `record` (centered on `c`)
+   * builds at `p`, 0 where it leaves the natural ground, −1 for an unplanned town.
+   */
+  builtAt(p: V3, c: V3, record: I): F {
+    return Fn(() => {
+      const out = float(-1).toVar();
+      const slot = int(this.data.element(record)).sub(1).toVar();
+      If(slot.greaterThanEqual(0), () => {
+        const east = normalize(cross(vec3(0, 1, 0), c));
+        const north = cross(c, east);
+        const k = float(this.radius).div(dot(p, c));
+        out.assign(
+          select(
+            this.maskBit(slot, dot(p, east).mul(k) as F, dot(p, north).mul(k) as F),
+            float(1),
+            float(0),
+          ),
+        );
+      });
+      return out;
+    })() as F;
+  }
+
   /**
    * The planned ground at unit direction `p` for light record `record` centered on
    * `c`: vec4(albedo, 1) where a field covers it; (neutral, 0.5) where the chunk's field
@@ -143,7 +226,7 @@ export class CityGround {
       If(slot.greaterThanEqual(0), () => {
         const neutral = mix(lin(GROUND_HEX[Ground.Courtyard]!), lin(0x8e8a80), 0.5);
         out.assign(vec4(neutral, 0.5));
-        const pa = int(this.plansAt).add(slot.mul(4));
+        const pa = int(this.plansAt).add(slot.mul(PLAN_WORDS));
         const plan = {
           x: int(this.data.element(pa)).sub(BIAS),
           y: int(this.data.element(pa.add(1))).sub(BIAS),
@@ -174,7 +257,10 @@ export class CityGround {
             )
               .sub(1)
               .toVar();
-            out.assign(vec4(neutral, 0.5));
+            // No field yet (far from the camera): the mask tells built from natural ground.
+            out.assign(
+              select(this.maskBit(slot, x as F, y as F), vec4(neutral, 0.5), vec4(0, 0, 0, 0.25)),
+            );
             If(field.greaterThanEqual(0), () => {
               const step = CHUNK / FIELD_TEXELS;
               const tx = clamp(x.sub(ci.mul(CHUNK)).div(step).sub(0.5), 0, FIELD_TEXELS - 1.001);

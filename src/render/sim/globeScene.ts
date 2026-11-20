@@ -225,6 +225,11 @@ export class GlobeScene {
     this.props = new PropLayer(this.terrain, this.lighting);
     this.structures = new StructureLayer(this.terrain, this.lighting);
     this.cities = new CityLayer(this.terrain, this.lighting);
+    // Woods and parks inside planned towns keep their trees and canopy (decision 278).
+    const cityBuilt = (d: Readonly<Vec3d>) => (this.cities.enabled ? this.cities.builtAt(d) : null);
+    this.forest.cityBuilt = cityBuilt;
+    this.terrain.cityBuilt = cityBuilt;
+    this.cities.onNearPlan = () => this.forest.clear();
     this.bridges = new BridgeLayer(this.terrain, this.lighting);
     // The sky, drawn behind everything: its LUT, the sun, the moon and the stars (decision 140).
     this.scene.backgroundNode = this.lighting.atmosphere.skyNode();

@@ -125,7 +125,7 @@ import { encodePng } from './png';
 import { previewWorld } from './previewWorld';
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
 import { SETTLEMENT_COAST, settlementPoint } from '../src/worldgen/strategic/graph';
-import { recordsOf } from '../src/render/sim/city/cityLayer';
+import { anchorsFromTargets, recordsOf } from '../src/render/sim/city/cityLayer';
 import type { WorldSeed } from '../src/core/rng';
 import { localFrame } from '../src/worldgen/edits/airfields';
 import { settlementInput, settlementWorld } from '../src/worldgen/settlements/fromGraph';
@@ -1088,7 +1088,13 @@ it('renders preview views', async () => {
     globalMapSampler(global.height, global.n),
     globalMaskSampler(global.finish.drainage.lakeDepth, global.n),
   ).infrastructure;
-  const infra = new InfraScene(campaign.graph, sited, params.radius, alignments);
+  const infra = new InfraScene(
+    campaign.graph,
+    sited,
+    params.radius,
+    alignments,
+    process.env.CITIES !== '0',
+  );
 
   if (strategic) {
     await renderStrategic(gpu, {
@@ -1227,6 +1233,7 @@ it('renders preview views', async () => {
     biomeOf: (i) => campaign.world.maps.biome[campaign.graph.settlements.cells[i]!] ?? 0,
     rivers: riverIndex.segments,
     recordOf: recordsOf(infra.sites),
+    anchorsOf: anchorsFromTargets(sited.targets),
   });
   // The bridge kit along the alignments (decision 192).
   if (alignments)

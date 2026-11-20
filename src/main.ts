@@ -21,7 +21,7 @@ import { WonderKind } from './worldgen/strategic/graph';
 import { DEFAULT_PLANET_PARAMS } from './worldgen/params';
 import type { PlanetParams } from './worldgen/params';
 import { GlobeScene } from './render/sim/globeScene';
-import { recordsOf } from './render/sim/city/cityLayer';
+import { anchorsFromTargets, recordsOf } from './render/sim/city/cityLayer';
 import { CITY_POPULATION } from './worldgen/settlements/tiers';
 import { StrategicScene } from './render/strategic/strategicScene';
 import { OVERLAY_LAYERS } from './render/strategic/overlays/militaryModel';
@@ -817,7 +817,8 @@ async function main(): Promise<void> {
       const airbases = strategic.infrastructure;
       // Roads, airfields, lights and buildings from the coarse pass (decision 65), roads
       // and railways along their alignments (decision 184).
-      const infra = new InfraScene(strategic.graph, airbases, params.radius, alignments);
+      // Targets at towns are drawn inside them by the settlements' plans (decision 279).
+      const infra = new InfraScene(strategic.graph, airbases, params.radius, alignments, true);
       const edits = airfieldGrading(
         infra,
         global.height,
@@ -875,6 +876,8 @@ async function main(): Promise<void> {
         biomeOf: (i) => world.maps.biome[strategic.graph.settlements.cells[i]!] ?? 0,
         rivers: riverIndex.segments,
         recordOf: recordsOf(infra.sites),
+        // The war's targets at towns become specific complexes in their plans (decision 279).
+        anchorsOf: anchorsFromTargets(airbases.targets),
       });
       // The map draws cities from their plans' blocks as the plans arrive (decision 270).
       let urbanFlushed = 0;

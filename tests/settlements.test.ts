@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { Biome } from '../src/worldgen/biomes';
 import { blocksFromFaces } from '../src/worldgen/settlements/blocks';
 import { SettlementFrame } from '../src/worldgen/settlements/frame';
-import { boxCorners, pointInPoly, polyArea } from '../src/worldgen/settlements/geom';
+import { boxCorners, pointInPoly, polyArea, polyCentroid } from '../src/worldgen/settlements/geom';
 import { buildGraph, faces } from '../src/worldgen/settlements/graph';
 import { subdivideBlock } from '../src/worldgen/settlements/parcels';
 import { planSettlement } from '../src/worldgen/settlements/plan';
@@ -175,6 +175,47 @@ describe('settlement generator (proposal 0009)', () => {
         .split('\n')
         .filter((l) => /^import|^} from|^export .* from/.test(l));
       for (const l of imports) expect(banned.test(l), `${f}: ${l}`).toBe(false);
+    }
+  });
+});
+
+describe('sites and the built mask (decisions 278, 279)', () => {
+  it("realizes a caller's sites as complexes with their buildings, in place of its own targets", () => {
+    const anchors = [
+      { id: 41, kind: 'works' as const, name: 'Testby Works' },
+      { id: 42, kind: 'fuel-depot' as const, name: 'Testby Fuel Depot' },
+      { id: 43, kind: 'power' as const, name: 'Testby Power Plant' },
+    ];
+    const plan = planSettlement(input({ anchors }), 7, { radius: RADIUS });
+    for (const a of anchors) {
+      const t = plan.targets.find((x) => x.anchor === a.id);
+      expect(t, a.kind).toBeDefined();
+      expect(t!.name).toBe(a.name);
+      for (const b of t!.buildings ?? []) expect(plan.buildings[b]).toBeDefined();
+    }
+    expect(plan.landmarks.some((l) => l.kind === 11)).toBe(true);
+    expect(plan.metrics.outsideParcel).toBe(0);
+    // Landmarks still point at their own buildings after the compaction.
+    for (const l of plan.landmarks)
+      if (l.building >= 0)
+        expect(plan.buildings[l.building]!.landmark).toBe(plan.landmarks.indexOf(l));
+  });
+
+  it('marks blocks and streets built and leaves parks and open ground natural', async () => {
+    const { packPlan, maskBuilt } = await import('../src/worldgen/settlements/pack');
+    const plan = planSettlement(input(), 7, { radius: RADIUS });
+    const packed = packPlan(plan);
+    const b = plan.buildings.find((x) => x.landmark < 0)!;
+    expect(maskBuilt(packed, b.x, b.y)).toBe(true);
+    expect(maskBuilt(packed, 20_000, 20_000)).toBe(false);
+    const parks = plan.blocks.filter((x) => x.ground === 2);
+    expect(parks.length).toBeGreaterThan(0);
+    for (const park of parks) {
+      const [cx, cy] = polyCentroid(park.polygon);
+      const onBuilding = plan.buildings.some(
+        (x) => Math.hypot(x.x - cx, x.y - cy) < Math.max(x.halfLength, x.halfWidth) + 60,
+      );
+      if (!onBuilding) expect(maskBuilt(packed, cx, cy)).toBe(false);
     }
   });
 });

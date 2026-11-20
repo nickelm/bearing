@@ -150,7 +150,11 @@ function coastLines(ground: SettlementInput['ground'], reach: number): number[][
 }
 
 /** The input for settlement `i`. */
-export function settlementInput(w: SettlementWorld, i: number): SettlementInput {
+export function settlementInput(
+  w: SettlementWorld,
+  i: number,
+  anchors: SettlementInput['anchors'] = [],
+): SettlementInput {
   const { graph, radius } = w;
   const s = graph.settlements;
   const center: [number, number, number] = [
@@ -234,6 +238,7 @@ export function settlementInput(w: SettlementWorld, i: number): SettlementInput 
     rivers,
     coasts: coastLines(ground, reach).map((points) => ({ points })),
     port: (s.flags[i]! & SETTLEMENT_PORT) !== 0,
+    anchors,
     ground,
   };
 }

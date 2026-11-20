@@ -70,6 +70,7 @@ import type {
   Landmark,
   Pad,
   Parcel,
+  SiteAnchor,
   PlanMetrics,
   SettlementInput,
   SettlementPlan,
@@ -104,6 +105,8 @@ class Context {
   readonly landmarks: Landmark[] = [];
   readonly targets: CandidateTarget[] = [];
   readonly plumes: number[] = [];
+  /** Buildings given way to landmarks and sites, dropped by `compact` at the end. */
+  readonly removed = new Set<number>();
   /** Original class of each street before the grade check (for the slope metric). */
   readonly traced: StreetKind[] = [];
   dropped = 0;
@@ -320,6 +323,8 @@ export function planSettlement(
   else planTown(ctx);
   if (input.tier !== Tier.City && opts.fieldSeed !== undefined) addFarmsteads(ctx);
   addBridges(ctx);
+  placeAnchors(ctx);
+  compact(ctx);
   const pads = largePads(ctx);
   const ms = performance.now() - t0;
   return {
@@ -583,8 +588,8 @@ function landmarkOnParcel(
   }
   if (!boxInside(p.polygon, cx, cy, angle, hl, hw)) return -1;
   // The parcel's own building gives way.
-  for (let i = ctx.buildings.length - 1; i >= 0; i--)
-    if (ctx.buildings[i]!.parcel === best) ctx.buildings.splice(i, 1);
+  // (Marked, not spliced: indices that landmarks and targets hold stay valid until compaction.)
+  ctx.buildings.forEach((b, i) => b.parcel === best && ctx.removed.add(i));
   const li = ctx.addLandmark(
     { kind, x: cx, y: cy, size: Math.max(hl, hw), height: size[2], building: -1 },
     r,
@@ -1122,6 +1127,312 @@ function addFarmsteads(ctx: Context): void {
     });
     for (const b of farmstead(x, y, corner.angle, palette, input.style, r))
       ctx.addBuilding(b, pi, bi);
+  }
+}
+
+/**
+ * Drops the buildings marked removed and renumbers what refers to buildings: landmarks
+ * and targets (decision 279).
+ */
+function compact(ctx: Context): void {
+  if (ctx.removed.size === 0) return;
+  const map = new Int32Array(ctx.buildings.length).fill(-1);
+  const kept: Building[] = [];
+  ctx.buildings.forEach((b, i) => {
+    if (ctx.removed.has(i)) return;
+    map[i] = kept.length;
+    kept.push(b);
+  });
+  ctx.buildings.length = 0;
+  ctx.buildings.push(...kept);
+  for (const l of ctx.landmarks) if (l.building >= 0) l.building = map[l.building]!;
+  for (const t of ctx.targets)
+    if (t.buildings) t.buildings = t.buildings.map((b) => map[b]!).filter((b) => b >= 0);
+  ctx.removed.clear();
+}
+
+/** What each site kind wants: preferred districts, its target kind, the size of a compound (m). */
+const SITE_RULES: Record<
+  SiteAnchor['kind'],
+  { districts: District[]; target: TargetKind; size: [number, number]; ground: Ground }
+> = {
+  works: {
+    districts: [District.Industrial],
+    target: TargetKind.Factory,
+    size: [260, 160],
+    ground: Ground.Concrete,
+  },
+  power: {
+    districts: [District.Utilities, District.Industrial],
+    target: TargetKind.PowerStation,
+    size: [320, 220],
+    ground: Ground.Gravel,
+  },
+  refinery: {
+    districts: [District.Industrial],
+    target: TargetKind.Refinery,
+    size: [420, 260],
+    ground: Ground.Gravel,
+  },
+  'rail-yard': {
+    districts: [District.RailYard, District.Industrial],
+    target: TargetKind.RailYard,
+    size: [600, 110],
+    ground: Ground.Ballast,
+  },
+  depot: {
+    districts: [District.Industrial],
+    target: TargetKind.Depot,
+    size: [220, 150],
+    ground: Ground.Concrete,
+  },
+  'fuel-depot': {
+    districts: [District.Industrial],
+    target: TargetKind.FuelDepot,
+    size: [200, 160],
+    ground: Ground.Gravel,
+  },
+};
+
+/**
+ * Realizes the caller's sites (decision 279): each takes an unused block of its preferred
+ * district (the nearest to rail for rail yards, to an arterial for depots, the largest
+ * otherwise), else a compound of its own just outside the extent along a road. Refineries
+ * and fuel depots refill their block with tanks, power stations gain cooling towers where
+ * they lack them. Each becomes a candidate target carrying the site's id and its buildings,
+ * in place of any target the plan had made of that block.
+ */
+function placeAnchors(ctx: Context): void {
+  const anchors = ctx.input.anchors ?? [];
+  if (anchors.length === 0) return;
+  const r = ctx.stream('sites');
+  const used = new Set<number>();
+  for (const a of anchors) {
+    const rule = SITE_RULES[a.kind];
+    let best = -1;
+    let score = Infinity;
+    for (const d of rule.districts) {
+      ctx.blocks.forEach((b, i) => {
+        if (used.has(i) || b.district !== d || b.area < 4000) return;
+        const [cx, cy] = polyCentroid(b.polygon);
+        const s =
+          a.kind === 'rail-yard'
+            ? ctx.distTo(ctx.lineSets.rails, cx, cy)
+            : a.kind === 'depot'
+              ? ctx.distTo(ctx.lineSets.arterials, cx, cy)
+              : -b.area;
+        if (s < score) {
+          score = s;
+          best = i;
+        }
+      });
+      if (best >= 0) break;
+    }
+    if (best < 0) best = siteCompound(ctx, rule.size, a.kind, rule.ground, r);
+    if (best < 0) continue;
+    used.add(best);
+    const block = ctx.blocks[best]!;
+    if (
+      a.kind === 'refinery' ||
+      a.kind === 'fuel-depot' ||
+      !ctx.buildings.some((b, i) => b.block === best && !ctx.removed.has(i))
+    )
+      fillSite(ctx, best, a.kind, r);
+    else if (
+      a.kind === 'power' &&
+      !ctx.landmarks.some(
+        (l) => l.kind === LandmarkKind.CoolingTower && pointInPoly(l.x, l.y, block.polygon),
+      )
+    )
+      addCoolingTowers(ctx, best, r);
+    const [cx, cy] = polyCentroid(block.polygon);
+    // The site replaces whatever target the plan made of its block.
+    for (let t = ctx.targets.length - 1; t >= 0; t--) {
+      const tg = ctx.targets[t]!;
+      if (
+        tg.anchor === undefined &&
+        tg.kind !== TargetKind.Bridge &&
+        pointInPoly(tg.x, tg.y, block.polygon)
+      )
+        ctx.targets.splice(t, 1);
+    }
+    const buildings: number[] = [];
+    ctx.buildings.forEach((b, i) => b.block === best && !ctx.removed.has(i) && buildings.push(i));
+    ctx.targets.push({
+      kind: rule.target,
+      x: cx,
+      y: cy,
+      footprint: block.polygon,
+      name: a.name,
+      anchor: a.id,
+      buildings,
+    });
+  }
+}
+
+/** A compound block just outside the extent, along a road where one leaves; its index or −1. */
+function siteCompound(
+  ctx: Context,
+  size: [number, number],
+  kind: SiteAnchor['kind'],
+  ground: Ground,
+  r: Rng,
+): number {
+  const base = r.nextFloat() * 2 * Math.PI;
+  for (let k = 0; k < 16; k++) {
+    const theta = base + (k * 2 * Math.PI) / 16;
+    const d = ctx.extent(theta) + size[1] / 2 + 80;
+    const x = d * Math.cos(theta);
+    const y = d * Math.sin(theta);
+    // Turned to the nearest road, else across the bearing.
+    const road = ctx.lineSets.arterials.nearest(x, y, 600);
+    const angle = road.d < 600 ? road.angle : theta + Math.PI / 2;
+    const poly = boxCorners(x, y, angle, size[0] / 2, size[1] / 2);
+    let ok = ctx.slope(x, y) < 0.12;
+    for (let i = 0; i < 4 && ok; i++) {
+      const px = poly[i * 2]!;
+      const py = poly[i * 2 + 1]!;
+      ok = !ctx.water(px, py, 10) && ctx.streetClearance(px, py) > 6 && ctx.slope(px, py) < 0.2;
+    }
+    if (ok && ctx.water(x, y, 10)) ok = false;
+    if (!ok) continue;
+    const bi = ctx.blocks.length;
+    ctx.blocks.push({
+      polygon: poly,
+      district:
+        kind === 'rail-yard'
+          ? District.RailYard
+          : kind === 'power'
+            ? District.Utilities
+            : District.Industrial,
+      ground,
+      area: polyArea(poly),
+      height: 0,
+      slope: ctx.slope(x, y),
+    });
+    ctx.parcels.push({
+      polygon: poly,
+      block: bi,
+      frontage: [poly[0]!, poly[1]!, poly[2]!, poly[3]!],
+    });
+    return bi;
+  }
+  return -1;
+}
+
+/** Fills a site's block with its kind's structures, the block's own buildings giving way. */
+function fillSite(ctx: Context, bi: number, kind: SiteAnchor['kind'], r: Rng): void {
+  const block = ctx.blocks[bi]!;
+  ctx.buildings.forEach((b, i) => b.block === bi && ctx.removed.add(i));
+  for (const l of ctx.landmarks)
+    if (l.building >= 0 && ctx.removed.has(l.building)) l.building = -1;
+  const box = minAreaBox(block.polygon);
+  const angle = Math.atan2(box.uy, box.ux);
+  // One parcel over the whole block, so the site's structures stand inside their parcel.
+  const pi = ctx.parcels.length;
+  ctx.parcels.push({ polygon: block.polygon, block: bi, frontage: longestEdge(block.polygon) });
+  const at = (u: number, v: number): [number, number] => [
+    box.cx + box.ux * u - box.uy * v,
+    box.cy + box.uy * u + box.ux * v,
+  ];
+  const shed = (u: number, v: number, hl: number, hw: number, h: number, warehouse = false) => {
+    const [x, y] = at(u, v);
+    if (!boxInside(block.polygon, x, y, angle, hl, hw)) return -1;
+    return ctx.addBuilding(
+      {
+        kind: warehouse ? BuildingKind.Warehouse : BuildingKind.Shed,
+        x,
+        y,
+        angle,
+        halfLength: hl,
+        halfWidth: hw,
+        height: h,
+        floors: 1,
+        roof: Roof.Flat,
+        roofHeight: 0,
+        wall: 0xa8a49c,
+        roofColor: 0x7a7672,
+        extras: 0,
+      },
+      pi,
+      bi,
+    );
+  };
+  if (kind === 'refinery' || kind === 'fuel-depot') {
+    // Tanks in rows, a control shed, and for a refinery flare stacks.
+    const tank = kind === 'refinery' ? 14 : 10;
+    const step = tank * 2.8;
+    for (let u = -box.hu + step; u <= box.hu - step; u += step) {
+      for (let v = -box.hv + step; v <= box.hv - step * 0.8; v += step) {
+        const [x, y] = at(u, v);
+        if (!boxInside(block.polygon, x, y, angle, tank, tank) || ctx.water(x, y, 2)) continue;
+        ctx.addLandmark(
+          { kind: LandmarkKind.Tank, x, y, size: tank, height: tank * 1.1, building: -1 },
+          r,
+        );
+      }
+    }
+    const control = shed(0, box.hv - 14, 14, 7, 6);
+    if (kind === 'refinery') {
+      const [x, y] = at(-box.hu * 0.6, box.hv * 0.6);
+      if (pointInPoly(x, y, block.polygon))
+        ctx.addLandmark(
+          { kind: LandmarkKind.Smokestack, x, y, size: 2, height: 55, building: control },
+          r,
+        );
+    }
+    return;
+  }
+  if (kind === 'rail-yard') {
+    shed(0, box.hv * 0.4, box.hu * 0.4, 12, 8);
+    shed(-box.hu * 0.5, -box.hv * 0.3, box.hu * 0.2, 9, 7, true);
+    return;
+  }
+  // Works, depots and power stations: halls in a row, a stack for works.
+  const halls = kind === 'depot' ? 3 : 2;
+  for (let k = 0; k < halls; k++) {
+    const u = -box.hu + ((k + 0.5) * 2 * box.hu) / halls;
+    const b = shed(
+      u,
+      0,
+      (box.hu / halls) * 0.75,
+      box.hv * 0.55,
+      kind === 'depot' ? 9 : 12,
+      kind === 'depot',
+    );
+    if (k === 0 && kind === 'works' && b >= 0) {
+      const h = ctx.buildings[b]!;
+      ctx.addLandmark(
+        { kind: LandmarkKind.Smokestack, x: h.x, y: h.y, size: 2.5, height: 60, building: b },
+        r,
+      );
+    }
+  }
+  if (kind === 'power') addCoolingTowers(ctx, bi, r);
+}
+
+function addCoolingTowers(ctx: Context, bi: number, r: Rng): void {
+  const block = ctx.blocks[bi]!;
+  const box = minAreaBox(block.polygon);
+  const angle = Math.atan2(box.uy, box.ux);
+  const tr = Math.min(24, box.hv * 0.4);
+  for (const k of [0.3, 0.7]) {
+    const x = box.cx + box.ux * box.hu * k;
+    const y = box.cy + box.uy * box.hu * k;
+    if (
+      tr > 10 &&
+      boxInside(block.polygon, x, y, angle, tr, tr) &&
+      !ctx.buildings.some(
+        (b, i) =>
+          !ctx.removed.has(i) &&
+          b.block === bi &&
+          Math.hypot(b.x - x, b.y - y) < tr + Math.max(b.halfLength, b.halfWidth),
+      )
+    )
+      ctx.addLandmark(
+        { kind: LandmarkKind.CoolingTower, x, y, size: tr, height: tr * 2.6, building: -1 },
+        r,
+      );
   }
 }
 

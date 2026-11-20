@@ -232,6 +232,8 @@ export class InfraScene {
     infra: Infrastructure,
     readonly radius: number,
     alignments: Alignments | null = null,
+    /** Targets at settlements are drawn by the settlements' plans (decision 279), not as sites here. */
+    plannedTargets = false,
   ) {
     this.habitability = graph.habitability;
     this.habitabilityResolution = graph.resolution;
@@ -440,6 +442,7 @@ export class InfraScene {
     const seen = new Set<number>();
     for (const t of infra.targets) {
       if (t.kind !== 'factory' && t.kind !== 'refinery' && t.kind !== 'power-plant') continue;
+      if (plannedTargets && t.settlement >= 0) continue;
       if (seen.has(t.cell)) continue;
       seen.add(t.cell);
       // Industry on the town's edge, 1.5 urban radii out, toward the cell's east.

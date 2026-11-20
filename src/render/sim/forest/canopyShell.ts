@@ -54,6 +54,7 @@ import { LAPSE_RATE } from '../../../worldgen/climate';
 import { sharesNode, standNode, standTopNode } from '../../common/canopyNode';
 import type { ClimateTexture } from '../../common/climateTexture';
 import { earthElevationNode } from '../../common/seasons';
+import type { CityGround } from '../city/cityGround';
 import type { LightShading, RoadShading } from '../infra/roadShading';
 import { ruralSpeckle } from '../infra/roadShading';
 import type { PlanetLighting } from '../lighting/planetLighting';
@@ -92,6 +93,8 @@ export interface CanopyShellDeps {
   land: LandShading;
   roads: RoadShading;
   lights: LightShading;
+  /** Planned towns' built masks (decision 278): the shell stays over their woods and parks. */
+  city?: CityGround | null;
 }
 
 const objectUniform = (key: string) =>
@@ -195,7 +198,17 @@ export function canopyShellMaterial(d: CanopyShellDeps): MeshBasicNodeMaterial {
       footprint,
       ruralSpeckle(planet, 2000),
     );
-    If(lane.greaterThan(0.5).or(built.x.add(built.y).greaterThan(0.3)), () => {
+    // A planned town cuts the shell only where it builds (its mask); an unplanned one over
+    // its whole built-up patch (decision 166).
+    const planned = d.city
+      ? d.lights.plannedBuilt(planet, lightStart, lightCount, d.city)
+      : float(-1);
+    const cut = select(
+      planned.lessThan(-0.5),
+      built.x.add(built.y).greaterThan(0.3),
+      planned.greaterThan(0.5),
+    );
+    If(lane.greaterThan(0.5).or(cut), () => {
       Discard();
     });
 

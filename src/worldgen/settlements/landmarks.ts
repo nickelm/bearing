@@ -39,5 +39,7 @@ export function landmarkName(
       return `${settlement} Docks`;
     case LandmarkKind.Market:
       return `${settlement} Market`;
+    case LandmarkKind.Tank:
+      return `${settlement} Tank Farm`;
   }
 }

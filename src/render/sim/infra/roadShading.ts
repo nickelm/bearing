@@ -316,6 +316,34 @@ export class LightShading {
   }
 
   /**
+   * For the canopy shell (decision 278): the nearest town's built mask at a planet-centered
+   * position: 1 built, 0 natural ground, −1 unplanned (or no town).
+   */
+  plannedBuilt(planetPosition: V3, start: F, count: F, city: CityGround): F {
+    return Fn(() => {
+      const p = normalize(planetPosition);
+      const best = float(1e9).toVar();
+      const bestId = int(-1).toVar();
+      const first = int(start);
+      Loop({ start: int(0), end: int(count), type: 'int' }, ({ i }) => {
+        const id = this.lists.element(first.add(i)).toInt();
+        const a = this.lights.element(id.mul(2));
+        const b = this.lights.element(id.mul(2).add(1));
+        const share = length(p.sub(a.xyz)).mul(this.radius).div(max(b.y, 1));
+        If(b.z.lessThan(0.5).and(b.y.greaterThan(0)).and(share.lessThan(best)), () => {
+          best.assign(share);
+          bestId.assign(id);
+        });
+      });
+      const out = float(-1).toVar();
+      If(bestId.greaterThanEqual(0), () => {
+        out.assign(city.builtAt(p, this.lights.element(bestId.mul(2)).xyz, bestId));
+      });
+      return out;
+    })() as F;
+  }
+
+  /**
    * The urban ground's albedo at a planet-centered position inside a built-up patch
    * (proposal 0009, Phase 1; decision 259): the nearest town's or industrial site's
    * street pattern (`urbanPattern.ts`) of asphalt streets, sidewalks, squares, parks,

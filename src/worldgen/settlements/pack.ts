@@ -13,7 +13,7 @@
  *   for crisp street edges (proposal 0005's per-chunk feature distance field).
  */
 import { pointInPoly, segDist, SpatialHash } from './geom';
-import { STREET_HALF_WIDTH } from './types';
+import { Ground, STREET_HALF_WIDTH } from './types';
 import type { CandidateTarget, Landmark, Pad, SettlementPlan, Style, Tier } from './types';
 
 export const BUILDING_FIELDS = 16;
@@ -44,6 +44,139 @@ export interface PackedPlan {
   pads: Pad[];
   /** The plan's bounding box (m): x0, y0, x1, y1. */
   bounds: [number, number, number, number];
+  /**
+   * Where the plan builds (decision 278): one bit per MASK_CELL square, row-major from
+   * (maskX0, maskY0) × MASK_CELL, set on blocks (but parks and cemeteries) and streets.
+   * Off it lies the natural ground, where woods keep their trees and canopy.
+   */
+  mask: Uint32Array;
+  maskX0: number;
+  maskY0: number;
+  maskNx: number;
+  maskNy: number;
+}
+
+/** Edge of a built-mask cell (m). */
+export const MASK_CELL = 40;
+/** The most cells a mask may hold (the city ground's buffer reserves this many bits per plan). */
+export const MASK_MAX_CELLS = 512 * 1024;
+
+/** The built mask of a plan (decision 278): blocks rasterized at cell centers, streets stamped. */
+export function builtMask(
+  p: Pick<
+    PackedPlan,
+    | 'buildings'
+    | 'blockPoints'
+    | 'blockOffsets'
+    | 'blockInfo'
+    | 'streetPoints'
+    | 'streetOffsets'
+    | 'streetKinds'
+    | 'bounds'
+  >,
+): {
+  mask: Uint32Array;
+  maskX0: number;
+  maskY0: number;
+  maskNx: number;
+  maskNy: number;
+} {
+  const C = MASK_CELL;
+  const [bx0, by0, bx1, by1] = p.bounds;
+  let x0 = Math.floor(bx0 / C) - 1;
+  let y0 = Math.floor(by0 / C) - 1;
+  let nx = Math.floor(bx1 / C) + 2 - x0;
+  let ny = Math.floor(by1 / C) + 2 - y0;
+  // Clamp to the buffer's room, about the center.
+  while (nx * ny > MASK_MAX_CELLS) {
+    x0 += 1;
+    y0 += 1;
+    nx -= 2;
+    ny -= 2;
+  }
+  const mask = new Uint32Array(Math.ceil((nx * ny) / 32));
+  const set = (i: number, j: number) => {
+    if (i < 0 || j < 0 || i >= nx || j >= ny) return;
+    const k = j * nx + i;
+    mask[k >> 5]! |= 1 << (k & 31);
+  };
+  const { blockPoints: bp, blockOffsets: bo, blockInfo: bi } = p;
+  for (let b = 0; b + 1 < bo.length; b++) {
+    const ground = bi[b * 4 + 1]!;
+    if (ground === Ground.Park || ground === Ground.Cemetery) continue;
+    const s = bo[b]!;
+    const n = (bo[b + 1]! - s) / 2;
+    let ylo = Infinity;
+    let yhi = -Infinity;
+    for (let k = 0; k < n; k++) {
+      ylo = Math.min(ylo, bp[s + k * 2 + 1]!);
+      yhi = Math.max(yhi, bp[s + k * 2 + 1]!);
+    }
+    for (let j = Math.ceil(ylo / C - 0.5); j <= Math.floor(yhi / C - 0.5); j++) {
+      const y = (j + 0.5) * C;
+      const xs: number[] = [];
+      for (let a = 0, c = n - 1; a < n; c = a++) {
+        const ya = bp[s + a * 2 + 1]!;
+        const yc = bp[s + c * 2 + 1]!;
+        if (ya > y !== yc > y) {
+          const xa = bp[s + a * 2]!;
+          xs.push(xa + ((y - ya) * (bp[s + c * 2]! - xa)) / (yc - ya));
+        }
+      }
+      xs.sort((u, v) => u - v);
+      for (let q = 0; q + 1 < xs.length; q += 2) {
+        for (let i = Math.ceil(xs[q]! / C - 0.5); i <= Math.floor(xs[q + 1]! / C - 0.5); i++)
+          set(i - x0, j - y0);
+      }
+    }
+  }
+  // Every building's footprint too: slabs in a microdistrict's parkland, a stadium in a park.
+  const bd = p.buildings;
+  for (let b = 0; b + BUILDING_FIELDS <= bd.length; b += BUILDING_FIELDS) {
+    const r = Math.hypot(bd[b + 3]!, bd[b + 4]!);
+    for (let j = Math.floor((bd[b + 1]! - r) / C); j <= Math.floor((bd[b + 1]! + r) / C); j++)
+      for (let i = Math.floor((bd[b]! - r) / C); i <= Math.floor((bd[b]! + r) / C); i++)
+        set(i - x0, j - y0);
+  }
+  const { streetPoints: sp, streetOffsets: so, streetKinds: sk } = p;
+  for (let s = 0; s < sk.length; s++) {
+    const hw = (STREET_HALF_WIDTH[sk[s]!] ?? 4) + 2.5;
+    for (let i = so[s]!; i + 3 < so[s + 1]!; i += 2) {
+      const ax = sp[i]!;
+      const ay = sp[i + 1]!;
+      const ex = sp[i + 2]!;
+      const ey = sp[i + 3]!;
+      for (
+        let j = Math.floor((Math.min(ay, ey) - hw) / C);
+        j <= Math.floor((Math.max(ay, ey) + hw) / C);
+        j++
+      ) {
+        for (
+          let k = Math.floor((Math.min(ax, ex) - hw) / C);
+          k <= Math.floor((Math.max(ax, ex) + hw) / C);
+          k++
+        ) {
+          // A cell is street when its center lies within the street's half-width plus half a cell.
+          if (segDist((k + 0.5) * C, (j + 0.5) * C, ax, ay, ex, ey).d < hw + C / 2)
+            set(k - x0, j - y0);
+        }
+      }
+    }
+  }
+  return { mask, maskX0: x0, maskY0: y0, maskNx: nx, maskNy: ny };
+}
+
+/** Whether local (x, y) lies on a plan's built ground by its mask (false off the mask). */
+export function maskBuilt(
+  p: Pick<PackedPlan, 'mask' | 'maskX0' | 'maskY0' | 'maskNx' | 'maskNy'>,
+  x: number,
+  y: number,
+): boolean {
+  const i = Math.floor(x / MASK_CELL) - p.maskX0;
+  const j = Math.floor(y / MASK_CELL) - p.maskY0;
+  if (i < 0 || j < 0 || i >= p.maskNx || j >= p.maskNy) return false;
+  const k = j * p.maskNx + i;
+  return ((p.mask[k >> 5]! >>> (k & 31)) & 1) === 1;
 }
 
 export function packPlan(p: SettlementPlan): PackedPlan {
@@ -110,7 +243,7 @@ export function packPlan(p: SettlementPlan): PackedPlan {
     streetKinds[i] = s.kind;
   });
   if (!(x0 < x1)) [x0, y0, x1, y1] = [-1, -1, 1, 1];
-  return {
+  const packed = {
     key: p.key,
     name: p.name,
     tier: p.tier,
@@ -128,8 +261,9 @@ export function packPlan(p: SettlementPlan): PackedPlan {
     targets: p.targets,
     plumes: p.plumes,
     pads: p.pads,
-    bounds: [x0, y0, x1, y1],
+    bounds: [x0, y0, x1, y1] as [number, number, number, number],
   };
+  return { ...packed, ...builtMask(packed) };
 }
 
 /** The transfer list of a packed plan. */
@@ -142,6 +276,7 @@ export function packedBuffers(p: PackedPlan): ArrayBuffer[] {
     p.streetPoints,
     p.streetOffsets,
     p.streetKinds,
+    p.mask,
   ].map((a) => a.buffer as ArrayBuffer);
 }
 

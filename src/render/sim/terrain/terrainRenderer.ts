@@ -212,6 +212,8 @@ export class TerrainRenderer {
   private exaggeration = 1;
   /** Height exaggeration, shared with layers drawn on the terrain (trees). */
   readonly exaggerationUniform = uniform(1);
+  /** Planned towns' built masks for the canopy shell's mesh (decision 278); set by the scene. */
+  cityBuilt: ((d: Readonly<Vec3d>) => boolean | null) | null = null;
   /** The planned towns' urban ground (decision 266), written by the city layer. */
   cityGround: CityGround | null = null;
   private mode: TileViewMode = 'biome';
@@ -339,6 +341,7 @@ export class TerrainRenderer {
       land: this.land,
       roads,
       lights,
+      city: this.cityGround,
     });
     const objectUniform = (key: string) =>
       uniform(0).onObjectUpdate(
@@ -634,7 +637,13 @@ export class TerrainRenderer {
       edits: w.edits ?? null,
       zoneShift: w.zoneShift ?? null,
       canopyClear: w.infra
-        ? (d, extra) => w.infra!.isClear(d, false, extra) || w.infra!.isBuiltUp(d, extra)
+        ? (d, extra) => {
+            // Planned towns lower the shell only where they build (decision 278).
+            const built = this.cityBuilt?.(d) ?? null;
+            return built === null
+              ? w.infra!.isClear(d, false, extra) || w.infra!.isBuiltUp(d, extra)
+              : built || w.infra!.isClear(d, true, extra);
+          }
         : null,
     };
   }
@@ -753,7 +762,13 @@ export class TerrainRenderer {
       edits: w.edits ?? null,
       zoneShift: w.zoneShift ?? null,
       canopyClear: w.infra
-        ? (d, extra) => w.infra!.isClear(d, false, extra) || w.infra!.isBuiltUp(d, extra)
+        ? (d, extra) => {
+            // Planned towns lower the shell only where they build (decision 278).
+            const built = this.cityBuilt?.(d) ?? null;
+            return built === null
+              ? w.infra!.isClear(d, false, extra) || w.infra!.isBuiltUp(d, extra)
+              : built || w.infra!.isClear(d, true, extra);
+          }
         : null,
     });
     const g = new BufferGeometry();

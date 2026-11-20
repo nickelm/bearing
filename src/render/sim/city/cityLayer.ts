@@ -69,9 +69,10 @@ import type { RiverSegments } from '../../../worldgen/riverIndex';
 import { SettlementFrame } from '../../../worldgen/settlements/frame';
 import { settlementInput, settlementWorld } from '../../../worldgen/settlements/fromGraph';
 import type { SettlementWorld } from '../../../worldgen/settlements/fromGraph';
-import { BUILDING_FIELDS, CHUNK } from '../../../worldgen/settlements/pack';
+import { BUILDING_FIELDS, CHUNK, MASK_CELL, maskBuilt } from '../../../worldgen/settlements/pack';
 import type { PackedPlan } from '../../../worldgen/settlements/pack';
 import { StreetKind } from '../../../worldgen/settlements/types';
+import type { SiteAnchor } from '../../../worldgen/settlements/types';
 import type { StrategicGraph } from '../../../worldgen/strategic/graph';
 import type { FromCityWorker, ToCityWorker } from '../../../workers/cityProtocol';
 import { CityCore } from '../../../workers/cityCore';
@@ -111,6 +112,8 @@ export interface CityWorld {
   rivers: RiverSegments | null;
   /** Light record index of settlement i in the terrain's light tables, or −1. */
   recordOf: (i: number) => number;
+  /** Sites a game layer asks settlement i to realize (its strike targets; decision 279). */
+  anchorsOf?: (i: number) => SiteAnchor[];
 }
 
 interface Chunk {
@@ -204,6 +207,32 @@ class Planner {
   }
 }
 
+/**
+ * The game's strike targets at each settlement as sites for its plan (decision 279): the
+ * adapter between the infrastructure (the game's) and the generator (the world's).
+ */
+export function anchorsFromTargets(
+  targets: readonly { id: number; kind: string; name: string; settlement: number }[],
+): (i: number) => SiteAnchor[] {
+  const kinds: Record<string, SiteAnchor['kind']> = {
+    factory: 'works',
+    'power-plant': 'power',
+    refinery: 'refinery',
+    'rail-yard': 'rail-yard',
+    'supply-depot': 'depot',
+    'fuel-depot': 'fuel-depot',
+  };
+  const by = new Map<number, SiteAnchor[]>();
+  for (const t of targets) {
+    const kind = kinds[t.kind];
+    if (!kind || t.settlement < 0) continue;
+    let l = by.get(t.settlement);
+    if (!l) by.set(t.settlement, (l = []));
+    l.push({ id: t.id, kind, name: t.name });
+  }
+  return (i) => by.get(i) ?? [];
+}
+
 /** Light record index of each settlement in an InfraScene's light tables (sites are in record order). */
 export function recordsOf(sites: readonly { key: string }[]): (i: number) => number {
   const map = new Map<number, number>();
@@ -221,6 +250,12 @@ export class CityLayer {
   boxRange = 2000;
   prismRange = 12_000;
   maxAltitude = 15_000;
+  /**
+   * Magnification of the view that picks the detail (decision 279): a targeting pod at
+   * 8× sets 8, so a city 30 km off draws as boxes, as it would from 4 km. Its narrow field
+   * keeps the triangle count in the same range.
+   */
+  zoom = 1;
   buildBudgetMs = 6;
   /** Spacing (m) of streetlights. */
   lightSpacing = 40;
@@ -324,7 +359,7 @@ export class CityLayer {
     while (this.prefetchQueue.length) {
       const i = this.prefetchQueue.shift()!;
       if (this.plans.has(i) || this.delivered.has(i)) continue;
-      const input = settlementInput(this.sw, i);
+      const input = settlementInput(this.sw, i, this.world!.anchorsOf?.(i) ?? []);
       const { ground: _g, ...rest } = input;
       this.plans.set(i, this.emptyState(i, input.center));
       this.planner.send({ type: 'plan', id: this.nextId++, input: rest });
@@ -418,6 +453,35 @@ export class CityLayer {
     return true;
   }
 
+  /**
+   * Whether unit direction `d` lies on a planned town's built ground (decision 278): true
+   * on its blocks and streets, false on its natural ground (woods, parks, fields), null
+   * where no plan covers it.
+   */
+  builtAt(d: Readonly<Vec3d>): boolean | null {
+    for (const p of this.plans.values()) {
+      const plan = p.plan;
+      if (!plan) continue;
+      const f = p.frame;
+      if (d.x * f.cx + d.y * f.cy + d.z * f.cz < 0.9999) continue;
+      const [x, y] = f.toPlane(d.x, d.y, d.z);
+      const i = Math.floor(x / MASK_CELL);
+      const j = Math.floor(y / MASK_CELL);
+      if (
+        i < plan.maskX0 ||
+        j < plan.maskY0 ||
+        i >= plan.maskX0 + plan.maskNx ||
+        j >= plan.maskY0 + plan.maskNy
+      )
+        continue;
+      return maskBuilt(plan, x, y);
+    }
+    return null;
+  }
+
+  /** Called when a plan arrives near the camera (the scene rebuilds the trees there). */
+  onNearPlan: (() => void) | null = null;
+
   /** The packed plan of settlement i, if built (colliders, targets, landmarks). */
   plan(i: number): PackedPlan | null {
     return this.plans.get(i)?.plan ?? null;
@@ -469,8 +533,41 @@ export class CityLayer {
     return best;
   }
 
+  /** Target damage by site id (decision 279), kept until the site's plan arrives. */
+  private readonly siteDamage = new Map<number, number>();
+
+  /**
+   * Damage (0..1) of the site a game layer passed as an anchor: that share of the site's
+   * buildings is damaged, about half of it in rubble, chosen by a fixed hash so more
+   * damage only ever adds to what is broken.
+   */
+  setSiteDamage(id: number, damage: number): void {
+    this.siteDamage.set(id, damage);
+    for (const p of this.plans.values()) if (p.plan) this.applySiteDamage(p);
+  }
+
+  private applySiteDamage(p: PlanState): void {
+    for (const t of p.plan!.targets) {
+      if (t.anchor === undefined || !this.siteDamage.has(t.anchor)) continue;
+      const dmg = this.siteDamage.get(t.anchor)!;
+      for (const b of t.buildings ?? []) {
+        const h = (((b + 1) * 2654435761) >>> 0) / 4294967296;
+        const state = h < dmg * 0.5 ? Damage.Rubble : h < dmg ? Damage.Damaged : Damage.Intact;
+        if ((p.damage?.[b] ?? 0) !== state) this.setDamage(p.index, b, state);
+      }
+    }
+  }
+
   private attachPlan(p: PlanState, plan: PackedPlan): void {
     p.plan = plan;
+    if (
+      this.lastEye &&
+      this.lastEye
+        .clone()
+        .normalize()
+        .dot(new Vec3d(...plan.center)) > Math.cos(15_000 / this.world!.radius)
+    )
+      this.onNearPlan?.();
     if (!this.delivered.has(p.index)) {
       this.delivered.add(p.index);
       this.onPlan?.(p.index, plan);
@@ -532,11 +629,15 @@ export class CityLayer {
     }
     p.coverage = coverage;
     plan.landmarks.forEach((l, i) => chunkOf(l.x, l.y).landmarks.push(i));
+    if (this.siteDamage.size) this.applySiteDamage(p);
   }
 
   /** Builds and places the settlements around `eye`. */
+  private lastEye: Vec3d | null = null;
+
   update(eye: Readonly<Vec3d>, heightAboveGround: number, view?: CullView): void {
     this.frame++;
+    this.lastEye = new Vec3d(eye.x, eye.y, eye.z);
     const world = this.world;
     const opts = this.terrain.meshOptions();
     const ground = this.terrain.cityGround;
@@ -573,14 +674,14 @@ export class CityLayer {
     for (let i = 0; i < this.reach.length; i++) {
       const dot = nadir.x * pts[i * 3]! + nadir.y * pts[i * 3 + 1]! + nadir.z * pts[i * 3 + 2]!;
       const d = Math.acos(Math.min(1, dot)) * R;
-      if (d < this.prismRange + this.reach[i]!) near.push({ i, d });
+      if (d < this.prismRange * this.zoom + this.reach[i]!) near.push({ i, d });
     }
     near.sort((a, b) => a.d - b.d);
     for (const { i } of near) {
       let p = this.plans.get(i);
       if (!p) {
         if (this.planner && this.planner.inFlight > 0) continue;
-        const input = settlementInput(this.sw, i);
+        const input = settlementInput(this.sw, i, this.world!.anchorsOf?.(i) ?? []);
         const { ground: _g, ...rest } = input;
         p = this.emptyState(i, input.center);
         this.plans.set(i, p);
@@ -612,7 +713,7 @@ export class CityLayer {
         if (free < 0) break;
         p.slot = free;
         this.planSlots[free] = i;
-        ground.setPlan(free, p.i0, p.j0, p.across);
+        ground.setPlan(free, p.i0, p.j0, p.across, p.plan!);
         ground.setRecord(world.recordOf(i), free);
       }
     }
@@ -631,7 +732,8 @@ export class CityLayer {
       const prismChunks: Chunk[] = [];
       const lit: Chunk[] = [];
       for (const [key, c] of p.chunks) {
-        const d = eye.distanceTo(c.center) - CHUNK * 0.7;
+        // A zoomed sensor (a targeting pod) sees detail as if `zoom` times nearer.
+        const d = (eye.distanceTo(c.center) - CHUNK * 0.7) / this.zoom;
         const lod: Lod =
           d < this.kitRange
             ? Lod.Kit

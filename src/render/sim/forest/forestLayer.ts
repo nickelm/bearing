@@ -1040,6 +1040,9 @@ export class ForestLayer {
     this.wash.radius.value = wash.radius;
   }
 
+  /** Planned towns' built masks (decision 278): true built, false natural, null unplanned. */
+  cityBuilt: ((d: Readonly<Vec3d>) => boolean | null) | null = null;
+
   /** Sets where trees must not stand, and rebuilds the trees. */
   setClearings(clear: ((d: Readonly<Vec3d>) => boolean) | undefined): void {
     this.clearings = clear;
@@ -1052,7 +1055,16 @@ export class ForestLayer {
    * Rebuilds the trees.
    */
   setInfrastructure(scene: InfraScene | null): void {
-    this.clearings = scene ? (d, extra = 0) => scene.isClear(d, false, extra) : undefined;
+    // A planned town clears trees where it builds, and its roads; its woods and parks keep
+    // theirs (decision 278). Unplanned towns clear their cores as before.
+    this.clearings = scene
+      ? (d, extra = 0) => {
+          const built = this.cityBuilt?.(d) ?? null;
+          return built === null
+            ? scene.isClear(d, false, extra)
+            : built || scene.isClear(d, true, extra);
+        }
+      : undefined;
     this.habitability = scene
       ? (d) => habitabilityAt(scene.habitability, scene.habitabilityResolution, d)
       : undefined;
