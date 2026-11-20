@@ -479,6 +479,12 @@ export function returnRoute(
   type: AircraftType,
   radius: Meters,
   recovery: number,
+  /**
+   * Turns the builder from the flight's heading toward home through a real radius
+   * (missionRoute.ts's `turnToward` at the rejoin's bank, decision 279); without it the
+   * way home starts at a corner, as before.
+   */
+  turn?: (b: RouteBuilder, home: Readonly<Dir>) => void,
 ): Route {
   const s = routeState(route, t, radius);
   const kept = routeBefore(route, t, radius);
@@ -490,6 +496,7 @@ export function returnRoute(
     b.ground(recovery, 'recovery');
   } else {
     const alt = type.cruiseAltitude;
+    if (s.airborne) turn?.(b, home);
     b.changeAltitudeToward(home, alt, type.cruiseSpeed * 0.7, 'climb', 'egress');
     const rate = Math.max(type.climbRate, 15);
     const descent = (b.altitude / rate) * type.cruiseSpeed * 0.8;

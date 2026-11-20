@@ -35,7 +35,7 @@ import { aircraftType } from './aircraft';
 import type { HandbackFix, HandbackLoss, HandbackStores } from '../eventLog';
 import { jumpInOpen, MISSION_PROFILES } from './mission';
 import type { BaseRef, Mission, MissionPhase } from './mission';
-import { rejoinRoute } from './missionRoute';
+import { REJOIN_BANK, rejoinRoute, turnToward } from './missionRoute';
 import { buildOrderOfBattle, baseIndex } from './orbat';
 import type { AirBaseRecord, BaseStocks, OrderOfBattle, Squadron } from './orbat';
 import { returnRoute, routeState, routeTimeline } from './route';
@@ -360,7 +360,16 @@ export class AirOps {
     const t = aircraftType(m.aircraftType);
     m.aborted = reason;
     const home = this.basePoint(m.base, sim.time + 3600);
-    let route = returnRoute(m.route, sim.time, home, t, this.radius, t.helicopter ? 180 : 480);
+    // The turn home through a real radius at the rejoin's bank, not a corner (decision 279).
+    let route = returnRoute(
+      m.route,
+      sim.time,
+      home,
+      t,
+      this.radius,
+      t.helicopter ? 180 : 480,
+      (b, to) => turnToward(b, to, t.cruiseSpeed, 'cruise', 'egress', this.radius, REJOIN_BANK),
+    );
     if (this.ground) route = floorRoute(route, this.ground, clearanceFor(t), this.radius);
     m.route = route;
     m.timeline = routeTimeline(route);

@@ -224,7 +224,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] Wind at full fidelity: the promoted flight flies in the campaign's wind and gusts (decision 278)
 - [ ] Winds aloft in the worker's rebuilt routes (AirOps cannot read the planner's weather yet; decision 257)
 - [ ] The route's climb (the air war's 110 m/s for the F-21) is steeper than the Kestrel sustains at its climb speed: the AI follows it up to 4 km late and catches up by the station (R2.10's calibration, or a slower climb in the route)
-- [ ] An abort (`returnRoute`) still turns home at a corner; give it the rejoin's turn
+- [x] An abort (`returnRoute`) still turns home at a corner; give it the rejoin's turn (decision 279)
 - [ ] The plug-ins' `behavior` parts (rule 16): CAP's first, once the follow runs `PromotedFlight` (the route tracker per phase; weapons on the pass in R2.6)
 - [x] Take over inside the jump-in window; hand back with the AI's orders (T or the bar's button, Free Flight's bindings, mouse aim and `MouseCapture`; decision 273)
 - [ ] Owner: on seed 4 no CAP is flown by the F-21 (CAPs are F-25 and F-28; the F-21 flies interdiction, about 7 a day), so take over is open only on F-21 interdiction until R2.7's flight data, or a stand-in flight model for fighters without their own (owner to decide)

@@ -1,13 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { arcDistance, destination, initialHeading } from '../src/core/greatCircle';
+import type { Dir } from '../src/core/greatCircle';
 import { DEG } from '../src/core/units';
 import { aircraftType } from '../src/sim/air/aircraft';
 import { MISSION_PHASES, MISSION_PROFILES } from '../src/sim/air/mission';
 import type { MissionPhase } from '../src/sim/air/mission';
-import { LEAST_REJOIN_STATION, rejoinRoute } from '../src/sim/air/missionRoute';
+import {
+  LEAST_REJOIN_STATION,
+  REJOIN_BANK,
+  rejoinRoute,
+  turnToward,
+} from '../src/sim/air/missionRoute';
 import type { FlightFix, RejoinInput } from '../src/sim/air/missionRoute';
-import { routeFeasible, routeState, routeTimeline } from '../src/sim/air/route';
-import type { Route } from '../src/sim/air/route';
+import { returnRoute, routeFeasible, routeState, routeTimeline } from '../src/sim/air/route';
+import type { Route, RouteBuilder } from '../src/sim/air/route';
 import { capMission, dir, phaseStart, R } from './helpers/promoted';
 
 const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
@@ -114,5 +120,29 @@ describe('the racetrack join', () => {
     const arrive = initialHeading(entry.b, entry.a) + Math.PI;
     const join = routeState(m.route, leg.t0 + 0.5, R).heading;
     expect(Math.abs(wrap(join - arrive))).toBeLessThan(30 * DEG);
+  });
+
+  it('turns an aborted flight home through a real radius, not at a corner', () => {
+    const home = dir(40, 10);
+    // On station, on a racetrack leg heading away from home.
+    const t0 = phaseStart(m, 'on-target');
+    let t = t0;
+    for (; t < t0 + 3600; t += 10) {
+      const s = routeState(m.route, t, R);
+      if (Math.abs(wrap(initialHeading(s.point, home) - s.heading)) > 150 * DEG) break;
+    }
+    const s = routeState(m.route, t, R);
+    const turn = (b: RouteBuilder, to: Readonly<Dir>) =>
+      turnToward(b, to, type.cruiseSpeed, 'cruise', 'egress', R, REJOIN_BANK);
+    const cornered = returnRoute(m.route, t, home, type, R, 480);
+    const turned = returnRoute(m.route, t, home, type, R, 480, turn);
+    const first = (r: Route) => {
+      const g = r.segments.find((x) => x.t0 >= t && x.kind === 'leg')!;
+      return Math.abs(wrap(initialHeading(g.a, g.b) - s.heading));
+    };
+    expect(first(cornered)).toBeGreaterThan(150 * DEG);
+    expect(first(turned)).toBeLessThan(25 * DEG);
+    expect(worstCorner(turned, t)).toBeLessThan(25 * DEG);
+    expect(routeTimeline(turned).at(-1)!.phase).toBe('complete');
   });
 });

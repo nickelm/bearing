@@ -112,16 +112,23 @@ export function turnToward(
   let h = last
     ? routeState({ segments: b.segments, fuel: 0, reserve: 0 }, last.t1 - 0.5, R).heading
     : b.heading;
-  const want = initialHeading(b.point, to);
-  const d = Math.atan2(Math.sin(want - h), Math.cos(want - h));
+  const off = (): number => {
+    const want = initialHeading(b.point, to);
+    return Math.atan2(Math.sin(want - h), Math.cos(want - h));
+  };
+  let d = off();
   if (Math.abs(d) < TURN_LEAST) return;
   const radius = (speed * speed) / (9.81 * Math.tan(bank));
-  const steps = Math.ceil(Math.abs(d) / TURN_STEP);
-  const dh = d / steps;
-  const chord = 2 * radius * Math.sin(Math.abs(dh) / 2);
-  for (let i = 0; i < steps; i++) {
+  const sign = Math.sign(d);
+  const full = 2 * radius * Math.sin(TURN_STEP / 2);
+  // Step by step, aimed again after each: the turn's own radius moves the flight, and near
+  // the point turned to that moves its bearing (decision 279). The last step takes the rest.
+  for (let i = 0; i < (2 * Math.PI) / TURN_STEP + 1 && sign * d > TURN_STEP / 4; i++) {
+    const dh = sign * Math.min(TURN_STEP, sign * d);
+    const chord = dh === sign * TURN_STEP ? full : 2 * radius * Math.sin(Math.abs(dh) / 2);
     b.leg(destination(b.point, h + dh / 2, chord, R), b.altitude, speed, regime, phase);
     h += dh;
+    d = off();
   }
 }
 
