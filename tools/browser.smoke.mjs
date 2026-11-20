@@ -590,9 +590,9 @@ const FOLLOW_TYPES = env('FOLLOW', 'cap,interdiction,cas,airlift').split(',');
  * Follow (R2.4): the war runs at 64× until a flight of each demo type is in the air, then
  * Follow from mission search (the first) or the app's handle (the rest) cuts behind it. Each
  * picture must show the HUD, the chase camera above the ground and the aircraft in front of
- * it; Escape returns to the map with the mission selected. Check 10 (LOW) follows a flight below
- * 400 m, a penetrator on interdiction (decision 253), and samples the camera's height above the
- * drawn ground; check 7's pictures are the HUD against the day's sky, snow and night.
+ * it; Escape returns to the map with the mission selected. Check 10 (LOW) follows a flight on a
+ * low-level leg (decision 253), waiting at most LOW_WAIT s, and samples the camera's height above
+ * the drawn ground; check 7's pictures are the HUD against the day's sky, snow and night.
  */
 async function followPart() {
   // The war runs while the simulation view's observer shows; the map visits stay short. On
@@ -759,21 +759,33 @@ async function followPart() {
     await deviceHealthy(`follow ${type}`);
   }
   if (env('LOW', '1') === '1') {
-    // Check 10: a flight below 400 m over the ground's level (a penetrator on interdiction,
-    // decision 253), followed for a minute of frames; the camera must stay above the ground.
+    // Check 10: a flight on a low-level leg (a penetrator on interdiction, a low strike;
+    // decision 253) with two minutes of it left, followed for a minute of frames; the camera
+    // must stay above the ground. The terrain floor lifts low legs over the ground (decision
+    // 240), so the leg's regime finds them, not its height above sea level.
     await page.evaluate(() => window.bearing.sim.setRate(64));
-    const low = await until(() => {
-      const b = window.bearing;
-      const now = b.sim.displayTime(performance.now());
-      const m = b.sim.missions.find((x) => {
-        if (x.aircraft <= 0) return false;
-        const s = x.route.segments.find((g) => g.t0 <= now && now < g.t1);
-        if (!s || s.kind === 'ground' || s.t1 - now < 120) return false;
-        const f = (now - s.t0) / Math.max(1, s.t1 - s.t0);
-        return s.alt0 + (s.alt1 - s.alt0) * f < 400 && s.alt1 < 400;
-      });
-      return m ? m.id : null;
-    }, 900).then((h) => h.jsonValue());
+    const low = await until(
+      () => {
+        const b = window.bearing;
+        const now = b.sim.displayTime(performance.now());
+        const m = b.sim.missions.find((x) => {
+          if (x.aircraft <= 0) return false;
+          const segs = x.route.segments;
+          let i = segs.findIndex((g) => g.t0 <= now && now < g.t1);
+          if (i < 0 || segs[i].regime !== 'lowLevel') return false;
+          while (i + 1 < segs.length && segs[i + 1].regime === 'lowLevel') i++;
+          return segs[i].t1 - now > 120;
+        });
+        return m ? m.id : null;
+      },
+      Number(env('LOW_WAIT', '600')),
+    )
+      .then((h) => h.jsonValue())
+      .catch(() => null);
+    if (low === null) {
+      fail('check 10: no flight on a low-level leg within LOW_WAIT seconds at 64×');
+      return;
+    }
     check(
       await page.evaluate((mid) => window.bearing.followMission(mid), low),
       `check 10: mission ${low} could not be followed`,

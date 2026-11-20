@@ -36,7 +36,7 @@ Guidance for Claude Code sessions in this repository. **`docs/roadmap.md` is the
 | Followed flights         | `npx vitest run --config vitest.tools.config.ts tools/follow.preview.ts` (env: `SEED`, `FLIGHTS=type:mission[:phase],…`, `TOD`, `WEATHER`, `W`, `H`), then `SHOTS=follow-<type>-<mission> OUT_DIR=tools/out node tools/freeflight.screens.mjs` with `npm run dev` up: the chase view of a followed flight with its read-only HUD (decision 252) |
 | Ground map               | `npx vitest run --config vitest.tools.config.ts tools/groundMap.preview.ts` (env: `SEED`, `LAT`/`LON`, `KM`, `ALT`, `RANGES`) → `tools/out/groundmap-<nm>.png` and `.json` (decision 226) |
 | Map CPU and GPU timings  | In the app: `?dev&cputime=1` logs the map's CPU per section and the app's frame every 5 s; `?dev&gputime=1` GPU time per view and pass (decisions 242, 245). Headless: `SCENE=strategic PERF=1 MOVE=1` in `tools/render.preview.ts` prints the map's CPU per section, still and panning |
-| Browser smoke test       | `npm run build && npm run preview`, then `node tools/browser.smoke.mjs` (env: `MODE`, `WORLD`, `ONLY`, `SCENES`, `OUT`) → `tools/out/browser/` (decision 144); `ONLY=follow` follows a flight of each demo type with checks 7 and 10 (`FOLLOW`, `LOW=0`, `NIGHT=0`; decisions 252, 253) |
+| Browser smoke test       | `npm run build && npm run preview`, then `node tools/browser.smoke.mjs` (env: `MODE`, `WORLD`, `ONLY`, `SCENES`, `OUT`) → `tools/out/browser/` (decision 144); `ONLY=follow` follows a flight of each demo type with checks 7 and 10 (`FOLLOW`, `LOW=0`, `LOW_WAIT`, `NIGHT=0`; decisions 252, 253) |
 
 ## Directory map
 

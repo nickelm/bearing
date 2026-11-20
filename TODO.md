@@ -193,7 +193,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] Check 10 headless: a low-level shot through a valley in `tools/follow.preview.ts` (the planned routes there have no terrain floor)
 - [x] Owner: follow a mission of each demo type and return (2026-11-20, GPU smoke run passed on seed 4)
 - [x] Owner's review (decision 253): formations by phase in the plug-ins; penetrators low on interdiction and CAS at 2,500 m; free look orbits the aircraft; HUD only by default, V for displays or a clean view; FPS gauge under the follow bar; aircraft near a base on its sited field; the Kestrel's gear folds inward
-- [ ] Check 10 over truly low flight: the smoke test's `follow` part now follows a flight below 400 m (a penetrator on interdiction); run it on the GPU
+- [ ] Check 10 over truly low flight: the smoke test's `follow` part now follows a flight on a low-level leg (a penetrator on interdiction, a low strike); run it on the GPU
 - [ ] Stretch (R6.6, owner): Follow and jump-in ease from the map's orbit down into the aircraft
 - [ ] Owner: look at the formations, the low-level interdiction and the orbit (decision 253)
 - [ ] Spectator displays' radar and threat formats are empty until R2.6's sensors read campaign contacts
