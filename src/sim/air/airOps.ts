@@ -360,7 +360,7 @@ export class AirOps {
     const t = aircraftType(m.aircraftType);
     m.aborted = reason;
     const home = this.basePoint(m.base, sim.time + 3600);
-    // The turn home through a real radius at the rejoin's bank, not a corner (decision 279).
+    // The turn home through a real radius at the rejoin's bank, not a corner (decision 281).
     let route = returnRoute(
       m.route,
       sim.time,

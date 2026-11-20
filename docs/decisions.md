@@ -4559,7 +4559,7 @@ Decision 256's AI checks had run gear down, and the gear's drag had been slowing
 
 **Reason:** the owner asked for specific buildings in cities to be strike targets. Campaign logic already plans strikes on the infrastructure's targets (rule 9); this makes each one a particular complex in its town that a pilot can find and see broken. The generator stays the world's: it realizes sites it is given and knows nothing of who asked.
 
-### 278. Wind at full fidelity
+### 280. Wind at full fidelity
 
 **Date:** 2026-11-20
 **Decision:** A promoted flight's aircraft fly in the campaign's air: before each step `airVelocity` (Free Flight's, decision 143) sets the wind and gusts at the aircraft from the worker's weather frames on the main thread (`SimClient.weather`), at the flight's own game time and its height above the drawn ground. The route tracker already flies ground speed and track and turns them into airspeed with the wind it feels (decision 256), so the flight keeps its route in wind; the player feels the same air after a take-over. The worker's rebuilt routes still leave winds aloft out (decision 257; TODO).
@@ -4568,11 +4568,11 @@ Decision 256's AI checks had run gear down, and the gear's drag had been slowing
 
 **Reason:** R2.5 (TODO): the promoted flight flew in still air.
 
-### 279. An abort turns home through a real radius; every route turn aims again after each step
+### 281. An abort turns home through a real radius; every route turn aims again after each step
 
 **Date:** 2026-11-20
-**Decision:** `returnRoute` (decision 250's abort) takes an optional turn, and AirOps gives it `turnToward` at the rejoin's 45° bank (decision 256): an aborted flight turns from its heading toward home through a real radius instead of reversing at a corner. `turnToward` now aims again after each 15° step and takes the rest in the last, smaller step. Before, it aimed once from where the turn began, and near the point turned to, the turn's own radius moved the flight enough to leave a corner at its end: an abort 45 km from home on the small test planet ended its turn 26° off the way home. The egress turns (decision 255) and the rejoin's (decision 256) turn the same way, so every world's routes change a little after a pass or a station, and the campaign's state with them.
+**Decision:** `returnRoute` (decision 250's abort) takes an optional turn, and AirOps gives it `turnToward` at the rejoin's 45° bank (decision 256): an aborted flight turns from its heading toward home through a real radius instead of reversing at a corner. `turnToward` now aims again after each 15° step and takes the rest in the last, smaller step. Before, it aimed once from where the turn began, and near the point turned to, the turn's own radius moved the flight enough to leave a corner at its end: an abort 45 km from home on the small test planet ended its turn 26° off the way home. The egress turns (decision 255) and the rejoin's (decision 256) turn the same way, so every world's routes change a little after a pass or a station, and the campaign's state with them. *Numbered 280 and 281 (wind) after the cities work's 278 and 279, which reached `main` at the same time.*
 
-**How it was checked.** `tests/rejoin.test.ts`: a CAP aborted on a racetrack leg heading away from home turns at its first leg by under 25° and has no corner over 25° to the approach (the corner route's first leg reverses by more than 150°), and its route completes; the rejoin tests pass unchanged. The unit suite, the type check and lint pass.
+**How it was checked.** `tests/rejoin.test.ts`: a CAP aborted on a racetrack leg heading away from home turns at its first leg by under 25° and has no corner over 25° to the approach (the corner route's first leg reverses by more than 150°), and its route completes; the rejoin tests pass unchanged. The unit suite, the type check and lint pass. `tools/war.preview.ts`: the same state stepped and in one jump on the demo seeds (`259dee174838e519`, `0bb125cf3ad63693`, `9fdde4dedb89aa66`), aircraft lost (A/P) 18/12, 13/12, 3/4 as in decision 256.
 
 **Reason:** R2.5 (TODO): an abort still turned home at a corner, which the follow draws and full fidelity cannot fly.

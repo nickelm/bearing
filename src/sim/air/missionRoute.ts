@@ -122,7 +122,7 @@ export function turnToward(
   const sign = Math.sign(d);
   const full = 2 * radius * Math.sin(TURN_STEP / 2);
   // Step by step, aimed again after each: the turn's own radius moves the flight, and near
-  // the point turned to that moves its bearing (decision 279). The last step takes the rest.
+  // the point turned to that moves its bearing (decision 281). The last step takes the rest.
   for (let i = 0; i < (2 * Math.PI) / TURN_STEP + 1 && sign * d > TURN_STEP / 4; i++) {
     const dh = sign * Math.min(TURN_STEP, sign * d);
     const chord = dh === sign * TURN_STEP ? full : 2 * radius * Math.sin(Math.abs(dh) / 2);

@@ -481,7 +481,7 @@ export function returnRoute(
   recovery: number,
   /**
    * Turns the builder from the flight's heading toward home through a real radius
-   * (missionRoute.ts's `turnToward` at the rejoin's bank, decision 279); without it the
+   * (missionRoute.ts's `turnToward` at the rejoin's bank, decision 281); without it the
    * way home starts at a corner, as before.
    */
   turn?: (b: RouteBuilder, home: Readonly<Dir>) => void,

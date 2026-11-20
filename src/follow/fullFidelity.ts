@@ -125,7 +125,7 @@ export class FullFidelity {
       phase: (u) => routeState((c.mission() ?? m).route, u, c.radius).phase,
       span: c.span,
     });
-    // The air they fly in: the campaign's wind and gusts, as Free Flight's (decision 278).
+    // The air they fly in: the campaign's wind and gusts, as Free Flight's (decision 280).
     for (const a of this.flight.aircraft) this.giveWind(a);
   }
 
