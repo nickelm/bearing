@@ -201,7 +201,7 @@ _Depends on R1.5, R1.6, R2.4._
 
 **Exit:** take over and hand back at every phase of a CAP mission, with the mission completing; losses and stores survive both directions.
 
-**State (2026-11-20):** begun (decision 256): promotion, demotion with the rejoin route, and the AI pilot (route, formation, station, pass and egress) run headless, and the worker holds a flown flight and rebuilds it at the handback (decision 257); the follow on full fidelity, take over in the view, the flight cap and the consequences are next (TODO).
+**State (2026-11-20):** exit met headless (decision 276): promotion and demotion with the rejoin route, the AI pilot (decision 256), the worker's hold and rebuild (decision 257), the follow at full fidelity (decision 272), take over and hand back in the view (decision 273), the flight cap (decision 274) and the session's consequences (decision 275); `tests/handoverExit.test.ts` takes over and hands back a CAP in each of its five window phases with the mission completing. Open: the owner's flight on the GPU, the held flight's fixes for the map and other flights' resolution, the plug-ins' `behavior` parts, the route's climb against the Kestrel's, and the abort's own turn (TODO).
 
 ### R2.6 Weapons, Damage and Interface Defaults — large
 

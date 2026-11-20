@@ -4352,3 +4352,12 @@ With the losses (`aircraft-lost`, crash) and the rebuilt route (`mission-rejoine
 **How it was checked.** `tests/handover.test.ts`: a CAP handed back with its lead crashed and #1 and #2 having fired one and two stores keeps two for the new lead, one record per survivor, and logs a session with one loss and three stores; a promotion after it starts the new lead with them. The other handover tests (hold, rebuild, replay hash, refusals) pass unchanged; a campaign without a take-over has no `expended`, so `tools/war.preview.ts`'s hashes do not move.
 
 **Reason:** roadmap R2.5: a session's consequences return to the worker as logged campaign events (owner decision 1); the exit asks that stores survive both directions.
+
+### 276. R2.5's exit test: take over and hand back at every phase of a CAP
+
+**Date:** 2026-11-20
+**Decision:** `tests/handoverExit.test.ts` runs the roadmap's exit criterion headless on seed 7's campaign world: the first CAP of three or more aircraft after two hours is taken over 20 s into each phase of its jump-in window in turn, on the route as it stands after the previous handback (climb-out, ingress, fence-in, on station, egress), flown at full fidelity for a minute and handed back. Each session promotes the flight from its analytic state as the follow does, the player's aircraft flown by a route tracker through its own input source (as mouse aim would be); each session the lead fires one store, and in the second the last wingman crashes. At every promotion the flight has the campaign's aircraft and the lead the stores fired before; at every handback the mission is released, one aircraft short after the crash, the survivors' stores kept, and its phase never runs backward. The log has one `flight-session` per phase and the crash as a loss, and the mission resolves and completes on its last rebuilt route. The flight flies over sea level: routes stand on the coarse ground's floor (decision 240), and the drawn ground is the renderer's.
+
+**How it was checked.** The test passes in 12 s; the unit suite, the type check and lint pass.
+
+**Reason:** roadmap R2.5's exit (take over and hand back at every phase of a CAP mission, with the mission completing; losses and stores survive both directions). The owner's flight on the GPU remains for the milestone's checkpoint.
