@@ -4603,3 +4603,18 @@ Decision 256's AI checks had run gear down, and the gear's drag had been slowing
 **How it was checked.** `tests/air.test.ts`: a held flight's badge stands at the given point, and its route and trail are the ones left out. The unit suite, the type check and lint pass.
 
 **Reason:** R2.5 (TODO): the map drew the held flight on its old route.
+
+### 285. Stores and pylons: a stores catalog, pylons in the bundles, loadouts by station
+
+**Date:** 2026-11-20
+**Decision:** R2.6 begins with the data its weapons hang from.
+
+- **The stores catalog** (`src/data/stores.json`, read by `sim/air/stores.ts`): each store's name in the setting, the real store its numbers come from, its kind (IR missile, radar missile, bomb, rockets, tank), mass, length, diameter and drag area. Six to start: a short-range and a medium-range missile (AIM-9M and AIM-7M figures), 230 and 900 kg bombs (Mk 82, Mk 84), a 19-rocket pod (LAU-61) and a 1,400 l tank. It lives outside `src/data/models/`, whose every JSON file the model library reads as a spec.
+- **Pylons** are a bundle's `pylons` (rule 17): an id, where the store hangs in the model's frame, whether it is mirrored, and which stores it can carry. A mirrored pylon is two stations, `<id>.right` and `<id>.left`.
+- **A loadout's `stations`** map pylon ids to store ids; the loader refuses a station on a missing pylon or a store the pylon cannot carry. The air war keeps a loadout's id, text and radius factor as before, so nothing in any world's campaign changes.
+- **The F-21** has five pylons (wingtips, outer, middle, inner and centerline) and its two loadouts by station, as their texts say: air-to-air, 4 short-range and 2 medium-range missiles and 2 tanks; strike, 2 900 kg bombs, 2 short-range missiles and 2 tanks. The bundle test's gaps for it are now calibration alone.
+- `stationLoads`, `storeCounts`, `remainingStores` and `storesLoad` turn a loadout and what was expended (promotion's `StoresState`, decision 275) into the stores left, their mass and their drag area, for the flight model, the stores format and the drawn stores next.
+
+**How it was checked.** `tests/stores.test.ts`: the catalog; the F-21's loadouts count as their texts; mirrored stations; the strike load's mass; stores left after some are expended; a station on a pylon that cannot carry its store refused. `tests/bundles.test.ts` with the F-21's gaps. The unit suite, the type check and lint pass.
+
+**Reason:** roadmap R2.6, *Pylons and loadouts in the bundles*.

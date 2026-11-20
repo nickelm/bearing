@@ -1,0 +1,59 @@
+{
+  "notes": "The stores catalog (R2.6, decision 285): what pylons carry. Names are the setting's own; the reference is the real store the numbers come from. Mass in kg (a tank's full), length and diameter in m, dragArea in m2 (drag = dynamic pressure x dragArea, added for every store beyond an aircraft's standard load). Kinds: ir-missile, radar-missile, bomb, rockets, tank.",
+  "stores": {
+    "srm": {
+      "name": "short-range missile",
+      "reference": "AIM-9M",
+      "kind": "ir-missile",
+      "mass": 86,
+      "length": 2.87,
+      "diameter": 0.127,
+      "dragArea": 0.008
+    },
+    "mrm": {
+      "name": "medium-range missile",
+      "reference": "AIM-7M",
+      "kind": "radar-missile",
+      "mass": 231,
+      "length": 3.66,
+      "diameter": 0.203,
+      "dragArea": 0.025
+    },
+    "bomb-230": {
+      "name": "230 kg bomb",
+      "reference": "Mk 82",
+      "kind": "bomb",
+      "mass": 241,
+      "length": 2.21,
+      "diameter": 0.273,
+      "dragArea": 0.015
+    },
+    "bomb-900": {
+      "name": "900 kg bomb",
+      "reference": "Mk 84",
+      "kind": "bomb",
+      "mass": 925,
+      "length": 3.84,
+      "diameter": 0.458,
+      "dragArea": 0.035
+    },
+    "rockets-19": {
+      "name": "rocket pod, 19 rockets",
+      "reference": "LAU-61",
+      "kind": "rockets",
+      "mass": 280,
+      "length": 1.9,
+      "diameter": 0.4,
+      "dragArea": 0.04
+    },
+    "tank-1400": {
+      "name": "1,400 l drop tank",
+      "reference": "370 gal tank",
+      "kind": "tank",
+      "mass": 1260,
+      "length": 4.6,
+      "diameter": 0.66,
+      "dragArea": 0.045
+    }
+  }
+}

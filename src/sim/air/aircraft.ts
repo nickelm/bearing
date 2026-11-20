@@ -72,6 +72,8 @@ export interface Loadout {
   stores: string;
   /** Combat radius with this load as a share of the type's radius (drag and weight). */
   radiusFactor: number;
+  /** What hangs on each pylon (pylon id → store id; decision 285), where the bundle has pylons. */
+  stations?: Record<string, string>;
 }
 
 export interface AircraftType {

@@ -201,7 +201,7 @@ _Depends on R1.5, R1.6, R2.4._
 
 **Exit:** take over and hand back at every phase of a CAP mission, with the mission completing; losses and stores survive both directions.
 
-**State (2026-11-20):** exit met headless (decision 276): promotion and demotion with the rejoin route, the AI pilot (decision 256), the worker's hold and rebuild (decision 257), the follow at full fidelity (decision 272), take over and hand back in the view (decision 273), the flight cap (decision 274) and the session's consequences (decision 275); `tests/handoverExit.test.ts` takes over and hands back a CAP in each of its five window phases with the mission completing. Open: the owner's flight on the GPU, the held flight's fixes for the map and other flights' resolution, the plug-ins' `behavior` parts, the route's climb against the Kestrel's, and the abort's own turn (TODO).
+**State (2026-11-20):** done in code (decisions 256, 257, 272–277, 280–284): promotion, demotion and the rejoin route, the AI pilot, the worker's hold and rebuild, the follow at full fidelity in the campaign's wind, take over and hand back (T), the flight cap, the session's consequences, the plug-ins' behavior parts, the abort's turn and the F-21's climb; the exit test passes headless (`tests/handoverExit.test.ts`), and the owner took over and handed back an F-21 on the GPU (gear fixed in decision 277). Open for the owner: a CAP take-over waits on the F-25's and F-28's flight data (R2.7), since the F-21 flies only interdiction on seed 4.
 
 ### R2.6 Weapons, Damage and Interface Defaults — large
 

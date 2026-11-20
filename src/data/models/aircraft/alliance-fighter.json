@@ -495,6 +495,23 @@
       [-5.4, 0.05, 3]
     ]
   },
+  "pylons": [
+    { "id": "wingtip", "mirror": true, "at": [-1.75, 0, 4.9], "carries": ["srm"] },
+    { "id": "outer", "mirror": true, "at": [-1.85, -0.35, 3.9], "carries": ["srm"] },
+    {
+      "id": "middle",
+      "mirror": true,
+      "at": [-1.4, -0.45, 2.9],
+      "carries": ["srm", "mrm", "bomb-230", "bomb-900", "rockets-19"]
+    },
+    {
+      "id": "inner",
+      "mirror": true,
+      "at": [-0.96, -0.55, 1.9],
+      "carries": ["mrm", "bomb-230", "bomb-900", "rockets-19", "tank-1400"]
+    },
+    { "id": "centerline", "at": [-0.6, -0.95, 0], "carries": ["tank-1400"] }
+  ],
   "airWar": {
     "id": "f21",
     "order": 1,
@@ -515,12 +532,14 @@
       {
         "id": "air-to-air",
         "stores": "2 medium-range and 4 short-range missiles, 2 tanks",
-        "radiusFactor": 1
+        "radiusFactor": 1,
+        "stations": { "wingtip": "srm", "outer": "srm", "middle": "mrm", "inner": "tank-1400" }
       },
       {
         "id": "strike",
         "stores": "2 × 900 kg bombs, 2 short-range missiles, 2 tanks",
-        "radiusFactor": 0.85
+        "radiusFactor": 0.85,
+        "stations": { "wingtip": "srm", "middle": "bomb-900", "inner": "tank-1400" }
       }
     ]
   },

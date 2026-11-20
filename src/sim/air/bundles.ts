@@ -23,6 +23,8 @@
  *   degrees), or `{ "kind": "helicopter" }` for the rig scaled by the main rotor.
  * - `pylons`, `calibration`: R2.6 and R2.2 fill them.
  */
+import { checkStations, parsePylons, StoresError } from './stores';
+import type { PylonSpec } from './stores';
 import { HOUR, KM, KNOT, MINUTE } from '../../core/units';
 import type { AvionicsProfile } from '../avionics/profiles';
 import type { AircraftRole, AircraftType, Loadout } from './aircraft';
@@ -67,7 +69,8 @@ export interface AircraftBundle {
   order: number | null;
   avionics: AvionicsProfile | null;
   rig: RigSpec | null;
-  pylons: unknown[] | null;
+  /** Its pylons (decision 285), or null. */
+  pylons: PylonSpec[] | null;
   calibration: Record<string, unknown> | null;
 }
 
@@ -119,11 +122,18 @@ function parseAirWar(raw: unknown, name: string, geometry: string | null, what: 
   }
   const loadouts: Loadout[] = o.loadouts.map((l, i) => {
     const lo = obj(l, `${what}.loadouts[${i}]`);
-    return {
+    const loadout: Loadout = {
       id: str(lo, 'id', `${what}.loadouts[${i}]`),
       stores: str(lo, 'stores', `${what}.loadouts[${i}]`),
       radiusFactor: num(lo, 'radiusFactor', `${what}.loadouts[${i}]`),
     };
+    if (lo.stations !== undefined) {
+      const st = obj(lo.stations, `${what}.loadouts[${i}].stations`);
+      for (const [k, v] of Object.entries(st))
+        if (typeof v !== 'string') throw new BundleError(`${what}.loadouts[${i}].stations.${k}`);
+      loadout.stations = st as Record<string, string>;
+    }
+    return loadout;
   });
   const type: AircraftType = {
     id: str(o, 'id', what),
@@ -210,6 +220,19 @@ export function parseBundle(raw: unknown, id: string): AircraftBundle {
   if (parts && model) throw new BundleError(`${id}: has its own parts and names model "${model}"`);
   const geometry = parts ? id : model;
   const air = o.airWar === undefined ? null : parseAirWar(o.airWar, name, geometry, `${id}.airWar`);
+  let pylons: PylonSpec[] | null;
+  try {
+    pylons = o.pylons === undefined ? null : parsePylons(o.pylons, `${id}.pylons`);
+    // Every loadout's stations name the bundle's pylons and stores they carry.
+    for (const l of air?.type.loadouts ?? []) {
+      if (!l.stations) continue;
+      if (!pylons) throw new StoresError(`${id}.airWar.loadouts.${l.id}: stations without pylons`);
+      checkStations(l.stations, pylons, `${id}.airWar.loadouts.${l.id}`);
+    }
+  } catch (e) {
+    if (e instanceof StoresError) throw new BundleError(e.message);
+    throw e;
+  }
   return {
     id,
     name,
@@ -222,7 +245,7 @@ export function parseBundle(raw: unknown, id: string): AircraftBundle {
     order: air?.order ?? null,
     avionics: o.avionics === undefined ? null : parseAvionics(o.avionics, `${id}.avionics`),
     rig: o.rig === undefined ? null : parseRig(o.rig, `${id}.rig`),
-    pylons: o.pylons === undefined ? null : (o.pylons as unknown[]),
+    pylons,
     calibration: o.calibration === undefined ? null : obj(o.calibration, `${id}.calibration`),
   };
 }

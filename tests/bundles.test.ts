@@ -56,7 +56,7 @@ describe('aircraft bundles', () => {
   it('list what the demo roster lacks', () => {
     const gaps = (typeId: string) =>
       bundleGaps(bundles.find((b) => b.airWar?.id === typeId)!).join(', ');
-    expect(gaps('f21')).toBe('pylons, calibration');
+    expect(gaps('f21')).toBe('calibration');
     expect(gaps('uh68')).toBe('pylons, calibration');
     expect(gaps('ve18')).toBe('geometry, flight, rig, pylons, calibration');
     expect(gaps('vo31')).toBe('flight, pylons, calibration');
