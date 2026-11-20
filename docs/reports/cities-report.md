@@ -99,7 +99,7 @@ New files: `src/worldgen/settlements/`, `src/render/sim/city/`, `src/render/sim/
 - **Two buildings** outside their parcel over 20 seeds (Mediterranean and Arid cities): probably landmark or stadium placement against a non-convex parcel.
 - **Nordic cities read dark** from 1 km: black roofs and dark wooden walls, as the style says, in a city of 3.6 million (seed 4's largest). Nordic may want a lighter palette for its large cities.
 - **Faces dropped** at about 6% of graph faces (insets that fail on thin or folded faces): the gaps show as natural ground.
-- **Unit suite.** `tests/gpu/mapSoak.test.ts` fails under lavapipe (geometries 274 > 234), as on an unmodified `main`; all else passes (1,348 tests).
+- **Unit suite.** `tests/gpu/mapSoak.test.ts` fails under lavapipe (geometries 274 > 234), as on an unmodified `main`; the other 1,357 tests pass after the rebase on `main`.
 - **Plans per seed.** The 20-seed metrics plan five cities, eight towns and eight villages per seed, and run without rivers.
 
 ## The Three Most Valuable Next Steps
