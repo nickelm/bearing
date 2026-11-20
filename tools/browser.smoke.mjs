@@ -788,6 +788,7 @@ async function followPart() {
     const t0 = Date.now();
     let low = null;
     let lastLog = 0;
+    let clock = 64;
     while (low === null && Date.now() - t0 < seconds(waitS)) {
       const r = await findLow();
       low = r.id;
@@ -800,6 +801,12 @@ async function followPart() {
               ? `; the next starts at T+${(r.next / 3600).toFixed(1)} h`
               : '; none among the flights planned yet'),
         );
+      }
+      // Near a low leg the clock slows to 4×: at 64× a six-minute leg passes in five seconds.
+      const rate = low === null && r.next - r.now < 900 ? 4 : 64;
+      if (rate !== clock) {
+        clock = rate;
+        await page.evaluate((x) => window.bearing.sim.setRate(x), rate);
       }
       if (low === null) await new Promise((res) => setTimeout(res, 250));
     }

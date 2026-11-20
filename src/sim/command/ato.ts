@@ -505,8 +505,12 @@ export class AirTaskingOrders implements TickProcess {
         continue;
       }
       const at = aircraftType(sq.type);
-      const rank = roles.indexOf(at.role);
-      if (rank < 0 || sq.aircraft < at.flightSize) continue;
+      const order = roles.indexOf(at.role);
+      if (order < 0 || sq.aircraft < at.flightSize) continue;
+      // Roles that rank alike leave the choice to distance (decision 254); a defended
+      // target still goes to the types that fly it low first.
+      const low = profile.lowRoles?.includes(at.role) ?? false;
+      const rank = profile.rolesAlike ? (need.defended && !low ? 1 : 0) : order;
       const loadout = at.loadouts.find((l) => l.id === profile.loadout) ?? at.loadouts[0]!;
       const dist = arcDistance(air.basePoint(sq.base, tot), need.target.point, R);
       if (dist > at.combatRadius * loadout.radiusFactor * this.w.input.rangeFactor) continue;

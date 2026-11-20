@@ -267,13 +267,15 @@ Pass times are analytic and detection rolls come from per-side forks, so the pic
 | Combat air patrol | Air superiority, multirole | Station over front, base, or convoy |
 | Fighter sweep | Air superiority | Offensive counter-air ahead of strike waves |
 | Escort | Air superiority, multirole | Attached to a strike package |
-| Interdiction | Multirole, strike | Bridges, roads, rail, supply columns behind the front |
+| Interdiction | Multirole, strike | Bridges, roads, rail, supply columns behind the front; the nearest able squadron flies it, penetrators first against defended targets (decision 254) |
 | Low-level penetration strike | F-111, A-6, and Su-24 analogues | Deep targets at night or in bad weather, terrain-following; A-6 analogue from carriers |
 | Stealth strike | F-117 analogue | Single-ship night strikes on heavily defended high-value targets; Alliance only |
 | SEAD | F-4G analogue | Suppresses air defenses for a package |
 | Close air support | A-10 and Su-25 analogues | Front segments under pressure |
 | Attack helicopter CAS | AH-64 and Mi-24 analogues | Short range, terrain masking, close to the front |
 | Anti-shipping | Maritime bombers, strike | Convoys, carrier groups, amphibious groups |
+| Airfield attack | Penetrators, multirole | Runway-denial weapons (Durandal analogues) crater runways and close a base for hours; shelters, aircraft on the ground and fuel (decision 254) |
+| Carrier alpha strike | A carrier's air wing | The whole wing in one package (strike, escort, SEAD, tanker) against a fleet, a port or an airfield (decision 254) |
 | Strategic bombing | Strategic bombers | Industry and logistics hubs |
 | Reconnaissance | RF-4 and MiG-25R analogues | Reveals targets for later strikes |
 | Support | AWACS, tankers | Long stations; joinable but rarely eventful |
@@ -283,10 +285,11 @@ Pass times are analytic and detection rolls come from per-side forks, so the pic
 | Scramble | Air superiority | Quick-reaction alert against a raid the air picture shows |
 | Maritime patrol | Maritime bombers | Finds convoys and naval groups |
 | Helicopter assault and troop insertion | Utility and heavy helicopters | Landing zones near the front |
+| Amphibious and airborne seizure | Transports, helicopters, escorts, CAS | Takes an island airfield or port; a squadron then stages forward onto it (decision 254) |
 | Combat search and rescue | Utility helicopters with escort and cover | Every ejection on either side (see *The Game Loop*) |
 | Medical evacuation | Utility helicopters | Casualties from the front |
 
-Each mission records its type, side, theater, package, target or station, and a timeline of phases: departure, climb-out, ingress, fence-in, on target or on station, egress, approach, and recovery. Its route's altitudes follow the mission and the type (decision 253): most types cruise at their cruise altitude, penetrators (the F-111, A-6 and Su-24 analogues) fly interdiction low and fast from the fence-in, and CAS works the front at about 2,500 m. Each flight flies the formation its plug-in names for the phase: close on the ground and near the field, route in cruise, combat spread line abreast from the fence-in for fighters, in trail for attack runs, and a stream for transports and bombers, changing over about 45 seconds.
+Each mission records its type, side, theater, package, target or station, and a timeline of phases: departure, climb-out, ingress, fence-in, on target or on station, egress, approach, and recovery. Its route's altitudes follow the mission and the type (decision 253): most types cruise at their cruise altitude, penetrators (the F-111, A-6 and Su-24 analogues) fly interdiction low and fast from the fence-in when they fly it (the nearest able squadron does, decision 254), and CAS works the front at about 2,500 m. Each flight flies the formation its plug-in names for the phase: close on the ground and near the field, route in cruise, combat spread line abreast from the fence-in for fighters, in trail for attack runs, and a stream for transports and bombers, changing over about 45 seconds.
 
 ## Mission Search and Jump-In
 

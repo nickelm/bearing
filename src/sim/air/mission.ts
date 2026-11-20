@@ -125,6 +125,12 @@ export interface MissionProfile {
    * as the F-111 and Su-24 analogues go in low and fast on interdiction.
    */
   lowRoles?: readonly AircraftRole[];
+  /**
+   * Its roles rank alike (decision 254): the nearest squadron that can fly it takes it, so
+   * availability, base and carrier decide, except that a defended target goes to the
+   * `lowRoles` first.
+   */
+  rolesAlike?: boolean;
   /** Altitude of the station's work (m above sea level), below cruise: CAS works the front at it. */
   stationAltitude?: number;
   stationTime: readonly [number, number];
@@ -163,6 +169,7 @@ export const MISSION_PROFILES: Record<MissionType, MissionProfile> = {
     station: 'pass',
     low: false,
     lowRoles: ['deep-strike', 'carrier-attack'],
+    rolesAlike: true,
     stationTime: [2 * MINUTE, 4 * MINUTE],
   },
   'deep-strike': {

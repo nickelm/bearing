@@ -154,7 +154,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] CAP stations by front length (one per 250 km, two to four), scored by the pressure near them (discovered: two stations left long fronts open, so almost no interceptions)
 - [x] Rear cities as supply sources (discovered: seed 10's Alliance had no depots on its supply lines)
 - [ ] R2.10 replaces the priors: each type's `calibration` block and the resolvers' constants (KILL_RATE, AD_RATE, P_HIT, DAMAGE_PER_HIT)
-- [ ] Strikes on airbases (deep strike, provisional) have no effect until R4.2: aircraft on the ground, stocks and runways
+- [ ] Strikes on airbases (deep strike, provisional) have no effect until R4.2's airfield attack: runway denial (Durandal analogues), shelters, aircraft on the ground, fuel (decision 254)
 - [ ] A strike's damage does not yet change supply beyond cut bridges (depots, rail yards and road edges feed R2.3's supply)
 
 ### R2.3 The ground war in aggregate
@@ -193,9 +193,9 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] Check 10 headless: a low-level shot through a valley in `tools/follow.preview.ts` (the planned routes there have no terrain floor)
 - [x] Owner: follow a mission of each demo type and return (2026-11-20, GPU smoke run passed on seed 4)
 - [x] Owner's review (decision 253): formations by phase in the plug-ins; penetrators low on interdiction and CAS at 2,500 m; free look orbits the aircraft; HUD only by default, V for displays or a clean view; FPS gauge under the follow bar; aircraft near a base on its sited field; the Kestrel's gear folds inward
-- [ ] Check 10 over truly low flight: the smoke test's `follow` part now follows a flight on a low-level leg (a penetrator on interdiction, a low strike); run it on the GPU
+- [x] Check 10 over truly low flight: the owner's GPU run followed an RF-34 on a low-level leg, the camera 100–106 m above the ground (2026-11-20)
 - [ ] Stretch (R6.6, owner): Follow and jump-in ease from the map's orbit down into the aircraft
-- [ ] Owner: should interdiction take penetrators (F-124, Vo-37) before multirole types? Today its role order puts the F-21 and Ar-23 first, so on seed 4 all interdiction flies at cruise altitude and only deep strikes and reconnaissance fly low
+- [x] Interdiction by the nearest able squadron, penetrators first against defended targets (owner: both should fly it; decision 254)
 - [ ] Owner: look at the formations, the low-level interdiction and the orbit (decision 253)
 - [ ] Spectator displays' radar and threat formats are empty until R2.6's sensors read campaign contacts
 - [ ] Afterburner, control surfaces and speedbrake of the followed aircraft stay at rest until R2.5's flight model drives them
@@ -293,11 +293,11 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 ## R4. Breadth
 
 - [ ] R4.1 Roster (large)
-- [ ] R4.2 Mission catalog (large)
+- [ ] R4.2 Mission catalog (large); with airfield attack (runway denial) and carrier alpha strikes (decision 254)
 - [ ] R4.3 Helicopter track (large)
 - [ ] R4.4 Transport operations (medium)
 - [ ] R4.5 Crews (large)
-- [ ] R4.6 Naval war (large)
+- [ ] R4.6 Naval war (large); with amphibious and airborne seizure of an airfield and a squadron staged onto it, the Iceland operation of *Red Storm Rising* (decision 254)
 - [ ] R4.7 Power lines (small)
 
 ## R5. Dynamic campaign

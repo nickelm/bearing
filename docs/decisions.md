@@ -4207,3 +4207,14 @@ That part could not run here: in Chromium on lavapipe the app stops drawing afte
 Left for later, in TODO: the eased dissolve from the orbit into the aircraft (a stretch goal for R6.6, owner), the E-5's own model (R2.7), and check 10 over truly low flight (the GPU run's CAS was climbing out, 1.7 km above the ground).
 
 **Reason:** the owner's review of R2.4's follow on a real GPU.
+
+### 254. Interdiction by the nearest able squadron; the owner's campaign direction (alpha strikes, airfield attack, seizures)
+
+**Date:** 2026-11-20
+**Decision:**
+
+- **Interdiction's squadrons.** The owner wants penetrators and multirole types both to fly interdiction, as the war, the aircraft available and the base (a carrier or not) allow. The interdiction profile's roles now rank alike (`MissionProfile.rolesAlike`): the ATO takes the nearest squadron that can fly it, within range, the ledger and its base's stocks, as for every type; against a defended target (the need's `defended`, which also adds the escort) its `lowRoles` (the F-124, A-14 and Vo-37) come first and go in low (decision 253). Before, its role order put the multirole types first, so on seed 4 the F-21 and Ar-23 flew all of it. A headless day now gives interdiction to the F-21 (19), the F-124 (4, low) and the Ar-23 (6) on seed 4, the F-124 (7, low), the Ar-23 (6) and the F-21 (3) on seed 7, and the F-21 and Ar-23 on seed 10, whose Alliance has no penetrator in range; flights with low legs start 1.5–2.5 game hours in on every seed. `tools/war.preview.ts`: the same state stepped and in one jump (`18ce2496b3d85040`, `7fcf7903935f0a21`, `75d06312b92a6e3c`); aircraft lost (A/P) 22/20, 11/18, 3/1.
+- **The campaign's direction** (owner, 2026-11-20): *Red Storm Rising* and the novels like it are the model, as the design's opening says. Three operations from it join the roadmap, each with its plug-in when its milestone comes: **airfield attack** with runway-denial weapons (Durandal analogues: cratered runways close a base for hours; shelters, aircraft on the ground and fuel are targets), which replaces the provisional "strikes on airbases" that do nothing yet (R4.2); **carrier alpha strikes**, a whole air wing in one package (R4.2); and **amphibious and airborne seizure** of an island airfield or port, after which a squadron stages forward onto it, as in the novel's Iceland operation with its MiG-29 squadron (R4.6, with R5.1's logistics to keep it supplied). `docs/design.md`'s mission table and `docs/roadmap.md`'s R4.2 and R4.6 say so.
+- **The smoke test's check 10** slows the clock to 4× within 15 game minutes of the next low leg: on the owner's run a six-minute leg at T+5.6 h passed in five seconds at 64× between two polls, and the check waited until T+7.3 h.
+
+**Reason:** the owner's review of R2.4's follow on the GPU (all checks passed, check 10's camera 100–106 m above the ground at low level).
