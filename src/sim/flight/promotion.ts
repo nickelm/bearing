@@ -110,7 +110,13 @@ export function aircraftFromPose(
   m.afterburner = 0;
   // Long airborne, as far as the laws know: not the moment of a liftoff.
   if (pose.airborne) m.lawState.airborne = 30;
-  return new FlownAircraft(m, neutralControls(), type);
+  // The controls match the state: gear handle up in the air (the neutral controls stand on a
+  // runway with it down, which would lower the gear at cruise speed and fail its doors).
+  const controls = neutralControls();
+  controls.gearDown = !pose.airborne;
+  controls.parkingBrake = !pose.airborne;
+  controls.throttle = m.power;
+  return new FlownAircraft(m, controls, type);
 }
 
 /**

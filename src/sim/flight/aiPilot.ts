@@ -139,6 +139,13 @@ export const FORMATION_GAINS: Readonly<TrackerGains> = {
 export const SPEED_MARGIN = 30;
 /** Airspeed short of the command (m/s) at which the afterburner may be used. */
 export const AB_SHORT = 10;
+/**
+ * Calibrated airspeed over the command (m/s) at which the speedbrake comes out, and under
+ * which it goes in again: a wingman coming out of the outside of a turn has tens of m/s
+ * to lose, more than idle power sheds in a clean jet.
+ */
+export const SPEEDBRAKE_OUT = 12;
+export const SPEEDBRAKE_IN = 4;
 /** The bank the speed envelope always allows (rad). */
 export const MIN_BANK = 10 * DEG;
 /** Flight path (rad, descending) below the least speed. */
@@ -251,6 +258,10 @@ export class PoseTracker {
       ctl,
       dt,
     );
+    // Too fast with the power at idle: the speedbrake, with some hysteresis.
+    const over = tel.cas - cas;
+    if (over > SPEEDBRAKE_OUT) ctl.speedbrake = true;
+    else if (over < SPEEDBRAKE_IN) ctl.speedbrake = false;
     const s = this.state;
     s.behind = behind;
     s.aside = aside;

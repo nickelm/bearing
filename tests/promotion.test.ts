@@ -40,6 +40,7 @@ describe('promotion', () => {
       expect(model.pos.distanceTo(new Vec3d(...s.pos))).toBeLessThan(1e-6);
       expect(model.vel.distanceTo(new Vec3d(...s.velocity))).toBeLessThan(1e-6);
       expect(model.gear).toBe(0);
+      expect(a.flown.controls.gearDown).toBe(false);
       expect(model.power).toBeGreaterThan(0);
       expect(model.fuel / model.spec.mass.fuel).toBeCloseTo(share, 9);
       expect(a.stores).toEqual({ loadout: 'air-to-air', expended: {} });
@@ -107,6 +108,11 @@ describe('the AI pilots of a promoted CAP flight', () => {
       }
     }
     expect(f.aircraft.map((a) => a.flown.crashed)).toEqual([null, null]);
+    // The gear stays up the whole way, its doors whole.
+    for (const a of f.aircraft) {
+      expect(lead(a).gear).toBe(0);
+      expect(lead(a).gearDamaged).toBe(false);
+    }
     // The route climbs faster than the Kestrel can at its climb speed: it follows late, not stalled.
     expect(worst).toBeLessThan(5000);
     expect(worstOnStation).toBeLessThan(400);

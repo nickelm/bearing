@@ -4522,3 +4522,14 @@ With the losses (`aircraft-lost`, crash) and the rebuilt route (`mission-rejoine
 **How it was checked.** The test passes in 12 s; the unit suite, the type check and lint pass.
 
 **Reason:** roadmap R2.5's exit (take over and hand back at every phase of a CAP mission, with the mission completing; losses and stores survive both directions). The owner's flight on the GPU remains for the milestone's checkpoint.
+
+### 277. Promoted aircraft with the gear handle up; the AI pilot's speedbrake
+
+**Date:** 2026-11-20
+**Decision:** The owner's first take-over found the gear coming down and staying down. Promotion (decision 256) gave each aircraft `neutralControls()`, which stand on a runway with the gear handle down, so every promoted aircraft lowered its gear at once; at cruise speed that is a gear overspeed, which fails the doors and holds the gear down (decision 207). A take-over then copied the AI's controls, gear down included, to the player. Promotion now sets the controls from the pose: gear handle and parking brake down only on the ground, the throttle at the promoted power.
+
+Decision 256's AI checks had run gear down, and the gear's drag had been slowing the wingman after each racetrack turn. With the gear up, a wingman leaving the outside of a turn about 35 kt faster than the lead came out up to 800 m ahead of its slot at idle. The route tracker (`PoseTracker`) now puts the speedbrake out when the airspeed is more than 12 m/s over its command and in again under 4 m/s; the wingman's worst error on station is again within decision 256's 600 m (about 300 m after a turn).
+
+**How it was checked.** `tests/promotion.test.ts`: promoted aircraft have the gear handle up, and a CAP pair flown from the climb-out to the approach keeps its gear up with its doors whole, the lead and the wingman within their bounds. The flight lockstep test passes unchanged (the flight model is untouched); the unit suite, the type check and lint pass.
+
+**Reason:** the owner's report after the first take-over.
