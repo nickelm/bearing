@@ -9,8 +9,7 @@
  * ±SMOOTH_WINDOW of the route, so a turn takes the window's time and the
  * aircraft banks into it by the coordinated-turn angle atan(v·ω/g), capped at
  * MAX_BANK. Pitch is the flight-path angle. Position stays the route's, so the
- * flight passes its waypoints exactly. Formation slots stand behind and beside
- * the lead in the lead's frame.
+ * flight passes its waypoints exactly. The wingmen's slots are in formation.ts.
  *
  * Pure and deterministic: a pose depends on the route and the time only.
  */
@@ -27,8 +26,6 @@ export const SMOOTH_WINDOW = 10;
 export const SMOOTH_SAMPLES = 21;
 export const MAX_BANK = 60 * DEG;
 export const GRAVITY = 9.81;
-/** Spacing of a formation's slots behind and beside the lead (m). */
-export const SLOT_SPACING = 120;
 
 export interface AnalyticPose {
   /** Position (world, m). */
@@ -159,30 +156,5 @@ export function analyticPose(route: Route, t: GameTime, radius: Meters): Analyti
     climb,
     airborne: s.airborne,
     phase: s.phase,
-  };
-}
-
-/**
- * Formation slot k of a flight (0: the lead): behind the lead and alternately
- * to its right and left, SLOT_SPACING apart, in the lead's level frame.
- */
-export function slotPose(lead: AnalyticPose, k: number): AnalyticPose {
-  if (k === 0) return lead;
-  const back = SLOT_SPACING * Math.ceil(k / 2) * 0.8;
-  const side = SLOT_SPACING * Math.ceil(k / 2) * (k % 2 === 1 ? 1 : -1);
-  const f = lead.forward;
-  const u = lead.up;
-  const right: Dir = [
-    f[1] * u[2] - f[2] * u[1],
-    f[2] * u[0] - f[0] * u[2],
-    f[0] * u[1] - f[1] * u[0],
-  ];
-  return {
-    ...lead,
-    pos: [
-      lead.pos[0] - f[0] * back + right[0] * side,
-      lead.pos[1] - f[1] * back + right[1] * side,
-      lead.pos[2] - f[2] * back + right[2] * side,
-    ],
   };
 }

@@ -35,6 +35,7 @@ import type {
   Places,
 } from '../../air/mission';
 export type { Places } from '../../air/mission';
+import type { Formation } from '../../air/formation';
 import type { BaseStocks } from '../../air/orbat';
 import type { AggregateResolver, Engagement, MissionOutcome, WorldEffect } from '../../air/outcome';
 export type {
@@ -227,6 +228,12 @@ export interface MissionPlugin {
    * intercepts, or none.
    */
   engagement: Engagement;
+  /**
+   * The flight's formation in each phase (decision 253): close on the ground and near
+   * the field, route in cruise, the type's tactical formation at the target. The follow
+   * view draws it now; R2.5's formation keeping flies it.
+   */
+  formations: Partial<Record<MissionPhase, Formation>>;
 }
 
 /** The eight parts, in the table's order. */

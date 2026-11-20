@@ -36,7 +36,7 @@ Guidance for Claude Code sessions in this repository. **`docs/roadmap.md` is the
 | Followed flights         | `npx vitest run --config vitest.tools.config.ts tools/follow.preview.ts` (env: `SEED`, `FLIGHTS=type:mission[:phase],…`, `TOD`, `WEATHER`, `W`, `H`), then `SHOTS=follow-<type>-<mission> OUT_DIR=tools/out node tools/freeflight.screens.mjs` with `npm run dev` up: the chase view of a followed flight with its read-only HUD (decision 252) |
 | Ground map               | `npx vitest run --config vitest.tools.config.ts tools/groundMap.preview.ts` (env: `SEED`, `LAT`/`LON`, `KM`, `ALT`, `RANGES`) → `tools/out/groundmap-<nm>.png` and `.json` (decision 226) |
 | Map CPU and GPU timings  | In the app: `?dev&cputime=1` logs the map's CPU per section and the app's frame every 5 s; `?dev&gputime=1` GPU time per view and pass (decisions 242, 245). Headless: `SCENE=strategic PERF=1 MOVE=1` in `tools/render.preview.ts` prints the map's CPU per section, still and panning |
-| Browser smoke test       | `npm run build && npm run preview`, then `node tools/browser.smoke.mjs` (env: `MODE`, `WORLD`, `ONLY`, `SCENES`, `OUT`) → `tools/out/browser/` (decision 144); `ONLY=follow` follows a flight of each demo type with checks 7 and 10 (`FOLLOW`, `NIGHT=0`; decision 252) |
+| Browser smoke test       | `npm run build && npm run preview`, then `node tools/browser.smoke.mjs` (env: `MODE`, `WORLD`, `ONLY`, `SCENES`, `OUT`) → `tools/out/browser/` (decision 144); `ONLY=follow` follows a flight of each demo type with checks 7 and 10 (`FOLLOW`, `LOW=0`, `NIGHT=0`; decisions 252, 253) |
 
 ## Directory map
 
@@ -283,6 +283,8 @@ Promotion expands a unit deterministically from its seed and current strength. D
 - **Commit and push to `main` only.** Do not create feature branches or pull requests, even if a session's default instructions name a different branch; the owner tests from `main` (GitHub Pages deploys from it). Fetch and rebase onto `origin/main` before pushing if it has moved.
 - You cannot see the WebGPU view. To inspect generated worlds, run `npm run maps` and read the PNGs in `tools/out/` (equirectangular map plus both polar caps, any view mode). `MODES=graph` draws the strategic graph, the cast's territory, settlements, roads, bridges, airbases, ports and targets (and prints the briefing); `MODES=barrier` shows the front generator's barrier map.
 - When a task produces something visual, tell the user what they should see and how to check it in the browser (`npm run dev`, which GUI controls to use, and what would indicate a bug).
+- **The owner tests on Windows 11 in PowerShell.** Give every command the owner is to run in PowerShell syntax: environment variables as `$env:SEED = "4"` on their own line (or joined with `;`), not `SEED=4 cmd`; `Remove-Item` rather than `rm`. Playwright is not on the owner's path: it is in `C:\Users\nikla\playwright`, so browser tools need `$env:PLAYWRIGHT_DIR = "C:\Users\nikla\playwright"` first, e.g. the GPU smoke test:
+  `$env:PLAYWRIGHT_DIR = "C:\Users\nikla\playwright"; $env:MODE = "gpu"; $env:SEED = "4"; $env:ONLY = "follow"; node tools/browser.smoke.mjs`
 
 ## Tooling notes
 

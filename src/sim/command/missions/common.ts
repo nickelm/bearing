@@ -5,6 +5,7 @@
  */
 import type { Dir } from '../../../core/greatCircle';
 import { HOUR } from '../../../core/units';
+import type { Formation } from '../../air/formation';
 import type { MissionPhase, MissionTarget } from '../../air/mission';
 import { BRIDGE_CUT } from '../../ground/damage';
 import type { FrontSegment } from '../front';
@@ -91,3 +92,30 @@ export function plannedStation(m: { timeline: { phase: MissionPhase; time: numbe
   if (i < 0 || i + 1 >= m.timeline.length) return 0;
   return m.timeline[i + 1]!.time - m.timeline[i]!.time;
 }
+
+/**
+ * Formations by phase for fighters and strike aircraft (decision 253): close on the
+ * ground and near the field, route in cruise, combat spread from the fence-in.
+ */
+export const TACTICAL_FORMATIONS: Partial<Record<MissionPhase, Formation>> = {
+  departure: 'close',
+  'climb-out': 'close',
+  ingress: 'route',
+  'fence-in': 'spread',
+  'on-target': 'spread',
+  egress: 'spread',
+  approach: 'close',
+  recovery: 'close',
+};
+
+/** Transports, tankers and bombers: in a stream from the climb to the approach. */
+export const STREAM_FORMATIONS: Partial<Record<MissionPhase, Formation>> = {
+  departure: 'close',
+  'climb-out': 'stream',
+  ingress: 'stream',
+  'fence-in': 'stream',
+  'on-target': 'stream',
+  egress: 'stream',
+  approach: 'stream',
+  recovery: 'close',
+};

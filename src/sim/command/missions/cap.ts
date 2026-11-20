@@ -17,7 +17,7 @@ import { HOUR } from '../../../core/units';
 import { DEFAULT_JUMP_IN } from '../../air/mission';
 import { capResolver } from '../../air/resolvers';
 import { carrierState } from '../../naval/carrierGroup';
-import { phases, plannedStation, station, the } from './common';
+import { phases, plannedStation, station, TACTICAL_FORMATIONS, the } from './common';
 import type { MissionPlugin, Need, PlanContext } from './plugin';
 
 export const CAP_STATIONS = 2;
@@ -116,6 +116,7 @@ export const CAP: MissionPlugin = {
   status: 'demo',
   category: 'counter-air',
   engagement: 'cap',
+  formations: TACTICAL_FORMATIONS,
   planner: needs,
   package: () => [{ role: 'lead', type: 'cap', offset: 0 }],
   resolver: capResolver,

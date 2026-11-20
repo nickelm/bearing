@@ -191,7 +191,11 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] Followed flights rendered headless with the HUD (`tools/follow.preview.ts`, `docs/reports/screens/follow-*.png`)
 - [ ] Acceptance checks 7 and 10 as scripted sequences: `ONLY=follow` in `tools/browser.smoke.mjs` is written but could not run on lavapipe (known issues); run it with `MODE=gpu` on the owner's machine
 - [ ] Check 10 headless: a low-level shot through a valley in `tools/follow.preview.ts` (the planned routes there have no terrain floor)
-- [ ] Owner: follow a mission of each demo type and return
+- [x] Owner: follow a mission of each demo type and return (2026-11-20, GPU smoke run passed on seed 4)
+- [x] Owner's review (decision 253): formations by phase in the plug-ins; penetrators low on interdiction and CAS at 2,500 m; free look orbits the aircraft; HUD only by default, V for displays or a clean view; FPS gauge under the follow bar; aircraft near a base on its sited field; the Kestrel's gear folds inward
+- [ ] Check 10 over truly low flight: the smoke test's `follow` part now follows a flight below 400 m (a penetrator on interdiction); run it on the GPU
+- [ ] Stretch (R6.6, owner): Follow and jump-in ease from the map's orbit down into the aircraft
+- [ ] Owner: look at the formations, the low-level interdiction and the orbit (decision 253)
 - [ ] Spectator displays' radar and threat formats are empty until R2.6's sensors read campaign contacts
 - [ ] Afterburner, control surfaces and speedbrake of the followed aircraft stay at rest until R2.5's flight model drives them
 
@@ -231,7 +235,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] Vo-35 (Su-25 analogue): flight data and control laws
 - [ ] A-15 (A-10 analogue): model spec, flight data, laws (if time allows; owner decision 5)
 - [ ] C-150 (C-130 analogue): model spec, flight data, laws, transport rig (if time allows)
-- [ ] AI-only models: F-25, E-5, KC-40, Vo-37, Ra-44, Ra-60, Ve-28 and the two utility helicopters
+- [ ] AI-only models: F-25, E-5, KC-40, Vo-37, Ra-44, Ra-60, Ve-28 and the two utility helicopters (the E-5 first: the owner asked for a proper AWACS model; the C-150 stands in for it until then)
 - [ ] Pact skin in a flown Vo-31 and Vo-35
 - [ ] Silhouette check (Part I check 6) for every new model; checks 12–13 for an attack aircraft
 

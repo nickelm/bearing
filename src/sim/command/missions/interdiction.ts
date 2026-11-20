@@ -12,7 +12,7 @@ import { arcDistance } from '../../../core/greatCircle';
 import { DEFAULT_JUMP_IN } from '../../air/mission';
 import { strikeResolver } from '../../air/resolvers';
 import type { MissionTarget, Places } from '../../air/mission';
-import { phases, restrike, standing, the } from './common';
+import { phases, restrike, standing, TACTICAL_FORMATIONS, the } from './common';
 import type { MissionPlugin, Need, PlanContext } from './plugin';
 
 export const INTERDICTION_PER_DAY = 24;
@@ -98,6 +98,8 @@ export const INTERDICTION: MissionPlugin = {
   status: 'demo',
   category: 'strike',
   engagement: 'target',
+  // The attack in trail, each aircraft over the target in turn.
+  formations: { ...TACTICAL_FORMATIONS, 'on-target': 'trail' },
   planner: needs,
   package: (n) => [
     { role: 'lead', type: 'interdiction', offset: 0 },

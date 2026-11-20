@@ -6,7 +6,11 @@
  * - **Climb-out** climbs toward the target at the type's climb rate and
  *   CLIMB_SPEED of cruise speed until cruise altitude.
  * - **Fence-in** starts FENCE_IN before the target (LOW_FENCE_IN for low-level
- *   profiles, which descend there to LOW_ALTITUDE and fly at low-level speed).
+ *   profiles, which descend there to LOW_ALTITUDE and fly at low-level speed). A
+ *   profile flies low for every type or only for its `lowRoles`: on interdiction
+ *   the penetrators (F-124, A-14, Vo-37) go in low and fast, the others at cruise
+ *   altitude (decision 253). A station worked below cruise (`stationAltitude`, CAS
+ *   at CAS_ALTITUDE) is reached by a descent from the fence-in.
  * - **On target:** a pass flies PASS_HALF before the target to PASS_HALF past
  *   it at combat power; an orbit holds a racetrack on the station; a landing
  *   stops on the ground at the destination.
@@ -85,7 +89,7 @@ function build(p: RoutePlanInput, stationTime: number, recovery: Dir): Route {
   const b = new RouteBuilder(t, R, flow, start, p.launch, fuel);
   b.wind = p.wind ?? null;
   const cruise = t.cruiseSpeed;
-  const low = p.profile.low;
+  const low = p.profile.low || (p.profile.lowRoles?.includes(t.role) ?? false);
   const lowAlt = t.helicopter ? HELICOPTER_LOW_ALTITUDE : LOW_ALTITUDE;
   const cruiseAlt = t.cruiseAltitude;
   const target = p.target;
@@ -114,8 +118,14 @@ function build(p: RoutePlanInput, stationTime: number, recovery: Dir): Route {
     b.leg(target, inAlt, inSpeed, 'combat', 'on-target');
     b.leg(destination(target, heading, PASS_HALF, R), inAlt, inSpeed, 'combat', 'on-target');
   } else if (station === 'orbit') {
+    // A station worked below cruise (CAS) is reached on the way in from the fence-in.
+    const work = low ? undefined : p.profile.stationAltitude;
+    if (work !== undefined && work < b.altitude) {
+      b.changeAltitudeToward(target, work, cruise, 'descent', 'fence-in');
+    }
+    const orbitAlt = work !== undefined && !low ? Math.min(work, inAlt) : inAlt;
     if (arcDistance(b.point, target, R) > 15e3) {
-      b.leg(toward(target, b.point, 15e3, R), inAlt, inSpeed, inRegime, 'fence-in');
+      b.leg(toward(target, b.point, 15e3, R), orbitAlt, inSpeed, inRegime, 'fence-in');
     }
     const axis = p.orbitHeading ?? initialHeading(target, start);
     b.orbit(target, axis, stationTime, cruise * LOITER_SPEED, 'on-target');

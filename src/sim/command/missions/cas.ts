@@ -8,7 +8,7 @@
 import { casBriefing } from '../../../campaign/missionBriefings';
 import { DEFAULT_JUMP_IN } from '../../air/mission';
 import { casResolver } from '../../air/resolvers';
-import { bySegment, phases, plannedStation, the } from './common';
+import { bySegment, phases, plannedStation, TACTICAL_FORMATIONS, the } from './common';
 import type { MissionPlugin, Need, PlanContext } from './plugin';
 
 export const CAS_PER_DAY: Record<'attacker' | 'defender', number> = { attacker: 24, defender: 12 };
@@ -60,6 +60,13 @@ export const CAS: MissionPlugin = {
   status: 'demo',
   category: 'ground-support',
   engagement: 'target',
+  // Working the front in trail: one aircraft attacks while the next sets up.
+  formations: {
+    ...TACTICAL_FORMATIONS,
+    'fence-in': 'route',
+    'on-target': 'trail',
+    egress: 'route',
+  },
   planner: needs,
   package: () => [{ role: 'lead', type: 'cas', offset: 0 }],
   resolver: casResolver,

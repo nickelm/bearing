@@ -14,10 +14,13 @@
  *   air and stands on it on the ground. The lift is presentation only: the route
  *   and the campaign never see it.
  */
+import { headingTangent } from '../core/greatCircle';
 import type { Dir } from '../core/greatCircle';
 import { FOOT, KNOT } from '../core/units';
 import type { Meters } from '../core/units';
-import { analyticPose, slotPose } from '../sim/air/analyticPose';
+import { analyticPose } from '../sim/air/analyticPose';
+import { formationAt, slotPose } from '../sim/air/formation';
+import type { Formation } from '../sim/air/formation';
 import type { AnalyticPose } from '../sim/air/analyticPose';
 import type { AircraftBundle, RigSpec } from '../sim/air/bundles';
 import type { Mission, MissionPhase } from '../sim/air/mission';
@@ -71,13 +74,86 @@ export function followedLook(
 export const FOLLOW_CLEARANCE: Meters = 40;
 
 /**
- * The flight's aircraft at game time t: the lead and its formation slots, one per
- * aircraft still in the flight (losses lower `aircraft`, decision 250).
+ * An airbase as the sim knows it (the coarse point its routes start and end at) and as
+ * the view draws it (sited on the eroded ground, decision 220): unit directions and the
+ * sited runway's heading (rad, 0..π).
  */
-export function flightPoses(m: Readonly<Mission>, t: number, radius: Meters): AnalyticPose[] {
-  const lead = analyticPose(m.route, t, radius);
+export interface AirfieldShift {
+  from: Dir;
+  to: Dir;
+  heading: number;
+}
+
+/** Within SHIFT_FULL of a coarse airbase point the drawn aircraft moves fully to the sited field; the shift fades out by SHIFT_FADE (m). */
+export const SHIFT_FULL: Meters = 3_000;
+export const SHIFT_FADE: Meters = 30_000;
+
+/**
+ * The pose moved from a coarse airbase point to its sited field (decision 253): fully
+ * near the base, fading out with distance, so the parked aircraft stands on the drawn
+ * field and the takeoff and landing run continuously into the route. On the ground the
+ * nose turns to the sited runway's heading (the end nearer the route's heading).
+ * Presentation only, like the drawn altitude.
+ */
+export function shiftedToAirfield(
+  p: Readonly<AnalyticPose>,
+  fields: readonly AirfieldShift[],
+  radius: Meters,
+): AnalyticPose {
+  if (fields.length === 0) return p as AnalyticPose;
+  const r = Math.hypot(...p.pos);
+  const d: Dir = [p.pos[0] / r, p.pos[1] / r, p.pos[2] / r];
+  let best: AirfieldShift | null = null;
+  let bestCos = -2;
+  for (const f of fields) {
+    const c = d[0] * f.from[0] + d[1] * f.from[1] + d[2] * f.from[2];
+    if (c > bestCos) {
+      bestCos = c;
+      best = f;
+    }
+  }
+  const dist = Math.acos(Math.min(1, bestCos)) * radius;
+  if (!best || dist >= SHIFT_FADE) return p as AnalyticPose;
+  const x = Math.max(0, Math.min(1, (dist - SHIFT_FULL) / (SHIFT_FADE - SHIFT_FULL)));
+  const w = 1 - x * x * (3 - 2 * x);
+  const q: Dir = [
+    d[0] + w * (best.to[0] - best.from[0]),
+    d[1] + w * (best.to[1] - best.from[1]),
+    d[2] + w * (best.to[2] - best.from[2]),
+  ];
+  const n = Math.hypot(...q);
+  const out: AnalyticPose = { ...p, pos: [(q[0] / n) * r, (q[1] / n) * r, (q[2] / n) * r] };
+  if (!p.airborne) {
+    const up: Dir = [q[0] / n, q[1] / n, q[2] / n];
+    const turn = (h: number) =>
+      Math.abs(Math.atan2(Math.sin(h - p.heading), Math.cos(h - p.heading)));
+    const h =
+      turn(best.heading) <= turn(best.heading + Math.PI) ? best.heading : best.heading + Math.PI;
+    out.heading = h;
+    out.forward = headingTangent(up, h);
+    out.up = up;
+  }
+  return out;
+}
+
+/**
+ * The flight's aircraft at game time t: the lead and its formation slots, one per
+ * aircraft still in the flight (losses lower `aircraft`, decision 250), in the
+ * formation its plug-in names for the phase (`formations`), spaced by the drawn
+ * wingspan `span` (m). The lead is moved onto the sited airfields near its base (`fields`).
+ */
+export function flightPoses(
+  m: Readonly<Mission>,
+  t: number,
+  radius: Meters,
+  fields: readonly AirfieldShift[] = [],
+  formations: Partial<Record<MissionPhase, Formation>> = {},
+  span: Meters = 10,
+): AnalyticPose[] {
+  const lead = shiftedToAirfield(analyticPose(m.route, t, radius), fields, radius);
+  const f = formationAt(m.timeline ?? [], formations, t);
   const out: AnalyticPose[] = [lead];
-  for (let k = 1; k < Math.max(1, m.aircraft); k++) out.push(slotPose(lead, k));
+  for (let k = 1; k < Math.max(1, m.aircraft); k++) out.push(slotPose(lead, k, f, span));
   return out;
 }
 

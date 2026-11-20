@@ -10,7 +10,7 @@ import { plainBriefing } from '../../../campaign/missionBriefings';
 import { DEFAULT_JUMP_IN, HELICOPTER_JUMP_IN } from '../../air/mission';
 import type { MissionTarget, MissionType } from '../../air/mission';
 import { AEW_SETBACK } from './cap';
-import { bySegment, restrike, the } from './common';
+import { STREAM_FORMATIONS, TACTICAL_FORMATIONS, bySegment, restrike, the } from './common';
 import type { Category } from '../doctrine';
 import type { Minimums } from '../environment';
 import type { Engagement } from '../../air/outcome';
@@ -40,6 +40,11 @@ function provisional(
     status: 'provisional',
     category,
     engagement,
+    // Support aircraft and bombers fly in a stream; the rest as fighters do.
+    formations:
+      category === 'support' || type === 'strategic-bombing'
+        ? STREAM_FORMATIONS
+        : TACTICAL_FORMATIONS,
     planner,
     package: pkg,
     resolver: { pending: 'R4.2' },

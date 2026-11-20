@@ -28,6 +28,26 @@ body.ff-flying .frame-overlay {
   background: rgb(0 0 0 / 0.4);
   z-index: 13;
 }
+/* Following a flight (decision 253): under the follow bar, clear of the messages display. */
+body.following .frame-overlay {
+  top: 44px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 1px 8px;
+  font-size: 11px;
+  color: rgb(255 255 255 / 0.8);
+  background: rgb(0 0 0 / 0.35);
+}
+
+body.following.follow-clean .frame-overlay {
+  top: 2px;
+}
+
+/* The debug panel stays out of a followed view unless asked for (?dev). */
+body.following:not(.dev) .lil-gui.lil-root {
+  display: none;
+}
+
 body.ff-flying.ff-no-fps .frame-overlay {
   display: none;
 }

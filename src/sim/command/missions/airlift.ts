@@ -9,7 +9,7 @@
 import { airliftBriefing } from '../../../campaign/missionBriefings';
 import { DEFAULT_JUMP_IN } from '../../air/mission';
 import { airliftResolver } from '../../air/resolvers';
-import { phases, the } from './common';
+import { phases, STREAM_FORMATIONS, the } from './common';
 import type { MissionPlugin, Need, PlanContext } from './plugin';
 
 export const LOW_STOCK = 0.8;
@@ -55,6 +55,7 @@ export const AIRLIFT: MissionPlugin = {
   status: 'demo',
   category: 'airlift',
   engagement: 'target',
+  formations: STREAM_FORMATIONS,
   planner: needs,
   package: () => [{ role: 'lead', type: 'airlift', offset: 0 }],
   resolver: airliftResolver,

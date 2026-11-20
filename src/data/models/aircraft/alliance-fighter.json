@@ -245,10 +245,10 @@
       "anim": {
         "channel": "gear",
         "hinge": [
-          [-1.7, -0.5, 1.18],
-          [-0.7, -0.5, 1.18]
+          [-1.7, -0.5, 1.2],
+          [-0.7, -0.5, 1.2]
         ],
-        "angle": -88
+        "angle": 135
       }
     },
     {
@@ -262,10 +262,10 @@
       "anim": {
         "channel": "gear",
         "hinge": [
-          [-1.7, -0.5, 1.18],
-          [-0.7, -0.5, 1.18]
+          [-1.7, -0.5, 1.2],
+          [-0.7, -0.5, 1.2]
         ],
-        "angle": -88
+        "angle": 135
       }
     },
     {
@@ -519,7 +519,7 @@
       },
       {
         "id": "strike",
-        "stores": "2 \u00d7 900 kg bombs, 2 short-range missiles, 2 tanks",
+        "stores": "2 × 900 kg bombs, 2 short-range missiles, 2 tanks",
         "radiusFactor": 0.85
       }
     ]

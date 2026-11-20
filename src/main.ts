@@ -109,6 +109,7 @@ import { START_ALTITUDE, startFocus } from './render/strategic/startFocus';
 import { SectionTimer } from './render/common/sectionTimer';
 import { MissionSearchPanel } from './ui/missionSearch/panel';
 import { Follow } from './follow/follow';
+import { normalize } from './core/greatCircle';
 import { CampaignTraffic } from './follow/campaignTraffic';
 import { SidePanel } from './ui/sidePanel';
 import { routeState } from './sim/air/route';
@@ -283,6 +284,8 @@ async function main(): Promise<void> {
   // The free camera is a development tool (decision 72): the simulation view is entered through
   // a unit (Follow, or an observer at a station), and the free camera only with ?dev (R2.4).
   const devCamera = query.has('dev');
+  // Developer views keep the debug panel where the game hides it (a followed flight).
+  document.body.classList.toggle('dev', query.has('dev'));
 
   // The game clock lives in the sim worker (decision 67); the display time follows it.
   // A new world resets the campaign calendar (decision 33) and restarts the sim.
@@ -776,6 +779,13 @@ async function main(): Promise<void> {
         globalMaskSampler(global.finish.drainage.lakeDepth, global.n),
       );
       if (r.wet.length) console.warn('Airbases left without a dry site:', r.wet);
+      // Campaign aircraft near a base are drawn on its sited field (decision 253).
+      const fields = strategic.infrastructure.airbases.map((b, i) => {
+        const to = r.infrastructure.airbases[i]!;
+        return { from: normalize(b.point), to: normalize(to.point), heading: to.heading };
+      });
+      if (follow) follow.fields = fields;
+      if (traffic) traffic.fields = fields;
       return { ...strategic, infrastructure: r.infrastructure };
     };
     const showGlobal = (

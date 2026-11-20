@@ -32,6 +32,7 @@ import type { AnalyticPose } from '../sim/air/analyticPose';
 import { AIRCRAFT_BUNDLES, bundleOfType } from '../sim/air/bundles';
 import type { AircraftBundle } from '../sim/air/bundles';
 import { missionPhase } from '../sim/air/mission';
+import { missionPlugin } from '../sim/command/missions/registry';
 import type { Mission } from '../sim/air/mission';
 import { routeState } from '../sim/air/route';
 import { initialAvionics } from '../sim/avionics/avionics';
@@ -48,7 +49,7 @@ import {
   gearDown,
   liftedPose,
 } from './followFlight';
-import type { FollowedLook } from './followFlight';
+import type { AirfieldShift, FollowedLook } from './followFlight';
 import { drawnType, spinningRotors } from './campaignTraffic';
 
 export interface FollowDeps {
@@ -70,6 +71,19 @@ export const SETTLE_TIME = 2.5;
 /** The zoom the settle starts from (the rig's distances times this). */
 export const SETTLE_ZOOM = 2.6;
 
+/**
+ * What the followed view shows besides the aircraft (decision 253): the HUD alone (the
+ * default for spectating), the HUD with the aircraft's displays (the flown view), or
+ * nothing but the scene. V steps through them; the choice holds from one follow to the next.
+ */
+export type FollowPanels = 'hud' | 'all' | 'clean';
+export const FOLLOW_PANELS: readonly FollowPanels[] = ['hud', 'all', 'clean'];
+const PANEL_LABELS: Record<FollowPanels, string> = {
+  hud: 'HUD',
+  all: 'HUD and displays',
+  clean: 'clean',
+};
+
 /** A drawn aircraft of the followed flight. */
 interface Drawn {
   view: AircraftView;
@@ -82,14 +96,20 @@ export class Follow {
   missionId: number | null = null;
   /** Which aircraft of the flight the camera follows (0: the lead). */
   slot = 0;
+  /** The airbases' coarse and sited places (decision 253). */
+  fields: readonly AirfieldShift[] = [];
   readonly hud = new Hud();
   readonly displays = new DisplaySystem();
+  /** What shows besides the scene (V). */
+  panels: FollowPanels = 'hud';
   private readonly bar: HTMLDivElement;
+  private readonly panelsButton: HTMLButtonElement;
   private readonly title: HTMLSpanElement;
   private look: FollowedLook | null = null;
   private bundle: AircraftBundle | null = null;
   private spec: ModelSpec | null = null;
   private gearHeight = 2;
+  private span = 10;
   private drawn: Drawn[] = [];
   private poses: AnalyticPose[] = [];
   private lastTime = NaN;
@@ -111,10 +131,12 @@ export class Follow {
     const next = document.createElement('button');
     next.textContent = 'Next aircraft (N)';
     next.addEventListener('click', () => this.nextAircraft());
+    this.panelsButton = document.createElement('button');
+    this.panelsButton.addEventListener('click', () => this.nextPanels());
     const back = document.createElement('button');
     back.textContent = 'Map (Esc)';
     back.addEventListener('click', () => this.stop(null));
-    this.bar.append(this.title, next, back);
+    this.bar.append(this.title, next, this.panelsButton, back);
     document.body.appendChild(this.bar);
     this.hud.show(false);
     this.displays.enabled = false;
@@ -129,6 +151,7 @@ export class Follow {
         this.stop(null);
       } else if (e.code === 'KeyN') this.nextAircraft();
       else if (e.code === 'KeyC') deps.globe.chase.recenter();
+      else if (e.code === 'KeyV') this.nextPanels();
     };
     // Free look: drag with any button; the wheel moves the camera closer or farther.
     const down = (e: PointerEvent) => {
@@ -189,6 +212,7 @@ export class Follow {
     const drawn = drawnType(m!.aircraftType);
     const spec = drawn.spec;
     this.gearHeight = drawn.gearHeight;
+    this.span = drawn.span;
     this.missionId = id;
     this.slot = Math.min(slot, Math.max(0, m!.aircraft - 1));
     this.look = look;
@@ -207,14 +231,30 @@ export class Follow {
     g.resetAtmosphere();
     this.deps.setView('simulation');
     this.hud.clearMessages();
-    this.hud.show(true);
     this.displays.reset(!this.poses[0]!.airborne);
     this.displays.attach({ avionics: initialAvionics(!this.poses[0]!.airborne) });
-    this.displays.visible = b.avionics !== null;
     this.displaysAt = -Infinity;
-    this.bar.hidden = false;
+    document.body.classList.add('following');
+    this.applyPanels();
     this.updateTitle(m!, t);
     return true;
+  }
+
+  /** Steps the panels: HUD, HUD and displays, clean. */
+  nextPanels(): void {
+    this.panels = FOLLOW_PANELS[(FOLLOW_PANELS.indexOf(this.panels) + 1) % FOLLOW_PANELS.length]!;
+    this.applyPanels();
+  }
+
+  private applyPanels(): void {
+    const on = this.missionId !== null;
+    this.hud.show(on && this.panels !== 'clean');
+    this.displays.visible = on && this.panels === 'all' && this.bundle?.avionics != null;
+    // Clean: the bar goes too (Escape still returns); the FPS gauge follows the body's class.
+    this.bar.hidden = !on || this.panels === 'clean';
+    document.body.classList.toggle('follow-clean', on && this.panels === 'clean');
+    this.panelsButton.textContent = `View (V): ${PANEL_LABELS[this.panels]}`;
+    this.displaysAt = -Infinity;
   }
 
   /** Returns to the map; `why` says why if the mission ended rather than the player leaving. */
@@ -282,7 +322,7 @@ export class Follow {
       afterburner: 0,
     });
     this.updateDisplays(m, p, frame, agl, t);
-    this.hud.draw(frame, project);
+    if (this.panels !== 'clean') this.hud.draw(frame, project);
   }
 
   /** The chase rig: the type's (or its stand-in's), a helicopter's scaled by the drawn rotor. */
@@ -314,7 +354,14 @@ export class Follow {
 
   /** The flight's poses at t, lifted over the drawn ground, the views built, and the camera's target. */
   private pose(m: Mission, t: number, dt = 0): void {
-    const raw = flightPoses(m, t, this.deps.radius);
+    const raw = flightPoses(
+      m,
+      t,
+      this.deps.radius,
+      this.fields,
+      missionPlugin(m.type).formations,
+      this.span,
+    );
     const g = this.deps.globe;
     while (this.drawn.length < raw.length) {
       const v = new AircraftView(this.spec!, [0, 0, 0], g.lighting);
@@ -395,7 +442,7 @@ export class Follow {
       helicopter,
     });
     const now = performance.now();
-    if (!changed && now - this.displaysAt < 100) return;
+    if (this.panels !== 'all' || (!changed && now - this.displaysAt < 100)) return;
     this.displaysAt = now;
     const d = Math.hypot(...p.pos);
     const snap = snapshotFromHud(frame, {
@@ -470,6 +517,7 @@ export class Follow {
     this.hud.show(false);
     this.displays.visible = false;
     this.bar.hidden = true;
+    document.body.classList.remove('following', 'follow-clean');
   }
 
   dispose(): void {

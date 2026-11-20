@@ -23,9 +23,11 @@ import type { GlobeScene } from '../render/sim/globeScene';
 import type { AnalyticPose } from '../sim/air/analyticPose';
 import { AIRCRAFT_BUNDLES, bundleOfType } from '../sim/air/bundles';
 import { missionPhase } from '../sim/air/mission';
+import { missionPlugin } from '../sim/command/missions/registry';
 import type { Mission } from '../sim/air/mission';
 import { routeState } from '../sim/air/route';
 import { drawnAltitude, flightPoses, followedLook, gearDown, liftedPose } from './followFlight';
+import type { AirfieldShift } from './followFlight';
 
 /** Flights whose lead is within this distance of the camera are drawn (m). */
 export const TRAFFIC_RANGE: Meters = 25_000;
@@ -39,6 +41,8 @@ export interface DrawnType {
   spec: ModelSpec;
   scheme: string | null;
   gearHeight: number;
+  /** Wingspan of the drawn model (m): formations space by it. */
+  span: number;
 }
 
 const types = new Map<string, DrawnType>();
@@ -52,8 +56,17 @@ export function drawnType(typeId: string): DrawnType {
   const spec: ModelSpec = look.scheme ? { ...base, scheme: look.scheme } : base;
   const built = buildModel(spec, { noAo: true });
   let minY = Infinity;
-  for (let i = 1; i < built.position.length; i += 3) minY = Math.min(minY, built.position[i]!);
-  d = { spec, scheme: look.scheme, gearHeight: Number.isFinite(minY) ? Math.max(0.5, -minY) : 2 };
+  let maxZ = 0;
+  for (let i = 0; i < built.position.length; i += 3) {
+    minY = Math.min(minY, built.position[i + 1]!);
+    maxZ = Math.max(maxZ, Math.abs(built.position[i + 2]!));
+  }
+  d = {
+    spec,
+    scheme: look.scheme,
+    gearHeight: Number.isFinite(minY) ? Math.max(0.5, -minY) : 2,
+    span: Math.max(4, 2 * maxZ),
+  };
   types.set(typeId, d);
   return d;
 }
@@ -90,6 +103,8 @@ interface Placed {
 export class CampaignTraffic {
   /** The followed mission, drawn by Follow. */
   exclude: number | null = null;
+  /** The airbases' coarse and sited places (decision 253). */
+  fields: readonly AirfieldShift[] = [];
   enabled = true;
   readonly layer: TrafficLayer;
   private readonly near = new Map<string, Near>();
@@ -136,7 +151,14 @@ export class CampaignTraffic {
       dir.set(s.point[0], s.point[1], s.point[2]);
       if (Math.acos(Math.max(-1, Math.min(1, dir.dot(e)))) > reach) continue;
       const type = drawnType(m.aircraftType);
-      flightPoses(m, t, this.radius).forEach((p, k) => {
+      flightPoses(
+        m,
+        t,
+        this.radius,
+        this.fields,
+        missionPlugin(m.type).formations,
+        type.span,
+      ).forEach((p, k) => {
         const d = new Vec3d(p.pos[0], p.pos[1], p.pos[2]).normalize();
         const ground = this.groundAt(d);
         const lifted = liftedPose(p, drawnAltitude(p, ground, type.gearHeight));

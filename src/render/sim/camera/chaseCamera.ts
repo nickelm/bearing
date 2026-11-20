@@ -189,6 +189,19 @@ function smooth(t: number): number {
   return x * x * (3 - 2 * x);
 }
 
+/**
+ * A fixed-wing rig's look point is 25 m ahead of the nose, which frames the way ahead
+ * from behind; as free look turns the eye away from behind, the look point moves onto
+ * the aircraft (fully at ORBIT_FULL off center), so the eye orbits the aircraft itself
+ * rather than a point in front of it (owner feedback on R2.4, decision 253).
+ * `cosLook` is the cosine of the angle between the eye's direction and straight behind.
+ */
+export const ORBIT_FULL = 45 * DEG;
+export function orbitWeight(cosLook: number): number {
+  const a = Math.acos(Math.max(-1, Math.min(1, cosLook)));
+  return smooth(a / ORBIT_FULL);
+}
+
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
@@ -530,7 +543,10 @@ export class ChaseCamera {
               this.zoom -
               spAim * ahead,
           )
-      : t.pos.clone().addScaled(f, 25).addScaled(u, 1);
+      : t.pos
+          .clone()
+          .addScaled(f, 25 * (1 - orbitWeight(cy * cp)))
+          .addScaled(u, 1 - orbitWeight(cy * cp));
     this.forward.copy(aim.sub(this.eye)).normalize();
     // A helicopter stays in the picture: where the ground holds a dragged-down
     // eye close under it, no look point keeps the orbit's framing, so the view

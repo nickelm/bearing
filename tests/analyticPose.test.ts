@@ -4,7 +4,8 @@ import { dot } from '../src/core/greatCircle';
 import type { Dir } from '../src/core/greatCircle';
 import { DEG } from '../src/core/units';
 import { AIRCRAFT_TYPES } from '../src/sim/air/aircraft';
-import { analyticPose, MAX_BANK, slotPose } from '../src/sim/air/analyticPose';
+import { analyticPose, MAX_BANK } from '../src/sim/air/analyticPose';
+import { slotPose } from '../src/sim/air/formation';
 import { MISSION_PROFILES } from '../src/sim/air/mission';
 import { planMissionRoute } from '../src/sim/air/missionRoute';
 
@@ -75,7 +76,7 @@ describe('the analytic pose', () => {
     expect(left).toBeGreaterThan(right);
   });
 
-  it('puts wingmen behind and beside the lead', () => {
+  it('puts wingmen behind and beside the lead (route: #2 left, #3 right)', () => {
     const lead = analyticPose(route, (route.segments[2]!.t0 + route.segments[2]!.t1) / 2, R);
     const two = slotPose(lead, 1);
     const three = slotPose(lead, 2);
@@ -87,7 +88,7 @@ describe('the analytic pose', () => {
       lead.forward[2] * lead.up[0] - lead.forward[0] * lead.up[2],
       lead.forward[0] * lead.up[1] - lead.forward[1] * lead.up[0],
     ];
-    expect(dot(rel(two), right)).toBeGreaterThan(0);
-    expect(dot(rel(three), right)).toBeLessThan(0);
+    expect(dot(rel(two), right)).toBeLessThan(0);
+    expect(dot(rel(three), right)).toBeGreaterThan(0);
   });
 });

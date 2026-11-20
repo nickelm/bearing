@@ -118,11 +118,22 @@ export interface MissionProfile {
   roles: readonly AircraftRole[];
   loadout?: string;
   station: 'orbit' | 'pass' | 'land';
+  /** Every type flies it low from the fence-in (descending to LOW_ALTITUDE) and out again. */
   low: boolean;
+  /**
+   * Roles that fly it low although the profile does not (decision 253): penetrators such
+   * as the F-111 and Su-24 analogues go in low and fast on interdiction.
+   */
+  lowRoles?: readonly AircraftRole[];
+  /** Altitude of the station's work (m above sea level), below cruise: CAS works the front at it. */
+  stationAltitude?: number;
   stationTime: readonly [number, number];
   /** The jump-in window (R1.4); DEFAULT_JUMP_IN when absent. */
   jumpIn?: JumpInWindow;
 }
+
+/** Where CAS works the front (m above sea level; the terrain floor lifts it over hills, decision 240). */
+export const CAS_ALTITUDE = 2500;
 
 export const MISSION_PROFILES: Record<MissionType, MissionProfile> = {
   cap: {
@@ -151,6 +162,7 @@ export const MISSION_PROFILES: Record<MissionType, MissionProfile> = {
     loadout: 'strike',
     station: 'pass',
     low: false,
+    lowRoles: ['deep-strike', 'carrier-attack'],
     stationTime: [2 * MINUTE, 4 * MINUTE],
   },
   'deep-strike': {
@@ -179,6 +191,7 @@ export const MISSION_PROFILES: Record<MissionType, MissionProfile> = {
     loadout: 'cas',
     station: 'orbit',
     low: false,
+    stationAltitude: CAS_ALTITUDE,
     stationTime: [15 * MINUTE, 40 * MINUTE],
   },
   'helo-cas': {
