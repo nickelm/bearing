@@ -74,7 +74,12 @@ import {
   RUNWAY_WIDTH,
   TAXIWAY_OFFSET,
   townRadiusToward,
+  urbanRadius,
 } from './infraScene';
+import { buildable, townLocal } from './urbanPattern';
+
+/** Half-size (m) a town building keeps clear of the urban ground's streets (decision 259). */
+const TOWN_MARGIN = 7;
 import { INK_LINEAR, libraryModel } from '../../common/models/threeModel';
 import { LIGHT_FLOATS, LIGHT_KINDS, lightPointMaterial, lightQuad } from './lightPoints';
 import type { BuiltSite, InfraScene } from './infraScene';
@@ -407,11 +412,22 @@ export function placeBuildings(
         if (!best || keep >= bestF) continue;
         if (scene.isClear(d, true)) continue;
         const dist = Math.acos(Math.min(1, best.point.dot(d))) * R;
+        // Off the urban ground's streets, squares and parks, and square to its grid (decision 259).
+        const grid = best.grid;
+        if (grid) {
+          const [x, y] = townLocal(best.point, d, R);
+          if (!buildable(x, y, dist / urbanRadius(best.population), grid, TOWN_MARGIN)) continue;
+        }
         const shape = townBuilding(
           r.fork(`${a},${b}`),
           dist < 0.3 * bestR,
           best.population >= 200_000,
         );
+        if (grid) {
+          const quarter =
+            Math.floor((-Math.PI / 2 - shape.angle + 8 * Math.PI) / (Math.PI / 2)) % 4;
+          shape.angle = angleForHeading(Math.PI / 2 - grid.angle + (quarter * Math.PI) / 2);
+        }
         emit({ d: d.clone(), ...shape }, true);
       }
     }

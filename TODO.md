@@ -348,3 +348,11 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] The Free Flight session's "drizzle: wet at once" check fails (decision 217); not investigated
 - [ ] Stale code comments listed in the audit's "Left in the Code"; fix when the files are next touched
 - [ ] On lavapipe, `tests/gpu/mapSoak.test.ts` "keeps the relief tiles within their caches while panning at the floor" fails (geometries 274 against 234; the same at 8542fd3, before R2.4's changes), and in Chromium on lavapipe the app stops drawing after its ninth frame (simulation view or map) while the GPU process grows by about 1 GB every 5–10 s, until the kernel kills it after about 195 s: seeds 4 and 1983, the `campaign` part as well as `follow`, and at 8542fd3. Not seen on the owner's GPU (decision 245); look at the relief and terrain tiles' buffers on a software adapter
+
+## Out of sync: Proposal 0009, settlements and cities
+
+Runs beside the main line (`docs/proposals/0009-settlements-and-cities.md`, `docs/plans/cities.md`); Phase 1 on `feature/urban-ground`, the rest on `feature/cities`.
+
+- [x] Phase 0: survey, baseline in the standard city views (`docs/reports/cities-baseline.md`), plan.
+- [x] Phase 1: urban ground in the terrain shader from a street grid per town, buildings off its streets (decision 259).
+- [ ] Phases 2–10 on `feature/cities` (see the plan).

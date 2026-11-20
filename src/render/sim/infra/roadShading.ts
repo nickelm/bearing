@@ -20,6 +20,7 @@ import {
   abs,
   atan,
   clamp,
+  cos,
   cross,
   dot,
   float,
@@ -37,11 +38,25 @@ import {
   normalize,
   select,
   sin,
+  smoothstep,
+  step,
   storage,
+  uint,
   uniform,
+  ivec3,
   vec3,
   vec4,
 } from 'three/tsl';
+import { cellHashNode, hashBitsNode } from '../../common/canopyNode';
+import {
+  CORE_SHARE,
+  INNER_SHARE,
+  MAJOR_EVERY,
+  MAJOR_HALF,
+  MINOR_HALF,
+  SIDEWALK,
+  URBAN_HASH_Z,
+} from './urbanPattern';
 import { tileForDirection, tileKey, tileKeyString } from '../../../core/tiles';
 import type { TileKey } from '../../../core/tiles';
 import { Vec3d } from '../../../core/vec3d';
@@ -84,18 +99,19 @@ export class RoadShading {
   }
 
   /**
-   * (coverage, concrete, shoulder) at a planet-centered position: coverage 0..1 by
+   * (coverage, concrete, shoulder, ballast) at a planet-centered position: coverage 0..1 by
    * any paved segment, how much of that is concrete, and the dark shoulder outside
    * wide concrete (runways and aprons, decision 221): a band SHOULDER_WIDTH m wide,
    * at least SHOULDER_PIXELS wide on screen, so a field reads from the air.
    */
-  coverage(planetPosition: V3, start: F, count: F, footprint: F, gate?: Node<'bool'>): V3 {
+  coverage(planetPosition: V3, start: F, count: F, footprint: F, gate?: Node<'bool'>): V4 {
     return Fn(() => {
       const p = normalize(planetPosition);
       const fp = max(footprint, 0.05);
       const cover = float(0).toVar();
       const concrete = float(0).toVar();
       const shoulder = float(0).toVar();
+      const ballast = float(0).toVar();
       const band = max(float(SHOULDER_WIDTH), fp.mul(SHOULDER_PIXELS));
       const first = int(start);
       // No segments where the gate fails (e.g. at sea), or with roads hidden.
@@ -115,6 +131,13 @@ export class RoadShading {
         const c = clamp(float(0.5).sub(d.sub(drawn).div(fp)), 0, 1).mul(strength);
         cover.assign(max(cover, c));
         concrete.assign(max(concrete, select(signed.lessThan(0), c, float(0))));
+        // Railways are the only concrete narrower than RAIL_MAX_HALF: their ballast (decision 259).
+        ballast.assign(
+          max(
+            ballast,
+            select(signed.lessThan(0).and(halfWidth.lessThan(RAIL_MAX_HALF)), c, float(0)),
+          ),
+        );
         // Outside the drawn edge, over a band, on concrete at least SHOULDER_MIN_HALF wide.
         const outside = d.sub(drawn);
         const s = clamp(float(0.5).add(outside.div(fp)), 0, 1)
@@ -122,8 +145,10 @@ export class RoadShading {
           .mul(select(signed.lessThan(-SHOULDER_MIN_HALF), float(1), float(0)));
         shoulder.assign(max(shoulder, s));
       });
-      return vec3(cover, concrete, shoulder.mul(float(1).sub(cover))).mul(this.style.enabled);
-    })() as V3;
+      return vec4(cover, concrete, shoulder.mul(float(1).sub(cover)), ballast).mul(
+        this.style.enabled,
+      );
+    })() as V4;
   }
 
   /**
@@ -168,6 +193,8 @@ export const SHOULDER_PIXELS = 2;
  * not taxiways (11.5).
  */
 export const SHOULDER_MIN_HALF = 15;
+/** Concrete segments narrower than this (m) are railway beds, drawn as ballast (decision 259). */
+export const RAIL_MAX_HALF = 6;
 
 export const LIGHT_LEVELS = [0, 2, 4] as const;
 export const LIGHT_LEVEL = 2;
@@ -179,11 +206,17 @@ export class LightTables {
   readonly lists: Uint32Array;
   /** Towns' urban extent radii, URBAN_VERTICES each (InfraScene.outlines). */
   readonly outlines: Float32Array;
+  /** The urban ground's pattern, one vec4 per light (InfraScene.townInfo; decision 259). */
+  readonly info: Float32Array;
   private readonly ranges = new Map<string, RiverRange>();
 
-  constructor(lights: Float32Array, radius: number, outlines?: Float32Array) {
+  constructor(lights: Float32Array, radius: number, outlines?: Float32Array, info?: Float32Array) {
     this.lights = lights.length ? lights : new Float32Array(8);
     this.outlines = outlines?.length ? outlines : new Float32Array(1);
+    this.info =
+      info && info.length === (this.lights.length / 8) * 4
+        ? info
+        : new Float32Array((this.lights.length / 8) * 4);
     const count = lights.length / 8;
     const byTile = new Map<string, number[]>();
     const p = new Vec3d();
@@ -257,6 +290,9 @@ export class LightShading {
   private readonly lights;
   private readonly lists;
   private readonly outlines;
+  private readonly info;
+  /** Beyond this distance (m) the urban ground gives way to its roofs (decision 259). */
+  readonly groundRange = uniform(11_000);
 
   constructor(
     tables: LightTables | null,
@@ -268,6 +304,106 @@ export class LightShading {
     this.lists = storage(new StorageBufferAttribute(lists, 1), 'uint', lists.length).toReadOnly();
     const o = tables?.outlines ?? new Float32Array(1);
     this.outlines = storage(new StorageBufferAttribute(o, 1), 'float', o.length).toReadOnly();
+    const inf = tables?.info ?? new Float32Array(4);
+    this.info = storage(new StorageBufferAttribute(inf, 4), 'vec4', inf.length / 4).toReadOnly();
+  }
+
+  /**
+   * The urban ground's albedo at a planet-centered position inside a built-up patch
+   * (proposal 0009, Phase 1; decision 259): the nearest town's or industrial site's
+   * street pattern (`urbanPattern.ts`) of asphalt streets, sidewalks, squares, parks,
+   * parking lots, courtyards, gardens and yards, or concrete and gravel for industry.
+   * Where a block shrinks below a few pixels, or beyond `groundRange`, it gives way to
+   * the roofs of `builtAlbedo`, the far representation. Call it inside built-up cover only.
+   */
+  urbanGround(planetPosition: V3, start: F, count: F, footprint: F, distance: F): V3 {
+    return Fn(() => {
+      const p = normalize(planetPosition);
+      const best = float(1e9).toVar();
+      const bestId = int(-1).toVar();
+      const bestD = float(0).toVar();
+      const bestR = float(1).toVar();
+      const bestIndustry = float(0).toVar();
+      const first = int(start);
+      Loop({ start: int(0), end: int(count), type: 'int' }, ({ i }) => {
+        const id = this.lists.element(first.add(i)).toInt();
+        const a = this.lights.element(id.mul(2));
+        const b = this.lights.element(id.mul(2).add(1));
+        const d = length(p.sub(a.xyz)).mul(this.radius);
+        const share = d.div(max(b.y, 1));
+        If(b.z.lessThan(1.5).and(b.y.greaterThan(0)).and(share.lessThan(best)), () => {
+          best.assign(share);
+          bestId.assign(id);
+          bestD.assign(d);
+          bestR.assign(b.y);
+          bestIndustry.assign(select(b.z.greaterThan(0.5), float(1), float(0)));
+        });
+      });
+      const roofs = builtAlbedo(planetPosition, footprint, bestIndustry);
+      const out = roofs.toVar();
+      If(bestId.greaterThanEqual(0), () => {
+        const g = this.info.element(bestId);
+        const S = g.y;
+        If(S.greaterThan(0), () => {
+          const c = this.lights.element(bestId.mul(2)).xyz;
+          const east = normalize(cross(vec3(0, 1, 0), c));
+          const north = cross(c, east);
+          const dp = p.sub(c);
+          const x = dot(dp, east).mul(this.radius);
+          const y = dot(dp, north).mul(this.radius);
+          const ca = cos(g.x);
+          const sa = sin(g.x);
+          const u = x.mul(ca).add(y.mul(sa));
+          const v = x.mul(sa).negate().add(y.mul(ca));
+          const fp = max(footprint, 0.05);
+          const line = (w: F) => {
+            const k = floor(w.div(S).add(0.5));
+            const major = mod(k, MAJOR_EVERY).lessThan(0.5);
+            return abs(w.sub(k.mul(S))).sub(select(major, float(MAJOR_HALF), float(MINOR_HALF)));
+          };
+          const edge = min(line(u as F), line(v as F));
+          const bi = floor(u.div(S));
+          const bj = floor(v.div(S));
+          const seed = uint(g.z);
+          const h = hashBitsNode(cellHashNode(ivec3(int(bi), int(bj), int(URBAN_HASH_Z)), seed), 4);
+          // Distance share at the block's center, so a block takes one class throughout.
+          const share = length(vec3(bi.add(0.5).mul(S), bj.add(0.5).mul(S), 0)).div(bestR);
+          // Gardens and yards alternate by parcel, a third of a block across.
+          const pi = floor(u.div(S.div(3)));
+          const pj = floor(v.div(S.div(3)));
+          const hp = hashBitsNode(
+            cellHashNode(ivec3(int(pi), int(pj), int(URBAN_HASH_Z + 1)), seed),
+            4,
+          );
+          const garden = mix(URBAN_COLORS.lawn, URBAN_COLORS.yard, step(0.55, hp));
+          const courtyard = mix(URBAN_COLORS.courtyard, URBAN_COLORS.yard, step(0.75, hp).mul(0.6));
+          const industrial = select(h.lessThan(0.3), URBAN_COLORS.gravel, URBAN_COLORS.concrete);
+          const residential = select(
+            share.lessThan(CORE_SHARE).and(h.lessThan(0.3)),
+            URBAN_COLORS.square,
+            select(
+              h.greaterThan(0.92),
+              URBAN_COLORS.park,
+              select(
+                h.greaterThan(0.85).and(share.greaterThan(CORE_SHARE)),
+                URBAN_COLORS.parking,
+                select(share.lessThan(INNER_SHARE), courtyard, garden),
+              ),
+            ),
+          );
+          const block = select(bestIndustry.greaterThan(0.5), industrial, residential);
+          const walk = clamp(float(0.5).sub(edge.sub(SIDEWALK).div(fp)), 0, 1);
+          const street = clamp(float(0.5).sub(edge.div(fp)), 0, 1);
+          const ground = mix(mix(block, URBAN_COLORS.sidewalk, walk), URBAN_COLORS.asphalt, street);
+          // Blocks below about four pixels, or beyond the ground's range, show their roofs.
+          const resolved = clamp(S.div(fp.mul(4)).sub(1), 0, 1).mul(
+            float(1).sub(smoothstep(this.groundRange.mul(0.8), this.groundRange, distance)),
+          );
+          out.assign(mix(roofs, ground, resolved));
+        });
+      });
+      return out;
+    })() as V3;
   }
 
   /**
@@ -392,6 +528,35 @@ export function builtAlbedo(planetPosition: V3, footprint: F, industry: F): V3 {
     return mix(townColor, concrete, industry);
   })() as V3;
 }
+
+const linear = (h: number) => {
+  const c = new Color().setHex(h);
+  return vec3(c.r, c.g, c.b);
+};
+
+/**
+ * The urban ground's palette (proposal 0009; decision 259), warm and muted beside the
+ * settlement palette of docs/visual-style.md: asphalt as the roads, pale sidewalks and
+ * squares, grass for parks and lawns, packed earth for yards, concrete and gravel for industry.
+ */
+export const URBAN_HEX = {
+  asphalt: 0x7a7062,
+  sidewalk: 0xb8b0a2,
+  square: 0xc9bca4,
+  park: 0x6f8a4e,
+  parking: 0x8c877e,
+  lawn: 0x7e9456,
+  yard: 0xa69a80,
+  courtyard: 0xa89f8e,
+  concrete: 0x9a968e,
+  gravel: 0x8a8172,
+  ballast: 0x6e665c,
+} as const;
+const URBAN_COLORS = Object.fromEntries(
+  Object.entries(URBAN_HEX).map(([k, h]) => [k, linear(h)]),
+) as unknown as Record<keyof typeof URBAN_HEX, V3>;
+/** Rail ballast (linear), for the railways' beds in the road shader. */
+export const BALLAST = URBAN_COLORS.ballast;
 
 /** Selects a factor of 0 on the day side to 1 at night, from the sun's elevation at `up`. */
 export function nightFactor(up: V3, sunDirection: V3): F {

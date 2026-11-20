@@ -4284,6 +4284,21 @@ Left for later (TODO): while the player flies, the map and other flights' resolu
 
 **Reason:** the owner's review of R2.5's start.
 
+### 259. Urban ground in the terrain shader (Proposal 0009, Phase 1)
+
+**Date:** 2026-11-20
+**Decision:** Proposal 0009 (settlements and cities) is accepted and lives in `docs/proposals/0009-settlements-and-cities.md`; `docs/plans/cities.md` plans it. Its first phase replaces the roof-and-wall lattice of the built-up patches (decision 71) with urban ground, drawn by the terrain shader with no geometry:
+
+- **The pattern** (`render/sim/infra/urbanPattern.ts`, `LightShading.urbanGround`). Each town and industrial site carries a street grid in its local frame (east and north at its center, as `localFrame`): turned to the bearing of the busiest road leaving its cell (from the network tier), spaced 90 m in cities (60,000 and up), 105 m in towns and 120 m in villages, a major street on every third line (7 m half-width, else 4.5 m), each edged by a 2.5 m sidewalk. Each block takes one ground class from a hash of its index and the distance of its center from the town's center, as a share of the built-up radius: squares within 0.14, parks and parking lots, paved courtyards within 0.4 and gardens and yards (alternating by parcels a third of a block wide) beyond; industrial sites take concrete and gravel. The pattern's parameters are one vec4 per light record (`InfraScene.townInfo`, read through `LightTables`).
+- **One hash on both sides.** The block hash is the canopy's 32-bit integer hash (decision 148, `cellHash` and `cellHashNode`), so the CPU's twin (`urbanClassAt`) picks the same class as the shader bit for bit, and the town buildings (`structureLayer.ts`) keep off streets, sidewalks, squares, parks and parking lots and turn square to the grid. A `fract(sin(…))` hash would differ between float64 and float32.
+- **Distance.** Where a block shrinks below about four pixels, or beyond `groundRange` (11 km, about the building range), the ground gives way to `builtAlbedo`'s roofs: the far representation of Part A's detail levels ("shading only: roof colors").
+- **Ballast.** Railways were concrete strips; concrete segments narrower than 6 m (railways are the only ones) now draw as ballast (`RoadShading.coverage` returns a fourth component).
+- **Views.** `tools/render.preview.ts` gains the standard city views of Proposal 0009: `city5k` and `city1k` over the largest city, `town300` over the settlement nearest 20,000 people, and `citynight`.
+
+**How it was checked.** `tests/urbanPattern.test.ts` (streets on the lines, majors wider, sidewalks, the hash against the canopy's, squares only in the core, buildings off streets); the standard views on seed 4 before and after (`docs/reports/cities-baseline.md`), on lavapipe.
+
+**Reason:** the built-up patch read as a patchwork of colored squares, not as a town, and the buildings stood on it at random. Structure first: even before Phase 3's streets, a town has streets its buildings respect. Settlement plans (Phases 3–5) replace the grid near the camera with their own streets and parcels; the grid stays as the fallback for towns without one.
+
 ### 271. The chase camera's acceleration lag in game time; the analytic pose's speed eased from leg to leg
 
 *Numbered after the cities work of Proposal 0009 (decisions 259–270, on `feature/urban-ground` and `feature/cities`, not yet on `main` when this was written), so the two merge without renumbering.*

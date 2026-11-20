@@ -33,6 +33,48 @@ import { STRUCTURE } from '../../../worldgen/networks/alignment';
 import { alignedPoint, linksByLine } from '../../../worldgen/networks/alignments';
 import type { Alignments } from '../../../worldgen/networks/alignments';
 import { NETWORK } from '../../../worldgen/networks/link';
+import { blockHash, foldGridAngle, urbanSpacing } from './urbanPattern';
+import type { UrbanInfo } from './urbanPattern';
+
+/**
+ * The bearing (rad, counterclockwise from east) of the busiest road leaving each
+ * settlement cell, by cell: the urban grid turns to it (decision 259).
+ */
+function mainRoadBearings(graph: StrategicGraph): Map<number, number> {
+  const roads = graph.roads;
+  const c3 = graph.settlements.points;
+  const cellIndex = new Map<number, number>();
+  graph.settlements.cells.forEach((c, i) => cellIndex.set(c, i));
+  const best = new Map<number, { cls: number; bearing: number }>();
+  const p = new Vec3d();
+  for (let k = 0; k < roads.count; k++) {
+    const o = roads.offsets[k]!;
+    const e = roads.offsets[k + 1]! - 1;
+    if (e <= o) continue;
+    const cls = roads.roadClass[k]!;
+    for (const [at, next] of [
+      [o, o + 1],
+      [e, e - 1],
+    ] as const) {
+      const cell = roads.cells[at]!;
+      const i = cellIndex.get(cell);
+      if (i === undefined) continue;
+      const prev = best.get(cell);
+      if (prev && prev.cls <= cls) continue;
+      p.set(c3[i * 3]!, c3[i * 3 + 1]!, c3[i * 3 + 2]!);
+      const { east, north } = localFrame(p);
+      const dx = roads.points[next * 3]! - p.x;
+      const dy = roads.points[next * 3 + 1]! - p.y;
+      const dz = roads.points[next * 3 + 2]! - p.z;
+      const bearing = Math.atan2(
+        dx * north.x + dy * north.y + dz * north.z,
+        dx * east.x + dy * east.y + dz * east.z,
+      );
+      best.set(cell, { cls, bearing });
+    }
+  }
+  return new Map([...best].map(([c, b]) => [c, b.bearing]));
+}
 
 export type SiteKind = 'town' | 'airbase' | 'industry';
 
@@ -71,6 +113,8 @@ export interface BuiltSite {
    * counterclockwise from east (decision 103); `radius` is their maximum.
    */
   outline?: Float32Array;
+  /** Towns and industry: the urban ground's street pattern (decision 259). */
+  grid?: UrbanInfo;
 }
 
 /** A town's built-up radius (m) toward unit direction `d`: its outline, or its radius. */
@@ -173,6 +217,8 @@ export class InfraScene {
    */
   readonly outlines: Float32Array;
   readonly sites: BuiltSite[] = [];
+  /** The urban ground's pattern per light record, 4 floats each (`UrbanInfo`; decision 259). */
+  readonly townInfo: Float32Array;
   /** Habitability per coarse cell and that grid's resolution, for the rural glow. */
   readonly habitability: Uint8Array;
   readonly habitabilityResolution: number;
@@ -298,6 +344,8 @@ export class InfraScene {
     };
     const lights: number[] = [];
     const outlines: number[] = [];
+    // The urban ground's pattern per light record (decision 259): angle, spacing, seed, 0.
+    const info: number[] = [];
     for (const base of infra.airbases) {
       const p = new Vec3d(...base.point);
       const h = base.heading;
@@ -333,10 +381,12 @@ export class InfraScene {
         key: `airbase-${base.id}`,
       });
       lights.push(p.x, p.y, p.z, 1500, 0.35, 0, BUILT_AIRFIELD, encodeRunway(L, h));
+      info.push(0, 0, 0, 0);
     }
     this.segments = { count: segs.length / 8, data: Float64Array.from(segs) };
 
     const s = graph.settlements;
+    const bearings = mainRoadBearings(graph);
     for (let i = 0; i < s.cells.length; i++) {
       const p = new Vec3d(s.points[i * 3]!, s.points[i * 3 + 1]!, s.points[i * 3 + 2]!);
       const pop = s.population[i]!;
@@ -379,6 +429,13 @@ export class InfraScene {
         BUILT_TOWN,
         shape,
       );
+      const grid: UrbanInfo = {
+        angle: foldGridAngle(bearings.get(s.cells[i]!) ?? blockHash(i, 0, 0x2f1) * Math.PI),
+        spacing: urbanSpacing(pop),
+        seed: (Math.imul(i + 1, 0x9e37) >>> 0) & 0xffffff,
+      };
+      info.push(grid.angle, grid.spacing, grid.seed, 0);
+      this.sites[this.sites.length - 1]!.grid = grid;
     }
     const seen = new Set<number>();
     for (const t of infra.targets) {
@@ -400,8 +457,16 @@ export class InfraScene {
       this.clear(p, p, 1000, false);
       this.indexBuilt(this.sites[this.sites.length - 1]!);
       lights.push(p.x, p.y, p.z, 1200, 0.4, 900, BUILT_INDUSTRY, 0);
+      const grid: UrbanInfo = {
+        angle: foldGridAngle(Math.PI / 2 - t.id * 0.7),
+        spacing: 140,
+        seed: (Math.imul(t.id + 1, 0x5bd1) >>> 0) & 0xffffff,
+      };
+      info.push(grid.angle, grid.spacing, grid.seed, 0);
+      this.sites[this.sites.length - 1]!.grid = grid;
     }
     this.lights = Float32Array.from(lights);
+    this.townInfo = Float32Array.from(info);
     this.outlines = Float32Array.from(outlines.length ? outlines : [0]);
   }
 
