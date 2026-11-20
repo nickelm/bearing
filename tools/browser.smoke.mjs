@@ -24,7 +24,8 @@
  *   WORLD    a world written by tools/browser.world.preview.ts, as its path without the
  *            extension (tools/out/browser/world-1983): it is put into the browser's world
  *            cache before the app loads, which spares a machine without a GPU the global pass
- *   ONLY     comma list of parts to run: flight, takeoff, helicopter, campaign (default all)
+ *   ONLY     comma list of parts to run: flight, takeoff, helicopter, campaign, follow (default
+ *            all but follow, which runs the war to each demo type's flights; FOLLOW lists them)
  *   TRAFFIC  1: Free Flight with its traffic and ground radars (decision 218)
  *   GPU_TIMING 1: GPU pass timings per view from timestamp queries (R1.1; a real GPU)
  *   HELO     the helicopter the helicopter part flies: scout (default) or utility
@@ -582,7 +583,195 @@ async function campaign() {
   await deviceHealthy('campaign');
 }
 
+/** The demo's mission types that `follow` follows, in order. */
+const FOLLOW_TYPES = env('FOLLOW', 'cap,interdiction,cas,airlift').split(',');
+
+/**
+ * Follow (R2.4): the war runs at 64× until a flight of each demo type is in the air, then
+ * Follow from mission search (the first) or the app's handle (the rest) cuts behind it. Each
+ * picture must show the HUD, the chase camera above the ground and the aircraft in front of
+ * it; Escape returns to the map with the mission selected. Check 10's run samples the camera's
+ * height above the drawn ground while it follows the low CAS flight; check 7's pictures are
+ * the HUD against the day's sky, snow and night.
+ */
+async function followPart() {
+  // The war runs while the simulation view's observer shows; the map visits stay short. On
+  // lavapipe the map's GPU process grows by about 1 GB every 10–20 s (decision 252) and the
+  // kernel kills it after three minutes or so.
+  await open(`seed=${seed}&view=simulation`);
+  await until(
+    () => window.bearing?.globe.terrainReady === true && window.bearing.sim.started === true,
+    900,
+  );
+  await fixScale();
+  /** Waits (at 64×) for a flight of `type` between climb-out and approach; returns its id. */
+  const airborne = async (type) => {
+    await page.evaluate(() => window.bearing.sim.setRate(64));
+    const handle = await until(
+      (t) => {
+        const b = window.bearing;
+        const now = b.sim.displayTime(performance.now());
+        const flying = ['climb-out', 'ingress', 'fence-in', 'on-target', 'egress'];
+        const m = b.sim.missions.find((x) => {
+          if (x.type !== t || x.aircraft <= 0) return false;
+          let phase = 'planned';
+          for (const e of x.timeline) if (e.time <= now) phase = e.phase;
+          // Ten game minutes left in the phase window, so the follow does not end at once.
+          const end = x.timeline.find((e) => e.phase === 'approach')?.time ?? Infinity;
+          return flying.includes(phase) && end - now > 900;
+        });
+        return m ? m.id : null;
+      },
+      900,
+      type,
+    );
+    return handle.jsonValue();
+  };
+  /** The followed view's state: the camera's height, the aircraft's place in the view, the HUD. */
+  const followState = () =>
+    page.evaluate(() => {
+      const b = window.bearing;
+      const g = b.globe;
+      const ch = g.chase;
+      const to = ch.target.pos.clone().sub(ch.eye);
+      const d = to.length();
+      const off = Math.acos(Math.max(-1, Math.min(1, to.dot(ch.forward) / (d || 1))));
+      const hud = document.querySelector('.ff-hud');
+      return {
+        active: b.follow?.active ?? false,
+        mission: b.follow?.missionId ?? null,
+        view: b.view(),
+        camera: g.cameraMode,
+        height: Math.round(ch.height * 10) / 10,
+        distance: Math.round(d),
+        offAxisDeg: Math.round(((off * 180) / Math.PI) * 10) / 10,
+        hud: hud !== null && !hud.hidden,
+        displays: document.querySelectorAll('.mfd, .display, [class*="slot"]').length,
+        title: document.querySelector('.follow-title')?.textContent ?? '',
+        rate: b.sim.rate,
+      };
+    });
+  const leave = async (id) => {
+    await page.keyboard.press('Escape');
+    await frames(10);
+    const back = await page.evaluate(() => ({
+      view: window.bearing.view(),
+      active: window.bearing.follow.active,
+      selected: window.bearing.strategic.airSelected,
+      camera: window.bearing.globe.cameraMode,
+    }));
+    check(
+      back.view === 'strategic' && !back.active && back.camera !== 'chase',
+      `follow: Escape did not return to the map: ${JSON.stringify(back)}`,
+    );
+    check(
+      back.selected === `mission:${id}`,
+      `follow: the map is not on the followed flight: ${JSON.stringify(back)}`,
+    );
+    await pageShot(`follow-return`);
+    // Back to the observer while the war runs on (see above).
+    await gui(page, 'View', 'simulation');
+    await frames(3);
+  };
+  for (const [i, type] of FOLLOW_TYPES.entries()) {
+    const id = await airborne(type);
+    if (i === 0) {
+      // Mission search (M) on the map, then the Follow button on this flight's row.
+      await page.evaluate(() => window.bearing.sim.setRate(0));
+      await gui(page, 'View', 'strategic');
+      await frames(3);
+      await page.keyboard.press('KeyM');
+      await frames(5);
+      const pressed = await page.evaluate((mid) => {
+        const rows = [...document.querySelectorAll('.mission-search .rows li')];
+        for (const li of rows) {
+          const title = li.querySelector('.title')?.textContent ?? '';
+          const m = window.bearing.sim.missions.find((x) => x.id === mid);
+          if (!m || !title.startsWith(m.callsign)) continue;
+          const b = li.querySelector('button.follow');
+          if (!b) return 'no Follow button on its row';
+          b.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+          return 'ok';
+        }
+        return `no row for mission ${mid} among ${rows.length}`;
+      }, id);
+      check(pressed === 'ok', `follow: mission search: ${pressed}`);
+    } else {
+      const ok = await page.evaluate((mid) => window.bearing.followMission(mid), id);
+      check(ok, `follow: mission ${id} (${type}) could not be followed`);
+    }
+    await frames(5);
+    await settled();
+    await frames(Math.round(60 / Math.max(1, slow / 4)));
+    const s = await followState();
+    log(
+      `follow ${type}: ${s.title}; camera ${s.height} m up, ${s.distance} m back, ${s.offAxisDeg}° off axis`,
+    );
+    check(
+      s.active && s.view === 'simulation' && s.camera === 'chase',
+      `follow ${type}: not following: ${JSON.stringify(s)}`,
+    );
+    check(s.hud, `follow ${type}: no HUD`);
+    check(s.rate === 1, `follow ${type}: the clock is not at 1× (${s.rate})`);
+    check(s.height > 0.5, `follow ${type}: the camera is in the ground (${s.height} m)`);
+    check(
+      s.offAxisDeg < 25,
+      `follow ${type}: the aircraft is not in front of the camera (${s.offAxisDeg}°)`,
+    );
+    await picture(`follow-${type}`);
+    await pageShot(`follow-${type}`);
+    results[`follow-${type}`].follow = s;
+    if (type === 'cas') {
+      // Check 10: the camera's least height above the drawn ground over a minute of low flight.
+      let least = Infinity;
+      for (let k = 0; k < 30; k++) {
+        await frames(2);
+        least = Math.min(least, (await followState()).height);
+      }
+      log(`check 10: least camera height above the ground ${least} m`);
+      check(least > 0.5, `check 10: the camera touched the ground (${least} m)`);
+      results['follow-cas'].leastHeight = least;
+      // Check 7: the HUD against snow.
+      await gui(page, 'Weather', 'snow');
+      await frames(20);
+      await picture('check7-snow');
+      await gui(page, 'Weather', 'live');
+    }
+    await leave(id);
+    await deviceHealthy(`follow ${type}`);
+  }
+  if (env('NIGHT', '1') === '1') {
+    // Check 7 at night: the clock jumps to local night over the map (the debug panel's local
+    // time seeks the war forward), then the first CAP in the air is followed.
+    const seek = await page.evaluate((h) => {
+      const c = [...document.querySelectorAll('.lil-gui .lil-controller')].find(
+        (x) => x.querySelector('.lil-name')?.textContent === 'Local time (h)',
+      );
+      const input = c?.querySelector('input');
+      if (!input) return 'no "Local time (h)" control';
+      input.value = String(h);
+      input.dispatchEvent(new Event('input'));
+      input.dispatchEvent(new Event('change'));
+      input.dispatchEvent(new Event('blur'));
+      return 'ok';
+    }, 23.5);
+    check(seek === 'ok', `check 7: ${seek}`);
+    const id = await airborne('cap');
+    check(
+      await page.evaluate((mid) => window.bearing.followMission(mid), id),
+      'check 7: no CAP to follow at night',
+    );
+    await frames(5);
+    await settled();
+    const s = await picture('check7-night');
+    log(`check 7 at night: sun ${s.sunElevation}°`);
+    check(s.sunElevation < -6, `check 7: not night at the flight (sun ${s.sunElevation}°)`);
+    await leave(id);
+  }
+}
+
 try {
+  if (parts.includes('follow')) await followPart();
   if (parts.includes('flight')) await flight();
   if (parts.includes('takeoff')) await takeoff();
   if (parts.includes('helicopter')) await helicopter();

@@ -250,5 +250,16 @@
       "elevationDeg": 60,
       "notch": 60
     }
+  },
+  "rig": {
+    "kind": "fast-jet",
+    "distance": 20,
+    "height": 4.2,
+    "groundDistance": 15,
+    "groundHeight": 2.8,
+    "rotation": 3.5,
+    "stretch": 2,
+    "stretchPerAccel": 0.25,
+    "fovDeg": 50
   }
 }

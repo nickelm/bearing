@@ -255,5 +255,16 @@
     },
     "rotorGauges": false,
     "crew": ["wso"]
+  },
+  "rig": {
+    "kind": "fast-jet",
+    "distance": 24,
+    "height": 5,
+    "groundDistance": 18,
+    "groundHeight": 3.2,
+    "rotation": 3.2,
+    "stretch": 2,
+    "stretchPerAccel": 0.25,
+    "fovDeg": 50
   }
 }

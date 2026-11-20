@@ -100,10 +100,18 @@ export class TimeControls {
     if (this.weatherEl.textContent !== d.weather) this.weatherEl.textContent = d.weather;
   }
 
-  /** Shows a short notice above the bar (e.g. why the clock slowed down), with an optional action. */
-  notify(text: string, ms = 6000, action?: { label: string; run: () => void }): void {
+  /** Shows a short notice above the bar (e.g. why the clock slowed down), with optional actions. */
+  notify(
+    text: string,
+    ms = 6000,
+    actions?: { label: string; run: () => void } | { label: string; run: () => void }[],
+  ): void {
     this.noticeEl.textContent = text;
-    if (action) {
+    for (const action of actions === undefined
+      ? []
+      : Array.isArray(actions)
+        ? actions
+        : [actions]) {
       const b = document.createElement('button');
       b.className = 'notice-action';
       b.textContent = action.label;

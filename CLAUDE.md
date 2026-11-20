@@ -35,7 +35,7 @@ Guidance for Claude Code sessions in this repository. **`docs/roadmap.md` is the
 | Air support comparison   | `npx vitest run --config vitest.tools.config.ts tools/airSupport.preview.ts --disable-console-intercept` (env: `SEEDS`, `HOURS`, `OUT`) → `tools/out/air-support.md`: the front after a day with full air war and with each side's strikes and ground support suppressed (decision 251) |
 | Ground map               | `npx vitest run --config vitest.tools.config.ts tools/groundMap.preview.ts` (env: `SEED`, `LAT`/`LON`, `KM`, `ALT`, `RANGES`) → `tools/out/groundmap-<nm>.png` and `.json` (decision 226) |
 | Map CPU and GPU timings  | In the app: `?dev&cputime=1` logs the map's CPU per section and the app's frame every 5 s; `?dev&gputime=1` GPU time per view and pass (decisions 242, 245). Headless: `SCENE=strategic PERF=1 MOVE=1` in `tools/render.preview.ts` prints the map's CPU per section, still and panning |
-| Browser smoke test       | `npm run build && npm run preview`, then `node tools/browser.smoke.mjs` (env: `MODE`, `WORLD`, `ONLY`, `SCENES`, `OUT`) → `tools/out/browser/` (decision 144) |
+| Browser smoke test       | `npm run build && npm run preview`, then `node tools/browser.smoke.mjs` (env: `MODE`, `WORLD`, `ONLY`, `SCENES`, `OUT`) → `tools/out/browser/` (decision 144); `ONLY=follow` follows a flight of each demo type with checks 7 and 10 (`FOLLOW`, `NIGHT=0`; decision 252) |
 
 ## Directory map
 
@@ -134,7 +134,8 @@ src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Bo
                     procedural builder, palettes and schemes; the specs are in src/data/models/, decision 106);
                     later the transition controller
   sim/              simulation view: GlobeScene, camera/ (observer, chase camera and stations), aircraft/
-                    (the flown aircraft with animated parts, decision 135), terrain/
+                    (the flown aircraft with animated parts, decision 135; trafficLayer.ts, instanced campaign
+                    aircraft, decision 252), terrain/
                     (TerrainRenderer), atmosphere/ (sky-view LUT, sun, moon and stars; decision 140), water/ (sea),
                     clouds/ (Volumetrics: the march through cloud, fog, dust and rain veils; cloudForm,
                     noiseVolume, the coverage bake and the weather texture; decision 141), forest/ (the canopy
@@ -168,6 +169,10 @@ src/freeflight/     the Free Flight mode's glue on the main thread: world and ru
                     session flow (?mode=freeflight; decision 134), its weather (a StandaloneWeather feed and
                     presets), URL options (decision 143) and traffic.ts, scripted traffic and ground radars
                     for the sensors (decision 218)
+src/follow/         following a campaign flight on the main thread (R2.4, decision 252): followFlight.ts (stand-in
+                    models, the drawn altitude over the drawn ground, the read-only HUD frame), follow.ts (the cut,
+                    the chase camera on the analytic pose, HUD, spectator displays, the way back to the map) and
+                    campaignTraffic.ts (other flights near the camera: full views near, instanced beyond)
 src/viewer/         the model viewer page (viewer.html, a second Vite page; decision 106)
 src/workers/        worker entry points and message protocols
 src/main.ts         app entry: WebGPU checks, renderer, scene, GUI

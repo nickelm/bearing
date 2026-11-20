@@ -554,6 +554,70 @@ body.ff-flying.ff-no-fps .frame-overlay {
   white-space: nowrap;
 }
 
+/* Follow (R2.4): on a row of mission search and in the map's selection panel. */
+.mission-search .head .follow {
+  margin-left: auto;
+  padding: 0 6px;
+  border-color: #ffc83d;
+  cursor: pointer;
+}
+
+.air-panel .follow {
+  margin-top: 6px;
+  color: #000;
+  background: #ffc83d;
+  border: none;
+  border-radius: 3px;
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+
+.air-panel .follow[hidden] {
+  display: none;
+}
+
+/* The followed flight's bar (R2.4): who, what, and the way back to the map. */
+.follow-bar {
+  position: fixed;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 32px);
+  padding: 4px 8px 4px 12px;
+  background: rgb(0 0 0 / 0.6);
+  border-left: 3px solid #ffc83d;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.follow-bar[hidden] {
+  display: none;
+}
+
+.follow-bar .follow-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.follow-bar button {
+  color: #fff;
+  background: rgb(255 255 255 / 0.08);
+  border: 1px solid rgb(255 255 255 / 0.25);
+  border-radius: 3px;
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 6px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
 .mission-search .sub {
   opacity: 0.75;
   font-size: 12px;

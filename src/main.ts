@@ -108,6 +108,8 @@ import { DEMO_SEEDS } from './campaign/demoSeeds';
 import { START_ALTITUDE, startFocus } from './render/strategic/startFocus';
 import { SectionTimer } from './render/common/sectionTimer';
 import { MissionSearchPanel } from './ui/missionSearch/panel';
+import { Follow } from './follow/follow';
+import { CampaignTraffic } from './follow/campaignTraffic';
 import { SidePanel } from './ui/sidePanel';
 import { routeState } from './sim/air/route';
 import { SeedBrowser } from './ui/seedBrowser';
@@ -153,6 +155,13 @@ export interface BearingHandle {
   readonly freeFlight: FreeFlight | null;
   /** GPU pass timings per view, with `?dev&gputime=1` on a device that has timestamp queries (R1.1). */
   readonly gpuTiming: GpuTiming | null;
+  /** Following a campaign flight (R2.4), and the app's way in: false if the mission cannot be followed. */
+  readonly follow: Follow | null;
+  readonly followMission: (id: number) => boolean;
+  /** The campaign's other aircraft near the camera (R2.4). */
+  readonly traffic: CampaignTraffic | null;
+  /** The view on screen. */
+  readonly view: () => 'simulation' | 'strategic';
 }
 
 declare global {
@@ -271,8 +280,9 @@ async function main(): Promise<void> {
     simCamera: 'observer',
     station: '',
   };
-  // The free camera is a development tool until V4 (decision 72): on the dev server, or with ?dev.
-  const devCamera = import.meta.env.DEV || query.has('dev');
+  // The free camera is a development tool (decision 72): the simulation view is entered through
+  // a unit (Follow, or an observer at a station), and the free camera only with ?dev (R2.4).
+  const devCamera = query.has('dev');
 
   // The game clock lives in the sim worker (decision 67); the display time follows it.
   // A new world resets the campaign calendar (decision 33) and restarts the sim.
@@ -397,7 +407,9 @@ async function main(): Promise<void> {
       ? strategicView.orbit
       : globe.cameraMode === 'observer'
         ? globe.observer
-        : globe.orbit;
+        : globe.cameraMode === 'chase'
+          ? globe.chase
+          : globe.orbit;
   const setActiveView = (view: 'simulation' | 'strategic') => {
     if (view === activeView) return;
     // Keep the place: the new view's camera starts over the same point, with the same heading.
@@ -481,6 +493,50 @@ async function main(): Promise<void> {
   };
   missionSearch.onFocus = focusMission;
   missionSearch.onInput = (input) => sim.input(input);
+  // Following a flight (R2.4): a cut into the simulation view behind one of its aircraft.
+  const follow = freeFlightMode
+    ? null
+    : new Follow({
+        canvas: renderer.domElement,
+        globe,
+        strategic: strategicView,
+        radius: DEFAULT_PLANET_PARAMS.radius,
+        missions: () => sim.missions,
+        setView: (v) => {
+          viewParams.scene = v;
+          setActiveView(v);
+        },
+        returned: (id, why) => {
+          applyCamera();
+          // The map lands above the flight, selected, if it still flies.
+          focusMission(id);
+          if (why) timeControls.notify(why, 6000);
+        },
+      });
+  // The campaign's aircraft near the camera (R2.4); the followed flight is Follow's to draw.
+  const traffic = freeFlightMode
+    ? null
+    : new CampaignTraffic(globe, DEFAULT_PLANET_PARAMS.radius, () => sim.missions);
+  if (follow && traffic) {
+    globe.beforeDraw = (eye) => {
+      follow.place(eye);
+      traffic.place(eye);
+    };
+  }
+  /** Follows mission `id` at 1× (the subscription's offer says so); false if it cannot be followed yet. */
+  const followMission = (id: number): boolean => {
+    if (!follow) return false;
+    if (!follow.start(id, gameTime)) {
+      timeControls.notify('That flight has not left the ground yet: follow it once it departs.');
+      return false;
+    }
+    missionSearch.visible = false;
+    strategicView.airSelected = null;
+    if (sim.rate !== 1) sim.setRate(1);
+    return true;
+  };
+  missionSearch.onFollow = followMission;
+  airPanel.onFollow = followMission;
   sidePanel.onChoose = (side) => {
     mapParams.viewingSide = side;
     strategicView.airView.side = side;
@@ -547,6 +603,9 @@ async function main(): Promise<void> {
 
   const regenerate = async () => {
     const token = ++generation;
+    // A new world: the followed flight and the drawn traffic belong to the old one.
+    follow?.stop(null);
+    traffic?.clear();
     const params: PlanetParams = {
       ...DEFAULT_PLANET_PARAMS,
       seed: worldParams.seed,
@@ -1144,12 +1203,25 @@ async function main(): Promise<void> {
   const touchDevice = hasTouch();
   sim.onFlagged = (n) => {
     const labels = n.events.map((e) => e.label).join(', ');
-    // A subscription's hit offers its mission (R1.4; following it is R2.4).
+    // A subscription's hit offers its mission: show it on the map, or follow it (R1.4, R2.4).
     const hit = n.events.find((e) => e.mission !== undefined);
     timeControls.notify(
       n.slowed ? `Slowed to 1×: ${labels}` : labels,
       hit ? 15000 : 6000,
-      hit ? { label: 'Show', run: () => focusMission(hit.mission!) } : undefined,
+      hit
+        ? [
+            {
+              label: 'Show',
+              run: () => {
+                follow?.stop(null);
+                focusMission(hit.mission!);
+              },
+            },
+            ...(follow && follow.missionId !== hit.mission
+              ? [{ label: 'Follow', run: () => void followMission(hit.mission!) }]
+              : []),
+          ]
+        : undefined,
     );
   };
   const relief = strategicView.relief;
@@ -1460,6 +1532,10 @@ async function main(): Promise<void> {
       atmosphere,
       freeFlight,
       gpuTiming,
+      follow,
+      followMission,
+      traffic,
+      view: () => activeView,
     };
   }
   // Apply the View folder's starting values (once onResize exists): before this, the
@@ -1511,6 +1587,13 @@ async function main(): Promise<void> {
     freeFlight?.frame(Math.min(frameMs, 250) / 1000, frameMs);
     gameTime =
       freeFlight && freeFlight.state !== 'menu' ? freeFlight.gameTime : sim.displayTime(now);
+    // The followed flight's pose and the chase camera's target, before the view renders.
+    if (follow?.active && activeView !== 'simulation') follow.stop(null);
+    follow?.frame(dt, gameTime);
+    if (traffic) {
+      traffic.time = gameTime;
+      traffic.exclude = follow?.missionId ?? null;
+    }
     globe.gameTime = gameTime;
     // A standing clock holds the weather's motion, the particles and the sound.
     globe.paused = freeFlight ? freeFlight.state === 'paused' : sim.rate === 0;
@@ -1558,6 +1641,7 @@ async function main(): Promise<void> {
     appCpu.lap(activeView === 'strategic' ? 'map render' : 'view render');
     gpuTiming?.frame(freeFlight && activeView === 'simulation' ? 'freeflight' : activeView, now);
     if (freeFlight && activeView === 'simulation') freeFlight.drawHud(globe.camera);
+    if (follow?.active && activeView === 'simulation') follow.drawHud(globe.camera, gameTime);
     // Rain, wind and dust where the camera is; silence over the map.
     const listening = activeView === 'simulation';
     const falling = globe.precipitation?.levels;

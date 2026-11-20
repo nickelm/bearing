@@ -59,10 +59,10 @@ describe('aircraft bundles', () => {
     expect(gaps('f21')).toBe('pylons, calibration');
     expect(gaps('uh68')).toBe('pylons, calibration');
     expect(gaps('ve18')).toBe('geometry, flight, rig, pylons, calibration');
-    expect(gaps('vo31')).toBe('flight, rig, pylons, calibration');
-    expect(gaps('vo35')).toBe('flight, rig, pylons, calibration');
+    expect(gaps('vo31')).toBe('flight, pylons, calibration');
+    expect(gaps('vo35')).toBe('flight, pylons, calibration');
     expect(gaps('a15')).toBe('geometry, flight, rig, pylons, calibration');
-    expect(gaps('c150')).toBe('geometry, flight, rig, pylons, calibration');
+    expect(gaps('c150')).toBe('flight, pylons, calibration');
     for (const id of ['f25', 'e5', 'kc40', 'vo37', 'ra44', 'ra60', 've28']) {
       expect(gaps(id), id).toContain('geometry');
     }

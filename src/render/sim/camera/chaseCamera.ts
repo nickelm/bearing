@@ -289,6 +289,26 @@ export class ChaseCamera {
     return 0;
   }
 
+  /** The view's heading (rad clockwise from north), for the map's camera on a return. */
+  get heading(): Radians {
+    const p = this.eye;
+    const n = p.length() || 1;
+    const ux = p.x / n;
+    const uy = p.y / n;
+    const uz = p.z / n;
+    // East = Y × up, north = up × east (rule 3: +Y through the north pole).
+    let ex = uz;
+    let ez = -ux;
+    const el = Math.hypot(ex, ez) || 1;
+    ex /= el;
+    ez /= el;
+    const nx = uy * ez;
+    const ny = uz * ex - ux * ez;
+    const nz = -uy * ex;
+    const f = this.forward;
+    return Math.atan2(f.x * ex + f.z * ez, f.x * nx + f.y * ny + f.z * nz);
+  }
+
   /** Free look by a mouse drag (pixels), `radPerPixel` = vertical FOV / viewport height. */
   look(dx: number, dy: number, radPerPixel: number): void {
     this.lookYaw += dx * radPerPixel;

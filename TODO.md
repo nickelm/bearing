@@ -179,16 +179,19 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 ### R2.4 Follow
 
 - [x] The followed flight's pose from its analytic route: position, nose and top, velocity, the turns at waypoints smoothed into banked turns, formation slots (`sim/air/analyticPose.ts`)
-- [ ] Campaign aircraft in the simulation view: the followed flight's aircraft from their bundles' models, posed by the analytic pose (one model per aircraft, the flight in formation)
-- [ ] Other flights near the camera, instanced by type, with a level of detail for packages; shadows near the camera
-- [ ] Chase camera on an analytic target (`ChaseTarget` from the pose); the rig from the followed type's bundle, including a transport rig
-- [ ] *Follow* from mission search and from a subscription offer: a cut into the simulation view with a chase-camera settle (owner decision 12)
-- [ ] Return to the map above the flight's position (a key and a button)
-- [ ] Read-only HUD for the followed aircraft from its analytic state (`hudFrame` from the pose)
-- [ ] Spectator displays: the followed aircraft's own formats, read-only
-- [ ] Retire the debug free camera behind `?dev` only
-- [ ] Acceptance checks 7 and 10 as scripted sequences
+- [x] Campaign aircraft in the simulation view: the followed flight's aircraft from their bundles' models, posed by the analytic pose (one model per aircraft, the flight in formation), lifted over the drawn ground (`follow/followFlight.ts`, `follow/follow.ts`)
+- [x] Stand-in models by class and side for types without geometry, in their own schemes, until R2.7; the C-150's model (it stands in for the large types)
+- [x] Other flights near the camera, instanced by type, with a level of detail for packages; shadows near the camera (full views within 1.5 km, at most six; `follow/campaignTraffic.ts`, `render/sim/aircraft/trafficLayer.ts`)
+- [x] Chase camera on an analytic target (`ChaseTarget` from the pose); the rig from the followed type's bundle, including a transport rig (the C-150's); rigs for the Vo-31, Vo-35 and F-124
+- [x] *Follow* from mission search and from a subscription offer (and the map's selection panel): a cut into the simulation view with a chase-camera settle (owner decision 12)
+- [x] Return to the map above the flight's position (Escape or M, and the bar's button)
+- [x] Read-only HUD for the followed aircraft from its analytic state (`followHudFrame`)
+- [x] Spectator displays: the followed aircraft's own formats, read-only, with the moving map
+- [x] Retire the debug free camera behind `?dev` only
+- [ ] Acceptance checks 7 and 10 as scripted sequences (`ONLY=follow` in `tools/browser.smoke.mjs`)
 - [ ] Owner: follow a mission of each demo type and return
+- [ ] Spectator displays' radar and threat formats are empty until R2.6's sensors read campaign contacts
+- [ ] Afterburner, control surfaces and speedbrake of the followed aircraft stay at rest until R2.5's flight model drives them
 
 ### R2.5 Full fidelity and handover
 
@@ -317,3 +320,4 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] GPU determinism flake in `detailStage` and `tileSynth` (about 1 run in 5–10 on record): not reproduced in 20 runs on the owner's GPU and 10 on lavapipe (2026-11-19), nothing changed to fix it; close if it stays away. History in the archived TODO
 - [ ] The Free Flight session's "drizzle: wet at once" check fails (decision 217); not investigated
 - [ ] Stale code comments listed in the audit's "Left in the Code"; fix when the files are next touched
+- [ ] On lavapipe, `tests/gpu/mapSoak.test.ts` "keeps the relief tiles within their caches while panning at the floor" fails (geometries 274 against 234; the same at 8542fd3, before R2.4's changes), and in Chromium on lavapipe the GPU process of a seed-4 world grows by about 1 GB every 10–20 s from the start, map or simulation view, until the kernel kills it after about 195 s (the `campaign` part as well as `follow`). Not seen on the owner's GPU (decision 245); look at the relief and terrain tiles' buffers on a software adapter

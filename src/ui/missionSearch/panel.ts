@@ -55,6 +55,8 @@ export class MissionSearchPanel {
   private isActive = true;
   /** A row was chosen: focus the map on the mission and select it. */
   onFocus: ((missionId: number) => void) | null = null;
+  /** Follow was chosen on a row: cut to the simulation view behind the flight (R2.4). */
+  onFollow: ((missionId: number) => void) | null = null;
   /** A campaign input (subscribe, unsubscribe) for the sim. */
   onInput: ((input: CampaignInputEvent) => void) | null = null;
 
@@ -230,6 +232,26 @@ export class MissionSearchPanel {
       sub.className = 'sub';
       sub.textContent = `${r.aircraft} · ${r.theater} · ${r.phaseLabel}${r.jumpable ? ' · jump-in open' : ''}`;
       li.append(head, sub);
+      if (r.followable) {
+        // On pointerdown: the rows are redrawn a few times a second, and a click needs the
+        // same element under the press and the release.
+        const follow = document.createElement('button');
+        follow.className = 'follow';
+        follow.textContent = 'Follow';
+        follow.title = 'Follow this flight in the simulation view';
+        follow.addEventListener('pointerdown', (e) => {
+          e.stopPropagation();
+          this.onFollow?.(r.id);
+        });
+        follow.addEventListener('click', (e) => e.stopPropagation());
+        follow.addEventListener('keydown', (e) => {
+          if (e.code !== 'Enter' && e.code !== 'Space') return;
+          e.stopPropagation();
+          e.preventDefault();
+          this.onFollow?.(r.id);
+        });
+        head.insertBefore(follow, when);
+      }
       const choose = () => this.onFocus?.(r.id);
       li.addEventListener('click', choose);
       li.addEventListener('keydown', (e) => {

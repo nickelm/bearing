@@ -49,13 +49,34 @@ export class AirPanel {
   private infra: Infrastructure | null = null;
   private carriers: CarrierTrack[] = [];
   private radius = 1;
+  private readonly body: HTMLDivElement;
+  private readonly followEl: HTMLButtonElement;
   /** Called when the panel's close button clears the selection. */
   onClose: (() => void) | null = null;
+  /** Follow was chosen for the selected mission (R2.4). */
+  onFollow: ((missionId: number) => void) | null = null;
 
   constructor(parent: HTMLElement = document.body) {
     this.el = document.createElement('div');
     this.el.className = 'air-panel';
     this.el.hidden = true;
+    // The close and follow buttons stay while the text under them is redrawn, so a click lands.
+    const close = document.createElement('button');
+    close.className = 'close';
+    close.textContent = '×';
+    close.title = 'Clear the selection (Esc)';
+    close.onclick = () => this.onClose?.();
+    this.body = document.createElement('div');
+    this.followEl = document.createElement('button');
+    this.followEl.className = 'follow';
+    this.followEl.textContent = 'Follow';
+    this.followEl.title = 'Follow this flight in the simulation view';
+    this.followEl.hidden = true;
+    this.followEl.onclick = () => {
+      const [kind, id] = (this.key ?? '').split(':');
+      if (kind === 'mission') this.onFollow?.(Number(id));
+    };
+    this.el.append(close, this.body, this.followEl);
     parent.appendChild(this.el);
   }
 
@@ -82,18 +103,15 @@ export class AirPanel {
       kind === 'mission'
         ? this.missionRows(missions.find((m) => m.id === id) ?? null, t)
         : this.carrierRows(id, missions, t);
-    this.el.replaceChildren();
-    const close = document.createElement('button');
-    close.className = 'close';
-    close.textContent = '×';
-    close.title = 'Clear the selection (Esc)';
-    close.onclick = () => this.onClose?.();
-    this.el.appendChild(close);
+    this.body.replaceChildren();
     for (const [i, text] of rows.entries()) {
       const p = document.createElement(i === 0 ? 'h2' : 'p');
       p.textContent = text;
-      this.el.appendChild(p);
+      this.body.appendChild(p);
     }
+    const m = kind === 'mission' ? missions.find((x) => x.id === id) : undefined;
+    const phase = m ? missionPhase(m, t) : 'complete';
+    this.followEl.hidden = !m || m.aircraft <= 0 || phase === 'planned' || phase === 'complete';
     this.el.hidden = false;
   }
 

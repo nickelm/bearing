@@ -106,6 +106,8 @@ export interface MissionRow {
   jumpIn: { from: GameTime; to: GameTime } | null;
   /** Whether the jump-in window is open now. */
   jumpable: boolean;
+  /** Whether the flight can be followed now: it has started and not ended (R2.4). */
+  followable: boolean;
 }
 
 function minutes(s: number): string {
@@ -173,6 +175,7 @@ export function missionRows(
             : `${minutes(-toAction)} ago`,
       jumpIn: window,
       jumpable: window !== null && t >= window.from && t < window.to,
+      followable: phase !== 'planned' && m.aircraft > 0,
     });
   }
   const rank = (r: MissionRow) => (r.timeToAction === 0 ? 0 : r.timeToAction > 0 ? 1 : 2);

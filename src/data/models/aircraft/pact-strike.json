@@ -224,7 +224,7 @@
     "loadouts": [
       {
         "id": "cas",
-        "stores": "rocket pods, 4 \u00d7 250 kg bombs, cannon",
+        "stores": "rocket pods, 4 × 250 kg bombs, cannon",
         "radiusFactor": 0.9
       }
     ]
@@ -241,5 +241,16 @@
     },
     "rotorGauges": false,
     "crew": []
+  },
+  "rig": {
+    "kind": "fast-jet",
+    "distance": 23,
+    "height": 5,
+    "groundDistance": 17,
+    "groundHeight": 3.2,
+    "rotation": 3.2,
+    "stretch": 2,
+    "stretchPerAccel": 0.25,
+    "fovDeg": 50
   }
 }
