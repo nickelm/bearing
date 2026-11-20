@@ -4297,3 +4297,21 @@ Left for later (TODO): while the player flies, the map and other flights' resolu
 **How it was checked.** `tests/follow.test.ts` (the camera at 1× and 16×), `tests/analyticPose.test.ts` (the speed has no steps), the unit suite.
 
 **Reason:** the owner's look at following a CAP at 16×.
+
+### 272. Follow at full fidelity: a followed F-21 flight promoted inside its window, its lead on the drawn route
+
+**Date:** 2026-11-20
+**Decision:** R2.5's follow on `PromotedFlight` (decision 256), on the main thread (`src/follow/fullFidelity.ts`, wired in `follow.ts`).
+
+- **When.** A followed flight is promoted when its type has fixed-wing flight data (`flightSpecOfType`: the F-21 alone today, the Vo-31 and Vo-35 in R2.7), it is inside its jump-in window (climb-out to approach), every aircraft is in the air and the clock runs at the flight cap (`FLOWN_MAX_RATE`, 8×) or slower. Faster, `PromotedFlight` cannot keep up (40 steps a frame) and the follow stays analytic. It is demoted at the approach, when the clock goes faster, and when its own clock falls more than 5 s behind game time (a seek or a stalled tab), after which it is promoted again from the route. The drawn aircraft then ease from where they flew onto their analytic poses over a 1.5 s time constant, so a demotion does not jump the camera by the AI's few hundred meters.
+- **The lead's reference** (`drawnReference` in `followFlight.ts`) is its route as the view draws it: on the sited field near its base (decision 253) and lifted to the drawn altitude's target over the drawn ground (decision 255), not the eased lift, so the AI climbs over a ridge at its tracker's own rate. The mission is looked up live, so a new route (an abort's, the worker's rebuilt route after a handback) becomes the reference when it arrives (`routeKey`; `PromotedFlight.setLead` keeps the pilots). Aircraft the campaign loses in aggregate leave the promoted flight from the highest slots, as decision 250's losses do.
+- **The ground** is Free Flight's: `flownGround` in `freeflight/ground.ts` builds the sited runways and the `AirfieldGround` (drawn surface, the height service before tiles load, the airfields' pads, landform props as obstacles) for both modes from the same terrain.
+- **Drawing.** The aircraft are drawn from their airframes: position at the CG (`AircraftView.setCg`, the spec's CG at full fidelity and none for analytic poses), the control laws' elevator, aileron and rudder, gear, speedbrake and afterburner; a crashed aircraft is hidden. The HUD frame is `buildHudFrame` of the followed airframe (mode FOLLOW · AI), the displays' snapshot is built from it as Free Flight's is, with the flight model's fuel capacity. Every other flight in the bubble is drawn by `CampaignTraffic` as before.
+- **Spectating at full fidelity is presentation.** The worker carries on the flight on its analytic route, which the AI tracks within a few hundred meters (decision 256); only a take-over holds the mission (decision 257).
+- **Mouse aim** moved out of Free Flight into `ui/flight/mouseAim.ts` (`aimDirection`, `flyMouseAim`), so a campaign aircraft taken over flies with the same law. Free Flight's behavior is unchanged.
+
+The promoted flight flies in still air: Free Flight's wind from the weather is not yet applied to it (TODO).
+
+**How it was checked.** `tests/fullFidelity.test.ts`: only the F-21 has fixed-wing flight data; promotion is wanted from the climb-out, at 8× but not 16×, and not at the approach; the reference is the route over low ground and the ground plus the clearance over a ridge; a CAP flight at full fidelity loses its highest slot when the campaign does, follows a new route within 400 m, and asks for a new promotion when its clock is a minute behind. The unit suite, the type check and lint pass. Lavapipe cannot run the app in Chromium here (decision 252), so the look is for the owner's GPU.
+
+**Reason:** R2.5: the player takes over a flight that already flies at full fidelity, so the take-over changes only where the inputs come from (design, *Mission Search and Jump-In*).

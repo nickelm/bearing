@@ -19,8 +19,11 @@ import {
   toRunway,
 } from '../sim/flight/runway';
 import type { Runway, RunwayFrame } from '../sim/flight/runway';
+import { HeightService } from '../worldgen/edits';
 import type { PadEdit, TerrainEdits } from '../worldgen/edits';
 import type { Infrastructure } from '../worldgen/strategic/infrastructure';
+import { airfieldPads, globalMapSampler } from '../render/sim/infra/airfieldGrading';
+import type { InfraScene } from '../render/sim/infra/infraScene';
 
 /** One runway per airbase, in `infra.airbases` order, at its graded pad's elevation. */
 export function runwaysOf(infra: Infrastructure, pads: readonly PadEdit[]): Runway[] {
@@ -102,4 +105,47 @@ export class AirfieldGround implements GroundQuery {
     if (this.obstacle?.(dir) != null) return 'land';
     return this.global(dir) <= 0 ? 'water' : 'land';
   }
+}
+
+/** What the ground of a flown aircraft is built from, once the global pass is done. */
+export interface FlownTerrain {
+  infra: InfraScene;
+  edits: TerrainEdits;
+  height: Float32Array;
+  n: number;
+  airbases: Infrastructure;
+}
+
+/** The drawn surface the ground reads: the terrain's finest loaded tiles (decision 227). */
+export interface DrawnSurface {
+  displaySurfaceAt(d: Readonly<Vec3d>, load?: boolean): number | null;
+}
+
+/**
+ * The sited runways and the ground of a flown aircraft (Free Flight's, and a campaign
+ * flight's at full fidelity, R2.5): the airfields' graded pads give the runways their
+ * elevations (decision 108); the drawn surface, the height service (the global grid plus
+ * the edits, as the sim worker's, R1.6) before tiles load, and the landform props as
+ * obstacles (decision 225).
+ */
+export function flownGround(
+  t: FlownTerrain,
+  radius: number,
+  terrain: DrawnSurface,
+  obstacle: (d: Readonly<Vec3d>) => number | null,
+): { runways: Runway[]; ground: AirfieldGround } {
+  const pads = airfieldPads(t.infra, globalMapSampler(t.height, t.n));
+  const runways = runwaysOf(t.airbases, pads);
+  const heights = new HeightService(radius, t.height, t.n, t.edits);
+  const ground = new AirfieldGround(
+    runways,
+    t.edits,
+    (d) => heights.height(d),
+    radius,
+    (d) => terrain.displaySurfaceAt(d),
+    obstacle,
+    // The sensors read resident tiles only (decision 227).
+    (d) => terrain.displaySurfaceAt(d, false),
+  );
+  return { runways, ground };
 }

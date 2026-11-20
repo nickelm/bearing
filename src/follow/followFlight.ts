@@ -27,6 +27,8 @@ import type { Mission, MissionPhase } from '../sim/air/mission';
 import { routeState } from '../sim/air/route';
 import { calibratedAirspeed, standardAtmosphere } from '../sim/flight/atmosphere';
 import type { HudFrame } from '../ui/flight/hud';
+import { Vec3d } from '../core/vec3d';
+import type { Reference } from '../sim/flight/aiPilot';
 
 /** The bundle whose geometry stands in for a type without one, by class and side (until R2.7). */
 export const STAND_INS: Readonly<Record<string, { alliance: string; pact: string }>> = {
@@ -187,11 +189,49 @@ export function flightPoses(
   formations: Partial<Record<MissionPhase, Formation>> = {},
   span: Meters = 10,
 ): AnalyticPose[] {
-  const lead = shiftedToAirfield(analyticPose(m.route, t, radius), fields, radius);
+  const lead = drawnLeadPose(m, t, radius, fields);
   const f = formationAt(m.timeline ?? [], formations, t);
   const out: AnalyticPose[] = [lead];
   for (let k = 1; k < Math.max(1, m.aircraft); k++) out.push(slotPose(lead, k, f, span));
   return out;
+}
+
+/** The lead's pose at game time t as the view places it: its route, moved onto the sited field near its base. */
+export function drawnLeadPose(
+  m: Readonly<Mission>,
+  t: number,
+  radius: Meters,
+  fields: readonly AirfieldShift[] = [],
+): AnalyticPose {
+  return shiftedToAirfield(analyticPose(m.route, t, radius), fields, radius);
+}
+
+/**
+ * The lead's reference at full fidelity (R2.5, owner decision 8: full fidelity flies
+ * where the view draws): its drawn pose (`pose`, the route on the sited field) lifted
+ * to the drawn altitude over the drawn ground (`ground`, m at a unit direction, or null
+ * while unknown). The lift is the target, not the eased one the view draws: the AI
+ * climbs over a ridge in its own time, the tracker's height gain deciding how fast.
+ */
+export function drawnReference(
+  pose: (t: number) => AnalyticPose | null,
+  ground: (d: Readonly<Vec3d>) => number | null,
+  gearHeight: Meters,
+  clearance: Meters = FOLLOW_CLEARANCE,
+): Reference {
+  return (t) => {
+    const p = pose(t);
+    if (!p) return null;
+    const pos = new Vec3d(p.pos[0], p.pos[1], p.pos[2]);
+    const l = liftedPose(
+      p,
+      drawnAltitude(p, ground(pos.clone().normalize()), gearHeight, clearance),
+    );
+    return {
+      pos: new Vec3d(l.pos[0], l.pos[1], l.pos[2]),
+      vel: new Vec3d(l.velocity[0], l.velocity[1], l.velocity[2]),
+    };
+  };
 }
 
 /**

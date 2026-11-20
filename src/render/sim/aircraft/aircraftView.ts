@@ -377,6 +377,13 @@ export class AircraftView {
     // otherwise come from a bounding sphere frozen at its first frame.
     this.shadow.renderOrder = -1;
   }
+  /**
+   * Moves the model so `cg` (model coordinates, m) sits at the pose's position: a view drawn
+   * from an analytic pose has none, one drawn from a flight model its spec's (R2.5).
+   */
+  setCg(cg: readonly [number, number, number]): void {
+    this.model.position.set(-cg[0], -cg[1], -cg[2]);
+  }
 
   /** The shadow, in camera-relative coordinates: add it to a group at the origin. */
   get shadowMesh(): Mesh {
@@ -565,7 +572,11 @@ export class AircraftView {
     const shade = this.shadowShade.array as Float32Array;
     for (const s of this.shadowSources) {
       const r = s.rotor >= 0 ? this.rotors[s.rotor]! : null;
-      const k = !r ? 1 : s.kind === 'blades' ? r.bladeOpacity.value : r.discOpacity.value * DISC_SHADOW;
+      const k = !r
+        ? 1
+        : s.kind === 'blades'
+          ? r.bladeOpacity.value
+          : r.discOpacity.value * DISC_SHADOW;
       const n3 = s.position.length;
       if (!s.mesh.visible || k < 0.004) {
         // A hidden source would still write depth and block what follows: collapse it.
@@ -660,11 +671,7 @@ export class AircraftView {
     };
     const mid = sample(null, 0);
     const pts = [sample(e1, span), sample(e1, -span), sample(e2, span), sample(e2, -span)];
-    const n = pts[0]!
-      .clone()
-      .sub(pts[1]!)
-      .cross(pts[2]!.clone().sub(pts[3]!))
-      .normalize();
+    const n = pts[0]!.clone().sub(pts[1]!).cross(pts[2]!.clone().sub(pts[3]!)).normalize();
     if (!(n.dot(dir) > 0.34)) return null;
     let rise = 0;
     for (const q of pts) rise = Math.max(rise, q.clone().sub(mid).dot(n));

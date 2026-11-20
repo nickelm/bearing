@@ -516,6 +516,7 @@ async function main(): Promise<void> {
           focusMission(id);
           if (why) timeControls.notify(why, 6000);
         },
+        rate: () => sim.rate,
       });
   // The campaign's aircraft near the camera (R2.4); the followed flight is Follow's to draw.
   const traffic = freeFlightMode
@@ -855,13 +856,10 @@ async function main(): Promise<void> {
       globe.shadows.setHeights(global.height, global.n);
       // Cloud bases, fog and dust now stand on the eroded ground, as drawn (decision 220).
       globe.weather.setGround(meanGround(weatherGrid, globalMapSampler(global.height, global.n)));
-      freeFlight?.setTerrain({
-        infra,
-        edits,
-        height: global.height,
-        n: global.n,
-        airbases,
-      });
+      const flownTerrain = { infra, edits, height: global.height, n: global.n, airbases };
+      freeFlight?.setTerrain(flownTerrain);
+      // A followed flight at full fidelity flies over the same ground (R2.5).
+      follow?.setTerrain(flownTerrain);
       globe.setInfrastructure(infra);
       globe.bridges.setAlignments(alignments, {
         road: strategic.graph.bridges,

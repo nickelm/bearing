@@ -120,6 +120,16 @@ export class PromotedFlight {
     this.assignPilots();
   }
 
+  /**
+   * Gives the lead a new reference without disturbing the pilots: the flight's route
+   * changed (an abort's way home, the worker's rebuilt route after a handback).
+   */
+  setLead(lead: Reference): void {
+    this.options.lead = lead;
+    this.leadReference = sampledReference(lead);
+    this.assignPilots();
+  }
+
   /** Takes `n` aircraft off the flight (the campaign lost them): the highest slots the player does not fly. */
   remove(n: number): number {
     let removed = 0;

@@ -8,7 +8,15 @@
  * bundles' models (followFlight.ts for stand-ins), posed by their analytic route
  * (sim/air/analyticPose.ts) in formation; the HUD and the aircraft's own displays
  * show what that pose knows, read-only. Escape, M or the button returns to the map
- * above the flight. Nobody flies it from here: taking over is R2.5.
+ * above the flight.
+ *
+ * Full fidelity (R2.5): a flight whose type has fixed-wing flight data is promoted
+ * inside its jump-in window (fullFidelity.ts): its aircraft are flown by AI pilots
+ * through the flight model over the drawn ground (Free Flight's `AirfieldGround`),
+ * drawn from their airframes with their control surfaces, afterburner and speedbrake,
+ * and the HUD and displays are built from the followed airframe. At the approach (or
+ * when the clock runs faster than the flight cap) the flight is demoted again, and the
+ * drawn aircraft ease back onto their routes.
  *
  * The followed mission is looked up by id each frame, since the worker replaces
  * the mission list when it changes (an abort's new route, a loss). When the
@@ -22,7 +30,8 @@ import { Vec3d } from '../core/vec3d';
 import type { ModelSpec } from '../render/common/models/spec';
 import { AircraftView } from '../render/sim/aircraft/aircraftView';
 import type { AircraftPose } from '../render/sim/aircraft/aircraftView';
-import { FAST_JET_RIG, rigFromBundle } from '../render/sim/camera/chaseCamera';
+import { FAST_JET_RIG, followAirframe, rigFromBundle } from '../render/sim/camera/chaseCamera';
+import { modelSpec } from '../render/common/models/library';
 import type { ChaseRig } from '../render/sim/camera/chaseCamera';
 import type { GlobeScene } from '../render/sim/globeScene';
 import { MovingMap } from '../render/strategic/movingMap';
@@ -41,9 +50,18 @@ import { initialAvionics } from '../sim/avionics/avionics';
 import { snapshotFromHud } from '../ui/displays/aircraftSnapshot';
 import { DisplaySystem } from '../ui/displays/system';
 import { Hud, matrixProjector } from '../ui/flight/hud';
+import type { HudFrame } from '../ui/flight/hud';
+import { buildHudFrame, landingAid } from '../ui/flight/hudFrame';
+import type { FlightModel } from '../sim/flight/flightModel';
+import type { FlightSpec } from '../sim/flight/flightSpec';
+import type { Runway } from '../sim/flight/runway';
+import { flownGround } from '../freeflight/ground';
+import type { AirfieldGround, FlownTerrain } from '../freeflight/ground';
+import { FullFidelity, flightSpecOfType, fullFidelityWanted } from './fullFidelity';
 import { PHASE_LABELS } from '../ui/missionSearch/model';
 import {
   drawnAltitude,
+  drawnLeadPose,
   easeLift,
   flightPoses,
   followHudFrame,
@@ -67,7 +85,12 @@ export interface FollowDeps {
   setView: (v: 'simulation' | 'strategic') => void;
   /** Called after the view returned to the map: focus the map on the mission (if it still flies). */
   returned: (missionId: number, why: string | null) => void;
+  /** The campaign clock's rate (game seconds per real second). */
+  rate: () => number;
 }
+
+/** Time constant (s) of the drawn aircraft's ease back onto their routes after a demotion. */
+export const DEMOTION_BLEND = 1.5;
 
 /** How long the chase camera takes to settle in from its start further back (s; owner decision 12). */
 export const SETTLE_TIME = 2.5;
@@ -110,6 +133,16 @@ export class Follow {
   private readonly bar: HTMLDivElement;
   private readonly panelsButton: HTMLButtonElement;
   private readonly title: HTMLSpanElement;
+  /** The flight model's ground and the sited runways (R2.5), once the terrain is ready. */
+  private airfield: AirfieldGround | null = null;
+  private runways: Runway[] = [];
+  /** The followed type's fixed-wing flight data, or null: it flies analytically. */
+  private flightSpec: FlightSpec | null = null;
+  /** The followed flight at full fidelity, or null. */
+  private full: FullFidelity | null = null;
+  /** After a demotion: each slot's offset from its route (m, world), easing out, and its age (s). */
+  private blend: Map<number, Vec3d> | null = null;
+  private blendAge = 0;
   private look: FollowedLook | null = null;
   private bundle: AircraftBundle | null = null;
   private spec: ModelSpec | null = null;
@@ -201,6 +234,28 @@ export class Follow {
     return this.missionId !== null;
   }
 
+  /** Whether the followed flight flies at full fidelity now. */
+  get fullFidelity(): boolean {
+    return this.full !== null;
+  }
+
+  /**
+   * The ground a promoted flight flies over, once the global pass is done (R2.5): built
+   * as Free Flight's, the drawn surface with the airfields' grading.
+   */
+  setTerrain(t: FlownTerrain | null): void {
+    this.demote();
+    if (!t) {
+      this.airfield = null;
+      this.runways = [];
+      return;
+    }
+    const g = this.deps.globe;
+    const r = flownGround(t, this.deps.radius, g.terrain, (d) => g.props.obstacleAt(d));
+    this.airfield = r.ground;
+    this.runways = r.runways;
+  }
+
   /** Whether mission `m` can be followed at game time t: its flight has left the ground or is about to. */
   static followable(m: Readonly<Mission> | undefined, t: number): boolean {
     if (!m || m.aircraft <= 0) return false;
@@ -225,6 +280,7 @@ export class Follow {
     this.look = look;
     this.bundle = b;
     this.spec = spec;
+    this.flightSpec = flightSpecOfType(m!.aircraftType, (id) => modelSpec(id).flight);
     this.lastTime = NaN;
     const g = this.deps.globe;
     g.chase.rig = this.rig(look, spec);
@@ -281,7 +337,61 @@ export class Follow {
   nextAircraft(): void {
     const m = this.mission();
     if (!m) return;
-    this.slot = (this.slot + 1) % Math.max(1, m.aircraft);
+    const slots = this.full
+      ? this.full.flight.alive.map((a) => a.slot)
+      : Array.from({ length: Math.max(1, m.aircraft) }, (_, k) => k);
+    this.slot = slots.find((s) => s > this.slot) ?? slots[0] ?? 0;
+  }
+
+  /**
+   * Promotes the followed flight inside its window, steps it, and demotes it at the
+   * approach, when the clock runs faster than the flight cap, or when its clock fell
+   * behind (a seek); the chase camera then follows the airframe.
+   */
+  private fidelity(m: Mission, t: number): void {
+    const g = this.deps.globe;
+    const want = fullFidelityWanted(m, t, this.deps.rate(), this.poses);
+    if (this.full && (!want || !this.full.advance(m, t))) this.demote();
+    else if (!this.full && want && this.flightSpec && this.airfield && g.terrainReady) {
+      this.full = new FullFidelity(
+        {
+          radius: this.deps.radius,
+          mission: () => this.mission(),
+          leadPose: (mm, u) => drawnLeadPose(mm, u, this.deps.radius, this.fieldsAt(mm, u)),
+          ground: this.airfield,
+          formations: missionPlugin(m.type).formations,
+          gearHeight: this.gearHeight,
+          clearance: this.clearance,
+          span: this.span,
+        },
+        this.flightSpec,
+        m,
+        t,
+        this.poses,
+      );
+      this.blend = null;
+      for (const d of this.drawn) d.view.setCg(this.flightSpec.cg);
+    }
+    const a = this.full?.followed(this.slot);
+    if (a) {
+      this.slot = a.slot;
+      followAirframe(g.chase.target, a.flown.airframe);
+    }
+  }
+
+  /** Back to the analytic poses: the drawn aircraft ease from where they flew onto their routes. */
+  private demote(): void {
+    const f = this.full;
+    if (!f) return;
+    this.full = null;
+    const at = f.positions();
+    this.blend = new Map();
+    this.blendAge = 0;
+    this.poses.forEach((p, k) => {
+      const q = at.get(k);
+      if (q) this.blend!.set(k, q.sub(new Vec3d(p.pos[0], p.pos[1], p.pos[2])));
+    });
+    for (const d of this.drawn) d.view.setCg([0, 0, 0]);
   }
 
   /** Advances the follow by `dt` real seconds at game time t; call before the scene renders. */
@@ -308,6 +418,7 @@ export class Follow {
     g.chase.timeRate =
       dt > 0 && Number.isFinite(this.lastTime) ? Math.max(0, t - this.lastTime) / dt : 1;
     this.pose(m, t, dt);
+    this.fidelity(m, t);
     if (Math.floor(t) !== Math.floor(this.lastTime)) this.updateTitle(m, t);
     this.lastTime = t;
   }
@@ -323,6 +434,21 @@ export class Follow {
       window.innerWidth,
       window.innerHeight,
     );
+    const a = this.full?.followed(this.slot);
+    if (a) {
+      // At full fidelity the HUD and the displays read the followed airframe (as Free Flight's).
+      const model = a.flown.airframe as unknown as FlightModel;
+      const frame = buildHudFrame(model, a.flown.controls, {
+        aid: landingAid(model, this.runways, this.deps.globe.chase.eye),
+        mode: 'follow · AI',
+        control: null,
+        timing: null,
+      });
+      frame.panels = true;
+      this.updateDisplays(m, airframeState(model), frame, t);
+      if (this.panels !== 'clean') this.hud.draw(frame, project);
+      return;
+    }
     const agl = this.heightAboveGround(p);
     const down = gearDown(p, agl);
     const frame = followHudFrame({
@@ -333,7 +459,19 @@ export class Follow {
       gearDown: down,
       afterburner: 0,
     });
-    this.updateDisplays(m, p, frame, agl, t);
+    this.updateDisplays(
+      m,
+      {
+        onGround: !p.airborne,
+        radarAltitude: agl,
+        groundSpeed: p.speed,
+        pos: p.pos,
+        track: p.heading,
+        heading: p.heading,
+      },
+      frame,
+      t,
+    );
     if (this.panels !== 'clean') this.hud.draw(frame, project);
   }
 
@@ -365,16 +503,21 @@ export class Follow {
   }
 
   /** The flight's poses at t, lifted over the drawn ground, the views built, and the camera's target. */
-  private pose(m: Mission, t: number, dt = 0): void {
+  /** The fields mission m's aircraft are drawn on at t: the sited airbases, and its carrier's deck. */
+  private fieldsAt(m: Readonly<Mission>, t: number): readonly AirfieldShift[] {
     const carrier =
       m.base.kind === 'carrier' && this.carriers[m.base.id]
         ? carrierState(this.carriers[m.base.id]!, t)
         : null;
+    return carrier ? [...this.fields, ...carrierFields(m, carrier)] : this.fields;
+  }
+
+  private pose(m: Mission, t: number, dt = 0): void {
     const raw = flightPoses(
       m,
       t,
       this.deps.radius,
-      carrier ? [...this.fields, ...carrierFields(m, carrier)] : this.fields,
+      this.fieldsAt(m, t),
       missionPlugin(m.type).formations,
       this.span,
     );
@@ -393,6 +536,18 @@ export class Follow {
       d.lift = dt > 0 && Number.isFinite(d.lift) ? easeLift(d.lift, target, dt) : target;
       return liftedPose(p, Math.max(0, p.altitude) + d.lift);
     });
+    // After a demotion the drawn aircraft ease from where they flew onto their routes.
+    if (this.blend) {
+      this.blendAge += dt;
+      const w = Math.exp(-this.blendAge / DEMOTION_BLEND);
+      if (w < 0.01) this.blend = null;
+      else
+        this.poses.forEach((p, k) => {
+          const o = this.blend!.get(k);
+          if (!o) return;
+          for (let i = 0; i < 3; i++) p.pos[i] = p.pos[i]! + [o.x, o.y, o.z][i]! * w;
+        });
+    }
     for (let k = 0; k < this.drawn.length; k++) {
       const visible = k < this.poses.length;
       this.drawn[k]!.view.group.visible = visible;
@@ -412,6 +567,10 @@ export class Follow {
     if (this.missionId === null) return;
     const g = this.deps.globe;
     const rpp = (g.camera.fov * DEG) / Math.max(1, window.innerHeight);
+    if (this.full) {
+      this.placeAirframes(eye, rpp);
+      return;
+    }
     const rotors = this.spec ? spinningRotors(this.spec) : undefined;
     this.poses.forEach((p, k) => {
       const v = this.drawn[k]!.view;
@@ -441,22 +600,51 @@ export class Follow {
     });
   }
 
+  /** Places the promoted flight's aircraft from their airframes: surfaces, gear, speedbrake, afterburner. */
+  private placeAirframes(eye: Readonly<Vec3d>, rpp: number): void {
+    const g = this.deps.globe;
+    const ground = this.airfield!;
+    for (const d of this.drawn) {
+      d.view.group.visible = false;
+      d.view.shadowMesh.visible = false;
+    }
+    for (const a of this.full!.flight.aircraft) {
+      const d = this.drawn[a.slot];
+      const m = a.flown.airframe as unknown as FlightModel;
+      if (!d || m.crashed) continue;
+      d.view.group.visible = true;
+      d.view.shadowMesh.visible = true;
+      const t = m.telemetry;
+      const pose: AircraftPose = {
+        pos: m.pos,
+        q: m.q,
+        elevator: t.laws.elevator,
+        aileron: t.laws.aileron,
+        rudder: t.laws.rudder,
+        gear: m.gear,
+        speedbrake: m.speedbrake,
+        afterburner: m.afterburner,
+        flaps: m.gear,
+        groundHeight: ground.height(m.pos.clone().normalize()),
+        // The drawn ground, so the shadow lies on its slope (decision 170).
+        ground: (dir) => ground.height(dir),
+      };
+      d.view.sun.copy(g.sun);
+      d.view.radPerPixel = rpp;
+      d.view.update(pose, eye);
+    }
+  }
+
   /** The master mode's triggers every frame; the displays at 10 Hz (decision 199), read-only. */
-  private updateDisplays(
-    m: Mission,
-    p: AnalyticPose,
-    frame: ReturnType<typeof followHudFrame>,
-    agl: number,
-    t: number,
-  ): void {
+  private updateDisplays(m: Mission, p: FollowedState, frame: HudFrame, t: number): void {
     const b = this.bundle;
     if (!b?.avionics) return;
     const helicopter = this.look?.rig?.kind === 'helicopter';
     const changed = this.displays.triggers({
-      onGround: !p.airborne,
+      onGround: p.onGround,
       gearDown: frame.gearDown,
-      radarAltitude: agl,
-      groundSpeed: p.speed,
+      radarAltitude: p.radarAltitude,
+      groundSpeed: p.groundSpeed,
       helicopter,
     });
     const now = performance.now();
@@ -468,14 +656,14 @@ export class Follow {
       name: `${m.callsign} · ${b.name}`,
       profile: b.avionics,
       avionics: this.displays.avionics,
-      capacity: b.airWar?.fuel ?? m.route.fuel,
-      groundSpeed: p.speed,
+      capacity: this.full ? this.full.spec.mass.fuel : (b.airWar?.fuel ?? m.route.fuel),
+      groundSpeed: p.groundSpeed,
       position: {
         lat: Math.asin(Math.max(-1, Math.min(1, p.pos[1] / d))),
         lon: Math.atan2(p.pos[0], p.pos[2]),
         radius: this.deps.radius,
       },
-      track: p.heading,
+      track: p.track,
       heading: p.heading,
       fixedGear: helicopter,
       control: 'AI',
@@ -518,8 +706,12 @@ export class Follow {
     const label = phase === 'planned' ? 'planned' : PHASE_LABELS[phase];
     const who = m.aircraft > 1 ? ` · aircraft ${this.slot + 1} of ${m.aircraft}` : '';
     const stand = this.look?.standIn ? ' (stand-in model)' : '';
-    const speed = Math.round((this.poses[this.slot]?.speed ?? 0) / KNOT);
-    this.title.textContent = `Following ${m.callsign} · ${this.bundle?.name ?? m.aircraftType}${stand}${who} · ${label} · ${speed} kt`;
+    const full = this.full ? ' · full fidelity' : '';
+    const flown = this.full?.followed(this.slot)?.flown.airframe;
+    const speed = Math.round(
+      (flown ? flown.telemetry.groundSpeed : (this.poses[this.slot]?.speed ?? 0)) / KNOT,
+    );
+    this.title.textContent = `Following ${m.callsign} · ${this.bundle?.name ?? m.aircraftType}${stand}${who} · ${label}${full} · ${speed} kt`;
   }
 
   /** Removes the drawn flight, the HUD and the displays. */
@@ -531,6 +723,8 @@ export class Follow {
     }
     this.drawn = [];
     this.poses = [];
+    this.full = null;
+    this.blend = null;
     this.missionId = null;
     this.hud.show(false);
     this.displays.visible = false;
@@ -543,4 +737,32 @@ export class Follow {
     this.detach();
     this.bar.remove();
   }
+}
+
+/** What the displays read of the followed aircraft, from its analytic pose or its airframe. */
+interface FollowedState {
+  onGround: boolean;
+  radarAltitude: number;
+  groundSpeed: number;
+  pos: readonly [number, number, number];
+  /** Track over the ground and heading (rad from north). */
+  track: number;
+  heading: number;
+}
+
+/** The displays' view of a flown airframe (as Free Flight's). */
+function airframeState(m: FlightModel): FollowedState {
+  const t = m.telemetry;
+  const up = m.pos.clone().normalize();
+  const east = new Vec3d(0, 1, 0).cross(up).normalize();
+  const north = up.clone().cross(east);
+  const vg = m.vel.clone().addScaled(up, -m.vel.dot(up));
+  return {
+    onGround: m.onGround,
+    radarAltitude: t.radarAltitude,
+    groundSpeed: t.groundSpeed,
+    pos: [m.pos.x, m.pos.y, m.pos.z],
+    track: vg.length() > 5 ? Math.atan2(vg.dot(east), vg.dot(north)) : t.heading,
+    heading: t.heading,
+  };
 }

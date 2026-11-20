@@ -203,7 +203,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] Owner: the karst towers and other landform props are not in the one height function (R3.6), so low flights pass through them; keep, thin out or remove them?
 - [ ] Spectator displays' radar and threat formats are empty until R2.6's sensors read campaign contacts
 - [x] Combat spread a nautical mile abeam, in meters whatever the span (owner; decision 258)
-- [ ] Afterburner, control surfaces and speedbrake of the followed aircraft stay at rest until R2.5's flight model drives them
+- [x] Afterburner, control surfaces and speedbrake of the followed aircraft stay at rest until R2.5's flight model drives them (the F-21 at full fidelity; decision 272)
 
 ### R2.5 Full fidelity and handover
 
@@ -217,9 +217,11 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] While the player flies, the map and the war see the held flight on its old route: post its position as fixes (inputs every few game seconds) so the map draws it where it is and other flights' resolution can find it
 - [ ] The follow must not end a held flight at its old route's end (`missionPhase` reads the old timeline while it is held)
 - [x] The followed aircraft seemed to slide backward after a racetrack turn at 16×: the chase camera's acceleration lag read speed changes per real second, and the analytic speed stepped from leg to leg (decision 271)
-- [ ] Follow on `PromotedFlight`: promote a followed flight whose type has flight data inside the window, its lead's reference the drawn route (the fields' shift and the lift over the drawn ground); draw the aircraft from their airframes (surfaces, afterburner, speedbrake); the HUD frame and displays from the airframe; demote at the approach
-- [ ] Ground for promoted flights: the drawn surface with the airfields' grading (Free Flight's `AirfieldGround`)
-- [ ] Every other flight inside the bubble stays drawn while the player flies (`CampaignTraffic`, as while following; owner, decision 258)
+- [x] Follow on `PromotedFlight`: promote a followed flight whose type has flight data inside the window, its lead's reference the drawn route (the fields' shift and the lift over the drawn ground); draw the aircraft from their airframes (surfaces, afterburner, speedbrake); the HUD frame and displays from the airframe; demote at the approach (decision 272)
+- [x] Ground for promoted flights: the drawn surface with the airfields' grading (Free Flight's `AirfieldGround`, built by `flownGround` for both)
+- [x] Every other flight inside the bubble stays drawn while the player flies (`CampaignTraffic`, as while following; owner, decision 258)
+- [ ] Owner, on the GPU: follow an F-21 CAP from climb-out through the station to the approach; the flight at full fidelity holds formation, its surfaces move, and it eases back onto its route at the approach (decision 272)
+- [ ] Wind at full fidelity: the promoted flight flies in still air (the routes leave winds aloft out of rebuilt routes too)
 - [ ] The route's climb (the air war's 110 m/s for the F-21) is steeper than the Kestrel sustains at its climb speed: the AI follows it up to 4 km late and catches up by the station (R2.10's calibration, or a slower climb in the route)
 - [ ] An abort (`returnRoute`) still turns home at a corner; give it the rejoin's turn
 - [ ] The plug-ins' `behavior` parts (rule 16): CAP's first, once the follow runs `PromotedFlight` (the route tracker per phase; weapons on the pass in R2.6)

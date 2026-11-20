@@ -172,8 +172,10 @@ src/freeflight/     the Free Flight mode's glue on the main thread: world and ru
                     for the sensors (decision 218)
 src/follow/         following a campaign flight on the main thread (R2.4, decision 252): followFlight.ts (stand-in
                     models, the drawn altitude over the drawn ground, the read-only HUD frame), follow.ts (the cut,
-                    the chase camera on the analytic pose, HUD, spectator displays, the way back to the map) and
-                    campaignTraffic.ts (other flights near the camera: full views near, instanced beyond)
+                    the chase camera on the analytic pose, HUD, spectator displays, the way back to the map),
+                    fullFidelity.ts (a followed flight promoted into a PromotedFlight inside its window, its lead on
+                    the drawn route; decision 272) and campaignTraffic.ts (other flights near the camera: full views
+                    near, instanced beyond)
 src/viewer/         the model viewer page (viewer.html, a second Vite page; decision 106)
 src/workers/        worker entry points and message protocols
 src/main.ts         app entry: WebGPU checks, renderer, scene, GUI

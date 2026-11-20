@@ -20,12 +20,10 @@ import { Vec3d } from '../core/vec3d';
 import type { GlobeScene } from '../render/sim/globeScene';
 import { AircraftView } from '../render/sim/aircraft/aircraftView';
 import type { AircraftPose } from '../render/sim/aircraft/aircraftView';
-import { airfieldPads, globalMapSampler } from '../render/sim/infra/airfieldGrading';
-import { HeightService } from '../worldgen/edits';
-import type { InfraScene } from '../render/sim/infra/infraScene';
 import { modelSpec } from '../render/common/models/library';
 import type { StrategicScene } from '../render/strategic/strategicScene';
-import { FlightDirector, along } from '../sim/flight/flightDirector';
+import { FlightDirector } from '../sim/flight/flightDirector';
+import { aimDirection, flyMouseAim } from '../ui/flight/mouseAim';
 import type { FlightControls } from '../sim/flight/controlLaws';
 import { followAirframe, rigFromBundle } from '../render/sim/camera/chaseCamera';
 import { AIRCRAFT_BUNDLES } from '../sim/air/bundles';
@@ -56,7 +54,6 @@ import type { WeatherView } from '../sim/weather/frame';
 import type { WeatherConfig } from '../sim/weather/model';
 import type { WeatherPreset } from '../sim/weather/presets';
 import type { StrategicWorld } from '../worldgen/campaignWorld';
-import type { TerrainEdits } from '../worldgen/edits';
 import {
   HelpOverlay,
   PauseMenu,
@@ -106,7 +103,8 @@ import type { FreeFlightUrl } from './url';
 import { FlightWeather } from './flightWeather';
 import { buildHudFrame, landingAid } from '../ui/flight/hudFrame';
 import { buildHeloHudFrame } from '../ui/flight/heloHud';
-import { AirfieldGround, runwaysOf } from './ground';
+import { flownGround } from './ground';
+import type { AirfieldGround, FlownTerrain } from './ground';
 
 export { parseFreeFlightUrl } from './url';
 export type { FreeFlightUrl } from './url';
@@ -439,32 +437,14 @@ export class FreeFlight {
    * The terrain the aircraft flies over, once the global pass is done: the
    * airfields' graded pads (decision 108) give the runways their elevations.
    */
-  setTerrain(t: {
-    infra: InfraScene;
-    edits: TerrainEdits;
-    height: Float32Array;
-    n: number;
-    airbases: StrategicWorld['infrastructure'];
-  }): void {
-    const sampler = globalMapSampler(t.height, t.n);
-    const pads = airfieldPads(t.infra, sampler);
-    this.runways = runwaysOf(t.airbases, pads);
+  setTerrain(t: FlownTerrain): void {
+    const g = flownGround(t, this.deps.radius, this.deps.globe.terrain, (d) =>
+      this.deps.globe.props.obstacleAt(d),
+    );
+    this.runways = g.runways;
+    this.ground = g.ground;
     // The sited runways (decision 220): their points and designators on the start screen.
     this.listBases(t.airbases);
-    const terrain = this.deps.globe.terrain;
-    // The height service (R1.6): the global grid plus the edits, as the sim worker's.
-    const heights = new HeightService(this.deps.radius, t.height, t.n, t.edits);
-    this.ground = new AirfieldGround(
-      this.runways,
-      t.edits,
-      (d) => heights.height(d),
-      this.deps.radius,
-      (d) => terrain.displaySurfaceAt(d),
-      // Landform props are obstacles (decision 225).
-      (d) => this.deps.globe.props.obstacleAt(d),
-      // The sensors read resident tiles only (decision 227).
-      (d) => terrain.displaySurfaceAt(d, false),
-    );
     this.menu.setReady(true);
     // A base in the URL starts the flight at once (fast iteration).
     if (this.pendingBase !== null && this.state === 'menu') {
@@ -1074,40 +1054,12 @@ export class FreeFlight {
    * centered, so looking around does not steer the jet (decision 198).
    */
   private aimDirection(): Vec3d {
-    const ch = this.deps.globe.chase;
-    const cam = this.deps.globe.camera;
-    const tanY = Math.tan(ch.fov / 2);
-    const right = ch.restForward.clone().cross(ch.restUp).normalize();
-    return ch.restForward
-      .clone()
-      .addScaled(right, this.input.cursor.x * tanY * cam.aspect)
-      .addScaled(ch.restUp, this.input.cursor.y * tanY)
-      .normalize();
+    return aimDirection(this.deps.globe.chase, this.deps.globe.camera.aspect, this.input.cursor);
   }
 
-  /**
-   * Mouse aim: the director flies toward the aim; the rudder keys stay the pilot's (the
-   * director zeroes the pedals in the air for its own turn coordination), and a held stick
-   * key takes its axis (decision 219).
-   */
+  /** Mouse aim (decision 219): the shared law, the jet's director toward the aim. */
   private mouseAim(m: FlightModel, ctl: FlightControls): void {
-    const pedals = ctl.yaw;
-    const a = along(m, this.aimDirection());
-    this.director.fly(
-      m,
-      {
-        course: a.course,
-        gamma: a.gamma,
-        speed: null,
-        maxBank: 80 * DEG,
-        maxTurnRate: 20 * DEG,
-        maxLoadDelta: 4,
-      },
-      ctl,
-      FLIGHT_STEP,
-    );
-    ctl.yaw = pedals;
-    this.input.overrideStick(ctl);
+    flyMouseAim(this.director, m, this.aimDirection(), ctl, this.input);
   }
 
   private event(e: FlightEvent): void {
