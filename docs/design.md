@@ -117,7 +117,7 @@ Events and ticks share one priority queue ordered by game time, so their interle
 **Weather.** A synoptic model of lows and highs on a coarse cube grid (about 65 km), driven by the climate maps and the season, gives cloud cover and ceiling, visibility, precipitation from drizzle to the downpour of a storm core, thunderstorms, dust storms over arid land, temperature, and winds aloft. Flight operations and the sky on screen read the same fields. Free Flight runs the same model without the war, or a preset derived from it (clear, overcast, rain, storm, snow, fog, dust storm).
 
 - **Auto-slowdown:** the simulation drops to 1× on events the player has subscribed to (see *Mission Search and Jump-In*).
-- **Flight cap:** while the player controls an aircraft, acceleration is limited to cruise phases (up to 8×) and cancels on any threat.
+- **Flight cap:** while the player controls an aircraft, acceleration is limited to cruise (up to 8×) and cancels on any threat. Cruise is in the air with the gear up, above about 1,000 ft, more than 40 km from the target or station; any enemy flight in the air within 120 km is a threat until the sensors read campaign contacts (R2.6). A rate above the cap drops to it, to 1× outside cruise (decision 274).
 
 ## Planet Parameters
 

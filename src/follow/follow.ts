@@ -59,6 +59,7 @@ import { MouseCapture } from '../ui/flight/mouseCapture';
 import { aimDirection, flyMouseAim } from '../ui/flight/mouseAim';
 import { FlightDirector } from '../sim/flight/flightDirector';
 import type { CampaignInputEvent } from '../sim/eventLog';
+import { flightRateCap } from '../sim/clock';
 import type { FlightModel } from '../sim/flight/flightModel';
 import type { FlightSpec } from '../sim/flight/flightSpec';
 import type { Runway } from '../sim/flight/runway';
@@ -642,6 +643,43 @@ export class Follow {
       this.slot = a.slot;
       followAirframe(g.chase.target, a.flown.airframe);
     }
+  }
+
+  /**
+   * The flight cap while the player flies (R2.5): 8× in cruise, 1× near the target or
+   * station, low, with the gear down, or with an enemy flight within reach; no cap when
+   * the player does not fly.
+   */
+  rateCap(t: number): { rate: number; reason: string | null } {
+    const m = this.mission();
+    const f = this.full;
+    if (!m || !f || f.flight.playerSlot === null) return { rate: Infinity, reason: null };
+    const model = f.flight.bySlot(f.flight.playerSlot)?.flown.airframe as unknown as
+      FlightModel | undefined;
+    if (!model) return { rate: Infinity, reason: null };
+    const R = this.deps.radius;
+    const tp = m.target.point;
+    const target = new Vec3d(tp[0], tp[1], tp[2]).scale(R);
+    let enemy = Infinity;
+    for (const e of this.deps.missions()) {
+      if (e.side === m.side || e.aircraft <= 0) continue;
+      const s = routeState(e.route, t, R);
+      if (!s.airborne) continue;
+      const r = R + s.altitude;
+      const d = Math.hypot(
+        s.point[0] * r - model.pos.x,
+        s.point[1] * r - model.pos.y,
+        s.point[2] * r - model.pos.z,
+      );
+      enemy = Math.min(enemy, d);
+    }
+    return flightRateCap({
+      airborne: !model.onGround,
+      gearDown: model.gear > 0.01,
+      heightAboveGround: model.telemetry.radarAltitude,
+      targetDistance: model.pos.clone().normalize().scale(R).distanceTo(target),
+      enemyDistance: enemy,
+    });
   }
 
   /** The bar's take-over button: shown while the player may take over or flies. */

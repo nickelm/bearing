@@ -4329,3 +4329,12 @@ The promoted flight flies in still air: Free Flight's wind from the weather is n
 **How it was checked.** `tests/fullFidelity.test.ts`: a handback carries the fix with three aircraft and the crashed #4 lost; the lead's reference is its own track while the mission is still held and the rebuilt route once the hold is gone; a flight with every aircraft crashed hands back with all four lost. The unit suite, the type check and lint pass. The flying itself is for the owner's GPU.
 
 **Reason:** R2.5: take over inside the jump-in window and hand back with the AI's orders; the player's input only replaces where the controls come from (rule 12).
+
+### 274. The flight cap: 8× in cruise while the player flies, 1× on any threat
+
+**Date:** 2026-11-20
+**Decision:** `flightRateCap` (`sim/clock.ts`) gives the fastest rate while the player flies a jet: `FLOWN_MAX_RATE` (8×) in cruise, else 1× with the reason. Cruise is in the air, gear up, at least 300 m (about 1,000 ft) above the ground and more than 40 km from the mission's target or station. A threat is any enemy flight in the air within 120 km (about 65 nm, a fighter radar's reach with some margin), from the missions' analytic positions, until R2.6 gives the sensors campaign contacts and the threat warning can say it. The follow reads it each frame from the flown airframe (`Follow.rateCap`) and the app drops the rate to the cap when it is higher, with a notice of why. The rates on offer stay `TIME_RATES`: 16× or more while flying comes down to 8×, and 4× runs as chosen; a threat drops the clock to 1×, and the player chooses again once clear. `PromotedFlight` takes at most 40 steps a frame, enough for 8× at 30 frames a second.
+
+**How it was checked.** `tests/flightCap.test.ts`: 8× in cruise, 1× with an enemy flight at 100 km, 30 km from the target, at 150 m, with the gear down and on the ground. The unit suite, the type check and lint pass.
+
+**Reason:** design, *Time*: the flight cap; roadmap R2.5.

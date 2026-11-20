@@ -1608,6 +1608,17 @@ async function main(): Promise<void> {
     follow?.frame(dt, gameTime);
     // While the player flies, Space and the digits are the jet's and the displays' keys.
     timeControls.keysEnabled = !follow?.flying;
+    // The flight cap (R2.5): up to 8× in cruise while the player flies, back to 1× on any threat.
+    if (follow?.flying && sim.rate > 1) {
+      const cap = follow.rateCap(gameTime);
+      if (sim.rate > cap.rate) {
+        sim.setRate(cap.rate);
+        timeControls.notify(
+          cap.reason ? `Back to 1×: ${cap.reason}` : `${cap.rate}× at most while you fly`,
+          4000,
+        );
+      }
+    }
     if (traffic) {
       traffic.time = gameTime;
       traffic.exclude = follow?.missionId ?? null;
