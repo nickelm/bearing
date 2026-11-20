@@ -124,7 +124,7 @@ import type { VolumetricQuality } from '../src/render/sim/clouds/volumetrics';
 import { encodePng } from './png';
 import { previewWorld } from './previewWorld';
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
-import { settlementPoint } from '../src/worldgen/strategic/graph';
+import { SETTLEMENT_COAST, settlementPoint } from '../src/worldgen/strategic/graph';
 import { recordsOf } from '../src/render/sim/city/cityLayer';
 import type { WorldSeed } from '../src/core/rng';
 import { localFrame } from '../src/worldgen/edits/airfields';
@@ -687,7 +687,7 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     name: 'industry',
     dLat: 0,
     dLon: 0,
-    altitude: 700,
+    altitude: 450,
     tilt: 64 * DEG,
     heading: 0,
     localTime: 10,
@@ -907,7 +907,13 @@ function cityTargets(
   views: PreviewView[],
 ): Record<'hilltown' | 'westcity' | 'eastcity' | 'village' | 'industry', Vec3d | null> {
   type Out = Record<'hilltown' | 'westcity' | 'eastcity' | 'village' | 'industry', Vec3d | null>;
-  const none: Out = { hilltown: null, westcity: null, eastcity: null, village: null, industry: null };
+  const none: Out = {
+    hilltown: null,
+    westcity: null,
+    eastcity: null,
+    village: null,
+    industry: null,
+  };
   const wanted = new Set(views.map((v) => v.target));
   if (![...Object.keys(none)].some((k) => wanted.has(k as PreviewView['target']))) return none;
   const g = campaign.graph;
@@ -938,18 +944,48 @@ function cityTargets(
     const c = new Vec3d(...settlementPoint(sp, i));
     const { east, north } = localFrame(c);
     const h = (de: number, dn: number) =>
-      height(c.clone().addScaled(east, de / radius).addScaled(north, dn / radius).normalize());
-    return Math.hypot(h(800, 0) - h(-800, 0), h(0, 800) - h(0, -800)) / 1600;
+      height(
+        c
+          .clone()
+          .addScaled(east, de / radius)
+          .addScaled(north, dn / radius)
+          .normalize(),
+      );
+    const hs = [h(800, 0), h(-800, 0), h(0, 800), h(0, -800), h(0, 0)];
+    // A hill town on land: every sample well above the sea, the slope a town can climb.
+    if (Math.min(...hs) < 30) return -Infinity;
+    const g = Math.hypot(hs[0]! - hs[1]!, hs[2]! - hs[3]!) / 1600;
+    return g <= 0.25 ? g : -Infinity;
   };
   const out: Out = { ...none };
-  out.hilltown = at(best((i) => (pop(i) >= TOWN_POPULATION && pop(i) < CITY_POPULATION ? slope(i) : -Infinity)));
+  out.hilltown = at(
+    best((i) => (pop(i) >= TOWN_POPULATION && pop(i) < CITY_POPULATION ? slope(i) : -Infinity)),
+  );
   out.westcity = at(best((i) => (sw.styles[i] === Style.Western ? pop(i) : -Infinity)));
-  out.eastcity = at(best((i) => (sw.styles[i] === Style.Eastern ? pop(i) : -Infinity)));
-  out.village = at(best((i) => (pop(i) >= 6000 && pop(i) <= 12_000 && sw.styles[i] === Style.Western ? -Math.abs(pop(i) - 9000) : -Infinity)));
+  // An inland Eastern-bloc city (coastal ones put the camera over the sea or a sea cliff).
+  out.eastcity = at(
+    best((i) =>
+      sw.styles[i] === Style.Eastern &&
+      pop(i) <= 600_000 &&
+      !(sp.flags[i]! & SETTLEMENT_COAST) &&
+      slope(i) > -Infinity
+        ? pop(i)
+        : -Infinity,
+    ),
+  );
+  out.village = at(
+    best((i) =>
+      pop(i) >= 6000 && pop(i) <= 12_000 && sw.styles[i] === Style.Western
+        ? -Math.abs(pop(i) - 9000)
+        : -Infinity,
+    ),
+  );
   if (wanted.has('industry')) {
     const big = best(pop);
     const plan = planSettlement(settlementInput(sw, big), campaign.seed, { radius });
-    const stack = plan.landmarks.find((l) => l.kind === LandmarkKind.Smokestack || l.kind === LandmarkKind.CoolingTower);
+    const stack =
+      plan.landmarks.find((l) => l.kind === LandmarkKind.CoolingTower) ??
+      plan.landmarks.find((l) => l.kind === LandmarkKind.Smokestack);
     if (stack) {
       const d = new SettlementFrame(plan.center, radius).toSphere(stack.x, stack.y);
       out.industry = new Vec3d(...d);

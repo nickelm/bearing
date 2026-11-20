@@ -36,6 +36,7 @@ Guidance for Claude Code sessions in this repository. **`docs/roadmap.md` is the
 | Followed flights         | `npx vitest run --config vitest.tools.config.ts tools/follow.preview.ts` (env: `SEED`, `FLIGHTS=type:mission[:phase],…`, `TOD`, `WEATHER`, `W`, `H`), then `SHOTS=follow-<type>-<mission> OUT_DIR=tools/out node tools/freeflight.screens.mjs` with `npm run dev` up: the chase view of a followed flight with its read-only HUD (decision 252) |
 | Ground map               | `npx vitest run --config vitest.tools.config.ts tools/groundMap.preview.ts` (env: `SEED`, `LAT`/`LON`, `KM`, `ALT`, `RANGES`) → `tools/out/groundmap-<nm>.png` and `.json` (decision 226) |
 | Map CPU and GPU timings  | In the app: `?dev&cputime=1` logs the map's CPU per section and the app's frame every 5 s; `?dev&gputime=1` GPU time per view and pass (decisions 242, 245). Headless: `SCENE=strategic PERF=1 MOVE=1` in `tools/render.preview.ts` prints the map's CPU per section, still and panning |
+| Settlement plans         | `npx vitest run --config vitest.tools.config.ts tools/cities.preview.ts --disable-console-intercept` (env: `SEEDS` or `FROM`/`COUNT`, `CITIES`, `TOWNS`, `VILLAGES`, `DRAW`, `REPORT`, `OUT`; add `--testTimeout=7000000` for many seeds) → plan drawings and metrics (Proposal 0009) |
 | Browser smoke test       | `npm run build && npm run preview`, then `node tools/browser.smoke.mjs` (env: `MODE`, `WORLD`, `ONLY`, `SCENES`, `OUT`) → `tools/out/browser/` (decision 144); `ONLY=follow` follows a flight of each demo type with checks 7 and 10 (`FOLLOW`, `LOW=0`, `LOW_WAIT`, `NIGHT=0`; decisions 252, 253) |
 
 ## Directory map
@@ -49,8 +50,9 @@ docs/proposals/     owner proposals (do not reformat); 0001-two-views.md (decisi
                     0002-third-person-flight.md (decision 94), 0003-forests-for-low-flight.md
                     (decision 148), 0004-helicopter-flight.md (decision 149),
                     0005-terrain-adaptive-networks.md (decision 161), 0006-displays-and-crew.md
-                    (decision 189), 0007-world-diversity.md (decision 204) and
-                    0008-game-loop-and-campaign.md (decision 228) are accepted
+                    (decision 189), 0007-world-diversity.md (decision 204),
+                    0008-game-loop-and-campaign.md (decision 228) and 0009-settlements-and-cities.md
+                    (decisions 259–270) are accepted
 docs/roadmap.md     phases R0–R6 with milestones, dependencies and exit criteria: what to build next
 docs/status/        audits: audit-2026-11-18.md (status matrix, health, decisions for the owner) and
                     todo-2026-11-18.md (the earlier tracks' TODO, archived)
@@ -75,6 +77,10 @@ src/worldgen/       planet generation pipeline stages (may use GPU compute); can
   networks/         the alignment tier (decisions 161, 180, 184): the router, plans, profiles, earthworks,
                     link tasks and anchors, links aligned whole, the stage (build.ts, run once per world
                     on a worker pool over level-6 tiles) and its stored record (alignments.ts)
+  settlements/      (Proposal 0009) the settlement generator, game-agnostic (rule 20): tiers, cultural styles,
+                    tensor-field streets, old cores, blocks, parcels, districts, buildings, landmarks, candidate
+                    targets, villages and farmsteads (plan.ts); packing and feature fields for the renderer (pack.ts),
+                    colliders and exports for a game layer
   strategic/        strategic graph types and builder (settlements, roads, bridges), and infrastructure
                     placed after casting: the only world view campaign logic gets. Road hierarchy,
                     railways and urban extents go here too, and the types of named features (decision 72)
@@ -134,6 +140,8 @@ src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Bo
                     water/ (river segment tables and river shading), models/ (model spec format,
                     procedural builder, palettes and schemes; the specs are in src/data/models/, decision 106);
                     later the transition controller
+  sim/city/         planned settlements (Proposal 0009): CityLayer (meshes by detail level, lights, plumes,
+                    damage), cityMesh.ts (geometry), cityGround.ts (the urban ground's feature fields in the terrain)
   sim/              simulation view: GlobeScene, camera/ (observer, chase camera and stations), aircraft/
                     (the flown aircraft with animated parts, decision 135; trafficLayer.ts, instanced campaign
                     aircraft, decision 252), terrain/
@@ -177,7 +185,7 @@ src/follow/         following a campaign flight on the main thread (R2.4, decisi
                     the drawn route; decision 272) and campaignTraffic.ts (other flights near the camera: full views
                     near, instanced beyond)
 src/viewer/         the model viewer page (viewer.html, a second Vite page; decision 106)
-src/workers/        worker entry points and message protocols
+src/workers/        worker entry points and message protocols; city.worker.ts plans settlements (decision 266)
 src/main.ts         app entry: WebGPU checks, renderer, scene, GUI
 tests/              Vitest unit tests (node); tests/gpu/ runs WGSL kernels on a real GPU via Dawn
 tools/              offline previews (npm run maps; terrain/bench *.preview.ts), output in tools/out/;
@@ -254,6 +262,10 @@ These are the project conventions. Lint enforces some of them (marked ⚙).
 17. **Aircraft types are bundles** (decisions 230, 232, Proposal 0008). Every type is one JSON bundle: geometry with animated parts, flight data, avionics profile and display complement, pylons and loadouts, role tags, crew roles, camera rig, aggregate performance from calibration, and faction, name and skin. Bundles live in `src/data/models/aircraft/`, where the sim may import them (decision 238); `src/sim/air/bundles.ts` is the one loader for the sim worker and the renderer. Never keep a part of a type in code. Add a type by filling every part; the bundle test (`tests/bundles.test.ts`) lists what a type lacks. A type that changes every world's cast needs its own decision.
 18. **Calibration** (decision 230). Aggregate resolvers and full fidelity must agree. Aggregate outcome tables are fitted from headless full-fidelity engagements by a script, stored in the repository, and checked by a tolerance test. A change to a flight model, a weapon or a resolver regenerates the affected tables in the same commit; never tune an aggregate table by hand.
 19. **Event log** (decision 230). Every player input to the campaign and every campaign-level decision is an event in the log, and the consequences of a full-fidelity session return to the simulation as logged events. Nothing outside the log may change campaign state, so replaying the log from a snapshot reproduces the same state. Sim state must be serializable: no hidden RNG state, no closures in the queue, no state held only by the UI.
+
+20. **Settlements are the world's, not the game's** (Proposal 0009, decision 260).
+    - ⚙ Nothing under `src/worldgen/settlements/` imports `campaign`, `sim`, `render`, `ui`, `freeflight` or `follow`, the war's parts of `worldgen/strategic/` (fronts, territory, infrastructure, sites) or anything named for factions. Urban styles key to cultural regions, never to sides.
+    - A game layer reads settlements through their plain exports (districts, landmarks, candidate targets) and sets their lighting levels and damage states through the city layer; campaign logic still reads only the strategic graph (rule 9).
 
 ## Fidelity as level of detail
 

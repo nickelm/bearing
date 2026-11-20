@@ -562,20 +562,58 @@ export function writePrisms(
     if (h <= 0) continue;
     const poly = simplify(Array.from(bp.subarray(bo[b]!, bo[b + 1]!)), 8);
     if (poly.length < 6) continue;
-    let lo = Infinity;
-    let hi = -Infinity;
+    // Heights follow the ground at each corner, so a prism on a slope steps with it
+    // instead of standing as a flat table over its low side.
+    const gs: number[] = [];
     for (let i = 0; i < poly.length; i += 2) {
       const g = ground(poly[i]!, poly[i + 1]!);
       if (g === null) return false;
-      lo = Math.min(lo, g);
-      hi = Math.max(hi, g);
+      gs.push(g);
     }
     const built = Math.min(1, 2 * coverage[b]!);
     const top = h * built;
     if (top < 1) continue;
     const c = srgb(bi[b * 4]! === 5 || bi[b * 4]! === 6 || bi[b * 4]! === 7 ? 0x8e8a82 : 0x9a6a58);
-    // Windows: far away their mean glow at night (the wall shader).
-    w.box(poly, -(hi - lo) - PLINTH[Lod.Prism]!, top, dim(c, 0.9), c, hi, 1, b / 997);
+    const wall = dim(c, 0.9);
+    const ref = gs[0]!;
+    const n = poly.length / 2;
+    let along = 0;
+    for (let i = 0; i < n; i++) {
+      const j = (i + 1) % n;
+      const ax = poly[i * 2]!;
+      const ay = poly[i * 2 + 1]!;
+      const bx = poly[j * 2]!;
+      const by = poly[j * 2 + 1]!;
+      const ga = gs[i]! - ref;
+      const gb = gs[j]! - ref;
+      const len = Math.hypot(bx - ax, by - ay);
+      // Windows: far away their mean glow at night (the wall shader).
+      const hash = b / 997;
+      w.quad(
+        [ax, ay, ga - PLINTH[Lod.Prism]!],
+        [bx, by, gb - PLINTH[Lod.Prism]!],
+        [bx, by, gb + top],
+        [ax, ay, ga + top],
+        wall,
+        ref,
+        [
+          [along, -PLINTH[Lod.Prism]!, 1, hash],
+          [along + len, -PLINTH[Lod.Prism]!, 1, hash],
+          [along + len, top, 1, hash],
+          [along, top, 1, hash],
+        ],
+      );
+      along += len;
+    }
+    for (let i = 1; i + 1 < n; i++) {
+      w.tri(
+        [poly[0]!, poly[1]!, gs[0]! - ref + top],
+        [poly[i * 2]!, poly[i * 2 + 1]!, gs[i]! - ref + top],
+        [poly[i * 2 + 2]!, poly[i * 2 + 3]!, gs[i + 1]! - ref + top],
+        c,
+        ref,
+      );
+    }
   }
   return true;
 }

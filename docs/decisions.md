@@ -4398,7 +4398,7 @@ Left for later (TODO): while the player flies, the map and other flights' resolu
 - **Levels** per chunk, by distance from the eye to the chunk minus 0.7 km:
   - a **kit** within 0.6 km: boxes plus chimneys, water tanks and church towers;
   - **boxes** within 2 km: walls and a gable, hip, shed or flat roof, 14–16 triangles, roofs over 0.6 m eaves;
-  - **prisms** within 12 km: one extruded block at its mean height times twice its built share, the polygon simplified to 8 m, merged into one mesh per settlement with its towers and stacks;
+  - **prisms** within 12 km: one extruded block at its mean height times twice its built share, the polygon simplified to 8 m, its base and top following the ground at each corner (a flat top over a sloping block read as a table), merged into one mesh per settlement with its towers and stacks;
   - nothing beyond.
 
   Part A's ranges were 1 km, 5 km and 15 km. With boxes to 5 km, the largest city put over 1 M triangles in view, against its budget of 0.3 M.

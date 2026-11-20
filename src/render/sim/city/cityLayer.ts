@@ -684,8 +684,9 @@ export class CityLayer {
         if (c.mesh) {
           const seen = !view || !sphereOutsideView(c.center, CHUNK, view);
           placeCameraRelative(c.mesh, c.origin, eye);
-          c.mesh.visible = seen;
-          if (seen) {
+          // Chunks with nothing to draw stay hidden (no empty draws).
+          c.mesh.visible = seen && (c.mesh.userData.triangles as number) > 0;
+          if (c.mesh.visible) {
             draws++;
             chunks++;
             triangles += c.mesh.userData.triangles as number;
@@ -707,7 +708,7 @@ export class CityLayer {
       }
       if (p.prisms) {
         placeCameraRelative(p.prisms, p.prisms.userData.origin as Vec3d, eye);
-        p.prisms.visible = true;
+        p.prisms.visible = (p.prisms.userData.triangles as number) > 0;
         draws++;
         triangles += p.prisms.userData.triangles as number;
       }
