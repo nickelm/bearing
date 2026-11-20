@@ -151,3 +151,39 @@ describe('the chase camera’s heading', () => {
     expect(c.heading).toBeCloseTo(-Math.PI / 2, 9);
   });
 });
+
+describe('a carrier flight', () => {
+  it('stands on the deck where the carrier is now, and flies off it', async () => {
+    const { carrierFields, drawnGround, DECK_HEIGHT, flightPoses } =
+      await import('../src/follow/followFlight');
+    const { AIRCRAFT_TYPES } = await import('../src/sim/air/aircraft');
+    const { MISSION_PROFILES } = await import('../src/sim/air/mission');
+    const { planMissionRoute } = await import('../src/sim/air/missionRoute');
+    const type = AIRCRAFT_TYPES.find((t) => t.carrier)!;
+    const launchAt = dir(30, 20);
+    const route = planMissionRoute({
+      type,
+      loadout: type.loadouts[0]!,
+      profile: MISSION_PROFILES.cap,
+      radius: R,
+      rangeFactor: 1,
+      basePoint: () => launchAt,
+      carrierBased: true,
+      target: dir(33, 22),
+      launch: 0,
+    })!;
+    const m = { aircraft: 2, route, base: { kind: 'carrier', id: 0 } } as unknown as Mission;
+    // The carrier has sailed 4 km on since the launch was planned.
+    const now = dir(30.036, 20);
+    const fields = carrierFields(m, { point: now, heading: 0 });
+    const parked = flightPoses(m, -30, R, fields)[0]!;
+    expect(parked.airborne).toBe(false);
+    const d = Math.hypot(...parked.pos);
+    const at: Dir = [parked.pos[0] / d, parked.pos[1] / d, parked.pos[2] / d];
+    expect(
+      Math.acos(Math.min(1, at[0] * now[0] + at[1] * now[1] + at[2] * now[2])) * R,
+    ).toBeLessThan(1);
+    expect(drawnGround(m, parked, 0)).toBe(DECK_HEIGHT);
+    expect(carrierFields({ ...m, base: { kind: 'airbase', id: 0 } } as Mission, null)).toEqual([]);
+  });
+});

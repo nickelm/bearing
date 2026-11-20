@@ -7,7 +7,9 @@
     "canopy": "canopy",
     "intake": "intake",
     "nozzle": "nozzle",
-    "store": "steel"
+    "store": "steel",
+    "gear": "#B8BCBE",
+    "tire": "#2B2C2E"
   },
   "parts": [
     {
@@ -192,6 +194,86 @@
       "to": [2.2, -0.6, 0],
       "radius": 0.24,
       "sides": 6
+    },
+    {
+      "type": "cylinder",
+      "group": "gear",
+      "from": [7.0, -0.3, 0],
+      "to": [7.0, -1.68, 0],
+      "radius": 0.07,
+      "sides": 6,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [7.0, -0.3, -0.4],
+          [7.0, -0.3, 0.4]
+        ],
+        "angle": -105
+      }
+    },
+    {
+      "type": "cylinder",
+      "group": "tire",
+      "from": [7.0, -1.68, -0.1],
+      "to": [7.0, -1.68, 0.1],
+      "radius": 0.32,
+      "sides": 8,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [7.0, -0.3, -0.4],
+          [7.0, -0.3, 0.4]
+        ],
+        "angle": -105
+      }
+    },
+    {
+      "type": "cylinder",
+      "group": "gear",
+      "from": [-0.5, -0.35, 0.7],
+      "to": [-0.5, -1.55, 0.7],
+      "radius": 0.07,
+      "sides": 6,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [-0.5, -0.35, 0.4],
+          [-0.5, -0.35, 1.0]
+        ],
+        "angle": -120
+      },
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "tire",
+      "from": [-0.5, -1.55, 0.55],
+      "to": [-0.5, -1.55, 0.85],
+      "radius": 0.4,
+      "sides": 8,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [-0.5, -0.35, 0.4],
+          [-0.5, -0.35, 1.0]
+        ],
+        "angle": -120
+      },
+      "mirror": true
+    },
+    {
+      "type": "box",
+      "group": "store",
+      "mirror": true,
+      "center": [-0.7, 0.368, 3.4],
+      "size": [1.43, 0.375, 0.07]
+    },
+    {
+      "type": "box",
+      "group": "store",
+      "mirror": true,
+      "center": [-1.6, 0.374, 5.2],
+      "size": [1.21, 0.388, 0.07]
     }
   ],
   "emissives": [

@@ -8,6 +8,8 @@
  * model (TrafficLayer). The followed flight is drawn by Follow and left out here.
  * Both sides' aircraft show: the view is the world, not a side's picture.
  */
+import { headingTangent } from '../core/greatCircle';
+import type { Dir } from '../core/greatCircle';
 import { DEG } from '../core/units';
 import type { Meters } from '../core/units';
 import { Quatd } from '../core/quat';
@@ -23,10 +25,22 @@ import type { GlobeScene } from '../render/sim/globeScene';
 import type { AnalyticPose } from '../sim/air/analyticPose';
 import { AIRCRAFT_BUNDLES, bundleOfType } from '../sim/air/bundles';
 import { missionPhase } from '../sim/air/mission';
+import { carrierState } from '../sim/naval/carrierGroup';
+import type { CarrierTrack } from '../sim/naval/carrierGroup';
 import { missionPlugin } from '../sim/command/missions/registry';
 import type { Mission } from '../sim/air/mission';
 import { routeState } from '../sim/air/route';
-import { drawnAltitude, flightPoses, followedLook, gearDown, liftedPose } from './followFlight';
+import {
+  carrierFields,
+  drawnAltitude,
+  drawnGround,
+  flightPoses,
+  FOLLOW_CLEARANCE,
+  followedLook,
+  gearDown,
+  HELICOPTER_CLEARANCE,
+  liftedPose,
+} from './followFlight';
 import type { AirfieldShift } from './followFlight';
 
 /** Flights whose lead is within this distance of the camera are drawn (m). */
@@ -35,6 +49,8 @@ export const TRAFFIC_RANGE: Meters = 25_000;
 export const NEAR_RANGE: Meters = 1_500;
 export const NEAR_KEEP: Meters = 2_000;
 export const MAX_NEAR = 6;
+/** Carrier groups within this distance of the camera are drawn (m). */
+export const SHIP_RANGE: Meters = 40_000;
 
 /** A type's drawn model, its scheme and the height of its reference point over its wheels. */
 export interface DrawnType {
@@ -43,6 +59,8 @@ export interface DrawnType {
   gearHeight: number;
   /** Wingspan of the drawn model (m): formations space by it. */
   span: number;
+  /** Least height over the drawn ground in flight (m). */
+  clearance: number;
 }
 
 const types = new Map<string, DrawnType>();
@@ -66,6 +84,7 @@ export function drawnType(typeId: string): DrawnType {
     scheme: look.scheme,
     gearHeight: Number.isFinite(minY) ? Math.max(0.5, -minY) : 2,
     span: Math.max(4, 2 * maxZ),
+    clearance: bundleOfType(typeId).airWar?.helicopter ? HELICOPTER_CLEARANCE : FOLLOW_CLEARANCE,
   };
   types.set(typeId, d);
   return d;
@@ -105,6 +124,8 @@ export class CampaignTraffic {
   exclude: number | null = null;
   /** The airbases' coarse and sited places (decision 253). */
   fields: readonly AirfieldShift[] = [];
+  /** The carrier groups' tracks (decision 255): drawn near the camera, their flights on deck. */
+  carriers: readonly CarrierTrack[] = [];
   enabled = true;
   readonly layer: TrafficLayer;
   private readonly near = new Map<string, Near>();
@@ -151,17 +172,21 @@ export class CampaignTraffic {
       dir.set(s.point[0], s.point[1], s.point[2]);
       if (Math.acos(Math.max(-1, Math.min(1, dir.dot(e)))) > reach) continue;
       const type = drawnType(m.aircraftType);
+      const carrier =
+        m.base.kind === 'carrier' && this.carriers[m.base.id]
+          ? carrierState(this.carriers[m.base.id]!, t)
+          : null;
       flightPoses(
         m,
         t,
         this.radius,
-        this.fields,
+        carrier ? [...this.fields, ...carrierFields(m, carrier)] : this.fields,
         missionPlugin(m.type).formations,
         type.span,
       ).forEach((p, k) => {
         const d = new Vec3d(p.pos[0], p.pos[1], p.pos[2]).normalize();
-        const ground = this.groundAt(d);
-        const lifted = liftedPose(p, drawnAltitude(p, ground, type.gearHeight));
+        const ground = drawnGround(m, p, this.groundAt(d));
+        const lifted = liftedPose(p, drawnAltitude(p, ground, type.gearHeight, type.clearance));
         const distance = Math.hypot(
           lifted.pos[0] - eye.x,
           lifted.pos[1] - eye.y,
@@ -242,7 +267,47 @@ export class CampaignTraffic {
       n.view.dispose();
       this.near.delete(key);
     }
+    far.push(...this.ships(eye));
     this.layer.update(far, eye);
+  }
+
+  /**
+   * The carrier groups within SHIP_RANGE of the camera (decision 255): the carrier and two
+   * escorts, at sea level on the group's track. The Pact's carrier uses the Alliance's
+   * model until it has its own; its escorts are cruisers.
+   */
+  private ships(eye: Readonly<Vec3d>): TrafficAircraft[] {
+    const out: TrafficAircraft[] = [];
+    const e = eye.clone().normalize();
+    for (const c of this.carriers) {
+      const s = carrierState(c, this.time);
+      const p = new Vec3d(...s.point);
+      if (Math.acos(Math.max(-1, Math.min(1, p.dot(e)))) * this.radius > SHIP_RANGE) continue;
+      const up: Dir = [...s.point];
+      const fwd = headingTangent(up, s.heading);
+      const right: Dir = [
+        fwd[1] * up[2] - fwd[2] * up[1],
+        fwd[2] * up[0] - fwd[0] * up[2],
+        fwd[0] * up[1] - fwd[1] * up[0],
+      ];
+      const escort = modelSpec(c.cast.side === 'pact' ? 'pact-cruiser' : 'alliance-destroyer');
+      const ship = (spec: ModelSpec, back: number, side: number) => {
+        const q = [0, 1, 2].map(
+          (i) => up[i]! * this.radius - fwd[i]! * back + right[i]! * side,
+        ) as [number, number, number];
+        const n = Math.hypot(...q);
+        const pos: [number, number, number] = [
+          (q[0] / n) * this.radius,
+          (q[1] / n) * this.radius,
+          (q[2] / n) * this.radius,
+        ];
+        out.push({ spec, scheme: null, gearDown: true, pos, forward: fwd, up });
+      };
+      ship(modelSpec('alliance-carrier'), 0, 0);
+      ship(escort, 1200, 1800);
+      ship(escort, 1200, -1800);
+    }
+    return out;
   }
 
   /** Removes every view and instance (the world changes). */

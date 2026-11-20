@@ -70,8 +70,14 @@ export function followedLook(
   return { drawn: s.geometry!, scheme: b.scheme ?? s.scheme, standIn: true, rig: b.rig ?? s.rig };
 }
 
-/** Least height of the drawn aircraft above the drawn ground in flight (m). */
-export const FOLLOW_CLEARANCE: Meters = 40;
+/**
+ * Least height of the drawn aircraft above the drawn ground in flight (m): above the
+ * tallest canopy (tropical stands reach about 43 m, worldgen/canopy.ts) with room to
+ * spare, since the lift reads the ground, not the trees (decision 255). Helicopters fly
+ * lower, over the canopy.
+ */
+export const FOLLOW_CLEARANCE: Meters = 90;
+export const HELICOPTER_CLEARANCE: Meters = 50;
 
 /**
  * An airbase as the sim knows it (the coarse point its routes start and end at) and as
@@ -136,6 +142,37 @@ export function shiftedToAirfield(
   return out;
 }
 
+/** Height of a carrier's flight deck above the sea (m; tools/models/carrier.py). */
+export const DECK_HEIGHT: Meters = 23.2;
+
+/**
+ * A carrier-based flight's deck (decision 255): its route's ground points (the carrier
+ * where it was at launch and at the planned landing) moved to where the carrier is now,
+ * so the flight stands on the deck and its takeoff and landing run from it.
+ */
+export function carrierFields(
+  m: Readonly<Mission>,
+  carrier: { point: Dir; heading: number } | null,
+): AirfieldShift[] {
+  if (!carrier || m.base.kind !== 'carrier') return [];
+  return m.route.segments
+    .filter((s) => s.kind === 'ground')
+    .map((s) => ({
+      from: [...s.a] as Dir,
+      to: [...carrier.point] as Dir,
+      heading: carrier.heading,
+    }));
+}
+
+/** The drawn ground under a pose: a carrier's deck for its flight on the ground, else the terrain's. */
+export function drawnGround(
+  m: Readonly<Mission>,
+  p: Readonly<AnalyticPose>,
+  terrain: number | null,
+): number | null {
+  return m.base.kind === 'carrier' && !p.airborne ? DECK_HEIGHT : terrain;
+}
+
 /**
  * The flight's aircraft at game time t: the lead and its formation slots, one per
  * aircraft still in the flight (losses lower `aircraft`, decision 250), in the
@@ -171,19 +208,20 @@ export function liftedPose(p: Readonly<AnalyticPose>, drawnAltitude: Meters): An
 
 /**
  * The altitude to draw at (m above sea level): the route's, but on the ground
- * `gearHeight` above the drawn ground and in the air at least FOLLOW_CLEARANCE
+ * `gearHeight` above the drawn ground and in the air at least `clearance` (FOLLOW_CLEARANCE)
  * above it. `ground` is the drawn ground's height (m), or null while unknown.
  */
 export function drawnAltitude(
   p: Readonly<AnalyticPose>,
   ground: number | null,
   gearHeight: Meters,
+  clearance: Meters = FOLLOW_CLEARANCE,
 ): Meters {
   const route = Math.max(0, p.altitude);
   if (ground === null) return route;
   const g = Math.max(0, ground);
   if (!p.airborne) return g + gearHeight;
-  return Math.max(route, g + FOLLOW_CLEARANCE);
+  return Math.max(route, g + clearance);
 }
 
 /**

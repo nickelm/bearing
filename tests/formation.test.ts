@@ -85,3 +85,22 @@ describe('formations', () => {
     expect(worst).toBeLessThan(1);
   });
 });
+
+describe('a formation in a turn', () => {
+  it('flies the outside wingman faster and the inside one slower', () => {
+    const orbit = route.segments.find((s) => s.kind === 'orbit')!;
+    // A moment in a racetrack's turn (it banks left: the left side is inside).
+    let lead = analyticPose(route, orbit.t0 + 30, R);
+    for (let t = orbit.t0 + 30; t < orbit.t1; t += 5) {
+      lead = analyticPose(route, t, R);
+      if (Math.abs(lead.bank) > 20 * DEG) break;
+    }
+    expect(Math.abs(lead.bank)).toBeGreaterThan(20 * DEG);
+    const spread = { from: 'spread', to: 'spread', blend: 1 } as const;
+    const right = slotPose(lead, 1, spread, 10);
+    const left = slotPose(lead, 2, spread, 10);
+    const [outside, inside] = lead.bank < 0 ? [right, left] : [left, right];
+    expect(outside.speed).toBeGreaterThan(lead.speed * 1.02);
+    expect(inside.speed).toBeLessThan(lead.speed * 0.98);
+  });
+});

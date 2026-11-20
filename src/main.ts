@@ -111,6 +111,7 @@ import { MissionSearchPanel } from './ui/missionSearch/panel';
 import { Follow } from './follow/follow';
 import { normalize } from './core/greatCircle';
 import { CampaignTraffic } from './follow/campaignTraffic';
+import { carrierTrack } from './sim/naval/carrierGroup';
 import { SidePanel } from './ui/sidePanel';
 import { routeState } from './sim/air/route';
 import { SeedBrowser } from './ui/seedBrowser';
@@ -570,6 +571,12 @@ async function main(): Promise<void> {
     );
     strategicView.airSelected = null;
     airPanel.setCampaign(s?.campaign.cast ?? null, s?.infrastructure ?? null, s?.graph.radius ?? 1);
+    // The carrier groups in the simulation view, their flights on deck (decision 255).
+    const tracks = (s?.campaign.cast.carriers ?? []).map((c) =>
+      carrierTrack(c, s?.graph.radius ?? 1),
+    );
+    if (traffic) traffic.carriers = tracks;
+    if (follow) follow.carriers = tracks;
     if (!s) {
       campaignPanel.visible = false;
       campaignParams.seedUsed = '—';

@@ -66,10 +66,11 @@ describe('winds aloft', () => {
     const cross = plan({ east: 40, north: 0 });
     const head = plan({ east: 0, north: -40 });
     const end = (r: typeof calm) => r.segments[r.segments.length - 1]!.t1;
-    const leg = (r: typeof calm, phase: string) => {
-      const s = r.segments.find((x) => x.phase === phase && x.kind === 'leg')!;
-      return s.t1 - s.t0;
-    };
+    // The phase's longest leg: the way out or home, not a leg of the turn off the target.
+    const leg = (r: typeof calm, phase: string) =>
+      Math.max(
+        ...r.segments.filter((x) => x.phase === phase && x.kind === 'leg').map((s) => s.t1 - s.t0),
+      );
     // A crosswind slows both ways: longer, and more fuel burned.
     expect(end(cross)).toBeGreaterThan(end(calm));
     expect(routeEndFuel(cross)).toBeLessThan(routeEndFuel(calm));

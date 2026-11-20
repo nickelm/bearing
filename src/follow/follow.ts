@@ -32,6 +32,8 @@ import type { AnalyticPose } from '../sim/air/analyticPose';
 import { AIRCRAFT_BUNDLES, bundleOfType } from '../sim/air/bundles';
 import type { AircraftBundle } from '../sim/air/bundles';
 import { missionPhase } from '../sim/air/mission';
+import { carrierState } from '../sim/naval/carrierGroup';
+import type { CarrierTrack } from '../sim/naval/carrierGroup';
 import { missionPlugin } from '../sim/command/missions/registry';
 import type { Mission } from '../sim/air/mission';
 import { routeState } from '../sim/air/route';
@@ -50,6 +52,7 @@ import {
   liftedPose,
 } from './followFlight';
 import type { AirfieldShift, FollowedLook } from './followFlight';
+import { carrierFields, drawnGround } from './followFlight';
 import { drawnType, spinningRotors } from './campaignTraffic';
 
 export interface FollowDeps {
@@ -98,6 +101,8 @@ export class Follow {
   slot = 0;
   /** The airbases' coarse and sited places (decision 253). */
   fields: readonly AirfieldShift[] = [];
+  /** The carrier groups' tracks: a carrier flight stands on its deck (decision 255). */
+  carriers: readonly CarrierTrack[] = [];
   readonly hud = new Hud();
   readonly displays = new DisplaySystem();
   /** What shows besides the scene (V). */
@@ -110,6 +115,7 @@ export class Follow {
   private spec: ModelSpec | null = null;
   private gearHeight = 2;
   private span = 10;
+  private clearance = 90;
   private drawn: Drawn[] = [];
   private poses: AnalyticPose[] = [];
   private lastTime = NaN;
@@ -213,6 +219,7 @@ export class Follow {
     const spec = drawn.spec;
     this.gearHeight = drawn.gearHeight;
     this.span = drawn.span;
+    this.clearance = drawn.clearance;
     this.missionId = id;
     this.slot = Math.min(slot, Math.max(0, m!.aircraft - 1));
     this.look = look;
@@ -354,11 +361,15 @@ export class Follow {
 
   /** The flight's poses at t, lifted over the drawn ground, the views built, and the camera's target. */
   private pose(m: Mission, t: number, dt = 0): void {
+    const carrier =
+      m.base.kind === 'carrier' && this.carriers[m.base.id]
+        ? carrierState(this.carriers[m.base.id]!, t)
+        : null;
     const raw = flightPoses(
       m,
       t,
       this.deps.radius,
-      this.fields,
+      carrier ? [...this.fields, ...carrierFields(m, carrier)] : this.fields,
       missionPlugin(m.type).formations,
       this.span,
     );
@@ -371,7 +382,9 @@ export class Follow {
     }
     this.poses = raw.map((p, k) => {
       const d = this.drawn[k]!;
-      const target = drawnAltitude(p, this.ground(p), this.gearHeight) - Math.max(0, p.altitude);
+      const target =
+        drawnAltitude(p, drawnGround(m, p, this.ground(p)), this.gearHeight, this.clearance) -
+        Math.max(0, p.altitude);
       d.lift = dt > 0 && Number.isFinite(d.lift) ? easeLift(d.lift, target, dt) : target;
       return liftedPose(p, Math.max(0, p.altitude) + d.lift);
     });

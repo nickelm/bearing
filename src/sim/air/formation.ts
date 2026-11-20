@@ -22,6 +22,7 @@
  */
 import type { Dir } from '../../core/greatCircle';
 import type { GameTime, Meters } from '../../core/units';
+import { GRAVITY } from './analyticPose';
 import type { AnalyticPose } from './analyticPose';
 import type { MissionPhase } from './mission';
 
@@ -136,13 +137,33 @@ export function slotPose(
     lf[2] * up[0] - lf[0] * up[2],
     lf[0] * up[1] - lf[1] * up[0],
   ];
+  // In a turn the formation turns about the vertical at the lead's turn rate, g·tan(bank)/v
+  // (a right bank turns clockwise seen from above): a wingman outside the turn flies faster
+  // than the lead, one inside slower (owner, decision 255).
+  const off: Dir = [
+    -lf[0] * back + right[0] * side,
+    -lf[1] * back + right[1] * side,
+    -lf[2] * back + right[2] * side,
+  ];
+  const rate = lead.speed > 1 ? (GRAVITY * Math.tan(lead.bank)) / lead.speed : 0;
+  // ω = −rate · up; ω × off.
+  const om: Dir = [-rate * up[0], -rate * up[1], -rate * up[2]];
+  const velocity: [number, number, number] = [
+    lead.velocity[0] + (om[1] * off[2] - om[2] * off[1]),
+    lead.velocity[1] + (om[2] * off[0] - om[0] * off[2]),
+    lead.velocity[2] + (om[0] * off[1] - om[1] * off[0]),
+  ];
+  const vh = Math.hypot(...velocity);
+  const vertical = velocity[0] * up[0] + velocity[1] * up[1] + velocity[2] * up[2];
   return {
     ...lead,
     pos: [
-      lead.pos[0] - lf[0] * back + right[0] * side + up[0] * above,
-      lead.pos[1] - lf[1] * back + right[1] * side + up[1] * above,
-      lead.pos[2] - lf[2] * back + right[2] * side + up[2] * above,
+      lead.pos[0] + off[0] + up[0] * above,
+      lead.pos[1] + off[1] + up[1] * above,
+      lead.pos[2] + off[2] + up[2] * above,
     ],
     altitude: lead.altitude + above,
+    velocity,
+    speed: lead.airborne ? Math.sqrt(Math.max(0, vh * vh - vertical * vertical)) : lead.speed,
   };
 }

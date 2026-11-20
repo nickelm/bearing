@@ -14,8 +14,9 @@
  * - **On target:** a pass flies PASS_HALF before the target to PASS_HALF past
  *   it at combat power; an orbit holds a racetrack on the station; a landing
  *   stops on the ground at the destination.
- * - **Egress** stays low for LOW_EGRESS after a low-level attack, climbs back
- *   to cruise altitude, and cruises home until the descent point.
+ * - **Egress** turns toward home through a real radius (2 g at the attack's
+ *   speed; decision 255), stays low for LOW_EGRESS after a low-level attack,
+ *   climbs back to cruise altitude, and cruises home until the descent point.
  * - **Approach** descends at the climb rate (at least MIN_DESCENT_RATE) and
  *   DESCENT_SPEED of cruise speed to the recovery base.
  * - **Station time** is the profile's wanted time, cut to what the fuel allows;
@@ -28,15 +29,16 @@
  */
 import type { Dir } from '../../core/greatCircle';
 import { arcDistance, destination, initialHeading, toward } from '../../core/greatCircle';
-import { MINUTE } from '../../core/units';
+import { DEG, MINUTE } from '../../core/units';
 import type { GameTime, Meters } from '../../core/units';
 import { cruiseFlow, FLOW } from './aircraft';
 import { clearanceFor, floorRoute } from './terrainFloor';
 import type { GroundSource } from './terrainFloor';
 import type { AircraftType, Loadout } from './aircraft';
 import type { MissionProfile } from './mission';
-import { RouteBuilder, routeEndFuel, routeFeasible } from './route';
+import { RouteBuilder, routeEndFuel, routeFeasible, routeState } from './route';
 import type { Route, WindSource } from './route';
+import type { FlowRegime } from './aircraft';
 
 export const FENCE_IN = 40e3;
 export const LOW_FENCE_IN = 120e3;
@@ -69,6 +71,42 @@ export interface RoutePlanInput {
   ground?: GroundSource | null;
   /** Winds aloft (R2.1): legs fly at their ground speed; none: airspeed is ground speed. */
   wind?: WindSource | null;
+}
+
+/** Bank of the turn off the target or station (2 g) and the heading step of its legs. */
+export const TURN_BANK = 60 * DEG;
+export const TURN_STEP = 15 * DEG;
+/** A smaller change of heading is left to the corner. */
+const TURN_LEAST = 20 * DEG;
+
+/**
+ * Turns from the route's heading toward `to` at TURN_BANK (decision 255): legs of
+ * TURN_STEP along an arc of radius v²/(g·tan bank), so a flight leaving its target
+ * turns away through a real radius rather than reversing at a corner over it, and the
+ * way home runs two radii (about 9 km at low-level speed) abeam of the target.
+ */
+function turnToward(
+  b: RouteBuilder,
+  to: Readonly<Dir>,
+  speed: number,
+  regime: FlowRegime,
+  phase: 'egress',
+  R: Meters,
+): void {
+  const last = b.segments[b.segments.length - 1];
+  if (!last || last.kind === 'ground') return;
+  let h = routeState({ segments: b.segments, fuel: 0, reserve: 0 }, last.t1 - 0.5, R).heading;
+  const want = initialHeading(b.point, to);
+  const d = Math.atan2(Math.sin(want - h), Math.cos(want - h));
+  if (Math.abs(d) < TURN_LEAST) return;
+  const radius = (speed * speed) / (9.81 * Math.tan(TURN_BANK));
+  const steps = Math.ceil(Math.abs(d) / TURN_STEP);
+  const dh = d / steps;
+  const chord = 2 * radius * Math.sin(Math.abs(dh) / 2);
+  for (let i = 0; i < steps; i++) {
+    b.leg(destination(b.point, h + dh / 2, chord, R), b.altitude, speed, regime, phase);
+    h += dh;
+  }
 }
 
 /** Ground time before takeoff (taxi, takeoff, join-up) and after landing (s). */
@@ -136,6 +174,10 @@ function build(p: RoutePlanInput, stationTime: number, recovery: Dir): Route {
     b.heading = initialHeading(target, recovery);
     b.ground(stationTime, 'on-target');
   }
+
+  // Off the target or the station: a turn toward home, not a reversal over the target.
+  if (station !== 'land')
+    turnToward(b, recovery, inSpeed, low ? 'lowLevel' : 'cruise', 'egress', R);
 
   // Egress: low for a while after a low attack, back up to cruise altitude, home.
   if (low && station !== 'land' && arcDistance(b.point, recovery, R) > LOW_EGRESS) {

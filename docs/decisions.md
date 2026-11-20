@@ -4218,3 +4218,20 @@ Left for later, in TODO: the eased dissolve from the orbit into the aircraft (a 
 - **The smoke test's check 10** slows the clock to 4× within 15 game minutes of the next low leg: on the owner's run a six-minute leg at T+5.6 h passed in five seconds at 64× between two polls, and the check waited until T+7.3 h.
 
 **Reason:** the owner's review of R2.4's follow on the GPU (all checks passed, check 10's camera 100–106 m above the ground at low level).
+
+### 255. Following, the owner's second look: carriers, gear and pylons, turns, egress, canopy clearance
+
+**Date:** 2026-11-20
+**Decision:**
+
+- **Carriers in the simulation view.** Carrier groups within 40 km of the camera are drawn on their tracks (`CampaignTraffic.carriers`, instanced): the carrier (the Pact's uses the Alliance's model until it has its own) with two escorts, destroyers or cruisers, 1.8 km abeam and 1.2 km astern. A carrier flight stands on the deck: its route's ground points (where the carrier was at launch and at the planned landing) are moved to where the carrier is now, with the airfields' fading shift (decision 253), and on the ground it stands at the deck's 23.2 m (`DECK_HEIGHT`). Before, a carrier CAP sat on open sea.
+- **Gear and pylons.** The F-124, Vo-35 and Vo-31 had no landing gear, so on the ground they sat on their stores: each now has a tricycle gear on the `gear` channel, retracting into the fuselage. Each fold was found by a search over hinge positions and angles for one that puts every point of the folded wheel inside the fuselage's section; the parts' `anim` blocks carry the result. The Kestrel's nose wheel folded forward and out of the nose: it now folds 110° aft into the fuselage. Underwing stores on the three hung below the wings with a gap: pylons now join them to the wing. Triangles: F-124 690, Vo-35 774, Vo-31 682, within the 300–800 budget.
+- **Formation turns.** A formation turns about the vertical at the lead's turn rate, g·tan(bank)/v, so each wingman now has the velocity of its slot: faster outside the turn, slower inside (`slotPose`; the HUD of a followed wingman reads it).
+- **Egress.** After a pass, routes reversed at a corner and flew home back over the target, and the analytic pose's smoothed heading slid sideways through the reversal. The route now turns toward home through a real radius (2 g at the attack's speed, legs every 15°, `turnToward` in `missionRoute.ts`) after a pass or a station, so the way home runs about two turn radii abeam of the target. `tests/egress.test.ts`: no corner over 21° in the egress, nothing within half a pass length of the target.
+- **Canopy clearance.** The drawn lift kept 40 m over the drawn ground, which is the terrain without its trees (tropical canopy reaches about 43 m). It now keeps 90 m for fixed-wing aircraft and 50 m for helicopters (`FOLLOW_CLEARANCE`, `HELICOPTER_CLEARANCE`).
+
+`tools/war.preview.ts`: the same state stepped and in one jump on the demo seeds (`959aa34f14d3c686`, `d3c185eb6cf58e8b`, `9a6835d99e3b84cb`), aircraft lost (A/P) 21/22, 11/18, 1/3. The unit suite passes; `tests/ato.test.ts`'s wind test now measures the phase's longest leg, the way home, rather than the first leg of the turn.
+
+Left for later (TODO): formation lights at night, off in combat spread; taxi and takeoff in turn; the Pact's own carrier model; the karst towers and other landform props are not in the one height function (R3.6), so low flights pass through them, and whether to keep them is the owner's call.
+
+**Reason:** the owner's second look at R2.4's follow.

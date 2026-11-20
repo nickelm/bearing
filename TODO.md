@@ -196,7 +196,11 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] Check 10 over truly low flight: the owner's GPU run followed an RF-34 on a low-level leg, the camera 100–106 m above the ground (2026-11-20)
 - [ ] Stretch (R6.6, owner): Follow and jump-in ease from the map's orbit down into the aircraft
 - [x] Interdiction by the nearest able squadron, penetrators first against defended targets (owner: both should fly it; decision 254)
-- [ ] Owner: look at the formations, the low-level interdiction and the orbit (decision 253)
+- [x] Owner: look at the formations, the low-level interdiction and the orbit (decision 253); second look answered in decision 255 (carriers, gear and pylons, turns, egress, canopy)
+- [ ] Formation lights at night, off in combat spread from the fence-in (owner; with the controlled-aircraft lights of R4.1)
+- [ ] Taxi and take off in turn, the flight joining up after takeoff (owner; with R2.5's ground handling or later)
+- [ ] The Pact's own carrier model (its carrier draws the Alliance's)
+- [ ] Owner: the karst towers and other landform props are not in the one height function (R3.6), so low flights pass through them; keep, thin out or remove them?
 - [ ] Spectator displays' radar and threat formats are empty until R2.6's sensors read campaign contacts
 - [ ] Afterburner, control surfaces and speedbrake of the followed aircraft stay at rest until R2.5's flight model drives them
 
