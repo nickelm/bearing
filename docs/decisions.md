@@ -4299,6 +4299,86 @@ Left for later (TODO): while the player flies, the map and other flights' resolu
 
 **Reason:** the built-up patch read as a patchwork of colored squares, not as a town, and the buildings stood on it at random. Structure first: even before Phase 3's streets, a town has streets its buildings respect. Settlement plans (Phases 3–5) replace the grid near the camera with their own streets and parcels; the grid stays as the fallback for towns without one.
 
+
+### 260. The settlement generator: a pure plan per settlement, game-agnostic, built on demand
+
+**Date:** 2026-11-20
+**Decision:** Proposal 0009's settlement generator lives in `src/worldgen/settlements/`. `planSettlement(input, seed, options)` turns one settlement's input into a `SettlementPlan` of plain arrays in the settlement's local frame: streets, blocks, parcels, buildings, landmarks, candidate targets, plume sources, pads and the metrics the checks read.
+
+- **Frame.** Gnomonic about the settlement's center, east and north as `localFrame` (`frame.ts`), so the terrain shader can take the same coordinates.
+- **Input** (`fromGraph.ts`). The graph's settlements, the land nodes' naming flavors, the urban extents (decision 103; capped at 1.5 built-up radii and 11 km), roads (network tier, or aligned routes when the caller passes them), railways, the drawn rivers, coastlines by marching squares on the water mask, and a height and water function. It reads no cast, territory, fronts or post-casting infrastructure. A lint rule in `eslint.config.js` and a test enforce this: the generator imports no `campaign`, `sim`, `render`, `ui`, `freeflight` or `follow` module, no `strategic/{fronts,territory,infrastructure,sites}`, and nothing named after factions.
+- **Tiers** (`tiers.ts`). Cities from 200,000 people (the graph's own `settlementKind` city, about 24 per world on seeds 4 and 10), towns from 15,000 (about 420), villages below (about 1,300). Farmsteads are satellites of villages and towns. The proposal's town view at 20,000 people falls in the town tier.
+- **Streams.** `settlements/streets`, `/districts`, `/parcels`, `/buildings`, `/landmarks` and `/farmsteads`, each forked by the settlement's key. A plan therefore depends on nothing but its input and seed, and no earlier stage draws differently.
+- **On demand.** Plans are not built with the world. On seed 4's coarse world, the 24 cities took 0.7–8.8 s each (median about 2.5 s; the largest has 200,000 buildings), towns 0.15–0.6 s and villages 10–40 ms. Building all of them would roughly double world generation, against the proposal's limit of 30%. The renderer builds the plans near the camera, off the main thread (decision 266). World generation time is unchanged.
+
+**Reason:** constraint 5 of the proposal (the generator belongs to the world), determinism (constraint 6), and the frame rate: generation cost scales with the area a player can see, not with the world.
+
+### 261. Urban styles by cultural region and climate
+
+**Date:** 2026-11-20
+**Decision:** Five styles (Western, Eastern bloc, Mediterranean, Nordic, Arid; `styles.ts`) attach to cultural regions, never to sides.
+
+- A naming region is a land node (decision 96). One landmass often holds a whole war, so each node is split into up to three **style regions**: one more per 120 settlements, seeded by farthest-point sampling from the most populous settlement, with no random draws.
+- Each flavor lists styles in order: A northern (Nordic, Western, Eastern), B eastern (Eastern, Western, Nordic), C southern (Mediterranean, Western, Arid), D steppe (Arid, Eastern, Mediterranean), E islands (Western, Mediterranean, Nordic). Style region *k* starts at preference *k*.
+- **Climate gates** (rule 15: culture picks, climate permits). Arid needs a dry biome, Nordic a cool one, Mediterranean a warm or dry one. A gated style falls through to the next preference; Western and Eastern bloc are never gated.
+- Each style has a palette (walls, roofs, flat roofs), roof types and pitch (Nordic 0.85, Mediterranean 0.3), house floors, chimney share, an old core or not (Nordic has none), radial avenues, street spacing (Eastern 1.25×, Nordic 1.35×, Mediterranean 0.85×) and microdistricts (Eastern only).
+
+**Reason:** the proposal keys styles to culture. A single style per continent would make a front-line war look the same on both sides, and the generator may not ask which side holds a town.
+
+### 262. Streets: a tensor field, streamlines, a planar graph, old cores and a grade limit
+
+**Date:** 2026-11-20
+**Decision:**
+
+- **Field** (`tensorField.ts`, after Chen et al. 2008). A weak seeded base grid; per arterial the nearest segment's direction with a Gaussian falloff (600 m in cities, 400 m in towns; motorways weigh most); a radial field round the center by style; the nearest river, coast or rail; and a contour field whose weight rises from 3% to 10% slope and dominates there (weight 6). The field is cached on a 20 m lattice and interpolated as a tensor; ground heights are cached on a 30 m lattice.
+- **Tracing** (`streets.ts`). Majors are traced first, then minors, each along both eigenvectors, with RK2 steps of 10 m and Jobard–Lefer seeding. Separations are 240 / 95 m in cities and 280 / 115 m in towns, times the style's spacing, widening by up to 1.9× toward the extent's edge. A line stops at water, outside the extent, on slopes above 30%, in the old core, within half a separation of a parallel line of its level, or on closing on itself. On slopes above 10%, a minor line ends where it would step within 60° of the fall line: hill-town minors run along the contours, and majors, paths and stairs cross.
+- **Graph** (`graph.ts`). Free ends are extended by 0.45 minor separations to meet streets they stop short of; crossings split edges; nodes merge within 3 m; overshoots are trimmed; faces are walked by turning to the previous edge counterclockwise.
+- **Old cores** (`oldCore.ts`). A relaxed Voronoi ward layout within 0.16 built-up radii in cities (300–900 m) and 0.2 in towns (180–420 m), 45 or 18 wards, with the market square as the center cell. A quarter of the inner edges are left out, so blocks merge irregularly. A wobbly ring road meets the traced streets.
+- **Grades.** Each edge is sampled every 25 m. Vehicle streets steeper than 10% become paths, and steeper than 25% stairs. Arterials keep their class (the regional network's grades are proposal 0005's).
+- Streets over water are dropped; only arterials cross rivers, and those crossings are exported as bridges.
+
+**Reason:** the proposal's street model. Chen et al.'s field gives grids that bend with roads, coasts and contours, without hand-written rules per case.
+
+### 263. Blocks, parcels and districts
+
+**Date:** 2026-11-20
+**Decision:**
+
+- **Blocks** (`blocks.ts`) are bounded faces between 500 m² and 250,000 m². Each is inset by its streets' half-widths plus a 2.5 m sidewalk (per-edge miter offsets). A face that cannot be inset cleanly is dropped and counted (about 4–6% of faces in cities).
+- **Parcels** (`parcels.ts`, after Vanegas et al. 2012). The smallest box is split across its long axis at the middle ±10% until the district's target area is reached. A cut is kept only if both halves keep street frontage; otherwise the other axis is tried, and if that also fails the piece stays whole. Every parcel thus fronts a street. Targets: old core 240 m², inner grid 520, terraced 170, detached 750, industrial 5,000, rail yard 9,000, port 4,000, times the style's factor (Nordic 1.5, Mediterranean 0.7, Arid 0.6).
+- **Districts** (`districts.ts`), in order: old core (inside the core); rail yards (the rail-side blocks nearest the center, three in cities and one in towns); ports (water-side blocks of port settlements); industry (near rail or water beyond 0.3 of the extent, more often in the Eastern bloc); civic and parks (steep blocks, and 5–8% at random); microdistricts (Eastern bloc, 0.3–0.85 of the extent); inner grid (within 0.4 in cities, 0.25 in towns); terraced (by style); detached. Each city has one power-and-utilities block: an outer block, preferring water and industry. The block holding the market square is a civic square.
+
+**Reason:** the proposal's blocks, parcels and districts, with the frontage rule enforced by construction.
+
+### 264. Buildings, landmarks, candidate targets and pads
+
+**Date:** 2026-11-20
+**Decision:**
+
+- **Buildings** (`buildings.ts`). One per parcel, turned to the frontage and inset by the district's front and side setbacks, shrunk in 15% steps until all four corners lie inside the parcel. Perimeter blocks sit at the front; houses are 8–14 m long; sheds and warehouses are 7–14 m tall. Floors are 3 m each, with one extra floor in the center. Roofs follow the style (flat in the Mediterranean, Arid and half the Eastern bloc perimeters), and roof rise is span × pitch / 2. Extras: chimneys, dormers (Western perimeters), balconies (Mediterranean and Eastern), water tanks on flat roofs, courtyards (Arid houses). Microdistricts hold rows of five- and nine-story slabs, 55–90 m long, set in parkland 48 m apart. No building stands over water or on slopes above 45%.
+- **Landmarks** (`landmarks.ts`), named in the settlement's flavor:
+  - a cathedral (cities) or church (towns and villages; a hall in Arid towns) and a town hall on the parcels nearest the square, replacing their buildings;
+  - a monument (cities) or market (Mediterranean and Arid towns) on the square;
+  - a TV tower on a city's high ground (Western and Eastern bloc), or a water tower on a town's (and in some Eastern bloc villages);
+  - a stadium in a city's largest civic block;
+  - smokestacks on half the industrial blocks;
+  - the power station's hall, two cooling towers and a 110 m stack;
+  - cranes at ports.
+- **Candidate targets.** Rail yard, power station, factories (the largest building of up to six industrial blocks in a city, two in a town), a depot (an industrial block within 300 m of an arterial), port and bridges. Each has a position, footprint and name. Airfields are not the generator's to export: airbases are placed after casting.
+- **Pads.** Structures over 1,500 m² whose corners span more than 3 m of ground get a pad record (the mean corner height, 6 m margin). They are **not** applied as terrain edits yet. `terrainEditsFor` feeds the sim worker's height service as well as the renderer (rule 13), and that is the main line's lane; an edit seen by one but not the other would split the one height function. Until the edits are wired in, large buildings stand on plinths like the rest.
+
+**Reason:** the proposal's buildings and landmarks, with structure checked by construction. Pads are deferred rather than applied on one side only, because rule 13 forbids that.
+
+### 265. Villages and farmsteads
+
+**Date:** 2026-11-20
+**Decision:**
+
+- **Villages** (`village.ts`). The main street is the arterial passing within 300 m of the center, or else a lane through it along the contour. Clustered styles get a green with a ring lane: 70% of Mediterranean and Arid villages, 35% of Western and Eastern bloc, 10% of Nordic. One to three side lanes branch off. Plots are strips along every street's frontage, both sides, at the style's width × depth (Western 22 × 45 m, Eastern 26 × 50, Mediterranean 14 × 26, Nordic 32 × 50, Arid 16 × 22). A plot is kept where it stays off water, off every street and off other plots. Each plot holds a house at the front and, on half the plots (a fifth in Mediterranean and Arid villages), a barn behind it. A church stands by the green or the main street.
+- **Farmsteads.** Three to seven round a town and two to five round a village, at 1.25–2.25 built-up radii. Each sits at a field corner of the terrain's field Voronoi cells (decision 162): a point on a field boundary with a third field within 30 m, searched within 120 m, turned to the boundary. Two to five buildings stand round a yard: a farmhouse, a barn opposite and sheds at the sides.
+
+**Reason:** the proposal's smallest tiers, built along roads and field boundaries rather than scattered (constraint 2).
+
 ### 271. The chase camera's acceleration lag in game time; the analytic pose's speed eased from leg to leg
 
 *Numbered after the cities work of Proposal 0009 (decisions 259–270, on `feature/urban-ground` and `feature/cities`, not yet on `main` when this was written), so the two merge without renumbering.*

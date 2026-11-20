@@ -355,4 +355,11 @@ Runs beside the main line (`docs/proposals/0009-settlements-and-cities.md`, `doc
 
 - [x] Phase 0: survey, baseline in the standard city views (`docs/reports/cities-baseline.md`), plan.
 - [x] Phase 1: urban ground in the terrain shader from a street grid per town, buildings off its streets (decision 259).
-- [ ] Phases 2–10 on `feature/cities` (see the plan).
+- [x] Phases 2–5: the settlement generator in `src/worldgen/settlements/` (tiers, styles, tensor-field streets, old cores, blocks, parcels, districts, buildings, landmarks, targets, villages, farmsteads; decisions 260–265), its tests and `tools/cities.preview.ts`.
+- [ ] Phase 6: city meshes by detail level from plans built in a worker; window bands, night windows, streetlights, lighting level; colliders.
+- [ ] Phase 5b: urban ground from plan data near the camera (per-chunk feature distance field).
+- [ ] Phase 7: smokestack and cooling-tower plumes.
+- [ ] Phase 8 (stretch): damage states.
+- [ ] Phase 9: strategic view city layer; candidate targets exported.
+- [ ] Phase 10: metrics over 20 seeds, screenshots, documents, report.
+- [ ] Wire settlement pads into `terrainEditsFor` once the sim's height service can take them (decision 264).

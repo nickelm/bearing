@@ -107,5 +107,37 @@ export default tseslint.config(
       'no-restricted-properties': NO_MATH_RANDOM,
     },
   },
+  {
+    // The settlement generator belongs to the world, not the war (Proposal 0009, decision 260):
+    // no game, campaign, simulation or faction code, and nothing placed after casting.
+    files: ['src/worldgen/settlements/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: GRAPHICS_PACKAGES,
+          patterns: [
+            RENDER_UI,
+            {
+              group: [
+                ...layer('campaign'),
+                ...layer('sim'),
+                ...layer('freeflight'),
+                ...layer('follow'),
+                '**/strategic/fronts',
+                '**/strategic/territory',
+                '**/strategic/infrastructure',
+                '**/strategic/sites',
+                '**/*faction*',
+              ],
+              message:
+                'The settlement generator is game-agnostic (Proposal 0009): it reads world data only, never the game, the cast or factions.',
+            },
+          ],
+        },
+      ],
+      'no-restricted-properties': NO_MATH_RANDOM,
+    },
+  },
   prettier,
 );

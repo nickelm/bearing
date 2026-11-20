@@ -1,0 +1,180 @@
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { Biome } from '../src/worldgen/biomes';
+import { blocksFromFaces } from '../src/worldgen/settlements/blocks';
+import { SettlementFrame } from '../src/worldgen/settlements/frame';
+import { boxCorners, pointInPoly, polyArea } from '../src/worldgen/settlements/geom';
+import { buildGraph, faces } from '../src/worldgen/settlements/graph';
+import { subdivideBlock } from '../src/worldgen/settlements/parcels';
+import { planSettlement } from '../src/worldgen/settlements/plan';
+import { climateAllows, styleFor, styleRegions } from '../src/worldgen/settlements/styles';
+import { tierOf } from '../src/worldgen/settlements/tiers';
+import { District, Style, Tier } from '../src/worldgen/settlements/types';
+import type { SettlementInput, SettlementPlan } from '../src/worldgen/settlements/types';
+import { rng } from '../src/core/rng';
+
+const RADIUS = 1e6;
+
+function input(over: Partial<SettlementInput> = {}, slope = 0): SettlementInput {
+  const r = over.population ? Math.min(9000, 10 * Math.sqrt(over.population)) : 1500;
+  return {
+    key: 's1',
+    name: 'Testby',
+    center: [0, 0, 1],
+    population: 22_000,
+    tier: Tier.Town,
+    style: Style.Western,
+    flavor: 0,
+    outline: Array.from({ length: 32 }, () => r),
+    arterials: [{ points: [-3000, 40, 3000, -40], roadClass: 1 }],
+    rails: [],
+    rivers: [{ points: [-3000, -900, 3000, -700], halfWidth: 20 }],
+    coasts: [],
+    port: false,
+    ground: { height: (x) => 100 + slope * x, water: () => false },
+    ...over,
+  };
+}
+
+function strip(p: SettlementPlan): string {
+  return JSON.stringify({ ...p, metrics: { ...p.metrics, ms: 0 } });
+}
+
+describe('settlement generator (proposal 0009)', () => {
+  it('extracts the blocks of a street grid, a short street snapped to its neighbor', () => {
+    const lines = [];
+    for (let i = 0; i <= 4; i++) {
+      lines.push({ kind: 2, points: [i * 100, -5, i * 100, 395], extend: true });
+      lines.push({ kind: 2, points: [-5, i * 100, 395, i * 100], extend: true });
+    }
+    lines.push({ kind: 2, points: [50, 0, 50, 90], extend: true });
+    const b = blocksFromFaces(faces(buildGraph(lines, 20)));
+    expect(b.polygons.length).toBe(17);
+    expect(b.dropped).toBe(0);
+  });
+
+  it('subdivides a block into parcels that all front a street', () => {
+    const block = [0, 0, 120, 0, 120, 80, 0, 80];
+    const ps = subdivideBlock(block, 400, 6, rng(1, 'test'));
+    expect(ps.length).toBeGreaterThan(12);
+    const total = ps.reduce((a, p) => a + polyArea(p.polygon), 0);
+    expect(total).toBeCloseTo(polyArea(block), 0);
+    for (const p of ps)
+      expect(
+        Math.hypot(p.frontage[2] - p.frontage[0], p.frontage[3] - p.frontage[1]),
+      ).toBeGreaterThan(5);
+  });
+
+  it('plans a town: buildings inside parcels, parcels on streets, nothing in the river', () => {
+    const plan = planSettlement(input(), 7, { radius: RADIUS });
+    const m = plan.metrics;
+    expect(plan.buildings.length).toBeGreaterThan(300);
+    expect(plan.blocks.length).toBeGreaterThan(30);
+    expect(m.outsideParcel).toBe(0);
+    expect(m.noFrontage).toBe(0);
+    expect(m.inWater).toBe(0);
+    expect(m.steepVehicle).toBe(0);
+    expect(plan.coreRadius).toBeGreaterThan(0);
+    expect(plan.landmarks.some((l) => l.name.length > 0)).toBe(true);
+  });
+
+  it('is deterministic and independent of other plans', () => {
+    const a = strip(planSettlement(input(), 7, { radius: RADIUS }));
+    planSettlement(input({ key: 's2', population: 9000, tier: Tier.Village }), 7, {
+      radius: RADIUS,
+    });
+    const b = strip(planSettlement(input(), 7, { radius: RADIUS }));
+    expect(b).toBe(a);
+    const c = strip(planSettlement(input(), 8, { radius: RADIUS }));
+    expect(c).not.toBe(a);
+  });
+
+  it('keeps minor streets along the contours on a 15% slope, and steep links off the vehicle network', () => {
+    const plan = planSettlement(input({ arterials: [], rivers: [] }, 0.15), 3, { radius: RADIUS });
+    const m = plan.metrics;
+    expect(m.slopedMinor).toBeGreaterThan(1000);
+    expect(m.slopedMinorAlong / m.slopedMinor).toBeGreaterThan(0.5);
+    expect(m.steepVehicle).toBe(0);
+    for (const s of plan.streets)
+      if (s.kind > 0 && s.kind <= 3) expect(s.grade).toBeLessThanOrEqual(0.1 + 1e-9);
+  });
+
+  it('exports a bridge where an arterial crosses a river', () => {
+    const plan = planSettlement(
+      input({ rivers: [{ points: [600, -3000, 700, 3000], halfWidth: 15 }] }),
+      7,
+      { radius: RADIUS },
+    );
+    const bridge = plan.targets.find((t) => t.kind === 5);
+    expect(bridge).toBeDefined();
+    expect(Math.abs(bridge!.x - 650)).toBeLessThan(10);
+    expect(plan.metrics.inWater).toBe(0);
+  });
+
+  it('plans a village of strip parcels along its road', () => {
+    const plan = planSettlement(input({ population: 6000, tier: Tier.Village }), 5, {
+      radius: RADIUS,
+    });
+    expect(plan.parcels.length).toBeGreaterThan(20);
+    expect(plan.metrics.outsideParcel).toBe(0);
+    for (const b of plan.buildings) {
+      if (b.parcel < 0) continue;
+      const c = boxCorners(b.x, b.y, b.angle, b.halfLength * 0.99, b.halfWidth * 0.99);
+      for (let i = 0; i < 4; i++)
+        expect(pointInPoly(c[i * 2]!, c[i * 2 + 1]!, plan.parcels[b.parcel]!.polygon)).toBe(true);
+    }
+  });
+
+  it('gives an eastern-bloc city microdistricts and a western one an old core', () => {
+    const big = { population: 300_000, tier: Tier.City };
+    const east = planSettlement(input({ ...big, style: Style.Eastern }), 2, { radius: RADIUS });
+    expect(east.blocks.some((b) => b.district === District.Microdistrict)).toBe(true);
+    const west = planSettlement(input({ ...big, style: Style.Western }), 2, { radius: RADIUS });
+    expect(west.blocks.some((b) => b.district === District.OldCore)).toBe(true);
+    expect(west.blocks.some((b) => b.district === District.Microdistrict)).toBe(false);
+  }, 60_000);
+
+  it('picks styles by region and climate, and splits large regions', () => {
+    expect(climateAllows(Style.Arid, Biome.TemperateForest)).toBe(false);
+    expect(climateAllows(Style.Arid, Biome.HotDesert)).toBe(true);
+    expect(styleFor(3, 0, Biome.HotDesert)).toBe(Style.Arid);
+    // Steppe flavor in a wet forest falls through to Eastern bloc.
+    expect(styleFor(3, 0, Biome.TemperateRainforest)).toBe(Style.Eastern);
+    const n = 300;
+    const pts: number[] = [];
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * 0.5;
+      pts.push(Math.sin(a), 0, Math.cos(a));
+    }
+    const regions = styleRegions(
+      new Array(n).fill(0),
+      Array.from({ length: n }, (_, i) => n - i),
+      pts,
+    );
+    expect(new Set(regions).size).toBe(3);
+    expect(tierOf(250_000)).toBe(Tier.City);
+    expect(tierOf(20_000)).toBe(Tier.Town);
+    expect(tierOf(5_000)).toBe(Tier.Village);
+  });
+
+  it('round-trips the local frame', () => {
+    const f = new SettlementFrame([0.3, 0.5, 0.8], RADIUS);
+    const d = f.toSphere(1234, -567);
+    const [x, y] = f.toPlane(...d);
+    expect(x).toBeCloseTo(1234, 6);
+    expect(y).toBeCloseTo(-567, 6);
+  });
+
+  it('imports nothing of the game (constraint 5)', () => {
+    const dir = join(__dirname, '../src/worldgen/settlements');
+    const banned =
+      /from '(\.\.\/)+(campaign|sim|render|ui|freeflight|follow)\b|strategic\/(fronts|territory|infrastructure|sites)|faction|casting/;
+    for (const f of readdirSync(dir)) {
+      const imports = readFileSync(join(dir, f), 'utf8')
+        .split('\n')
+        .filter((l) => /^import|^} from|^export .* from/.test(l));
+      for (const l of imports) expect(banned.test(l), `${f}: ${l}`).toBe(false);
+    }
+  });
+});
