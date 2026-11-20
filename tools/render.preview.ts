@@ -125,6 +125,14 @@ import { encodePng } from './png';
 import { previewWorld } from './previewWorld';
 import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
 import { settlementPoint } from '../src/worldgen/strategic/graph';
+import { recordsOf } from '../src/render/sim/city/cityLayer';
+import type { WorldSeed } from '../src/core/rng';
+import { localFrame } from '../src/worldgen/edits/airfields';
+import { settlementInput, settlementWorld } from '../src/worldgen/settlements/fromGraph';
+import { SettlementFrame } from '../src/worldgen/settlements/frame';
+import { planSettlement } from '../src/worldgen/settlements/plan';
+import { CITY_POPULATION, TOWN_POPULATION } from '../src/worldgen/settlements/tiers';
+import { LandmarkKind, Style } from '../src/worldgen/settlements/types';
 import type { StrategicGraph } from '../src/worldgen/strategic/graph';
 import { InfraScene, offsetPoint } from '../src/render/sim/infra/infraScene';
 import { observerStations, wonderStations } from '../src/render/sim/camera/observerStations';
@@ -174,6 +182,11 @@ export interface PreviewView {
     | 'forest'
     | 'city'
     | 'town'
+    | 'hilltown'
+    | 'westcity'
+    | 'eastcity'
+    | 'village'
+    | 'industry'
     | 'airbase'
     | 'front'
     | 'capital'
@@ -626,6 +639,62 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     detail: true,
   },
   {
+    // Proposal 0009's report views (decision 267).
+    name: 'hilltown',
+    dLat: 0,
+    dLon: 0,
+    altitude: 900,
+    tilt: 66 * DEG,
+    heading: 30 * DEG,
+    localTime: 15,
+    target: 'hilltown',
+    detail: true,
+  },
+  {
+    name: 'westcity',
+    dLat: 0,
+    dLon: 0,
+    altitude: 1500,
+    tilt: 62 * DEG,
+    heading: 0,
+    localTime: 11,
+    target: 'westcity',
+    detail: true,
+  },
+  {
+    name: 'eastcity',
+    dLat: 0,
+    dLon: 0,
+    altitude: 1500,
+    tilt: 62 * DEG,
+    heading: 0,
+    localTime: 11,
+    target: 'eastcity',
+    detail: true,
+  },
+  {
+    name: 'village',
+    dLat: 0,
+    dLon: 0,
+    altitude: 500,
+    tilt: 68 * DEG,
+    heading: 0,
+    localTime: 16,
+    target: 'village',
+    detail: true,
+  },
+  {
+    name: 'industry',
+    dLat: 0,
+    dLon: 0,
+    altitude: 700,
+    tilt: 64 * DEG,
+    heading: 0,
+    localTime: 10,
+    target: 'industry',
+    detail: true,
+  },
+  {
     name: 'airbase',
     dLat: 0,
     dLon: 0,
@@ -826,6 +895,69 @@ export const STRATEGIC_PREVIEW_VIEWS: PreviewView[] = [
   },
 ];
 
+/**
+ * Targets for the settlement report: the steepest town, the largest western and
+ * eastern-bloc settlements, a village of 6,000 to 12,000 people, and the largest city's
+ * first smokestack (planned here; a few seconds).
+ */
+function cityTargets(
+  campaign: { graph: StrategicGraph; world: { maps: { biome: Uint8Array } }; seed: WorldSeed },
+  global: { height: Float32Array; n: number; finish: { drainage: { lakeDepth: Float32Array } } },
+  radius: number,
+  views: PreviewView[],
+): Record<'hilltown' | 'westcity' | 'eastcity' | 'village' | 'industry', Vec3d | null> {
+  type Out = Record<'hilltown' | 'westcity' | 'eastcity' | 'village' | 'industry', Vec3d | null>;
+  const none: Out = { hilltown: null, westcity: null, eastcity: null, village: null, industry: null };
+  const wanted = new Set(views.map((v) => v.target));
+  if (![...Object.keys(none)].some((k) => wanted.has(k as PreviewView['target']))) return none;
+  const g = campaign.graph;
+  const sp = g.settlements;
+  const height = globalMapSampler(global.height, global.n);
+  const lake = globalMapSampler(global.finish.drainage.lakeDepth, global.n);
+  const sw = settlementWorld(
+    g,
+    radius,
+    { height: (d) => height(d), water: (d) => height(d) <= 0 || lake(d) > 0.5 },
+    (i) => campaign.world.maps.biome[sp.cells[i]!] ?? 0,
+  );
+  const at = (i: number) => (i >= 0 ? new Vec3d(...settlementPoint(sp, i)) : null);
+  const best = (score: (i: number) => number) => {
+    let b = -1;
+    let s = -Infinity;
+    for (let i = 0; i < sp.cells.length; i++) {
+      const v = score(i);
+      if (v > s) {
+        s = v;
+        b = i;
+      }
+    }
+    return Number.isFinite(s) ? b : -1;
+  };
+  const pop = (i: number) => sp.population[i]!;
+  const slope = (i: number) => {
+    const c = new Vec3d(...settlementPoint(sp, i));
+    const { east, north } = localFrame(c);
+    const h = (de: number, dn: number) =>
+      height(c.clone().addScaled(east, de / radius).addScaled(north, dn / radius).normalize());
+    return Math.hypot(h(800, 0) - h(-800, 0), h(0, 800) - h(0, -800)) / 1600;
+  };
+  const out: Out = { ...none };
+  out.hilltown = at(best((i) => (pop(i) >= TOWN_POPULATION && pop(i) < CITY_POPULATION ? slope(i) : -Infinity)));
+  out.westcity = at(best((i) => (sw.styles[i] === Style.Western ? pop(i) : -Infinity)));
+  out.eastcity = at(best((i) => (sw.styles[i] === Style.Eastern ? pop(i) : -Infinity)));
+  out.village = at(best((i) => (pop(i) >= 6000 && pop(i) <= 12_000 && sw.styles[i] === Style.Western ? -Math.abs(pop(i) - 9000) : -Infinity)));
+  if (wanted.has('industry')) {
+    const big = best(pop);
+    const plan = planSettlement(settlementInput(sw, big), campaign.seed, { radius });
+    const stack = plan.landmarks.find((l) => l.kind === LandmarkKind.Smokestack || l.kind === LandmarkKind.CoolingTower);
+    if (stack) {
+      const d = new SettlementFrame(plan.center, radius).toSphere(stack.x, stack.y);
+      out.industry = new Vec3d(...d);
+    }
+  }
+  return out;
+}
+
 /** The settlement closest to 20,000 people (log scale): proposal 0009's town view. */
 function townTarget(sp: StrategicGraph['settlements']): Vec3d | null {
   let best = -1;
@@ -846,6 +978,7 @@ function drawStats(scene: GlobeScene): string {
     [scene.terrain.group, 'terrain'],
     [scene.forest.group, 'trees'],
     [scene.structures.group, 'buildings'],
+    [scene.cities.group, 'cities'],
     [scene.clouds.group, 'clouds'],
     [scene.strategic.group, 'overlay'],
     [scene.globe.group, 'grid'],
@@ -879,7 +1012,7 @@ function drawStats(scene: GlobeScene): string {
     })
     .filter(Boolean)
     .join(', ');
-  return `${groups}; deepest L${scene.terrain.stats.deepest}, ${scene.forest.stats.instances} trees (${(scene.forest.stats.triangles / 1e6).toFixed(2)} M tris), ${scene.terrain.stats.shells} canopy shells, ${scene.structures.stats.instances} buildings`;
+  return `${groups}; deepest L${scene.terrain.stats.deepest}, ${scene.forest.stats.instances} trees (${(scene.forest.stats.triangles / 1e6).toFixed(2)} M tris), ${scene.terrain.stats.shells} canopy shells, ${scene.structures.stats.instances} buildings; cities: ${scene.cities.stats.plans} plans, ${scene.cities.stats.chunks} chunks, ${(scene.cities.stats.triangles / 1e6).toFixed(3)} M tris, ${scene.cities.stats.draws} draws`;
 }
 
 const env = (k: string, d: string) => process.env[k] ?? d;
@@ -1046,6 +1179,19 @@ it('renders preview views', async () => {
         : undefined,
   });
   scene.setInfrastructure(infra);
+  // Settlements from their plans (Proposal 0009); CITIES=0 draws the old town scatter.
+  scene.citiesOn = process.env.CITIES !== '0';
+  scene.cities.setWorld({
+    graph: campaign.graph,
+    radius: params.radius,
+    seed: params.seed,
+    height: global.height,
+    lake: global.finish.drainage.lakeDepth,
+    n: global.n,
+    biomeOf: (i) => campaign.world.maps.biome[campaign.graph.settlements.cells[i]!] ?? 0,
+    rivers: riverIndex.segments,
+    recordOf: recordsOf(infra.sites),
+  });
   // The bridge kit along the alignments (decision 192).
   if (alignments)
     scene.bridges.setAlignments(alignments, {
@@ -1202,6 +1348,8 @@ it('renders preview views', async () => {
     // A town of 8,000 to 40,000 people (proposal 0009's town tier): the largest such on the main
     // continent's node, else the one nearest 20,000.
     town: townTarget(sp),
+    // Proposal 0009's report views (decision 267).
+    ...cityTargets(campaign, global, params.radius, views),
     airbase: base ? new Vec3d(...base.point) : null,
     ocean: null,
     hedges: null,
@@ -1803,6 +1951,7 @@ it('renders preview views', async () => {
       const treesPending =
         (scene.forest.group.visible ? scene.forest.stats.pending : 0) +
         (scene.structures.group.visible ? scene.structures.stats.pending : 0) +
+        (scene.cities.group.visible ? scene.cities.stats.pending : 0) +
         (scene.groundCover.group.visible ? scene.groundCover.stats.pending : 0) +
         (scene.props.group.visible ? scene.props.stats.pending : 0);
       stable = s.pending === 0 && treesPending === 0 && sig === last ? stable + 1 : 0;

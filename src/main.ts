@@ -21,6 +21,8 @@ import { WonderKind } from './worldgen/strategic/graph';
 import { DEFAULT_PLANET_PARAMS } from './worldgen/params';
 import type { PlanetParams } from './worldgen/params';
 import { GlobeScene } from './render/sim/globeScene';
+import { recordsOf } from './render/sim/city/cityLayer';
+import { CITY_POPULATION } from './worldgen/settlements/tiers';
 import { StrategicScene } from './render/strategic/strategicScene';
 import { OVERLAY_LAYERS } from './render/strategic/overlays/militaryModel';
 import { INFRA_LAYERS } from './render/strategic/infra/infraModel';
@@ -862,6 +864,32 @@ async function main(): Promise<void> {
       // A followed flight at full fidelity flies over the same ground (R2.5).
       follow?.setTerrain(flownTerrain);
       globe.setInfrastructure(infra);
+      // Settlements from their plans, built in their own worker (Proposal 0009).
+      globe.cities.setWorld({
+        graph: strategic.graph,
+        radius: params.radius,
+        seed: params.seed,
+        height: global.height,
+        lake: global.finish.drainage.lakeDepth,
+        n: global.n,
+        biomeOf: (i) => world.maps.biome[strategic.graph.settlements.cells[i]!] ?? 0,
+        rivers: riverIndex.segments,
+        recordOf: recordsOf(infra.sites),
+      });
+      // The map draws cities from their plans' blocks as the plans arrive (decision 270).
+      let urbanFlushed = 0;
+      globe.cities.onPlan = (i, plan) => {
+        strategicView.relief.urban.applyPlan(i, plan, params.radius);
+        if (performance.now() - urbanFlushed > 3000) {
+          urbanFlushed = performance.now();
+          strategicView.relief.urban.flush();
+        } else setTimeout(() => strategicView.relief.urban.flush(), 3100);
+      };
+      globe.cities.prefetch(
+        [...strategic.graph.settlements.population.keys()].filter(
+          (i) => strategic.graph.settlements.population[i]! >= CITY_POPULATION,
+        ),
+      );
       globe.bridges.setAlignments(alignments, {
         road: strategic.graph.bridges,
         rail: strategic.graph.railways.bridges,

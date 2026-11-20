@@ -57,7 +57,7 @@ export function polyPerimeter(p: Poly): number {
 }
 
 /** Even-odd point in polygon. */
-export function pointInPoly(x: number, y: number, p: Poly): boolean {
+export function pointInPoly(x: number, y: number, p: ArrayLike<number>): boolean {
   let inside = false;
   const n = p.length / 2;
   for (let i = 0, j = n - 1; i < n; j = i++) {

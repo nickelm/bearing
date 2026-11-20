@@ -4379,6 +4379,72 @@ Left for later (TODO): while the player flies, the map and other flights' resolu
 
 **Reason:** the proposal's smallest tiers, built along roads and field boundaries rather than scattered (constraint 2).
 
+### 266. Plans in a worker; the urban ground from per-chunk feature fields
+
+**Date:** 2026-11-20
+**Decision:**
+
+- **Worker.** `workers/city.worker.ts` gets the global grid's heights and lake depths once per world and builds plans from inputs that the main thread prepares (`settlementInput` without its ground). It returns them packed into transferable typed arrays (`worldgen/settlements/pack.ts`; parcels stay in the worker). One plan is in flight at a time, nearest settlement first. Where there are no Web Workers (Node previews), `CityCore` runs in process within the frame budget. Meshes are built on the main thread within `buildBudgetMs` (6 ms), because they need the terrain's tile data for plinths: a deviation from Part A, which builds meshes in a worker.
+- **Feature fields.** For the chunks (1 km squares of the plan's frame) within 4.5 km of the camera, the worker rasterizes 128² texels (7.8 m). Each u32 texel holds the signed distance to the nearest street's edge (in quarter meters), the block's ground class, the street's class and the district. This is Proposal 0005's per-chunk feature distance field, built for towns, where segment lists would loop over thousands of streets per fragment.
+- **Shader.** `CityGround` (`render/sim/city/cityGround.ts`) packs a record → plan slot table, per-slot chunk tables and 128 field slots into **one** u32 storage buffer. The terrain's fragment stage was at WebGPU's default limit of 8 storage buffers, so decision 259's pattern vec4s also move into the outlines buffer. `LightShading.urbanGround` reads the nearest town's plan slot. Within a chunk with a field it draws streets with crisp edges (distance read bilinearly), sidewalks, paths and stairs, and the block's ground (courtyards, gardens alternating lawn and yard by 22 m, parks, squares, parking, concrete, gravel, ballast, sports grounds, cemeteries). Off the blocks and away from the streets, and outside the plan's chunks, it hands the cover back to the natural ground; in a chunk whose field is not built yet it draws neutral built ground, never the interim grid. Unplanned towns keep decision 259's grid.
+
+**Reason:** a plan takes up to 9 s for the largest city and cannot run on the main thread. A town's streets must match its buildings, and a texture lookup per fragment costs far less than a loop over a city's segments.
+
+### 267. City meshes by detail level
+
+**Date:** 2026-11-20
+**Decision:** `CityLayer` (`render/sim/city/cityLayer.ts`) draws planned settlements and turns off the town scatter (`StructureLayer.towns`). Airbase and industry sites keep it.
+
+- **Levels** per chunk, by distance from the eye to the chunk minus 0.7 km:
+  - a **kit** within 0.6 km: boxes plus chimneys, water tanks and church towers;
+  - **boxes** within 2 km: walls and a gable, hip, shed or flat roof, 14–16 triangles, roofs over 0.6 m eaves;
+  - **prisms** within 12 km: one extruded block at its mean height times twice its built share, the polygon simplified to 8 m, merged into one mesh per settlement with its towers and stacks;
+  - nothing beyond.
+
+  Part A's ranges were 1 km, 5 km and 15 km. With boxes to 5 km, the largest city put over 1 M triangles in view, against its budget of 0.3 M.
+- **Plinths.** Every building's walls start at the highest drawn ground under it (the level-10 surface the structure layer uses) and a plinth band reaches down to the lowest point, plus 1.5, 4 or 12 m by level, because coarser terrain meshes lie lower.
+- **One material.** Positions are relative to the chunk's origin, with the ground height in its own attribute, exaggerated as the terrain is. Faces are flat and lit by `shadeDiffuse` with aerial perspective. Window bands come from wall coordinates (3 m floors, 3.2 m bays) within 1.4 km. At night about a third of the panes light up, by hash and scaled by the settlement's lighting level (`setLighting`: 1 lit, 0.4 dimmed, 0 blacked out), with a mean glow beyond window range. Streetlights stand every 40 m along arterial, major and minor streets of the near chunks, as one instanced mesh per settlement.
+- **No ink outlines** on city meshes (decision 107 makes them optional): at a draw per chunk they would double the draw calls.
+- `tools/render.preview.ts` waits for the city layer, prints its plans, chunks, triangles and draws, and takes `CITIES=0` for the old scatter. It also gains the report's views (`hilltown`, `westcity`, `eastcity`, `village`, `industry`).
+
+**Reason:** the hard budgets of Part A: a draw call per chunk and per settlement keeps a city under 40, and the detail ranges keep triangles in budget.
+
+### 268. Plumes, colliders and the game layer's data
+
+**Date:** 2026-11-20
+**Decision:**
+
+- **Plumes** (Phase 7). Each smokestack and cooling tower carries ten soft camera-facing puffs that cycle in age over 40 s. They rise 60 m (steam 90 m), drift 40 s downwind with the ground wind the scene samples (a 2 m/s breeze when calm) and grow fourfold, so a plume shows the wind. Smoke is gray, steam white, and fire smoke from damaged landmarks and targets dark. One instanced mesh per settlement.
+- **Colliders** (`worldgen/settlements/colliders.ts`). One oriented box per building, with wall and roof tops above the ground under it. A spatial index answers a segment test (slab test in the box's frame) for line of sight and the height of a flat roof for landings. The caller passes the drawn ground. Nothing reads them yet; R3's line of sight and ground combat are the main line's.
+- **Exports** (`worldgen/settlements/exports.ts`). Per settlement: its districts (blocks and area), landmarks and candidate targets as kinds, names, directions and footprints. These are plain types; the generator imports nothing of the planner.
+
+**Reason:** Part A's plumes, colliders and data for a game layer, kept on the world's side of the line.
+
+### 269. Damage states
+
+**Date:** 2026-11-20
+**Decision:** `CityLayer.setDamage(settlement, building, state)` sets intact, damaged or rubble.
+
+- **Damaged** buildings are blackened (walls ×0.35, roofs ×0.25), lose 15% of their height and 70% of their roof.
+- **Rubble** is a low mound, at most 2.5 m high, in dusty brown.
+- States are a byte per building per plan.
+- A chunk records each building's triangle range. A new state rewrites that range in place and fills what is left with degenerate triangles, uploading only the changed range, which takes about 0.07 ms in `tests/cityRender.test.ts`. A state that needs more triangles than the range (back to intact from rubble) rebuilds the chunk (about 6 ms for 400 buildings).
+- Damaged landmarks, and buildings within 60 m of a candidate target, add fire smoke plumes.
+
+**Reason:** Part A's damage, at full scope. The in-place patch beats its "rebuild the affected block" and its 2 ms budget without a mesh per block.
+
+### 270. The map's city extents from blocks, tinted by district
+
+**Date:** 2026-11-20
+**Decision:**
+
+- The map's urban texture becomes RG8: coverage, and the share of industry, rail yards, ports and utilities. The relief shader tints the urban fill toward `#A8A49C` by up to 70% of that share.
+- `UrbanTexture.applyPlan` clears a city's graph polygon and rasterizes its plan's blocks instead, scaled as the map scales towns (×1.6). Blocks cover about two thirds of a texel between streets, so their coverage is taken ×1.5.
+- In the app, `CityLayer.prefetch` plans every city of 200,000 people or more in the background when the worker is idle, and `onPlan` hands each plan to the map; the texture uploads at most every 3 s.
+- **Not done:** major streets and landmark glyphs in the Region band. At the zoom floor (about 100 km) major streets 240 m apart are 2–3 px apart and would read as noise, and landmark glyphs need the label engine's placement. TODO.
+
+**Reason:** Part A's strategic view: extents from block outlines and district tints, within the map's own rules (no individual buildings; decision 105's larger-than-life towns).
+
 ### 271. The chase camera's acceleration lag in game time; the analytic pose's speed eased from leg to leg
 
 *Numbered after the cities work of Proposal 0009 (decisions 259–270, on `feature/urban-ground` and `feature/cities`, not yet on `main` when this was written), so the two merge without renumbering.*

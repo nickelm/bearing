@@ -6,7 +6,8 @@
  *
  *   npx vitest run --config vitest.tools.config.ts tools/cities.preview.ts
  *
- * env: SEEDS (default 4), FROM/COUNT (seed range), TOWNS (sample per seed, 12),
+ * env: SEEDS (default 4), FROM/COUNT (seed range), CITIES (sample per seed, all),
+ * TOWNS (sample per seed, 12),
  * VILLAGES (12), DRAW (number of plans to draw per tier, 1), OUT (tools/out),
  * REPORT=path writes the Markdown metrics, ONLY=city|town|village.
  */
@@ -156,7 +157,12 @@ it('plans settlements', () => {
       );
     const pickEvery = (l: number[], k: number) =>
       l.length <= k ? l : Array.from({ length: k }, (_, j) => l[Math.floor((j * l.length) / k)]!);
-    const chosen = [byTier[0]!, pickEvery(byTier[1]!, towns), pickEvery(byTier[2]!, villages)];
+    const cities = Number(process.env.CITIES ?? 1000);
+    const chosen = [
+      pickEvery(byTier[0]!, cities),
+      pickEvery(byTier[1]!, towns),
+      pickEvery(byTier[2]!, villages),
+    ];
     const drawn = [0, 0, 0];
     console.log(
       `seed ${seed}: world ${(worldMs / 1000).toFixed(1)} s, settlement setup ${setupMs.toFixed(0)} ms; cities ${byTier[0]!.length}, towns ${byTier[1]!.length}, villages ${byTier[2]!.length}`,
