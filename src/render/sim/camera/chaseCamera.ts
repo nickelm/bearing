@@ -261,6 +261,8 @@ export class ChaseCamera {
   private liftVel = 0;
   private lastSpeed = 0;
   private accel = 0;
+  /** Game seconds per real second for the target's motion (1 in Free Flight; the follow sets it). */
+  timeRate = 1;
   private agl = 0;
   private initialized = false;
   /** A helicopter's free look is easing back to center (recenter()). */
@@ -387,10 +389,12 @@ export class ChaseCamera {
       this.initialized = true;
     }
     if (hv) this.agl += (agl - this.agl) * Math.min(1, dt * 2);
-    const h = Math.max(dt, 1e-4);
-    // Forward acceleration, smoothed.
+    // Forward acceleration in game time, smoothed in real time: under time acceleration a
+    // speed change per real second is `timeRate` times harsher than the aircraft's own
+    // (decision 259: a wingman easing off after a turn at 16× pulled the camera in).
+    const h = Math.max(dt * Math.max(this.timeRate, 0), 1e-4);
     const speed = t.velocity.length();
-    const a = (speed - this.lastSpeed) / h;
+    const a = this.timeRate > 0 ? (speed - this.lastSpeed) / h : 0;
     this.lastSpeed = speed;
     this.accel += (a - this.accel) * Math.min(1, dt * 3);
     // In flight the frame leans toward the velocity (85% above 60 m/s): at an

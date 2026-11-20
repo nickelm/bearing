@@ -92,3 +92,26 @@ describe('the analytic pose', () => {
     expect(dot(rel(three), right)).toBeGreaterThan(0);
   });
 });
+
+describe('the analytic pose’s speed', () => {
+  it('eases from leg to leg instead of stepping (decision 259)', () => {
+    // The route's own speed steps at segment boundaries (climb, cruise, loiter, egress).
+    let steps = 0;
+    for (let i = 1; i < route.segments.length; i++) {
+      const a = route.segments[i - 1]!;
+      const b = route.segments[i]!;
+      if (a.kind !== 'ground' && b.kind !== 'ground' && Math.abs(a.speed - b.speed) > 5) steps++;
+    }
+    expect(steps).toBeGreaterThan(0);
+    let worst = 0;
+    let prev = NaN;
+    for (let t = route.segments[1]!.t0 + 30; t < end - 600; t += 0.25) {
+      const p = analyticPose(route, t, R);
+      if (!p.airborne) continue;
+      if (Number.isFinite(prev)) worst = Math.max(worst, Math.abs(p.speed - prev) / 0.25);
+      prev = p.speed;
+    }
+    // A step of tens of m/s spread over the 20 s window: a few m/s² at most.
+    expect(worst).toBeLessThan(5);
+  });
+});

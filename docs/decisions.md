@@ -4276,10 +4276,24 @@ Left for later (TODO): while the player flies, the map and other flights' resolu
 
 - **Combat spread** is a nautical mile abeam (`SPREAD_ABEAM`, 1,852 m), 30 m back, the second element's wingman two miles out. Decision 253 set it at 60 wingspans, about 570 m for the F-21, which the owner pointed out is far tighter than the doctrine: US Navy combat spread and the US Air Force's line abreast are flown about 1 to 1.5 nm apart, for mutual support by eye and by radar. That distance follows from the tactic, not the airframe, so spread's slots are in meters (`slotMeters`); the other formations stay in wingspans. Formations are presentation and the AI's slots, never campaign facts, so the war's state does not change. The AI wingman in `tests/promotion.test.ts` still holds its slot within 600 m on station at a mile: the racetrack's 1.5°/s turns ask it for about 48 m/s more outside the turn, which it has. A tighter turn at altitude needs combat spread's tactical turns (cross turns, in-place turns) instead of holding the slot; those come with air combat in R3.4.
 - **For later phases** (owner, 2026-11-20), now in the roadmap:
-  - R2.6: the player's own flight always in view, its other aircraft marked on the HUD and shown on the moving map and the radar by intraflight datalink, since a wingman a mile abeam is a speck.
+  - A living world: the owner wants to see every other flight inside the bubble around the player. The simulation view has drawn every flight within 25 km of the camera since R2.4 (decision 252: full views within 1.5 km, instanced beyond), in the chase view and at an observer station; full fidelity must keep it (R2.5, TODO). Marking the player's own flight on the HUD and on the moving map and radar by intraflight datalink, since a wingman a mile abeam is a speck, goes into R2.6 as a smaller item of the same kind.
   - R3.3: radar missiles as semi-active (Sparrow analogues, Fox 1) for most types, the navy fighter's long-range missile (the F-28's Phoenix analogue) against bombers, and active-radar missiles (Fox 3) as a campaign setting for the late era.
   - R3.4: BVR timelines for the AI and the player's flight (commit, sort, shot, crank, notch, abort and minimum abort ranges by missile and threat) and basic fighter maneuvers in the merge.
   - R4.6: Backfire (Ra-84) raids on carrier groups with heavy anti-ship missiles, the outer air battle against them, and the vampire calls and point defense when the missiles are inbound, as in *Red Storm Rising*.
   - R4.5, now *Crews and radio*: check-ins with the strike lead and with AWACS and ground controllers, air traffic control near airfields, brevity in the comms format. Controllers' callsigns are invented per side like the setting's other names, not the real ones (the owner's Darkstar, Magic and Overlord are examples of the kind).
 
 **Reason:** the owner's review of R2.5's start.
+
+### 271. The chase camera's acceleration lag in game time; the analytic pose's speed eased from leg to leg
+
+*Numbered after the cities work of Proposal 0009 (decisions 259–270, on `feature/urban-ground` and `feature/cities`, not yet on `main` when this was written), so the two merge without renumbering.*
+
+**Date:** 2026-11-20
+**Decision:** The owner saw a followed aircraft slide backward for a moment just after a racetrack turn, at 16×. The routes' poses never move against the nose (every slot of a CAP flight stepped in 16× frames from climb-out to landing: the slowest is 64 m/s forward, at the landing), so the motion was the camera's. The chase camera lengthens and shortens its distance with the target's forward acceleration (`stretchPerAccel`, 0.25 m per m/s² for fast jets), and it took that acceleration per real second. Under time acceleration a speed change per real second is the rate times harsher: a wingman outside a turn flies faster than the lead (decision 255) and eases back over the 20 s of the turn's end, which at 16× read as hard braking, so the camera closed in on it by 1.6 m (more at a mile abeam, decision 258) and the aircraft seemed to come back toward the eye. The analytic route's speed also stepped from leg to leg (orbit to egress, cruise to climb), which jolted the camera at any rate.
+
+- **The camera** (`ChaseCamera.timeRate`, game seconds per real second, set each frame by the follow from the displayed time; 1 in Free Flight) measures acceleration in game time and smooths it in real time. The same game-time history at 1× and 16× now gives the same distance to within 0.3 m (before: 1.6 m apart).
+- **The analytic pose's speed** is the mean over the heading's ±10 s window, from the same samples, so it eases from leg to leg: at most 5 m/s² on a CAP route whose legs step by tens of m/s. Position stays the route's, so a flight still passes its waypoints exactly; the HUD's airspeed and the AI's reference velocity ease the same way.
+
+**How it was checked.** `tests/follow.test.ts` (the camera at 1× and 16×), `tests/analyticPose.test.ts` (the speed has no steps), the unit suite.
+
+**Reason:** the owner's look at following a CAP at 16×.

@@ -187,3 +187,33 @@ describe('a carrier flight', () => {
     expect(carrierFields({ ...m, base: { kind: 'airbase', id: 0 } } as Mission, null)).toEqual([]);
   });
 });
+
+describe('the chase camera under time acceleration', () => {
+  it('stretches by the flight’s own deceleration, not the frame’s (decision 259)', async () => {
+    const { ChaseCamera } = await import('../src/render/sim/camera/chaseCamera');
+    const { Vec3d } = await import('../src/core/vec3d');
+    // The same game-time history, a wingman easing off 15 m/s over 20 game seconds after a
+    // turn, seen at 1× and at 16×: the camera's distance must not depend on the rate.
+    const run = (rate: number) => {
+      const c = new ChaseCamera(R);
+      c.timeRate = rate;
+      const t = c.target;
+      t.pos.set(0, 0, R + 5000);
+      t.forward.set(0, 1, 0);
+      t.up.set(0, 0, 1);
+      t.onGround = false;
+      let least = Infinity;
+      const dt = 1 / 60;
+      for (let real = 0; real < 40 / rate + 3; real += dt) {
+        const game = real * rate;
+        const v = game < 10 ? 225 : game < 30 ? 225 - (15 * (game - 10)) / 20 : 210;
+        t.velocity.copy(new Vec3d(0, v, 0));
+        t.pos.addScaled(t.velocity, dt * rate);
+        c.update(dt);
+        least = Math.min(least, c.eye.distanceTo(t.pos));
+      }
+      return least;
+    };
+    expect(Math.abs(run(16) - run(1))).toBeLessThan(0.3);
+  });
+});

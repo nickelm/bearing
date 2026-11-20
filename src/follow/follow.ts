@@ -271,6 +271,7 @@ export class Follow {
     this.clear();
     const g = this.deps.globe;
     g.chase.zoom = 1;
+    g.chase.timeRate = 1;
     g.cameraMode = 'observer';
     this.deps.setView('strategic');
     this.deps.returned(id, why);
@@ -302,6 +303,10 @@ export class Follow {
       const s = this.settle * this.settle * (3 - 2 * this.settle);
       this.deps.globe.chase.zoom = SETTLE_ZOOM + (1 - SETTLE_ZOOM) * s;
     }
+    // The camera's acceleration lag reads the flight's own time, not the frame's (decision 259).
+    const g = this.deps.globe;
+    g.chase.timeRate =
+      dt > 0 && Number.isFinite(this.lastTime) ? Math.max(0, t - this.lastTime) / dt : 1;
     this.pose(m, t, dt);
     if (Math.floor(t) !== Math.floor(this.lastTime)) this.updateTitle(m, t);
     this.lastTime = t;

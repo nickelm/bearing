@@ -212,7 +212,7 @@ _Depends on R1.5, R1.7, R2.5._
 - Hit and kill resolution, minimal damage states, ejection from full fidelity.
 - The sensors read campaign contacts: aggregate flights become radar targets, sites with radars become emitters.
 - Interface defaults per mission type and phase: master mode, formats, HUD cues and declutter; route and waypoints on the moving map and HUD steering.
-- The player's own flight always in view: its other aircraft marked on the HUD and on the moving map and radar by the intraflight datalink, so a wingman a mile abeam is found at a glance (owner, decision 258).
+- The player's own flight always in view: its other aircraft marked on the HUD and on the moving map and radar by the intraflight datalink, so a wingman a mile abeam is found at a glance (decision 258).
 - Acceptance check 8 with the pipper.
 
 **Exit:** the player shoots down an AI aircraft on CAP and hits a bridge with bombs on interdiction, and both reach the campaign's state.
