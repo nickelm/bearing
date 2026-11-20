@@ -4585,3 +4585,12 @@ Decision 256's AI checks had run gear down, and the gear's drag had been slowing
 **How it was checked.** `tests/missions.test.ts`: the registry has no pending part for the demo types. `tests/fullFidelity.test.ts`: a CAP on station has the route law, slots and air-to-air, at the climb-out its weapons are held, and an escort (provisional) is not promoted. The unit suite, the type check and lint pass.
 
 **Reason:** rule 16: a mission type is complete only with all eight parts; R2.5 made the full-fidelity behavior possible.
+
+### 283. The F-21's route climb at 50 m/s, what its flight model sustains
+
+**Date:** 2026-11-20
+**Decision:** The F-21's air-war climb rate (`airWar.climbRate` in its bundle) is 50 m/s, down from 110. Its routes climb at 70% of the cruise speed (about 173 m/s), and at that speed the flight model's specific excess power at military power is about 77 m/s at 1 km, 61 at 3 km, 49 at 5 km, 36 at 7 km and 24 at 9 km (in afterburner 160, 130, 106, 83 and 63 m/s): 110 m/s all the way to 9 km was beyond the Kestrel even in afterburner, so the AI followed its climb up to 3 km behind. At 50 m/s, the mean at military power, the lead stays within 1.3 km in the climb (afterburner a quarter of the time near the top). The aggregate route should not ask for more than full fidelity can fly (rule 18); the other types keep their priors until they have flight models (R2.7). The descent from cruise, at the same rate, is longer too. Every world's F-21 routes change, so the campaign's state.
+
+**How it was checked.** `tests/promotion.test.ts`: the AI lead of a CAP pair stays within 2 km of its route from the climb-out (5 km before). `tests/ato.test.ts`'s wind test moves its target 220 km farther out, since the slower climb now reaches the old one's fence-in point before any ingress. The unit suite, the type check and lint pass. `tools/war.preview.ts` (`3c5623019d8c0959`, `5dceaff2ae334be7`, `7dde4a86cbf5f482`; stepped and in one jump the same): aircraft lost (A/P) 18/12, 11/15, 3/4, against 18/12, 13/12, 3/4.
+
+**Reason:** R2.5 (TODO): the route's climb was steeper than the aircraft can fly.

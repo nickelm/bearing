@@ -507,7 +507,7 @@
     "maxSpeedKt": 1150,
     "cruiseAltitude": 9000,
     "ceiling": 15000,
-    "climbRate": 110,
+    "climbRate": 50,
     "combatRadiusKm": 550,
     "stationTimeMin": 15,
     "fuel": 5800,

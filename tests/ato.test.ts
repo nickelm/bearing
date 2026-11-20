@@ -58,7 +58,8 @@ describe('winds aloft', () => {
         rangeFactor: 1,
         basePoint: () => dir(40, 10),
         carrierBased: false,
-        target: dir(44, 10),
+        target: dir(46, 10),
+        // Far enough for an ingress after the F-21's climb at 50 m/s (decision 283).
         launch: 0,
         wind: () => wind,
       })!;

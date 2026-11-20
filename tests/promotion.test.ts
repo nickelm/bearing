@@ -113,8 +113,8 @@ describe('the AI pilots of a promoted CAP flight', () => {
       expect(lead(a).gear).toBe(0);
       expect(lead(a).gearDamaged).toBe(false);
     }
-    // The route climbs faster than the Kestrel can at its climb speed: it follows late, not stalled.
-    expect(worst).toBeLessThan(5000);
+    // The route climbs at the F-21's 50 m/s, a little more than its military power sustains near the top (decision 283).
+    expect(worst).toBeLessThan(2000);
     expect(worstOnStation).toBeLessThan(400);
     expect(worstWing).toBeLessThan(600);
     expect(lead(f.aircraft[0]!).fuel).toBeLessThan(fuel0);
