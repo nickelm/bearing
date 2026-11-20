@@ -4,6 +4,8 @@
 
 *Audit 2026-11-18 (decision 229): the code diverges from this proposal in three settled ways. The hillshade is computed per fragment, not baked (decision 78); labels use a single-channel SDF atlas built at load time, not MSDF (decision 98); infrastructure lives in `worldgen/strategic/`, not `worldgen/infrastructure/` (rule 9). The transition between views is not built. The roadmap section below is superseded by `docs/roadmap.md` (decision 228).*
 
+*Extended by Proposal 0009 (decisions 259–270): settlements gain streets, blocks, parcels, districts and buildings from a settlement generator; the map's urban fill takes planned cities' block outlines and tints their industry, rail yards and ports (decision 270).*
+
 ## Summary
 
 Bearing gets two distinct views of the same world, each with its own renderer and visual language.

@@ -4,6 +4,8 @@
 
 *Audit 2026-11-18 (decision 229): features are drawn from segment lists, not a per-chunk distance field (decision 161); airfield pads are exempt from "rivers always last" until siting keeps them off rivers (decision 164); links are aligned independently in a spatial order (decision 184), not railways first; bridges are not yet nodes that a strike can cut, and fewer than half of the network's bridges match a drawn crossing (decision 190). This proposal has no roadmap section; `docs/roadmap.md` schedules its remaining work (decision 228).*
 
+*Extended by Proposal 0009 (decisions 259–270): arterials from this proposal's networks seed the settlements' street fields and stay fixed; inside planned towns the urban ground is drawn from a per-chunk feature distance field after all (decision 266), the first one built, since a town's thousands of streets would overload segment lists. Settlement pads for large structures are recorded but not yet applied as edits (decision 264).*
+
 ## Principle
 
 Every linear feature has a **design speed or flow regime**, and that regime decides how the feature and the terrain adapt to each other. A slow lowland river wanders and carves a floodplain. A minor mountain road yields to the slope and switches back. A motorway cuts, fills, and bridges to keep its grade and curves. A mainline railway accepts long detours, horseshoe curves, spiral loops, viaducts, and tunnels before it accepts a steep grade. A power line ignores the terrain.

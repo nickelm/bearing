@@ -364,5 +364,8 @@ Runs beside the main line (`docs/proposals/0009-settlements-and-cities.md`, `doc
 - [ ] Phase 9: major streets and landmark glyphs in the Region band (decision 270).
 - [ ] Ink outlines on city meshes without doubling draw calls (decision 267).
 - [ ] Meshes built in a worker (needs the tile surface there; decision 266).
-- [ ] Phase 10: metrics over 20 seeds, screenshots, documents, report.
+- [x] Phase 10: metrics over 20 seeds, screenshots, documents, report (`docs/reports/cities-report.md`).
+- [ ] Frame time on the owner's GPU in the standard city views (`?dev&gputime=1`); tune the ranges.
+- [ ] Night: move the town glow onto streets and windows for planned towns.
+- [ ] Two buildings outside their parcels over 20 seeds (Mediterranean, Arid cities).
 - [ ] Wire settlement pads into `terrainEditsFor` once the sim's height service can take them (decision 264).
