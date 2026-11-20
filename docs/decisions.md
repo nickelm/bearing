@@ -4558,3 +4558,12 @@ Decision 256's AI checks had run gear down, and the gear's drag had been slowing
 - **Zoom.** `CityLayer.zoom` divides the distances that pick a chunk's detail and multiplies the reach for plans. A targeting pod at 8× sees a city 30 km away as boxes, as from about 4 km. Its narrow field keeps the triangle count in the same range.
 
 **Reason:** the owner asked for specific buildings in cities to be strike targets. Campaign logic already plans strikes on the infrastructure's targets (rule 9); this makes each one a particular complex in its town that a pilot can find and see broken. The generator stays the world's: it realizes sites it is given and knows nothing of who asked.
+
+### 278. Wind at full fidelity
+
+**Date:** 2026-11-20
+**Decision:** A promoted flight's aircraft fly in the campaign's air: before each step `airVelocity` (Free Flight's, decision 143) sets the wind and gusts at the aircraft from the worker's weather frames on the main thread (`SimClient.weather`), at the flight's own game time and its height above the drawn ground. The route tracker already flies ground speed and track and turns them into airspeed with the wind it feels (decision 256), so the flight keeps its route in wind; the player feels the same air after a take-over. The worker's rebuilt routes still leave winds aloft out (decision 257; TODO).
+
+**How it was checked.** `tests/fullFidelity.test.ts`: a CAP flight on station in a steady 25 m/s west wind has the wind at its aircraft and its lead within 600 m of the route over four minutes. The unit suite, the type check and lint pass.
+
+**Reason:** R2.5 (TODO): the promoted flight flew in still air.

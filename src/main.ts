@@ -520,6 +520,7 @@ async function main(): Promise<void> {
         },
         rate: () => sim.rate,
         post: (input) => sim.input(input),
+        weather: () => sim.weather,
       });
   // The campaign's aircraft near the camera (R2.4); the followed flight is Follow's to draw.
   const traffic = freeFlightMode

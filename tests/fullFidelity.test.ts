@@ -14,6 +14,7 @@ import { formationAt, slotPose } from '../src/sim/air/formation';
 import type { Mission } from '../src/sim/air/mission';
 import { missionPlugin } from '../src/sim/command/missions/registry';
 import type { FlightModel } from '../src/sim/flight/flightModel';
+import type { WeatherView } from '../src/sim/weather/frame';
 import { capMission, phaseStart, R, SPAN, seaLevel } from './helpers/promoted';
 
 const flightData = (id: string) => MODEL_SPECS[id]?.flight;
@@ -147,4 +148,50 @@ describe('a followed flight at full fidelity', () => {
     expect(h.fix.aircraft).toBe(0);
     expect(h.lost).toHaveLength(4);
   });
+
+  it('flies its route in a 25 m/s crosswind', () => {
+    const m = capMission();
+    const t0 = phaseStart(m, 'on-target') + 300;
+    // A steady west wind everywhere, no gusts.
+    const view = {
+      ready: true,
+      wind: (_p: unknown, _a: number, _t: number, out: { east: number; north: number }) => {
+        out.east = 25;
+        out.north = 0;
+        return out;
+      },
+      report: () => ({ cloudCover: 0, storm: 0, cloudBase: 5000 }),
+    } as unknown as WeatherView;
+    const f = new FullFidelity(
+      {
+        radius: R,
+        mission: () => m,
+        leadPose: (mm, u) => drawnLeadPose(mm, u, R),
+        ground: seaLevel,
+        formations,
+        gearHeight: 2,
+        clearance: FOLLOW_CLEARANCE,
+        span: SPAN,
+        weather: () => view,
+      },
+      flightSpecOfType('f21', flightData)!,
+      m,
+      t0,
+      poses(m, t0),
+    );
+    let worst = 0;
+    for (let t = t0; t < t0 + 240; t += 1 / 30) {
+      f.advance(m, t);
+      if (t < t0 + 30) continue;
+      const lead = f.flight.aircraft[0]!.flown.airframe as FlightModel;
+      worst = Math.max(
+        worst,
+        lead.pos.distanceTo(new Vec3d(...analyticPose(m.route, f.flight.time, R).pos)),
+      );
+    }
+    const lead = f.flight.aircraft[0]!.flown.airframe as FlightModel;
+    // The air moves: airspeed and ground speed differ by the wind.
+    expect(lead.wind.length()).toBeCloseTo(25, 3);
+    expect(worst).toBeLessThan(600);
+  }, 60_000);
 });

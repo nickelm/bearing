@@ -59,6 +59,7 @@ import { MouseCapture } from '../ui/flight/mouseCapture';
 import { aimDirection, flyMouseAim } from '../ui/flight/mouseAim';
 import { FlightDirector } from '../sim/flight/flightDirector';
 import type { CampaignInputEvent } from '../sim/eventLog';
+import type { WeatherView } from '../sim/weather/frame';
 import { flightRateCap } from '../sim/clock';
 import type { FlightModel } from '../sim/flight/flightModel';
 import type { FlightSpec } from '../sim/flight/flightSpec';
@@ -95,6 +96,8 @@ export interface FollowDeps {
   returned: (missionId: number, why: string | null) => void;
   /** The campaign clock's rate (game seconds per real second). */
   rate: () => number;
+  /** The campaign's weather (the worker's frames), for the wind at full fidelity. */
+  weather?: () => WeatherView | null;
   /** Posts a player input to the campaign (logged in the worker; R1.4). */
   post: (input: CampaignInputEvent) => void;
 }
@@ -635,6 +638,7 @@ export class Follow {
           gearHeight: this.gearHeight,
           clearance: this.clearance,
           span: this.span,
+          weather: this.deps.weather,
         },
         this.flightSpec,
         m,

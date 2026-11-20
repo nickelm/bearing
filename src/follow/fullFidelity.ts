@@ -40,6 +40,8 @@ import type { FlightSpec } from '../sim/flight/flightSpec';
 import { PromotedFlight } from '../sim/flight/promotedFlight';
 import type { PromotedAircraft } from '../sim/flight/promotion';
 import { drawnReference } from './followFlight';
+import { airVelocity } from '../sim/flight/wind';
+import type { WeatherView } from '../sim/weather/frame';
 
 /** The fixed-wing flight data of a type's bundle (its drawn geometry's), or null: it flies analytically. */
 export function flightSpecOfType(
@@ -96,6 +98,8 @@ export interface FullFidelityContext {
   gearHeight: Meters;
   clearance: Meters;
   span: Meters;
+  /** The campaign's weather, for the air the aircraft fly in (null: still air). */
+  weather?: () => WeatherView | null;
 }
 
 export class FullFidelity {
@@ -121,6 +125,23 @@ export class FullFidelity {
       phase: (u) => routeState((c.mission() ?? m).route, u, c.radius).phase,
       span: c.span,
     });
+    // The air they fly in: the campaign's wind and gusts, as Free Flight's (decision 278).
+    for (const a of this.flight.aircraft) this.giveWind(a);
+  }
+
+  /** The aircraft's air before each step: the weather's wind at its place and time. */
+  private giveWind(a: PromotedAircraft): void {
+    const c = this.ctx;
+    const f = this.flight;
+    a.flown.wind = (af) =>
+      airVelocity(
+        c.weather?.() ?? null,
+        af.pos,
+        c.radius,
+        f.time,
+        Math.max(0, af.telemetry.radarAltitude),
+        af.wind,
+      );
   }
 
   /** The lead's reference on the followed mission's route as it is at each call. */

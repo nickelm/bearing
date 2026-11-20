@@ -83,7 +83,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] AI sensing and line of sight read the height service, not resident tiles (decision 227's sensors keep tiles for the ground map and elevation map only)
 - [x] Analytic low-level routes: a terrain floor along each leg from the coarse heights, with clearance by mission type; test that no route on the pinned seeds passes below terrain (clearance by airframe: 100 m jets, 30 m helicopters)
 - [x] Sited runways for full fidelity and the simulation view: the sim carries the sited runway as presentation data beside the coarse point (`world.terrain.fields`)
-- [ ] R2.5: check a flight handed to full fidelity anywhere on its route is above the drawn ground (the floor is checked against the coarse ground only; decision 240)
+- [x] R2.5: check a flight handed to full fidelity anywhere on its route is above the drawn ground (the floor is checked against the coarse ground only; decision 240): promotion starts from the drawn poses, lifted at least the follow's clearance over the drawn ground, and the lead's reference keeps that lift (decision 272)
 
 ### R1.7 Aircraft bundles and roster data
 
@@ -221,7 +221,8 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] Ground for promoted flights: the drawn surface with the airfields' grading (Free Flight's `AirfieldGround`, built by `flownGround` for both)
 - [x] Every other flight inside the bubble stays drawn while the player flies (`CampaignTraffic`, as while following; owner, decision 258)
 - [ ] Owner, on the GPU: follow an F-21 CAP from climb-out through the station to the approach; the flight at full fidelity holds formation, its surfaces move, and it eases back onto its route at the approach (decision 272)
-- [ ] Wind at full fidelity: the promoted flight flies in still air (the routes leave winds aloft out of rebuilt routes too)
+- [x] Wind at full fidelity: the promoted flight flies in the campaign's wind and gusts (decision 278)
+- [ ] Winds aloft in the worker's rebuilt routes (AirOps cannot read the planner's weather yet; decision 257)
 - [ ] The route's climb (the air war's 110 m/s for the F-21) is steeper than the Kestrel sustains at its climb speed: the AI follows it up to 4 km late and catches up by the station (R2.10's calibration, or a slower climb in the route)
 - [ ] An abort (`returnRoute`) still turns home at a corner; give it the rejoin's turn
 - [ ] The plug-ins' `behavior` parts (rule 16): CAP's first, once the follow runs `PromotedFlight` (the route tracker per phase; weapons on the pass in R2.6)
