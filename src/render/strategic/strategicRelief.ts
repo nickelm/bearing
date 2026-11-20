@@ -71,6 +71,9 @@ import { HabitabilityTexture } from '../common/habitabilityTexture';
 import { TerritoryTexture } from './overlays/territoryTexture';
 import { UrbanTexture } from './infra/urbanTexture';
 
+/** The urban fill over industry, rail yards and ports of planned cities (decision 270). */
+const URBAN_INDUSTRY_FILL = 0xa8a49c;
+
 /** Part II's urban extent fill (sRGB), and how much of it covers the land (decision 104). */
 export const URBAN_FILL = 0xcbb8a0;
 export const URBAN_OPACITY = 1;
@@ -443,7 +446,16 @@ export class StrategicRelief {
         1,
       ).mul(float(1).sub(smoothstep(0.25, 0.5, coverageWidth)));
       const builtLand = mix(
-        mix(mapLand, rgb(hexToLinear(URBAN_FILL)), urbanFill.mul(URBAN_OPACITY).mul(urbanGate)),
+        mix(
+          mapLand,
+          // Planned cities' industry, rail yards and ports tint the fill (Proposal 0009).
+          mix(
+            rgb(hexToLinear(URBAN_FILL)),
+            rgb(hexToLinear(URBAN_INDUSTRY_FILL)),
+            this.urban.sampleIndustry(radial).mul(0.7),
+          ),
+          urbanFill.mul(URBAN_OPACITY).mul(urbanGate),
+        ),
         rgb(hexToLinear(URBAN_EDGE)),
         urbanEdge.mul(urbanGate),
       );

@@ -48,6 +48,7 @@ import {
   vec4,
 } from 'three/tsl';
 import { cellHashNode, hashBitsNode } from '../../common/canopyNode';
+import type { CityGround } from '../city/cityGround';
 import {
   CORE_SHARE,
   INNER_SHARE,
@@ -290,7 +291,8 @@ export class LightShading {
   private readonly lights;
   private readonly lists;
   private readonly outlines;
-  private readonly info;
+  /** Where the pattern's vec4s start in the outlines buffer (decision 259; one buffer fewer). */
+  private readonly infoBase: number;
   /** Beyond this distance (m) the urban ground gives way to its roofs (decision 259). */
   readonly groundRange = uniform(11_000);
 
@@ -302,10 +304,15 @@ export class LightShading {
     const lists = tables?.lists ?? new Uint32Array(1);
     this.lights = storage(new StorageBufferAttribute(l, 4), 'vec4', l.length / 4).toReadOnly();
     this.lists = storage(new StorageBufferAttribute(lists, 1), 'uint', lists.length).toReadOnly();
+    // The outlines and, after them, the pattern's four floats per light: one storage
+    // buffer, since the terrain's fragment stage is at WebGPU's default of 8.
     const o = tables?.outlines ?? new Float32Array(1);
-    this.outlines = storage(new StorageBufferAttribute(o, 1), 'float', o.length).toReadOnly();
     const inf = tables?.info ?? new Float32Array(4);
-    this.info = storage(new StorageBufferAttribute(inf, 4), 'vec4', inf.length / 4).toReadOnly();
+    const both = new Float32Array(o.length + inf.length);
+    both.set(o);
+    both.set(inf, o.length);
+    this.infoBase = o.length;
+    this.outlines = storage(new StorageBufferAttribute(both, 1), 'float', both.length).toReadOnly();
   }
 
   /**
@@ -316,7 +323,14 @@ export class LightShading {
    * Where a block shrinks below a few pixels, or beyond `groundRange`, it gives way to
    * the roofs of `builtAlbedo`, the far representation. Call it inside built-up cover only.
    */
-  urbanGround(planetPosition: V3, start: F, count: F, footprint: F, distance: F): V3 {
+  urbanGround(
+    planetPosition: V3,
+    start: F,
+    count: F,
+    footprint: F,
+    distance: F,
+    city?: CityGround | null,
+  ): V4 {
     return Fn(() => {
       const p = normalize(planetPosition);
       const best = float(1e9).toVar();
@@ -341,69 +355,102 @@ export class LightShading {
       });
       const roofs = builtAlbedo(planetPosition, footprint, bestIndustry);
       const out = roofs.toVar();
-      If(bestId.greaterThanEqual(0), () => {
-        const g = this.info.element(bestId);
-        const S = g.y;
-        If(S.greaterThan(0), () => {
-          const c = this.lights.element(bestId.mul(2)).xyz;
-          const east = normalize(cross(vec3(0, 1, 0), c));
-          const north = cross(c, east);
-          const dp = p.sub(c);
-          const x = dot(dp, east).mul(this.radius);
-          const y = dot(dp, north).mul(this.radius);
-          const ca = cos(g.x);
-          const sa = sin(g.x);
-          const u = x.mul(ca).add(y.mul(sa));
-          const v = x.mul(sa).negate().add(y.mul(ca));
-          const fp = max(footprint, 0.05);
-          const line = (w: F) => {
-            const k = floor(w.div(S).add(0.5));
-            const major = mod(k, MAJOR_EVERY).lessThan(0.5);
-            return abs(w.sub(k.mul(S))).sub(select(major, float(MAJOR_HALF), float(MINOR_HALF)));
-          };
-          const edge = min(line(u as F), line(v as F));
-          const bi = floor(u.div(S));
-          const bj = floor(v.div(S));
-          const seed = uint(g.z);
-          const h = hashBitsNode(cellHashNode(ivec3(int(bi), int(bj), int(URBAN_HASH_Z)), seed), 4);
-          // Distance share at the block's center, so a block takes one class throughout.
-          const share = length(vec3(bi.add(0.5).mul(S), bj.add(0.5).mul(S), 0)).div(bestR);
-          // Gardens and yards alternate by parcel, a third of a block across.
-          const pi = floor(u.div(S.div(3)));
-          const pj = floor(v.div(S.div(3)));
-          const hp = hashBitsNode(
-            cellHashNode(ivec3(int(pi), int(pj), int(URBAN_HASH_Z + 1)), seed),
-            4,
-          );
-          const garden = mix(URBAN_COLORS.lawn, URBAN_COLORS.yard, step(0.55, hp));
-          const courtyard = mix(URBAN_COLORS.courtyard, URBAN_COLORS.yard, step(0.75, hp).mul(0.6));
-          const industrial = select(h.lessThan(0.3), URBAN_COLORS.gravel, URBAN_COLORS.concrete);
-          const residential = select(
-            share.lessThan(CORE_SHARE).and(h.lessThan(0.3)),
-            URBAN_COLORS.square,
-            select(
-              h.greaterThan(0.92),
-              URBAN_COLORS.park,
-              select(
-                h.greaterThan(0.85).and(share.greaterThan(CORE_SHARE)),
-                URBAN_COLORS.parking,
-                select(share.lessThan(INNER_SHARE), courtyard, garden),
-              ),
-            ),
-          );
-          const block = select(bestIndustry.greaterThan(0.5), industrial, residential);
-          const walk = clamp(float(0.5).sub(edge.sub(SIDEWALK).div(fp)), 0, 1);
-          const street = clamp(float(0.5).sub(edge.div(fp)), 0, 1);
-          const ground = mix(mix(block, URBAN_COLORS.sidewalk, walk), URBAN_COLORS.asphalt, street);
-          // Blocks below about four pixels, or beyond the ground's range, show their roofs.
-          const resolved = clamp(S.div(fp.mul(4)).sub(1), 0, 1).mul(
-            float(1).sub(smoothstep(this.groundRange.mul(0.8), this.groundRange, distance)),
-          );
-          out.assign(mix(roofs, ground, resolved));
+      // How much of the built-up cover the urban ground keeps (0: the natural ground).
+      const keep = float(1).toVar();
+      // Planned towns (decision 266) draw their plan's ground near the camera.
+      const planned = vec4(0).toVar();
+      if (city) {
+        If(bestId.greaterThanEqual(0), () => {
+          planned.assign(city.ground(p, this.lights.element(bestId.mul(2)).xyz, bestId, footprint));
         });
-      });
-      return out;
-    })() as V3;
+      }
+      const near = float(1).sub(smoothstep(this.groundRange.mul(0.8), this.groundRange, distance));
+      If(planned.w.greaterThan(0.4), () => {
+        out.assign(mix(roofs, planned.xyz, near));
+      })
+        .ElseIf(planned.w.greaterThan(0.1), () => {
+          keep.assign(0);
+        })
+        .ElseIf(bestId.greaterThanEqual(0), () => {
+          const at = int(this.infoBase).add(bestId.mul(4));
+          const g = vec4(
+            this.outlines.element(at),
+            this.outlines.element(at.add(1)),
+            this.outlines.element(at.add(2)),
+            this.outlines.element(at.add(3)),
+          );
+          const S = g.y;
+          If(S.greaterThan(0), () => {
+            const c = this.lights.element(bestId.mul(2)).xyz;
+            const east = normalize(cross(vec3(0, 1, 0), c));
+            const north = cross(c, east);
+            const dp = p.sub(c);
+            const x = dot(dp, east).mul(this.radius);
+            const y = dot(dp, north).mul(this.radius);
+            const ca = cos(g.x);
+            const sa = sin(g.x);
+            const u = x.mul(ca).add(y.mul(sa));
+            const v = x.mul(sa).negate().add(y.mul(ca));
+            const fp = max(footprint, 0.05);
+            const line = (w: F) => {
+              const k = floor(w.div(S).add(0.5));
+              const major = mod(k, MAJOR_EVERY).lessThan(0.5);
+              return abs(w.sub(k.mul(S))).sub(select(major, float(MAJOR_HALF), float(MINOR_HALF)));
+            };
+            const edge = min(line(u as F), line(v as F));
+            const bi = floor(u.div(S));
+            const bj = floor(v.div(S));
+            const seed = uint(g.z);
+            const h = hashBitsNode(
+              cellHashNode(ivec3(int(bi), int(bj), int(URBAN_HASH_Z)), seed),
+              4,
+            );
+            // Distance share at the block's center, so a block takes one class throughout.
+            const share = length(vec3(bi.add(0.5).mul(S), bj.add(0.5).mul(S), 0)).div(bestR);
+            // Gardens and yards alternate by parcel, a third of a block across.
+            const pi = floor(u.div(S.div(3)));
+            const pj = floor(v.div(S.div(3)));
+            const hp = hashBitsNode(
+              cellHashNode(ivec3(int(pi), int(pj), int(URBAN_HASH_Z + 1)), seed),
+              4,
+            );
+            const garden = mix(URBAN_COLORS.lawn, URBAN_COLORS.yard, step(0.55, hp));
+            const courtyard = mix(
+              URBAN_COLORS.courtyard,
+              URBAN_COLORS.yard,
+              step(0.75, hp).mul(0.6),
+            );
+            const industrial = select(h.lessThan(0.3), URBAN_COLORS.gravel, URBAN_COLORS.concrete);
+            const residential = select(
+              share.lessThan(CORE_SHARE).and(h.lessThan(0.3)),
+              URBAN_COLORS.square,
+              select(
+                h.greaterThan(0.92),
+                URBAN_COLORS.park,
+                select(
+                  h.greaterThan(0.85).and(share.greaterThan(CORE_SHARE)),
+                  URBAN_COLORS.parking,
+                  select(share.lessThan(INNER_SHARE), courtyard, garden),
+                ),
+              ),
+            );
+            const block = select(bestIndustry.greaterThan(0.5), industrial, residential);
+            const walk = clamp(float(0.5).sub(edge.sub(SIDEWALK).div(fp)), 0, 1);
+            const street = clamp(float(0.5).sub(edge.div(fp)), 0, 1);
+            const ground = mix(
+              mix(block, URBAN_COLORS.sidewalk, walk),
+              URBAN_COLORS.asphalt,
+              street,
+            );
+            // Blocks below about four pixels, or beyond the ground's range, show their roofs.
+            const resolved = clamp(S.div(fp.mul(4)).sub(1), 0, 1).mul(
+              float(1).sub(smoothstep(this.groundRange.mul(0.8), this.groundRange, distance)),
+            );
+            out.assign(mix(roofs, ground, resolved));
+          });
+        });
+      return vec4(out, keep);
+    })() as V4;
   }
 
   /**

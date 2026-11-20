@@ -48,6 +48,7 @@ import { TerrainRenderer } from './terrain/terrainRenderer';
 import { MotionEstimate } from '../common/terrain/prefetch';
 import { OrbitCamera, attachOrbitInput } from '../common/orbitCamera';
 import { StrategicOverlay } from '../strategic/strategicOverlay';
+import { CityLayer } from './city/cityLayer';
 import { StructureLayer } from './infra/structureLayer';
 import { BridgeLayer } from './infra/bridgeLayer';
 import type { InfraScene } from './infra/infraScene';
@@ -121,6 +122,10 @@ export class GlobeScene {
   readonly props: PropLayer;
   /** Buildings of towns, airbases and industry near the camera (decision 65). */
   readonly structures: StructureLayer;
+  /** Settlements drawn from their plans (Proposal 0009, decision 267). */
+  readonly cities: CityLayer;
+  /** Off draws the old town scatter instead of planned settlements. */
+  citiesOn = true;
   /** Bridges and viaducts of the aligned roads and railways (decision 192). */
   readonly bridges: BridgeLayer;
   /** Cloud coverage, cloud shadows and the shell far above the view (decisions 55, 68, 141). */
@@ -219,6 +224,7 @@ export class GlobeScene {
     );
     this.props = new PropLayer(this.terrain, this.lighting);
     this.structures = new StructureLayer(this.terrain, this.lighting);
+    this.cities = new CityLayer(this.terrain, this.lighting);
     this.bridges = new BridgeLayer(this.terrain, this.lighting);
     // The sky, drawn behind everything: its LUT, the sun, the moon and the stars (decision 140).
     this.scene.backgroundNode = this.lighting.atmosphere.skyNode();
@@ -231,6 +237,7 @@ export class GlobeScene {
       this.groundCover.group,
       this.props.group,
       this.structures.group,
+      this.cities.group,
       this.bridges.group,
       this.clouds.group,
       this.strategic.group,
@@ -492,7 +499,13 @@ export class GlobeScene {
         this.structures.inkWidth,
         (this.camera.fov * Math.PI) / 180 / this.viewportHeight,
       );
+      // Settlements from their plans (Proposal 0009) replace the town scatter where they draw.
+      this.cities.enabled = this.structures.enabled && this.citiesOn && this.cities.hasWorld;
+      this.structures.towns = !this.cities.enabled;
       this.structures.update(o.eye, aboveGround, cull);
+      const gw = this.groundCover.groundWind;
+      this.cities.wind.value.set(gw.x, gw.y, gw.z);
+      this.cities.update(o.eye, aboveGround, cull);
       this.props.update(o.eye, aboveGround);
       this.bridges.update(o.eye, aboveGround);
     } else {
@@ -502,6 +515,7 @@ export class GlobeScene {
       this.props.group.visible = false;
       if (this.rotorDust) this.rotorDust.group.visible = false;
       this.structures.group.visible = false;
+      this.cities.group.visible = false;
     }
 
     // Above the highest exaggerated terrain, so the lines are not buried.
@@ -571,6 +585,7 @@ export class GlobeScene {
     this.groundCover.dispose();
     this.props.dispose();
     this.structures.dispose();
+    this.cities.dispose();
     this.bridges.dispose();
     this.clouds.dispose();
     this.weather.dispose();

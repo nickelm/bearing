@@ -85,6 +85,7 @@ import type { RiverIndex } from '../../../worldgen/riverIndex';
 import type { InfraScene } from '../infra/infraScene';
 import type { TerrainEdits } from '../../../worldgen/edits';
 import { HabitabilityTexture } from '../../common/habitabilityTexture';
+import { CityGround } from '../city/cityGround';
 import {
   BALLAST,
   LightShading,
@@ -211,6 +212,8 @@ export class TerrainRenderer {
   private exaggeration = 1;
   /** Height exaggeration, shared with layers drawn on the terrain (trees). */
   readonly exaggerationUniform = uniform(1);
+  /** The planned towns' urban ground (decision 266), written by the city layer. */
+  cityGround: CityGround | null = null;
   private mode: TileViewMode = 'biome';
   private detail: Noise3 = new Noise3(rng(0, 'render-detail'));
   private readonly index = new BufferAttribute(buildTileIndex(), 1);
@@ -459,11 +462,13 @@ export class TerrainRenderer {
         heading: ground.heading,
       });
       // The urban ground (proposal 0009, decision 259) in place of the biome under towns.
-      const urban = vec3(0).toVar();
+      const urban = vec4(0).toVar();
       If(builtCover.greaterThan(0), () => {
-        urban.assign(lights.urbanGround(planet, lightStart, lightCount, footprint, distance));
+        urban.assign(
+          lights.urbanGround(planet, lightStart, lightCount, footprint, distance, this.cityGround),
+        );
       });
-      const landAlbedo = mix(ground.albedo.mul(micro.shade), urban, builtCover);
+      const landAlbedo = mix(ground.albedo.mul(micro.shade), urban.xyz, builtCover.mul(urban.w));
       // Falls (decision 126): river water on steep facets is white water.
       // Standing water (a lake or the sea) takes no falls or white water: rivers run on
       // through lakes to their outlets, and their reaches there carry the inflow's
@@ -669,6 +674,10 @@ export class TerrainRenderer {
           world.infra.outlines,
           world.infra.townInfo,
         )
+      : null;
+    // The planned towns' ground (decision 266), one buffer set per world.
+    this.cityGround = world?.infra
+      ? new CityGround(world.infra.lights.length / 8, world.radius)
       : null;
     const oldHabitability = this.habitability;
     this.habitability = world?.infra

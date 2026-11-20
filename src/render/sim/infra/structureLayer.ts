@@ -277,6 +277,7 @@ export function placeBuildings(
   opts: MeshOptions,
   scene: InfraScene,
   seed: WorldSeed,
+  townsOn = true,
 ): BuildingInstances {
   const R = opts.radius;
   const size = TILE_TEXELS * (1 << t.level);
@@ -376,7 +377,7 @@ export function placeBuildings(
     }
   }
 
-  const towns = sites.filter((s) => s.kind === 'town');
+  const towns = townsOn ? sites.filter((s) => s.kind === 'town') : [];
   if (towns.length > 0) {
     const r = rng(seed, 'buildings').fork(tileKeyString(t));
     const step = LATTICE / sampleM;
@@ -457,6 +458,7 @@ export class StructureLayer {
   /** Above this height over the ground, no buildings are built or drawn (m). */
   maxAltitude = 15_000;
   buildBudgetMs = 4;
+  private townsOn = true;
   readonly stats = { tiles: 0, instances: 0, pending: 0 };
   private scene: InfraScene | null = null;
   private readonly tiles = new Map<string, BuiltTile>();
@@ -499,6 +501,17 @@ export class StructureLayer {
 
   get inkWidth(): number {
     return this.inkWidthPx;
+  }
+
+  /** Whether towns get scattered buildings (off where settlement plans draw them, decision 267). */
+  get towns(): boolean {
+    return this.townsOn;
+  }
+
+  set towns(on: boolean) {
+    if (on === this.townsOn) return;
+    this.townsOn = on;
+    this.clear();
   }
 
   setScene(scene: InfraScene | null): void {
@@ -646,7 +659,7 @@ export class StructureLayer {
         pending++;
         continue;
       }
-      this.tiles.set(s, this.build(placeBuildings(k, data, opts, scene, world.seed)));
+      this.tiles.set(s, this.build(placeBuildings(k, data, opts, scene, world.seed, this.townsOn)));
     }
     this.stats.pending = pending;
     let instances = 0;
