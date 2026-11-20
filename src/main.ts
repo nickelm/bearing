@@ -517,6 +517,7 @@ async function main(): Promise<void> {
           if (why) timeControls.notify(why, 6000);
         },
         rate: () => sim.rate,
+        post: (input) => sim.input(input),
       });
   // The campaign's aircraft near the camera (R2.4); the followed flight is Follow's to draw.
   const traffic = freeFlightMode
@@ -1605,6 +1606,8 @@ async function main(): Promise<void> {
     // The followed flight's pose and the chase camera's target, before the view renders.
     if (follow?.active && activeView !== 'simulation') follow.stop(null);
     follow?.frame(dt, gameTime);
+    // While the player flies, Space and the digits are the jet's and the displays' keys.
+    timeControls.keysEnabled = !follow?.flying;
     if (traffic) {
       traffic.time = gameTime;
       traffic.exclude = follow?.missionId ?? null;

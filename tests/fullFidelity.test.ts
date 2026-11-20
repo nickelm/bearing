@@ -107,4 +107,44 @@ describe('a followed flight at full fidelity', () => {
     // A clock far behind (a seek) asks for a new promotion.
     expect(f.advance(m, t + 60)).toBe(false);
   }, 60_000);
+
+  it('hands back with the fix and the losses, the lead flying on until the rebuilt route arrives', () => {
+    let m = capMission();
+    const t0 = phaseStart(m, 'on-target') + 300;
+    const f = fullFlight(() => m, t0);
+    expect(f.flight.takeOver(0)).toBe(true);
+    // The worker holds it: the list shows it flown.
+    m = { ...m, flown: { slot: 0, since: t0 } };
+    let t = t0;
+    for (; t < t0 + 5; t += 1 / 30) f.advance(m, t);
+    (f.flight.aircraft[3]!.flown.airframe as FlightModel).crash('test');
+    const h = f.flight.handback();
+    expect(h.fix.aircraft).toBe(3);
+    expect(h.fix.airborne).toBe(true);
+    expect(h.lost.map((l) => [l.slot, l.cause])).toEqual([[3, 'test']]);
+    const lead = f.flight.aircraft[0]!.flown.airframe as FlightModel;
+    const v = lead.vel.clone();
+    f.handBack();
+    expect(f.flight.playerSlot).toBeNull();
+    // Still held: the reference is the lead's own track, not the old route.
+    const ref = f.flight.pilots[0]!.reference(f.flight.time + 10)!;
+    const ahead = lead.pos.clone().addScaled(v, 10);
+    expect(ref.pos.distanceTo(ahead)).toBeLessThan(1e-6);
+    // The rebuilt route arrives (the hold is gone): it is the reference again.
+    m = { ...m, flown: undefined };
+    f.advance(m, t + 1 / 30);
+    const p = f.flight.pilots[0]!.reference(f.flight.time)!;
+    expect(
+      p.pos.distanceTo(new Vec3d(...analyticPose(m.route, f.flight.time, R).pos)),
+    ).toBeLessThan(1);
+  }, 60_000);
+
+  it('hands back a flight with no aircraft left as lost where they fell', () => {
+    const m = capMission();
+    const f = fullFlight(() => m, phaseStart(m, 'fence-in') + 60);
+    for (const a of f.flight.aircraft) (a.flown.airframe as FlightModel).crash('test');
+    const h = f.flight.handback();
+    expect(h.fix.aircraft).toBe(0);
+    expect(h.lost).toHaveLength(4);
+  });
 });

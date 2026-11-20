@@ -27,6 +27,8 @@ export class TimeControls {
   private readonly noticeEl: HTMLDivElement;
   private noticeTimer: ReturnType<typeof setTimeout> | null = null;
   private rate = 0;
+  /** Whether Space and the digit keys work the clock (off while the player flies a jet, R2.5). */
+  keysEnabled = true;
   /** Rate to resume at after a pause. */
   private resumeRate = 1;
   private readonly onKey: (e: KeyboardEvent) => void;
@@ -67,6 +69,7 @@ export class TimeControls {
     this.onKey = (e) => {
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (!this.keysEnabled) return;
       if (e.code === 'Space') {
         e.preventDefault();
         this.choose(this.rate === 0 ? this.resumeRate : 0);

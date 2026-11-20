@@ -40,7 +40,7 @@ import { mapRange } from '../ui/displays/formats';
 import type { AnalyticPose } from '../sim/air/analyticPose';
 import { AIRCRAFT_BUNDLES, bundleOfType } from '../sim/air/bundles';
 import type { AircraftBundle } from '../sim/air/bundles';
-import { missionPhase } from '../sim/air/mission';
+import { jumpInOpen, missionPhase } from '../sim/air/mission';
 import { carrierState } from '../sim/naval/carrierGroup';
 import type { CarrierTrack } from '../sim/naval/carrierGroup';
 import { missionPlugin } from '../sim/command/missions/registry';
@@ -52,6 +52,13 @@ import { DisplaySystem } from '../ui/displays/system';
 import { Hud, matrixProjector } from '../ui/flight/hud';
 import type { HudFrame } from '../ui/flight/hud';
 import { buildHudFrame, landingAid } from '../ui/flight/hudFrame';
+import type { ControlCursor } from '../ui/flight/controlCursor';
+import { FlightInput, STICK_DEADZONE, STICK_FULL } from '../ui/flight/flightInput';
+import type { FlightAction } from '../ui/flight/flightInput';
+import { MouseCapture } from '../ui/flight/mouseCapture';
+import { aimDirection, flyMouseAim } from '../ui/flight/mouseAim';
+import { FlightDirector } from '../sim/flight/flightDirector';
+import type { CampaignInputEvent } from '../sim/eventLog';
 import type { FlightModel } from '../sim/flight/flightModel';
 import type { FlightSpec } from '../sim/flight/flightSpec';
 import type { Runway } from '../sim/flight/runway';
@@ -87,7 +94,14 @@ export interface FollowDeps {
   returned: (missionId: number, why: string | null) => void;
   /** The campaign clock's rate (game seconds per real second). */
   rate: () => number;
+  /** Posts a player input to the campaign (logged in the worker; R1.4). */
+  post: (input: CampaignInputEvent) => void;
 }
+
+/** How long the worker has to hold a taken-over flight before the take-over counts as refused (ms). */
+export const HOLD_WAIT = 3000;
+/** How long after the flown aircraft crashes the controls go back to the AI (ms). */
+export const CRASH_HANDBACK = 3000;
 
 /** Time constant (s) of the drawn aircraft's ease back onto their routes after a demotion. */
 export const DEMOTION_BLEND = 1.5;
@@ -132,6 +146,18 @@ export class Follow {
   panels: FollowPanels = 'hud';
   private readonly bar: HTMLDivElement;
   private readonly panelsButton: HTMLButtonElement;
+  private readonly takeButton: HTMLButtonElement;
+  private readonly nextButton: HTMLButtonElement;
+  /** The mouse's pointer lock (rule 14) and Free Flight's input bindings for a taken-over jet. */
+  readonly capture: MouseCapture;
+  readonly input: FlightInput;
+  private readonly director = new FlightDirector();
+  /** Mouse aim has the stick once the mouse has been captured this session (decision 206). */
+  private aimEngaged = false;
+  /** When the player took over (ms), until the worker's hold shows in the mission. */
+  private takenAt: number | null = null;
+  /** When the flown aircraft crashed (ms), or null. */
+  private crashedAt: number | null = null;
   private readonly title: HTMLSpanElement;
   /** The flight model's ground and the sited runways (R2.5), once the terrain is ready. */
   private airfield: AirfieldGround | null = null;
@@ -170,21 +196,48 @@ export class Follow {
     const next = document.createElement('button');
     next.textContent = 'Next aircraft (N)';
     next.addEventListener('click', () => this.nextAircraft());
+    this.nextButton = next;
+    this.takeButton = document.createElement('button');
+    this.takeButton.hidden = true;
+    this.takeButton.addEventListener('click', () => this.toggleControl());
     this.panelsButton = document.createElement('button');
     this.panelsButton.addEventListener('click', () => this.nextPanels());
     const back = document.createElement('button');
     back.textContent = 'Map (Esc)';
     back.addEventListener('click', () => this.stop(null));
-    this.bar.append(this.title, next, this.panelsButton, back);
+    this.bar.append(this.title, next, this.takeButton, this.panelsButton, back);
     document.body.appendChild(this.bar);
     this.hud.show(false);
     this.displays.enabled = false;
     this.displays.visible = false;
 
     const canvas = deps.canvas;
+    // Taking over: the jet's bindings, mouse aim and the one pointer lock (rule 14).
+    this.capture = new MouseCapture(canvas);
+    this.capture.onChange = (on) => {
+      if (!this.flying) return;
+      if (on) this.aimEngaged = true;
+      if (this.input.mode === 'direct') this.input.centerCursor();
+    };
+    this.capture.onLost = () => {
+      if (this.flying)
+        this.hud.message('Mouse free: Tab or a click on the view to fly, T hands back', 3);
+    };
+    this.capture.onRefused = () =>
+      this.hud.message('The browser kept the mouse: click the view to capture it', 4);
+    this.input = new FlightInput(canvas, this.capture);
+    this.input.mode = 'mouse-aim';
+    this.input.onAction = (a) => this.action(a);
     const key = (e: KeyboardEvent) => {
       if (this.missionId === null || e.ctrlKey || e.altKey || e.metaKey || e.repeat) return;
       if ((e.target as HTMLElement | null)?.closest?.('input, select, textarea')) return;
+      if (e.code === 'KeyT') {
+        e.preventDefault();
+        this.toggleControl();
+        return;
+      }
+      // While the player flies the jet's bindings have the keys (FlightInput, the displays).
+      if (this.flying) return;
       if (e.code === 'Escape' || e.code === 'KeyM') {
         e.preventDefault();
         this.stop(null);
@@ -194,7 +247,7 @@ export class Follow {
     };
     // Free look: drag with any button; the wheel moves the camera closer or farther.
     const down = (e: PointerEvent) => {
-      if (this.missionId === null) return;
+      if (this.missionId === null || this.flying) return;
       this.dragging = true;
       this.lastX = e.clientX;
       this.lastY = e.clientY;
@@ -212,7 +265,7 @@ export class Follow {
       deps.globe.chase.lookHeld = false;
     };
     const wheel = (e: WheelEvent) => {
-      if (this.missionId === null) return;
+      if (this.missionId === null || this.flying) return;
       e.preventDefault();
       deps.globe.chase.zoomBy(Math.sign(e.deltaY));
     };
@@ -232,6 +285,214 @@ export class Follow {
 
   get active(): boolean {
     return this.missionId !== null;
+  }
+
+  /** Whether the player flies one of the followed flight's aircraft. */
+  get flying(): boolean {
+    return this.full?.flight.playerSlot != null;
+  }
+
+  /** Whether the player may take over the followed aircraft now: at full fidelity, in its window, not held. */
+  canTakeOver(t: number): boolean {
+    const m = this.mission();
+    return (
+      !!m &&
+      this.full !== null &&
+      !this.flying &&
+      !m.flown &&
+      jumpInOpen(m, t) &&
+      this.takenAt === null
+    );
+  }
+
+  /** T or the bar's button: takes over the followed aircraft, or hands it back. */
+  toggleControl(): void {
+    if (this.flying) this.handBack(null);
+    else this.takeOver(this.lastTime);
+  }
+
+  /**
+   * The player takes the followed aircraft (R2.5): its AI pilot leaves, the jet's input
+   * flies it from the controls the AI left, and the worker holds the mission (`take-over`).
+   */
+  takeOver(t: number): boolean {
+    const m = this.mission();
+    const f = this.full;
+    if (!m || !f || !this.canTakeOver(t)) return false;
+    const a = f.followed(this.slot);
+    if (!a) return false;
+    const model = a.flown.airframe as unknown as FlightModel;
+    const inp = this.input;
+    inp.reset(false, a.flown.controls.throttle);
+    Object.assign(inp.controls, a.flown.controls);
+    inp.mode = 'mouse-aim';
+    inp.centerCursor();
+    this.director.reset();
+    this.aimEngaged = false;
+    if (!f.flight.takeOver(a.slot)) return false;
+    // The input source: the jet's controls as the input holds them, mouse aim over them once
+    // the mouse is captured (as Free Flight's; the pilot hook and the input share the controls).
+    a.flown.pilot = (_af, ctl) => {
+      Object.assign(ctl, inp.controls);
+      if (inp.mode === 'mouse-aim' && this.aimEngaged && !model.onGround) {
+        flyMouseAim(this.director, model, this.aimDirection(), ctl, inp);
+        Object.assign(inp.controls, ctl);
+      }
+    };
+    this.slot = a.slot;
+    this.takenAt = performance.now();
+    this.crashedAt = null;
+    this.deps.post({ kind: 'take-over', mission: m.id, slot: a.slot });
+    inp.enabled = true;
+    this.capture.grab();
+    // The flown view: the HUD with the aircraft's own displays, their bindings live.
+    this.displays.attach(a.flown);
+    this.displays.enabled = true;
+    if (this.panels === 'hud') this.panels = 'all';
+    this.applyPanels();
+    this.hud.clearMessages();
+    this.hud.message(
+      [
+        `You have control: ${m.callsign}, aircraft ${a.slot + 1}`,
+        'Tab or a click: fly with the mouse (mouse aim); T hands back to the AI',
+      ],
+      6,
+    );
+    return true;
+  }
+
+  /**
+   * The player leaves the aircraft (R2.5): the AI takes it again and the worker gets the
+   * hand-back input, the flight's fix and the aircraft full fidelity lost, from which it
+   * rebuilds the route (decision 257). `why` is said on the HUD, if given.
+   */
+  handBack(why: string | null): void {
+    const m = this.mission();
+    const f = this.full;
+    if (!f || f.flight.playerSlot === null) return;
+    const a = f.flight.bySlot(f.flight.playerSlot);
+    // Posted after the take-over in any case: the worker applies them in order.
+    if (m) {
+      const h = f.flight.handback();
+      this.deps.post({ kind: 'hand-back', mission: m.id, fix: h.fix, lost: h.lost });
+    }
+    if (a) a.flown.pilot = null;
+    f.handBack();
+    this.endControl();
+    this.hud.message(why ?? `${m?.callsign ?? 'The flight'} is back with the AI`, 4);
+  }
+
+  /** The jet's input off, the mouse free, the displays read-only again. */
+  private endControl(): void {
+    this.input.enabled = false;
+    this.capture.release();
+    this.displays.enabled = false;
+    this.takenAt = null;
+    this.crashedAt = null;
+    this.applyPanels();
+  }
+
+  /** Where mouse aim flies: the cursor's direction in the chase view with its look centered. */
+  private aimDirection(): Vec3d {
+    return aimDirection(this.deps.globe.chase, this.deps.globe.camera.aspect, this.input.cursor);
+  }
+
+  /** The jet's toggle actions while the player flies (Free Flight's bindings). */
+  private action(a: FlightAction): void {
+    if (!this.flying) return;
+    const c = this.input.controls;
+    switch (a) {
+      case 'gear':
+        c.gearDown = !c.gearDown;
+        break;
+      case 'speedbrake':
+        c.speedbrake = !c.speedbrake;
+        break;
+      case 'parkingBrake':
+        c.parkingBrake = !c.parkingBrake;
+        break;
+      case 'mouseCapture': {
+        const freeing = this.capture.captured;
+        this.capture.toggle();
+        if (freeing) this.hud.message('Mouse free: Tab or a click on the view to fly with it', 2.5);
+        break;
+      }
+      case 'invertMouse':
+        this.input.invertAim = !this.input.invertAim;
+        this.hud.message(
+          this.input.invertAim ? 'Mouse up and down inverted' : 'Mouse up and down normal',
+          3,
+        );
+        break;
+      case 'mouseAim':
+        this.input.mode = this.input.mode === 'mouse-aim' ? 'direct' : 'mouse-aim';
+        this.input.centerCursor();
+        this.director.reset();
+        this.capture.grab();
+        this.hud.message(
+          this.input.mode === 'mouse-aim'
+            ? 'Mouse aim: fly toward the ring'
+            : 'Direct: the mouse is the stick',
+          3,
+        );
+        break;
+      case 'recenterView':
+        this.deps.globe.chase.recenter();
+        break;
+      case 'help':
+        this.hud.message(
+          [
+            'Mouse aim or W/S/A/D, Q/E rudder, Shift/Ctrl throttle, G gear, B speedbrake',
+            'N mouse aim or direct, Tab frees the mouse, C or right drag looks, T hands back',
+          ],
+          8,
+        );
+        break;
+      default:
+        // Escape frees the mouse (the browser's); the pause and the debug panel are Free Flight's.
+        break;
+    }
+  }
+
+  /** The player's controls each frame: keys, mouse, look and zoom; the hold checked, a crash handed back. */
+  private flyFrame(m: Mission, dt: number): void {
+    const f = this.full!;
+    const a = f.flight.bySlot(f.flight.playerSlot!);
+    const model = a?.flown.airframe as unknown as FlightModel | undefined;
+    const now = performance.now();
+    // The worker holds the mission once its list shows it flown; a refusal hands back at once.
+    if (this.takenAt !== null && m.flown) this.takenAt = null;
+    else if (this.takenAt !== null && now - this.takenAt > HOLD_WAIT) {
+      this.handBack(null);
+      this.hud.clearMessages();
+      this.hud.message('The campaign did not hand the flight over: the AI keeps it', 5, true);
+      return;
+    }
+    if (model?.crashed) {
+      if (this.crashedAt === null) {
+        this.crashedAt = now;
+        this.hud.message([`CRASH: ${model.crashed}`], 6, true);
+      } else if (now - this.crashedAt > CRASH_HANDBACK) {
+        this.handBack(`${m.callsign} lost an aircraft; the AI flies the rest`);
+        return;
+      }
+    }
+    if (!model) return;
+    const inp = this.input;
+    const chase = this.deps.globe.chase;
+    inp.directOnGround = model.onGround || !this.aimEngaged;
+    inp.aimRotates = model.onGround && this.aimEngaged;
+    inp.update(dt);
+    chase.lookHeld = inp.lookHeld;
+    if (inp.lookHeld) {
+      const rpp = (this.deps.globe.camera.fov * DEG) / Math.max(1, window.innerHeight);
+      chase.look(inp.lookDelta.x, inp.lookDelta.y, rpp);
+      inp.lookDelta.x = inp.lookDelta.y = 0;
+    }
+    if (inp.zoomSteps !== 0) {
+      chase.zoomBy(inp.zoomSteps);
+      inp.zoomSteps = 0;
+    }
   }
 
   /** Whether the followed flight flies at full fidelity now. */
@@ -324,6 +585,8 @@ export class Follow {
   stop(why: string | null): void {
     const id = this.missionId;
     if (id === null) return;
+    // Leaving the view leaves the aircraft: the AI takes it with its orders.
+    if (this.flying) this.handBack(null);
     this.clear();
     const g = this.deps.globe;
     g.chase.zoom = 1;
@@ -351,7 +614,9 @@ export class Follow {
   private fidelity(m: Mission, t: number): void {
     const g = this.deps.globe;
     const want = fullFidelityWanted(m, t, this.deps.rate(), this.poses);
-    if (this.full && (!want || !this.full.advance(m, t))) this.demote();
+    // Flown, or held until the worker's rebuilt route arrives: it stays at full fidelity.
+    const keep = this.flying || !!m.flown;
+    if (this.full && ((!want && !keep) || !this.full.advance(m, t))) this.demote();
     else if (!this.full && want && this.flightSpec && this.airfield && g.terrainReady) {
       this.full = new FullFidelity(
         {
@@ -379,6 +644,17 @@ export class Follow {
     }
   }
 
+  /** The bar's take-over button: shown while the player may take over or flies. */
+  private updateTakeButton(t: number): void {
+    const b = this.takeButton;
+    const flying = this.flying;
+    const can = flying || this.canTakeOver(t);
+    b.hidden = !can;
+    const label = flying ? 'Hand back (T)' : 'Take over (T)';
+    if (b.textContent !== label) b.textContent = label;
+    this.nextButton.disabled = flying;
+  }
+
   /** Back to the analytic poses: the drawn aircraft ease from where they flew onto their routes. */
   private demote(): void {
     const f = this.full;
@@ -398,7 +674,9 @@ export class Follow {
   frame(dt: number, t: number): void {
     if (this.missionId === null) return;
     const m = this.mission();
-    if (!m || missionPhase(m, t) === 'complete') {
+    // A flight the player flies (or the worker still holds) is not ended by its old route's end.
+    const held = this.flying || !!m?.flown;
+    if (!m || (missionPhase(m, t) === 'complete' && !held)) {
       this.stop(m ? `${m.callsign} has landed` : 'The flight is gone');
       return;
     }
@@ -406,7 +684,7 @@ export class Follow {
       this.stop(`${m.callsign} was lost`);
       return;
     }
-    if (this.slot >= m.aircraft) this.slot = 0;
+    if (this.slot >= m.aircraft && !this.full) this.slot = 0;
     // The settle: the camera eases in from further back over SETTLE_TIME.
     if (this.settle < 1) {
       this.settle = Math.min(1, this.settle + dt / SETTLE_TIME);
@@ -418,7 +696,9 @@ export class Follow {
     g.chase.timeRate =
       dt > 0 && Number.isFinite(this.lastTime) ? Math.max(0, t - this.lastTime) / dt : 1;
     this.pose(m, t, dt);
+    if (this.flying) this.flyFrame(m, dt);
     this.fidelity(m, t);
+    this.updateTakeButton(t);
     if (Math.floor(t) !== Math.floor(this.lastTime)) this.updateTitle(m, t);
     this.lastTime = t;
   }
@@ -435,6 +715,10 @@ export class Follow {
       window.innerHeight,
     );
     const a = this.full?.followed(this.slot);
+    if (a && this.flying && a.slot === this.full!.flight.playerSlot) {
+      this.drawFlownHud(m, a.flown.airframe as unknown as FlightModel, project, t);
+      return;
+    }
     if (a) {
       // At full fidelity the HUD and the displays read the followed airframe (as Free Flight's).
       const model = a.flown.airframe as unknown as FlightModel;
@@ -472,6 +756,51 @@ export class Follow {
       frame,
       t,
     );
+    if (this.panels !== 'clean') this.hud.draw(frame, project);
+  }
+
+  /** The player's HUD, as Free Flight's: mouse aim's ring or the direct stick, the landing aid. */
+  private drawFlownHud(
+    m: Mission,
+    model: FlightModel,
+    project: ReturnType<typeof matrixProjector>,
+    t: number,
+  ): void {
+    const inp = this.input;
+    const aim = inp.mode === 'mouse-aim';
+    const captured = this.capture.captured;
+    let control: ControlCursor | null = null;
+    if (aim && this.aimEngaged) {
+      const d = this.aimDirection();
+      control = {
+        kind: 'aim',
+        x: 0,
+        y: 0,
+        dir: [d.x, d.y, d.z],
+        active: captured,
+        full: STICK_FULL,
+        deadzone: STICK_DEADZONE,
+      };
+    } else if (captured) {
+      control = {
+        kind: 'stick',
+        x: inp.cursor.x,
+        y: inp.cursor.y,
+        dir: null,
+        active: true,
+        full: STICK_FULL,
+        deadzone: STICK_DEADZONE,
+      };
+    }
+    const mode = aim ? 'mouse aim' : 'direct';
+    const frame = buildHudFrame(model, inp.controls, {
+      aid: landingAid(model, this.runways, this.deps.globe.chase.eye),
+      mode: captured ? mode : `${mode} · TAB TO FLY`,
+      control,
+      timing: null,
+    });
+    frame.panels = true;
+    this.updateDisplays(m, airframeState(model), frame, t);
     if (this.panels !== 'clean') this.hud.draw(frame, project);
   }
 
@@ -666,8 +995,8 @@ export class Follow {
       track: p.track,
       heading: p.heading,
       fixedGear: helicopter,
-      control: 'AI',
-      mouseFree: false,
+      control: this.flying ? (this.input.mode === 'mouse-aim' ? 'mouse aim' : 'direct') : 'AI',
+      mouseFree: this.flying && !this.capture.captured,
       messages: [],
       sensors: null,
     });
@@ -735,6 +1064,8 @@ export class Follow {
   dispose(): void {
     this.clear();
     this.detach();
+    this.input.dispose();
+    this.capture.dispose();
     this.bar.remove();
   }
 }

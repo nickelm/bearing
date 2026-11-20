@@ -215,7 +215,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] AI pilot: attack run and egress (the route's pass and turn home; weapons release is R2.6)
 - [x] Worker protocol: a take-over input holds the mission (no aggregate resolution, phase events cancelled); a handback input carries the demoted state, the worker rebuilds the route with `rejoinRoute`, reschedules the phases and logs losses (crashes) and the new route (decision 257)
 - [ ] While the player flies, the map and the war see the held flight on its old route: post its position as fixes (inputs every few game seconds) so the map draws it where it is and other flights' resolution can find it
-- [ ] The follow must not end a held flight at its old route's end (`missionPhase` reads the old timeline while it is held)
+- [x] The follow must not end a held flight at its old route's end (`missionPhase` reads the old timeline while it is held; decision 273)
 - [x] The followed aircraft seemed to slide backward after a racetrack turn at 16×: the chase camera's acceleration lag read speed changes per real second, and the analytic speed stepped from leg to leg (decision 271)
 - [x] Follow on `PromotedFlight`: promote a followed flight whose type has flight data inside the window, its lead's reference the drawn route (the fields' shift and the lift over the drawn ground); draw the aircraft from their airframes (surfaces, afterburner, speedbrake); the HUD frame and displays from the airframe; demote at the approach (decision 272)
 - [x] Ground for promoted flights: the drawn surface with the airfields' grading (Free Flight's `AirfieldGround`, built by `flownGround` for both)
@@ -225,7 +225,8 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] The route's climb (the air war's 110 m/s for the F-21) is steeper than the Kestrel sustains at its climb speed: the AI follows it up to 4 km late and catches up by the station (R2.10's calibration, or a slower climb in the route)
 - [ ] An abort (`returnRoute`) still turns home at a corner; give it the rejoin's turn
 - [ ] The plug-ins' `behavior` parts (rule 16): CAP's first, once the follow runs `PromotedFlight` (the route tracker per phase; weapons on the pass in R2.6)
-- [ ] Take over inside the jump-in window; hand back with the AI's orders
+- [x] Take over inside the jump-in window; hand back with the AI's orders (T or the bar's button, Free Flight's bindings, mouse aim and `MouseCapture`; decision 273)
+- [ ] Owner, on the GPU: take over an F-21 on a CAP station with T, fly with mouse aim, hand back with T; the wingman stays on you, and the flight flies back to its station
 - [ ] Flight cap: up to 8× in cruise while flying, cancelled on any threat
 - [ ] Session consequences as logged campaign events at handback
 - [ ] Test: take over and hand back at every phase of a CAP mission; the mission completes

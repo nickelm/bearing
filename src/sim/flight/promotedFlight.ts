@@ -23,7 +23,9 @@
  *
  * Headless: the main thread runs it beside the view, and tests run it alone.
  */
+import type { Dir } from '../../core/greatCircle';
 import type { GameTime, Meters } from '../../core/units';
+import type { HandbackFix, HandbackLoss } from '../eventLog';
 import { Vec3d } from '../../core/vec3d';
 import type { AnalyticPose } from '../air/analyticPose';
 import { slotPose } from '../air/formation';
@@ -160,6 +162,36 @@ export class PromotedFlight {
   /** Folds the flight back into its analytic state (demotion). */
   demote(): DemotedFlight | null {
     return demoteFlight(this.mission, this.time, this.radius, this.aircraft, this.spec.mass.fuel);
+  }
+
+  /**
+   * What the worker's hand-back input carries (decision 257): the fix where the flight
+   * is, in the route's terms, and the aircraft full fidelity lost. With none left the fix
+   * is where the last one fell, on the ground with nothing in it.
+   */
+  handback(): { fix: HandbackFix; lost: HandbackLoss[] } {
+    const d = this.demote();
+    if (d) {
+      const { time, point, altitude, heading, fuel, aircraft, airborne } = d;
+      return { fix: { time, point, altitude, heading, fuel, aircraft, airborne }, lost: d.lost };
+    }
+    const lost = this.aircraft.map((a) => {
+      const u = a.flown.airframe.pos.clone().normalize();
+      return { slot: a.slot, point: [u.x, u.y, u.z] as Dir, cause: a.flown.crashed ?? 'damage' };
+    });
+    const point: Dir = lost[lost.length - 1]?.point ?? [0, 1, 0];
+    return {
+      fix: {
+        time: this.time,
+        point,
+        altitude: 0,
+        heading: 0,
+        fuel: 0,
+        aircraft: 0,
+        airborne: false,
+      },
+      lost,
+    };
   }
 
   private stepOnce(ground: GroundQuery): void {
