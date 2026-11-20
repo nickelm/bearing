@@ -599,10 +599,35 @@ async function followPart() {
   // lavapipe the map's GPU process grows by about 1 GB every 10–20 s (decision 252) and the
   // kernel kills it after three minutes or so.
   await open(`seed=${seed}&view=simulation`);
-  await until(
-    () => window.bearing?.globe.terrainReady === true && window.bearing.sim.started === true,
-    900,
-  );
+  await until(() => window.bearing?.globe.terrainReady === true, 900);
+  log('follow: the terrain is ready');
+  await until(() => window.bearing.sim.started === true, 900);
+  /**
+   * Seeks the war `hours` ahead (at most 11) through the debug panel's local time: the sim
+   * jumps there headless. Returns the local hour reached.
+   */
+  const seekAhead = async (hours) => {
+    const r = await page.evaluate((ahead) => {
+      const c = [...document.querySelectorAll('.lil-gui .lil-controller')].find(
+        (x) => x.querySelector('.lil-name')?.textContent === 'Local time (h)',
+      );
+      const input = c?.querySelector('input');
+      if (!input) return 'no "Local time (h)" control';
+      const h = (Number(input.value) + ahead) % 24;
+      input.value = String(h);
+      input.dispatchEvent(new Event('input'));
+      input.dispatchEvent(new Event('change'));
+      input.dispatchEvent(new Event('blur'));
+      return h;
+    }, hours);
+    if (typeof r !== 'number') throw new Error(r);
+    await frames(5);
+    return r;
+  };
+  // Into the day's war at once: the campaign starts paused and its first flights are hours away,
+  // and on lavapipe the GPU process lasts about three minutes (decision 252).
+  const hour = await seekAhead(Number(env('FOLLOW_AHEAD', '4')));
+  log(`follow: the war at ${hour.toFixed(1)} h local`);
   await fixScale();
   /** Waits (at 64×) for a flight of `type` between climb-out and approach; returns its id. */
   const airborne = async (type) => {
@@ -625,7 +650,9 @@ async function followPart() {
       900,
       type,
     );
-    return handle.jsonValue();
+    const id = await handle.jsonValue();
+    log(`follow: ${type} mission ${id} is in the air`);
+    return id;
   };
   /** The followed view's state: the camera's height, the aircraft's place in the view, the HUD. */
   const followState = () =>
@@ -743,19 +770,13 @@ async function followPart() {
   if (env('NIGHT', '1') === '1') {
     // Check 7 at night: the clock jumps to local night over the map (the debug panel's local
     // time seeks the war forward), then the first CAP in the air is followed.
-    const seek = await page.evaluate((h) => {
-      const c = [...document.querySelectorAll('.lil-gui .lil-controller')].find(
-        (x) => x.querySelector('.lil-name')?.textContent === 'Local time (h)',
-      );
-      const input = c?.querySelector('input');
-      if (!input) return 'no "Local time (h)" control';
-      input.value = String(h);
-      input.dispatchEvent(new Event('input'));
-      input.dispatchEvent(new Event('change'));
-      input.dispatchEvent(new Event('blur'));
-      return 'ok';
-    }, 23.5);
-    check(seek === 'ok', `check 7: ${seek}`);
+    const now = await page.evaluate(() => Number(window.__probe.guiGet('Local time (h)')));
+    let ahead = (23.5 - now + 24) % 24;
+    while (ahead > 0.01) {
+      const step = Math.min(11, ahead);
+      await seekAhead(step);
+      ahead -= step;
+    }
     const id = await airborne('cap');
     check(
       await page.evaluate((mid) => window.bearing.followMission(mid), id),

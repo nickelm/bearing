@@ -15,7 +15,7 @@ _Adopted 2026-11-18 with Proposal 0008 (`docs/proposals/0008-game-loop-and-campa
 | ----------------------- | ---------------------------------------------------------------------------- | ---------- | ----------------- |
 | R0. Audit and reconcile | Know what exists; documents match the code                                   | —          | done (this audit) |
 | R1. Consolidation       | What the demo needs from earlier tracks, and nothing more                    | R1.1–R1.8  | done              |
-| R2. One day of war      | The thin, complete loop: the tech demo                                       | R2.1–R2.12 | R2.1–R2.3 done    |
+| R2. One day of war      | The thin, complete loop: the tech demo                                       | R2.1–R2.12 | R2.1–R2.3 done, R2.4 built |
 | R3. Combat depth        | Sensors, weapons, air combat, air defense, ground entities                   | R3.1–R3.6  |                   |
 | R4. Breadth             | Roster, mission catalog, helicopters, transport, crews, naval war            | R4.1–R4.7  |                   |
 | R5. Dynamic campaign    | Logistics, morale, weeks of war, saves, consequences                         | R5.1–R5.6  |                   |
@@ -186,6 +186,8 @@ _Depends on R1.4, R1.5, R1.7._
 - Per-type camera rigs from the bundles.
 
 **Exit:** the owner follows a mission of each demo type from the map and returns, with acceptance checks 7 and 10.
+
+**State (2026-11-20):** built (decision 252); waiting for the owner's follow of each demo type and for checks 7 and 10 on a real GPU (`ONLY=follow` in `tools/browser.smoke.mjs`), which could not run on lavapipe here.
 
 ### R2.5 Full Fidelity and Handover — large
 

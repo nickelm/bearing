@@ -188,7 +188,9 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] Read-only HUD for the followed aircraft from its analytic state (`followHudFrame`)
 - [x] Spectator displays: the followed aircraft's own formats, read-only, with the moving map
 - [x] Retire the debug free camera behind `?dev` only
-- [ ] Acceptance checks 7 and 10 as scripted sequences (`ONLY=follow` in `tools/browser.smoke.mjs`)
+- [x] Followed flights rendered headless with the HUD (`tools/follow.preview.ts`, `docs/reports/screens/follow-*.png`)
+- [ ] Acceptance checks 7 and 10 as scripted sequences: `ONLY=follow` in `tools/browser.smoke.mjs` is written but could not run on lavapipe (known issues); run it with `MODE=gpu` on the owner's machine
+- [ ] Check 10 headless: a low-level shot through a valley in `tools/follow.preview.ts` (the planned routes there have no terrain floor)
 - [ ] Owner: follow a mission of each demo type and return
 - [ ] Spectator displays' radar and threat formats are empty until R2.6's sensors read campaign contacts
 - [ ] Afterburner, control surfaces and speedbrake of the followed aircraft stay at rest until R2.5's flight model drives them
@@ -320,4 +322,4 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] GPU determinism flake in `detailStage` and `tileSynth` (about 1 run in 5–10 on record): not reproduced in 20 runs on the owner's GPU and 10 on lavapipe (2026-11-19), nothing changed to fix it; close if it stays away. History in the archived TODO
 - [ ] The Free Flight session's "drizzle: wet at once" check fails (decision 217); not investigated
 - [ ] Stale code comments listed in the audit's "Left in the Code"; fix when the files are next touched
-- [ ] On lavapipe, `tests/gpu/mapSoak.test.ts` "keeps the relief tiles within their caches while panning at the floor" fails (geometries 274 against 234; the same at 8542fd3, before R2.4's changes), and in Chromium on lavapipe the GPU process of a seed-4 world grows by about 1 GB every 10–20 s from the start, map or simulation view, until the kernel kills it after about 195 s (the `campaign` part as well as `follow`). Not seen on the owner's GPU (decision 245); look at the relief and terrain tiles' buffers on a software adapter
+- [ ] On lavapipe, `tests/gpu/mapSoak.test.ts` "keeps the relief tiles within their caches while panning at the floor" fails (geometries 274 against 234; the same at 8542fd3, before R2.4's changes), and in Chromium on lavapipe the app stops drawing after its ninth frame (simulation view or map) while the GPU process grows by about 1 GB every 5–10 s, until the kernel kills it after about 195 s: seeds 4 and 1983, the `campaign` part as well as `follow`, and at 8542fd3. Not seen on the owner's GPU (decision 245); look at the relief and terrain tiles' buffers on a software adapter
