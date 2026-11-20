@@ -189,14 +189,14 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] Spectator displays: the followed aircraft's own formats, read-only, with the moving map
 - [x] Retire the debug free camera behind `?dev` only
 - [x] Followed flights rendered headless with the HUD (`tools/follow.preview.ts`, `docs/reports/screens/follow-*.png`)
-- [ ] Acceptance checks 7 and 10 as scripted sequences: `ONLY=follow` in `tools/browser.smoke.mjs` is written but could not run on lavapipe (known issues); run it with `MODE=gpu` on the owner's machine
+- [x] Acceptance checks 7 and 10 as scripted sequences: `ONLY=follow` in `tools/browser.smoke.mjs`, passed with `MODE=gpu` on the owner's machine (decisions 253, 254)
 - [ ] Check 10 headless: a low-level shot through a valley in `tools/follow.preview.ts` (the planned routes there have no terrain floor)
 - [x] Owner: follow a mission of each demo type and return (2026-11-20, GPU smoke run passed on seed 4)
 - [x] Owner's review (decision 253): formations by phase in the plug-ins; penetrators low on interdiction and CAS at 2,500 m; free look orbits the aircraft; HUD only by default, V for displays or a clean view; FPS gauge under the follow bar; aircraft near a base on its sited field; the Kestrel's gear folds inward
 - [x] Check 10 over truly low flight: the owner's GPU run followed an RF-34 on a low-level leg, the camera 100–106 m above the ground (2026-11-20)
 - [ ] Stretch (R6.6, owner): Follow and jump-in ease from the map's orbit down into the aircraft
 - [x] Interdiction by the nearest able squadron, penetrators first against defended targets (owner: both should fly it; decision 254)
-- [x] Owner: look at the formations, the low-level interdiction and the orbit (decision 253); second look answered in decision 255 (carriers, gear and pylons, turns, egress, canopy)
+- [x] Owner: look at the formations, the low-level interdiction and the orbit (decision 253); second look answered in decision 255 (carriers, gear and pylons, turns, egress, canopy), checked by the owner on 2026-11-20
 - [ ] Formation lights at night, off in combat spread from the fence-in (owner; with the controlled-aircraft lights of R4.1)
 - [ ] Taxi and take off in turn, the flight joining up after takeoff (owner; with R2.5's ground handling or later)
 - [ ] The Pact's own carrier model (its carrier draws the Alliance's)
@@ -206,12 +206,18 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 
 ### R2.5 Full fidelity and handover
 
-- [ ] Promotion: analytic state → `FlownAircraft` (position, attitude, speed, fuel, configuration, stores, damage)
-- [ ] Demotion: `FlownAircraft` → analytic route from the current position; losses and stores preserved
-- [ ] AI pilot on the director: route following and waypoints
-- [ ] AI pilot: formation keeping
-- [ ] AI pilot: orbit and CAP station
-- [ ] AI pilot: attack run and egress
+- [x] Promotion: analytic state → `FlownAircraft` (position, attitude, speed, fuel by share, gear and power; stores and damage as records until R2.6) from the drawn poses (`sim/flight/promotion.ts`; decision 256)
+- [x] Demotion: `FlownAircraft` → the flight's state (survivors, crashes as losses, where the lead is, fuel by share, stores) and a route rebuilt from there that carries on the mission by its phase (`rejoinRoute`)
+- [x] AI pilot on the director: route following (`sim/flight/aiPilot.ts`: station keeping on the route's point, speed first)
+- [x] AI pilot: formation keeping (the slots of `formation.ts` beside the flown lead; `PromotedFlight`)
+- [x] AI pilot: orbit and CAP station (the route's racetrack; flights now join it running the way they arrive)
+- [x] AI pilot: attack run and egress (the route's pass and turn home; weapons release is R2.6)
+- [ ] Worker protocol: a take-over input holds the mission (no aggregate resolution, phase events cancelled); a handback input carries the demoted state, the worker rebuilds the route with `rejoinRoute`, reschedules the phases and logs losses (crashes) and the new route
+- [ ] Follow on `PromotedFlight`: promote a followed flight whose type has flight data inside the window, its lead's reference the drawn route (the fields' shift and the lift over the drawn ground); draw the aircraft from their airframes (surfaces, afterburner, speedbrake); the HUD frame and displays from the airframe; demote at the approach
+- [ ] Ground for promoted flights: the drawn surface with the airfields' grading (Free Flight's `AirfieldGround`)
+- [ ] The route's climb (the air war's 110 m/s for the F-21) is steeper than the Kestrel sustains at its climb speed: the AI follows it up to 4 km late and catches up by the station (R2.10's calibration, or a slower climb in the route)
+- [ ] An abort (`returnRoute`) still turns home at a corner; give it the rejoin's turn
+- [ ] The plug-ins' `behavior` parts (rule 16): CAP's first, once the follow runs `PromotedFlight` (the route tracker per phase; weapons on the pass in R2.6)
 - [ ] Take over inside the jump-in window; hand back with the AI's orders
 - [ ] Flight cap: up to 8× in cruise while flying, cancelled on any threat
 - [ ] Session consequences as logged campaign events at handback

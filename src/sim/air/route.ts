@@ -58,8 +58,13 @@ export interface RouteSegment {
   alt1: number;
   /** Ground speed (m/s): along the leg or around the racetrack; 0 on the ground. */
   speed: number;
-  /** Orbit: turn radius (m) and distance flown around the racetrack at t0. */
+  /** Orbit: turn radius (m). */
   turn: number;
+  /**
+   * Orbit: distance around the racetrack at t0 (m), where the flight joined it
+   * (decision 256); absent in routes planned before: 0, the lower leg's start.
+   */
+  around?: number;
   /** Ground: heading held (rad). */
   heading: number;
   /** Fuel per aircraft at t0 (kg) and flow (kg/s). */
@@ -166,14 +171,47 @@ export function orbitPoint(
   return { point, heading: tangentHeading(point, t) };
 }
 
-/** Where a racetrack centered at c with its axis toward `ahead` begins (its entry point). */
-export function orbitEntry(
+const wrapAngle = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+
+/** Candidate join points around a racetrack. */
+const JOIN_SAMPLES = 64;
+
+/**
+ * Where a flight at `from`, heading `heading`, joins a racetrack (decision 256): the
+ * distance around it whose point it reaches by a straight leg with the least turning,
+ * at the leg's start and where it meets the racetrack's direction, and a little
+ * preference for near points. Joining at the lower leg's start whatever the arrival
+ * reversed a flight coming from the base side by about 170°.
+ */
+export function orbitJoin(
   c: Readonly<Dir>,
   ahead: Readonly<Dir>,
   turn: number,
+  from: Readonly<Dir>,
+  heading: number,
   radius: Meters,
-): Dir {
-  return orbitPoint(c, ahead, turn, 0, radius).point;
+): number {
+  const P = perimeter(turn);
+  let best = 0;
+  let bestScore = Infinity;
+  for (let k = 0; k < JOIN_SAMPLES; k++) {
+    const d = (P * k) / JOIN_SAMPLES;
+    const o = orbitPoint(c, ahead, turn, d, radius);
+    const dist = arcDistance(from, o.point, radius);
+    let score = (0.5 * dist) / P;
+    if (dist > 1) {
+      const out = initialHeading(from, o.point);
+      const arrive = initialHeading(o.point, from) + Math.PI;
+      score += Math.abs(wrapAngle(out - heading)) + Math.abs(wrapAngle(o.heading - arrive));
+    } else {
+      score += Math.abs(wrapAngle(o.heading - heading));
+    }
+    if (score < bestScore) {
+      bestScore = score;
+      best = d;
+    }
+  }
+  return best;
 }
 
 /** The flight's state at game time t. */
@@ -200,7 +238,7 @@ export function routeState(route: Route, t: GameTime, radius: Meters): RouteStat
     return { ...base, point: [...s.a], heading: s.heading, speed: 0, airborne: false };
   }
   if (s.kind === 'orbit') {
-    const o = orbitPoint(s.a, s.b, s.turn, s.speed * dt, radius);
+    const o = orbitPoint(s.a, s.b, s.turn, (s.around ?? 0) + s.speed * dt, radius);
     return { ...base, point: o.point, heading: o.heading, speed: s.speed, airborne: !outside };
   }
   const point = slerp(s.a, s.b, f);
@@ -354,7 +392,8 @@ export class RouteBuilder {
   ): this {
     const turn = this.type.helicopter ? HELICOPTER_ORBIT_TURN : ORBIT_TURN;
     const ahead = destination(c, heading, 10e3, this.radius);
-    const entry = orbitEntry(c, ahead, turn, this.radius);
+    const around = orbitJoin(c, ahead, turn, this.point, this.heading, this.radius);
+    const entry = orbitPoint(c, ahead, turn, around, this.radius).point;
     this.leg(entry, this.altitude, speed, 'cruise', phase);
     const t0 = this.time;
     this.push({
@@ -369,9 +408,10 @@ export class RouteBuilder {
       alt1: this.altitude,
       speed,
       turn,
+      around,
       heading,
     });
-    const end = orbitPoint(c, ahead, turn, speed * duration, this.radius);
+    const end = orbitPoint(c, ahead, turn, around + speed * duration, this.radius);
     this.point = end.point;
     this.heading = end.heading;
     return this;
@@ -393,20 +433,10 @@ export class RouteBuilder {
 }
 
 /**
- * The route cut at game time `t` and turned home (an abort, R2.2): the segments
- * before `t` as flown, the current one cut at `t`, then a climb or descent to
- * cruise altitude toward `home`, cruise, the approach and the recovery on the
- * ground. Fuel carries on from the cut. A flight on the ground at `t` stays
- * there and ends.
+ * The route as flown until game time `t`: the segments before it, and the current
+ * one cut at `t` (an orbit keeps its center and axis; routeState stops at t1).
  */
-export function returnRoute(
-  route: Route,
-  t: GameTime,
-  home: Readonly<Dir>,
-  type: AircraftType,
-  radius: Meters,
-  recovery: number,
-): Route {
+export function routeBefore(route: Route, t: GameTime, radius: Meters): RouteSegment[] {
   const s = routeState(route, t, radius);
   const kept: RouteSegment[] = [];
   for (const seg of route.segments) {
@@ -422,14 +452,37 @@ export function returnRoute(
       } else if (seg.kind === 'ground') {
         cut.alt1 = 0;
       }
-      // An orbit cut keeps its center and axis; routeState stops at t1.
       kept.push(cut);
     }
     break;
   }
-  // The cruise flow with the loadout, from any segment that burns fuel.
+  return kept;
+}
+
+/** The route's cruise flow with its loadout (kg/s), from any segment that burns fuel. */
+export function routeCruiseFlow(route: Route): number {
   const burning = route.segments.find((x) => FLOW[x.regime] > 0);
-  const flow = burning ? burning.flow / FLOW[burning.regime] : 0;
+  return burning ? burning.flow / FLOW[burning.regime] : 0;
+}
+
+/**
+ * The route cut at game time `t` and turned home (an abort, R2.2): the segments
+ * before `t` as flown, the current one cut at `t`, then a climb or descent to
+ * cruise altitude toward `home`, cruise, the approach and the recovery on the
+ * ground. Fuel carries on from the cut. A flight on the ground at `t` stays
+ * there and ends.
+ */
+export function returnRoute(
+  route: Route,
+  t: GameTime,
+  home: Readonly<Dir>,
+  type: AircraftType,
+  radius: Meters,
+  recovery: number,
+): Route {
+  const s = routeState(route, t, radius);
+  const kept = routeBefore(route, t, radius);
+  const flow = routeCruiseFlow(route);
   const b = new RouteBuilder(type, radius, flow, s.point, t, s.fuel);
   b.altitude = s.altitude;
   b.heading = s.heading;

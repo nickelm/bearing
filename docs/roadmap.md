@@ -187,7 +187,7 @@ _Depends on R1.4, R1.5, R1.7._
 
 **Exit:** the owner follows a mission of each demo type from the map and returns, with acceptance checks 7 and 10.
 
-**State (2026-11-20):** built (decision 252); waiting for the owner's follow of each demo type and for checks 7 and 10 on a real GPU (`ONLY=follow` in `tools/browser.smoke.mjs`), which could not run on lavapipe here.
+**State (2026-11-20):** done (decisions 252–255): the owner followed a mission of each demo type on the GPU with checks 7 and 10 passing (`ONLY=follow`, seed 4), and checked the fixes of the two reviews.
 
 ### R2.5 Full Fidelity and Handover — large
 
@@ -200,6 +200,8 @@ _Depends on R1.5, R1.6, R2.4._
 - A session's consequences return to the worker as logged campaign events (owner decision 1).
 
 **Exit:** take over and hand back at every phase of a CAP mission, with the mission completing; losses and stores survive both directions.
+
+**State (2026-11-20):** begun (decision 256): promotion, demotion with the rejoin route, and the AI pilot (route, formation, station, pass and egress) run headless; the worker's protocol, the follow on full fidelity, take over, the flight cap and the consequences are next (TODO).
 
 ### R2.6 Weapons, Damage and Interface Defaults — large
 
