@@ -324,7 +324,7 @@ Runs beside the phases, not on their critical path (`docs/proposals/0009-settlem
 
 ## Out of Sync: Proposal 0010, Terrain Art Direction
 
-Runs beside the phases on branch `feature/terrain-art` (`docs/proposals/0010-terrain-art-direction.md`, `docs/plans/terrain-art.md`, decisions 296 on): relief exaggeration after climate and biomes (the campaign's coarse pass stays unexaggerated), curvature, strata and color drift in the terrain shader, rock dressing, valley mist and zone height fog, ambient particles, a stylized sky, waterfalls and rapids, and as stretch work points of interest and viewshed composition. Every layer has an off switch and a quality tier (`TerrainArtSettings`). Touches R6.4 (the governor's steps) and R6.8 (zone air, the falls wonder). Open items are under *Out of sync* in `TODO.md`.
+Runs beside the phases on branch `feature/terrain-art` (`docs/proposals/0010-terrain-art-direction.md`, `docs/plans/terrain-art.md`, decisions 296 on): relief exaggeration after climate and biomes (the campaign's coarse pass stays unexaggerated), curvature, strata and color drift in the terrain shader, rock dressing, valley mist and zone height fog, ambient particles, a stylized sky, waterfalls and rapids, and as stretch work points of interest and viewshed composition. Every layer has an off switch and a quality tier (`TerrainArtSettings`). State: all eight phases built on the branch (report `docs/reports/terrain-art-report.md`); the GPU timing of its budgets waits for the owner's machine. Touches R6.4 (the governor's steps) and R6.8 (zone air, the falls wonder). Open items are under *Out of sync* in `TODO.md`.
 
 ## Dependency Overview
 

@@ -54,6 +54,10 @@ What exists and where each layer goes in:
 7. Composition (stretch): viewsheds and the landmark bias.
 8. Verification: `tools/terrainArt.preview.ts` over 20 seeds → `docs/reports/terrain-art-metrics.md`; screenshots; the report.
 
+## State
+
+All eight phases are built (2026-11-21); the report is `docs/reports/terrain-art-report.md` and the metrics `docs/reports/terrain-art-metrics.md`. Open items are under *Out of sync: Proposal 0010* in `TODO.md`.
+
 ## Lane
 
 Changes stay in `src/worldgen/` (new stages and their wiring), `src/render/` (terrain, atmosphere, water, props, strategic glyphs), `src/data/models/` (new specs), `tools/` (previews) and `docs/`. Shared files touched are listed in the report.

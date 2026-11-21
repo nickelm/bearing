@@ -411,7 +411,9 @@ Branch `feature/terrain-art`; plan `docs/plans/terrain-art.md`; decisions 296 on
 - [x] Phase 5: waterfalls, rapids, lake reflection (decision 301)
 - [x] Phase 6 (stretch): points of interest (decision 302)
 - [x] Phase 7 (stretch): viewshed composition (decision 303)
-- [ ] Phase 8: metrics over 20 seeds, screenshots, report
+- [x] Phase 8: metrics over 20 seeds (`docs/reports/terrain-art-metrics.md`), screenshots, report (`docs/reports/terrain-art-report.md`)
+- [ ] Find why rock pieces on steep walls drew down-facing faces dark; drop the `normalToUp` workaround (decision 299)
+- [ ] Frame a waterfall and a radar station for the report in the browser; GPU timing of the standard views against the 1.5 ms and 3 ms budgets
 - [ ] Access roads and pads for points of interest (the router of Proposal 0005); a reservoir behind each dam; power lines aligned
 - [ ] Points of interest in a worker: their placement runs on the main thread when a world loads
 - [ ] The sim's analytic routes clear the coarse, unexaggerated ground (`sim.init`); scale it with the relief exaggeration (the sim's lane)
