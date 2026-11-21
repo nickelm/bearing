@@ -533,21 +533,22 @@ export class LightShading {
       const minRadius = max(footprint, 1).mul(1.5);
       const minBuilt = max(footprint, 1).mul(1.2);
       const wobble = edgeNoise.sub(0.5).mul(0.5).add(1);
+      // The settlements' lights as points on a LIGHT_CELL lattice: a third of the cells hold
+      // a small bright spot, giving way to their mean (0.4 of the old even glow) where cells
+      // shrink below a few pixels (decision 296).
+      const P = p.mul(this.radius);
+      const q = P.div(LIGHT_CELL);
+      const h = fract(sin(dot(floor(q), vec3(127.1, 311.7, 74.7))).mul(43758.5453));
+      const spot = smoothstep(0.3, 0.15, length(fract(q).sub(0.5)));
+      const resolved = clamp(float(LIGHT_CELL / 3).div(max(footprint, 1e-3)).sub(1), 0, 1);
+      const points = mix(float(0.4), step(h, 0.33).mul(spot).mul(10), resolved);
+      // The halo off the built-up patch: none near the camera, all of it from orbit.
+      const halo = smoothstep(150, 1500, footprint);
       Loop({ start: int(0), end: int(count), type: 'int' }, ({ i }) => {
         const id = this.lists.element(first.add(i)).toInt();
         const a = this.lights.element(id.mul(2));
         const b = this.lights.element(id.mul(2).add(1));
         const d = length(p.sub(a.xyz)).mul(this.radius);
-        // Night light.
-        const r = max(a.w, minRadius);
-        const scale = min(a.w.div(r), 1);
-        const x = clamp(float(1).sub(d.mul(d).div(r.mul(r))), 0, 1);
-        // A planned town lights itself near the camera (its lamps and windows): its disk
-        // glows on the ground only by `planned.keep` there (decision 296).
-        const own = planned
-          ? float(1).sub(planned.city.planned(id).mul(float(1).sub(planned.keep)))
-          : float(1);
-        total.addAssign(b.x.mul(x.mul(x)).mul(scale.mul(scale).mul(0.7).add(0.3)).mul(own));
         // Built-up patch: the town's outline where it has one (less wobble: it is
         // already irregular), else the disk.
         const shaped = b.z.lessThan(0.5).and(b.w.greaterThan(0.5));
@@ -561,6 +562,18 @@ export class LightShading {
         const c = clamp(shown.sub(d).div(edge), 0, 1)
           .mul(thin.mul(thin))
           .mul(select(b.y.greaterThan(0), float(1), float(0)));
+        // Night light. A town's and an industry's light falls in points over its built-up
+        // patch; the soft halo round it is for views from far up, where a pixel holds the
+        // whole town (decision 296). A planned town lights itself near the camera (its lamps
+        // and windows): its points show only by `planned.keep` there.
+        const r = max(a.w, minRadius);
+        const scale = min(a.w.div(r), 1);
+        const x = clamp(float(1).sub(d.mul(d).div(r.mul(r))), 0, 1);
+        const own = planned
+          ? float(1).sub(planned.city.planned(id).mul(float(1).sub(planned.keep)))
+          : float(1);
+        const settled = select(b.z.lessThan(1.5), mix(halo, points, c).mul(own), float(1));
+        total.addAssign(b.x.mul(x.mul(x)).mul(scale.mul(scale).mul(0.7).add(0.3)).mul(settled));
         If(b.z.lessThan(0.5), () => {
           town.assign(max(town, c));
         })
@@ -584,6 +597,8 @@ export class LightShading {
  * `industry` is the share of industrial cover.
  */
 const BLOCK = 70;
+/** The settlements' far lights' lattice (m; decision 296). */
+const LIGHT_CELL = 30;
 export function builtAlbedo(planetPosition: V3, footprint: F, industry: F): V3 {
   return Fn(() => {
     const lin = (h: number) => {
