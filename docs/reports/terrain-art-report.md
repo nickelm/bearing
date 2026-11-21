@@ -78,7 +78,22 @@ Measured in the standard views at 1408 × 792 with art `medium` against `off`, r
 
 ## Screenshots
 
-SCREENS
+All from `tools/render.preview.ts` on Dawn with lavapipe (seed 1983, 1408 × 792, clear weather, art `medium` unless noted), in `docs/reports/screens/`. The valley and canyon views stand at the baseline's spots.
+
+| View | File |
+|---|---|
+| Alpine valley from 500 m at relief 1.0, art on | `terrain-art-valley-r10.jpg` |
+| The same valley at relief 1.3 (the default): taller walls, rock dressing on the sunlit wall, the zone's drifting snow | `terrain-art-valley-r13.jpg` |
+| The same valley at 08:12: valley mist over the floor, burning off | `terrain-art-valley-mist.jpg` |
+| The same valley in the `storybook` style | `terrain-art-valley-storybook.jpg` |
+| A canyon at relief 1.3 with strata bands, rock by lithology and crest teeth | `terrain-art-canyon.jpg` |
+| A lighthouse on a coastal point from 500 m | `terrain-art-lighthouse.jpg` |
+| The baseline valley, for comparison | `terrain-art-baseline-valley.jpg` |
+
+Not captured:
+
+- **A waterfall and a radar station on a summit.** The automatic framing (`ART_SHOTS=1`) put the observer inside forest canopy for the tallest steep fall, and 3 km below a radar that stands on a flat upland rim, too small to read. Both need a framing pass with the owner in the browser (`?view=simulation`, the debug panel's observer).
+- **Headless Chromium with WebGPU.** Not run: Chromium's software WebGPU cannot run Bearing, and the lavapipe browser path takes 14 minutes for the global pass alone (CLAUDE.md, *No GPU, browser*).
 
 ## Simplifications
 
@@ -129,7 +144,10 @@ The other session's lanes (simulation, campaign, game loop) are untouched except
 - **POI placement runs on the main thread.** Points of interest are placed when a world loads, which takes 2.7 s at 1024² in the preview; moving it into the worldgen worker is a TODO.
 - **Steep cliffs make thousands of small falls.** Mountain streams stepping down the 75 m strata produce thousands of small falls per world. Only falls within 9 km are drawn, and only the 48 most striking are named.
 - **Rapids' foam lines follow height contours**, so on a reach that runs across a slope they can cross the channel at an angle.
-- **`tests/gpu/mapSoak.test.ts` fails on this software GPU**, as it did before this work.
+- **Rock shading workaround.** On steep walls some rock pieces drew down-facing faces as near-black patches, whatever their sink. The models' normals and winding check out, and lighting them with the instance's up vector drew correctly; the cause is not yet found. Until it is, the rock layer leans its shading normals 70% toward up (`TileLayerOptions.normalToUp`), so pieces shade like the slope under them.
+- **Lighthouses at the waterline.** Lighthouse sites may be shoals and skerries down to 5 m below the sea, so some stand at the water's edge.
+- **The zones' drifting snow** shows over cold valleys whose surroundings average above 2.5 km, even under a clear sky (the valley views).
+- - **`tests/gpu/mapSoak.test.ts` fails on this software GPU**, as it did before this work.
 
 ## Next Steps
 
