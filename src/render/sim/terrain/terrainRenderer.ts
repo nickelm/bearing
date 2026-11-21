@@ -414,10 +414,22 @@ export class TerrainRenderer {
       const isDry = dry.greaterThan(0);
       // Towns and industry as built-up patches, and their night lights, in one
       // pass over the light list (decision 71); dry land only.
+      const distance = length(positionWorld).toVar();
+      // Planned towns light themselves out to the prisms' range: their disk glows on the
+      // ground only beyond it, so near the camera the ground stays dark (decision 296).
+      const city = this.cityGround;
+      const planned = city ? { city, keep: smoothstep(10_000, 14_000, distance) } : null;
       const built = vec4(0).toVar();
       If(isDry.and(lightCount.greaterThan(0)), () => {
         built.assign(
-          lights.sample(planet, lightStart, lightCount, footprint, ruralSpeckle(planet, 2000)),
+          lights.sample(
+            planet,
+            lightStart,
+            lightCount,
+            footprint,
+            ruralSpeckle(planet, 2000),
+            planned,
+          ),
         );
       });
       const builtCover = clamp(built.x.add(built.y), 0, 1).mul(dry);
@@ -441,7 +453,6 @@ export class TerrainRenderer {
       });
       const snow = ground.snow.toVar();
       const canopy = ground.canopy.toVar();
-      const distance = length(positionWorld).toVar();
       // Micro-facets on bare dry land near a low camera (decisions 168, 169): water,
       // towns and the canopy keep the facet's normal, and roads draw over them.
       // Roads and pavement over dry land and rivers (a road over a river reads as a bridge).
@@ -563,7 +574,12 @@ export class TerrainRenderer {
         const clusters = clamp(ruralSpeckle(planet, 30_000).sub(0.45).mul(3), 0, 1);
         const resolved = clamp(footprint.div(1500), 0, 1);
         const villages = mix(dots, float(0.15), resolved).mul(clusters);
-        const rural = pow(hab, 1.5).mul(villages).mul(0.9);
+        // The speckles stand for villages too small to plan, seen from far: near the camera
+        // they lit kilometer-wide patches of open ground with no lamps in them (decision 296).
+        const rural = pow(hab, 1.5)
+          .mul(villages)
+          .mul(0.9)
+          .mul(smoothstep(20_000, 50_000, distance));
         glow.assign(
           built.z
             .add(rural)

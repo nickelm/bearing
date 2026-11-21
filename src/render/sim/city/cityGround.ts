@@ -193,6 +193,11 @@ export class CityGround {
     return inside.and(bit.equal(uint(1)));
   }
 
+  /** 1 where light record `record` has a plan on the GPU (its lights are its own), else 0. */
+  planned(record: I): F {
+    return select(this.data.element(record).greaterThan(uint(0)), float(1), float(0)) as F;
+  }
+
   /**
    * For the canopy shell (decision 278): 1 where planned town `record` (centered on `c`)
    * builds at `p`, 0 where it leaves the natural ground, −1 for an unplanned town.

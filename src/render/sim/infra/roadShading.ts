@@ -515,7 +515,14 @@ export class LightShading {
    * - **Runway paint** (airbase records, V3): signed cover from `runwayMarks`,
    *   positive white, negative yellow.
    */
-  sample(planetPosition: V3, start: F, count: F, footprint: F, edgeNoise: F): V4 {
+  sample(
+    planetPosition: V3,
+    start: F,
+    count: F,
+    footprint: F,
+    edgeNoise: F,
+    planned?: { city: CityGround; keep: F } | null,
+  ): V4 {
     return Fn(() => {
       const p = normalize(planetPosition);
       const town = float(0).toVar();
@@ -535,7 +542,12 @@ export class LightShading {
         const r = max(a.w, minRadius);
         const scale = min(a.w.div(r), 1);
         const x = clamp(float(1).sub(d.mul(d).div(r.mul(r))), 0, 1);
-        total.addAssign(b.x.mul(x.mul(x)).mul(scale.mul(scale).mul(0.7).add(0.3)));
+        // A planned town lights itself near the camera (its lamps and windows): its disk
+        // glows on the ground only by `planned.keep` there (decision 296).
+        const own = planned
+          ? float(1).sub(planned.city.planned(id).mul(float(1).sub(planned.keep)))
+          : float(1);
+        total.addAssign(b.x.mul(x.mul(x)).mul(scale.mul(scale).mul(0.7).add(0.3)).mul(own));
         // Built-up patch: the town's outline where it has one (less wobble: it is
         // already irregular), else the disk.
         const shaped = b.z.lessThan(0.5).and(b.w.greaterThan(0.5));

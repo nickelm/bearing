@@ -316,7 +316,10 @@ export class SimPipeline {
   readonly bloomStrength = uniform(0.8);
   /** Scales the bloom threshold of the time of day (grade.ts). */
   bloomThresholdScale = 1;
-  /** Peak-to-peak film grain in the darkest tones, as a fraction of full scale. */
+  /**
+   * Peak-to-peak film grain in the shadows, as a fraction of full scale. It fades out toward
+   * black and toward white (decision 296), so a night sky and unlit ground stay clean.
+   */
   readonly grainAmount = uniform(0.016);
   /** Stage switches. A stage that is off is left out of the frame. */
   bloom = true;
@@ -1125,10 +1128,12 @@ export class SimPipeline {
       if (grain || dither) {
         const noise = hash12(vec2(pixel).add(this.grainOffset) as V2).sub(0.5);
         let amplitude: F = float(0) as F;
-        // Grain fades toward white, as on film; the dither is half an 8-bit step each way.
+        // Grain fades toward white, as on film, and out toward black, where it read as noise
+        // crawling over the night (decision 296); the dither is half an 8-bit step each way.
         if (grain) {
+          const y = luma(color as V3);
           amplitude = this.grainAmount.mul(
-            float(1).sub(luma(color as V3).mul(0.6)),
+            float(1).sub(y.mul(0.6)).mul(smoothstep(0.04, 0.2, y)),
           ) as unknown as F;
         }
         if (dither) amplitude = amplitude.add(1 / 255) as F;

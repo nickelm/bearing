@@ -1324,6 +1324,9 @@ it('renders preview views', async () => {
   if (process.env.VIBRANCE) scene.lighting.sunsetVibrance = Number(process.env.VIBRANCE);
   // LIGHTS=0 puts the settlements' and roads' night glow out, to judge moonlight on its own.
   if (process.env.LIGHTS === '0') scene.terrain.roadStyle.lights.value = 0;
+  // FULL_MOON and NIGHT_LIGHT override the night's light (decision 296).
+  if (process.env.FULL_MOON) scene.lighting.fullMoon = Number(process.env.FULL_MOON);
+  if (process.env.NIGHT_LIGHT) scene.lighting.nightLight.value = Number(process.env.NIGHT_LIGHT);
   if (process.env.WET) {
     const state = scene.weatherState;
     const update = state.update.bind(state);

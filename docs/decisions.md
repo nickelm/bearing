@@ -4746,3 +4746,15 @@ Decision 256's AI checks had run gear down, and the gear's drag had been slowing
 **How it was checked.** `tests/gun.test.ts`: 1 s of trigger fires 100 rounds with 20 tracers, none safe; a round leaves at about 1,230 m/s and slows and falls; level, the pipper is 0.5–8 mrad under the boresight with a time of flight of 0.4–0.8 s; a 0.2 rad/s pull moves it more than 0.05 rad further down; no solution at 5 km; the rack fires only armed with the gun selected, counts the rounds expended, and a new rack from that state has the rest. The unit suite, the type check and lint pass. The lockstep test is unchanged.
 
 **Reason:** roadmap R2.6, *Gun with a lead-computing pipper*.
+
+### 296. Night: no grain on black, no lit ground without lamps, a darker night
+
+**Date:** 2026-11-21
+**Decision:**
+
+- **Grain.** The simulation view's film grain (decision 138) fades out toward black as well as toward white: its amplitude is `grainAmount` × (1 − 0.6 Y) × smoothstep(0.04, 0.2, Y) on the encoded luma Y. It was strongest in the darkest tones, so a night sky and unlit ground crawled with noise. The dither of half a code value stays. The strategic view's paper grain (decision 93) is a separate effect and never reaches the simulation view.
+- **Town glow on the ground.** A planned town lights itself with its streetlights, windows and the far prisms' glow (decision 293) out to the prism range. Its light disk (decision 71) now adds to the ground only by smoothstep(10 km, 14 km) of the distance from the camera; unplanned towns keep their disk. The disk had washed the whole town and the fields round it in a warm tan, with the canopy shell's woods cut out of it in black.
+- **Rural glow.** The habitability speckles that stand for unplanned villages fade in between 20 and 50 km from the camera. Nearer, they lit kilometer-wide patches of open ground with no lamps in them.
+- `tools/render.preview.ts` takes `FULL_MOON` and `NIGHT_LIGHT` to try the night's light.
+
+**Reason:** the owner saw grain on black areas at night and light patches on the ground near towns that read as lit ground, not as lights, and asked for a night dark enough that a night vision system will be needed.
