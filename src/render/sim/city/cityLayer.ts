@@ -99,6 +99,8 @@ type V3 = Node<'vec3'>;
 const FIELD_RANGE = 4500;
 /** Plans are kept this far beyond the prism range (m), then released. */
 const RELEASE = 6000;
+/** The far lights' lattice (m): one possible point of light per cell (decision 296). */
+const SPECK_CELL = 14;
 
 /** What the layer needs from the world. */
 export interface CityWorld {
@@ -1261,11 +1263,23 @@ export class CityLayer {
       const night = nightFactor(upU as unknown as V3, L.sunDirection);
       // Far away a window is a sub-pixel speck: its mean glow instead.
       const glowNear = pane.mul(lit);
-      const glowFar = min(wall.z, 1).mul(0.25).mul(level).mul(step(0.8, v));
+      // Beyond the windows' range, lights are points on a 14 m lattice of planet positions:
+      // about one cell in ten by the lighting level holds a small bright spot, and where the
+      // spots shrink below a pixel or two, their mean takes over. A uniform mean glow over
+      // walls and the far prisms' roofs read as lit ground, not as lights (decision 296).
+      const planet = L.planetPosition(positionWorld as unknown as V3);
+      const q = planet.div(SPECK_CELL);
+      const h = fract(sin(dot(floor(q), vec3(127.1, 311.7, 74.7))).mul(43758.5453));
+      const spot = smoothstep(0.22, 0.12, length(fract(q).sub(0.5)));
+      const speck = step(h, level.mul(0.1)).mul(spot).mul(2.2);
+      const speckMean = level.mul(0.1).mul(0.05).mul(2.2);
+      const resolved = float(1).sub(smoothstep(5000, 10_000, dist));
+      const far = mix(speckMean, speck, resolved);
+      const glowFar = min(wall.z, 1).mul(far).mul(step(0.8, v));
       const glow = mix(glowFar, glowNear, near).mul(night);
-      // Far block prisms' roofs carry the block's mean light, so a city glows from afar
-      // instead of hiding the terrain's town glow under dark roofs (decision 293).
-      const roofGlow = step(1.5, wall.z).mul(level).mul(0.18).mul(night);
+      // Far block prisms' roofs carry their windows' light as the same points, so a city
+      // glows from afar without hiding under dark roofs (decisions 293, 296).
+      const roofGlow = step(1.5, wall.z).mul(far).mul(night);
       const emissive = vec3(1, 0.72, 0.4).mul(
         glow.mul(select(abs(normal.dot(upU)).lessThan(0.5), 0.9, 0)).add(roofGlow),
       );
