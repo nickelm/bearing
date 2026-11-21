@@ -387,6 +387,7 @@ export class FreeFlight {
         this.state !== 'menu' && !this.helo ? (this.rack?.gun?.live ?? []) : [],
         eye,
         (cam.fov * DEG) / Math.max(1, window.innerHeight),
+        this.rack?.gun?.spec.muzzleVelocity,
       );
     };
     window.addEventListener('beforeunload', this.unload);

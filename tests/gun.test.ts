@@ -92,3 +92,27 @@ describe('the gun (decision 295)', () => {
     expect(again.gun!.rounds).toBe(460);
   });
 });
+
+describe('tracers (decision 295)', () => {
+  it('trail their rounds no further back than the rounds have flown from the gun', async () => {
+    const { Tracers } = await import('../src/render/sim/aircraft/tracers');
+    const { Matrix4, Vector3 } = await import('three/webgpu');
+    const t = new Tracers();
+    const round = (age: number) => ({
+      pos: new Vec3d(age * 1230, 0, 0),
+      vel: new Vec3d(1230, 0, 0),
+      age,
+      tracer: true,
+    });
+    t.place([round(1 / 60), round(1)], new Vec3d(), 0.001, spec.muzzleVelocity);
+    const len = (i: number) => {
+      const m = new Matrix4();
+      t.mesh.getMatrixAt(i, m);
+      return new Vector3().setFromMatrixColumn(m, 0).length();
+    };
+    // A round one frame out: a streak of what it flew, about 17 m, not the full 31 m.
+    expect(len(0)).toBeCloseTo(spec.muzzleVelocity / 60, 3);
+    expect(len(1)).toBeCloseTo(1230 * 0.025, 3);
+    t.dispose();
+  });
+});

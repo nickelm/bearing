@@ -54,8 +54,18 @@ export class Tracers {
     this.mesh.frustumCulled = false;
   }
 
-  /** Places the tracer rounds of `rounds` relative to `eye`, `radPerPixel` setting their least width. */
-  place(rounds: Iterable<Readonly<Round>>, eye: Readonly<Vec3d>, radPerPixel: number): void {
+  /**
+   * Places the tracer rounds of `rounds` relative to `eye`, `radPerPixel` setting their least
+   * width. A streak trails its round, but never further back than the round has flown from
+   * the muzzle at `muzzleVelocity` (m/s): a fresh round's streak starts at the gun, not
+   * behind the aircraft (owner, decision 295).
+   */
+  place(
+    rounds: Iterable<Readonly<Round>>,
+    eye: Readonly<Vec3d>,
+    radPerPixel: number,
+    muzzleVelocity = 1000,
+  ): void {
     let n = 0;
     for (const r of rounds) {
       if (!r.tracer || n >= MAX_TRACERS) continue;
@@ -65,7 +75,7 @@ export class Tracers {
       const w = Math.max(MIN_WIDTH, this.p.length() * radPerPixel * PIXELS);
       this.dir.set(r.vel.x / speed, r.vel.y / speed, r.vel.z / speed);
       this.q.setFromUnitVectors(this.x, this.dir);
-      this.s.set(speed * STREAK, w, w);
+      this.s.set(Math.min(speed * STREAK, r.age * muzzleVelocity), w, w);
       this.m.compose(this.p, this.q, this.s);
       this.mesh.setMatrixAt(n++, this.m);
     }

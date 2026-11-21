@@ -1093,6 +1093,7 @@ export class Follow {
       flight.aircraft.flatMap((a) => a.rack.gun?.live ?? []),
       eye,
       rpp,
+      flight.aircraft[0]?.rack.gun?.spec.muzzleVelocity,
     );
     for (const a of flight.aircraft) {
       const m = a.flown.airframe as unknown as FlightModel;
