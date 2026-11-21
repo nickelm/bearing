@@ -36,6 +36,7 @@ Guidance for Claude Code sessions in this repository. **`docs/roadmap.md` is the
 | Followed flights         | `npx vitest run --config vitest.tools.config.ts tools/follow.preview.ts` (env: `SEED`, `FLIGHTS=type:mission[:phase],…`, `TOD`, `WEATHER`, `W`, `H`), then `SHOTS=follow-<type>-<mission> OUT_DIR=tools/out node tools/freeflight.screens.mjs` with `npm run dev` up: the chase view of a followed flight with its read-only HUD (decision 252) |
 | Ground map               | `npx vitest run --config vitest.tools.config.ts tools/groundMap.preview.ts` (env: `SEED`, `LAT`/`LON`, `KM`, `ALT`, `RANGES`) → `tools/out/groundmap-<nm>.png` and `.json` (decision 226) |
 | Map CPU and GPU timings  | In the app: `?dev&cputime=1` logs the map's CPU per section and the app's frame every 5 s; `?dev&gputime=1` GPU time per view and pass (decisions 242, 245). Headless: `SCENE=strategic PERF=1 MOVE=1` in `tools/render.preview.ts` prints the map's CPU per section, still and panning |
+| Terrain art metrics      | `npx vitest run --config vitest.tools.config.ts tools/terrainArt.preview.ts --disable-console-intercept --testTimeout=20000000` (env: `SEEDS` or `FROM`/`COUNT`, `GRES` (256), `TILES`, `RELIEF`, `OUT`) → `docs/reports/terrain-art-metrics.md`: Proposal 0010's checks over 20 seeds (decisions 296–303). The render preview takes `ART_VIEWS=1` (the standard views), `ART_SHOTS=1` (a waterfall, a radar, a lighthouse), `ART`, `ART_STYLE`, `RELIEF`, `SPOT_FIX`, `ROCKS=0`, `MIST=0`, `POIS=0`; the rock and structure kits are written by `node tools/models/rocks.mjs` and `node tools/models/poi.mjs` |
 | Settlement plans         | `npx vitest run --config vitest.tools.config.ts tools/cities.preview.ts --disable-console-intercept` (env: `SEEDS` or `FROM`/`COUNT`, `CITIES`, `TOWNS`, `VILLAGES`, `DRAW`, `REPORT`, `OUT`; add `--testTimeout=7000000` for many seeds) → plan drawings and metrics (Proposal 0009) |
 | Browser smoke test       | `npm run build && npm run preview`, then `node tools/browser.smoke.mjs` (env: `MODE`, `WORLD`, `ONLY`, `SCENES`, `OUT`) → `tools/out/browser/` (decision 144); `ONLY=follow` follows a flight of each demo type with checks 7 and 10 (`FOLLOW`, `LOW=0`, `LOW_WAIT`, `NIGHT=0`; decisions 252, 253) |
 
@@ -46,7 +47,8 @@ docs/design.md      design doc (source of truth; do not reformat)
 docs/decisions.md   architecture decision log
 docs/visual-style.md  visual style guide (source of truth for the look; do not reformat)
 docs/style/references/  reference screenshots: local only, gitignored, never shipped (decision 70)
-docs/proposals/     owner proposals (do not reformat); 0001-two-views.md (decision 72),
+docs/proposals/     owner proposals (do not reformat); 0010-terrain-art-direction.md (decisions 296–303),
+                    0001-two-views.md (decision 72),
                     0002-third-person-flight.md (decision 94), 0003-forests-for-low-flight.md
                     (decision 148), 0004-helicopter-flight.md (decision 149),
                     0005-terrain-adaptive-networks.md (decision 161), 0006-displays-and-crew.md
@@ -267,6 +269,8 @@ These are the project conventions. Lint enforces some of them (marked ⚙).
 20. **Settlements are the world's, not the game's** (Proposal 0009, decision 260).
     - ⚙ Nothing under `src/worldgen/settlements/` imports `campaign`, `sim`, `render`, `ui`, `freeflight` or `follow`, the war's parts of `worldgen/strategic/` (fronts, territory, infrastructure, sites) or anything named for factions. Urban styles key to cultural regions, never to sides.
     - A game layer reads settlements through their plain exports (districts, landmarks, candidate targets) and sets their lighting levels and damage states through the city layer; campaign logic still reads only the strategic graph (rule 9).
+
+21. **Terrain art is scalable and game-agnostic** (Proposal 0010, decision 296). Every terrain art layer (surface art, rock dressing, mist and fog, particles, sky, waterfalls, structures) has an off switch and scales with `TerrainArtSettings` (quality `off`/`low`/`medium`/`high`, style `bearing`/`storybook`/`muted`); a new costly layer joins the art governor's steps. ⚙ The world stages (`worldgen/poi/`, `rockDressing.ts`, `waterfalls.ts`, `curvature.ts`, `reliefExaggeration.ts`, `viewshed.ts`) import nothing of the game, the cast or factions; a game passes its places, routes and viewpoints in. Relief exaggeration (`PlanetParams.reliefExaggeration`) is applied once, after climate and biomes; climate reads drawn heights divided back (`drawnEarthElevation`, `earthElevationNode`), and the campaign's coarse pass never sees it (decision 297).
 
 ## Fidelity as level of detail
 
