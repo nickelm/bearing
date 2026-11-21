@@ -70,7 +70,9 @@ import { MouseCapture } from '../ui/flight/mouseCapture';
 import { clearPresetEdits, DisplaySystem } from '../ui/displays/system';
 import type { ControlsAction } from '../ui/displays/model';
 import { AVIONICS_PROFILES } from '../sim/avionics/profiles';
-import { relativePicture, snapshotFromHud } from '../ui/displays/aircraftSnapshot';
+import { relativePicture, snapshotFromHud, storesSnapshot } from '../ui/displays/aircraftSnapshot';
+import { StoresRack } from '../sim/flight/storesRack';
+import { standardStations } from '../sim/air/stores';
 import type { SnapshotSensors, SnapshotTerrain } from '../ui/displays/snapshot';
 import { ACM_CONE, acmAcquire, SensorModel } from '../sim/sensors/sensors';
 import { threatCalls } from '../ui/displays/calls';
@@ -198,6 +200,8 @@ export class FreeFlight {
   private displayName = 'F-21 Kestrel';
   private sortieAt = 0;
   private fuelCapacity = 0;
+  /** The Kestrel's stores: its flight data's standard load (decision 289); null in a helicopter. */
+  private rack: StoresRack | null = null;
   /** The gear doors' failure has been announced this sortie. */
   private gearDamageTold = false;
   private displaysAt = -Infinity;
@@ -537,6 +541,14 @@ export class FreeFlight {
     if (spawn === 'air') spawnInAir(m, r, end);
     else spawnOnRunway(m, r, end);
     this.model = m;
+    // The standard load is the flight data's own: the rack adds no mass or drag (decision 287).
+    const pylons = AIRCRAFT_BUNDLES[AIRCRAFT]!.pylons ?? [];
+    this.rack = new StoresRack(
+      this.flightSpec,
+      pylons,
+      standardStations(pylons, this.flightSpec.standardStores ?? {}),
+      { loadout: 'standard', expended: {} },
+    );
     this.gearDamageTold = false;
     this.monitor = new FlightMonitor(this.runways, R);
     this.monitor.reset(spawn === 'air');
@@ -1519,6 +1531,10 @@ export class FreeFlight {
       control,
       mouseFree: this.state === 'flying' && !this.capture.captured && !this.pilot,
       sensors: this.sensorSnap,
+      stores:
+        this.rack && !this.helo
+          ? storesSnapshot(this.rack.stations, this.rack.loaded, this.model?.tankFuel ?? 0)
+          : null,
       messages: this.hud.log.map((l) => ({
         at: (l.at - this.sortieAt) / 1000,
         text: l.text,

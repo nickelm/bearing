@@ -1,8 +1,9 @@
 {
-  "notes": "The stores catalog (R2.6, decision 285): what pylons carry. Names are the setting's own; the reference is the real store the numbers come from. Mass in kg (a tank's full; fuel is the kg of fuel a full tank holds, 1,400 l at 0.8 kg/l, which the engine burns before the internal fuel: decision 287), length and diameter in m, dragArea in m2 (drag = dynamic pressure x dragArea, added for every store beyond an aircraft's standard load). Kinds: ir-missile, radar-missile, bomb, rockets, tank.",
+  "notes": "The stores catalog (R2.6, decision 285): what pylons carry. Names are the setting's own, and short is the label the stores format and the HUD show (decision 289); the reference is the real store the numbers come from. Mass in kg (a tank's full; fuel is the kg of fuel a full tank holds, 1,400 l at 0.8 kg/l, which the engine burns before the internal fuel: decision 287), length and diameter in m, dragArea in m2 (drag = dynamic pressure x dragArea, added for every store beyond an aircraft's standard load). Kinds: ir-missile, radar-missile, bomb, rockets, tank.",
   "stores": {
     "srm": {
       "name": "short-range missile",
+      "short": "SRM",
       "reference": "AIM-9M",
       "kind": "ir-missile",
       "mass": 86,
@@ -12,6 +13,7 @@
     },
     "mrm": {
       "name": "medium-range missile",
+      "short": "MRM",
       "reference": "AIM-7M",
       "kind": "radar-missile",
       "mass": 231,
@@ -21,6 +23,7 @@
     },
     "bomb-230": {
       "name": "230 kg bomb",
+      "short": "B230",
       "reference": "Mk 82",
       "kind": "bomb",
       "mass": 241,
@@ -30,6 +33,7 @@
     },
     "bomb-900": {
       "name": "900 kg bomb",
+      "short": "B900",
       "reference": "Mk 84",
       "kind": "bomb",
       "mass": 925,
@@ -39,6 +43,7 @@
     },
     "rockets-19": {
       "name": "rocket pod, 19 rockets",
+      "short": "RKT",
       "reference": "LAU-61",
       "kind": "rockets",
       "mass": 280,
@@ -48,6 +53,7 @@
     },
     "tank-1400": {
       "name": "1,400 l drop tank",
+      "short": "TANK",
       "reference": "370 gal tank",
       "kind": "tank",
       "mass": 1260,

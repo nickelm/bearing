@@ -147,7 +147,8 @@ describe('display presets', () => {
     const s = snap();
     const d = initialDisplayState(s);
     expect(applyUi(d, s, { type: 'select-format', slot: 'leftMfd', format: 'radar-aa' })).toBe(d);
-    expect(slotFormats(s, 'leftMfd')).toEqual(['moving-map', 'engines']);
+    // The stores format is built (decision 289): it joins the left display's formats.
+    expect(slotFormats(s, 'leftMfd')).toEqual(['moving-map', 'engines', 'stores']);
   });
 });
 

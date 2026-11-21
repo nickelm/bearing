@@ -72,6 +72,17 @@ export interface SnapshotTerrain {
   altitude: number;
 }
 
+/** What hangs on the pylons (decision 289): the stores format reads it. */
+export interface SnapshotStores {
+  /** Every station of the loadout, left wing to right: where it is across (m, + right), what it carries. */
+  stations: { station: string; z: number; store: string; label: string; loaded: boolean }[];
+  /** The weapons aboard in loadout order: store id, label, how many are left, their master mode. */
+  weapons: { id: string; label: string; count: number; mode: 'air-to-air' | 'air-to-ground' }[];
+  /** Drop tanks still hanging and the fuel in them (kg). */
+  tanks: number;
+  tankFuel: number;
+}
+
 export interface AircraftSnapshot {
   /** Seconds since the flight began. */
   time: number;
@@ -127,4 +138,6 @@ export interface AircraftSnapshot {
   sensors: SnapshotSensors | null;
   /** Terrain for the moving map's elevation modes, while one shows (decision 227). */
   terrain?: SnapshotTerrain | null;
+  /** The stores on the pylons (decision 289); absent or null without a stores rack. */
+  stores?: SnapshotStores | null;
 }

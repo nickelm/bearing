@@ -7,7 +7,14 @@
 import type { AvionicsState } from '../../sim/avionics/avionics';
 import type { AvionicsProfile } from '../../sim/avionics/profiles';
 import type { HudFrame } from '../flight/hud';
-import type { AircraftSnapshot, SnapshotMessage, SnapshotSensors } from './snapshot';
+import type {
+  AircraftSnapshot,
+  SnapshotMessage,
+  SnapshotSensors,
+  SnapshotStores,
+} from './snapshot';
+import { STORES, weaponMode } from '../../sim/air/stores';
+import type { StationLoad } from '../../sim/air/stores';
 import { Vec3d } from '../../core/vec3d';
 import { radarDisplayRange } from '../../sim/avionics/avionics';
 import type { RadarSpec, SensorPicture } from '../../sim/sensors/sensors';
@@ -107,6 +114,50 @@ export interface SnapshotExtras {
   mouseFree: boolean;
   messages: SnapshotMessage[];
   sensors: SnapshotSensors | null;
+  /** The stores on the pylons (decision 289), or null. */
+  stores?: SnapshotStores | null;
+}
+
+/**
+ * The stores for the displays (decision 289): every station of the loadout, left wing to
+ * right, with what is still `loaded`; the weapons by store in loadout order with their
+ * counts; the tanks and the fuel in them (kg).
+ */
+export function storesSnapshot(
+  stations: readonly StationLoad[],
+  loaded: readonly StationLoad[],
+  tankFuel: number,
+): SnapshotStores {
+  const on = new Set(loaded.map((l) => l.station));
+  const weapons: SnapshotStores['weapons'] = [];
+  let tanks = 0;
+  for (const l of stations) {
+    const mode = weaponMode(l.store);
+    if (!mode) {
+      if (on.has(l.station) && STORES[l.store]?.kind === 'tank') tanks++;
+      continue;
+    }
+    let w = weapons.find((x) => x.id === l.store);
+    if (!w) {
+      w = { id: l.store, label: STORES[l.store]?.short ?? l.store, count: 0, mode };
+      weapons.push(w);
+    }
+    if (on.has(l.station)) w.count++;
+  }
+  return {
+    stations: [...stations]
+      .sort((a, b) => a.at[2] - b.at[2])
+      .map((l) => ({
+        station: l.station,
+        z: l.at[2],
+        store: l.store,
+        label: STORES[l.store]?.short ?? l.store,
+        loaded: on.has(l.station),
+      })),
+    weapons,
+    tanks,
+    tankFuel,
+  };
 }
 
 /** The afterburner's stage (0 off, 1–5) from the lever, as the HUD shows it. */
@@ -167,5 +218,6 @@ export function snapshotFromHud(f: HudFrame, x: SnapshotExtras): AircraftSnapsho
     mouseFree: x.mouseFree,
     messages: x.messages,
     sensors: x.sensors,
+    stores: x.stores ?? null,
   };
 }

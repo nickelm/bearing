@@ -48,7 +48,10 @@ import { missionPlugin } from '../sim/command/missions/registry';
 import type { Mission } from '../sim/air/mission';
 import { routeState } from '../sim/air/route';
 import { initialAvionics } from '../sim/avionics/avionics';
-import { snapshotFromHud } from '../ui/displays/aircraftSnapshot';
+import { snapshotFromHud, storesSnapshot } from '../ui/displays/aircraftSnapshot';
+import type { SnapshotStores } from '../ui/displays/snapshot';
+import { flightFuel } from '../sim/flight/promotion';
+import { storesEffect } from '../sim/flight/storesRack';
 import { DisplaySystem } from '../ui/displays/system';
 import { Hud, matrixProjector } from '../ui/flight/hud';
 import type { HudFrame } from '../ui/flight/hud';
@@ -723,6 +726,33 @@ export class Follow {
     return enemy;
   }
 
+  /**
+   * The followed aircraft's stores for the displays (decision 289): its rack at full
+   * fidelity, else its loadout less what it expended before.
+   */
+  private storesOf(m: Mission, t: number): SnapshotStores | null {
+    const a = this.full?.followed(this.slot);
+    if (a) {
+      const fm = a.flown.airframe as unknown as FlightModel;
+      return storesSnapshot(a.rack.stations, a.rack.loaded, fm.tankFuel);
+    }
+    const loads = flightStores(m).loads;
+    if (!loads.length) return null;
+    const on = new Set(loadedOf(m, this.slot, loads));
+    const loaded = loads.filter((l) => on.has(l.station));
+    // The route's fuel as the aircraft would hold it: the internal tanks fill first (decision 287).
+    let tankFuel = 0;
+    const spec = this.flightSpec;
+    if (spec) {
+      const tanks = storesEffect(loaded, spec.standardStores).tankCapacity;
+      const capacity = spec.mass.fuel + storesEffect(loads, spec.standardStores).tankCapacity;
+      const s = routeState(m.route, t, this.deps.radius);
+      const fuel = flightFuel(s.fuel, m.route.fuel, capacity);
+      tankFuel = Math.max(0, Math.min(tanks, fuel - spec.mass.fuel));
+    }
+    return storesSnapshot(loads, loaded, tankFuel);
+  }
+
   /** The player drops their drop tanks (J, the stores format's button; decision 287). */
   private jettison(): void {
     const n = this.full?.flight.jettisonPlayerTanks() ?? 0;
@@ -1090,6 +1120,7 @@ export class Follow {
       mouseFree: this.flying && !this.capture.captured,
       messages: [],
       sensors: null,
+      stores: this.storesOf(m, t),
     });
     this.displays.update(snap);
     this.requestMap(snap.position);

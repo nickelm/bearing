@@ -10,6 +10,10 @@
 import type { MasterMode } from '../../src/sim/avionics/avionics';
 import { initialAvionics, radarDisplayRange } from '../../src/sim/avionics/avionics';
 import { AVIONICS_PROFILES } from '../../src/sim/avionics/profiles';
+import { AIRCRAFT_BUNDLES } from '../../src/sim/air/bundles';
+import { stationLoads } from '../../src/sim/air/stores';
+import { loadedStations } from '../../src/sim/flight/storesRack';
+import { storesSnapshot } from '../../src/ui/displays/aircraftSnapshot';
 import type {
   AircraftSnapshot,
   SnapshotContact,
@@ -80,10 +84,25 @@ export async function drawDisplays(q: URLSearchParams): Promise<void> {
   // samples from tools/groundMap.preview.ts (decision 227).
   const terrain = q.get('terrain');
   if (terrain) snap.terrain = (await (await fetch(`../out/${terrain}`)).json()) as never;
+  // The jet's strike load with one bomb gone, and the bombs selected in air-to-ground (decision 289).
+  if (!helo) {
+    const b = AIRCRAFT_BUNDLES['alliance-fighter']!;
+    const loads = stationLoads(
+      b.airWar!.loadouts.find((l) => l.id === 'strike')!.stations!,
+      b.pylons!,
+    );
+    snap.stores = storesSnapshot(loads, loadedStations(loads, { 'bomb-900': 1 }), 1400);
+  }
   const sys = new DisplaySystem();
   sys.edits = {};
   sys.uiScale = Number(q.get('scale') ?? 1);
-  sys.avionics = { ...sys.avionics, masterMode: mode, manual: !ground };
+  sys.avionics = {
+    ...sys.avionics,
+    masterMode: mode,
+    manual: !ground,
+    weapon: mode === 'air-to-ground' ? 'bomb-900' : mode === 'air-to-air' ? 'srm' : null,
+    masterArm: mode === 'air-to-ground' || mode === 'air-to-air' || mode === 'dogfight',
+  };
   sys.visible = true;
   // `&mapimg=<file in tools/out>&mapnm=<range it was drawn for>`: a moving-map picture from the
   // strategic render preview (MAP=1) as the map's picture, centered on the aircraft (decision 201).

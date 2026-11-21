@@ -46,6 +46,7 @@ const FORMATS: Partial<Record<FormatId, Format>> = {
   threat: threatFormat,
   'radar-aa': radarFormat,
   'radar-ag': groundMapFormat,
+  stores: storesFormat,
 };
 
 /** The moving map's ranges, center to edge (nautical miles; decision 201). */
@@ -147,6 +148,29 @@ export function displayModel(
       command: r.lock ? av({ type: 'radar-lock', id: null }) : null,
     };
   }
+  if (format === 'stores' && s.stores) {
+    // Top row: the weapons aboard; right side: master arm at the top, jettison at the bottom.
+    s.stores.weapons.slice(0, 5).forEach((w, i) => {
+      buttons[i] = {
+        label: w.label,
+        active: s.avionics.weapon === w.id,
+        command: {
+          to: 'avionics',
+          command: { type: 'select-weapon', weapon: s.avionics.weapon === w.id ? null : w.id },
+        },
+      };
+    });
+    buttons[5] = {
+      label: s.avionics.masterArm ? 'ARM' : 'SAFE',
+      active: s.avionics.masterArm,
+      command: { to: 'avionics', command: { type: 'master-arm', on: !s.avionics.masterArm } },
+    };
+    buttons[9] = {
+      label: 'JETT',
+      active: false,
+      command: s.stores.tanks > 0 ? { to: 'controls', action: 'jettisonTanks' } : null,
+    };
+  }
   if (large(slot)) {
     // Bottom row, left to right (positions 14 down to 10): the slot's formats.
     slotFormats(s, slot)
@@ -245,6 +269,79 @@ function enginesFormat(s: AircraftSnapshot): ScreenItem[] {
         'left',
         e.afterburner > 0 ? 'normal' : 'dim',
       ),
+    );
+  return items;
+}
+
+/**
+ * The stores format (decision 289): master arm across the top, the stations across the
+ * screen from the left wing to the right with what each carries (dim once empty), the
+ * selected weapon's stations underlined, the selected weapon and how many are left, and
+ * the tanks with their fuel.
+ */
+function storesFormat(s: AircraftSnapshot): ScreenItem[] {
+  const st = s.stores;
+  const arm = s.avionics.masterArm;
+  const items: ScreenItem[] = [
+    text(0.5, 0.22, arm ? 'MASTER ARM' : 'SAFE', 'normal', 'center', arm ? 'caution' : 'dim'),
+  ];
+  if (!st || st.stations.length === 0) {
+    items.push(text(0.5, 0.5, 'NO STORES', 'normal', 'center', 'dim'));
+    return items;
+  }
+  // Stations evenly across the wing, left to right (their real spacing crowds the labels).
+  const n = st.stations.length;
+  const wy = 0.36;
+  items.push({
+    kind: 'line',
+    points: [
+      [0.06, wy],
+      [0.94, wy],
+    ],
+    tone: 'dim',
+  });
+  const selected = s.avionics.weapon;
+  st.stations.forEach((x, i) => {
+    const px = n === 1 ? 0.5 : 0.1 + (0.8 * i) / (n - 1);
+    const low = i % 2 === 1;
+    const ly = wy + (low ? 0.17 : 0.1);
+    items.push(
+      {
+        kind: 'line',
+        points: [
+          [px, wy],
+          [px, ly - 0.05],
+        ],
+        tone: 'dim',
+      },
+      text(px, ly, x.loaded ? x.label : '—', 'small', 'center', x.loaded ? 'normal' : 'dim'),
+    );
+    if (x.loaded && x.store === selected)
+      items.push({
+        kind: 'line',
+        points: [
+          [px - 0.045, ly + 0.03],
+          [px + 0.045, ly + 0.03],
+        ],
+        tone: 'normal',
+        width: 2,
+      });
+  });
+  const w = st.weapons.find((x) => x.id === selected);
+  items.push(
+    text(
+      0.08,
+      0.66,
+      w ? `WEAPON  ${w.mode === 'air-to-air' ? 'A-A' : 'A-G'}` : 'WEAPON',
+      'small',
+      'left',
+      'dim',
+    ),
+    text(0.08, 0.75, w ? `${w.label} × ${w.count}` : 'NONE', 'large', 'left', w ? 'normal' : 'dim'),
+  );
+  if (st.tanks > 0)
+    items.push(
+      text(0.08, 0.85, `TANKS ${st.tanks} · ${fuelText(s, st.tankFuel)}`, 'small', 'left'),
     );
   return items;
 }

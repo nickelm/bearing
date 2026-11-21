@@ -16,6 +16,8 @@ const KINDS: readonly StoreKind[] = ['ir-missile', 'radar-missile', 'bomb', 'roc
 export interface StoreSpec {
   id: string;
   name: string;
+  /** The label on the stores format and the HUD (decision 289). */
+  short: string;
   /** The real store the numbers come from. */
   reference: string;
   kind: StoreKind;
@@ -47,6 +49,7 @@ function parseCatalog(raw: unknown): Readonly<Record<string, StoreSpec>> {
     const spec: StoreSpec = {
       id,
       name: String(s.name),
+      short: String(s.short ?? id).toUpperCase(),
       reference: String(s.reference ?? ''),
       kind,
       mass: num('mass'),
@@ -63,6 +66,14 @@ function parseCatalog(raw: unknown): Readonly<Record<string, StoreSpec>> {
 
 /** Every store by id. */
 export const STORES: Readonly<Record<string, StoreSpec>> = parseCatalog(catalog);
+
+/** The master mode a weapon belongs to: missiles air-to-air, bombs and rockets air-to-ground; tanks none. */
+export function weaponMode(store: string): 'air-to-air' | 'air-to-ground' | null {
+  const k = STORES[store]?.kind;
+  if (k === 'ir-missile' || k === 'radar-missile') return 'air-to-air';
+  if (k === 'bomb' || k === 'rockets') return 'air-to-ground';
+  return null;
+}
 
 /** A pylon of a type (its bundle's `pylons`), in the model's frame (x forward, y up, z right). */
 export interface PylonSpec {

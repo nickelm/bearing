@@ -4660,3 +4660,16 @@ Decision 256's AI checks had run gear down, and the gear's drag had been slowing
 **How it was checked.** `tests/aircraftStores.test.ts`: every store has a model; the standard load hangs on the wingtip and outer pylons; the strike loadout's six stores are drawn, a mesh and its ink each, and hiding all but the wingtip missiles leaves two; a stand-in hangs nothing. `tests/models.test.ts` keeps the stores within their budget. `tools/models.preview.ts` renders the six (`tools/out/model-store-*.png`). The unit suite, the type check and lint pass. The owner checks the look on the GPU.
 
 **Reason:** roadmap R2.6, *Stores on pylons that disappear on release; jettison*.
+
+### 289. The stores format, master arm and weapon selection
+
+**Date:** 2026-11-21
+**Decision:** The stores format (SMS) is built (rule 14: a pure function from the snapshot to a display model).
+
+- **Snapshot.** `AircraftSnapshot.stores` lists every station of the loadout from the left wing to the right with what it carries and whether it is still loaded, the weapons aboard by store with their counts and master mode, and the tanks with the fuel in them (`storesSnapshot`). The follow fills it from the followed aircraft's rack at full fidelity, else from its loadout less what it expended before, with the tanks' share of the route's fuel; Free Flight from the Kestrel's standard load, on a rack that adds nothing to its flight model (decision 287).
+- **Format.** Master arm (SAFE dim, MASTER ARM amber) across the top; the stations evenly along a wing line, labels staggered in two rows (their real spacing crowded them), an empty station a dash, the selected weapon's stations underlined; below, the selected weapon with its mode and count, and the tanks with their fuel in the skin's unit. Buttons: the weapons along the top row, master arm at the top of the right side, JETT at its bottom (the controls' `jettisonTanks`). Each store's label is its catalog `short` (SRM, MRM, B230, B900, RKT, TANK).
+- **Weapon selection** is an avionics command (`select-weapon`); the selected weapon is avionics state. A weapon brings its master mode: missiles air-to-air, bombs and rockets air-to-ground (`weaponMode`); an air-to-air weapon keeps a dogfight. Choosing a master mode by hand deselects a weapon of the other mode. With the format built, the air-to-ground preset's left display shows it, and SMS joins the F-21's left display buttons.
+
+**How it was checked.** `tests/storesFormat.test.ts`: selecting bombs brings air-to-ground and a missile air-to-air; a dogfight stays; a hand-chosen mode deselects the other mode's weapon; the snapshot's counts, tanks and station order; the buttons issue their commands; the air-to-ground preset opens the format. `tests/displays.test.ts` now expects SMS among the left display's formats. `tools/displays.screens.mjs` (air-to-ground and air-to-air, both skins, 1366 × 768): within the clutter limits, and the format read at 3× with no overlaps after the labels were staggered. The unit suite, the type check and lint pass.
+
+**Reason:** roadmap R2.6, *Stores format and master arm; weapon selection triggers air-to-air and air-to-ground modes*.

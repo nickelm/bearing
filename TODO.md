@@ -242,14 +242,16 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] Pylons and stations for the Vo-31, Vo-35 and A-15 with their geometry and flight data (R2.7)
 - [x] Stores' mass and drag in the flight model beyond the flight data's standard load (`StoresRack`, `standardStores`; decision 287)
 - [x] Drop tanks with fuel (owner, decision 286): tanks carry fuel the engine burns first, the flight model's fuel is internal plus tanks, the F-21's air-war load 5,440 kg to match, jettison by J and the AI within 40 km of an enemy flight; `tests/promotion.test.ts` retuned (decision 287)
-- [ ] The stores format's jettison button (`ControlsAction` `jettisonTanks`, wired in the follow) with the stores format
+- [x] The stores format's jettison button (`ControlsAction` `jettisonTanks`, wired in the follow; decision 289)
 - [ ] The approach energy cue (`energy.ts`) predicts without the stores' drag and mass; stores' CG and inertia stay the spec's (R2.10)
 - [ ] The AI's jettison reads enemy flights on their routes; from the sensors' picture once they read campaign contacts
 - [x] Stores on pylons that disappear on release; jettison (store model specs, `AircraftView` mounts and `setStores`, the rack's stations at full fidelity, what was expended before off the pylons; decision 288)
 - [ ] Pylons drawn under the stores (the fighter's pylon pieces), and a released store or jettisoned tank that falls away instead of vanishing
 - [ ] The Pact fighter and the strike aircraft still draw their stores in their bodies: pylons and stations with their flight data (R2.7)
 - [ ] Owner, on the GPU: an F-21 on interdiction shows two bombs, two tanks and two wingtip missiles; after J the tanks are gone; the Kestrel in Free Flight shows four missiles
-- [ ] Stores format and master arm; weapon selection triggers air-to-air and air-to-ground modes
+- [x] Stores format and master arm; weapon selection triggers air-to-air and air-to-ground modes (the SMS format, `select-weapon`, the snapshot's stores for the follow and Free Flight; decision 289)
+- [ ] Weapon selection and master arm by key (hot keys without looking: a weapon step and master arm), once the gun and missile fire
+- [ ] The Pact skin's stores labels (Cyrillic-style or its own short names) with the skins' label work
 - [ ] Gun with a lead-computing pipper
 - [ ] IR missile with a seeker circle and simple guidance, one per side
 - [ ] Unguided bombs with CCIP fall lines; rockets

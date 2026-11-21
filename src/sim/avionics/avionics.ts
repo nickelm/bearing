@@ -11,6 +11,7 @@
  * dogfight returns to the mode before it. Thresholds have hysteresis, so a
  * touch-and-go or a hover at 20 kt does not flicker between modes.
  */
+import { weaponMode } from '../air/stores';
 import { FOOT, KNOT } from '../../core/units';
 import type { RadarMode } from '../sensors/sensors';
 
@@ -60,6 +61,8 @@ export interface AvionicsState {
   radar: { on: boolean; mode: RadarMode; range: number; lock: string | null };
   /** The air-to-ground radar's ground map (decision 226): its range step. */
   groundRadar: { range: number };
+  /** The weapon selected (a store id; decision 289), or null. */
+  weapon: string | null;
 }
 
 export type AvionicsCommand =
@@ -73,7 +76,9 @@ export type AvionicsCommand =
   | { type: 'radar-range'; delta: 1 | -1 }
   /** Locks a contact (single-target track), or breaks the lock with null. */
   | { type: 'radar-lock'; id: string | null }
-  | { type: 'ground-radar-range'; delta: 1 | -1 };
+  | { type: 'ground-radar-range'; delta: 1 | -1 }
+  /** Selects a weapon (a store id, null for none); a weapon brings its master mode (decision 289). */
+  | { type: 'select-weapon'; weapon: string | null };
 
 export function initialAvionics(onGround: boolean): AvionicsState {
   return {
@@ -84,6 +89,7 @@ export function initialAvionics(onGround: boolean): AvionicsState {
     acknowledged: [],
     radar: { on: true, mode: 'rws', range: 2, lock: null },
     groundRadar: { range: 2 },
+    weapon: null,
   };
 }
 
@@ -94,9 +100,29 @@ function leaveAcm(r: AvionicsState['radar']): AvionicsState['radar'] {
 
 export function applyCommand(s: AvionicsState, c: AvionicsCommand): AvionicsState {
   switch (c.type) {
-    case 'master-mode':
+    case 'master-mode': {
       if (c.mode === 'dogfight') return applyCommand(s, { type: 'dogfight' });
-      return { ...s, masterMode: c.mode, manual: true, radar: leaveAcm(s.radar) };
+      // A weapon of the other mode is deselected (decision 289).
+      const w = s.weapon ? weaponMode(s.weapon) : null;
+      const weapon =
+        w && (c.mode === 'air-to-air' || c.mode === 'air-to-ground') && w !== c.mode
+          ? null
+          : s.weapon;
+      return { ...s, masterMode: c.mode, manual: true, radar: leaveAcm(s.radar), weapon };
+    }
+    case 'select-weapon': {
+      const mode = c.weapon ? weaponMode(c.weapon) : null;
+      if (!mode) return { ...s, weapon: c.weapon };
+      // An air-to-air weapon keeps a dogfight; otherwise the weapon's mode comes up.
+      if (mode === 'air-to-air' && s.masterMode === 'dogfight') return { ...s, weapon: c.weapon };
+      return {
+        ...s,
+        weapon: c.weapon,
+        masterMode: mode,
+        manual: true,
+        radar: leaveAcm(s.radar),
+      };
+    }
     case 'dogfight':
       // The override key: in, and out again to the mode before it. The radar goes to air
       // combat mode and back to range-while-search, keeping a lock it holds (decision 223).
