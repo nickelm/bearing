@@ -74,6 +74,8 @@
 import { makeZoneShift } from '../src/render/common/zoneLook';
 import { surfaceArtSampler } from '../src/render/common/terrain/surfaceArt';
 import { bearingPois } from '../src/render/sim/props/poiWorld';
+import type { PointOfInterest } from '../src/worldgen/poi/poi';
+import { findWaterfalls } from '../src/worldgen/waterfalls';
 import { terrainArtSettings } from '../src/render/common/terrainArt';
 import type { ArtQuality, ArtStyle } from '../src/render/common/terrainArt';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -1330,6 +1332,7 @@ it('renders preview views', async () => {
   // Rock dressing (decision 299); ROCKS=0 leaves it out.
   if (process.env.ROCKS !== '0' && propMaps) scene.rocks.setMaps(propMaps);
   // Points of interest composed into the airfields' views (decisions 302, 303); POIS=0 leaves them out.
+  let pois: PointOfInterest[] = [];
   if (process.env.POIS !== '0' && propMaps) {
     const poiResult = bearingPois(
       {
@@ -1351,6 +1354,7 @@ it('renders preview views', async () => {
         `a landmark in view of ${(100 * poiResult.coverage).toFixed(0)}% of airfields`,
     );
     scene.setPointsOfInterest(poiResult.pois, propMaps);
+    pois = poiResult.pois;
   }
   if (process.env.SPARKLE === '0') scene.terrain.land.sparkle.value = 0;
   // MICRO=x scales the ground's micro-facets (decision 168; 0 = off); GLINT=x their glints.
@@ -1835,6 +1839,79 @@ it('renders preview views', async () => {
           : spot,
         ...(art ? { detail: true } : {}),
       });
+    }
+  }
+  // ART_SHOTS=1 (decision 301–302): the tallest waterfall, a radar station and a lighthouse,
+  // each from an observer standing back from it and looking at it.
+  if (process.env.ART_SHOTS === '1') {
+    const ground = globalMapSampler(global.height, global.n);
+    const R = params.radius;
+    const framing = (
+      name: string,
+      target: Vec3d,
+      back: number,
+      eye: number,
+      aim: number,
+      toward?: Vec3d,
+    ): PreviewView => {
+      const east = new Vec3d(0, 1, 0).cross(target).normalize();
+      const north = target.clone().cross(east);
+      // Stand back along `toward` (a tangent direction), else from the south-west.
+      const away = toward ?? north.clone().scale(-0.7).addScaled(east, -0.7).normalize();
+      const point = target
+        .clone()
+        .addScaled(away, back / R)
+        .normalize();
+      const e2 = new Vec3d(0, 1, 0).cross(point).normalize();
+      const n2 = point.clone().cross(e2);
+      const to = target.clone().sub(point);
+      const facing = Math.atan2(to.dot(e2), to.dot(n2));
+      const rise = Math.max(0, ground(target)) + aim - (Math.max(0, ground(point)) + eye);
+      return {
+        name,
+        dLat: 0,
+        dLon: 0,
+        altitude: 0,
+        tilt: 0,
+        heading: 0,
+        localTime: Number(process.env.SPOT_TIME ?? 15.5),
+        detail: true,
+        spot: {
+          kind: 'peaks',
+          point,
+          facing,
+          height: eye,
+          pitch: Math.atan2(rise, back),
+          note: name,
+        },
+      };
+    };
+    const falls = findWaterfalls(riverIndex, params.radius, params.seed).falls;
+    const tall = falls.reduce<(typeof falls)[number] | null>(
+      (a, f) => (!a || (f.top - f.bottom) * f.width > (a.top - a.bottom) * a.width ? f : a),
+      null,
+    );
+    if (tall) {
+      const lip = new Vec3d(...tall.lip);
+      const foot = new Vec3d(...tall.foot);
+      const down = foot.clone().sub(lip);
+      down.addScaled(foot, -down.dot(foot));
+      const toward = down.length() > 1e-9 ? down.normalize() : undefined;
+      console.log(
+        `art-fall: ${tall.name ?? 'a fall'}, ${(tall.top - tall.bottom).toFixed(0)} m, ${tall.width.toFixed(0)} m wide`,
+      );
+      views.push(framing('art-fall', foot, 500, 60, (tall.top - tall.bottom) / 2, toward));
+    }
+    for (const kind of ['radar-station', 'lighthouse'] as const) {
+      const best = pois.filter((p) => p.kind === kind).sort((a, b) => b.score - a.score)[0];
+      if (!best) {
+        console.log(`art-${kind}: none in this world`);
+        continue;
+      }
+      console.log(`art-${kind}: ${best.name}`);
+      views.push(
+        framing(`art-${kind}`, new Vec3d(...best.dir), 1200, kind === 'lighthouse' ? 60 : 200, 20),
+      );
     }
   }
   // WONDERS=1 frames every wonder; WONDERS=324,334 those features only.

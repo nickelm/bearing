@@ -38,9 +38,13 @@ describe('waterfalls', () => {
       expect(f.top - f.bottom).toBeGreaterThanOrEqual(WATERFALL_TUNING.minDrop);
       expect(f.width).toBeGreaterThanOrEqual(WATERFALL_TUNING.minWidth);
       expect(Math.hypot(...f.lip)).toBeCloseTo(1, 6);
-      expect(f.name !== null).toBe(f.top - f.bottom >= WATERFALL_TUNING.namedDrop);
-      if (f.name) expect(f.name).toMatch(/Falls$/);
+      if (f.name) {
+        expect(f.name).toMatch(/Falls$/);
+        expect(f.top - f.bottom).toBeGreaterThanOrEqual(WATERFALL_TUNING.namedDrop);
+        expect(f.width).toBeGreaterThanOrEqual(WATERFALL_TUNING.namedWidth);
+      }
     }
+    expect(a.falls.filter((f) => f.name).length).toBeLessThanOrEqual(WATERFALL_TUNING.namedCount);
     for (const r of a.rapids) {
       expect(r.to).toBeGreaterThan(r.from);
       expect(r.gradient).toBeGreaterThanOrEqual(WATERFALL_TUNING.rapidsGradient);

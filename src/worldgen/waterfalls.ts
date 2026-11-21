@@ -18,14 +18,19 @@ import { RIVER_SEGMENT_FIELDS } from './riverIndex';
 export const WATERFALL_TUNING = {
   /** A segment is part of a fall where its stepped surface drops this steeply (m/m)... */
   fallGradient: 0.12,
+  /** ...or, on a river at least `majorWidth` wide, this steeply: large rivers fall at gentler grades. */
+  majorFallGradient: 0.05,
   /** ...and part of rapids where it drops at least this steeply. */
   rapidsGradient: 0.025,
   /** Falls lower than this (m) are rapids. */
   minDrop: 6,
   /** Rivers narrower than this (m) have no falls drawn. */
   minWidth: 6,
-  /** Falls at least this tall (m) are named. */
+  /** Falls at least this tall (m) on rivers at least `namedWidth` wide may be named... */
   namedDrop: 40,
+  namedWidth: 15,
+  /** ...the tallest and widest of them, at most this many per world. */
+  namedCount: 48,
   /** A "major" fall for the proposal's check: a river at least this wide (m). */
   majorWidth: 20,
 };
@@ -115,12 +120,13 @@ export function findWaterfalls(
       const L = segLength(s);
       const drop = surf(s, 0) - surf(s, 1);
       const g = drop / L;
-      if (g >= t.fallGradient) {
+      const steep = d[s * F + 6]! >= t.majorWidth ? t.majorFallGradient : t.fallGradient;
+      if (g >= steep) {
         if (runStart < 0) runStart = s;
       } else {
         closeFall(s);
       }
-      if (g >= t.rapidsGradient && g < t.fallGradient) {
+      if (g >= t.rapidsGradient && g < steep) {
         if (rapidStart < 0) rapidStart = s;
         rapidDrop += drop;
         rapidLen += L;
@@ -134,6 +140,13 @@ export function findWaterfalls(
     closeFall(to);
     if (rapidStart >= 0) rapids.push({ from: rapidStart, to, gradient: rapidDrop / rapidLen });
   }
-  for (const f of falls) if (f.top - f.bottom >= t.namedDrop) f.name = `${names.proper(0)} Falls`;
+  // Names for the most striking: tall falls on wide rivers, the largest first.
+  const striking = falls
+    .filter((f) => f.top - f.bottom >= t.namedDrop && f.width >= t.namedWidth)
+    .sort(
+      (a, b) => (b.top - b.bottom) * Math.sqrt(b.width) - (a.top - a.bottom) * Math.sqrt(a.width),
+    )
+    .slice(0, t.namedCount);
+  for (const f of striking) f.name = `${names.proper(0)} Falls`;
   return { falls, rapids };
 }
