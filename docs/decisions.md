@@ -4315,6 +4315,8 @@ Left for later (TODO): while the player flies, the map and other flights' resolu
 
 ### 261. Urban styles by cultural region and climate
 
+*Preferences revised and two styles added by decision 292.*
+
 **Date:** 2026-11-20
 **Decision:** Five styles (Western, Eastern bloc, Mediterranean, Nordic, Arid; `styles.ts`) attach to cultural regions, never to sides.
 
@@ -4673,3 +4675,34 @@ Decision 256's AI checks had run gear down, and the gear's drag had been slowing
 **How it was checked.** `tests/storesFormat.test.ts`: selecting bombs brings air-to-ground and a missile air-to-air; a dogfight stays; a hand-chosen mode deselects the other mode's weapon; the snapshot's counts, tanks and station order; the buttons issue their commands; the air-to-ground preset opens the format. `tests/displays.test.ts` now expects SMS among the left display's formats. `tools/displays.screens.mjs` (air-to-ground and air-to-air, both skins, 1366 × 768): within the clutter limits, and the format read at 3× with no overlaps after the labels were staggered. The unit suite, the type check and lint pass.
 
 **Reason:** roadmap R2.6, *Stores format and master arm; weapon selection triggers air-to-air and air-to-ground modes*.
+
+### 290. Urban ground fields name the nearest street; the shader measures exactly
+
+**Date:** 2026-11-21
+**Decision:** A chunk's feature field (decision 266) no longer stores the distance to the nearest street's edge. Each texel names the nearest street segment within 40 m: an index into the chunk's own segment table of up to 4,096 segments, with ends in chunk-local meters quantized to 3 cm (two u16 per end) and the half-width and class. The block's ground and district stay in the texel's upper bytes. For each pixel the shader takes the segments the four texels round it name and measures the exact distance to each. A chunk's field grows from 64 KB to 112 KB; the 128 slots hold 14.7 MB.
+
+**Reason:** the owner saw village lanes drawn as a row of lens-shaped patches. The texels are 7.8 m; a lane 6 m wide often has no texel center inside it, so every stored distance was positive, and interpolating between them dipped below zero only where the lane passed near a texel center. A distance to a line cannot be interpolated across the line. Naming the segment and measuring per pixel draws streets of any width whole, with exact ends and junctions.
+
+### 291. Plans take the roads and railways as the terrain draws them
+
+**Date:** 2026-11-21
+**Decision:** `InfraScene` records each road, spur and railway as it draws it: smoothed through the network's cell centers, or along its alignment where the world has one (`roadLines`, `railLines`). The city layer passes these to `settlementWorld` as the plans' arterials and rails, in the app and in the render preview. Before, plans took the network tier's coarse polylines.
+
+**Reason:** the owner saw houses standing on a main road. A plan laid out its street village and its grids along the coarse polyline, while the terrain drew the road hundreds of meters away along its smoothed or aligned course.
+
+### 292. Downtowns and business districts; American and Southeast Asian styles
+
+**Date:** 2026-11-21
+**Decision:**
+
+- **Towers.** A new district, *business*, holds towers: a new building kind on parcels of about 2,600 m², with squarish footprints of 26–45 m, 12–60 floors of 3.6 m rising toward the district's middle, flat roofs with a setback crown (and a plant room in the kit), walls in glass, stone and concrete, and paved plazas between. Window bands and lit windows as other buildings.
+- **Placement by style.** Each style says where towers go:
+  - **downtown at the center** (American, Southeast Asian): city blocks within 0.13 of the extent from the center, and the inner 0.06 of large towns;
+  - **business district off the center** (Western, Mediterranean, Nordic), in the manner of La Défense: in cities only, the largest block at 0.35–0.7 of the extent within 250 m of a main road, and up to 28 blocks within 650 m of it;
+  - **none** (Eastern bloc, Arid).
+- **American style.** A gridded city with no organic core and no radial avenues, 15% wider street spacing, a downtown, and suburbs of gabled and hipped houses on lots 35% larger. Walls are siding and brick, roofs asphalt gray. Its cities raise TV towers like the Western and Eastern bloc ones.
+- **Southeast Asian style.** Dense: spacing 0.85, parcels 0.55. Rows of pastel shophouses, a floor taller than terraces elsewhere, over an arcade at the street. Hipped and flat tiled roofs, a downtown of towers. The climate gates it to tropical biomes (rain and seasonal forest, mangrove, cloud forest, savanna).
+- **Preferences** (decision 261 revised): A northern Nordic, Western, American; B eastern Eastern bloc, Western, Nordic; C southern Mediterranean, Southeast Asian, Western; D steppe Arid, Eastern bloc, American; E islands Southeast Asian, Western, Mediterranean. Over seeds 1, 4, 7 and 10, American appears in 110–450 settlements per world (up to 1.9 million people). Southeast Asian appears in 1–20, where tropical coasts allow it (seed 7 has a city of 240,000).
+- Every world's settlement styles change with this; that is presentation only (nothing in the campaign reads styles).
+
+**Reason:** the owner asked for cities whose centers are skylines (American, Southeast Asian) and for European cities whose business centers lie away from the old center.

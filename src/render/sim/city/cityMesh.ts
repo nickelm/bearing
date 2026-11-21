@@ -18,7 +18,13 @@ import { simplify } from '../../../worldgen/settlements/geom';
 import { BUILDING_FIELDS } from '../../../worldgen/settlements/pack';
 import type { PackedPlan } from '../../../worldgen/settlements/pack';
 import { SettlementFrame } from '../../../worldgen/settlements/frame';
-import { BuildingKind, Extra, LandmarkKind, Roof } from '../../../worldgen/settlements/types';
+import {
+  BuildingKind,
+  District,
+  Extra,
+  LandmarkKind,
+  Roof,
+} from '../../../worldgen/settlements/types';
 
 export const Lod = { None: 0, Prism: 1, Box: 2, Kit: 3 } as const;
 export type Lod = (typeof Lod)[keyof typeof Lod];
@@ -59,6 +65,7 @@ const WINDOWS = new Set<number>([
   BuildingKind.Civic,
   BuildingKind.Farm,
   BuildingKind.Landmark,
+  BuildingKind.Tower,
 ]);
 
 /** A growable float buffer (amortized doubling, no per-push allocation). */
@@ -378,6 +385,35 @@ export function writeBuilding(
       w.quad(P(-hl, hw, height), P(hl, hw, height), P(hl, hw, top), P(-hl, hw, top), wall, hi);
     }
   }
+  if (kind === BuildingKind.Tower) {
+    // A crown: a setback top story and a plant room (decision 292), at boxes and kits alike.
+    const crown = dim(wall, 0.85);
+    w.box(
+      corners(x, y, angle, hl * 0.82, hw * 0.82),
+      height,
+      height + 4.5,
+      crown,
+      dim(roofColor, 0.9),
+      hi,
+      1,
+      hash,
+    );
+    if (lod === Lod.Kit)
+      w.box(
+        corners(
+          x + hl * 0.2 * Math.cos(angle),
+          y + hl * 0.2 * Math.sin(angle),
+          angle,
+          hl * 0.3,
+          hw * 0.3,
+        ),
+        height + 4.5,
+        height + 8,
+        dim(crown, 0.8),
+        dim(crown, 0.7),
+        hi,
+      );
+  }
   if (lod === Lod.Kit) {
     const c = Math.cos(angle);
     const s = Math.sin(angle);
@@ -571,6 +607,9 @@ export function writePrisms(
 ): boolean {
   const { blockPoints: bp, blockOffsets: bo, blockInfo: bi } = plan;
   for (const b of blocks) {
+    // Business districts draw their towers one by one instead (decision 292): a block
+    // averaged over its plazas would flatten the skyline.
+    if (bi[b * 4]! === District.Business) continue;
     const h = bi[b * 4 + 2]!;
     if (h <= 0) continue;
     const poly = simplify(Array.from(bp.subarray(bo[b]!, bo[b + 1]!)), 8);

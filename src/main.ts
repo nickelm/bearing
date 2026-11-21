@@ -878,6 +878,8 @@ async function main(): Promise<void> {
         rivers: riverIndex.segments,
         recordOf: recordsOf(infra.sites),
         // The war's targets at towns become specific complexes in their plans (decision 279).
+        roads: infra.roadLines,
+        rails: infra.railLines,
         anchorsOf: anchorsFromTargets(airbases.targets),
       });
       // The map draws cities from their plans' blocks as the plans arrive (decision 270).

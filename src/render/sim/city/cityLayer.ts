@@ -71,7 +71,7 @@ import { settlementInput, settlementWorld } from '../../../worldgen/settlements/
 import type { SettlementWorld } from '../../../worldgen/settlements/fromGraph';
 import { BUILDING_FIELDS, CHUNK, MASK_CELL, maskBuilt } from '../../../worldgen/settlements/pack';
 import type { PackedPlan } from '../../../worldgen/settlements/pack';
-import { StreetKind } from '../../../worldgen/settlements/types';
+import { BuildingKind, StreetKind } from '../../../worldgen/settlements/types';
 import type { SiteAnchor } from '../../../worldgen/settlements/types';
 import type { StrategicGraph } from '../../../worldgen/strategic/graph';
 import type { FromCityWorker, ToCityWorker } from '../../../workers/cityProtocol';
@@ -112,6 +112,9 @@ export interface CityWorld {
   rivers: RiverSegments | null;
   /** Light record index of settlement i in the terrain's light tables, or −1. */
   recordOf: (i: number) => number;
+  /** Roads and railways as the terrain draws them (InfraScene.roadLines, railLines; decision 291). */
+  roads?: { points: Float64Array; roadClass: number }[];
+  rails?: Float64Array[];
   /** Sites a game layer asks settlement i to realize (its strike targets; decision 279). */
   anchorsOf?: (i: number) => SiteAnchor[];
 }
@@ -321,6 +324,8 @@ export class CityLayer {
       { height: (d) => height(d), water: (d) => height(d) <= 0 || lake(d) > 0.5 },
       world.biomeOf,
       world.rivers,
+      world.roads,
+      world.rails,
     );
     const s = world.graph.settlements;
     this.points = Float64Array.from(s.points);
@@ -943,6 +948,15 @@ export class CityLayer {
     const w = this.writer(p, { origin });
     const blocks = chunks.flatMap((c) => c.blocks);
     if (!writePrisms(w, p.plan!, blocks, p.coverage!, ground)) return null;
+    // Towers stand as boxes even far off: the skyline reads from 12 km (decision 292).
+    const b = p.plan!.buildings;
+    for (const c of chunks)
+      for (const i of c.buildings)
+        if (
+          b[i * BUILDING_FIELDS + 11] === BuildingKind.Tower &&
+          !writeBuilding(w, p.plan!, i, Lod.Prism, ground)
+        )
+          return null;
     // Towers and stacks stay in view from afar.
     for (const c of chunks)
       for (const l of c.landmarks) writeLandmark(w, p.plan!, l, Lod.Prism, ground);

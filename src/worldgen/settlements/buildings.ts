@@ -106,6 +106,15 @@ export const DISTRICT_RULES: Readonly<Record<number, DistrictRule>> = {
     floors: [1, 2],
     kind: BuildingKind.Civic,
   },
+  [District.Business]: {
+    parcelArea: 2600,
+    frontage: 20,
+    front: 8,
+    side: 6,
+    depth: [24, 40],
+    floors: [12, 40],
+    kind: BuildingKind.Tower,
+  },
   [District.Utilities]: {
     parcelArea: 1e9,
     frontage: 10,
@@ -118,7 +127,7 @@ export const DISTRICT_RULES: Readonly<Record<number, DistrictRule>> = {
 };
 
 /** Parcel size by style: Nordic plots are generous, Mediterranean and Arid ones tight. */
-export const STYLE_PARCEL: readonly number[] = [1, 1.1, 0.7, 1.5, 0.6];
+export const STYLE_PARCEL: readonly number[] = [1, 1.1, 0.7, 1.5, 0.6, 1.35, 0.55];
 
 function pick<T>(r: Rng, items: readonly T[]): T {
   return items[Math.min(items.length - 1, Math.floor(r.nextFloat() * items.length))]!;
@@ -181,10 +190,13 @@ export function parcelBuilding(
     n1 = Math.max(n1, n);
   }
   const depthWant = rule.depth[0] + r.nextFloat() * (rule.depth[1] - rule.depth[0]);
-  const front = rule.front * (0.8 + 0.4 * r.nextFloat());
+  const arcade = style === Style.SoutheastAsian && rule.kind === BuildingKind.Terrace;
+  const front = (arcade ? 0.5 : rule.front) * (0.8 + 0.4 * r.nextFloat());
   const depth = Math.min(depthWant, n1 - front - 1.5);
   let length = u1 - u0 - 2 * rule.side;
   if (rule.kind === BuildingKind.House) length = Math.min(length, 8 + r.nextFloat() * 6);
+  // Towers keep a squarish footprint, at most 45 m on a side.
+  if (rule.kind === BuildingKind.Tower) length = Math.min(length, 26 + r.nextFloat() * 19);
   if (rule.kind === BuildingKind.Shed || rule.kind === BuildingKind.Warehouse) length *= 0.9;
   const along = (u0 + u1) / 2 + (rule.kind === BuildingKind.House ? (r.nextFloat() - 0.5) * 3 : 0);
   const floorsU = r.nextFloat();
@@ -219,10 +231,21 @@ export function parcelBuilding(
   if (rule.kind === BuildingKind.Perimeter && share < 0.15) floors += 1;
   if (style === Style.Nordic && rule.kind === BuildingKind.Perimeter)
     floors = Math.max(2, floors - 2);
+  // Shophouses: a floor more over an arcade at the street (decision 292).
+  if (style === Style.SoutheastAsian && rule.kind === BuildingKind.Terrace) floors += 1;
+  const tower = rule.kind === BuildingKind.Tower;
+  // Towers rise toward the downtown's center: up to 60 floors at its middle.
+  if (tower)
+    floors = Math.round(
+      floors * (1 + 0.5 * Math.max(0, 1 - share / 0.1)) * (0.6 + 0.4 * r.nextFloat()) + 4,
+    );
   const industrial = rule.kind === BuildingKind.Shed || rule.kind === BuildingKind.Warehouse;
-  const height = industrial ? 7 + floorsU * 7 : floors * FLOOR_HEIGHT + 0.5;
+  const height = industrial
+    ? 7 + floorsU * 7
+    : floors * (tower ? 3.6 : FLOOR_HEIGHT) + (tower ? 2 : 0.5);
   let roof: Roof;
   if (industrial) roof = roofU < 0.6 ? Roof.Flat : Roof.Shed;
+  else if (tower) roof = Roof.Flat;
   else if (rule.kind === BuildingKind.Perimeter)
     roof =
       style === Style.Mediterranean ||
@@ -248,7 +271,7 @@ export function parcelBuilding(
     extras |= Extra.Balcony;
   if (roof === Roof.Flat && !industrial && extraU < 0.2) extras |= Extra.WaterTank;
   if (style === Style.Arid && rule.kind === BuildingKind.House) extras |= Extra.Courtyard;
-  const walls = palette.walls;
+  const walls = tower ? palette.towerWalls : palette.walls;
   const roofs = roof === Roof.Flat || industrial ? palette.flatRoofs : palette.roofs;
   return {
     kind: rule.kind,

@@ -217,6 +217,13 @@ export class InfraScene {
    */
   readonly outlines: Float32Array;
   readonly sites: BuiltSite[] = [];
+  /**
+   * Roads and spurs as drawn (smoothed, or along their alignments), unit directions xyz,
+   * with their class, and railways as drawn: what settlement plans take as their
+   * arterials and rails, so houses keep off the road the terrain shows (decision 291).
+   */
+  readonly roadLines: { points: Float64Array; roadClass: number }[] = [];
+  readonly railLines: Float64Array[] = [];
   /** The urban ground's pattern per light record, 4 floats each (`UrbanInfo`; decision 259). */
   readonly townInfo: Float32Array;
   /** Habitability per coarse cell and that grid's resolution, for the rural glow. */
@@ -275,6 +282,10 @@ export class InfraScene {
           }
           sm = chaikin(pts, 3);
         }
+        const flat = Float64Array.from(sm.flatMap((q) => [q[0]!, q[1]!, q[2]!]));
+        if (kind === 'rail') this.railLines.push(flat);
+        else
+          this.roadLines.push({ points: flat, roadClass: kind === 'spur' ? 2 : r.roadClass[k]! });
         const drawn = kind === 'rail' ? -w : w;
         for (let i = 0; i + 1 < sm.length; i++) {
           const a = sm[i]!;

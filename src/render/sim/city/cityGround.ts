@@ -36,7 +36,12 @@ import {
 import {
   CHUNK,
   FIELD_TEXELS,
+  FIELD_WORDS,
   MASK_CELL,
+  NO_SEGMENT,
+  SEG_ORIGIN,
+  SEG_SCALE,
+  SEG_WORDS,
   MASK_MAX_CELLS,
   NO_BLOCK,
 } from '../../../worldgen/settlements/pack';
@@ -52,7 +57,6 @@ export const PLAN_SLOTS = 16;
 /** Chunks a plan's table holds: a 24 × 24 km square at most. */
 export const CHUNKS_PER_PLAN = 24 * 24;
 export const FIELD_SLOTS = 128;
-const TEXELS = FIELD_TEXELS * FIELD_TEXELS;
 /** Chunk indices are stored biased, so negative ones fit a u32. */
 const BIAS = 1 << 15;
 /** Words per plan slot: chunk grid (i0, j0, across, table base), mask (x0, y0, nx, ny). */
@@ -101,7 +105,7 @@ export class CityGround {
     this.chunksAt = this.plansAt + PLAN_SLOTS * PLAN_WORDS;
     this.masksAt = this.chunksAt + PLAN_SLOTS * CHUNKS_PER_PLAN;
     this.fieldsAt = this.masksAt + PLAN_SLOTS * MASK_WORDS;
-    this.words = new Uint32Array(this.fieldsAt + FIELD_SLOTS * TEXELS);
+    this.words = new Uint32Array(this.fieldsAt + FIELD_SLOTS * FIELD_WORDS);
     this.attr = new StorageBufferAttribute(this.words, 1);
     this.data = storage(this.attr, 'uint', this.words.length).toReadOnly();
   }
@@ -162,9 +166,9 @@ export class CityGround {
   }
 
   writeField(field: number, data: Uint32Array): void {
-    const at = this.fieldsAt + field * TEXELS;
-    this.words.set(data, at);
-    this.touch(at, TEXELS);
+    const at = this.fieldsAt + field * FIELD_WORDS;
+    this.words.set(data.subarray(0, FIELD_WORDS), at);
+    this.touch(at, FIELD_WORDS);
   }
 
   /** Whether local (x, y) of plan slot `slot` is built by its mask (inline in a `Fn`). */
@@ -269,7 +273,7 @@ export class CityGround {
               const j0 = int(floor(ty));
               const fx = tx.sub(floor(tx));
               const fy = ty.sub(floor(ty));
-              const base = int(this.fieldsAt).add(field.mul(FIELD_TEXELS * FIELD_TEXELS));
+              const base = int(this.fieldsAt).add(field.mul(FIELD_WORDS));
               const texel = (i: I, j: I) => this.data.element(base.add(j.mul(FIELD_TEXELS)).add(i));
               const i1 = select(i0.lessThan(FIELD_TEXELS - 1), i0.add(1), i0) as I;
               const j1 = select(j0.lessThan(FIELD_TEXELS - 1), j0.add(1), j0) as I;
@@ -277,19 +281,56 @@ export class CityGround {
               const t10 = texel(i1, j0);
               const t01 = texel(i0, j1);
               const t11 = texel(i1, j1);
-              const dist = (t: Node<'uint'>) =>
-                float(t.bitAnd(uint(255)))
-                  .sub(128)
-                  .div(4);
-              const d = mix(mix(dist(t00), dist(t10), fx), mix(dist(t01), dist(t11), fx), fy);
-              // The nearest texel's ground and street class.
+              // The exact distance to the street segments the four texels name (decision 290):
+              // edges stay crisp and streets narrower than a texel stay whole.
+              const lx = x.sub(ci.mul(CHUNK)).add(SEG_ORIGIN).mul(SEG_SCALE);
+              const ly = y.sub(cj.mul(CHUNK)).add(SEG_ORIGIN).mul(SEG_SCALE);
+              const d = float(1e4).toVar();
+              const kind = uint(255).toVar();
+              const segAt = int(base).add(FIELD_TEXELS * FIELD_TEXELS);
+              for (const t of [t00, t10, t01, t11]) {
+                const id = t.bitAnd(uint(0xffff)).toVar();
+                If(id.notEqual(uint(NO_SEGMENT)), () => {
+                  const o = segAt.add(int(id).mul(SEG_WORDS));
+                  const wa = this.data.element(o);
+                  const wb = this.data.element(o.add(1));
+                  const wc = this.data.element(o.add(2));
+                  const ax = float(wa.bitAnd(uint(0xffff)));
+                  const ay = float(wa.shiftRight(uint(16)));
+                  const bx = float(wb.bitAnd(uint(0xffff)));
+                  const by = float(wb.shiftRight(uint(16)));
+                  const ex = bx.sub(ax);
+                  const ey = by.sub(ay);
+                  const h = clamp(
+                    lx
+                      .sub(ax)
+                      .mul(ex)
+                      .add(ly.sub(ay).mul(ey))
+                      .div(max(ex.mul(ex).add(ey.mul(ey)), 1e-6)),
+                    0,
+                    1,
+                  );
+                  const px = lx.sub(ax.add(ex.mul(h)));
+                  const py = ly.sub(ay.add(ey.mul(h)));
+                  const ds = px
+                    .mul(px)
+                    .add(py.mul(py))
+                    .sqrt()
+                    .div(SEG_SCALE)
+                    .sub(float(wc.bitAnd(uint(255))).div(16));
+                  If(ds.lessThan(d), () => {
+                    d.assign(ds);
+                    kind.assign(wc.shiftRight(uint(8)).bitAnd(uint(255)));
+                  });
+                });
+              }
+              // The nearest texel's ground.
               const near = select(
                 fy.lessThan(0.5),
                 select(fx.lessThan(0.5), t00, t10),
                 select(fx.lessThan(0.5), t01, t11),
               );
-              const ground = near.shiftRight(uint(8)).bitAnd(uint(255)).toVar();
-              const kind = near.shiftRight(uint(16)).bitAnd(uint(255)).toVar();
+              const ground = near.shiftRight(uint(16)).bitAnd(uint(255)).toVar();
               const block = vec3(0).toVar();
               // Gardens alternate lawn and yard in 22 m squares (a parcel or so), gently.
               const checker = abs(floor(x.div(22)).add(floor(y.div(22)))).mod(2);

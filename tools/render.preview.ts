@@ -187,6 +187,8 @@ export interface PreviewView {
     | 'eastcity'
     | 'village'
     | 'industry'
+    | 'uscity'
+    | 'asiacity'
     | 'airbase'
     | 'front'
     | 'capital'
@@ -673,6 +675,29 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     detail: true,
   },
   {
+    name: 'uscity',
+    dLat: 0,
+    dLon: 0,
+    altitude: 1500,
+    tilt: 66 * DEG,
+    heading: 0,
+    localTime: 11,
+    target: 'uscity',
+    detail: true,
+  },
+  {
+    name: 'asiacity',
+    dLat: 0,
+    dLon: 0,
+    // Steeper and higher: seed 7's city lies in a valley behind a ridge.
+    altitude: 2500,
+    tilt: 45 * DEG,
+    heading: 0,
+    localTime: 11,
+    target: 'asiacity',
+    detail: true,
+  },
+  {
     name: 'village',
     dLat: 0,
     dLon: 0,
@@ -905,14 +930,22 @@ function cityTargets(
   global: { height: Float32Array; n: number; finish: { drainage: { lakeDepth: Float32Array } } },
   radius: number,
   views: PreviewView[],
-): Record<'hilltown' | 'westcity' | 'eastcity' | 'village' | 'industry', Vec3d | null> {
-  type Out = Record<'hilltown' | 'westcity' | 'eastcity' | 'village' | 'industry', Vec3d | null>;
+): Record<
+  'hilltown' | 'westcity' | 'eastcity' | 'village' | 'industry' | 'uscity' | 'asiacity',
+  Vec3d | null
+> {
+  type Out = Record<
+  'hilltown' | 'westcity' | 'eastcity' | 'village' | 'industry' | 'uscity' | 'asiacity',
+  Vec3d | null
+>;
   const none: Out = {
     hilltown: null,
     westcity: null,
     eastcity: null,
     village: null,
     industry: null,
+    uscity: null,
+    asiacity: null,
   };
   const wanted = new Set(views.map((v) => v.target));
   if (![...Object.keys(none)].some((k) => wanted.has(k as PreviewView['target']))) return none;
@@ -980,6 +1013,9 @@ function cityTargets(
         : -Infinity,
     ),
   );
+  // The largest American and Southeast Asian settlements: downtowns of towers (decision 292).
+  out.uscity = at(best((i) => (sw.styles[i] === Style.American ? pop(i) : -Infinity)));
+  out.asiacity = at(best((i) => (sw.styles[i] === Style.SoutheastAsian ? pop(i) : -Infinity)));
   if (wanted.has('industry')) {
     const big = best(pop);
     const plan = planSettlement(settlementInput(sw, big), campaign.seed, { radius });
@@ -1233,6 +1269,8 @@ it('renders preview views', async () => {
     biomeOf: (i) => campaign.world.maps.biome[campaign.graph.settlements.cells[i]!] ?? 0,
     rivers: riverIndex.segments,
     recordOf: recordsOf(infra.sites),
+    roads: infra.roadLines,
+    rails: infra.railLines,
     anchorsOf: anchorsFromTargets(sited.targets),
   });
   // The bridge kit along the alignments (decision 192).

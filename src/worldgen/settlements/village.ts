@@ -25,6 +25,8 @@ export const VILLAGE_PLOT: readonly [number, number][] = [
   [14, 26],
   [32, 50],
   [16, 22],
+  [30, 55],
+  [10, 24],
 ];
 
 export interface StripParcel {

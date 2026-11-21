@@ -333,6 +333,27 @@ export class FieldIndex {
     return found;
   }
 
+  /** The segment whose edge is nearest (x, y) within `reach` (its index), or −1. */
+  nearestSegment(x: number, y: number, reach: number): number {
+    let best = reach;
+    let id = -1;
+    const s = this.seg;
+    this.segs.near(x, y, reach + 8, (k) => {
+      const o = k * 6;
+      const d = segDist(x, y, s[o]!, s[o + 1]!, s[o + 2]!, s[o + 3]!).d - s[o + 4]!;
+      if (d < best) {
+        best = d;
+        id = k;
+      }
+    });
+    return id;
+  }
+
+  /** Segment k: ax, ay, bx, by, half-width, kind. */
+  segment(k: number): number[] {
+    return this.seg.slice(k * 6, k * 6 + 6);
+  }
+
   /** Signed distance (m) to the nearest street's edge within `reach`, and its class. */
   street(x: number, y: number, reach: number): { d: number; kind: number } {
     let best = reach;
@@ -350,25 +371,95 @@ export class FieldIndex {
   }
 }
 
+/** Segments a chunk's field can hold (each SEG_WORDS words after its texels). */
+export const FIELD_SEGMENTS = 4096;
+export const SEG_WORDS = 3;
+/** Words per chunk field: texels, then its segment table. */
+export const FIELD_WORDS = FIELD_TEXELS * FIELD_TEXELS + FIELD_SEGMENTS * SEG_WORDS;
+/** Quantization of segment ends: chunk-local meters from −SEG_ORIGIN, SEG_SCALE steps per meter. */
+export const SEG_ORIGIN = 512;
+export const SEG_SCALE = 32;
+/** Texels name the nearest street within this distance of its edge (m). */
+const STREET_REACH = 40;
+export const NO_SEGMENT = 0xffff;
+
 /**
- * The field of chunk (ci, cj): texels of CHUNK / FIELD_TEXELS m, the chunk's corner at
- * (ci × CHUNK, cj × CHUNK) in the plan's frame.
+ * The field of chunk (ci, cj) (decisions 266, 290): FIELD_TEXELS² texels of CHUNK /
+ * FIELD_TEXELS m, each a u32 with the nearest street segment's index in the chunk's
+ * table (bits 0–15; NO_SEGMENT if none within STREET_REACH m), the ground class of the
+ * block under it (bits 16–23; NO_BLOCK outside) and the block's district (bits 24–31).
+ * Then the segment table: per segment its ends in chunk-local quantized meters (two
+ * u16 each, x low) and its half-width in sixteenths of a meter with its class above.
+ * The shader measures the exact distance to the segments of the four texels round a
+ * pixel, so streets of any width keep crisp, continuous edges; the distance itself was
+ * stored before and could not be interpolated across a street narrower than a texel.
  */
 export function chunkField(index: FieldIndex, ci: number, cj: number): Uint32Array {
   const T = FIELD_TEXELS;
   const step = CHUNK / T;
-  const out = new Uint32Array(T * T);
+  const out = new Uint32Array(FIELD_WORDS);
   const info = index.plan.blockInfo;
+  const x0 = ci * CHUNK;
+  const y0 = cj * CHUNK;
+  const local = new Map<number, number>();
+  const segBase = T * T;
+  const q = (v: number) => Math.max(0, Math.min(65535, Math.round((v + SEG_ORIGIN) * SEG_SCALE)));
+  /** Clips segment k to the chunk grown by a margin, so its ends fit the quantization. */
+  const add = (k: number): number => {
+    const known = local.get(k);
+    if (known !== undefined) return known;
+    if (local.size >= FIELD_SEGMENTS) return NO_SEGMENT;
+    const seg = index.segment(k);
+    const hw = seg[4]!;
+    const kind = seg[5]!;
+    let ax = seg[0]!;
+    let ay = seg[1]!;
+    let bx = seg[2]!;
+    let by = seg[3]!;
+    ax -= x0;
+    ay -= y0;
+    bx -= x0;
+    by -= y0;
+    // Liang–Barsky against [−400, CHUNK + 400]².
+    const lo = -400;
+    const hi = CHUNK + 400;
+    let t0 = 0;
+    let t1 = 1;
+    const dx = bx - ax;
+    const dy = by - ay;
+    for (const [p, qq] of [
+      [-dx, ax - lo],
+      [dx, hi - ax],
+      [-dy, ay - lo],
+      [dy, hi - ay],
+    ] as const) {
+      if (p === 0) {
+        if (qq < 0) t1 = -1;
+      } else {
+        const r = qq / p;
+        if (p < 0) t0 = Math.max(t0, r);
+        else t1 = Math.min(t1, r);
+      }
+    }
+    if (t0 > t1) return NO_SEGMENT;
+    const n = local.size;
+    local.set(k, n);
+    const o = segBase + n * SEG_WORDS;
+    out[o] = (q(ax + dx * t0) | (q(ay + dy * t0) << 16)) >>> 0;
+    out[o + 1] = (q(ax + dx * t1) | (q(ay + dy * t1) << 16)) >>> 0;
+    out[o + 2] = (Math.min(255, Math.round(hw * 16)) | (kind << 8)) >>> 0;
+    return n;
+  };
   for (let j = 0; j < T; j++) {
     for (let i = 0; i < T; i++) {
-      const x = ci * CHUNK + (i + 0.5) * step;
-      const y = cj * CHUNK + (j + 0.5) * step;
-      const s = index.street(x, y, 31);
+      const x = x0 + (i + 0.5) * step;
+      const y = y0 + (j + 0.5) * step;
+      const k = index.nearestSegment(x, y, STREET_REACH);
+      const seg = k >= 0 ? add(k) : NO_SEGMENT;
       const b = index.blockAt(x, y);
-      const dist = Math.max(0, Math.min(255, Math.round(s.d * 4) + 128));
       const ground = b >= 0 ? info[b * 4 + 1]! : NO_BLOCK;
       const district = b >= 0 ? info[b * 4]! : 255;
-      out[j * T + i] = (dist | (ground << 8) | (s.kind << 16) | (district << 24)) >>> 0;
+      out[j * T + i] = (seg | (ground << 16) | (district << 24)) >>> 0;
     }
   }
   return out;

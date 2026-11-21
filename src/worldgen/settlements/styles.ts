@@ -18,12 +18,20 @@ import { Roof, Style } from './types';
 
 /** Style preference per naming flavor (worldgen/names/flavors.ts: A–D land, E islands). */
 export const FLAVOR_STYLES: readonly (readonly Style[])[] = [
-  [Style.Nordic, Style.Western, Style.Eastern],
+  [Style.Nordic, Style.Western, Style.American],
   [Style.Eastern, Style.Western, Style.Nordic],
-  [Style.Mediterranean, Style.Western, Style.Arid],
-  [Style.Arid, Style.Eastern, Style.Mediterranean],
-  [Style.Western, Style.Mediterranean, Style.Nordic],
+  [Style.Mediterranean, Style.SoutheastAsian, Style.Western],
+  [Style.Arid, Style.Eastern, Style.American],
+  [Style.SoutheastAsian, Style.Western, Style.Mediterranean],
 ];
+
+const TROPICAL = new Set<number>([
+  Biome.TropicalRainforest,
+  Biome.TropicalSeasonalForest,
+  Biome.Mangrove,
+  Biome.CloudForest,
+  Biome.Savanna,
+]);
 
 const DRY = new Set<number>([
   Biome.HotDesert,
@@ -64,6 +72,8 @@ export function climateAllows(style: Style, biome: number): boolean {
       return COOL.has(biome);
     case Style.Mediterranean:
       return WARM.has(biome);
+    case Style.SoutheastAsian:
+      return TROPICAL.has(biome);
     default:
       return true;
   }
@@ -163,7 +173,16 @@ export interface StylePalette {
   spacing: number;
   /** Builds microdistricts in its middle ring. */
   microdistricts: boolean;
+  /**
+   * Where its cities put towers (decision 292): a downtown at the center, a business
+   * district off it near a main road (Europe's), or none.
+   */
+  business: 'center' | 'edge' | 'none';
+  /** Tower walls: glass, stone and concrete. */
+  towerWalls: readonly number[];
 }
+
+const TOWER_WALLS = [0x7f93a4, 0x9aa6ae, 0xc8c2b6, 0x6f7f8c, 0xb4bcc0];
 
 export const PALETTES: readonly StylePalette[] = [
   // Western: red tile and slate, brick and plaster.
@@ -182,6 +201,8 @@ export const PALETTES: readonly StylePalette[] = [
     radial: 0.5,
     spacing: 1,
     microdistricts: false,
+    business: 'edge',
+    towerWalls: TOWER_WALLS,
   },
   // Eastern bloc: gray concrete, tin and tile.
   {
@@ -199,6 +220,8 @@ export const PALETTES: readonly StylePalette[] = [
     radial: 0.9,
     spacing: 1.25,
     microdistricts: true,
+    business: 'none',
+    towerWalls: TOWER_WALLS,
   },
   // Mediterranean: ochre and white stucco, low tile and flat roofs.
   {
@@ -217,6 +240,8 @@ export const PALETTES: readonly StylePalette[] = [
     radial: 0.3,
     spacing: 0.85,
     microdistricts: false,
+    business: 'edge',
+    towerWalls: TOWER_WALLS,
   },
   // Nordic: low wooden houses, steep dark roofs, generous spacing.
   {
@@ -231,6 +256,8 @@ export const PALETTES: readonly StylePalette[] = [
     radial: 0.2,
     spacing: 1.35,
     microdistricts: false,
+    business: 'edge',
+    towerWalls: TOWER_WALLS,
   },
   // Arid: flat roofs, courtyard houses, pale earth.
   {
@@ -245,5 +272,46 @@ export const PALETTES: readonly StylePalette[] = [
     radial: 0.2,
     spacing: 0.9,
     microdistricts: false,
+    business: 'none',
+    towerWalls: TOWER_WALLS,
+  },
+  // American: a gridded city, a downtown of towers, suburbs of houses on large lots.
+  {
+    walls: [0xd9d2c4, 0xb88a6a, 0xc9b79a, 0xe6e1d6, 0x9c6b52],
+    roofs: [0x5a5a5e, 0x6e6a66, 0x4a4c50],
+    flatRoofs: [0x8a8680, 0x9a968e],
+    houseRoofs: [
+      [Roof.Gable, 0.6],
+      [Roof.Hip, 0.4],
+    ],
+    pitch: 0.45,
+    houseFloors: [1, 2],
+    chimneys: 0.4,
+    oldCore: false,
+    radial: 0,
+    spacing: 1.15,
+    microdistricts: false,
+    business: 'center',
+    towerWalls: TOWER_WALLS,
+  },
+  // Southeast Asian: dense pastel shophouses round a skyline of towers.
+  {
+    walls: [0xefe8d8, 0xe8d9a8, 0xcfe0c8, 0xd8c8b8, 0xf0dcc8],
+    roofs: [0xb0603f, 0xc07050, 0x8a4a3a],
+    flatRoofs: [0xbab4a8, 0xc8c0b0],
+    houseRoofs: [
+      [Roof.Hip, 0.5],
+      [Roof.Flat, 0.3],
+      [Roof.Gable, 0.2],
+    ],
+    pitch: 0.35,
+    houseFloors: [2, 3],
+    chimneys: 0,
+    oldCore: false,
+    radial: 0.2,
+    spacing: 0.85,
+    microdistricts: false,
+    business: 'center',
+    towerWalls: [0x8fa4b2, 0xd8d4cc, 0xa8b8c0, 0x7a8a96, 0xe0dcd2],
   },
 ];

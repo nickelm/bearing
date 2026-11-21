@@ -46,13 +46,36 @@ describe('city rendering data (proposal 0009 Phase 6)', () => {
   it('packs a plan and rasterizes a chunk field with streets and blocks', () => {
     expect(plan.buildings.length / BUILDING_FIELDS).toBeGreaterThan(200);
     const field = chunkField(new FieldIndex(plan), 0, 0);
-    let street = 0;
+    let named = 0;
     let blocks = 0;
-    for (const t of field) {
-      if ((t & 255) < 128) street++;
-      if (((t >> 8) & 255) !== NO_BLOCK) blocks++;
+    let onStreet = 0;
+    const T = 128;
+    for (let k = 0; k < T * T; k++) {
+      const t = field[k]!;
+      const seg = t & 0xffff;
+      if (((t >> 16) & 255) !== NO_BLOCK) blocks++;
+      if (seg === 0xffff) continue;
+      named++;
+      // The exact distance to the named segment, as the shader takes it.
+      const o = T * T + seg * 3;
+      const q = (v: number) => v / 32 - 512;
+      const ax = q(field[o]! & 0xffff);
+      const ay = q(field[o]! >>> 16);
+      const bx = q(field[o + 1]! & 0xffff);
+      const by = q(field[o + 1]! >>> 16);
+      const hw = (field[o + 2]! & 255) / 16;
+      const x = ((k % T) + 0.5) * (1000 / T);
+      const y = (Math.floor(k / T) + 0.5) * (1000 / T);
+      const ex = bx - ax;
+      const ey = by - ay;
+      const h = Math.max(
+        0,
+        Math.min(1, ((x - ax) * ex + (y - ay) * ey) / (ex * ex + ey * ey || 1)),
+      );
+      if (Math.hypot(x - ax - ex * h, y - ay - ey * h) < hw) onStreet++;
     }
-    expect(street).toBeGreaterThan(500);
+    expect(named).toBeGreaterThan(5000);
+    expect(onStreet).toBeGreaterThan(500);
     expect(blocks).toBeGreaterThan(2000);
   });
 

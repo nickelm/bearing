@@ -13,9 +13,26 @@ export const Tier = { City: 0, Town: 1, Village: 2, Farmstead: 3 } as const;
 export type Tier = (typeof Tier)[keyof typeof Tier];
 export const TIER_NAMES = ['city', 'town', 'village', 'farmstead'] as const;
 
-export const Style = { Western: 0, Eastern: 1, Mediterranean: 2, Nordic: 3, Arid: 4 } as const;
+export const Style = {
+  Western: 0,
+  Eastern: 1,
+  Mediterranean: 2,
+  Nordic: 3,
+  Arid: 4,
+  /** Decision 292. */
+  American: 5,
+  SoutheastAsian: 6,
+} as const;
 export type Style = (typeof Style)[keyof typeof Style];
-export const STYLE_NAMES = ['western', 'eastern bloc', 'mediterranean', 'nordic', 'arid'] as const;
+export const STYLE_NAMES = [
+  'western',
+  'eastern bloc',
+  'mediterranean',
+  'nordic',
+  'arid',
+  'american',
+  'southeast asian',
+] as const;
 
 /** Street classes, widest first. Paths and stairs carry no vehicles. */
 export const StreetKind = {
@@ -42,6 +59,8 @@ export const District = {
   Port: 7,
   Civic: 8,
   Utilities: 9,
+  /** Towers: a downtown at the center or a business district off it (decision 292). */
+  Business: 10,
 } as const;
 export type District = (typeof District)[keyof typeof District];
 export const DISTRICT_NAMES = [
@@ -55,6 +74,7 @@ export const DISTRICT_NAMES = [
   'port',
   'civic and parks',
   'power and utilities',
+  'business',
 ] as const;
 
 /** What covers a block's ground between buildings (the urban ground's classes). */
@@ -87,6 +107,8 @@ export const BuildingKind = {
   Landmark: 7,
   Farm: 8,
   Barn: 9,
+  /** Office and apartment towers (decision 292). */
+  Tower: 10,
 } as const;
 export type BuildingKind = (typeof BuildingKind)[keyof typeof BuildingKind];
 

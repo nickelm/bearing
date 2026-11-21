@@ -386,5 +386,8 @@ Runs beside the main line (`docs/proposals/0009-settlements-and-cities.md`, `doc
 - [x] Woods and parks inside planned towns keep their trees and canopy (decision 278).
 - [x] The war's town targets as complexes in their plans; damage by site; a sensor zoom (decision 279).
 - [ ] Main line: send damaged targets in the sim snapshot and call `CityLayer.setSiteDamage` (decision 279).
+- [x] Streets of any width drawn whole: fields name the nearest segment (decision 290).
+- [x] Plans take the roads and railways as drawn (decision 291).
+- [x] Downtowns and business districts; American and Southeast Asian styles (decision 292).
 - [ ] Targeting pod (P3–P5): set `CityLayer.zoom` from the pod's magnification (decision 279).
 - [ ] Wire settlement pads into `terrainEditsFor` once the sim's height service can take them (decision 264).

@@ -465,6 +465,8 @@ function planTown(ctx: Context): void {
       slope = Math.max(slope, ctx.slope(poly[i]!, poly[i + 1]!));
     kept.push(poly);
     contexts.push({
+      cx,
+      cy,
       share: ctx.share(cx, cy),
       rail: ctx.distTo(ctx.lineSets.rails, cx, cy),
       water: ctx.distTo(ctx.lineSets.water, cx, cy),
@@ -697,7 +699,12 @@ function addTownLandmarks(ctx: Context, square: [number, number] | null): void {
     );
   }
   // A TV tower on a city's high ground, a water tower on a town's.
-  if (city && (input.style === Style.Western || input.style === Style.Eastern)) {
+  if (
+    city &&
+    (input.style === Style.Western ||
+      input.style === Style.Eastern ||
+      input.style === Style.American)
+  ) {
     const p = highPoint(ctx, 0.2, 0.85, 200);
     if (p)
       ctx.addLandmark(

@@ -219,3 +219,27 @@ describe('sites and the built mask (decisions 278, 279)', () => {
     }
   });
 });
+
+describe('downtowns and business districts (decision 292)', () => {
+  it('raises towers at the center of an American city and off the center of a Western one', () => {
+    const big = { population: 300_000, tier: Tier.City };
+    const us = planSettlement(input({ ...big, style: Style.American }), 2, { radius: RADIUS });
+    const towers = us.buildings.filter((b) => b.kind === 10);
+    expect(towers.length).toBeGreaterThan(5);
+    const meanDist = towers.reduce((a, b) => a + Math.hypot(b.x, b.y), 0) / towers.length;
+    expect(meanDist).toBeLessThan(700);
+    expect(Math.max(...towers.map((b) => b.height))).toBeGreaterThan(80);
+    const eu = planSettlement(input({ ...big, style: Style.Western }), 2, { radius: RADIUS });
+    const euTowers = eu.buildings.filter((b) => b.kind === 10);
+    expect(euTowers.length).toBeGreaterThan(5);
+    const euDist = euTowers.reduce((a, b) => a + Math.hypot(b.x, b.y), 0) / euTowers.length;
+    expect(euDist).toBeGreaterThan(1000);
+    expect(eu.metrics.outsideParcel).toBe(0);
+  }, 60_000);
+
+  it('gives Southeast Asian style only where the climate is tropical', () => {
+    expect(styleFor(4, 0, Biome.TropicalRainforest)).toBe(Style.SoutheastAsian);
+    expect(styleFor(4, 0, Biome.TemperateForest)).toBe(Style.Western);
+    expect(styleFor(0, 2, Biome.TemperateForest)).toBe(Style.American);
+  });
+});

@@ -36,6 +36,8 @@ export interface SettlementWorld {
   ground: WorldGround;
   /** Road polylines in planet directions: the aligned routes where the world has them. */
   roads: { points: Float64Array; roadClass: number }[];
+  /** Railway polylines in planet directions, as drawn (aligned) where the caller passes them. */
+  rails: Float64Array[] | null;
 }
 
 /**
@@ -49,6 +51,7 @@ export function settlementWorld(
   biomeOf: (i: number) => number,
   rivers: RiverSegments | null = null,
   roads?: { points: Float64Array; roadClass: number }[],
+  rails?: Float64Array[],
 ): SettlementWorld {
   const s = graph.settlements;
   const n = s.cells.length;
@@ -70,7 +73,7 @@ export function settlementWorld(
       ),
       roadClass: graph.roads.roadClass[k]!,
     }));
-  return { graph, radius, styles, biomes, rivers, ground, roads: roadLines };
+  return { graph, radius, styles, biomes, rivers, ground, roads: roadLines, rails: rails ?? null };
 }
 
 /** Clips planet polylines to the frame within `reach` m, as local polylines (pieces). */
@@ -184,8 +187,12 @@ export function settlementInput(
   }
   const rails: SettlementInput['rails'] = [];
   const rl = graph.railways.lines;
-  for (let k = 0; k < rl.count; k++) {
-    const pts = rl.points.slice(rl.offsets[k]! * 3, rl.offsets[k + 1]! * 3);
+  const railLines =
+    w.rails ??
+    Array.from({ length: rl.count }, (_, k) =>
+      rl.points.slice(rl.offsets[k]! * 3, rl.offsets[k + 1]! * 3),
+    );
+  for (const pts of railLines) {
     for (const piece of clipLocal(frame, pts, reach)) rails.push({ points: densify(piece, 60) });
   }
   const rivers: SettlementInput['rivers'] = [];
