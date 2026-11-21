@@ -41,6 +41,7 @@ import type { FlightControls } from './controlLaws';
 import { FlightModel } from './flightModel';
 import type { FlightSpec } from './flightSpec';
 import type { PylonSpec } from '../air/stores';
+import type { GunSpec } from './gun';
 import { FlownAircraft } from './flownAircraft';
 import { headingOf } from './runway';
 
@@ -140,11 +141,11 @@ export function promoteFlight(
   poses: readonly Readonly<AnalyticPose>[],
 ): PromotedAircraft[] {
   const s = routeState(mission.route, t, radius);
-  const { pylons, stations } = loadoutStations(mission.aircraftType, mission.loadout);
+  const { pylons, stations, gun } = loadoutStations(mission.aircraftType, mission.loadout);
   return poses.slice(0, mission.aircraft).map((p, slot) => {
     // What full fidelity expended before stays expended (decision 275).
     const stores = { loadout: mission.loadout, expended: { ...(mission.expended?.[slot] ?? {}) } };
-    const rack = new StoresRack(spec, pylons, stations, stores);
+    const rack = new StoresRack(spec, pylons, stations, stores, gun);
     const fuel = flightFuel(s.fuel, mission.route.fuel, rack.capacity);
     const flown = aircraftFromPose(spec, radius, p, fuel, mission.aircraftType);
     rack.load(flown.airframe as FlightModel, fuel);
@@ -156,12 +157,17 @@ export function promoteFlight(
 export function loadoutStations(
   typeId: string,
   loadout: string,
-): { pylons: PylonSpec[] | null; stations: Record<string, string> | undefined } {
+): {
+  pylons: PylonSpec[] | null;
+  stations: Record<string, string> | undefined;
+  gun: GunSpec | null;
+} {
   try {
     const stations = aircraftType(typeId).loadouts.find((l) => l.id === loadout)?.stations;
-    return { pylons: bundleOfType(typeId).pylons, stations };
+    const b = bundleOfType(typeId);
+    return { pylons: b.pylons, stations, gun: b.gun };
   } catch {
-    return { pylons: null, stations: undefined };
+    return { pylons: null, stations: undefined, gun: null };
   }
 }
 

@@ -25,6 +25,7 @@
  */
 import { checkStations, parsePylons, stationLoads, STORES, StoresError } from './stores';
 import type { PylonSpec } from './stores';
+import type { GunSpec } from '../flight/gun';
 import { HOUR, KM, KNOT, MINUTE } from '../../core/units';
 import type { AvionicsProfile } from '../avionics/profiles';
 import type { AircraftRole, AircraftType, Loadout } from './aircraft';
@@ -71,6 +72,8 @@ export interface AircraftBundle {
   rig: RigSpec | null;
   /** Its pylons (decision 285), or null. */
   pylons: PylonSpec[] | null;
+  /** Its internal gun (decision 295), or null. */
+  gun: GunSpec | null;
   calibration: Record<string, unknown> | null;
 }
 
@@ -111,6 +114,24 @@ function bool(o: Json, key: string, what: string, fallback: boolean): boolean {
   if (v === undefined) return fallback;
   if (typeof v !== 'boolean') throw new BundleError(`${what}.${key}: not a boolean`);
   return v;
+}
+
+function parseGun(raw: unknown, what: string): GunSpec {
+  const o = obj(raw, what);
+  const at = o.at;
+  if (!Array.isArray(at) || at.length !== 3 || at.some((x) => typeof x !== 'number'))
+    throw new BundleError(`${what}.at: not [x, y, z]`);
+  return {
+    name: str(o, 'name', what),
+    reference: str(o, 'reference', what),
+    rounds: num(o, 'rounds', what),
+    rate: num(o, 'rate', what),
+    muzzleVelocity: num(o, 'muzzleVelocity', what),
+    at: [at[0], at[1], at[2]] as [number, number, number],
+    roundMass: num(o, 'roundMass', what),
+    roundDragArea: num(o, 'roundDragArea', what),
+    tracerEvery: num(o, 'tracerEvery', what),
+  };
 }
 
 function parseAirWar(raw: unknown, name: string, geometry: string | null, what: string) {
@@ -257,6 +278,7 @@ export function parseBundle(raw: unknown, id: string): AircraftBundle {
     avionics: o.avionics === undefined ? null : parseAvionics(o.avionics, `${id}.avionics`),
     rig: o.rig === undefined ? null : parseRig(o.rig, `${id}.rig`),
     pylons,
+    gun: o.gun === undefined ? null : parseGun(o.gun, `${id}.gun`),
     calibration: o.calibration === undefined ? null : obj(o.calibration, `${id}.calibration`),
   };
 }

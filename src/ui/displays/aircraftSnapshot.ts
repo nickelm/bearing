@@ -13,7 +13,7 @@ import type {
   SnapshotSensors,
   SnapshotStores,
 } from './snapshot';
-import { STORES, weaponMode } from '../../sim/air/stores';
+import { GUN, STORES, weaponMode } from '../../sim/air/stores';
 import type { StationLoad } from '../../sim/air/stores';
 import { Vec3d } from '../../core/vec3d';
 import { radarDisplayRange } from '../../sim/avionics/avionics';
@@ -127,9 +127,12 @@ export function storesSnapshot(
   stations: readonly StationLoad[],
   loaded: readonly StationLoad[],
   tankFuel: number,
+  /** The internal gun's rounds left, or null without one (decision 295). */
+  gunRounds: number | null = null,
 ): SnapshotStores {
   const on = new Set(loaded.map((l) => l.station));
-  const weapons: SnapshotStores['weapons'] = [];
+  const weapons: SnapshotStores['weapons'] =
+    gunRounds === null ? [] : [{ id: GUN, label: 'GUN', count: gunRounds, mode: 'air-to-air' }];
   let tanks = 0;
   for (const l of stations) {
     const mode = weaponMode(l.store);

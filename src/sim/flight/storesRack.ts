@@ -25,6 +25,10 @@ import type { PylonSpec, StationLoad } from '../air/stores';
 import type { FlightModel } from './flightModel';
 import type { FlightSpec } from './flightSpec';
 import type { StoresState } from './promotion';
+import { GUN } from '../air/stores';
+import { Gun } from './gun';
+import type { GunSpec } from './gun';
+import type { AvionicsState } from '../avionics/avionics';
 
 /** The stations of `loads` still loaded after `expended` (store id → count): each store's first ones go first. */
 export function loadedStations(
@@ -75,6 +79,8 @@ export class StoresRack {
   /** Fuel the loadout takes (kg): internal plus every tank it hangs, dropped or not. */
   readonly capacity: number;
   private loadedList: StationLoad[];
+  /** The internal gun, with the rounds not yet fired (decision 295), or null. */
+  readonly gun: Gun | null;
 
   constructor(
     readonly spec: FlightSpec,
@@ -82,7 +88,9 @@ export class StoresRack {
     stations: Readonly<Record<string, string>> | undefined,
     /** The loadout and what is expended; the rack counts its releases here. */
     readonly state: StoresState,
+    gun: Readonly<GunSpec> | null = null,
   ) {
+    this.gun = gun ? new Gun(gun, gun.rounds - (state.expended[GUN] ?? 0)) : null;
     this.stations = pylons && stations ? stationLoads(stations, pylons) : [];
     this.loadedList = loadedStations(this.stations, state.expended);
     this.capacity = spec.mass.fuel + storesEffect(this.stations, spec.standardStores).tankCapacity;
@@ -141,6 +149,23 @@ export class StoresRack {
     m.storesMass = e.mass;
     m.storesDragArea = e.dragArea;
     return l;
+  }
+
+  /**
+   * Steps the gun by dt (decision 295): it fires while its trigger is held, master arm is on,
+   * the aircraft is off the ground and the gun is selected or the dogfight mode is up. The
+   * rounds fired count as expended stores.
+   */
+  stepGun(m: FlightModel, avionics: Readonly<AvionicsState>, dt: number): number {
+    const g = this.gun;
+    if (!g) return 0;
+    const armed =
+      avionics.masterArm &&
+      !m.onGround &&
+      (avionics.weapon === GUN || avionics.masterMode === 'dogfight');
+    const n = g.step(m, this.spec.cg, dt, m.radius, armed);
+    if (n > 0) this.state.expended[GUN] = (this.state.expended[GUN] ?? 0) + n;
+    return n;
   }
 
   /** Drops every tank with the fuel in it; returns how many went. */

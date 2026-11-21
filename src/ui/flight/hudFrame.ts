@@ -24,6 +24,10 @@ import {
 } from '../../sim/flight/runway';
 import type { Runway, RunwayEnd } from '../../sim/flight/runway';
 import type { ControlCursor } from './controlCursor';
+import { leadSolution, PIPPER_RANGE } from '../../sim/flight/gun';
+import type { StoresRack } from '../../sim/flight/storesRack';
+import type { AvionicsState } from '../../sim/avionics/avionics';
+import { GUN } from '../../sim/air/stores';
 import type { HoverHud, HudEnergy, HudFrame, HudLandingAid } from './hud';
 
 /** The speed trend vector looks this far ahead (s). */
@@ -315,4 +319,25 @@ export function hoverSymbols(i: HoverInputs): HoverHud {
     modes: i.modes ?? [],
     hazards: i.hazards ?? [],
   };
+}
+
+/**
+ * The gun pipper for the HUD (decision 295), shown while the gun is selected or in a
+ * dogfight: the lead solution at `range` (a radar lock's, else the pipper's default)
+ * placed relative to the camera at `eye`, the rounds left and whether it would fire.
+ */
+export function gunHud(
+  m: FlightModel,
+  rack: Pick<StoresRack, 'gun'> | null,
+  avionics: Readonly<AvionicsState>,
+  eye: Readonly<Vec3d>,
+  range: number = PIPPER_RANGE,
+): HudFrame['gun'] {
+  const g = rack?.gun;
+  if (!g || m.onGround) return null;
+  if (avionics.weapon !== GUN && avionics.masterMode !== 'dogfight') return null;
+  const sol = leadSolution(m, g.spec, m.spec.cg, m.radius, range);
+  if (!sol) return null;
+  const at = m.pos.clone().add(m.q.rotate(sol.dir).scale(range)).sub(eye);
+  return { point: [at.x, at.y, at.z], rounds: g.rounds, armed: avionics.masterArm };
 }

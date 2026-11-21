@@ -250,11 +250,15 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] A released store falls away instead of vanishing; the F-21's strike load with 4 bombs and a centerline tank (`strike/long` the old one); drop tanks as a base stock; read-only spectator displays (owner; decision 294)
 - [ ] Tanks the AI drops while a flight is only spectated do not reach the campaign: post them as a logged input, or keep the AI's tanks on while spectating
 - [ ] The Pact fighter and the strike aircraft still draw their stores in their bodies: pylons and stations with their flight data (R2.7)
-- [ ] Owner, on the GPU: an F-21 on interdiction shows two bombs, two tanks and two wingtip missiles; after J the tanks are gone; the Kestrel in Free Flight shows four missiles
+- [x] Owner, on the GPU (signed off 2026-11-21): an F-21 on interdiction shows four bombs, a centerline tank and two wingtip missiles; after J the tank falls away; the Kestrel in Free Flight shows four missiles; spectator displays are read-only (decisions 288, 294)
 - [x] Stores format and master arm; weapon selection triggers air-to-air and air-to-ground modes (the SMS format, `select-weapon`, the snapshot's stores for the follow and Free Flight; decision 289)
 - [ ] Weapon selection and master arm by key (hot keys without looking: a weapon step and master arm), once the gun and missile fire
 - [ ] The Pact skin's stores labels (Cyrillic-style or its own short names) with the skins' label work
-- [ ] Gun with a lead-computing pipper
+- [x] Gun with a lead-computing pipper (the bundle's `gun`, `sim/flight/gun.ts`, the trigger on Enter and the left button, tracers, GUN on the stores format; decision 295)
+- [ ] Gun hits (the next task: rounds against aircraft and the ground), muzzle flash and the gun's sound
+- [ ] Acceptance check 8's pipper half in a scripted hard turn (`tools/render.preview.ts`), and the owner's look on the GPU
+- [ ] The AI's gun (R3: targets from the sensors' picture)
+- [ ] `tests/gpu/mapSoak.test.ts` fails on main under lavapipe (geometries 274 against a 234 peak while panning at the floor), with or without decision 295: look at the strategic map's relief tile caches after the cities' commits
 - [ ] IR missile with a seeker circle and simple guidance, one per side
 - [ ] Unguided bombs with CCIP fall lines; rockets
 - [ ] Hit and kill resolution; minimal damage states; ejection from full fidelity

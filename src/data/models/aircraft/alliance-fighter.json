@@ -486,6 +486,17 @@
       [-5.4, 0.05, 3]
     ]
   },
+  "gun": {
+    "name": "20 mm cannon",
+    "reference": "M61A1, PGU-28 rounds",
+    "rounds": 510,
+    "rate": 100,
+    "muzzleVelocity": 1030,
+    "at": [2.4, 0.35, -0.7],
+    "roundMass": 0.102,
+    "roundDragArea": 0.0001,
+    "tracerEvery": 5
+  },
   "pylons": [
     { "id": "wingtip", "mirror": true, "at": [-1.75, 0, 4.9], "carries": ["srm"] },
     { "id": "outer", "mirror": true, "at": [-1.85, -0.35, 3.9], "carries": ["srm"] },

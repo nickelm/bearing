@@ -48,7 +48,15 @@ async function main(): Promise<void> {
   if (panels) shot.frame.panels = true;
   // `&acm=1`: the radar's air combat mode cone about the boresight (decision 223).
   if (query.get('acm') === '1') shot.frame.acmCone = (10 * Math.PI) / 180;
-  else for (const m of shot.messages) hud.message(m, 600);
+  // `&gun=1`: the gun pipper (decision 295) a little below the boresight, 610 m out.
+  if (query.get('gun') === '1') {
+    const b = shot.frame.boresight;
+    shot.frame.gun = {
+      point: [b[0] * 610, b[1] * 610 - 12, b[2] * 610],
+      rounds: 486,
+      armed: query.get('safe') !== '1',
+    };
+  } else for (const m of shot.messages) hud.message(m, 600);
   hud.draw(
     shot.frame,
     matrixProjector(shot.view, shot.projection, window.innerWidth, window.innerHeight),

@@ -67,8 +67,13 @@ function parseCatalog(raw: unknown): Readonly<Record<string, StoreSpec>> {
 /** Every store by id. */
 export const STORES: Readonly<Record<string, StoreSpec>> = parseCatalog(catalog);
 
+/** The gun's id among the weapons (a weapon selection, an expended count of rounds; decision 295). */
+export const GUN = 'gun';
+
 /** The master mode a weapon belongs to: missiles air-to-air, bombs and rockets air-to-ground; tanks none. */
 export function weaponMode(store: string): 'air-to-air' | 'air-to-ground' | null {
+  // The gun serves both; selected, it brings air-to-air (decision 295).
+  if (store === GUN) return 'air-to-air';
   const k = STORES[store]?.kind;
   if (k === 'ir-missile' || k === 'radar-missile') return 'air-to-air';
   if (k === 'bomb' || k === 'rockets') return 'air-to-ground';

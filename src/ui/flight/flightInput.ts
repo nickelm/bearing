@@ -36,6 +36,7 @@ export type FlightAction =
   | 'speedbrake'
   | 'brakes'
   | 'parkingBrake'
+  | 'fire'
   | 'jettison'
   | 'mouseAim'
   | 'freeLook'
@@ -60,6 +61,7 @@ export const FLIGHT_BINDINGS: Record<FlightAction, string[]> = {
   speedbrake: ['KeyB'],
   brakes: ['Space'],
   parkingBrake: ['KeyP'],
+  fire: ['Enter'],
   jettison: ['KeyJ'],
   mouseAim: ['KeyN'],
   freeLook: ['KeyC'],
@@ -85,6 +87,7 @@ export const ACTION_LABELS: Record<FlightAction, string> = {
   speedbrake: 'Speedbrake out / in',
   brakes: 'Wheel brakes (hold)',
   parkingBrake: 'Parking brake on / off',
+  fire: 'Fire the gun (hold; or hold the left mouse button while the mouse flies), with master arm on',
   jettison: 'Jettison the drop tanks (a campaign aircraft that carries them)',
   mouseAim: 'Mouse aim (fly toward the ring) or direct (the mouse is the stick)',
   freeLook: 'Free look (hold; or hold the right mouse button); the view stays where you leave it',
@@ -207,6 +210,7 @@ export class FlightInput {
   /** The detent the lever stopped at during the current throttle press, if any. */
   private stoppedAt: number | null = null;
   private rightDown = false;
+  private leftDown = false;
   private readonly detach: () => void;
 
   constructor(
@@ -235,7 +239,10 @@ export class FlightInput {
     };
     const kd = (e: KeyboardEvent) => onKey(e, true);
     const ku = (e: KeyboardEvent) => onKey(e, false);
-    const blur = () => this.held.clear();
+    const blur = () => {
+      this.held.clear();
+      this.leftDown = false;
+    };
     // On the document, as the helicopter's input listens (decision 195): under pointer lock
     // the motion arrives as `mousemove` with `movementX/Y` in every browser.
     const moveTarget: EventTarget = typeof document === 'undefined' ? el : document;
@@ -270,10 +277,14 @@ export class FlightInput {
         this.onAction?.('recenterView');
       } else if (e.button === 0 && this.capture && !this.capture.captured) {
         this.capture.grab();
+      } else if (e.button === 0) {
+        // With the mouse captured, the left button is the trigger (decision 295).
+        this.leftDown = true;
       }
     };
     const up = (e: PointerEvent) => {
       if (e.button === 2) this.rightDown = false;
+      if (e.button === 0) this.leftDown = false;
     };
     const wheel = (e: WheelEvent) => {
       if (!this.enabled) return;
@@ -336,6 +347,11 @@ export class FlightInput {
     this.keyAction.clear();
     for (const [a, codes] of Object.entries(FLIGHT_BINDINGS) as [FlightAction, string[]][])
       for (const c of codes) this.keyAction.set(c, a);
+  }
+
+  /** The gun's trigger: the fire key, or the left button while the mouse flies (decision 295). */
+  get trigger(): boolean {
+    return this.enabled && (this.isHeld('fire') || (this.leftDown && !!this.capture?.captured));
   }
 
   private isHeld(a: FlightAction): boolean {

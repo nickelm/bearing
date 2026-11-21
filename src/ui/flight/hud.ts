@@ -178,6 +178,12 @@ export interface HudFrame {
    */
   target?: { point: [number, number, number]; label: string } | null;
   /**
+   * The gun's lead-computing pipper (decision 295) while the gun is selected or in a
+   * dogfight: where a target at the pipper's range (a lock's, or about 2,000 ft) is hit,
+   * relative to the camera (m), with the rounds left and whether the gun is armed.
+   */
+  gun?: { point: [number, number, number]; rounds: number; armed: boolean } | null;
+  /**
    * The radar's air combat mode cone about the boresight (half angle, rad), while it
    * searches in a dogfight (decision 223); else null.
    */
@@ -381,6 +387,7 @@ export class Hud {
     // Below the app's frame-time readout.
     if (f.debug) this.debugPanel(f, 16, 64, s);
     if (f.target) this.targetBox(f.target, project, s);
+    if (f.gun) this.pipper(f.gun, project, s);
     if (f.control) drawControlCursor(c, f.control, project, W, H, s);
   }
 
@@ -437,6 +444,27 @@ export class Hud {
       c.rect(p.x - h, p.y - h, 2 * h, 2 * h);
     });
     this.text(t.label, p.x, p.y + h + 16 * s, 'center');
+  }
+
+  /** The gun pipper (decision 295): a ring with a center dot, the rounds left under it. */
+  private pipper(g: NonNullable<HudFrame['gun']>, project: Projector, s: number): void {
+    const p = project(g.point[0], g.point[1], g.point[2], true);
+    if (!p) return;
+    const c = this.ctx;
+    const r = 18 * s;
+    this.stroke(() => {
+      c.beginPath();
+      c.arc(p.x, p.y, r, 0, Math.PI * 2);
+      c.moveTo(p.x + 1.6 * s, p.y);
+      c.arc(p.x, p.y, 1.6 * s, 0, Math.PI * 2);
+    });
+    this.text(
+      g.armed ? `${g.rounds}` : `${g.rounds} SAFE`,
+      p.x,
+      p.y + r + 14 * s,
+      'center',
+      g.rounds > 0 ? HUD_COLOR : WARN_COLOR,
+    );
   }
 
   // ---- Drawing helpers ----

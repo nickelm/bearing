@@ -19,6 +19,7 @@ import { Quatd } from '../core/quat';
 import { Vec3d } from '../core/vec3d';
 import type { GlobeScene } from '../render/sim/globeScene';
 import { standardMounts } from '../render/sim/aircraft/storeMounts';
+import { Tracers } from '../render/sim/aircraft/tracers';
 import { AircraftView } from '../render/sim/aircraft/aircraftView';
 import type { AircraftPose } from '../render/sim/aircraft/aircraftView';
 import { modelSpec } from '../render/common/models/library';
@@ -104,7 +105,7 @@ import { flightStartTime } from './clock';
 import { writeFreeFlightParams } from './url';
 import type { FreeFlightUrl } from './url';
 import { FlightWeather } from './flightWeather';
-import { buildHudFrame, landingAid } from '../ui/flight/hudFrame';
+import { buildHudFrame, gunHud, landingAid } from '../ui/flight/hudFrame';
 import { buildHeloHudFrame } from '../ui/flight/heloHud';
 import { flownGround } from './ground';
 import type { AirfieldGround, FlownTerrain } from './ground';
@@ -200,6 +201,8 @@ export class FreeFlight {
   private displayName = 'F-21 Kestrel';
   private sortieAt = 0;
   private fuelCapacity = 0;
+  /** The gun's tracers (decision 295), made with the first frame. */
+  private tracers: Tracers | null = null;
   /** The Kestrel's stores: its flight data's standard load (decision 289); null in a helicopter. */
   private rack: StoresRack | null = null;
   /** The gear doors' failure has been announced this sortie. */
@@ -374,6 +377,17 @@ export class FreeFlight {
       if (this.view && (this.model || this.helo) && this.state !== 'menu')
         this.view.update(this.pose, eye);
       this.poseTraffic(eye);
+      // The gun's tracers (decision 295).
+      if (!this.tracers) {
+        this.tracers = new Tracers();
+        deps.globe.vehicles.add(this.tracers.mesh);
+      }
+      const cam = deps.globe.camera;
+      this.tracers.place(
+        this.state !== 'menu' && !this.helo ? (this.rack?.gun?.live ?? []) : [],
+        eye,
+        (cam.fov * DEG) / Math.max(1, window.innerHeight),
+      );
     };
     window.addEventListener('beforeunload', this.unload);
     deps.setView('strategic');
@@ -548,6 +562,7 @@ export class FreeFlight {
       pylons,
       standardStations(pylons, this.flightSpec.standardStores ?? {}),
       { loadout: 'standard', expended: {} },
+      AIRCRAFT_BUNDLES[AIRCRAFT]!.gun,
     );
     this.gearDamageTold = false;
     this.monitor = new FlightMonitor(this.runways, R);
@@ -790,6 +805,9 @@ export class FreeFlight {
     f.wind = (a) => this.setWind(a);
     f.onStep = (a, dt) => {
       this.gameTime += dt;
+      // The Kestrel's gun fires and its rounds fly at the flight step (decision 295).
+      if (this.rack && a === (this.model as unknown))
+        this.rack.stepGun(this.model!, f.avionics, dt);
       for (const e of this.monitor!.update(a, dt)) this.event(e);
     };
     this.flown = flown;
@@ -1204,6 +1222,15 @@ export class FreeFlight {
     frame.panels = true;
     this.updateDisplays(frame);
     frame.target = this.hudTarget(m, this.deps.globe.chase.eye);
+    // The gun (decision 295): the trigger while flying, the pipper at the lock's range.
+    if (this.rack?.gun) this.rack.gun.trigger = this.state === 'flying' && this.input.trigger;
+    frame.gun = gunHud(
+      m,
+      this.rack,
+      this.displays.avionics,
+      this.deps.globe.chase.eye,
+      this.lockRange(m) ?? undefined,
+    );
     const radar = this.displays.avionics.radar;
     frame.acmCone = radar.on && radar.mode === 'acm' && !radar.lock ? ACM_CONE : null;
     this.hud.draw(frame, project);
@@ -1469,6 +1496,13 @@ export class FreeFlight {
   }
 
   /** The locked contact as the HUD's target box: relative to the camera, with its range. */
+  /** The locked contact's range (m), or null without a lock. */
+  private lockRange(m: Airframe): number | null {
+    const lock = this.displays.avionics.radar.lock;
+    const c = lock ? this.sensors.picture.contacts.find((x) => x.id === lock) : undefined;
+    return c ? Math.hypot(c.pos[0] - m.pos.x, c.pos[1] - m.pos.y, c.pos[2] - m.pos.z) : null;
+  }
+
   private hudTarget(m: Airframe, eye: Readonly<Vec3d>): HudFrame['target'] {
     const lock = this.displays.avionics.radar.lock;
     const c = lock ? this.sensors.picture.contacts.find((x) => x.id === lock) : undefined;
@@ -1533,7 +1567,12 @@ export class FreeFlight {
       sensors: this.sensorSnap,
       stores:
         this.rack && !this.helo
-          ? storesSnapshot(this.rack.stations, this.rack.loaded, this.model?.tankFuel ?? 0)
+          ? storesSnapshot(
+              this.rack.stations,
+              this.rack.loaded,
+              this.model?.tankFuel ?? 0,
+              this.rack.gun?.rounds ?? null,
+            )
           : null,
       messages: this.hud.log.map((l) => ({
         at: (l.at - this.sortieAt) / 1000,

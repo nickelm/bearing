@@ -55,7 +55,7 @@ import { storesEffect } from '../sim/flight/storesRack';
 import { DisplaySystem } from '../ui/displays/system';
 import { Hud, matrixProjector } from '../ui/flight/hud';
 import type { HudFrame } from '../ui/flight/hud';
-import { buildHudFrame, landingAid } from '../ui/flight/hudFrame';
+import { buildHudFrame, gunHud, landingAid } from '../ui/flight/hudFrame';
 import type { ControlCursor } from '../ui/flight/controlCursor';
 import { FlightInput, STICK_DEADZONE, STICK_FULL } from '../ui/flight/flightInput';
 import type { FlightAction } from '../ui/flight/flightInput';
@@ -85,6 +85,7 @@ import {
 import type { AirfieldShift, FollowedLook } from './followFlight';
 import { carrierFields, drawnGround } from './followFlight';
 import { ReleasedStores } from '../render/sim/aircraft/releasedStores';
+import { Tracers } from '../render/sim/aircraft/tracers';
 import { STORES } from '../sim/air/stores';
 import type { StationLoad } from '../sim/air/stores';
 import { drawnType, flightStores, loadedOf, spinningRotors } from './campaignTraffic';
@@ -194,6 +195,8 @@ export class Follow {
     { loads: StationLoad[]; tankFuel: number; tanks: number }
   >();
   private fallTime = 0;
+  /** The flight's gun tracers (decision 295). */
+  private tracers: Tracers | null = null;
   private poses: AnalyticPose[] = [];
   private lastTime = NaN;
   private settle = 0;
@@ -747,7 +750,12 @@ export class Follow {
     const a = this.full?.followed(this.slot);
     if (a) {
       const fm = a.flown.airframe as unknown as FlightModel;
-      return storesSnapshot(a.rack.stations, a.rack.loaded, fm.tankFuel);
+      return storesSnapshot(
+        a.rack.stations,
+        a.rack.loaded,
+        fm.tankFuel,
+        a.rack.gun?.rounds ?? null,
+      );
     }
     const loads = flightStores(m).loads;
     if (!loads.length) return null;
@@ -798,6 +806,7 @@ export class Follow {
     for (const d of this.drawn) d.view.setCg([0, 0, 0]);
     this.hung.clear();
     this.released?.clear();
+    this.tracers?.place([], new Vec3d(), 1);
   }
 
   /** Advances the follow by `dt` real seconds at game time t; call before the scene renders. */
@@ -930,6 +939,10 @@ export class Follow {
       timing: null,
     });
     frame.panels = true;
+    // The gun: the trigger from the input, the pipper on the HUD (decision 295).
+    const rack = this.full?.followed(this.slot)?.rack ?? null;
+    if (rack?.gun) rack.gun.trigger = inp.trigger;
+    frame.gun = gunHud(model, rack, this.displays.avionics, this.deps.globe.chase.eye);
     this.updateDisplays(m, airframeState(model), frame, t);
     if (this.panels !== 'clean') this.hud.draw(frame, project);
   }
@@ -1071,6 +1084,16 @@ export class Follow {
     // Stores that left their pylons since the last frame fall away (decision 294).
     const flight = this.full!.flight;
     this.released ??= new ReleasedStores(g.vehicles, g.lighting, this.deps.radius);
+    // The flight's tracers (decision 295).
+    if (!this.tracers) {
+      this.tracers = new Tracers();
+      g.vehicles.add(this.tracers.mesh);
+    }
+    this.tracers.place(
+      flight.aircraft.flatMap((a) => a.rack.gun?.live ?? []),
+      eye,
+      rpp,
+    );
     for (const a of flight.aircraft) {
       const m = a.flown.airframe as unknown as FlightModel;
       const now = a.rack.loaded;
@@ -1221,6 +1244,7 @@ export class Follow {
     this.full = null;
     this.hung.clear();
     this.released?.clear();
+    this.tracers?.place([], new Vec3d(), 1);
     this.blend = null;
     this.missionId = null;
     this.hud.show(false);
