@@ -399,5 +399,8 @@ Runs beside the main line (`docs/proposals/0009-settlements-and-cities.md`, `doc
 - [x] Plans take the roads and railways as drawn (decision 291).
 - [x] Downtowns and business districts; American and Southeast Asian styles (decision 292).
 - [x] Cities at night from afar; chunks culled at their ground (decision 293).
+- [x] Night: no grain on black, no lit ground without lamps, a darker night (decision 296).
+- [ ] A night vision system (owner's request with decision 296): the night is now dark enough to need one. Which aircraft carry it (NVG, FLIR or both) belongs in their avionics profiles (rule 14); a roadmap phase for it is the owner's call.
+- [ ] `tools/render.preview.ts`: `moonlit-range` cannot find a sun 30° down at the peak's latitude in August and renders at 11:00; take the lowest sun of the night when the wanted elevation is out of reach.
 - [ ] Targeting pod (P3–P5): set `CityLayer.zoom` from the pod's magnification (decision 279).
 - [ ] Wire settlement pads into `terrainEditsFor` once the sim's height service can take them (decision 264).
