@@ -63,6 +63,8 @@ export const MODEL_BUDGETS = {
   cover: [8, 40],
   /** Landform props (decision 204): karst towers, pillars, stacks, inselbergs; 30–200. */
   prop: [30, 200],
+  /** Stores on pylons (decision 288): missiles, bombs, pods, tanks, on top of the aircraft's count. */
+  store: [12, 120],
   carrier: [2000, 5000],
   ship: [400, 2000],
 } as const satisfies Record<string, readonly [number, number]>;

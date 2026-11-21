@@ -245,7 +245,10 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] The stores format's jettison button (`ControlsAction` `jettisonTanks`, wired in the follow) with the stores format
 - [ ] The approach energy cue (`energy.ts`) predicts without the stores' drag and mass; stores' CG and inertia stay the spec's (R2.10)
 - [ ] The AI's jettison reads enemy flights on their routes; from the sensors' picture once they read campaign contacts
-- [ ] Stores on pylons that disappear on release; jettison
+- [x] Stores on pylons that disappear on release; jettison (store model specs, `AircraftView` mounts and `setStores`, the rack's stations at full fidelity, what was expended before off the pylons; decision 288)
+- [ ] Pylons drawn under the stores (the fighter's pylon pieces), and a released store or jettisoned tank that falls away instead of vanishing
+- [ ] The Pact fighter and the strike aircraft still draw their stores in their bodies: pylons and stations with their flight data (R2.7)
+- [ ] Owner, on the GPU: an F-21 on interdiction shows two bombs, two tanks and two wingtip missiles; after J the tanks are gone; the Kestrel in Free Flight shows four missiles
 - [ ] Stores format and master arm; weapon selection triggers air-to-air and air-to-ground modes
 - [ ] Gun with a lead-computing pipper
 - [ ] IR missile with a seeker circle and simple guidance, one per side

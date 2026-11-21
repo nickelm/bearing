@@ -1,0 +1,48 @@
+{
+  "name": "Drop tank",
+  "class": "store",
+  "groups": {
+    "body": "steel"
+  },
+  "parts": [
+    {
+      "type": "loft",
+      "group": "body",
+      "sides": 8,
+      "stations": [
+        {
+          "x": 2.3,
+          "w": 0,
+          "h": 0
+        },
+        {
+          "x": 1.15,
+          "w": 0.33,
+          "h": 0.33
+        },
+        {
+          "x": -0.9199999999999999,
+          "w": 0.33,
+          "h": 0.33
+        },
+        {
+          "x": -2.3,
+          "w": 0,
+          "h": 0
+        }
+      ]
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "mirror": true,
+      "root": [-1.5179999999999998, 0, 0],
+      "rootChord": 0.5519999999999999,
+      "tipChord": 0.33119999999999994,
+      "span": 0.36300000000000004,
+      "sweep": 30,
+      "thickness": 0.04,
+      "dihedral": -30
+    }
+  ]
+}

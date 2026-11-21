@@ -81,7 +81,7 @@ import {
 } from './followFlight';
 import type { AirfieldShift, FollowedLook } from './followFlight';
 import { carrierFields, drawnGround } from './followFlight';
-import { drawnType, spinningRotors } from './campaignTraffic';
+import { drawnType, flightStores, loadedOf, spinningRotors } from './campaignTraffic';
 
 export interface FollowDeps {
   canvas: HTMLCanvasElement;
@@ -937,7 +937,7 @@ export class Follow {
     );
     const g = this.deps.globe;
     while (this.drawn.length < raw.length) {
-      const v = new AircraftView(this.spec!, [0, 0, 0], g.lighting);
+      const v = new AircraftView(this.spec!, [0, 0, 0], g.lighting, flightStores(m).mounts);
       v.planetRadius = this.deps.radius;
       g.vehicles.add(v.group, v.shadowMesh);
       this.drawn.push({ view: v, lift: 0 });
@@ -986,8 +986,12 @@ export class Follow {
       return;
     }
     const rotors = this.spec ? spinningRotors(this.spec) : undefined;
+    const m = this.mission();
+    const loads = m ? flightStores(m).loads : [];
     this.poses.forEach((p, k) => {
       const v = this.drawn[k]!.view;
+      // Stores expended at full fidelity before stay off (decision 275).
+      if (m && loads.length) v.setStores(loadedOf(m, k, loads));
       const pos = new Vec3d(p.pos[0], p.pos[1], p.pos[2]);
       const fwd = new Vec3d(p.forward[0], p.forward[1], p.forward[2]);
       const upv = new Vec3d(p.up[0], p.up[1], p.up[2]);
@@ -1028,6 +1032,8 @@ export class Follow {
       if (!d || m.crashed) continue;
       d.view.group.visible = true;
       d.view.shadowMesh.visible = true;
+      // What hangs on the rack: a store fired, released or dropped is gone (decision 288).
+      d.view.setStores(a.rack.loaded.map((l) => l.station));
       const t = m.telemetry;
       const pose: AircraftPose = {
         pos: m.pos,

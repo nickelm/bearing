@@ -21,6 +21,9 @@ import { AircraftView } from '../render/sim/aircraft/aircraftView';
 import type { RotorPose } from '../render/sim/aircraft/aircraftView';
 import { TrafficLayer } from '../render/sim/aircraft/trafficLayer';
 import type { TrafficAircraft } from '../render/sim/aircraft/trafficLayer';
+import { typeLoadoutMounts } from '../render/sim/aircraft/storeMounts';
+import { loadedStations } from '../sim/flight/storesRack';
+import type { StationLoad } from '../sim/air/stores';
 import type { GlobeScene } from '../render/sim/globeScene';
 import type { AnalyticPose } from '../sim/air/analyticPose';
 import { AIRCRAFT_BUNDLES, bundleOfType } from '../sim/air/bundles';
@@ -90,6 +93,35 @@ export function drawnType(typeId: string): DrawnType {
   return d;
 }
 
+/**
+ * The stores a mission's aircraft hang on their drawn model (decision 288): its loadout
+ * on its bundle's pylons, none for a stand-in model (its pylons are another type's).
+ */
+export function flightStores(
+  m: Readonly<Pick<Mission, 'aircraftType' | 'loadout'>>,
+): ReturnType<typeof typeLoadoutMounts> {
+  const key = `${m.aircraftType}:${m.loadout}`;
+  let s = storesByLoadout.get(key);
+  if (!s) {
+    const b = bundleOfType(m.aircraftType);
+    s = followedLook(b, AIRCRAFT_BUNDLES).standIn
+      ? { loads: [], mounts: [] }
+      : typeLoadoutMounts(b, m.loadout);
+    storesByLoadout.set(key, s);
+  }
+  return s;
+}
+const storesByLoadout = new Map<string, ReturnType<typeof typeLoadoutMounts>>();
+
+/** The stations still loaded on aircraft `slot` of mission m, from what it expended (decision 275). */
+export function loadedOf(
+  m: Readonly<Pick<Mission, 'expended'>>,
+  slot: number,
+  loads: readonly StationLoad[],
+): string[] {
+  return loadedStations(loads, m.expended?.[slot] ?? {}).map((l) => l.station);
+}
+
 /** Rotors and propellers turning at governed speed: their discs show (helicopters, the C-150). */
 export function spinningRotors(
   spec: ModelSpec,
@@ -108,12 +140,17 @@ export function spinningRotors(
 interface Near {
   view: AircraftView;
   seen: boolean;
+  /** The stations its loadout hangs (decision 288). */
+  loads: StationLoad[];
 }
 
 /** One aircraft of a nearby flight, posed for the frame. */
 interface Placed {
   key: string;
   type: DrawnType;
+  /** Its mission and slot, for the stores it hangs. */
+  mission: Mission;
+  slot: number;
   pose: AnalyticPose;
   ground: number;
   distance: number;
@@ -195,6 +232,8 @@ export class CampaignTraffic {
         this.placed.push({
           key: `${m.id}:${k}`,
           type,
+          mission: m,
+          slot: k,
           pose: lifted,
           ground: Math.max(0, ground ?? 0),
           distance,
@@ -230,13 +269,16 @@ export class CampaignTraffic {
       near++;
       let n = kept;
       if (!n) {
-        const v = new AircraftView(a.type.spec, [0, 0, 0], g.lighting);
+        const stores = flightStores(a.mission);
+        const v = new AircraftView(a.type.spec, [0, 0, 0], g.lighting, stores.mounts);
         v.planetRadius = this.radius;
         g.vehicles.add(v.group, v.shadowMesh);
-        n = { view: v, seen: true };
+        n = { view: v, seen: true, loads: stores.loads };
         this.near.set(a.key, n);
       }
       n.seen = true;
+      // What it expended at full fidelity before stays off its pylons (decision 275).
+      if (n.loads.length) n.view.setStores(loadedOf(a.mission, a.slot, n.loads));
       const p = a.pose;
       const fwd = new Vec3d(p.forward[0], p.forward[1], p.forward[2]);
       const up = new Vec3d(p.up[0], p.up[1], p.up[2]);

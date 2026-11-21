@@ -1,0 +1,71 @@
+{
+  "name": "Medium-range missile",
+  "class": "store",
+  "groups": {
+    "body": "paint-white",
+    "seeker": "radome"
+  },
+  "parts": [
+    {
+      "type": "cylinder",
+      "group": "body",
+      "from": [-1.83, 0, 0],
+      "to": [1.4282926829268294, 0, 0],
+      "radius": 0.1015,
+      "sides": 6
+    },
+    {
+      "type": "cylinder",
+      "group": "seeker",
+      "from": [1.4282926829268294, 0, 0],
+      "to": [1.83, 0, 0],
+      "radius": 0.1015,
+      "radius2": 0.01218,
+      "sides": 6
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "mirror": true,
+      "root": [-1.3800000000000001, 0, 0.08120000000000001],
+      "rootChord": 0.45,
+      "tipChord": 0.1575,
+      "span": 0.32,
+      "sweep": 45,
+      "thickness": 0.04
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [-1.3800000000000001, 0.08120000000000001, 0],
+      "rootChord": 0.45,
+      "tipChord": 0.1575,
+      "span": 0.32,
+      "sweep": 45,
+      "thickness": 0.04,
+      "dihedral": 90
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [-1.3800000000000001, -0.08120000000000001, 0],
+      "rootChord": 0.45,
+      "tipChord": 0.1575,
+      "span": 0.32,
+      "sweep": 45,
+      "thickness": 0.04,
+      "dihedral": -90
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "mirror": true,
+      "root": [0.25, 0, 0.08120000000000001],
+      "rootChord": 0.6,
+      "tipChord": 0.18,
+      "span": 0.3,
+      "sweep": 50,
+      "thickness": 0.04
+    }
+  ]
+}

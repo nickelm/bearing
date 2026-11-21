@@ -68,6 +68,7 @@ import { testGpu } from '../tests/gpu/device';
 import { headlessRenderer } from '../tests/gpu/renderer';
 import { encodePng } from './png';
 import { previewWorld } from './previewWorld';
+import { flightStores } from '../src/follow/campaignTraffic';
 
 const env = (k: string, d: string) => process.env[k] ?? d;
 
@@ -212,7 +213,9 @@ it('renders followed flights', async () => {
     scene.chase.rig = rig;
     scene.chase.zoom = 1;
     scene.chase.resetView();
-    const view = new AircraftView(drawn.spec, [0, 0, 0], scene.lighting);
+    // Its first loadout on its pylons (decision 288); none on a stand-in.
+    const stores = flightStores({ aircraftType: typeId, loadout: type.loadouts[0]!.id }).mounts;
+    const view = new AircraftView(drawn.spec, [0, 0, 0], scene.lighting, stores);
     view.planetRadius = R;
     scene.vehicles.add(view.group, view.shadowMesh);
     // The game time: the route's moment, on a day whose local time there is TOD.

@@ -1,0 +1,29 @@
+{
+  "name": "Rocket pod",
+  "class": "store",
+  "groups": {
+    "body": "steel",
+    "front": "opening"
+  },
+  "parts": [
+    {
+      "type": "cylinder",
+      "group": "body",
+      "from": [-0.95, 0, 0],
+      "to": [0.83, 0, 0],
+      "radius": 0.2,
+      "sides": 8,
+      "caps": true
+    },
+    {
+      "type": "cylinder",
+      "group": "front",
+      "from": [0.83, 0, 0],
+      "to": [0.95, 0, 0],
+      "radius": 0.2,
+      "radius2": 0.12,
+      "sides": 8,
+      "caps": true
+    }
+  ]
+}

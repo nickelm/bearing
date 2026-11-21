@@ -149,6 +149,30 @@ export function stationLoads(
   return out;
 }
 
+/**
+ * Stations for a flight data's standard load (store id → count; decision 288): each store
+ * on the first pylons, in bundle order, that carry it and are still free, a mirrored
+ * pylon taking two. What cannot be hung is left out.
+ */
+export function standardStations(
+  pylons: readonly PylonSpec[],
+  standard: Readonly<Record<string, number>>,
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [store, count] of Object.entries(standard)) {
+    let left = count;
+    for (const p of pylons) {
+      if (left <= 0) break;
+      if (out[p.id] || !p.carries.includes(store)) continue;
+      const n = p.mirror ? 2 : 1;
+      if (n > left) continue;
+      out[p.id] = store;
+      left -= n;
+    }
+  }
+  return out;
+}
+
 /** How many of each store the stations hang. */
 export function storeCounts(loads: readonly StationLoad[]): Record<string, number> {
   const n: Record<string, number> = {};

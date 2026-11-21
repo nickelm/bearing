@@ -78,6 +78,8 @@ import { testGpu } from '../tests/gpu/device';
 import { headlessRenderer } from '../tests/gpu/renderer';
 import { encodePng } from './png';
 import { previewWorld } from './previewWorld';
+import { standardMounts } from '../src/render/sim/aircraft/storeMounts';
+import { AIRCRAFT_BUNDLES } from '../src/sim/air/bundles';
 
 const env = (k: string, d: string) => process.env[k] ?? d;
 
@@ -223,7 +225,9 @@ it('renders Free Flight shots', async () => {
   const ctl = neutralControls();
   const pilot = new TestPilot(runway, end, R);
   const monitor = new FlightMonitor(runways, R);
-  const view = new AircraftView(spec, fs.cg, scene.lighting);
+  const bundle = AIRCRAFT_BUNDLES[spec.id];
+  const stores = bundle ? standardMounts(bundle, fs.standardStores) : [];
+  const view = new AircraftView(spec, fs.cg, scene.lighting, stores);
   view.planetRadius = R;
   scene.vehicles.add(view.group, view.shadowMesh);
   const pose: AircraftPose = {

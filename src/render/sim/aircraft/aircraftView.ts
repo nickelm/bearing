@@ -67,6 +67,7 @@ import { Vec3d } from '../../../core/vec3d';
 import { buildAnimatedModel } from '../../common/models/builder';
 import type { AnimatedPiece, BuiltModel, BuiltRotor } from '../../common/models/builder';
 import type { ModelSpec } from '../../common/models/spec';
+import type { StoreMount } from './storeMounts';
 import { INK_LINEAR, modelGeometry } from '../../common/models/threeModel';
 import type { PlanetLighting, Vec3Node } from '../lighting/planetLighting';
 
@@ -223,8 +224,16 @@ export class AircraftView {
   private readonly tmpQ = new Quaternion();
   private readonly tmpAxis = new Vector3();
   private readonly tmpEuler = new Euler();
+  /** The stores' meshes and ink by station (decision 288). */
+  private readonly storeMeshes = new Map<string, Mesh[]>();
 
-  constructor(spec: ModelSpec, cg: readonly [number, number, number], lighting: PlanetLighting) {
+  constructor(
+    spec: ModelSpec,
+    cg: readonly [number, number, number],
+    lighting: PlanetLighting,
+    /** Stores that may hang on its stations, all shown until `setStores` (decision 288). */
+    stores: readonly StoreMount[] = [],
+  ) {
     this.material = this.buildMaterial(lighting);
     this.inkMaterial = this.buildInk();
     const built = buildAnimatedModel(spec);
@@ -258,6 +267,13 @@ export class AircraftView {
       const { mesh } = addMesh(piece.model, pivot, [-o[0], -o[1], -o[2]]);
       shadowed.push({ mesh, model: piece.model });
       this.pieces.push({ piece, pivot });
+    }
+    // Stores on their stations: built once each, shown while loaded; they shadow as the body.
+    for (const s of stores) {
+      const m = buildAnimatedModel(s.spec).body;
+      const { mesh, ink } = addMesh(m, this.model, s.at);
+      shadowed.push({ mesh, model: m });
+      this.storeMeshes.set(s.station, [mesh, ink]);
     }
     this.group.add(this.model);
 
@@ -383,6 +399,21 @@ export class AircraftView {
    */
   setCg(cg: readonly [number, number, number]): void {
     this.model.position.set(-cg[0], -cg[1], -cg[2]);
+  }
+
+  /**
+   * Shows the stores on `loaded` stations and hides the rest: a store fired, released or
+   * jettisoned leaves its station empty (decision 288). Stations without a mount are ignored.
+   */
+  setStores(loaded: Iterable<string>): void {
+    const on = new Set(loaded);
+    for (const [station, meshes] of this.storeMeshes)
+      for (const x of meshes) x.visible = on.has(station);
+  }
+
+  /** The stations that have a store drawn on them, shown or not. */
+  get storeStations(): string[] {
+    return [...this.storeMeshes.keys()];
   }
 
   /** The shadow, in camera-relative coordinates: add it to a group at the origin. */

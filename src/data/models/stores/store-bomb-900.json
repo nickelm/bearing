@@ -1,0 +1,61 @@
+{
+  "name": "900 kg bomb",
+  "class": "store",
+  "groups": {
+    "body": "paint-green",
+    "fin": "paint-green"
+  },
+  "parts": [
+    {
+      "type": "loft",
+      "group": "body",
+      "sides": 6,
+      "stations": [
+        {
+          "x": 1.92,
+          "w": 0,
+          "h": 0
+        },
+        {
+          "x": 0.8447999999999998,
+          "w": 0.229,
+          "h": 0.229
+        },
+        {
+          "x": -0.768,
+          "w": 0.229,
+          "h": 0.229
+        },
+        {
+          "x": -1.6128,
+          "w": 0.10305,
+          "h": 0.10305
+        }
+      ]
+    },
+    {
+      "type": "wing",
+      "group": "fin",
+      "mirror": true,
+      "root": [-0.768, 0, 0.0687],
+      "rootChord": 0.8448,
+      "tipChord": 0.67584,
+      "span": 0.2061,
+      "sweep": 20,
+      "thickness": 0.03,
+      "dihedral": 45
+    },
+    {
+      "type": "wing",
+      "group": "fin",
+      "mirror": true,
+      "root": [-0.768, 0, 0.0687],
+      "rootChord": 0.8448,
+      "tipChord": 0.67584,
+      "span": 0.2061,
+      "sweep": 20,
+      "thickness": 0.03,
+      "dihedral": -45
+    }
+  ]
+}

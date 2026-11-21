@@ -146,6 +146,7 @@ A zone is a named region 16–63 km across (decision 205: the proposal's 100–4
 | Model | Triangles |
 |---|---|
 | Fighter, strike aircraft | 300–800 |
+| Store on a pylon (missile, bomb, rocket pod, drop tank) | 12–120, on top of its aircraft's count (decision 288) |
 | Bomber, tanker, transport, AWACS | 600–1,500 |
 | Helicopter | 300–800, plus a translucent rotor disc when spinning |
 | Tank, IFV, SAM vehicle | 150–400 |

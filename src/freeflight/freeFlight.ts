@@ -18,6 +18,7 @@ import { DEG, NAUTICAL_MILE } from '../core/units';
 import { Quatd } from '../core/quat';
 import { Vec3d } from '../core/vec3d';
 import type { GlobeScene } from '../render/sim/globeScene';
+import { standardMounts } from '../render/sim/aircraft/storeMounts';
 import { AircraftView } from '../render/sim/aircraft/aircraftView';
 import type { AircraftPose } from '../render/sim/aircraft/aircraftView';
 import { modelSpec } from '../render/common/models/library';
@@ -567,7 +568,12 @@ export class FreeFlight {
     this.crashAt = 0;
     // Scene: the aircraft, its shadow, the chase camera.
     const g = this.deps.globe;
-    this.showView(AIRCRAFT, () => new AircraftView(this.spec, this.flightSpec.cg, g.lighting));
+    // The Kestrel hangs its flight data's standard load: four short-range missiles (decision 288).
+    const stores = standardMounts(AIRCRAFT_BUNDLES[AIRCRAFT]!, this.flightSpec.standardStores);
+    this.showView(
+      AIRCRAFT,
+      () => new AircraftView(this.spec, this.flightSpec.cg, g.lighting, stores),
+    );
     g.chase.rig = rigFromBundle(AIRCRAFT_BUNDLES[AIRCRAFT]!.rig!);
     g.chase.stickyLook = true;
     this.pose.q = m.q;
@@ -1221,7 +1227,12 @@ export class FreeFlight {
         : null;
     for (const a of this.traffic?.aircraft ?? []) {
       if (this.trafficViews.has(a.id)) continue;
-      const v = new AircraftView(modelSpec(a.model), [0, 0, 0], this.deps.globe.lighting);
+      const spec = modelSpec(a.model);
+      const b = AIRCRAFT_BUNDLES[a.model];
+      const standard = (spec.flight as { standardStores?: Record<string, number> } | undefined)
+        ?.standardStores;
+      const stores = b ? standardMounts(b, standard) : [];
+      const v = new AircraftView(spec, [0, 0, 0], this.deps.globe.lighting, stores);
       v.planetRadius = this.deps.radius;
       v.shadowMesh.visible = false;
       this.deps.globe.vehicles.add(v.group, v.shadowMesh);
