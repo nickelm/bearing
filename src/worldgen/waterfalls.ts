@@ -44,6 +44,8 @@ export interface Waterfall {
   bottom: number;
   /** River width at the lip (m). */
   width: number;
+  /** Length of the run from the lip to the foot along the river (m). */
+  run: number;
   /** River polyline (into the index's lines). */
   line: number;
   /** A name for tall falls, else null. */
@@ -104,6 +106,8 @@ export function findWaterfalls(
       const top = surf(runStart, 0);
       const bottom = surf(end - 1, 1);
       const width = d[a + 6]!;
+      let run = 0;
+      for (let q = runStart; q < end; q++) run += segLength(q);
       runStart = -1;
       if (top > 1e8 || top - bottom < t.minDrop || width < t.minWidth) return;
       falls.push({
@@ -112,6 +116,7 @@ export function findWaterfalls(
         top,
         bottom,
         width,
+        run,
         line: k,
         name: null,
       });

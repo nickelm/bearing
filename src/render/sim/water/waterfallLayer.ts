@@ -202,6 +202,9 @@ export class WaterfallLayer {
         .scale(radius + h * ex)
         .sub(this.anchor);
     for (const f of this.falls) {
+      // A sheet for a steep fall only: a long cascade is the river's white water and rapids,
+      // and a sheet arcing over its run would float above the channel.
+      if (f.run > 1.5 * (f.top - f.bottom)) continue;
       lip.set(...f.lip);
       if (lip.clone().scale(radius).distanceTo(eye) > this.range) continue;
       foot.set(...f.foot);
