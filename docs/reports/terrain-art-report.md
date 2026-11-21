@@ -45,11 +45,36 @@ This pull request implements all eight phases of Proposal 0010, including the st
 
 ## Metrics Against Criteria
 
-METRICS
+Over 20 seeds (1–20, two of them retried by the validity check), global grid 256² per face, relief exaggeration 1.3 (`tools/terrainArt.preview.ts`; full tables in `terrain-art-metrics.md`):
+
+| Check | Criterion | Result |
+|---|---|---|
+| Relief scale | Invariants pass at 1.0, 1.3, 1.5 | 0 river surfaces rising downstream; lakes level in 20/20 seeds; road profiles within grade (unit test) |
+| Biomes | Identical at all scales | Identical (biome and forest maps) in 20/20 seeds |
+| Rock dressing | No floating pieces; cliffs over 45° dressed | 100% of 166,779 cliff cells have a piece within one cell; 25 of 356,600 pieces (0.007%) stand up to a few meters above the sampled ground at their spot, on curved ground between samples |
+| Shading | Visible; no seams | Visible in the screenshots below; seam-free by construction (per-vertex data sampled by direction, per-face curvature from the drawn mesh) |
+| Waterfalls | Every major knickpoint on a large river has one | 97% of 81,567 major knickpoints (rivers at least 20 m wide dropping at least 15 m at 5% or steeper) have a fall within 600 m; 237,270 falls in all, 960 named |
+| Structures | Each type where its sites exist; each named and with a glyph | All 12 types appear; none unnamed; one `structure` glyph each |
+| Composition | A landmark in view of at least 70% of airfields | 100% of 1,448 airfields (lowest seed 99%) |
+| Independence | No game, campaign or faction imports | Enforced by an ESLint rule on the new worldgen modules |
+| Determinism | Same seed, same world | 20/20 seeds place the same structures twice; placement is hashed per cell |
+
+The 3% of knickpoints without a fall are mostly reaches through lakes and junctions, where the stepped surface is flat.
 
 ## Budgets
 
-BUDGETS
+Measured in the standard views at 1408 × 792 with art `medium` against `off`, relief 1.3, at the baseline's spots:
+
+| View | Rock dressing | Waterfalls | Structures |
+|---|---|---|---|
+| Alpine valley, 500 m | 9 draws, 0.042 M triangles (2,030 pieces) | 5 in range, 170 triangles | none in view |
+| Canyon, 300 m | 9 draws, 0.021 M triangles | — | — |
+| Coast, 1 km | 4 draws, 0.003 M triangles | — | — |
+
+- **Rock dressing:** at most 9 draws and 0.042 M triangles, against the budget of 30 draws and 20% of the 2 M triangle budget (0.4 M). Met.
+- **Air (mist, fog, particles):** the fog is a few ALU and two texture reads per vertex inside the existing aerial perspective, and the particles reuse the overlay. Not measured in milliseconds here (see below).
+- **Total frame time:** not measurable on this machine. The renderer is lavapipe on four CPU cores shared with the metrics run: the art-off frames (1.1–1.5 s) came out slower than the art-on frames (0.5–1.0 s), which says only that the machine was busy. The owner's GPU timing pass (`?dev&gputime=1`, `MODE=gpu GPU_TIMING=1` in the smoke test) is the check for the 1.5 ms and 3 ms budgets.
+- **Points of interest:** placing them for a 1024² world takes 2.7 s on the main thread when the world loads (a known issue).
 
 ## Screenshots
 
@@ -101,7 +126,7 @@ The other session's lanes (simulation, campaign, game loop) are untouched except
 ## Known Issues
 
 - **The sim's analytic routes clear the coarse, unexaggerated ground** (`sim.init` in `main.ts`). At 1.3, a route flown low over high ground could pass below the drawn surface. Scaling the coarse heights handed to the sim is a one-line change in the sim's lane, left to that session.
-- **POI placement runs on the main thread.** Points of interest are placed when a world loads, which takes about a second at 1024²; moving it into the worldgen worker is a TODO.
+- **POI placement runs on the main thread.** Points of interest are placed when a world loads, which takes 2.7 s at 1024² in the preview; moving it into the worldgen worker is a TODO.
 - **Steep cliffs make thousands of small falls.** Mountain streams stepping down the 75 m strata produce thousands of small falls per world. Only falls within 9 km are drawn, and only the 48 most striking are named.
 - **Rapids' foam lines follow height contours**, so on a reach that runs across a slope they can cross the channel at an angle.
 - **`tests/gpu/mapSoak.test.ts` fails on this software GPU**, as it did before this work.
