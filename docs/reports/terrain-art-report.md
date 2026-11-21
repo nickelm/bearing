@@ -30,7 +30,7 @@ This pull request implements all eight phases of Proposal 0010, including the st
 - **The sky** draws a larger sun and moon by style, and an aurora near the poles.
 - **Light shafts** were already in the volumetrics.
 
-**Water** (decision 301). Waterfalls are found on the rivers' stepped surfaces and drawn as a parabolic sheet with stepped scrolling bands, a foam pool and a placeholder mist. The tallest falls are named. Rapids draw foam lines across steep reaches. Lakes are calmer and more reflective than the sea.
+**Water** (decision 301). Waterfalls are found on the rivers' stepped surfaces; the steep ones are drawn as a parabolic sheet with stepped scrolling bands, a foam pool and a placeholder mist. The tallest falls are named. Rapids draw foam lines across steep reaches. Lakes are calmer and more reflective than the sea.
 
 **Structures** (decision 302). A game-agnostic framework places twelve modern types by site suitability: radar stations, early-warning radars, relay towers, bunkers, batteries, observation posts, dams, lighthouses, observatories, quarries, oil fields and power lines. Each gets a name, a chunky model with a far model, and a map glyph. The caller passes places and routes as points and polylines and chooses the kit.
 
@@ -147,7 +147,7 @@ The other session's lanes (simulation, campaign, game loop) are untouched except
 - **Rock shading workaround.** On steep walls some rock pieces drew down-facing faces as near-black patches, whatever their sink. The models' normals and winding check out, and lighting them with the instance's up vector drew correctly; the cause is not yet found. Until it is, the rock layer leans its shading normals 70% toward up (`TileLayerOptions.normalToUp`), so pieces shade like the slope under them.
 - **Lighthouses at the waterline.** Lighthouse sites may be shoals and skerries down to 5 m below the sea, so some stand at the water's edge.
 - **The zones' drifting snow** shows over cold valleys whose surroundings average above 2.5 km, even under a clear sky (the valley views).
-- - **`tests/gpu/mapSoak.test.ts` fails on this software GPU**, as it did before this work.
+- **`tests/gpu/mapSoak.test.ts` fails on this software GPU**, as it did before this work.
 
 ## Next Steps
 
