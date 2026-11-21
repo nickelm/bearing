@@ -574,12 +574,15 @@ export class TerrainRenderer {
         const clusters = clamp(ruralSpeckle(planet, 30_000).sub(0.45).mul(3), 0, 1);
         const resolved = clamp(footprint.div(1500), 0, 1);
         const villages = mix(dots, float(0.15), resolved).mul(clusters);
-        // The speckles stand for villages too small to plan, seen from far: near the camera
-        // they lit kilometer-wide patches of open ground with no lamps in them (decision 296).
+        // The speckles stand for the countryside's lights as seen from orbit, where a pixel
+        // holds many villages. The simulation view (20 km and below) draws the settlements'
+        // own lights only: there the speckles lit kilometer-wide patches of open ground with
+        // no town in them (decision 299).
+        const altitude = length(L.eye).sub(radius);
         const rural = pow(hab, 1.5)
           .mul(villages)
           .mul(0.9)
-          .mul(smoothstep(20_000, 50_000, distance));
+          .mul(smoothstep(50_000, 200_000, altitude));
         glow.assign(
           built.z
             .add(rural)

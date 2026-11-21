@@ -4756,7 +4756,7 @@ Decision 256's AI checks had run gear down, and the gear's drag had been slowing
 - **Town glow on the ground.** A planned town lights itself with its streetlights, windows and the far prisms' glow (decision 293) out to the prism range. Its light disk (decision 71) now adds to the ground only by smoothstep(10 km, 14 km) of the distance from the camera; unplanned towns keep their disk. The disk had washed the whole town and the fields round it in a warm tan, with the canopy shell's woods cut out of it in black.
 - **Far window light.** Beyond the windows' range (1.4 km), a building's walls and the far block prisms' roofs no longer glow evenly with the windows' mean light (decision 293). Lights are points on a 14 m lattice of planet positions: about one cell in ten, by the lighting level, holds a small bright spot; between 5 and 10 km from the camera the spots give way to their mean, about a tenth of the old roof glow. The even glow on roofs read as lit ground.
 - **Town light as points.** A town's and an industry's light disk on the terrain (decision 71) now falls in points over its built-up patch: on a 30 m lattice, a third of the cells hold a small bright spot, giving way to their mean, 0.15 of the old even glow, where cells shrink below two pixels: from afar a dim warm glow, not lit ground. The soft halo off the patch fades in only with pixel footprints from 150 m to 1.5 km, from far up. Airbases keep their glow.
-- **Rural glow.** The habitability speckles that stand for unplanned villages fade in between 20 and 50 km from the camera. Nearer, they lit kilometer-wide patches of open ground with no lamps in them.
+- **Rural glow.** The habitability speckles that stand for unplanned villages fade in between 20 and 50 km from the camera (superseded by decision 299: from orbit only). Nearer, they lit kilometer-wide patches of open ground with no lamps in them.
 - **A darker night.** The full moon's light (`fullMoon`) is 0.06 (was 0.12, decision 140) and the starlight and airglow floor (`nightLight`) 0.008 (was 0.02). On seed 4's `night` view under a ten-day moon, moonlit open ground went from about (33, 35, 40) to (5, 9, 15) in sRGB: land is a silhouette against the sky, and only a full moon shows it dimly. The night is meant to need a night vision system, which does not exist yet (TODO).
 - `tools/render.preview.ts` takes `FULL_MOON` and `NIGHT_LIGHT` to try the night's light.
 
@@ -4786,3 +4786,10 @@ Decision 256's AI checks had run gear down, and the gear's drag had been slowing
 **How it was checked.** In headless Chromium on the displays' composite page (`tools/hud/composite.html?hover=transition&displays=navigation`): SMS chosen, then SRM; the stores format stays, where before the change the moving map replaced it. The unit suite, the type check and lint pass.
 
 **Reason:** the owner's report after flying the IR missile.
+
+### 299. No rural glow in the simulation view
+
+**Date:** 2026-11-21
+**Decision:** The rural glow (decision 71: habitability broken into 2.5 km speckles inside 30 km clusters, standing for villages too small for the light lists) fades in with the camera's altitude, from 50 to 200 km. The simulation view, at 20 km and below, draws only the settlements' own lights: every graph settlement is in the light lists of the tiles it shows, as points over its built-up patch and their dim mean from afar (decision 296). This supersedes decision 296's fade from 20 to 50 km of distance.
+
+**Reason:** the owner saw warm glow patches over hills and mountains that held no town and turned to dark terrain on approach. They were the speckles beyond 20 km. The speckles serve a view from orbit, where a pixel holds many villages; nearer, they invent light where there is none.
