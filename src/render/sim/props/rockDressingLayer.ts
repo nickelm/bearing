@@ -136,8 +136,9 @@ export function placeDressingTile(
       dirAt(px, py, d);
       if (clear && clear(d, extent / 2)) continue;
       // Upright pieces stand on the lowest ground under their footprint, sunk below it;
-      // pieces laid on the face sit on the ground at their spot (bilinear), sunk a little:
-      // on a steep wall the footprint's lowest point would bury them.
+      // pieces laid on the face sit on the ground at their spot (bilinear), sunk by
+      // `faceSink` of their size: on a steep wall the footprint's lowest point would bury
+      // them, and a slab sunk less overhangs a convex slope and shows its dark underside.
       let ground: number;
       if (spec.pose === 'upright') {
         const r = Math.max(1, Math.round(extent / 3 / sampleM));
@@ -159,7 +160,7 @@ export function placeDressingTile(
         const at = (x: number, y: number) => data.height[idx(x, y)]!;
         const h0 = (at(x0, y0) * (1 - tx) + at(x0 + 1, y0) * tx) * (1 - ty);
         const h1 = (at(x0, y0 + 1) * (1 - tx) + at(x0 + 1, y0 + 1) * tx) * ty;
-        ground = h0 + h1 - 0.04 * extent;
+        ground = h0 + h1 - DRESSING_TUNING.faceSink * extent;
       }
       // Up: the vertical, or the surface's normal for pieces that lie on the ground.
       if (spec.pose === 'face') {

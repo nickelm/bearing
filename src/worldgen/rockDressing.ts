@@ -103,8 +103,14 @@ export const DRESSING_TUNING = {
   concave: 0.05,
   /** Pieces larger than this (m, size × scale) collide (the proposal's 20 m). */
   collideAbove: 20,
-  /** How far each piece sinks below the lowest ground under it, per meter of size. */
+  /** How far each upright piece sinks below the lowest ground under it, per meter of size. */
   sink: 0.12,
+  /**
+   * How far a piece laid on a face sinks below the ground at its spot, per meter of size:
+   * enough that a flat slab on a convex slope does not overhang its downslope edge and
+   * show a dark underside to a camera below it.
+   */
+  faceSink: 0.15,
 };
 
 /** What placement reads at a cell. */
