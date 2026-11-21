@@ -102,6 +102,7 @@ describe.skipIf(!gpu)('light in the shadows (TSL on Dawn)', () => {
     // Under a low sun surfaces are exposed over the sky (decision 139): the sun's light
     // and the sky's on them alike, so the shadow keeps its depth; under a high sun not at all.
     // Without the night's floor of starlight, which the exposure leaves alone.
+    const nightLight = lighting.nightLight.value;
     lighting.nightLight.value = 0;
     const exposed = await run(5 * DEG, 0.5);
     const gain = lighting.surfaceGain.value;
@@ -113,7 +114,7 @@ describe.skipIf(!gpu)('light in the shadows (TSL on Dawn)', () => {
       expect(luma(exposed.lit[k]!) / luma(plain5.lit[k]!)).toBeCloseTo(gain, 2);
       expect(luma(exposed.shade[k]!) / luma(plain5.shade[k]!)).toBeCloseTo(gain, 2);
     }
-    lighting.nightLight.value = 0.02;
+    lighting.nightLight.value = nightLight;
     const plain60 = await run(60 * DEG, 0.5);
     expect(luma(plain60.lit[0]!)).toBeCloseTo(luma(high.lit[0]!), 5);
     expect(luma(plain60.shade[0]!)).toBeCloseTo(luma(high.shade[0]!), 6);

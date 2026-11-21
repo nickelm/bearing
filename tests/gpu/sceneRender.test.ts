@@ -64,6 +64,8 @@ describe.skipIf(!gpu)('GlobeScene on Dawn', () => {
     const o = scene.orbit;
     o.lat = Math.asin(main.y);
     o.lon = Math.atan2(main.x, main.z);
+    // Day over the camera: the night is dark enough to read as unlit (decision 296).
+    scene.sun.copy(main).normalize();
 
     const frames = async (n: number) => {
       for (let f = 0; f < n; f++) {
