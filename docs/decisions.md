@@ -4777,3 +4777,12 @@ Decision 256's AI checks had run gear down, and the gear's drag had been slowing
 **How it was checked.** `tests/missile.test.ts`: the seeker locks a source in its cone, keeps it 30° off the nose, loses it at 60° and beyond its range; the missile reaches 700–1,100 m/s and hits a crossing target within 6 s; it hits a target turning away at 6 g from 2.5 km and is spent against one 18 km out running away; it never fuzes on its shooter; from the rack, the seeker locks, the launch takes a missile off a station and records it, and the missile hits. `tests/stores.test.ts` for the catalog. The HUD composite (`tools/hud/composite.html?shot=climb&seeker=1` and `seeker=lock`) and the model preview of `store-srm-p` were read. The unit suite, the type check and lint pass.
 
 **Reason:** roadmap R2.6, *IR missile with a seeker circle and simple guidance, one per side*.
+
+### 298. A weapon chosen on the stores format keeps the format up
+
+**Date:** 2026-11-21
+**Decision:** Selecting a weapon brings its master mode (decision 289), and a new master mode applies its preset to the displays (decision 199). The first time a weapon was chosen on the stores format, the air-to-air preset put the moving map back on that display; once the player had chosen the stores format in that mode, their edit kept it there, so the jump happened only once (owner). Now a `select-weapon` command that changes the master mode keeps any large display that showed the stores format, expanded, on it; the other slots take the new mode's preset. The display system also takes the new mode as its last snapshot's at once, so the next update does not apply the preset a second time.
+
+**How it was checked.** In headless Chromium on the displays' composite page (`tools/hud/composite.html?hover=transition&displays=navigation`): SMS chosen, then SRM; the stores format stays, where before the change the moving map replaced it. The unit suite, the type check and lint pass.
+
+**Reason:** the owner's report after flying the IR missile.

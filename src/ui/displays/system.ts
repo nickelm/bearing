@@ -128,13 +128,22 @@ export class DisplaySystem {
     }
     if (c.to === 'avionics') {
       const before = this.avionics.masterMode;
+      const shown = this.display?.slots;
       this.avionics = applyCommand(this.avionics, c.command);
-      if (this.last && this.display && before !== this.avionics.masterMode)
-        this.display = applyPreset(
-          this.display,
-          { ...this.last, avionics: this.avionics },
-          this.edits,
-        );
+      if (this.last && this.display && before !== this.avionics.masterMode) {
+        this.last = { ...this.last, avionics: this.avionics };
+        let d = applyPreset(this.display, this.last, this.edits);
+        // A weapon chosen on the stores format brings its master mode, but the format it
+        // was chosen on stays where it is (owner, decision 298).
+        if (c.command.type === 'select-weapon' && shown) {
+          const slots = { ...d.slots };
+          for (const id of ['leftMfd', 'rightMfd'] as const)
+            if (shown[id].format === 'stores' && shown[id].state === 'expanded')
+              slots[id] = { ...shown[id] };
+          d = { ...d, slots };
+        }
+        this.display = d;
+      }
       this.redraw();
       return;
     }
