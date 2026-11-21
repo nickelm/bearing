@@ -20,6 +20,7 @@ import { GlobalGrid } from './gpu/globalGrid';
 import type { GpuContext } from './gpu/gpuContext';
 import { upsampleMap } from './gpu/upsample';
 import type { PlanetParams } from './params';
+import { clampExaggeration, exaggerateRelief, unexaggeratedHeight } from './reliefExaggeration';
 import type { World } from './pipeline';
 
 export const GLOBAL_STAGES = ['detail', 'erosion', 'readback', 'drainage, rivers, biomes'] as const;
@@ -33,6 +34,8 @@ export interface GlobalWorld {
   /** Boundary uplift (reference m), CPU copy. */
   uplift: Float32Array;
   finish: FinishResult;
+  /** Relief exaggeration the CPU heights and `finish` carry (decision 297); the grid stays unexaggerated. */
+  reliefExaggeration: number;
   timings: { stage: string; ms: number }[];
 }
 
@@ -160,10 +163,17 @@ export async function buildGlobalWorld(
       grid.upload('height', height);
     }
     lap('drainage, rivers, biomes (worker)');
+    // Relief exaggeration (Proposal 0010, decision 297): after climate and biomes, before
+    // anything is built on the terrain. The grid's "height" stays unexaggerated: the tile
+    // kernel synthesizes from it and scales its samples (TileSynthOptions.reliefExaggeration).
+    const reliefExaggeration = clampExaggeration(params.reliefExaggeration);
+    exaggerateRelief(height, finish, reliefExaggeration);
+    grid.reliefExaggeration = reliefExaggeration;
+    lap('relief exaggeration');
     check();
     opts.onProgress?.('done', 1);
     releaseUnused(grid);
-    return { n, grid, height, uplift, finish, timings };
+    return { n, grid, height, uplift, finish, reliefExaggeration, timings };
   } catch (err) {
     grid.dispose();
     throw err;
@@ -190,10 +200,22 @@ function releaseUnused(grid: GlobalGrid): void {
 /** Rebuilds a GlobalWorld from stored data (worldStore.ts): uploads height and uplift to the GPU. */
 export function restoreGlobalWorld(
   gpu: GpuContext,
-  stored: { n: number; height: Float32Array; uplift: Float32Array; finish: FinishResult },
+  stored: {
+    n: number;
+    height: Float32Array;
+    uplift: Float32Array;
+    finish: FinishResult;
+    /** The exaggeration the stored heights carry (decision 297); absent: 1. */
+    reliefExaggeration?: number;
+  },
 ): GlobalWorld {
   const grid = new GlobalGrid(gpu, stored.n);
-  grid.upload('height', stored.height);
+  const e = clampExaggeration(stored.reliefExaggeration);
+  grid.reliefExaggeration = e;
+  grid.upload(
+    'height',
+    e === 1 ? stored.height : stored.height.map((h) => unexaggeratedHeight(h, e)),
+  );
   grid.upload('uplift', stored.uplift);
   return {
     n: stored.n,
@@ -201,6 +223,7 @@ export function restoreGlobalWorld(
     height: stored.height,
     uplift: stored.uplift,
     finish: stored.finish,
+    reliefExaggeration: e,
     timings: [],
   };
 }

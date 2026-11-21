@@ -129,6 +129,7 @@ import {
 } from '../../common/terrain/tileMesh';
 import type { MeshOptions, TileViewMode } from '../../common/terrain/tileMesh';
 import { MicroFacets } from './microFacets';
+import { setClimateExaggeration } from '../../common/seasons';
 
 const ZERO = new Vector3();
 const NO_TILE = new Vector4();
@@ -666,6 +667,7 @@ export class TerrainRenderer {
   /** Shows a world (or nothing). Drops all cached tiles. */
   setWorld(world: TerrainWorld | null): void {
     this.world = world;
+    if (world) setClimateExaggeration(world.synth.exaggeration);
     if (world) {
       this.water.reliefScale.value = world.reliefScale;
       this.land.reliefScale.value = world.reliefScale;

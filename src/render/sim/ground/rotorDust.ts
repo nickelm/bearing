@@ -66,7 +66,8 @@ import { Vec3d } from '../../../core/vec3d';
 import { directionToCubeFace } from '../../../core/coords';
 import { tileForDirection, TILE_TEXELS } from '../../../core/tiles';
 import { Biome, TileCover } from '../../../worldgen/biomes';
-import { earthElevation, LAPSE_RATE } from '../../../worldgen/climate';
+import { LAPSE_RATE } from '../../../worldgen/climate';
+import { drawnEarthElevation } from '../../common/seasons';
 import { NO_LAKE } from '../../../worldgen/gpu/tileSynth';
 import { srgbToLinear } from '../../common/palette';
 import type { ClimateTexture } from '../../common/climateTexture';
@@ -387,7 +388,7 @@ export class RotorDust {
       }
     }
     const c = this.climate.sampleAt(d, this.climateSample);
-    const meanT = c[0]! - earthElevation(Math.max(0, h), c[3]!, opts.reliefScale) * LAPSE_RATE;
+    const meanT = c[0]! - drawnEarthElevation(Math.max(0, h), c[3]!, opts.reliefScale) * LAPSE_RATE;
     const hemisphere = Math.max(-1, Math.min(1, d.y * 20));
     const seasonal =
       Math.cos((this.land.seasonPhase.value - WARMEST_PHASE) * 2 * Math.PI) * hemisphere;

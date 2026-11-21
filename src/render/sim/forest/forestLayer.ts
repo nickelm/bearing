@@ -108,7 +108,8 @@ import {
   standTop,
   tropicalShare,
 } from '../../../worldgen/canopy';
-import { earthElevation, LAPSE_RATE } from '../../../worldgen/climate';
+import { LAPSE_RATE } from '../../../worldgen/climate';
+import { drawnEarthElevation } from '../../common/seasons';
 import { MAX_BAKED_LEVEL, NO_LAKE } from '../../../worldgen/gpu/tileSynth';
 import type { TileData } from '../../../worldgen/gpu/tileSynth';
 import type { ClimateTexture } from '../../common/climateTexture';
@@ -381,7 +382,7 @@ export function* treePlacer(
   /** Climate at the current site: sets the annual mean `meanT` (°C) there. */
   const climateHere = (h: number) => {
     ctx.climate(d, climate);
-    meanT = climate[0]! - earthElevation(h, climate[3]!, opts.reliefScale) * LAPSE_RATE;
+    meanT = climate[0]! - drawnEarthElevation(h, climate[3]!, opts.reliefScale) * LAPSE_RATE;
   };
   const push = (
     kind: TreeKind,
@@ -538,7 +539,7 @@ export function* treePlacer(
       climate[1]!,
       climate[2]!,
       climate[0]! -
-        earthElevation(Math.max(0, climate[3]!), climate[3]!, opts.reliefScale) * LAPSE_RATE,
+        drawnEarthElevation(Math.max(0, climate[3]!), climate[3]!, opts.reliefScale) * LAPSE_RATE,
       0.05,
       regionalTerm(d.x * R, d.y * R, d.z * R, cSeed),
     );
@@ -587,7 +588,7 @@ export function* treePlacer(
         );
         const slope = Math.hypot(hx - h, hy - h) / (step1 * sampleM);
         if (slope > 0.12) continue;
-        if (earthElevation(h, climate[3]!, opts.reliefScale) > 1500) continue;
+        if (drawnEarthElevation(h, climate[3]!, opts.reliefScale) > 1500) continue;
         const share =
           ctx.hedgeShare ??
           hedgeShare(

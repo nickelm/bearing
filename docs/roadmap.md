@@ -322,6 +322,10 @@ _Depends on all of R2._
 
 Runs beside the phases, not on their critical path (`docs/proposals/0009-settlements-and-cities.md`, `docs/plans/cities.md`, decisions 259–270): urban ground, a game-agnostic settlement generator (tiers, cultural styles, tensor-field streets, blocks, parcels, districts, buildings, landmarks, candidate targets), city meshes by detail level, night lighting, plumes, damage states and the map's city extents. Touches R3 and later: R3's line of sight and ground entities can read the building colliders; R5's consequences can set damage states and lighting levels; the planner may read the candidate targets through its own adapter (rule 9 forbids it the generator's modules). Open items are under *Out of sync* in `TODO.md`.
 
+## Out of Sync: Proposal 0010, Terrain Art Direction
+
+Runs beside the phases on branch `feature/terrain-art` (`docs/proposals/0010-terrain-art-direction.md`, `docs/plans/terrain-art.md`, decisions 296 on): relief exaggeration after climate and biomes (the campaign's coarse pass stays unexaggerated), curvature, strata and color drift in the terrain shader, rock dressing, valley mist and zone height fog, ambient particles, a stylized sky, waterfalls and rapids, and as stretch work points of interest and viewshed composition. Every layer has an off switch and a quality tier (`TerrainArtSettings`). Touches R6.4 (the governor's steps) and R6.8 (zone air, the falls wonder). Open items are under *Out of sync* in `TODO.md`.
+
 ## Dependency Overview
 
 ```mermaid

@@ -64,7 +64,8 @@ import { cubeFaceUvToDirection, directionToCubeFace } from '../../../core/coords
 import { tileForDirection, tileKeyString, TILE_TEXELS } from '../../../core/tiles';
 import type { TileKey } from '../../../core/tiles';
 import { Vec3d } from '../../../core/vec3d';
-import { earthElevation, LAPSE_RATE } from '../../../worldgen/climate';
+import { LAPSE_RATE } from '../../../worldgen/climate';
+import { drawnEarthElevation } from '../../common/seasons';
 import { FARMABLE_BIOMES, srgbToLinear } from '../../common/palette';
 import { NO_LAKE } from '../../../worldgen/gpu/tileSynth';
 import type { TileData } from '../../../worldgen/gpu/tileSynth';
@@ -409,7 +410,8 @@ export function* coverPlacer(
       const mat = materialAt(data, fx, fy);
       const cover = mat & 0xff;
       ctx.climate(d, climate);
-      const meanT = climate[0]! - earthElevation(h, climate[3]!, opts.reliefScale) * LAPSE_RATE;
+      const meanT =
+        climate[0]! - drawnEarthElevation(h, climate[3]!, opts.reliefScale) * LAPSE_RATE;
       // The drawn triangle's slope: k = [00, 10, 11] below the diagonal, [00, 11, 01] above.
       const tr = triangleAt(cx, cy);
       const [ka, kb, kc] = tr.k as [number, number, number];

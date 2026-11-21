@@ -389,7 +389,16 @@ export class StrategicScene {
   /** The world's tiles for the relief mesh (null until the global pass, or for none). */
   setTerrainWorld(world: StrategicReliefWorld | null): void {
     this.relief.setWorld(world);
+    // Peaks' spot heights show the exaggerated relief (decision 297).
+    const e = world?.synth.exaggeration ?? 1;
+    if (e !== this.reliefExaggeration) {
+      this.reliefExaggeration = e;
+      this.lightsDirty = true;
+    }
   }
+
+  /** Relief exaggeration of the drawn world (decision 297): the graph's heights are unexaggerated. */
+  private reliefExaggeration = 1;
 
   /** Zones from the eroded world, for their labels (decision 213); null to drop them. */
   setZones(zones: readonly ZoneRecord[] | null): void {
@@ -656,7 +665,15 @@ export class StrategicScene {
         this.infraLines.setOverlays(infra, dry);
         this.infraSites.setOverlays(infra, dry);
         this.labels.setLabels(
-          buildLabels(d.graph, d.cast, heightAt, military, d.infra, this.zones),
+          buildLabels(
+            d.graph,
+            d.cast,
+            heightAt,
+            military,
+            d.infra,
+            this.zones,
+            this.reliefExaggeration,
+          ),
         );
       } else {
         this.lights.setLights(null);

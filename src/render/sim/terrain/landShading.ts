@@ -59,7 +59,7 @@ import {
 import { LAPSE_RATE } from '../../../worldgen/climate';
 import { CONIFER_T, FIELD_CELL, SEED_CROP } from '../../../worldgen/canopy';
 import { cellHashNode, fieldCellNode, hashBitsNode } from '../../common/canopyNode';
-import { earthElevationNode } from '../../common/seasons';
+import { CLIMATE_EXAGGERATION, earthElevationNode } from '../../common/seasons';
 import { WAVE_PERIOD } from '../water/waterShading';
 import { WARMEST_PHASE } from '../../common/seasons';
 
@@ -618,7 +618,8 @@ export class LandShading {
     const dryRock = i.landform
       ? smoothstep(0.3, 0.75, i.landform.x)
       : smoothstep(0.32, 0.14, moisture);
-    const layer = i.height.div(STRATA_THICKNESS);
+    // Strata at the kernel's unexaggerated heights, so the bands sit on its benches (decision 297).
+    const layer = i.height.mul(CLIMATE_EXAGGERATION.inverse).div(STRATA_THICKNESS);
     const k = floor(layer);
     const inLayer = fract(layer);
     const pick = hash3(vec3(k, k.mul(0.37), 7));

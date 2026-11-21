@@ -26,6 +26,7 @@
  * | road (route numbers, pass and coast road names; decision 104) | – | – | all |
  * | airbase (in the holder's color, budgeted; decision 247) | – | – | all |
  */
+import { exaggeratedHeight } from '../../../worldgen/reliefExaggeration';
 import type { ZoneRecord } from '../../../worldgen/zones';
 import type { Cast } from '../../../campaign/cast';
 import {
@@ -261,8 +262,11 @@ export function buildLabels(
   military: MilitaryOverlays | null = null,
   infra: Infrastructure | null = null,
   zones: readonly ZoneRecord[] | null = null,
+  /** Relief exaggeration of the drawn world (decision 297): the graph's peak heights are unexaggerated. */
+  reliefExaggeration = 1,
 ): MapLabel[] {
   const out: MapLabel[] = [];
+  const peakHeight = (h: number) => exaggeratedHeight(h, reliefExaggeration);
   const f = graph.features;
   for (let i = 0; i < f.count; i++) {
     const kind = f.kind[i] as FeatureKind;
@@ -277,12 +281,14 @@ export function buildLabels(
     out.push({
       id: out.length,
       text:
-        kind === FeatureKind.Peak ? peakText(f.names[i]!, f.height[i]!) : labelText(f.names[i]!),
+        kind === FeatureKind.Peak
+          ? peakText(f.names[i]!, peakHeight(f.height[i]!))
+          : labelText(f.names[i]!),
       style: STYLE[kind],
       importance: f.importance[i]!,
       placement: placementOf(kind),
       anchor,
-      height: kind === FeatureKind.Peak ? f.height[i]! : Math.max(0, heightAt(anchor)),
+      height: kind === FeatureKind.Peak ? peakHeight(f.height[i]!) : Math.max(0, heightAt(anchor)),
       path: path.length >= 6 ? Float64Array.from(path) : null,
       gap: kind === FeatureKind.Peak ? 5 : 0,
       bands,

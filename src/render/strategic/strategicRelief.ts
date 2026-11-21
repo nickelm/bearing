@@ -86,7 +86,11 @@ import { BiomeFillTexture, hexToLinear, STEEP_ROCK_FILL } from './biomeFill';
 import { COAST_DISTANCE_MAX, CoastDistanceTexture } from './coastDistance';
 import { daylightNode, lakeIceNode, SEA_ICE, seaIceNode, SNOW, snowNode } from './mapDaylight';
 import { ClimateTexture } from '../common/climateTexture';
-import { earthElevationNode, surfaceTemperatureNode } from '../common/seasons';
+import {
+  earthElevationNode,
+  setClimateExaggeration,
+  surfaceTemperatureNode,
+} from '../common/seasons';
 import {
   COASTLINE_PX,
   mapWaterNode,
@@ -602,6 +606,7 @@ export class StrategicRelief {
   /** Shows a world (or nothing). Drops all cached tiles. */
   setWorld(world: StrategicReliefWorld | null): void {
     this.world = world;
+    if (world) setClimateExaggeration(world.synth.exaggeration);
     if (world) {
       this.biomeFill.setBiomes(world.biome, world.biomeResolution);
       this.reliefScale.value = world.reliefScale;

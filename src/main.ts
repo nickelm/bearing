@@ -1079,6 +1079,7 @@ async function main(): Promise<void> {
             height: global.height,
             uplift: global.uplift,
             finish: global.finish,
+            reliefExaggeration: global.reliefExaggeration,
           },
           alignments: alignments ?? undefined,
         })

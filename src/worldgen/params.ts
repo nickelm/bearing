@@ -20,6 +20,13 @@ export interface PlanetParams {
    * Does not affect the atmosphere or aircraft performance.
    */
   reliefScale: number;
+  /**
+   * Relief exaggeration (Proposal 0010, decision 297): multiplies the height above the
+   * sea after climate and biomes, before networks, settlements and props, so the
+   * landscape is taller without changing what grows where. 1.0–1.5; absent means 1.
+   * Not to be confused with `reliefScale`, the planet-to-Earth ratio of decision 14.
+   */
+  reliefExaggeration?: number;
   /** Obliquity of the rotation axis; drives seasons (decision 15). */
   axialTilt: Radians;
   /** Mean solar day (noon to noon). */
@@ -41,6 +48,7 @@ export const DEFAULT_PLANET_PARAMS: Readonly<PlanetParams> = {
   temperatureOffset: 0,
   moistureScale: 1.0,
   reliefScale: PLANET_RADIUS / EARTH_RADIUS,
+  reliefExaggeration: 1.3,
   axialTilt: 23.44 * DEG,
   solarDay: 24 * HOUR,
   year: 365 * DAY,

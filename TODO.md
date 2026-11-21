@@ -398,3 +398,17 @@ Runs beside the main line (`docs/proposals/0009-settlements-and-cities.md`, `doc
 - [x] Cities at night from afar; chunks culled at their ground (decision 293).
 - [ ] Targeting pod (P3–P5): set `CityLayer.zoom` from the pod's magnification (decision 279).
 - [ ] Wire settlement pads into `terrainEditsFor` once the sim's height service can take them (decision 264).
+
+## Out of sync: Proposal 0010, terrain art direction
+
+Branch `feature/terrain-art`; plan `docs/plans/terrain-art.md`; decisions 296 on.
+
+- [x] Phase 0: survey, baseline (`docs/reports/terrain-art-baseline.md`), plan, standard views (`ART_VIEWS=1`)
+- [x] Phase 1: relief exaggeration (decision 297), invariants at 1.0, 1.3 and 1.5
+- [ ] Phase 2: curvature bake and shading, strata by lithology, color drift
+- [ ] Phase 3: rock dressing kit, placement, colliders, LOD, budget
+- [ ] Phase 4: valley mist and height fog, ambient particles, sky style and aurora, budget
+- [ ] Phase 5: waterfalls, rapids, lake reflection
+- [ ] Phase 6 (stretch): points of interest
+- [ ] Phase 7 (stretch): viewshed composition
+- [ ] Phase 8: metrics over 20 seeds, screenshots, report

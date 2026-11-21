@@ -53,7 +53,13 @@ export async function previewWorld(
     version: GENERATOR_VERSION,
     savedAt: Date.now(),
     tectonic: world,
-    global: { n: global.n, height: global.height, uplift: global.uplift, finish: global.finish },
+    global: {
+      n: global.n,
+      height: global.height,
+      uplift: global.uplift,
+      finish: global.finish,
+      reliefExaggeration: global.reliefExaggeration,
+    },
   };
   mkdirSync(CACHE_DIR, { recursive: true });
   writeFileSync(file, serialize(stored));

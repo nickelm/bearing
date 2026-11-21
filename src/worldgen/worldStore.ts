@@ -19,7 +19,7 @@ import type { PlanetParams } from './params';
 import type { World } from './pipeline';
 
 /** Bump whenever generation output changes, so cached worlds are regenerated. */
-export const GENERATOR_VERSION = 34;
+export const GENERATOR_VERSION = 35;
 
 const DB_NAME = 'bearing-worlds';
 const STORE = 'worlds';
@@ -36,6 +36,8 @@ export interface StoredWorld {
     height: Float32Array;
     uplift: Float32Array;
     finish: FinishResult;
+    /** Relief exaggeration the heights carry (decision 297); absent in worlds stored before it: 1. */
+    reliefExaggeration?: number;
   };
   /** Roads and railways aligned on the eroded world (decision 184); absent if skipped (?align=0). */
   alignments?: Alignments;

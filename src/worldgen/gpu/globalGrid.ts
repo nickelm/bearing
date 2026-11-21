@@ -16,6 +16,12 @@ export class GlobalGrid {
   private readonly maps = new Map<string, { buffer: GPUBuffer; type: MapType }>();
   /** Most bytes held in maps at any one time. */
   peakBytes = 0;
+  /**
+   * Relief exaggeration of the CPU copies of this grid's heights (decision 297). The
+   * grid's own "height" map stays unexaggerated; the tile kernel reads this to scale
+   * its inputs and samples (TileSynthOptions.reliefExaggeration).
+   */
+  reliefExaggeration = 1;
 
   constructor(
     readonly gpu: GpuContext,

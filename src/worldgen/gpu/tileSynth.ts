@@ -297,6 +297,16 @@ export interface TileSynthOptions {
   tuning?: Partial<typeof TILE_SYNTH_TUNING>;
   /** The war's natural wonders the kernel shapes (decision 221); absent: none. */
   wonders?: readonly TileWonder[];
+  /**
+   * Relief exaggeration (Proposal 0010, decision 297): the factor the global data
+   * (`height`, lake levels, `basinLevel`, `treeline`, the river index's surfaces, the
+   * wonders' bases) were multiplied by above the sea. The kernel synthesizes from
+   * them divided back, on the grid's own unexaggerated "height" map, and the samples'
+   * heights and lake levels above the sea are multiplied again on readback, so a tile
+   * at any exaggeration is the unexaggerated tile stretched: the same materials,
+   * biomes, rivers and forest, its detail scaled with the rest. Default 1.
+   */
+  reliefExaggeration?: number;
 }
 
 /** A natural wonder shaped by the tile kernel (decision 221). */
@@ -422,6 +432,8 @@ export class TileSynthesizer {
   /** Per global cell: landform masks, four unorm8 (landformMasks.ts). */
   private readonly masks: GPUBuffer;
   private readonly firstWavelength: number;
+  /** Relief exaggeration of the inputs and outputs (Proposal 0010, decision 297). */
+  readonly exaggeration: number;
 
   constructor(
     private readonly grid: GlobalGrid,
@@ -443,6 +455,11 @@ export class TileSynthesizer {
     // lakes are at least 3 m deep, so that is enough.
     // Closed basins (decision 210): bit 17 salt lake, bit 18 playa; a playa's cells
     // carry its crust's level like a lake, so the shore code below shapes them.
+    const ex = opts.reliefExaggeration ?? grid.reliefExaggeration;
+    this.exaggeration = ex;
+    const un = (x: number) => (x > 0 ? x / ex : x);
+    const height = ex === 1 ? opts.height : opts.height.map(un);
+    const treeline = ex === 1 ? opts.treeline : opts.treeline.map(un);
     const packed = new Uint32Array(grid.cellCount * 2);
     for (let c = 0; c < grid.cellCount; c++) {
       const depth = opts.lakeDepth[c]!;
@@ -456,10 +473,12 @@ export class TileSynthesizer {
         (opts.forest[c]! << 24);
       const level =
         depth > 0 ? opts.height[c]! + depth : playa ? opts.basinLevel![c]! : NO_LAKE_HALF;
-      packed[c * 2 + 1] = toHalf(level) | (toHalf(Math.max(-60_000, opts.treeline[c]!)) << 16);
+      packed[c * 2 + 1] =
+        toHalf(level === NO_LAKE_HALF ? level : un(level)) |
+        (toHalf(Math.max(-60_000, treeline[c]!)) << 16);
     }
     this.material = gpu.storageFrom(packed, 'tiles.globalMaterial');
-    this.masks = buildLandformMasks(grid, opts.biome, opts.height, opts.treeline, opts.lithology);
+    this.masks = buildLandformMasks(grid, opts.biome, height, treeline, opts.lithology);
 
     const code = /* wgsl */ `${grid.wgsl}
 struct Tile { face: i32, level: i32, x: i32, y: i32, segStart: u32, segCount: u32, octaves: u32,
@@ -489,7 +508,10 @@ const TWO_PI: f32 = 6.283185307;
 const NO_LAKE: f32 = ${NO_LAKE};
 const NO_LAKE_HALF: f32 = ${f(NO_LAKE_HALF)};
 const RIVER_REACH: f32 = ${f(t.riverReach)};
-${wondersWgsl(opts.wonders ?? [], R)}
+${wondersWgsl(
+  (opts.wonders ?? []).map((w) => ({ ...w, base: un(w.base) })),
+  R,
+)}
 
 // The direction of face sample (ix, iy) of n per face edge, bit for bit the same from
 // either face of a seam: the warped coordinate comes from integers, is odd in its
@@ -1251,9 +1273,13 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     });
     const src = this.opts.index.segments.data;
     const segData = new Float32Array(Math.max(1, deltaAt) * RIVER_SEGMENT_FIELDS);
+    const ex = this.exaggeration;
     segIds.forEach((s, i) => {
       for (let k = 0; k < RIVER_SEGMENT_FIELDS; k++) {
-        segData[i * RIVER_SEGMENT_FIELDS + k] = src[s * RIVER_SEGMENT_FIELDS + k]!;
+        const v = src[s * RIVER_SEGMENT_FIELDS + k]!;
+        // Water surfaces (fields 8–11) into the kernel's unexaggerated space.
+        segData[i * RIVER_SEGMENT_FIELDS + k] =
+          k >= 8 && ex !== 1 && v > 0 && v < NO_SURFACE * 0.5 ? v / ex : v;
       }
     });
     const deltas = this.opts.index.deltas;
@@ -1292,8 +1318,11 @@ fn main(@builtin(global_invocation_id) gid: vec3u) {
     const lakes = new Float32Array(keys.length * SAMPLES);
     const materials = new Uint32Array(keys.length * SAMPLES);
     for (let i = 0; i < heights.length; i++) {
-      heights[i] = asF32[i * 4]!;
-      lakes[i] = asF32[i * 4 + 1]!;
+      const h = asF32[i * 4]!;
+      const l = asF32[i * 4 + 1]!;
+      // Back to the exaggerated surface (Proposal 0010): land and lake levels above the sea.
+      heights[i] = h > 0 ? h * ex : h;
+      lakes[i] = l > 0 ? l * ex : l;
       materials[i] = asU32[i * 4 + 2]!;
     }
 

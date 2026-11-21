@@ -17,7 +17,8 @@ import { syntheticConfig } from './helpers/weatherWorld';
 // The demo's worlds as the app builds them (decision 232). A change to generation
 // that bumps GENERATOR_VERSION must re-check them: run `npm run seeds`, choose the
 // seeds again if one lost its front, and update DEMO_SEEDS and this version.
-const CHECKED_ON_VERSION = 34;
+// Version 35 (relief exaggeration, decision 297) leaves the coarse pass, and with it the cast, as it was.
+const CHECKED_ON_VERSION = 35;
 
 describe('demo seeds', () => {
   const grid = new CubeGrid(COARSE_RESOLUTION);
