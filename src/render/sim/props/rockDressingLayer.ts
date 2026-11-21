@@ -207,6 +207,9 @@ export function rockDressingLayer(density: () => number): TileLayerOptions {
     ceiling: 6000,
     stride: DRESSING_STRIDE,
     seedOf: dressingSeed,
+    // Pieces on steep walls drew their undersides dark with their own normals; leaning the
+    // normals toward the instance's up shades them like the slope they sit on (decision 299).
+    normalToUp: 0.7,
     place: (data, maps, seed, radius, clear) =>
       placeDressingTile(data, maps, seed, radius, clear, density()),
   };

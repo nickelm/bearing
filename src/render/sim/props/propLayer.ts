@@ -29,6 +29,7 @@ import {
   cos,
   cross,
   Fn,
+  mix,
   modelWorldMatrix,
   normalize,
   positionWorld,
@@ -129,6 +130,11 @@ export interface TileLayerOptions {
   stride: number;
   /** The layer's hash seed for a world. */
   seedOf: (worldSeed: WorldSeed) => number;
+  /**
+   * How far shading normals lean toward the instance's up, 0..1 (default 0): rock dressing
+   * shades like the ground it sits on (decision 299; see the report's known issues).
+   */
+  normalToUp?: number;
   place: (
     data: TileData,
     maps: PropWorldMaps,
@@ -397,7 +403,8 @@ export class PropLayer {
       return p;
     })();
     const n0 = attribute('normal', 'vec3');
-    const normal = normalize(ax.mul(n0.x).add(up.mul(n0.y)).add(az.mul(n0.z))) as V3;
+    const modelNormal = normalize(ax.mul(n0.x).add(up.mul(n0.y)).add(az.mul(n0.z)));
+    const normal = normalize(mix(modelNormal, up, this.layer.normalToUp ?? 0)) as V3;
     const albedo = attribute('color', 'vec3').mul(params.z) as V3;
     m.colorNode = lighting.applyAerial(
       lighting.shadeDiffuse(albedo, normal, positionWorld as V3),
