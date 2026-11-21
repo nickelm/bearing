@@ -16,7 +16,8 @@
  *     cells (sampled slope above 45°) with a piece within one cell, pieces per tile, and
  *     pieces whose foot stands above the ground at their own spot (floating);
  *   - waterfalls on the eroded world's rivers: falls, named falls, and major knickpoints
- *     (a river at least 20 m wide whose surface drops 15 m within 300 m) with a fall within
+ *     (a river at least 20 m wide whose surface drops at least 15 m at 5% or steeper over
+ *     about 300 m) with a fall within
  *     600 m;
  *   - points of interest: count per type, every one named; and the share of airfields
  *     with a landmark in view from an approach after composition;
@@ -183,7 +184,9 @@ it('measures Proposal 0010 over the seeds', async () => {
           e++;
         }
         const drop = d[s * F + 8]! - d[(e - 1) * F + 9]!;
-        if (drop >= 15) {
+        // A major knickpoint: at least 15 m of drop at 5% or steeper over the run measured
+        // (segments are often longer than 300 m: a gentle reach is no knickpoint).
+        if (drop >= 15 && drop / Math.max(run, 1) >= 0.05) {
           knick.push(new Vec3d(d[s * F]!, d[s * F + 1]!, d[s * F + 2]!));
           s = e;
         }
