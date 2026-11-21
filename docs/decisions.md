@@ -4749,12 +4749,9 @@ Decision 256's AI checks had run gear down, and the gear's drag had been slowing
 
 ### 296. Night: no grain on black, no lit ground without lamps, a darker night
 
-### 297. IR missiles: one per side, a seeker circle, proportional navigation, a proximity fuze
-
 **Date:** 2026-11-21
 **Decision:**
 
-<<<<<<< HEAD
 - **Grain.** The simulation view's film grain (decision 138) fades out toward black as well as toward white: its amplitude is `grainAmount` × (1 − 0.6 Y) × smoothstep(0.04, 0.2, Y) on the encoded luma Y. It was strongest in the darkest tones, so a night sky and unlit ground crawled with noise. The dither of half a code value stays. The strategic view's paper grain (decision 93) is a separate effect and never reaches the simulation view.
 - **Town glow on the ground.** A planned town lights itself with its streetlights, windows and the far prisms' glow (decision 293) out to the prism range. Its light disk (decision 71) now adds to the ground only by smoothstep(10 km, 14 km) of the distance from the camera; unplanned towns keep their disk. The disk had washed the whole town and the fields round it in a warm tan, with the canopy shell's woods cut out of it in black.
 - **Far window light.** Beyond the windows' range (1.4 km), a building's walls and the far block prisms' roofs no longer glow evenly with the windows' mean light (decision 293). Lights are points on a 14 m lattice of planet positions: about one cell in ten, by the lighting level, holds a small bright spot; between 5 and 10 km from the camera the spots give way to their mean, about a tenth of the old roof glow. The even glow on roofs read as lit ground.
@@ -4764,7 +4761,12 @@ Decision 256's AI checks had run gear down, and the gear's drag had been slowing
 - `tools/render.preview.ts` takes `FULL_MOON` and `NIGHT_LIGHT` to try the night's light.
 
 **Reason:** the owner saw grain on black areas at night and light patches on the ground near towns that read as lit ground, not as lights, and asked for a night dark enough that a night vision system will be needed.
-=======
+
+### 297. IR missiles: one per side, a seeker circle, proportional navigation, a proximity fuze
+
+**Date:** 2026-11-21
+**Decision:**
+
 - **Data.** An IR missile's catalog entry carries a `missile` block: the seeker's gimbal limit, acquisition cone and lock range, the motor's thrust, burn and propellant, proportional navigation's gain and g limit, the fuze radius and the missile's life. The Alliance's `srm` (AIM-9M figures: 40° gimbal, 2.5° cone, 10 km, 12.5 kN for 5.2 s, 35 g, 8 m fuze) and the Pact's new `srm-p` (R-73 figures: 60° gimbal, 3° cone, 12 km, 14 kN for 5 s, 40 g, 9 m fuze, 105 kg), with its own model (canards forward). The Pact's flies once a Pact fighter has pylons and flight data (R2.7).
 - **Heat sources** are the aircraft a seeker can see, refreshed by the app each frame and carried along their velocities between refreshes: in a take-over the other side's airborne flights (each one's lead on its route), in Free Flight the traffic. The seeker is itself a sensor (rule 12): it sees what is hot inside its cone and range, without a display's filtered picture.
 - **The aircraft's seeker** (`sim/flight/missile.ts`, `Seeker`) looks along the boresight, or slaved to a radar lock inside its gimbal limit; a source inside its cone and lock range locks, and it tracks that source until it leaves the gimbal limit or the range. The HUD draws its circle at the cone's size (at least a readable ring), dashed while it searches and solid on the target it tracks, with the missile's name and count (and SAFE).
@@ -4775,4 +4777,3 @@ Decision 256's AI checks had run gear down, and the gear's drag had been slowing
 **How it was checked.** `tests/missile.test.ts`: the seeker locks a source in its cone, keeps it 30° off the nose, loses it at 60° and beyond its range; the missile reaches 700–1,100 m/s and hits a crossing target within 6 s; it hits a target turning away at 6 g from 2.5 km and is spent against one 18 km out running away; it never fuzes on its shooter; from the rack, the seeker locks, the launch takes a missile off a station and records it, and the missile hits. `tests/stores.test.ts` for the catalog. The HUD composite (`tools/hud/composite.html?shot=climb&seeker=1` and `seeker=lock`) and the model preview of `store-srm-p` were read. The unit suite, the type check and lint pass.
 
 **Reason:** roadmap R2.6, *IR missile with a seeker circle and simple guidance, one per side*.
->>>>>>> e9d3c43 (R2.6: IR missiles, one per side: seeker circle, proportional navigation, proximity fuze, flame and smoke (decision 297))
