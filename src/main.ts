@@ -1,3 +1,13 @@
+import { worldProfile } from './worldgen/worldProfile';
+import { bearingPois } from './render/sim/props/poiWorld';
+import {
+  ART_GOVERNOR_STEPS,
+  artFromQuery,
+  governed as governedArt,
+  terrainArtSettings,
+} from './render/common/terrainArt';
+import { clampExaggeration } from './worldgen/reliefExaggeration';
+import { surfaceArtSampler } from './render/common/terrain/surfaceArt';
 import { makeZoneShift } from './render/common/zoneLook';
 import './style.css';
 import { Vector2, WebGPURenderer } from 'three/webgpu';
@@ -240,6 +250,8 @@ async function main(): Promise<void> {
   const freeFlightMode = query.get('mode') === 'freeflight';
   const queryRes = Number(query.get('res'));
   const queryGres = Number(query.get('gres'));
+  // ?profile=bearing|natural|heroic: the world's genre (decision 296).
+  const profile = worldProfile(query.get('profile'));
   const worldParams: WorldGuiParams = {
     // The campaign opens on the first demo seed, which has a land front and so close air
     // support (decision 248); Free Flight keeps the long-standing default world.
@@ -251,6 +263,10 @@ async function main(): Promise<void> {
     plateCount: DEFAULT_PLANET_PARAMS.plateCount,
     oceanFraction: DEFAULT_PLANET_PARAMS.oceanFraction,
     reliefScale: Number(DEFAULT_PLANET_PARAMS.reliefScale.toFixed(3)),
+    // ?relief=1.0 … 1.5 (Proposal 0010, decision 297), else the world profile's.
+    reliefExaggeration: clampExaggeration(
+      Number(query.get('relief') ?? profile.reliefExaggeration),
+    ),
     temperatureOffset: DEFAULT_PLANET_PARAMS.temperatureOffset,
     moistureScale: DEFAULT_PLANET_PARAMS.moistureScale,
     erosionStrength: DEFAULT_PLANET_PARAMS.erosionStrength,
@@ -283,6 +299,9 @@ async function main(): Promise<void> {
     scene: query.get('view') === 'simulation' && !freeFlightMode ? 'simulation' : 'strategic',
     simCamera: 'observer',
     station: '',
+    // ?art=off|low|medium|high and ?artStyle=bearing|storybook|muted (decision 296).
+    artQuality: artFromQuery(query).quality,
+    artStyle: artFromQuery(query).style,
   };
   // The free camera is a development tool (decision 72): the simulation view is entered through
   // a unit (Follow, or an observer at a station), and the free camera only with ?dev (R2.4).
@@ -367,6 +386,7 @@ async function main(): Promise<void> {
 
   let grid = new CubeGrid(worldParams.resolution);
   const globe = new GlobeScene(renderer, { radius: DEFAULT_PLANET_PARAMS.radius, grid });
+  globe.setDressingDensity(profile.dressingDensity);
   // The moon and the stars are placed from the orbit and the campaign's calendar (decision 140).
   globe.planetOrbit = orbitParams;
   globe.calendar = calendar;
@@ -627,6 +647,7 @@ async function main(): Promise<void> {
       plateCount: worldParams.plateCount,
       oceanFraction: worldParams.oceanFraction,
       reliefScale: worldParams.reliefScale,
+      reliefExaggeration: worldParams.reliefExaggeration,
       temperatureOffset: worldParams.temperatureOffset,
       moistureScale: worldParams.moistureScale,
       erosionStrength: worldParams.erosionStrength,
@@ -840,12 +861,21 @@ async function main(): Promise<void> {
         edits,
         // Each zone's palette shift (decision 213).
         zoneShift: global.finish.zones ? makeZoneShift(global.finish.zones, global.n) : undefined,
+        // Curvature, strata and rock tone (decision 298).
+        surfaceArt:
+          global.finish.curvature && global.finish.lithology
+            ? surfaceArtSampler({
+                n: global.n,
+                curvature: global.finish.curvature,
+                lithology: global.finish.lithology,
+              })
+            : undefined,
       });
       // Landform props from the eroded grid's rock, provinces and biomes (decision 225), dense
       // at the karst-bay and pillar-forest wonders.
       const propWonders = (kind: number) =>
         terrain.wonders.filter((w) => w.kind === kind).map((w) => new Vec3d(...w.dir));
-      globe.props.setMaps(
+      const propMaps =
         global.finish.province && global.finish.lithology
           ? {
               n: global.n,
@@ -855,10 +885,38 @@ async function main(): Promise<void> {
               karstWonders: propWonders(WonderKind.KarstBay),
               pillarWonders: propWonders(WonderKind.PillarForest),
             }
-          : null,
-      );
+          : null;
+      globe.props.setMaps(propMaps);
+      // Rock dressing reads the same maps (decision 299).
+      globe.rocks.setMaps(propMaps);
       // Mountain shadows are baked from the global heights (decision 139).
       globe.shadows.setHeights(global.height, global.n);
+      // Valley mist and the zones' height fog read the ground and zones at the eye (decision 300).
+      globe.zoneAir.setWorld({ n: global.n, height: global.height, zones: global.finish.zones });
+      // Points of interest, composed into the airfields' views (decisions 302, 303).
+      const poiResult = bearingPois(
+        {
+          n: global.n,
+          radius: params.radius,
+          height: global.height,
+          biome: global.finish.biome,
+          province: global.finish.province,
+          lithology: global.finish.lithology,
+          discharge: global.finish.drainage.discharge,
+        },
+        strategic.graph,
+        airbases.airbases.map((a) => ({ point: a.point, heading: a.heading })),
+        params.seed,
+        terrain.wonders.map((w) => ({ dir: w.dir, height: 300 })),
+        profile.poiKinds,
+        profile.poiDensity,
+      );
+      console.info(
+        `Points of interest: ${poiResult.pois.length} in ${poiResult.ms.toFixed(0)} ms; ` +
+          `a landmark in view of ${(100 * poiResult.coverage).toFixed(0)}% of airfields`,
+      );
+      globe.setPointsOfInterest(poiResult.pois, propMaps);
+      strategicView.setPointsOfInterest(poiResult.pois);
       // Cloud bases, fog and dust now stand on the eroded ground, as drawn (decision 220).
       globe.weather.setGround(meanGround(weatherGrid, globalMapSampler(global.height, global.n)));
       const flownTerrain = { infra, edits, height: global.height, n: global.n, airbases };
@@ -1157,6 +1215,7 @@ async function main(): Promise<void> {
       globe.structures.ink = v.ink;
       globe.structures.setInk(v.inkWidth, 0);
       globe.structures.lightBrightness.value = v.nightLights;
+      globe.setTerrainArt(terrainArtSettings(v.artQuality, v.artStyle));
       renderScale.targetMs = 1000 / v.targetFps;
       const fixed = RenderScaleController.fixed(v.renderScale);
       applyRenderScale(fixed ?? renderScale.scale, performance.now());
@@ -1203,6 +1262,7 @@ async function main(): Promise<void> {
           plateCount: worldParams.plateCount,
           oceanFraction: worldParams.oceanFraction,
           reliefScale: worldParams.reliefScale,
+          reliefExaggeration: worldParams.reliefExaggeration,
           temperatureOffset: worldParams.temperatureOffset,
           moistureScale: worldParams.moistureScale,
           erosionStrength: worldParams.erosionStrength,
@@ -1400,6 +1460,7 @@ async function main(): Promise<void> {
   );
   // The governor lowers the volumetric quality and the particles on a machine that struggles.
   const governor = new QualityGovernor(GOVERNOR_STEPS);
+  const artGovernor = new QualityGovernor(ART_GOVERNOR_STEPS);
   let governed = atmosphere.autoQuality;
   const applyAtmosphereSettings = () => {
     const now = performance.now();
@@ -1631,8 +1692,34 @@ async function main(): Promise<void> {
         // The load has changed: the render scale finds its place anew.
         renderScale.reset(now);
       }
+      // Terrain art sheds its costly layers once the atmosphere has stepped all the way
+      // down (decision 296): particles and far rocks, then the mist, then rocks.
+      if (governor.level >= GOVERNOR_STEPS) {
+        const artLevel = artGovernor.record({
+          frameMs,
+          nowMs: now,
+          targetMs: renderScale.targetMs,
+          scale: renderScale.scale,
+          minScale: renderScale.minScale,
+          maxScale: renderScale.maxScale,
+          adaptive: viewParams.renderScale === 'auto',
+          loading: globe.terrain.stats.pending > 0,
+        });
+        if (artLevel !== null) {
+          globe.setTerrainArt(
+            governedArt(terrainArtSettings(viewParams.artQuality, viewParams.artStyle), artLevel),
+          );
+          renderScale.reset(now);
+        }
+      } else if (artGovernor.level > 0) {
+        artGovernor.reset(now);
+        globe.setTerrainArt(terrainArtSettings(viewParams.artQuality, viewParams.artStyle));
+      } else {
+        artGovernor.hold(now);
+      }
     } else {
       governor.hold(now);
+      artGovernor.hold(now);
     }
     const dt = Math.min(frameMs, 100) / 1000;
     freeFlight?.frame(Math.min(frameMs, 250) / 1000, frameMs);

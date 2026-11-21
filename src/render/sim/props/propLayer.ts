@@ -54,6 +54,7 @@ import { MAX_BAKED_LEVEL, NO_LAKE } from '../../../worldgen/gpu/tileSynth';
 import { Rock, rockOf } from '../../../worldgen/lithology';
 import { PROP_KINDS, PROP_SIZE, PROP_STRIDE, propInCell, propSeed } from '../../../worldgen/props';
 import type { PropKind, PropSite } from '../../../worldgen/props';
+import type { WorldSeed } from '../../../core/rng';
 import { buildModel } from '../../common/models/builder';
 import { MODEL_SPECS } from '../../common/models/library';
 import type { InfraScene } from '../infra/infraScene';
@@ -101,10 +102,52 @@ export const PROP_COLLISION_RADIUS: Readonly<Record<PropKind, number>> = {
 
 interface Chunk {
   origin: Vec3d;
-  lists: Map<PropKind, Float32Array>;
+  lists: Map<string, Float32Array>;
   obstacles: PropObstacles;
   lastUsed: number;
 }
+
+/** What a tile placer returns: instance lists by kind (FLOATS per item) and obstacles. */
+export interface PlacedTile {
+  origin: Vec3d;
+  lists: Map<string, Float32Array>;
+  obstacles: PropObstacles;
+}
+
+/**
+ * What an instanced tile layer draws (decision 299): the landform props by default, and
+ * the rock dressing with its own kinds, ranges, cell stride and placer.
+ */
+export interface TileLayerOptions {
+  /** Model ids; each also has a far model `${kind}-lod`. */
+  kinds: readonly string[];
+  /** Full models within `near` (m), far ones to `far`, none while the eye is above `ceiling`. */
+  near: number;
+  far: number;
+  ceiling: number;
+  /** Level-7 samples per cell (the obstacles' lattice). */
+  stride: number;
+  /** The layer's hash seed for a world. */
+  seedOf: (worldSeed: WorldSeed) => number;
+  place: (
+    data: TileData,
+    maps: PropWorldMaps,
+    seed: number,
+    radius: number,
+    clear?: (d: Readonly<Vec3d>, extra?: number) => boolean,
+  ) => PlacedTile;
+}
+
+/** The landform props (decision 225). */
+export const PROP_LAYER: TileLayerOptions = {
+  kinds: PROP_KINDS,
+  near: PROP_NEAR,
+  far: PROP_FAR,
+  ceiling: PROP_CEILING,
+  stride: PROP_STRIDE,
+  seedOf: propSeed,
+  place: placePropTile,
+};
 
 /** Places the props of a level-7 data tile. Pure: no GPU. */
 export function placePropTile(
@@ -114,7 +157,7 @@ export function placePropTile(
   radius: number,
   /** True in a clearing (InfraScene.isClear): no prop there. */
   clear?: (d: Readonly<Vec3d>, extra?: number) => boolean,
-): { origin: Vec3d; lists: Map<PropKind, Float32Array>; obstacles: PropObstacles } {
+): PlacedTile {
   const t = data.key;
   const size = TILE_TEXELS * (1 << t.level);
   const sampleM = ((Math.PI / 2) * radius) / size;
@@ -227,7 +270,7 @@ export function placePropTile(
       );
     }
   }
-  const out = new Map<PropKind, Float32Array>();
+  const out = new Map<string, Float32Array>();
   for (const [k, l] of lists) out.set(k, Float32Array.from(l));
   return {
     origin,
@@ -246,8 +289,9 @@ function obstacleTop(
   cx: number,
   cy: number,
   radius: number,
+  stride: number,
 ): number | null {
-  const cells = TILE_TEXELS / PROP_STRIDE;
+  const cells = TILE_TEXELS / stride;
   let top: number | null = null;
   for (let j = cy - 1; j <= cy + 1; j++) {
     for (let i = cx - 1; i <= cx + 1; i++) {
@@ -273,7 +317,7 @@ function frame(p: Readonly<Vec3d>): { east: Vec3d; north: Vec3d } {
 }
 
 /** The far model of a kind. */
-const lodOf = (k: PropKind) => `${k}-lod`;
+const lodOf = (k: string) => `${k}-lod`;
 
 export class PropLayer {
   readonly group = new Group();
@@ -295,11 +339,23 @@ export class PropLayer {
   private readonly anchor = new Vec3d();
   private filledAt: Vec3d | null = null;
 
+  /** Ranges (m): full models within `near`, far ones to `far` (a quality tier may change them). */
+  near: number;
+  far: number;
+
   constructor(
     private readonly terrain: TerrainRenderer,
     lighting: PlanetLighting,
+    private readonly layer: TileLayerOptions = PROP_LAYER,
   ) {
     this.material = this.buildMaterial(lighting);
+    this.near = layer.near;
+    this.far = layer.far;
+  }
+
+  /** Places every chunk again (after a change to what the placer reads, e.g. a density). */
+  invalidate(): void {
+    this.reset();
   }
 
   /** The global maps of the current world (null: no props). */
@@ -364,7 +420,7 @@ export class PropLayer {
     if (world !== this.lastWorld) {
       this.reset();
       this.lastWorld = world;
-      this.seed = world ? propSeed(world.seed) : 0;
+      this.seed = world ? this.layer.seedOf(world.seed) : 0;
     }
     const show =
       this.enabled &&
@@ -372,7 +428,7 @@ export class PropLayer {
       opts !== null &&
       opts.mode === 'biome' &&
       this.maps !== null &&
-      heightAboveGround < PROP_CEILING;
+      heightAboveGround < this.layer.ceiling;
     this.group.visible = show;
     if (!show) return;
     const R = opts.radius;
@@ -381,11 +437,11 @@ export class PropLayer {
     const { east, north } = frame(radial);
     const wanted = new Map<string, TileKey>();
     const step = 3000;
-    const n = Math.ceil(PROP_FAR / step);
+    const n = Math.ceil(this.far / step);
     const d = new Vec3d();
     for (let j = -n; j <= n; j++)
       for (let i = -n; i <= n; i++) {
-        if ((i * i + j * j) * step * step > (PROP_FAR + step) ** 2) continue;
+        if ((i * i + j * j) * step * step > (this.far + step) ** 2) continue;
         d.copy(radial)
           .addScaled(east, (i * step) / R)
           .addScaled(north, (j * step) / R)
@@ -414,7 +470,7 @@ export class PropLayer {
         continue;
       }
       this.chunks.set(s, {
-        ...placePropTile(data, this.maps!, this.seed, R, this.clear),
+        ...this.layer.place(data, this.maps!, this.seed, R, this.clear),
         lastUsed: this.frame,
       });
       placed++;
@@ -442,7 +498,7 @@ export class PropLayer {
     const ex = this.terrain.exaggerationUniform.value;
     let instances = 0;
     let triangles = 0;
-    for (const kind of PROP_KINDS) {
+    for (const kind of this.layer.kinds) {
       // [near, far] lists.
       const near: number[] = [];
       const far: number[] = [];
@@ -460,8 +516,8 @@ export class PropLayer {
           const py = by + data[o + 4]! * ex;
           const pz = bz + data[o + 5]! * ex;
           const dist = Math.sqrt(px * px + py * py + pz * pz);
-          if (dist > PROP_FAR) continue;
-          const list = dist < PROP_NEAR ? near : far;
+          if (dist > this.far) continue;
+          const list = dist < this.near ? near : far;
           list.push(bx, by, bz);
           for (let k = 3; k < FLOATS; k++) list.push(data[o + k]!);
         }
@@ -541,10 +597,11 @@ export class PropLayer {
     if (!c) return null;
     const uv = directionToCubeFace(dir);
     const size = TILE_TEXELS * (1 << MAX_BAKED_LEVEL);
-    const cx = Math.floor((uv.u * size - k.x * TILE_TEXELS) / PROP_STRIDE);
-    const cy = Math.floor((uv.v * size - k.y * TILE_TEXELS) / PROP_STRIDE);
+    const stride = this.layer.stride;
+    const cx = Math.floor((uv.u * size - k.x * TILE_TEXELS) / stride);
+    const cy = Math.floor((uv.v * size - k.y * TILE_TEXELS) / stride);
     const R = this.terrain.meshOptions()?.radius ?? 1e6;
-    return obstacleTop(c.obstacles, dir, cx, cy, R);
+    return obstacleTop(c.obstacles, dir, cx, cy, R, stride);
   }
 
   dispose(): void {

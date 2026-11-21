@@ -1,0 +1,25 @@
+{
+  "name": "Lighthouse (far)",
+  "class": "building",
+  "groups": {
+    "concrete": "#9A968E",
+    "dark": "#5E5B55",
+    "white": "#E8E6DF",
+    "red": "#B0402E",
+    "steel": "#7C8174",
+    "rust": "#8A5A3A",
+    "olive": "#6B6A4A",
+    "glass": "#F2D27A"
+  },
+  "parts": [
+    {
+      "type": "cylinder",
+      "group": "white",
+      "from": [0, -2, 0],
+      "to": [0, 32, 0],
+      "radius": 3.4,
+      "sides": 6,
+      "radius2": 2.2
+    }
+  ]
+}

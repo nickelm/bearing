@@ -264,6 +264,12 @@ export class WaterShading {
   readonly foamStrength = uniform(1);
   /** Lake shore foam relative to the sea's (decision 146). */
   readonly lakeFoam = uniform(0.7);
+  /**
+   * Calm lakes (Proposal 0010, decision 301): 0 shades lakes as the sea, 1 makes them
+   * calmer (a narrower glint lobe) and more reflective of the sky, for mirror-like
+   * mountain lakes. The art settings' `lakeMirror`.
+   */
+  readonly lakeMirror = uniform(1);
   readonly waves = waveSet();
   readonly swell = swellSet();
   /** Surface wind direction (world, unit, or zero in calm air): the gusts' streaks run along it (decision 146). */
@@ -483,10 +489,13 @@ export class WaterShading {
           : float(1);
         const thin = riverOnly.mul(float(1).sub(trueShare));
         const reflectShare = float(1).sub(thin);
+        // Calm lakes (decision 301): a smoother surface than the sea's.
+        const calm = lake.mul(float(1).sub(sea)).mul(this.lakeMirror).toVar();
         const alpha2 = this.baseRoughness
           .mul(this.baseRoughness)
           .add(unresolved.mul(2))
-          .add(thin.mul(THIN_RIVER_ALPHA2));
+          .add(thin.mul(THIN_RIVER_ALPHA2))
+          .mul(float(1).sub(calm.mul(0.75)));
 
         // Lighting of the water surface.
         const v = normalize(i.relative.negate()) as V3;
@@ -497,7 +506,13 @@ export class WaterShading {
         const nDotH = max(dot(waveNormal, h), 0);
         const d = nDotH.mul(nDotH).mul(alpha2.sub(1)).add(1);
         const ggx = alpha2.div(d.mul(d).mul(Math.PI));
-        const fresnel = float(0.02).add(float(0.98).mul(pow(float(1).sub(nDotV), 5)));
+        const schlick = float(0.02).add(float(0.98).mul(pow(float(1).sub(nDotV), 5)));
+        // A calm lake mirrors more of the sky at every angle.
+        const fresnel = mix(
+          schlick,
+          max(schlick, pow(float(1).sub(nDotV), 2).mul(0.55).add(0.1)),
+          calm,
+        );
         // Specular radiance: π·E·D·F/(4·N·V) with E = π × the display sun illuminance (decision 34).
         const sunLight = at.sunlight;
         const glint = sunLight.mul(ggx.mul(fresnel).mul(nDotL).div(nDotV.mul(4)).mul(Math.PI));

@@ -1,0 +1,63 @@
+{
+  "name": "Lighthouse",
+  "class": "building",
+  "groups": {
+    "concrete": "#9A968E",
+    "dark": "#5E5B55",
+    "white": "#E8E6DF",
+    "red": "#B0402E",
+    "steel": "#7C8174",
+    "rust": "#8A5A3A",
+    "olive": "#6B6A4A",
+    "glass": "#F2D27A"
+  },
+  "parts": [
+    {
+      "type": "cylinder",
+      "group": "white",
+      "from": [0, -2, 0],
+      "to": [0, 12, 0],
+      "radius": 3.4,
+      "sides": 8,
+      "radius2": 3
+    },
+    {
+      "type": "cylinder",
+      "group": "red",
+      "from": [0, 12, 0],
+      "to": [0, 20, 0],
+      "radius": 3,
+      "sides": 8,
+      "radius2": 2.6
+    },
+    {
+      "type": "cylinder",
+      "group": "white",
+      "from": [0, 20, 0],
+      "to": [0, 28, 0],
+      "radius": 2.6,
+      "sides": 8,
+      "radius2": 2.3
+    },
+    {
+      "type": "box",
+      "group": "glass",
+      "center": [0, 29.5, 0],
+      "size": [4, 3, 4]
+    },
+    {
+      "type": "frustum",
+      "group": "red",
+      "center": [0, 31, 0],
+      "base": [4.6, 4.6],
+      "top": [0.6, 0.6],
+      "height": 3
+    },
+    {
+      "type": "box",
+      "group": "white",
+      "center": [7, 1, 0],
+      "size": [7, 5, 6]
+    }
+  ]
+}

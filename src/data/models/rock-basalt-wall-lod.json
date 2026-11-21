@@ -1,0 +1,17 @@
+{
+  "name": "Basalt wall (far)",
+  "class": "rock",
+  "groups": {
+    "a": "#3E3836",
+    "b": "#4A3F3A",
+    "c": "#2E2B2B"
+  },
+  "parts": [
+    {
+      "type": "box",
+      "group": "a",
+      "center": [0, 4, 0],
+      "size": [26, 16, 5]
+    }
+  ]
+}

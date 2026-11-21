@@ -405,10 +405,15 @@ Branch `feature/terrain-art`; plan `docs/plans/terrain-art.md`; decisions 296 on
 
 - [x] Phase 0: survey, baseline (`docs/reports/terrain-art-baseline.md`), plan, standard views (`ART_VIEWS=1`)
 - [x] Phase 1: relief exaggeration (decision 297), invariants at 1.0, 1.3 and 1.5
-- [ ] Phase 2: curvature bake and shading, strata by lithology, color drift
-- [ ] Phase 3: rock dressing kit, placement, colliders, LOD, budget
-- [ ] Phase 4: valley mist and height fog, ambient particles, sky style and aurora, budget
-- [ ] Phase 5: waterfalls, rapids, lake reflection
-- [ ] Phase 6 (stretch): points of interest
-- [ ] Phase 7 (stretch): viewshed composition
+- [x] Phase 2: curvature bake and shading, strata by lithology, color drift (decision 298)
+- [x] Phase 3: rock dressing kit, placement, colliders, LOD (decision 299)
+- [x] Phase 4: valley mist and height fog, ambient particles, sky style and aurora (decision 300)
+- [x] Phase 5: waterfalls, rapids, lake reflection (decision 301)
+- [x] Phase 6 (stretch): points of interest (decision 302)
+- [x] Phase 7 (stretch): viewshed composition (decision 303)
 - [ ] Phase 8: metrics over 20 seeds, screenshots, report
+- [ ] Access roads and pads for points of interest (the router of Proposal 0005); a reservoir behind each dam; power lines aligned
+- [ ] Points of interest in a worker: their placement runs on the main thread when a world loads
+- [ ] The sim's analytic routes clear the coarse, unexaggerated ground (`sim.init`); scale it with the relief exaggeration (the sim's lane)
+- [ ] Waterfall mist on Proposal 0011's effects system once it exists
+- [ ] Zone grading, sun warmth and cloud regime (stored, not yet applied)

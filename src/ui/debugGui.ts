@@ -2,6 +2,8 @@
  * lil-gui debug panel: world parameters, generation control, debug view
  * options and read-only status values.
  */
+import { ART_QUALITIES, ART_STYLES } from '../render/common/terrainArt';
+import type { ArtQuality, ArtStyle } from '../render/common/terrainArt';
 import { RENDER_SCALES } from '../render/common/renderScale';
 import type { RenderScaleSetting } from '../render/common/renderScale';
 import { WEATHER_PRESETS } from '../sim/weather/presets';
@@ -17,6 +19,8 @@ export interface WorldGuiParams {
   plateCount: number;
   oceanFraction: number;
   reliefScale: number;
+  /** Relief exaggeration after climate and biomes (Proposal 0010, decision 297), 1.0–1.5. */
+  reliefExaggeration: number;
   temperatureOffset: number;
   moistureScale: number;
   erosionStrength: number;
@@ -58,6 +62,9 @@ export interface ViewGuiParams {
   targetFps: number;
   /** Which view is on screen (decision 72): the strategic map or the simulation view. */
   scene: 'simulation' | 'strategic';
+  /** Terrain art quality tier and style (Proposal 0010, decision 296). */
+  artQuality: ArtQuality;
+  artStyle: ArtStyle;
   /** The simulation view's camera: an observer at a base or port, or the free camera (dev flag). */
   simCamera: 'observer' | 'free';
   /** The observer's station, by label (see `setStations`). */
@@ -344,6 +351,9 @@ export class DebugGui {
     w.add(world, 'plateCount', 6, 40, 1).name('Plates').onFinishChange(regen);
     w.add(world, 'oceanFraction', 0.4, 0.9, 0.01).name('Ocean fraction').onFinishChange(regen);
     w.add(world, 'reliefScale', 0.05, 1, 0.005).name('Relief scale').onFinishChange(regen);
+    w.add(world, 'reliefExaggeration', 1, 1.5, 0.05)
+      .name('Relief exaggeration')
+      .onFinishChange(regen);
     w.add(world, 'temperatureOffset', -20, 20, 0.5)
       .name('Temperature offset (°C)')
       .onFinishChange(regen);
@@ -431,6 +441,12 @@ export class DebugGui {
       .onChange(() => callbacks.viewChanged(view));
     t.add(view, 'nightLights', 0, 10, 0.1)
       .name('Night lights (sim detail)')
+      .onChange(() => callbacks.viewChanged(view));
+    t.add(view, 'artQuality', [...ART_QUALITIES])
+      .name('Terrain art (quality)')
+      .onChange(() => callbacks.viewChanged(view));
+    t.add(view, 'artStyle', [...ART_STYLES])
+      .name('Terrain art (style)')
       .onChange(() => callbacks.viewChanged(view));
 
     const st = this.gui.addFolder('Status');

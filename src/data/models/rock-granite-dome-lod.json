@@ -1,0 +1,21 @@
+{
+  "name": "Granite dome (far)",
+  "class": "rock",
+  "groups": {
+    "a": "#9C9A94",
+    "b": "#B5B2AA",
+    "c": "#85837D"
+  },
+  "parts": [
+    {
+      "type": "blob",
+      "group": "a",
+      "center": [0, -2, 0],
+      "radius": [18, 14, 15],
+      "detail": 0,
+      "jitter": 0.1,
+      "seed": 21,
+      "half": true
+    }
+  ]
+}

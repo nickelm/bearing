@@ -561,6 +561,23 @@ interface Field {
   uMotion: UniformNode<'vec3', Vector3>;
   uAmbient: UniformNode<'vec3', Vector3>;
   uSun: UniformNode<'vec3', Vector3>;
+  /** Ambient particles (decision 300): a tint over the kind's, and light of their own. */
+  uTint: UniformNode<'vec3', Vector3>;
+  uGlow: UniformNode<'vec3', Vector3>;
+}
+
+/**
+ * Ambient particles of the zone at the camera (Proposal 0010, decision 300), drawn as a
+ * low level of one of the kinds: pollen and seeds, blowing dust, drifting snow, leaves,
+ * fireflies. `level` is the least intensity of `kind` while it lasts; `tint` multiplies
+ * the kind's color and `glow` adds light of the particle's own (fireflies), both only
+ * while the ambient level outweighs the weather's.
+ */
+export interface AmbientParticleSpec {
+  kind: ParticleKind;
+  level: number;
+  tint: readonly [number, number, number];
+  glow: readonly [number, number, number];
 }
 
 export class Precipitation {
@@ -570,6 +587,8 @@ export class Precipitation {
   enabled = true;
   /** Quality: scales the instance counts (0.5 low, 1 default, up to MAX_DENSITY). */
   density = 1;
+  /** The zone's ambient particles (decision 300), or null. */
+  ambient: AmbientParticleSpec | null = null;
   /** Intensity 0..1 of each kind where the camera is, after the fade with height (as of the last update). */
   readonly levels: Record<ParticleKind, number> = { rain: 0, snow: 0, dust: 0 };
   /** Instances drawn per kind in the last frame. */
@@ -650,6 +669,8 @@ export class Precipitation {
       uMotion: uniform(new Vector3(0, 1e4, 0)),
       uAmbient: uniform(new Vector3()),
       uSun: uniform(new Vector3()),
+      uTint: uniform(new Vector3(1, 1, 1)),
+      uGlow: uniform(new Vector3()),
     };
     field.mesh = new Mesh(geometry, this.material(field));
     field.mesh.name = kind;
@@ -795,8 +816,10 @@ export class Precipitation {
         const shade = pow(rand(8), shadePower).mul(shadeRange).add(shadeMin);
         vColor.assign(
           vec3(...tint)
+            .mul(field.uTint)
             .mul(shade)
-            .mul(field.uAmbient.add(field.uSun.mul(forwardScatter))),
+            .mul(field.uAmbient.add(field.uSun.mul(forwardScatter)))
+            .add(field.uGlow.mul(shade)),
         );
 
         const corner = p
@@ -882,6 +905,10 @@ export class Precipitation {
     this.levels.rain = state.rain.value * falling;
     this.levels.snow = state.snow.value * falling;
     this.levels.dust = state.dust.value * dustAtHeight(frame.aboveGround);
+    // The zone's ambient particles where the weather brings fewer (decision 300).
+    const amb = this.ambient;
+    const ambientWins = amb !== null && amb.level > this.levels[amb.kind];
+    if (amb && ambientWins) this.levels[amb.kind] = amb.level;
     // The light is worked out for the first kind that is drawn: in dry air, not at all.
     let light: ParticleLight | null = null;
     // Cloud closing in: what falls from it is not far off.
@@ -936,6 +963,9 @@ export class Precipitation {
       }
       field.uAmbient.value.set(...light.ambient);
       field.uSun.value.set(...light.sun);
+      const own = ambientWins && amb!.kind === field.kind;
+      field.uTint.value.set(...(own ? amb!.tint : ([1, 1, 1] as const)));
+      field.uGlow.value.set(...(own ? amb!.glow : ([0, 0, 0] as const)));
     }
     // The pipeline draws its overlay pass only while something in it is visible.
     this.group.visible = this.fields.some((f) => f.mesh.visible);

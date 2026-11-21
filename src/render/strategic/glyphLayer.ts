@@ -46,6 +46,7 @@ import { placePlanetCentered } from '../common/cameraRelative';
 import { srgbToLinear } from '../common/palette';
 import {
   capitalModel,
+  structureModel,
   cityModel,
   duneModel,
   forestModel,
@@ -74,6 +75,8 @@ export const GLYPH_COLORS: Record<GlyphKind, [number, number]> = {
   town: [0xe9e1d2, 0xa65e45],
   city: [0xe4ddd0, 0x7d7a78],
   capital: [0xe4ddd0, 0x7d7a78],
+  // Points of interest: concrete gray with a dark cap, set apart from towns (decision 302).
+  structure: [0xd8d2c4, 0x4a4844],
 };
 /** Lift above the terrain under the glyph's center (m), so its base does not sink. */
 const LIFT = 150;
@@ -93,6 +96,7 @@ const MODELS: Record<GlyphKind, () => GlyphModel> = {
   town: townModel,
   city: cityModel,
   capital: capitalModel,
+  structure: structureModel,
 };
 
 export interface GlyphUniforms {

@@ -1,0 +1,34 @@
+{
+  "name": "Schist slabs",
+  "class": "rock",
+  "groups": {
+    "a": "#6E7468",
+    "b": "#5E665C",
+    "c": "#7C8174"
+  },
+  "parts": [
+    {
+      "type": "box",
+      "group": "a",
+      "center": [0, 1, 0],
+      "size": [20, 3, 12],
+      "bevel": 0.5
+    },
+    {
+      "type": "box",
+      "group": "b",
+      "center": [2, 3.5, 1],
+      "size": [16, 2.5, 10],
+      "yaw": 12,
+      "bevel": 0.4
+    },
+    {
+      "type": "box",
+      "group": "c",
+      "center": [-1, 5.5, -1],
+      "size": [12, 2, 8],
+      "yaw": -9,
+      "bevel": 0.3
+    }
+  ]
+}

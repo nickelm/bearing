@@ -1,0 +1,19 @@
+{
+  "name": "Crest tooth (far)",
+  "class": "rock",
+  "groups": {
+    "a": "#9C9A94",
+    "b": "#B5B2AA",
+    "c": "#85837D"
+  },
+  "parts": [
+    {
+      "type": "frustum",
+      "group": "a",
+      "center": [0, -4, 0],
+      "base": [11, 9],
+      "top": [1.5, 1.2],
+      "height": 22
+    }
+  ]
+}

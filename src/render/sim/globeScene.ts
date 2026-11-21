@@ -37,6 +37,13 @@ import { WeatherTexture } from './clouds/weatherTexture';
 import { ForestLayer } from './forest/forestLayer';
 import { GroundCoverLayer } from './ground/groundCoverLayer';
 import { PropLayer } from './props/propLayer';
+import { rockDressingLayer } from './props/rockDressingLayer';
+import { ZoneAir } from './atmosphere/zoneAir';
+import { WaterfallLayer } from './water/waterfallLayer';
+import { poiItems, poiLayer } from './props/poiLayer';
+import type { PoiItem } from './props/poiLayer';
+import type { PropWorldMaps } from './props/propLayer';
+import type { PointOfInterest } from '../../worldgen/poi/poi';
 import { RotorDust } from './ground/rotorDust';
 import { GlobeMesh } from '../common/globeMesh';
 import { PlanetLighting } from './lighting/planetLighting';
@@ -52,6 +59,8 @@ import { CityLayer } from './city/cityLayer';
 import { StructureLayer } from './infra/structureLayer';
 import { BridgeLayer } from './infra/bridgeLayer';
 import type { InfraScene } from './infra/infraScene';
+import { terrainArtSettings } from '../common/terrainArt';
+import type { TerrainArtSettings } from '../common/terrainArt';
 import { SimPipeline } from './post/simPipeline';
 import type { WeatherView } from '../../sim/weather/frame';
 
@@ -120,6 +129,13 @@ export class GlobeScene {
   readonly groundCover: GroundCoverLayer;
   /** Landform props: tower karst, pillars, inselbergs (decision 225). */
   readonly props: PropLayer;
+  /** Rock dressing over steep ground (Proposal 0010, decision 299), on the props' instancing. */
+  readonly rocks: PropLayer;
+  /** Waterfalls on the rivers' drops (Proposal 0010, decision 301). */
+  readonly waterfalls: WaterfallLayer;
+  /** Points of interest and their power lines (Proposal 0010, decision 302); `setPointsOfInterest`. */
+  readonly pois: PropLayer;
+  private poiByTile = new Map<string, PoiItem[]>();
   /** Buildings of towns, airbases and industry near the camera (decision 65). */
   readonly structures: StructureLayer;
   /** Settlements drawn from their plans (Proposal 0009, decision 267). */
@@ -223,6 +239,17 @@ export class GlobeScene {
       this.terrain.land,
     );
     this.props = new PropLayer(this.terrain, this.lighting);
+    this.rocks = new PropLayer(
+      this.terrain,
+      this.lighting,
+      rockDressingLayer(() => this.terrainArt.rocks.density * this.dressingDensity),
+    );
+    this.waterfalls = new WaterfallLayer(this.terrain, this.lighting);
+    this.pois = new PropLayer(
+      this.terrain,
+      this.lighting,
+      poiLayer(() => this.poiByTile),
+    );
     this.structures = new StructureLayer(this.terrain, this.lighting);
     this.cities = new CityLayer(this.terrain, this.lighting);
     // Woods and parks inside planned towns keep their trees and canopy (decision 278).
@@ -241,6 +268,9 @@ export class GlobeScene {
       this.forest.group,
       this.groundCover.group,
       this.props.group,
+      this.rocks.group,
+      this.waterfalls.group,
+      this.pois.group,
       this.structures.group,
       this.cities.group,
       this.bridges.group,
@@ -335,11 +365,66 @@ export class GlobeScene {
    * Infrastructure drawn on the terrain (decision 65): buildings and tree
    * clearings here; roads and lights come with the terrain world.
    */
+  /** The zones' air at the camera: valley mist and height fog (decision 300); `zoneAir.setWorld`. */
+  get zoneAir(): ZoneAir {
+    return (this.zoneAirDriver ??= new ZoneAir(this.lighting.atmosphere.groundFog));
+  }
+  private zoneAirDriver: ZoneAir | null = null;
+
+  /** Terrain art settings in force (Proposal 0010, decision 296); `setTerrainArt` applies them. */
+  terrainArt: TerrainArtSettings = terrainArtSettings();
+
+  /**
+   * Applies terrain art settings (decision 296): the surface art's strengths now, and the
+   * rock dressing, air, water and sky layers as they read `terrainArt` each frame.
+   */
+  setTerrainArt(s: TerrainArtSettings): void {
+    this.terrainArt = s;
+    const land = this.terrain.land;
+    land.artCurvature.value = s.curvature;
+    land.artStrata.value = s.strata;
+    land.artDrift.value = s.drift;
+    this.terrain.rapids.value = s.rapids;
+    this.waterfalls.enabled = s.waterfalls;
+    this.pois.enabled = s.structures;
+    this.terrain.water.lakeMirror.value = s.lakeMirror;
+    const r = this.rocks;
+    if (s.rocks.density !== this.rocksDensity) {
+      this.rocksDensity = s.rocks.density;
+      r.invalidate();
+    }
+    r.enabled = s.rocks.enabled;
+    r.near = s.rocks.near;
+    r.far = Math.max(s.rocks.near, s.rocks.far);
+  }
+
+  private rocksDensity = terrainArtSettings().rocks.density;
+
+  /** The world profile's rock dressing density (decision 296); `setDressingDensity`. */
+  private dressingDensity = 1;
+
+  /** Sets the world profile's rock dressing density and places the rocks again. */
+  setDressingDensity(d: number): void {
+    if (d === this.dressingDensity) return;
+    this.dressingDensity = d;
+    this.rocks.invalidate();
+  }
+
+  /**
+   * The world's points of interest (decision 302) and the global maps the layer needs to
+   * show (as the props'); an empty list draws none.
+   */
+  setPointsOfInterest(pois: readonly PointOfInterest[], maps: PropWorldMaps | null): void {
+    this.poiByTile = poiItems(pois);
+    this.pois.setMaps(maps);
+  }
+
   setInfrastructure(scene: InfraScene | null): void {
     this.structures.setScene(scene);
     this.forest.setInfrastructure(scene);
     this.groundCover.setInfrastructure(scene);
     this.props.setInfrastructure(scene);
+    this.rocks.setInfrastructure(scene);
     this.rotorDust?.setInfrastructure(scene);
   }
 
@@ -406,6 +491,32 @@ export class GlobeScene {
     this.clouds.update(o.eye);
     moonDirection(this.gameTime, this.planetOrbit, this.calendar, this.moon);
     this.lighting.update(o.eye, this.sun, this.moon);
+    // The stylized sky (decision 300): the art style's sun and moon, aurora near the poles by night.
+    {
+      const sky = this.lighting.atmosphere.sky;
+      const art = this.terrainArt.sky;
+      sky.sunScale.value = art.sunScale;
+      sky.moonScale.value = art.moonScale;
+      const len = Math.hypot(o.eye.x, o.eye.y, o.eye.z) || 1;
+      const sinLat = o.eye.y / len;
+      const t = Math.min(1, Math.max(0, (Math.abs(sinLat) - 0.83) / (0.94 - 0.83)));
+      sky.aurora.value = art.aurora * t * t * (3 - 2 * t) * sky.stars.value;
+      if (sky.aurora.value > 0) {
+        const sign = Math.sign(sinLat) || 1;
+        const pole = sky.auroraPole.value;
+        pole.set(-sinLat * (o.eye.x / len), 1 - sinLat * sinLat, -sinLat * (o.eye.z / len));
+        pole.normalize().multiplyScalar(sign);
+      }
+    }
+    // Valley mist and the zone's height fog (decision 300), from the zone and ground at the eye.
+    this.zoneAir.update(
+      o.eye,
+      this.sun,
+      this.weatherState.wetness.value,
+      this.terrainArt,
+      this.lighting.atmosphere.params.groundRadius,
+      effectDt,
+    );
     // The ground gets wet and dries in game time: under time acceleration a shower's wet
     // ground would otherwise last for hours of game time (3 real minutes at 60×). Never
     // slower than real time, so a view whose game clock stands still settles (previews).
@@ -435,6 +546,8 @@ export class GlobeScene {
       dt: effectDt,
       pixelAngle: fovY / bufferHeight,
     });
+    // The zone's ambient particles ride on the precipitation's kinds (decision 300).
+    if (this.precipitation) this.precipitation.ambient = this.zoneAir.ambient;
     this.precipitation?.update({
       eye: o.eye,
       forward: o.forward,
@@ -512,12 +625,18 @@ export class GlobeScene {
       this.cities.wind.value.set(gw.x, gw.y, gw.z);
       this.cities.update(o.eye, aboveGround, cull);
       this.props.update(o.eye, aboveGround);
+      this.rocks.update(o.eye, aboveGround);
+      this.waterfalls.update(o.eye);
+      this.pois.update(o.eye, aboveGround);
       this.bridges.update(o.eye, aboveGround);
     } else {
       this.bridges.group.visible = false;
       this.forest.group.visible = false;
       this.groundCover.group.visible = false;
       this.props.group.visible = false;
+      this.rocks.group.visible = false;
+      this.waterfalls.group.visible = false;
+      this.pois.group.visible = false;
       if (this.rotorDust) this.rotorDust.group.visible = false;
       this.structures.group.visible = false;
       this.cities.group.visible = false;
@@ -589,6 +708,9 @@ export class GlobeScene {
     this.forest.dispose();
     this.groundCover.dispose();
     this.props.dispose();
+    this.rocks.dispose();
+    this.waterfalls.dispose();
+    this.pois.dispose();
     this.structures.dispose();
     this.cities.dispose();
     this.bridges.dispose();

@@ -1,0 +1,19 @@
+{
+  "name": "Schist fins (far)",
+  "class": "rock",
+  "groups": {
+    "a": "#6E7468",
+    "b": "#5E665C",
+    "c": "#7C8174"
+  },
+  "parts": [
+    {
+      "type": "frustum",
+      "group": "a",
+      "center": [0, -3, 0],
+      "base": [15, 10],
+      "top": [9, 3],
+      "height": 13
+    }
+  ]
+}

@@ -35,6 +35,7 @@ import {
   dot,
   float,
   Fn,
+  fract,
   fwidth,
   If,
   length,
@@ -57,6 +58,7 @@ import {
   vertexIndex,
 } from 'three/tsl';
 import { placeCameraRelative } from '../../common/cameraRelative';
+import type { Node } from 'three/webgpu';
 import { directionToCubeFace } from '../../../core/coords';
 import type { CubeFaceUv } from '../../../core/coords';
 import { Noise3 } from '../../../core/noise';
@@ -96,6 +98,7 @@ import {
   ruralSpeckle,
 } from '../infra/roadShading';
 import { FaceSampler, tileGridCoordinate } from './faceShading';
+import { meshCurvature, SURFACE_STRIDE } from './surfaceArtShading';
 import { facetNormal } from './facets';
 import { LandShading, periodicValueNoise } from './landShading';
 import { CANOPY_THRESHOLD, canopySeed } from '../../../worldgen/canopy';
@@ -127,7 +130,7 @@ import {
   surfaceSampler,
   TILE_VERTEX_COUNT,
 } from '../../common/terrain/tileMesh';
-import type { MeshOptions, TileViewMode } from '../../common/terrain/tileMesh';
+import type { MeshOptions, SurfaceArtSampler, TileViewMode } from '../../common/terrain/tileMesh';
 import { MicroFacets } from './microFacets';
 import { setClimateExaggeration } from '../../common/seasons';
 
@@ -181,6 +184,8 @@ export interface TerrainWorld {
   edits?: TerrainEdits;
   /** The zones' palette shift (decision 213); none when absent. */
   zoneShift?: ZoneShift;
+  /** Curvature, strata and rock tone per vertex (decision 298); none when absent. */
+  surfaceArt?: SurfaceArtSampler;
 }
 
 export class TerrainRenderer {
@@ -240,6 +245,8 @@ export class TerrainRenderer {
   readonly riverStyle = new RiverStyle();
   /** Land albedo: moisture, rock, snow, season and detail (decision 43). */
   readonly land = new LandShading();
+  /** Rapids' foam bands across steep reaches (Proposal 0010, decision 301; 0 off). */
+  readonly rapids = uniform(1);
   /** Stepped relief finer than the mesh near a low camera (decisions 168, 169). */
   readonly micro = new MicroFacets();
   private readonly data = new TileCache<TileData>(DATA_SHARE * DEFAULT_TILE_MEMORY_MIB * 2 ** 20);
@@ -397,6 +404,12 @@ export class TerrainRenderer {
       const faceJitter = face.jitter.toVar();
       const faceSpacing = face.spacing.toVar();
       const faceLandform = face.at(attribute('landform', 'vec3')).toVar();
+      // Surface art (decision 298): the baked curvature, strata and rock tone at the face's
+      // center, and the mesh's own curvature per face from the slope's derivatives.
+      const faceArt = face.at(attribute('art', 'vec3')).toVar();
+      const fineCurvature = meshCurvature(attribute('slope', 'vec3'), positionWorld as Node<'vec3'>)
+        .mul(faceSpacing)
+        .toVar();
       // The face's center from the camera-relative position (meters, precise near the camera)
       // plus the eye, the same for every pixel: the field it lies in (decision 183).
       const faceField = normalize(L.planetPosition(face.at(positionWorld)))
@@ -439,6 +452,9 @@ export class TerrainRenderer {
         landform: faceLandform,
         settled: this.habitability.sample(faceUp),
         fieldPoint: faceField,
+        art: faceArt,
+        fineCurvature,
+        sun: L.sunDirection,
       });
       const snow = ground.snow.toVar();
       const canopy = ground.canopy.toVar();
@@ -541,7 +557,15 @@ export class TerrainRenderer {
       const white = clamp(riverCover.z.mul(churn.mul(2.2).sub(0.5)), 0, 1)
         .mul(this.land.enabled)
         .mul(running);
-      const surface = mix(banked, foam, max(falls, white));
+      // Rapids (decision 301): foam lines across steep reaches at every 1.6 m of drop, a
+      // little ragged; contours of height run across the flow, so the lines do too.
+      const ledge = fract(rawHeight.div(1.6).add(churn.mul(0.35)));
+      const rapidBands = clamp(riverCover.z.mul(2), 0, 1)
+        .mul(smoothstep(0.62, 0.7, ledge).mul(float(1).sub(smoothstep(0.86, 0.94, ledge))))
+        .mul(this.rapids)
+        .mul(this.land.enabled)
+        .mul(running);
+      const surface = mix(banked, foam, max(max(falls, white), rapidBands));
       const withRoads = mix(surface, roadRadiance, paved.x.mul(dry));
       // The dark shoulders along runways and aprons (decision 221): fields read from the air.
       const shoulderRadiance = L.shadeDiffuse(
@@ -637,6 +661,7 @@ export class TerrainRenderer {
       detail: this.detail,
       edits: w.edits ?? null,
       zoneShift: w.zoneShift ?? null,
+      surfaceArt: w.surfaceArt ?? null,
       canopyClear: w.infra
         ? (d, extra) => {
             // Planned towns lower the shell only where they build (decision 278).
@@ -763,6 +788,7 @@ export class TerrainRenderer {
       lakeShore: true,
       edits: w.edits ?? null,
       zoneShift: w.zoneShift ?? null,
+      surfaceArt: w.surfaceArt ?? null,
       canopyClear: w.infra
         ? (d, extra) => {
             // Planned towns lower the shell only where they build (decision 278).
@@ -778,17 +804,23 @@ export class TerrainRenderer {
     g.setAttribute('up', new BufferAttribute(m.up, 3));
     // Packed per-vertex scalars and the canopy shell's edge density in one interleaved
     // buffer: WebGPU allows eight vertex buffers and the terrain uses them all (decision 157).
-    const surface = new Float32Array(TILE_VERTEX_COUNT * 5);
+    // Surface art rides in the same buffer (curvature, strata, rock tone; decision 298).
+    const S = SURFACE_STRIDE;
+    const surface = new Float32Array(TILE_VERTEX_COUNT * S);
     for (let v = 0; v < TILE_VERTEX_COUNT; v++) {
-      surface[v * 5] = m.height[v]!;
-      surface[v * 5 + 1] = m.water[v]!;
-      surface[v * 5 + 2] = m.shore[v]!;
-      surface[v * 5 + 3] = m.forest[v]!;
-      surface[v * 5 + 4] = m.forestInner[v]!;
+      surface[v * S] = m.height[v]!;
+      surface[v * S + 1] = m.water[v]!;
+      surface[v * S + 2] = m.shore[v]!;
+      surface[v * S + 3] = m.forest[v]!;
+      surface[v * S + 4] = m.forestInner[v]!;
+      surface[v * S + 5] = m.art[v * 3]!;
+      surface[v * S + 6] = m.art[v * 3 + 1]!;
+      surface[v * S + 7] = m.art[v * 3 + 2]!;
     }
-    const packed = new InterleavedBuffer(surface, 5);
+    const packed = new InterleavedBuffer(surface, S);
     g.setAttribute('surface', new InterleavedBufferAttribute(packed, 4, 0));
     g.setAttribute('canopyEdge', new InterleavedBufferAttribute(packed, 1, 4));
+    g.setAttribute('art', new InterleavedBufferAttribute(packed, 3, 5));
     g.setAttribute('parentBase', new BufferAttribute(m.parentBase, 3));
     g.setAttribute('parentDisp', new BufferAttribute(m.parentDisp, 3));
     g.setAttribute('slope', new BufferAttribute(m.slope, 3));

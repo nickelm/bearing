@@ -1,0 +1,17 @@
+{
+  "name": "Sandstone slab (far)",
+  "class": "rock",
+  "groups": {
+    "a": "#B06A3A",
+    "b": "#C4925C",
+    "c": "#965532"
+  },
+  "parts": [
+    {
+      "type": "box",
+      "group": "a",
+      "center": [0, 3, 0],
+      "size": [22, 12, 14]
+    }
+  ]
+}

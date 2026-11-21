@@ -1,0 +1,29 @@
+{
+  "name": "Granite tor (far)",
+  "class": "rock",
+  "groups": {
+    "a": "#9C9A94",
+    "b": "#B5B2AA",
+    "c": "#85837D"
+  },
+  "parts": [
+    {
+      "type": "blob",
+      "group": "a",
+      "center": [0, 3, 0],
+      "radius": [10, 6, 9],
+      "detail": 0,
+      "jitter": 0.15,
+      "seed": 24
+    },
+    {
+      "type": "blob",
+      "group": "b",
+      "center": [1, 11, 0],
+      "radius": [7, 6, 6.5],
+      "detail": 0,
+      "jitter": 0.15,
+      "seed": 25
+    }
+  ]
+}

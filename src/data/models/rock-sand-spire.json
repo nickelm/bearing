@@ -1,0 +1,72 @@
+{
+  "name": "Sandstone spire",
+  "class": "rock",
+  "groups": {
+    "a": "#B06A3A",
+    "b": "#C4925C",
+    "c": "#965532"
+  },
+  "parts": [
+    {
+      "type": "column",
+      "group": "a",
+      "sides": 5,
+      "rings": [
+        {
+          "y": -4,
+          "r": 9
+        },
+        {
+          "y": 10,
+          "r": 7.5
+        },
+        {
+          "y": 22,
+          "r": 6.5,
+          "x": 0.6
+        }
+      ],
+      "seed": 11,
+      "jitter": 0.12
+    },
+    {
+      "type": "column",
+      "group": "c",
+      "sides": 5,
+      "rings": [
+        {
+          "y": 21,
+          "r": 7.2,
+          "x": 0.6
+        },
+        {
+          "y": 27,
+          "r": 7.6,
+          "x": 0.8
+        }
+      ],
+      "seed": 12,
+      "jitter": 0.08
+    },
+    {
+      "type": "column",
+      "group": "b",
+      "sides": 5,
+      "rings": [
+        {
+          "y": 27,
+          "r": 5.6,
+          "x": 0.8
+        },
+        {
+          "y": 36,
+          "r": 4.2,
+          "x": 1.2
+        }
+      ],
+      "seed": 13,
+      "jitter": 0.1,
+      "top": 2
+    }
+  ]
+}

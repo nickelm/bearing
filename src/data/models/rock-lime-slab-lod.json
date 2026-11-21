@@ -1,0 +1,28 @@
+{
+  "name": "Limestone slab (far)",
+  "class": "rock",
+  "groups": {
+    "a": "#D8D2C2",
+    "b": "#C8C1AE",
+    "c": "#B9B19C"
+  },
+  "parts": [
+    {
+      "type": "column",
+      "group": "a",
+      "sides": 6,
+      "rings": [
+        {
+          "y": -3,
+          "r": 12
+        },
+        {
+          "y": 9,
+          "r": 8
+        }
+      ],
+      "seed": 31,
+      "jitter": 0.12
+    }
+  ]
+}

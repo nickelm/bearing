@@ -1,0 +1,36 @@
+{
+  "name": "Dam",
+  "class": "building",
+  "groups": {
+    "concrete": "#9A968E",
+    "dark": "#5E5B55",
+    "white": "#E8E6DF",
+    "red": "#B0402E",
+    "steel": "#7C8174",
+    "rust": "#8A5A3A",
+    "olive": "#6B6A4A",
+    "glass": "#F2D27A"
+  },
+  "parts": [
+    {
+      "type": "frustum",
+      "group": "concrete",
+      "center": [0, -10, 0],
+      "base": [100, 34],
+      "top": [100, 12],
+      "height": 70
+    },
+    {
+      "type": "box",
+      "group": "concrete",
+      "center": [0, 61, 0],
+      "size": [104, 3, 14]
+    },
+    {
+      "type": "box",
+      "group": "dark",
+      "center": [0, 20, -14],
+      "size": [12, 30, 4]
+    }
+  ]
+}

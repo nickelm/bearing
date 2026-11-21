@@ -1,0 +1,32 @@
+{
+  "name": "Oil field (far)",
+  "class": "building",
+  "groups": {
+    "concrete": "#9A968E",
+    "dark": "#5E5B55",
+    "white": "#E8E6DF",
+    "red": "#B0402E",
+    "steel": "#7C8174",
+    "rust": "#8A5A3A",
+    "olive": "#6B6A4A",
+    "glass": "#F2D27A"
+  },
+  "parts": [
+    {
+      "type": "cylinder",
+      "group": "white",
+      "from": [0, -1, 10],
+      "to": [0, 7, 10],
+      "radius": 5,
+      "sides": 6
+    },
+    {
+      "type": "frustum",
+      "group": "steel",
+      "center": [-10, -1, -8],
+      "base": [4, 4],
+      "top": [1, 1],
+      "height": 23
+    }
+  ]
+}

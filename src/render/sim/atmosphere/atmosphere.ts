@@ -100,6 +100,7 @@ import {
 } from './model';
 import type { AtmosphereLuts, AtmosphereParams } from './model';
 import { MOON_TINT, SkyView } from './skyView';
+import { GroundFog } from './groundFog';
 import type { SkyUniforms } from './skyView';
 
 type F = Node<'float'>;
@@ -186,6 +187,8 @@ export class AtmosphereNodes {
   readonly vibrance = uniform(1);
   /** The sky: its LUT, the sun, the moon and the stars (skyView.ts). */
   readonly sky: SkyView;
+  /** Valley mist and zone height fog in front of surfaces (decision 300). */
+  readonly groundFog = new GroundFog();
   /** The CPU's copies of the transmittance and multiple-scattering tables. */
   tables!: AtmosphereLuts;
   /** Counts `rebuild` calls, so the sky knows its LUT is stale. */
@@ -238,9 +241,29 @@ export class AtmosphereNodes {
     const t1 = max(min(dist, top.y), t0);
     const s = this.march(ro, rd, t0 as F, t1 as F, steps, 2, true);
     const gain = this.enabled.mul(this.inScatter).mul(this.aerialGain(s.transmittance));
+    // Valley mist and zone height fog (decision 300): nearer the ground than most of the
+    // haze, so the haze is seen through them; a uniform branch in clear air.
+    const fogIn = vec3(0).toVar();
+    const fogT = float(1).toVar();
+    const fog = this.groundFog;
+    If(fog.on, () => {
+      const pointHeight = length(ro.add(relative)).sub(this.params.groundRadius) as F;
+      // The fog's light: what a white, level surface at the camera reflects, sky and sun.
+      const r = length(ro);
+      const muS = dot(ro.div(r), this.u.sunDirection);
+      const light = this.skyIrradiance(muS as F)
+        .mul(2)
+        .add(this.transmittanceToTop(r as F, muS as F).mul(max(muS, 0).mul(1 / Math.PI)));
+      const f = fog.between(dist as F, pointHeight, light as V3);
+      fogIn.assign(f.inscatter);
+      fogT.assign(f.transmittance);
+    });
     return {
-      inscatter: max(this.graded(s.inscatter), 0).mul(gain) as V3,
-      transmittance: mix(vec3(1), s.transmittance, this.enabled) as V3,
+      inscatter: max(this.graded(s.inscatter), 0)
+        .mul(gain)
+        .mul(fogT)
+        .add(fogIn.mul(this.enabled)) as V3,
+      transmittance: mix(vec3(1), s.transmittance, this.enabled).mul(fogT) as V3,
     };
   }
 

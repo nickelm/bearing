@@ -14,9 +14,9 @@ import type { LodSelection } from './quadtree';
 export const DATA_TILE_BYTES = TILE_STRIDE * TILE_STRIDE * 8;
 /**
  * base, up, parentBase, parentDisp, slope, color, landform (vec3) + surface (vec4)
- * interleaved with canopyEdge (decision 157), float32.
+ * interleaved with canopyEdge (decision 157) and the surface art (vec3, decision 298), float32.
  */
-export const MESH_TILE_BYTES = TILE_VERTEX_COUNT * (7 * 3 + 5) * 4;
+export const MESH_TILE_BYTES = TILE_VERTEX_COUNT * (7 * 3 + 8) * 4;
 /**
  * Share of the tile memory budget for CPU tile data; the rest holds meshes.
  * Low views draw about 400 meshes plus their fallback parents, against about

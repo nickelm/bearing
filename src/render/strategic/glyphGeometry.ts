@@ -224,6 +224,14 @@ function dome(m: ModelBuilder, cx: number, cy: number, r: number, h: number): vo
   }
 }
 
+/** A point of interest (decision 302): a slim tower with a cap on a low plinth. */
+export function structureModel(): GlyphModel {
+  const m = new ModelBuilder();
+  building(m, 0, 0, 0.3, 0.22, 0.08, 0);
+  tower(m, 0.02, 0, 0.07, 0.42, 0.14);
+  return m.build();
+}
+
 /** A village: three houses with gable roofs. */
 export function villageModel(): GlyphModel {
   const m = new ModelBuilder();

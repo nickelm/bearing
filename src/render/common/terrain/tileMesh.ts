@@ -99,6 +99,12 @@ export interface TileMeshData {
    * and 1 where the biome is farmable (decision 127), 0 elsewhere and in debug views.
    */
   landform: Float32Array;
+  /**
+   * Surface art per vertex, three each (Proposal 0010, decision 298): the world's baked
+   * curvature (−1 convex … 1 concave), the rock's strata strength 0..1 and its tone (an
+   * albedo factor for bare rock). Zero curvature and strength, tone 1, without a sampler.
+   */
+  art: Float32Array;
   /** Displayed height range before exaggeration (m), of this tile and of the parent surface it morphs to. */
   minHeight: number;
   maxHeight: number;
@@ -151,7 +157,12 @@ export interface MeshOptions {
   canopyClear?: ((d: Readonly<Vec3d>, extra: number) => boolean) | null;
   /** The zones' palette shift on land (decision 213); none when absent. */
   zoneShift?: ZoneShift | null;
+  /** Surface art at a direction (decision 298): writes curvature, strata and tone at `out[o..o+2]`. */
+  surfaceArt?: SurfaceArtSampler | null;
 }
+
+/** Writes a direction's surface art (curvature, strata strength, rock tone) into out[o..o + 2]. */
+export type SurfaceArtSampler = (d: Readonly<Vec3d>, out: Float32Array, o: number) => void;
 
 /** Shared index buffer: grid triangles split along (i, j)–(i+1, j+1), plus skirts. */
 export function buildTileIndex(): Uint32Array {
@@ -415,6 +426,8 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
   const color = new Float32Array(n3);
   const forest = new Float32Array(TILE_VERTEX_COUNT);
   const landform = new Float32Array(TILE_VERTEX_COUNT * 3);
+  const art = new Float32Array(TILE_VERTEX_COUNT * 3);
+  const artDir = new Vec3d();
 
   // Grid: directions, own heights and parent heights (float64).
   const dirs = new Float64Array(GRID_VERTICES * 3);
@@ -567,6 +580,8 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
       landform[v * 3 + 1] = ((mat >>> 21) & 7) / 7;
       landform[v * 3 + 2] =
         opts.mode === 'biome' && hOwn[v]! > 0 && FARMABLE_BIOMES.has(mat & 0xff) ? 1 : 0;
+      if (opts.surfaceArt && opts.mode === 'biome') opts.surfaceArt(dirOf(v, artDir), art, v * 3);
+      else art[v * 3 + 2] = 1;
       // No canopy on graded ground (airfields); it thins over the pad's margin.
       if (grade && forest[v]! > 0)
         forest[v] = forest[v]! * (1 - opts.edits!.cover(dirOf(v, gradeDir)));
@@ -636,6 +651,7 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
       forest[dst] = forest[src]!;
       forestInner[dst] = forestInner[src]!;
       landform.copyWithin(dst * 3, src * 3, src * 3 + 3);
+      art.copyWithin(dst * 3, src * 3, src * 3 + 3);
     }
   }
   return {
@@ -653,6 +669,7 @@ export function buildTileMesh(t: TileKey, sources: MeshSources, opts: MeshOption
     forest,
     forestInner,
     landform,
+    art,
     minHeight: minH,
     maxHeight: maxH,
   };

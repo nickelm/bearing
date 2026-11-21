@@ -107,6 +107,15 @@ export interface LandInputs {
    * scattered single pixels of the neighboring field's crop near field boundaries.
    */
   fieldPoint?: V3;
+  /**
+   * Surface art at the face (decision 298): the world's baked curvature (−1 convex … 1
+   * concave), the rock's strata strength 0..1 and its tone; without it, none.
+   */
+  art?: V3;
+  /** The mesh's own curvature per face, dimensionless (meshCurvature × facet size). */
+  fineCurvature?: F;
+  /** Unit vector toward the sun, for the drift's warm sunward and cool shaded slopes. */
+  sun?: V3;
 }
 
 /** What `snowSparkle` needs at a fragment. */
@@ -240,6 +249,40 @@ export class LandShading {
   readonly wetness = uniform(0);
   /** Snow sparkle strength (0 = off, 1 = default). */
   readonly sparkle = uniform(1);
+  /**
+   * Surface art strengths (Proposal 0010, decision 298; TerrainArtSettings): curvature
+   * light and dark, strata bands and rock tone by lithology, and color drift. 0 is off.
+   */
+  readonly artCurvature = uniform(1);
+  readonly artStrata = uniform(1);
+  readonly artDrift = uniform(1);
+
+  /**
+   * Color drift (decision 298): a multiplier that shifts value and hue a little with
+   * low-frequency noise, cools and pales high ground, and warms faces turned to the sun
+   * and cools those turned away, so no biome reads as one flat color. Within a biome's
+   * family: value ±10%, the red–blue balance ±5%, and ±8% warm to cool by aspect.
+   */
+  drift(wrapped: V3, slope: V3, up: V3, elevation: F, sun: V3 | undefined): V3 {
+    const n1 = periodicValueNoise(wrapped, 1024);
+    const n2 = periodicValueNoise(wrapped.add(vec3(311, 127, 59)) as V3, 512);
+    const value = n1.mul(0.1);
+    const hue = n2.mul(0.05);
+    let tint: V3 = vec3(value.add(hue).add(1), value.add(1), value.sub(hue).add(1)) as V3;
+    // High ground cooler and paler.
+    const high = smoothstep(800, 3500, elevation);
+    tint = tint.mul(mix(vec3(1), vec3(1.0, 1.02, 1.06), high)) as V3;
+    if (sun) {
+      // Aspect: the slope's downhill direction against the sun's along the ground.
+      const across = sun.sub(up.mul(dot(sun, up)));
+      const toward = dot(slope.negate(), across).div(max(length(across), 1e-3));
+      const facing = clamp(toward.mul(1.5), -1, 1).mul(smoothstep(0.02, 0.15, length(slope)));
+      tint = tint.mul(
+        vec3(facing.mul(0.08).add(1), facing.mul(0.02).add(1), facing.mul(-0.08).add(1)),
+      ) as V3;
+    }
+    return mix(vec3(1), tint, this.artDrift) as V3;
+  }
 
   /**
    * An albedo on wet ground: darker (water fills the pores, to about 60%) and
@@ -536,6 +579,16 @@ export class LandShading {
         : continuous
     ) as V3;
     a = a.mul(shadeMul) as V3;
+    // Color drift within the biome's family (decision 298).
+    a = a.mul(
+      this.drift(
+        i.wrapped,
+        i.slope,
+        i.up,
+        earthElevationNode(i.height, i.climate.w, this.reliefScale),
+        i.sun,
+      ),
+    ) as V3;
     const faceted = (i.face ? this.facets : float(0)) as F;
     const jitter = (i.face ? i.face.jitter : float(0.5)) as F;
     const steep = length(i.slope);
@@ -630,7 +683,18 @@ export class LandShading {
     const banded = mix(this.slopeRock, cliff, smoothstep(0.08, 0.2, inLayer));
     // Dry ground below the cliffs takes the rock's tint too: talus and red sand.
     a = mix(a, a.mul(mix(vec3(1), vec3(1.08, 0.9, 0.74), dryRock.mul(0.6))), dryRock) as V3;
-    a = mix(a, mix(this.rockColor, banded, dryRock).mul(rockTone), rock) as V3;
+    // Rock by lithology and strata in layered rock under any climate (decision 298): the
+    // rock's tone against the base color, and value bands at the strata, a little wavy.
+    const art = i.art ?? vec3(0, 0, 1);
+    const layered = clamp(art.y.mul(this.artStrata), 0, 1).mul(float(1).sub(dryRock));
+    const wavy = i.height
+      .mul(CLIMATE_EXAGGERATION.inverse)
+      .add(periodicValueNoise(i.wrapped, 256).mul(9))
+      .div(STRATA_THICKNESS * 0.5);
+    const band = hash3(vec3(floor(wavy), 3, 11));
+    const bandTone = mix(float(1), band.mul(0.34).add(0.8), layered);
+    const toned = this.rockColor.mul(mix(float(1), art.z, clamp(this.artStrata, 0, 1)));
+    a = mix(a, mix(toned.mul(bandTone), banded, dryRock).mul(rockTone), rock) as V3;
     // Rain darkens the ground, the rock and the canopy; snow stays as it is.
     a = this.wet(a);
 
@@ -646,6 +710,15 @@ export class LandShading {
     // Two snow shades per face: sunlit faces still differ, as in the reference board.
     const snowTone = mix(float(1), step(0.5, jitter).mul(0.06).add(0.94), faceted);
     a = mix(a, this.snowColor.mul(snowTone), snow) as V3;
+
+    // Curvature (decision 298): hollows and creases darker, crests and edges lighter, from
+    // the world's baked curvature and the facets' own, so relief reads in flat light.
+    if (i.art || i.fineCurvature) {
+      const coarse = (i.art ? i.art.x : float(0)) as F;
+      const fine = clamp((i.fineCurvature ?? float(0)) as F, -1, 1);
+      const c = clamp(coarse.mul(0.7).add(fine.mul(0.6)), -1, 1);
+      a = a.mul(float(1).sub(c.mul(this.artCurvature).mul(0.3))) as V3;
+    }
 
     return {
       albedo: mix(i.albedo, a, this.enabled) as V3,

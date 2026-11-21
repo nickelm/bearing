@@ -1,0 +1,22 @@
+{
+  "name": "Quarry (far)",
+  "class": "building",
+  "groups": {
+    "concrete": "#9A968E",
+    "dark": "#5E5B55",
+    "white": "#E8E6DF",
+    "red": "#B0402E",
+    "steel": "#7C8174",
+    "rust": "#8A5A3A",
+    "olive": "#6B6A4A",
+    "glass": "#F2D27A"
+  },
+  "parts": [
+    {
+      "type": "box",
+      "group": "concrete",
+      "center": [0, 0, 0],
+      "size": [60, 5, 50]
+    }
+  ]
+}

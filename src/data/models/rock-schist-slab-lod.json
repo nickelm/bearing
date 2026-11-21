@@ -1,0 +1,17 @@
+{
+  "name": "Schist slabs (far)",
+  "class": "rock",
+  "groups": {
+    "a": "#6E7468",
+    "b": "#5E665C",
+    "c": "#7C8174"
+  },
+  "parts": [
+    {
+      "type": "box",
+      "group": "a",
+      "center": [0, 2, 0],
+      "size": [20, 6, 12]
+    }
+  ]
+}

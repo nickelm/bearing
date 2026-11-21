@@ -1,0 +1,37 @@
+{
+  "name": "Schist fins",
+  "class": "rock",
+  "groups": {
+    "a": "#6E7468",
+    "b": "#5E665C",
+    "c": "#7C8174"
+  },
+  "parts": [
+    {
+      "type": "frustum",
+      "group": "a",
+      "center": [0, -3, 0],
+      "base": [14, 3],
+      "top": [10, 1.5],
+      "height": 14
+    },
+    {
+      "type": "frustum",
+      "group": "b",
+      "center": [3, -3, 4],
+      "base": [12, 2.5],
+      "top": [8, 1.2],
+      "height": 11,
+      "yaw": 8
+    },
+    {
+      "type": "frustum",
+      "group": "c",
+      "center": [-2, -3, -4],
+      "base": [11, 2.5],
+      "top": [7, 1],
+      "height": 9,
+      "yaw": -6
+    }
+  ]
+}

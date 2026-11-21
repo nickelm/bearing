@@ -1,0 +1,20 @@
+{
+  "name": "Granite boulder (far)",
+  "class": "rock",
+  "groups": {
+    "a": "#9C9A94",
+    "b": "#B5B2AA",
+    "c": "#85837D"
+  },
+  "parts": [
+    {
+      "type": "blob",
+      "group": "b",
+      "center": [0, 2.5, 0],
+      "radius": [6, 5, 5],
+      "detail": 0,
+      "jitter": 0.2,
+      "seed": 22
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "name": "Boulder (far)",
+  "class": "rock",
+  "groups": {
+    "a": "#8A8478",
+    "b": "#9A948A",
+    "c": "#7A746A"
+  },
+  "parts": [
+    {
+      "type": "blob",
+      "group": "b",
+      "center": [0, 1.6, 0],
+      "radius": [4, 3, 3.4],
+      "detail": 0,
+      "jitter": 0.2,
+      "seed": 71
+    }
+  ]
+}

@@ -1,0 +1,49 @@
+{
+  "name": "Quarry",
+  "class": "building",
+  "groups": {
+    "concrete": "#9A968E",
+    "dark": "#5E5B55",
+    "white": "#E8E6DF",
+    "red": "#B0402E",
+    "steel": "#7C8174",
+    "rust": "#8A5A3A",
+    "olive": "#6B6A4A",
+    "glass": "#F2D27A"
+  },
+  "parts": [
+    {
+      "type": "box",
+      "group": "concrete",
+      "center": [0, -1, 0],
+      "size": [60, 3, 50]
+    },
+    {
+      "type": "box",
+      "group": "dark",
+      "center": [0, 1.5, -18],
+      "size": [52, 4, 8]
+    },
+    {
+      "type": "box",
+      "group": "dark",
+      "center": [0, 4.5, -26],
+      "size": [52, 4, 6]
+    },
+    {
+      "type": "box",
+      "group": "rust",
+      "center": [24, 1.5, 18],
+      "size": [10, 5, 6],
+      "yaw": 15
+    },
+    {
+      "type": "frustum",
+      "group": "steel",
+      "center": [-20, -1, 14],
+      "base": [2, 2],
+      "top": [0.6, 0.6],
+      "height": 17
+    }
+  ]
+}

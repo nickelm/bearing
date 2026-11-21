@@ -16,6 +16,7 @@ import { extractRivers } from './rivers';
 import type { Rivers } from './rivers';
 import type { WorldSeed } from '../core/rng';
 import { segmentZones } from './zones';
+import { curvatureMap } from './curvature';
 import type { Zones } from './zones';
 
 export interface FinishInput {
@@ -84,6 +85,11 @@ export interface FinishResult {
   lithology?: Uint8Array;
   /** Zones with names and look recipes (decision 213); absent in worlds stored before them. */
   zones?: Zones;
+  /**
+   * Curvature per global cell in (−1, 1), positive concave (Proposal 0010, decision 298),
+   * from the unexaggerated heights; absent in worlds stored before it.
+   */
+  curvature?: Float32Array;
   display: DisplayMaps;
   timings: { stage: string; ms: number }[];
 }
@@ -269,10 +275,12 @@ export function finishWorld(input: FinishInput): FinishResult {
           ),
         )
       : undefined;
+  const curvature = time('curvature', () => curvatureMap(input.n, input.height));
   return {
     drainage,
     rivers,
     channels,
+    curvature,
     biome,
     forest,
     treeline,

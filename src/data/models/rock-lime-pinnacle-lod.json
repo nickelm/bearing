@@ -1,0 +1,29 @@
+{
+  "name": "Limestone pinnacle (far)",
+  "class": "rock",
+  "groups": {
+    "a": "#D8D2C2",
+    "b": "#C8C1AE",
+    "c": "#B9B19C"
+  },
+  "parts": [
+    {
+      "type": "column",
+      "group": "a",
+      "sides": 6,
+      "rings": [
+        {
+          "y": -4,
+          "r": 8
+        },
+        {
+          "y": 24,
+          "r": 4.5
+        }
+      ],
+      "seed": 32,
+      "jitter": 0.15,
+      "top": 4
+    }
+  ]
+}

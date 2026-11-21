@@ -72,6 +72,10 @@
  * (gitignored).
  */
 import { makeZoneShift } from '../src/render/common/zoneLook';
+import { surfaceArtSampler } from '../src/render/common/terrain/surfaceArt';
+import { bearingPois } from '../src/render/sim/props/poiWorld';
+import { terrainArtSettings } from '../src/render/common/terrainArt';
+import type { ArtQuality, ArtStyle } from '../src/render/common/terrainArt';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { deserialize } from 'node:v8';
 import { createRequire } from 'node:module';
@@ -1109,7 +1113,12 @@ it('renders preview views', async () => {
 
   // The campaign world first: the global pass uses the seed that passed the validity check.
   const campaign = generateCampaignWorld({ ...DEFAULT_PLANET_PARAMS, seed });
-  const params = { ...DEFAULT_PLANET_PARAMS, seed: campaign.seed };
+  // RELIEF=1.0…1.5 sets the relief exaggeration (decision 297; default 1.3).
+  const params = {
+    ...DEFAULT_PLANET_PARAMS,
+    seed: campaign.seed,
+    ...(process.env.RELIEF ? { reliefExaggeration: Number(process.env.RELIEF) } : {}),
+  };
   const { world, global } = await previewWorld(gpu, params, tres, gres);
   // ALIGNMENTS=path: roads and railways along a record from tools/alignment.preview.ts (SAVE),
   // with their corridors cut into the terrain (decision 184).
@@ -1255,7 +1264,23 @@ it('renders preview views', async () => {
       process.env.ZONES !== '0' && global.finish.zones
         ? makeZoneShift(global.finish.zones, global.n)
         : undefined,
+    // Curvature, strata and rock tone (decision 298).
+    surfaceArt:
+      global.finish.curvature && global.finish.lithology
+        ? surfaceArtSampler({
+            n: global.n,
+            curvature: global.finish.curvature,
+            lithology: global.finish.lithology,
+          })
+        : undefined,
   });
+  // ART=off|low|medium|high and ART_STYLE=bearing|storybook|muted (decision 296).
+  scene.setTerrainArt(
+    terrainArtSettings(
+      (process.env.ART ?? 'medium') as ArtQuality,
+      (process.env.ART_STYLE ?? 'bearing') as ArtStyle,
+    ),
+  );
   scene.setInfrastructure(infra);
   // Settlements from their plans (Proposal 0009); CITIES=0 draws the old town scatter.
   scene.citiesOn = process.env.CITIES !== '0';
@@ -1284,18 +1309,49 @@ it('renders preview views', async () => {
   // Mountain shadows (decision 139) from the global heights; SHADOW=0 leaves them out.
   // SPARKLE=0 leaves the snow's glints out; WET=x (0..1) wets the ground whatever the weather.
   if (process.env.SHADOW !== '0') scene.shadows.setHeights(global.height, global.n);
+  // Valley mist and zone height fog (decision 300); MIST=0 leaves them out.
+  if (process.env.MIST !== '0')
+    scene.zoneAir.setWorld({ n: global.n, height: global.height, zones: global.finish.zones });
   // Landform props (decision 225), as main.ts sets them; PROPS=0 leaves them out.
   const propWonders = (kind: number) =>
     wonders.filter((w) => w.kind === kind).map((w) => new Vec3d(...w.dir));
-  if (process.env.PROPS !== '0' && global.finish.province && global.finish.lithology)
-    scene.props.setMaps({
-      n: global.n,
-      province: global.finish.province,
-      lithology: global.finish.lithology,
-      biome: global.finish.biome,
-      karstWonders: propWonders(2),
-      pillarWonders: propWonders(3),
-    });
+  const propMaps =
+    global.finish.province && global.finish.lithology
+      ? {
+          n: global.n,
+          province: global.finish.province,
+          lithology: global.finish.lithology,
+          biome: global.finish.biome,
+          karstWonders: propWonders(2),
+          pillarWonders: propWonders(3),
+        }
+      : null;
+  if (process.env.PROPS !== '0' && propMaps) scene.props.setMaps(propMaps);
+  // Rock dressing (decision 299); ROCKS=0 leaves it out.
+  if (process.env.ROCKS !== '0' && propMaps) scene.rocks.setMaps(propMaps);
+  // Points of interest composed into the airfields' views (decisions 302, 303); POIS=0 leaves them out.
+  if (process.env.POIS !== '0' && propMaps) {
+    const poiResult = bearingPois(
+      {
+        n: global.n,
+        radius: params.radius,
+        height: global.height,
+        biome: global.finish.biome,
+        province: global.finish.province,
+        lithology: global.finish.lithology,
+        discharge: global.finish.drainage.discharge,
+      },
+      campaign.graph,
+      sited.airbases.map((a) => ({ point: a.point, heading: a.heading })),
+      params.seed,
+      wonders.map((w) => ({ dir: w.dir, height: 300 })),
+    );
+    console.log(
+      `points of interest: ${poiResult.pois.length} in ${poiResult.ms.toFixed(0)} ms, ` +
+        `a landmark in view of ${(100 * poiResult.coverage).toFixed(0)}% of airfields`,
+    );
+    scene.setPointsOfInterest(poiResult.pois, propMaps);
+  }
   if (process.env.SPARKLE === '0') scene.terrain.land.sparkle.value = 0;
   // MICRO=x scales the ground's micro-facets (decision 168; 0 = off); GLINT=x their glints.
   if (process.env.MICRO) scene.terrain.micro.strength.value = Number(process.env.MICRO);
@@ -1730,7 +1786,26 @@ it('renders preview views', async () => {
     };
     const spots = await findSpots(global, params.radius, sunAzimuth, prepare);
     for (const k of kinds) {
-      const spot = spots.get(k);
+      // SPOT_FIX=kind:lat,lon,facing,pitch;… (degrees) pins a spot, e.g. to frame the same
+      // place at two relief exaggerations (decision 297), whose spot search would differ.
+      const fixed = (process.env.SPOT_FIX ?? '')
+        .split(';')
+        .map((e) => e.split(':'))
+        .find(([name]) => name === k)?.[1]
+        ?.split(',')
+        .map(Number);
+      const found = spots.get(k);
+      const spot =
+        fixed && fixed.length >= 4
+          ? {
+              kind: k,
+              point: latLonToDirection(fixed[0]! * DEG, fixed[1]! * DEG),
+              facing: fixed[2]! * DEG,
+              height: found?.height ?? 120,
+              pitch: fixed[3]! * DEG,
+              note: 'pinned by SPOT_FIX',
+            }
+          : found;
       if (!spot) {
         console.log(`spot ${k}: none in this world`);
         continue;
@@ -1738,7 +1813,7 @@ it('renders preview views', async () => {
       const lat = Math.asin(spot.point.y) / DEG;
       const lon = Math.atan2(spot.point.x, spot.point.z) / DEG;
       console.log(
-        `spot ${k}: ${lat.toFixed(3)}, ${lon.toFixed(3)} facing ${(spot.facing / DEG).toFixed(0)}° at ${spot.height.toFixed(0)} m (${spot.note})`,
+        `spot ${k}: ${lat.toFixed(3)}, ${lon.toFixed(3)} facing ${(spot.facing / DEG).toFixed(0)}° pitch ${(spot.pitch / DEG).toFixed(1)}° at ${spot.height.toFixed(0)} m (${spot.note})`,
       );
       const art = artViews
         ? { glacial: 'art-valley', canyon: 'art-canyon', cliffs: 'art-coast' }[k as string]
@@ -2048,7 +2123,8 @@ it('renders preview views', async () => {
         (scene.structures.group.visible ? scene.structures.stats.pending : 0) +
         (scene.cities.group.visible ? scene.cities.stats.pending : 0) +
         (scene.groundCover.group.visible ? scene.groundCover.stats.pending : 0) +
-        (scene.props.group.visible ? scene.props.stats.pending : 0);
+        (scene.props.group.visible ? scene.props.stats.pending : 0) +
+        (scene.rocks.group.visible ? scene.rocks.stats.pending : 0);
       stable = s.pending === 0 && treesPending === 0 && sig === last ? stable + 1 : 0;
       last = sig;
     }
@@ -2535,6 +2611,22 @@ it('renders preview views', async () => {
       const ps = scene.props.stats;
       console.log(
         `  props: ${ps.chunks} tiles, ${ps.instances} props in ${ps.draws} draws, ${(ps.triangles / 1e6).toFixed(3)} M triangles`,
+      );
+    }
+    if (scene.waterfalls.stats.drawn) {
+      const wf = scene.waterfalls.stats;
+      console.log(`  waterfalls: ${wf.drawn} of ${wf.falls} in range, ${wf.triangles} triangles`);
+    }
+    if (scene.pois.stats.instances) {
+      const ps = scene.pois.stats;
+      console.log(
+        `  points of interest: ${ps.instances} structures and pylons in ${ps.draws} draws, ${(ps.triangles / 1e6).toFixed(3)} M triangles`,
+      );
+    }
+    if (scene.rocks.stats.instances) {
+      const rs = scene.rocks.stats;
+      console.log(
+        `  rocks: ${rs.chunks} tiles, ${rs.instances} pieces in ${rs.draws} draws, ${(rs.triangles / 1e6).toFixed(3)} M triangles`,
       );
     }
     if (scene.groundCover.stats.instances) {

@@ -1,0 +1,41 @@
+{
+  "name": "Sandstone buttress",
+  "class": "rock",
+  "groups": {
+    "a": "#B06A3A",
+    "b": "#C4925C",
+    "c": "#965532"
+  },
+  "parts": [
+    {
+      "type": "box",
+      "group": "a",
+      "center": [0, 4, 0],
+      "size": [16, 12, 14],
+      "bevel": 1
+    },
+    {
+      "type": "box",
+      "group": "b",
+      "center": [0, 14, -2],
+      "size": [12, 10, 10],
+      "yaw": 8,
+      "bevel": 1
+    },
+    {
+      "type": "box",
+      "group": "c",
+      "center": [0, 22, -3],
+      "size": [8, 7, 7],
+      "yaw": -6,
+      "bevel": 0.8
+    },
+    {
+      "type": "box",
+      "group": "a",
+      "center": [0, 27, -3],
+      "size": [6, 4, 5],
+      "yaw": 10
+    }
+  ]
+}

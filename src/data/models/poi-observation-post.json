@@ -1,0 +1,37 @@
+{
+  "name": "Observation post",
+  "class": "building",
+  "groups": {
+    "concrete": "#9A968E",
+    "dark": "#5E5B55",
+    "white": "#E8E6DF",
+    "red": "#B0402E",
+    "steel": "#7C8174",
+    "rust": "#8A5A3A",
+    "olive": "#6B6A4A",
+    "glass": "#F2D27A"
+  },
+  "parts": [
+    {
+      "type": "box",
+      "group": "olive",
+      "center": [0, 1.5, 0],
+      "size": [7, 5, 7],
+      "bevel": 0.6
+    },
+    {
+      "type": "box",
+      "group": "glass",
+      "center": [0, 4.5, 0],
+      "size": [6, 1.2, 6]
+    },
+    {
+      "type": "frustum",
+      "group": "steel",
+      "center": [4, -1, 4],
+      "base": [1.4, 1.4],
+      "top": [0.5, 0.5],
+      "height": 15
+    }
+  ]
+}

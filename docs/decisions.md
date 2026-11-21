@@ -4773,3 +4773,77 @@ Decision 256's AI checks had run gear down, and the gear's drag had been slowing
 - **Checks.** `tests/reliefExaggeration.test.ts` at 1.0, 1.3 and 1.5: biomes, forest and zones identical; land scaled and the sea floor kept; lakes level; the treeline on the same cells; no river surface rising downstream; road profiles within the trunk grade on the scaled ground.
 
 **Reason:** Proposal 0010, *Relief Scale*. Scaling after biomes keeps climate unchanged by construction; scaling the tile kernel's output rather than its inputs keeps every landform rule the kernel holds (gully depth by slope, alpine crests by height, strata thickness) as tuned. Keeping the coarse pass unexaggerated keeps rule 9's planning data, and the other session's war, independent of an art setting.
+
+### 298. Surface art: curvature, strata by rock, color drift
+
+**Date:** 2026-11-21
+**Decision:** Proposal 0010's *Surface* layer, in the terrain shader:
+
+- **Curvature.** A curvature map baked once per world on the global grid (`worldgen/curvature.ts`, in `finishWorld`, from the unexaggerated heights): how far a cell lies below (concave, positive) or above (convex) the mean of its eight neighbors and of their neighbors, squashed by tanh into (−1, 1). It reaches the shader per vertex, sampled bilinearly by direction so neighboring tiles agree (`render/common/terrain/surfaceArt.ts`). The mesh's own curvature adds the fine scale: the divergence of the interpolated slope across each triangle (`meshCurvature`), one value per face, from screen derivatives taken before any branch (decision 69). Concave faces darken and convex ones lighten by up to 30% (`LandShading.artCurvature`).
+- **Strata and rock by lithology.** Each vertex carries its rock's strata strength (layered sedimentary rock 1, unlayered sediments and lava flows 0.35–0.6, schist 0.2, granite and till 0) and tone (granite 2×, limestone 3.2×, basalt 0.45× the base rock color, …; `ROCK_STRATA`, `ROCK_TONE`). Bare rock in layered rock under any climate now shows value bands at half the strata thickness, at the kernel's unexaggerated heights with ±9 m of noise, so they stay on its benches; the dry-rock bands of decision 126 are unchanged. Rock takes its tone by lithology, as Part I already stated.
+- **Color drift.** Within each biome's family: value ±10% and the red–blue balance ±5% from two low-frequency noises, high ground a little cooler and paler, and faces turned to the sun up to 8% warmer, those turned away up to 8% cooler (`LandShading.drift`), before the shade quantization's facets, so every face stays one color.
+- **Data path.** The art triple (curvature, strata, tone) rides in the terrain's interleaved `surface` buffer, now eight floats a vertex: all eight vertex buffers are in use (decision 157). Mesh memory grows from 26 to 29 floats a vertex (`MESH_TILE_BYTES`).
+- **Switches.** `artCurvature`, `artStrata` and `artDrift` are uniforms set from `TerrainArtSettings`; quality `off` sets them to 0.
+
+**Reason:** Proposal 0010, *Surface*. Per-vertex data sampled by direction is seamless by construction; per-face curvature from the slope's derivatives costs no data and follows the facets the player sees.
+
+### 299. Rock dressing on the props' instancing
+
+**Date:** 2026-11-21
+**Decision:** Proposal 0010's rock dressing (`worldgen/rockDressing.ts`, game-agnostic):
+
+- **Kit.** Sixteen pieces with far models (`src/data/models/rock-*.json`, written by `tools/models/rocks.mjs`, class `rock`, 6–160 triangles): sandstone slabs, ledges, buttresses and spires (blocky, banded); granite domes, boulders and tors (rounded); limestone slabs and pinnacles (pale, fluted); basalt columns and walls (columnar); schist slabs and fins (slabby); scree fans, crest teeth and boulders on any rock. Sizes 8–36 m at scale 1, scaled 0.4–3×.
+- **Placement.** One candidate per cell of 2 × 2 level-7 samples (about 95 m), at a hashed spot, by a pure function of the cell's site: crests (convex and steep) carry teeth, spires, pinnacles, columns or tors; cliffs (above 45°) carry slabs and ledges by rock, laid on the face with the surface's normal as their up; walls (32°–45°) carry buttresses in layered or rifted rock and slabs elsewhere; concave ground below steeper ground carries scree; open high ground (alpine, tundra, moorland, rocky and cold desert) scattered boulders. Young collision ranges and rifts carry 25% more, old mountains and shields 25% less. Upright pieces sink below the lowest ground under their footprint by 12% of their size; pieces laid on a face sit on the ground at their spot, sunk 4% of their size, since on a steep wall the footprint's lowest point would bury them.
+- **Drawing.** `PropLayer` takes the kinds, ranges, ceiling, cell stride and placer as options (`TileLayerOptions`); the landform props keep theirs, and the rock dressing is a second instance (`GlobeScene.rocks`) with full models within 1.5 km and far ones to 5 km (the quality tier's `rocks.near` and `rocks.far`), none above 6 km. Its density is the tier's.
+- **Collision.** Pieces larger than 20 m are columns in their tile's obstacles, as the props are.
+
+**Reason:** Proposal 0010, *Rock Dressing*. Sharing the props' instancing keeps one drawing path for things that stand on the tiles.
+
+### 300. The zones' air: valley mist, height fog, particles, a stylized sky
+
+**Date:** 2026-11-21
+**Decision:** Proposal 0010's *Air*:
+
+- **Valley mist and height fog** are two exponential layers of fog in `AtmosphereNodes.aerialPerspective` (`atmosphere/groundFog.ts`), so every material that takes aerial perspective sits in them at no extra pass. Height fog takes the zone's haze color and density (`ZoneRecipe.haze`, `hazeDensity`, unread until now) and thickens toward the area's mean ground (scale height 450 m). Valley mist pools above the lowest ground within 6 km of the camera (scale height 40 m), thick before and at sunrise and burning off by about 30° of sun, a little at dusk, more on wet ground, more in foggy zones, none in dusty ones. The optical depth is analytic; the fog scatters what a white, level surface at the camera reflects. `ZoneAir` sets both per frame from the zone under the camera, easing over 2.5 s.
+- **Light shafts** were already in the volumetrics (decision 141); unchanged.
+- **Ambient particles** ride on the precipitation overlay (decision 142): the zone's particles raise one kind to a low level with a tint and a glow while the weather brings less (`Precipitation.ambient`, `ambientFor`): pale motes of pollen over meadows, orange leaves in deciduous forest, dust in dry zones, drifting snow in cold zones above 2.5 km, fireflies at dusk in humid ones.
+- **Sky.** The sun's and the moon's disks scale with the style (`SkyView.sunScale`, `moonScale`: 1.6 and 1.4 in `bearing`, 2.4 and 2 in `storybook`); an aurora of green to violet curtains rises over the poleward horizon by night above about 56° of latitude (`SkyView.aurora`).
+- **Budget.** Clear air without zones costs a uniform branch; with fog on, a few ALU and two texture reads per vertex of each material.
+
+**Reason:** Proposal 0010, *Air*. Folding the fog into aerial perspective keeps it on every material without a new pass; reusing the particle overlay adds no system.
+
+### 301. Waterfalls, rapids and calm lakes
+
+**Date:** 2026-11-21
+**Decision:** Proposal 0010's *Water*:
+
+- **Falls** are found on the river index's stepped surfaces (`worldgen/waterfalls.ts`): a run of segments whose surface falls at least 12% is one fall from its first point (the lip) to its last (the foot), if it drops at least 6 m on a river at least 6 m wide; falls 40 m and taller are named "<name> Falls" from `rng("waterfalls")`. Gentler steep runs (2.5–12%) are rapids. These are Proposal 0005's knickpoints made explicit.
+- **Drawing.** `WaterfallLayer` builds the falls within 9 km of the eye: a sheet the river's width on a parabola from lip to foot with stepped bands of white water scrolling down it, a foam pool at the foot, and three crossed soft quads of mist over the pool. The mist is a placeholder for Proposal 0011's effects system, which is not in the repository.
+- **Rapids** draw foam lines across steep reaches at every 1.6 m of drop in the terrain shader: contours of height run across the flow, so no flow direction is needed (`TerrainRenderer.rapids`).
+- **Calm lakes** are smoother than the sea and reflect more sky at every angle (`WaterShading.lakeMirror`).
+
+**Reason:** Proposal 0010, *Water*.
+
+### 302. Points of interest
+
+**Date:** 2026-11-21
+**Decision:** Proposal 0010's *Structures* (stretch work), game-agnostic in `worldgen/poi/poi.ts`:
+
+- **Framework.** Twelve types (radar station, early-warning radar, relay tower, bunker complex, coastal battery, observation post, dam, lighthouse, observatory, quarry, oil field, power line) each with a site score on the global grid from prominence, view, sea, saddles and gorges, nearness to the caller's places and routes, biome, province and rock; a count per million km² of land; a spacing; a name pattern from `rng("poi")`; and a model. The caller passes places and routes as points and polylines and chooses the kit (`PoiOptions.kinds`). Power lines run straight from a site to the nearest place as a row of pylons.
+- **Bearing's side** (`render/sim/props/poiWorld.ts`) hands it the strategic graph's settlements and roads and the airfields' approaches.
+- **Drawing.** Twelve chunky models with far models (`src/data/models/poi-*.json`, written by `tools/models/poi.mjs`; towers are frusta, not lattices, Part I's rule against thin geometry), on a third `PropLayer` (full models within 3 km, far ones to 16 km), standing on the lowest ground under their footprint; large ones collide. On the map, one `structure` glyph at the Region band.
+- **Simplifications.** No access roads (the router of Proposal 0005 is not run for them), no pads, and no reservoir behind a dam; the power lines are not aligned.
+
+**Reason:** Proposal 0010, *Structures*; the plain inputs keep the generator usable by other games (owner's addendum).
+
+### 303. Composition by viewsheds
+
+**Date:** 2026-11-21
+**Decision:** Proposal 0010's *Composition* (stretch work):
+
+- **Viewsheds** (`worldgen/viewshed.ts`) count, per global cell, the viewpoints from which a point 60 m above it is in sight within 30 km, with the planet's curvature. Bearing's viewpoints are each airfield's two approaches, 300 m up and 6 km out.
+- **Bias.** Points of interest score 0.6–1.4 times their site score by the viewshed, so seen sites win.
+- **Landmarks.** Wonders (300 m), named falls, and radars, relay towers, lighthouses, observatories and dams count as landmarks. After placement, every viewpoint that sees none gets a relay tower on the most prominent ground it does see within 20 km (`composeLandmarks`).
+- **Not done.** The wonders' own placement is not biased: it belongs to the cast, which is the same at every relief exaggeration (decision 297) and is the other session's.
+
+**Reason:** Proposal 0010, *Composition*.

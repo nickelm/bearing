@@ -1,0 +1,19 @@
+{
+  "name": "Sandstone buttress (far)",
+  "class": "rock",
+  "groups": {
+    "a": "#B06A3A",
+    "b": "#C4925C",
+    "c": "#965532"
+  },
+  "parts": [
+    {
+      "type": "frustum",
+      "group": "a",
+      "center": [0, -2, 0],
+      "base": [16, 14],
+      "top": [6, 5],
+      "height": 32
+    }
+  ]
+}

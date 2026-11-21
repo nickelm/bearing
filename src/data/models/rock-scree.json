@@ -1,0 +1,39 @@
+{
+  "name": "Scree fan",
+  "class": "rock",
+  "groups": {
+    "a": "#8A8478",
+    "b": "#9A948A",
+    "c": "#7A746A"
+  },
+  "parts": [
+    {
+      "type": "blob",
+      "group": "a",
+      "center": [0, -0.5, 0],
+      "radius": [16, 2.2, 12],
+      "detail": 1,
+      "jitter": 0.3,
+      "seed": 61,
+      "half": true
+    },
+    {
+      "type": "blob",
+      "group": "b",
+      "center": [-6, 0.3, 4],
+      "radius": [2, 1.4, 2],
+      "detail": 0,
+      "jitter": 0.3,
+      "seed": 62
+    },
+    {
+      "type": "blob",
+      "group": "c",
+      "center": [5, 0.4, -3],
+      "radius": [2.4, 1.6, 2],
+      "detail": 0,
+      "jitter": 0.3,
+      "seed": 63
+    }
+  ]
+}

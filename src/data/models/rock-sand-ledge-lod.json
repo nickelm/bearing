@@ -1,0 +1,17 @@
+{
+  "name": "Sandstone ledge (far)",
+  "class": "rock",
+  "groups": {
+    "a": "#B06A3A",
+    "b": "#C4925C",
+    "c": "#965532"
+  },
+  "parts": [
+    {
+      "type": "box",
+      "group": "b",
+      "center": [0, 1, 0],
+      "size": [34, 9, 10]
+    }
+  ]
+}

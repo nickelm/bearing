@@ -1,0 +1,29 @@
+{
+  "name": "Granite boulder",
+  "class": "rock",
+  "groups": {
+    "a": "#9C9A94",
+    "b": "#B5B2AA",
+    "c": "#85837D"
+  },
+  "parts": [
+    {
+      "type": "blob",
+      "group": "b",
+      "center": [0, 2.5, 0],
+      "radius": [6, 5, 5],
+      "detail": 1,
+      "jitter": 0.22,
+      "seed": 22
+    },
+    {
+      "type": "blob",
+      "group": "c",
+      "center": [5, 1, 3],
+      "radius": [3, 2.5, 3],
+      "detail": 0,
+      "jitter": 0.25,
+      "seed": 23
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import type { PointOfInterest } from '../../worldgen/poi/poi';
 /**
  * The strategic view's scene (decision 72, visual-style Part II): an illustrated globe
  * from about 3,000 km down to a zoom floor of about 100 km. It has its own Three.js
@@ -50,6 +51,7 @@ import { perspectiveView } from './labels/labelPlacement';
 import type { LabelView } from './labels/labelPlacement';
 import type { FontAtlas } from './labels/fontAtlas';
 import { layoutGlyphs } from './glyphLayout';
+import type { GlyphSet } from './glyphLayout';
 import { CubeGrid as FeatureGrid } from '../../core/cubeGrid';
 import { MilitaryLayer } from './overlays/militaryLayer';
 import { buildMilitaryOverlays, OVERLAY_LAYERS } from './overlays/militaryModel';
@@ -400,6 +402,13 @@ export class StrategicScene {
   /** Relief exaggeration of the drawn world (decision 297): the graph's heights are unexaggerated. */
   private reliefExaggeration = 1;
 
+  /** Points of interest as map glyphs at the Region band (decision 302); an empty list for none. */
+  setPointsOfInterest(pois: readonly PointOfInterest[]): void {
+    this.pois = pois;
+    this.lightsDirty = true;
+  }
+  private pois: readonly PointOfInterest[] = [];
+
   /** Zones from the eroded world, for their labels (decision 213); null to drop them. */
   setZones(zones: readonly ZoneRecord[] | null): void {
     this.zones = zones;
@@ -654,6 +663,7 @@ export class StrategicScene {
         this.glyphs.setGlyphs([
           ...glyphSets(d.graph, w, grid),
           ...layoutCityGlyphs(d.graph.settlements, capitals, (x, y, z) => heightAt([x, y, z])),
+          structureGlyphs(this.pois, (x, y, z) => heightAt([x, y, z])),
         ]);
         const military = this.militaryOverlays(d.graph, d.cast, d.infra);
         const dry = (p: Readonly<[number, number, number]>) => Math.max(0, heightAt(p));
@@ -924,6 +934,22 @@ export class StrategicScene {
  * live on the graph's coarse grid; heights, temperature, biome and wind come from the
  * world's maps, looked up by direction when the two grids differ.
  */
+/** One `structure` glyph per point of interest, at the Region band (decision 302). */
+function structureGlyphs(
+  pois: readonly PointOfInterest[],
+  heightAt: (x: number, y: number, z: number) => number,
+): GlyphSet {
+  const list = pois.filter((p) => p.kind !== 'power-line');
+  const position = new Float32Array(list.length * 4);
+  const shape = new Float32Array(list.length * 4);
+  list.forEach((p, k) => {
+    const [x, y, z] = p.dir;
+    position.set([x, y, z, Math.max(0, heightAt(x, y, z))], k * 4);
+    shape.set([2.4e3, p.facing, 0, 0], k * 4);
+  });
+  return { kind: 'structure', band: 'region', count: list.length, position, shape };
+}
+
 function glyphSets(graph: StrategicGraph, w: World, grid: CubeGrid) {
   const fgrid = graph.resolution === grid.n ? grid : new FeatureGrid(graph.resolution);
   const m = w.maps;

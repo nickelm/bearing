@@ -230,6 +230,16 @@ export class SkyView {
   readonly mie = SkyView.lutTexture();
   /** Radiance of the sun's disk at its center, relative to the sun illuminance. */
   readonly sunDisk = uniform(60);
+  /**
+   * The sun's and the moon's drawn size against SUN_ANGULAR_RADIUS and MOON_ANGULAR_RADIUS
+   * (Proposal 0010's stylized sky, decision 300: the art style's sky scale).
+   */
+  readonly sunScale = uniform(1);
+  readonly moonScale = uniform(1);
+  /** Aurora strength, 0 off (set per frame from the latitude, the dark and the art style). */
+  readonly aurora = uniform(0);
+  /** Unit vector toward the nearer pole along the ground at the camera: the aurora's side of the sky. */
+  readonly auroraPole = uniform(new Vector3(0, 0, 1));
   /** Radiance of the moon's sunlit face, display units; 0 (with no earthshine) draws no moon. */
   readonly moonDisk = uniform(MOON_DISK_DAY);
   /** Radiance of the moon's dark side (earthshine), display units. */
@@ -622,6 +632,32 @@ export class SkyView {
   }
 
   /** The stars and the galaxy's band toward a unit direction, before extinction and the sky's fade. */
+  /**
+   * Aurora curtains (decision 300): bands of green fading to violet with height, rippling
+   * along the horizon and drifting slowly, strongest about 15–30° up. Smooth, like the
+   * rest of the sky; `aurora` scales them, and their light is display units.
+   */
+  private auroraAt(rd: V3, mu: F): V3 {
+    const side = this.side as unknown as V3;
+    const across = this.up.cross(this.side) as unknown as V3;
+    const az = atan(dot(rd, side), dot(rd, across));
+    const t = this.clock.mul(0.03);
+    const wave = sin(
+      az
+        .mul(5)
+        .add(sin(az.mul(2.3).add(t)).mul(1.6))
+        .add(t.mul(2)),
+    );
+    const curtain = pow(wave.mul(0.5).add(0.5), 3);
+    const flat = normalize(rd.sub(this.up.mul(mu)));
+    const poleward = smoothstep(-0.3, 0.7, dot(flat, this.auroraPole));
+    const band = smoothstep(0.08, 0.25, mu)
+      .mul(float(1).sub(smoothstep(0.35, 0.75, mu)))
+      .mul(poleward);
+    const color = mix(vec3(0.15, 0.9, 0.45), vec3(0.55, 0.25, 0.85), smoothstep(0.3, 0.6, mu));
+    return color.mul(curtain.mul(band).mul(this.aurora).mul(0.06)) as V3;
+  }
+
   private starField(rd: V3, mu: F, pixel: F, skyLuminance: F): V3 {
     // Into the celestial frame: back by the sphere's rotation about +Y.
     const c = this.starRotation.x;
@@ -703,7 +739,10 @@ export class SkyView {
     const moon = this.u.moonDirection as unknown as V3;
     const sun = this.air.u.sunDirection as unknown as V3;
     // The disk as a sphere: q is the offset across it in radii, n the surface normal.
-    const q = rd.sub(moon.mul(cosMoon)).div(Math.sin(MOON_ANGULAR_RADIUS)).toVar();
+    const q = rd
+      .sub(moon.mul(cosMoon))
+      .div(sin(this.moonScale.mul(MOON_ANGULAR_RADIUS)))
+      .toVar();
     const rr = dot(q, q).toVar();
     const n = q.sub(moon.mul(sqrt(max(float(1).sub(rr), 0))));
     const lit = dot(n, sun);
@@ -765,7 +804,7 @@ export class SkyView {
       const cosMoon = dot(rd, this.u.moonDirection).toVar();
       If(
         cosMoon
-          .greaterThan(Math.cos(MOON_ANGULAR_RADIUS * 1.02))
+          .greaterThan(cos(this.moonScale.mul(MOON_ANGULAR_RADIUS * 1.02)))
           .and(this.moonDisk.add(this.earthshine).greaterThan(0)),
         () => {
           const moon = this.moonAt(rd as V3, cosMoon as F).toVar();
@@ -777,11 +816,19 @@ export class SkyView {
         const field = this.starField(rd as V3, mu as F, pixel as F, luminance(color as V3));
         color.addAssign(beyond().mul(field).mul(open));
       });
+      // Aurora (decision 300): soft curtains above the poleward horizon by night.
+      If(this.aurora.greaterThan(0).and(mu.greaterThan(0)), () => {
+        color.addAssign(
+          beyond()
+            .mul(this.auroraAt(rd as V3, mu as F))
+            .mul(open),
+        );
+      });
       const cosSun = dot(rd, air.u.sunDirection).toVar();
-      If(cosSun.greaterThan(Math.cos(SUN_ANGULAR_RADIUS * 1.02)), () => {
+      If(cosSun.greaterThan(cos(this.sunScale.mul(SUN_ANGULAR_RADIUS * 1.02))), () => {
         // Across the disk in radii; the limb is darker and redder than the center.
         const across = sqrt(max(float(1).sub(cosSun.mul(cosSun)), 0)).div(
-          Math.sin(SUN_ANGULAR_RADIUS),
+          sin(this.sunScale.mul(SUN_ANGULAR_RADIUS)),
         );
         const depth = sqrt(max(float(1).sub(across.mul(across)), 0));
         const limb = vec3(1).sub(vec3(0.42, 0.54, 0.7).mul(float(1).sub(depth)));

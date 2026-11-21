@@ -1,0 +1,38 @@
+{
+  "name": "Granite tor",
+  "class": "rock",
+  "groups": {
+    "a": "#9C9A94",
+    "b": "#B5B2AA",
+    "c": "#85837D"
+  },
+  "parts": [
+    {
+      "type": "blob",
+      "group": "a",
+      "center": [0, 3, 0],
+      "radius": [10, 6, 9],
+      "detail": 1,
+      "jitter": 0.18,
+      "seed": 24
+    },
+    {
+      "type": "blob",
+      "group": "b",
+      "center": [1, 10, 0],
+      "radius": [7, 4, 6.5],
+      "detail": 0,
+      "jitter": 0.2,
+      "seed": 25
+    },
+    {
+      "type": "blob",
+      "group": "c",
+      "center": [0.5, 15, 0.5],
+      "radius": [4.5, 3, 4],
+      "detail": 0,
+      "jitter": 0.2,
+      "seed": 26
+    }
+  ]
+}

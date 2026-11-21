@@ -1,0 +1,30 @@
+{
+  "name": "Observatory (far)",
+  "class": "building",
+  "groups": {
+    "concrete": "#9A968E",
+    "dark": "#5E5B55",
+    "white": "#E8E6DF",
+    "red": "#B0402E",
+    "steel": "#7C8174",
+    "rust": "#8A5A3A",
+    "olive": "#6B6A4A",
+    "glass": "#F2D27A"
+  },
+  "parts": [
+    {
+      "type": "box",
+      "group": "white",
+      "center": [0, 3, 0],
+      "size": [16, 9, 12]
+    },
+    {
+      "type": "blob",
+      "group": "white",
+      "center": [-5, 8, 0],
+      "radius": [6, 6, 6],
+      "detail": 0,
+      "half": true
+    }
+  ]
+}

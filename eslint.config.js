@@ -139,5 +139,42 @@ export default tseslint.config(
       'no-restricted-properties': NO_MATH_RANDOM,
     },
   },
+  {
+    // Terrain art's world stages are game-agnostic (Proposal 0010, decision 296): rock
+    // dressing, waterfalls, curvature, relief exaggeration and points of interest read
+    // world data only, never the game, the cast or factions.
+    files: [
+      'src/worldgen/poi/**',
+      'src/worldgen/rockDressing.ts',
+      'src/worldgen/waterfalls.ts',
+      'src/worldgen/curvature.ts',
+      'src/worldgen/reliefExaggeration.ts',
+      'src/worldgen/viewshed.ts',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: GRAPHICS_PACKAGES,
+          patterns: [
+            RENDER_UI,
+            {
+              group: [
+                ...layer('campaign'),
+                ...layer('sim'),
+                ...layer('freeflight'),
+                ...layer('follow'),
+                '**/strategic/**',
+                '**/*faction*',
+              ],
+              message:
+                'Terrain art is game-agnostic (Proposal 0010): it reads world data only, never the game, the cast or factions.',
+            },
+          ],
+        },
+      ],
+      'no-restricted-properties': NO_MATH_RANDOM,
+    },
+  },
   prettier,
 );
