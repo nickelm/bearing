@@ -29,6 +29,8 @@ import { GUN } from '../air/stores';
 import { Gun } from './gun';
 import { boresightOf, Missile, Seeker } from './missile';
 import type { HeatSource } from './missile';
+import { flyProjectile, launchProjectile } from './ordnance';
+import type { Impact, Projectile } from './ordnance';
 import type { GroundQuery } from './airframe';
 import { modelToBody } from './rigidBody';
 import { Vec3d } from '../../core/vec3d';
@@ -96,6 +98,13 @@ export class StoresRack {
    * from the war or the traffic; between refreshes each is carried along its velocity.
    */
   sources: HeatSource[] = [];
+  /** Bombs and rockets falling or flying, and their impacts since the app last took them (decision 300). */
+  readonly ordnance: Projectile[] = [];
+  readonly impacts: Impact[] = [];
+  /** The trigger held for the selected rocket pods: they ripple while it is. */
+  rocketTrigger = false;
+  private rocketOwed = 0;
+  private rocketTurn = 0;
 
   constructor(
     readonly spec: FlightSpec,
@@ -239,6 +248,53 @@ export class StoresRack {
     return missile;
   }
 
+  /** Rockets left in the loaded pods of `store` (decision 300). */
+  rocketsLeft(store: string): number {
+    const r = STORES[store]?.rocket;
+    if (!r) return 0;
+    const pods = this.loadedList.filter((l) => l.store === store).length;
+    return Math.max(0, pods * r.count - (this.state.expended[rocketKey(store)] ?? 0));
+  }
+
+  /**
+   * Releases the selected bomb (decision 300), with master arm on, in the air: one per
+   * press, from its next station. Returns the bomb, or null.
+   */
+  dropBomb(m: FlightModel, avionics: Readonly<AvionicsState>): Projectile | null {
+    const w = avionics.weapon;
+    if (!w || STORES[w]?.kind !== 'bomb' || !avionics.masterArm || m.onGround) return null;
+    const station = this.release(m, w);
+    if (!station) return null;
+    const p = launchProjectile(w, this.stationPos(m, station.at), m.vel, m.q);
+    if (p) this.ordnance.push(p);
+    return p;
+  }
+
+  /** Where a station hangs in the world now (m). */
+  private stationPos(m: FlightModel, at: readonly [number, number, number]): Vec3d {
+    return m.pos.clone().add(m.q.rotate(modelToBody(at, this.spec.cg)));
+  }
+
+  /** Fires the selected rocket pods while their trigger is held: alternate pods at the ripple rate. */
+  private stepRockets(m: FlightModel, avionics: Readonly<AvionicsState>, dt: number): void {
+    const w = avionics.weapon;
+    const r = w ? STORES[w]?.rocket : null;
+    if (!w || !r || !this.rocketTrigger || !avionics.masterArm || m.onGround) {
+      this.rocketOwed = 0;
+      return;
+    }
+    this.rocketOwed += r.ripple * dt;
+    while (this.rocketOwed >= 1 && this.rocketsLeft(w) > 0) {
+      this.rocketOwed -= 1;
+      const pods = this.loadedList.filter((l) => l.store === w);
+      const pod = pods[this.rocketTurn++ % pods.length]!;
+      const p = launchProjectile(w, this.stationPos(m, pod.at), m.vel, m.q);
+      if (p) this.ordnance.push(p);
+      const k = rocketKey(w);
+      this.state.expended[k] = (this.state.expended[k] ?? 0) + 1;
+    }
+  }
+
   /** Steps the gun and the missiles in flight by dt from game time t (decisions 295, 297). */
   stepWeapons(
     m: FlightModel,
@@ -248,6 +304,15 @@ export class StoresRack {
     ground: GroundQuery | null = null,
   ): void {
     this.stepGun(m, avionics, dt);
+    this.stepRockets(m, avionics, dt);
+    const groundAt = (d: Readonly<Vec3d>) => (ground ? ground.height(d) : 0);
+    for (let i = this.ordnance.length - 1; i >= 0; i--) {
+      const hit = flyProjectile(this.ordnance[i]!, dt, m.radius, groundAt, t);
+      if (hit) {
+        this.ordnance.splice(i, 1);
+        this.impacts.push(hit);
+      } else if (this.ordnance[i]!.age > 120) this.ordnance.splice(i, 1);
+    }
     for (let i = this.missiles.length - 1; i >= 0; i--) {
       const x = this.missiles[i]!;
       x.step(dt, t, m.radius, this.sources, ground ? (d) => ground.height(d) : null);
@@ -275,4 +340,23 @@ export function gunSelected(avionics: Readonly<AvionicsState>): boolean {
   return (
     avionics.weapon === GUN || (avionics.masterMode === 'dogfight' && avionics.weapon === null)
   );
+}
+
+/** The expended key that counts the rockets fired from the pods of `store` (decision 300). */
+export function rocketKey(store: string): string {
+  return `${store}#fired`;
+}
+
+/** Rockets left by pod store in `loaded`, after the rockets `expended` counts (decision 300). */
+export function rocketCounts(
+  loaded: readonly StationLoad[],
+  expended: Readonly<Record<string, number>>,
+): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const l of loaded) {
+    const r = STORES[l.store]?.rocket;
+    if (r) out[l.store] = (out[l.store] ?? 0) + r.count;
+  }
+  for (const k of Object.keys(out)) out[k] = Math.max(0, out[k]! - (expended[rocketKey(k)] ?? 0));
+  return out;
 }

@@ -1,0 +1,38 @@
+{
+  "name": "Rocket, 70 mm",
+  "class": "store",
+  "groups": {
+    "body": "paint-white",
+    "seeker": "steel"
+  },
+  "parts": [
+    {
+      "type": "cylinder",
+      "group": "body",
+      "from": [-0.53, 0, 0],
+      "to": [0.35, 0, 0],
+      "radius": 0.035,
+      "sides": 6
+    },
+    {
+      "type": "cylinder",
+      "group": "seeker",
+      "from": [0.35, 0, 0],
+      "to": [0.53, 0, 0],
+      "radius": 0.035,
+      "radius2": 0.006,
+      "sides": 6
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "mirror": true,
+      "root": [-0.43, 0, 0.03],
+      "rootChord": 0.1,
+      "tipChord": 0.08,
+      "span": 0.08,
+      "sweep": 0,
+      "thickness": 0.04
+    }
+  ]
+}

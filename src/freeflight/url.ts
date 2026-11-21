@@ -58,6 +58,8 @@ export function parseFreeFlightUrl(q: URLSearchParams, seed: string): FreeFlight
     options.invertStick = kinds.includes('stick');
     options.invertHelo = kinds.includes('helo');
   }
+  const loadout = q.get('loadout');
+  if (loadout) options.loadout = loadout === 'standard' ? null : loadout;
   const control = q.get('control');
   if (control === 'aim' || control === 'direct') options.control = control;
   const base = q.has('base') ? Number(q.get('base')) : NaN;
@@ -98,6 +100,9 @@ export function writeFreeFlightParams(
   q.set('fuel', options.unlimitedFuel ? 'unlimited' : 'limited');
   q.set('aircraft', options.aircraft);
   q.set('control', options.control);
+  // The jet's loadout: named only when not the standard one (decision 300).
+  if (options.loadout) q.set('loadout', options.loadout);
+  else q.delete('loadout');
   const inverted = [
     options.invertAim && 'aim',
     options.invertStick && 'stick',

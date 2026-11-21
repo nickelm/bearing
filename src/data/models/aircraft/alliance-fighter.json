@@ -553,6 +553,17 @@
         "stores": "2 × 900 kg bombs, 2 short-range missiles, 2 tanks",
         "radiusFactor": 0.85,
         "stations": { "wingtip": "srm", "middle": "bomb-900", "inner": "tank-1400" }
+      },
+      {
+        "id": "cas",
+        "stores": "2 rocket pods, 2 × 230 kg bombs, 2 short-range missiles, a centerline tank",
+        "radiusFactor": 0.7,
+        "stations": {
+          "wingtip": "srm",
+          "middle": "rockets-19",
+          "inner": "bomb-230",
+          "centerline": "tank-1100"
+        }
       }
     ]
   },

@@ -263,7 +263,9 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] The seeker's tone (audio), flares and the seeker's lock-on against the sun and the ground (R3)
 - [ ] Heat sources from every aircraft of an enemy flight (formation slots), not its lead alone; line of sight for the seeker
 - [ ] The Pact's missile on a flown Pact fighter (R2.7: the Vo-31's pylons and flight data)
-- [ ] Unguided bombs with CCIP fall lines; rockets
+- [x] Unguided bombs with CCIP fall lines; rockets (`sim/flight/ordnance.ts`, the CCIP pipper, explosions, the F-21's CAS loadout, Free Flight's `loadout=`; decision 300)
+- [ ] Bomb release modes (pairs, ripple with spacing) and the delayed cue when the CCIP point is below the HUD (DTOS); craters and scorch decals at impacts
+- [ ] Rocket pods' mass falls as they fire (the pod's dry mass); rockets' warheads in hit resolution
 - [ ] Hit and kill resolution; minimal damage states; ejection from full fidelity
 - [ ] Sensors read campaign contacts: aggregate flights as radar targets, sites with radars as emitters
 - [ ] Interface defaults per mission type and phase: master mode, formats, HUD cues, declutter

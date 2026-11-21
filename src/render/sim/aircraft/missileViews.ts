@@ -21,10 +21,22 @@ import type { Group } from 'three/webgpu';
 import { float, positionLocal, positionWorld, vec3 } from 'three/tsl';
 import { Quatd } from '../../../core/quat';
 import { Vec3d } from '../../../core/vec3d';
-import type { Missile } from '../../../sim/flight/missile';
+/**
+ * Something in flight the view draws (decisions 297, 299): a missile, a bomb or a rocket,
+ * keyed by the sim's own object, with the store model it shows and whether a motor burns.
+ */
+export interface Flying {
+  key: object;
+  /** The store whose model it shows (`store-<id>`), or another model spec id. */
+  model: string;
+  pos: Readonly<Vec3d>;
+  vel: Readonly<Vec3d>;
+  burning: boolean;
+}
 import type { PlanetLighting } from '../lighting/planetLighting';
 import { AircraftView } from './aircraftView';
 import { storeModel } from './storeMounts';
+import { MODEL_SPECS } from '../../common/models/library';
 
 /** Seconds between smoke points, and how long a point lasts. */
 const SMOKE_STEP = 0.06;
@@ -46,7 +58,7 @@ interface View {
 }
 
 export class MissileViews {
-  private readonly views = new Map<Missile, View>();
+  private readonly views = new Map<object, View>();
   private readonly puffs: Puff[] = [];
   private readonly smoke: InstancedMesh;
   private readonly flameGeo: ConeGeometry;
@@ -98,19 +110,19 @@ export class MissileViews {
    * for ended ones, smoke from those burning; `groundAt` lays their shadows.
    */
   place(
-    missiles: readonly Missile[],
+    missiles: readonly Flying[],
     t: number,
     eye: Readonly<Vec3d>,
     sun: Readonly<Vec3d>,
     radPerPixel: number,
     groundAt: (dir: Readonly<Vec3d>) => number,
   ): void {
-    const live = new Set(missiles);
+    const live = new Set(missiles.map((x) => x.key));
     for (const [k, v] of this.views) if (!live.has(k)) this.drop(k, v);
     for (const ms of missiles) {
-      let v = this.views.get(ms);
+      let v = this.views.get(ms.key);
       if (!v) {
-        const spec = storeModel(ms.store);
+        const spec = storeModel(ms.model) ?? MODEL_SPECS[ms.model];
         if (!spec) continue;
         const view = new AircraftView(spec, [0, 0, 0], this.lighting);
         view.planetRadius = this.radius;
@@ -121,7 +133,7 @@ export class MissileViews {
         view.group.add(flame);
         this.vehicles.add(view.group, view.shadowMesh);
         v = { view, flame, last: null, lastAt: -Infinity };
-        this.views.set(ms, v);
+        this.views.set(ms.key, v);
       }
       const speed = ms.vel.length();
       const fwd = ms.vel.clone().scale(1 / Math.max(1, speed));
@@ -174,7 +186,7 @@ export class MissileViews {
     this.flameMat.dispose();
   }
 
-  private drop(k: Missile, v: View): void {
+  private drop(k: object, v: View): void {
     this.vehicles.remove(v.view.group, v.view.shadowMesh);
     v.view.dispose();
     this.views.delete(k);
@@ -213,4 +225,39 @@ function tailOf(spec: { parts: readonly unknown[] }): number {
       if (typeof v === 'number') x = Math.min(x, v);
   }
   return x;
+}
+
+/** What a stores rack has in flight, as the view draws it: missiles, bombs and rockets. */
+export function flyingOf(rack: {
+  missiles: readonly {
+    store: string;
+    pos: Readonly<Vec3d>;
+    vel: Readonly<Vec3d>;
+    burning: boolean;
+  }[];
+  ordnance: readonly {
+    store: string;
+    kind: 'bomb' | 'rocket';
+    pos: Readonly<Vec3d>;
+    vel: Readonly<Vec3d>;
+    age: number;
+    ballistics: { burn: number };
+  }[];
+}): Flying[] {
+  const out: Flying[] = rack.missiles.map((m) => ({
+    key: m,
+    model: m.store,
+    pos: m.pos,
+    vel: m.vel,
+    burning: m.burning,
+  }));
+  for (const p of rack.ordnance)
+    out.push({
+      key: p,
+      model: p.kind === 'rocket' ? 'rocket' : p.store,
+      pos: p.pos,
+      vel: p.vel,
+      burning: p.age < p.ballistics.burn,
+    });
+  return out;
 }

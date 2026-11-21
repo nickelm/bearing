@@ -62,6 +62,17 @@ async function main(): Promise<void> {
       armed: true,
     };
   }
+  // `&ccip=1`: the bombs' CCIP pipper (decision 300) a little below the flight path marker.
+  if (query.get('ccip') === '1') {
+    const v = shot.frame.velocity;
+    const n = Math.hypot(v[0], v[1], v[2]);
+    shot.frame.ccip = {
+      point: [(v[0] / n) * 2000, (v[1] / n) * 2000 - 260, (v[2] / n) * 2000],
+      time: 9.4,
+      label: 'B230 1',
+      armed: true,
+    };
+  }
   // `&gun=1`: the gun pipper (decision 295) a little below the boresight, 610 m out.
   if (query.get('gun') === '1') {
     const b = shot.frame.boresight;

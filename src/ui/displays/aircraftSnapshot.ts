@@ -129,6 +129,8 @@ export function storesSnapshot(
   tankFuel: number,
   /** The internal gun's rounds left, or null without one (decision 295). */
   gunRounds: number | null = null,
+  /** Rockets left by pod store id (decision 300): a pod counts its rockets, not itself. */
+  rockets: Readonly<Record<string, number>> = {},
 ): SnapshotStores {
   const on = new Set(loaded.map((l) => l.station));
   const weapons: SnapshotStores['weapons'] =
@@ -147,6 +149,7 @@ export function storesSnapshot(
     }
     if (on.has(l.station)) w.count++;
   }
+  for (const w of weapons) if (w.id in rockets) w.count = rockets[w.id]!;
   return {
     stations: [...stations]
       .sort((a, b) => a.at[2] - b.at[2])

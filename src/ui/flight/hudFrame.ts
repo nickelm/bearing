@@ -28,6 +28,7 @@ import { leadSolution, PIPPER_RANGE } from '../../sim/flight/gun';
 import { gunSelected } from '../../sim/flight/storesRack';
 import { sourceAt } from '../../sim/flight/missile';
 import { STORES } from '../../sim/air/stores';
+import { impactPoint } from '../../sim/flight/ordnance';
 import type { StoresRack } from '../../sim/flight/storesRack';
 import type { AvionicsState } from '../../sim/avionics/avionics';
 import type { HoverHud, HudEnergy, HudFrame, HudLandingAid } from './hud';
@@ -367,6 +368,32 @@ export function seekerHud(
     cone: sk.spec.cone,
     tracking: !!src,
     label: `${STORES[w]?.short ?? w} ${rack.counts[w] ?? 0}`,
+    armed: avionics.masterArm,
+  };
+}
+
+/**
+ * The CCIP pipper for the HUD (decision 300), while a bomb or a rocket pod is selected:
+ * where the store released now reaches the ground (relative to the camera at `eye`), its
+ * time to impact, and the weapon's name with the count left.
+ */
+export function ccipHud(
+  m: FlightModel,
+  rack: Pick<StoresRack, 'counts' | 'rocketsLeft'> | null,
+  avionics: Readonly<AvionicsState>,
+  eye: Readonly<Vec3d>,
+  groundAt: (dir: Readonly<Vec3d>) => number,
+): HudFrame['ccip'] {
+  const w = avionics.weapon;
+  const kind = w ? STORES[w]?.kind : undefined;
+  if (!rack || !w || m.onGround || (kind !== 'bomb' && kind !== 'rockets')) return null;
+  const left = kind === 'rockets' ? rack.rocketsLeft(w) : (rack.counts[w] ?? 0);
+  const hit = impactPoint(w, m.pos, m.vel, m.q, m.radius, groundAt);
+  const at = hit?.at.clone().sub(eye);
+  return {
+    point: at ? [at.x, at.y, at.z] : null,
+    time: hit?.time ?? null,
+    label: `${STORES[w]?.short ?? w} ${left}`,
     armed: avionics.masterArm,
   };
 }

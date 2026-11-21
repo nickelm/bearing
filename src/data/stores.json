@@ -1,5 +1,5 @@
 {
-  "notes": "The stores catalog (R2.6, decision 285): what pylons carry. Names are the setting's own, and short is the label the stores format and the HUD show (decision 289); the reference is the real store the numbers come from. Mass in kg (a tank's full; fuel is the kg of fuel a full tank holds, 1,400 l at 0.8 kg/l, which the engine burns before the internal fuel: decision 287), length and diameter in m, dragArea in m2 (drag = dynamic pressure x dragArea, added for every store beyond an aircraft's standard load). Kinds: ir-missile, radar-missile, bomb, rockets, tank. An IR missile's missile block (decision 297): its seeker's gimbal limit and acquisition cone (deg) and lock range (m), its motor's thrust (N), burn (s) and propellant (kg), proportional navigation's gain and its g limit, its proximity fuze's radius (m) and its life (s).",
+  "notes": "The stores catalog (R2.6, decision 285): what pylons carry. Names are the setting's own, and short is the label the stores format and the HUD show (decision 289); the reference is the real store the numbers come from. Mass in kg (a tank's full; fuel is the kg of fuel a full tank holds, 1,400 l at 0.8 kg/l, which the engine burns before the internal fuel: decision 287), length and diameter in m, dragArea in m2 (drag = dynamic pressure x dragArea, added for every store beyond an aircraft's standard load). Kinds: ir-missile, radar-missile, bomb, rockets, tank. An IR missile's missile block (decision 297): its seeker's gimbal limit and acquisition cone (deg) and lock range (m), its motor's thrust (N), burn (s) and propellant (kg), proportional navigation's gain and its g limit, its proximity fuze's radius (m) and its life (s). A rocket pod's rocket block (decision 300): rockets per pod, each rocket's mass (kg) and drag area (m2), its motor's thrust (N), burn (s) and propellant (kg), and the ripple rate (rockets per second) while the trigger is held.",
   "stores": {
     "srm": {
       "name": "short-range missile",
@@ -95,7 +95,16 @@
       "mass": 280,
       "length": 1.9,
       "diameter": 0.4,
-      "dragArea": 0.04
+      "dragArea": 0.04,
+      "rocket": {
+        "count": 19,
+        "mass": 10.4,
+        "dragArea": 0.0023,
+        "thrust": 4500,
+        "burn": 1.05,
+        "propellant": 6.2,
+        "ripple": 10
+      }
     },
     "tank-1400": {
       "name": "1,400 l drop tank",

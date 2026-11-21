@@ -18,7 +18,7 @@ import { DEG, NAUTICAL_MILE } from '../core/units';
 import { Quatd } from '../core/quat';
 import { Vec3d } from '../core/vec3d';
 import type { GlobeScene } from '../render/sim/globeScene';
-import { standardMounts } from '../render/sim/aircraft/storeMounts';
+import { standardMounts, storeModel, storeMounts } from '../render/sim/aircraft/storeMounts';
 import { Tracers } from '../render/sim/aircraft/tracers';
 import { AircraftView } from '../render/sim/aircraft/aircraftView';
 import type { AircraftPose } from '../render/sim/aircraft/aircraftView';
@@ -73,7 +73,7 @@ import type { ControlsAction } from '../ui/displays/model';
 import { AVIONICS_PROFILES } from '../sim/avionics/profiles';
 import { relativePicture, snapshotFromHud, storesSnapshot } from '../ui/displays/aircraftSnapshot';
 import { StoresRack } from '../sim/flight/storesRack';
-import { standardStations } from '../sim/air/stores';
+import { standardStations, STORES } from '../sim/air/stores';
 import type { SnapshotSensors, SnapshotTerrain } from '../ui/displays/snapshot';
 import { ACM_CONE, acmAcquire, SensorModel } from '../sim/sensors/sensors';
 import { threatCalls } from '../ui/displays/calls';
@@ -105,9 +105,11 @@ import { flightStartTime } from './clock';
 import { writeFreeFlightParams } from './url';
 import type { FreeFlightUrl } from './url';
 import { FlightWeather } from './flightWeather';
-import { buildHudFrame, gunHud, landingAid, seekerHud } from '../ui/flight/hudFrame';
-import { gunSelected } from '../sim/flight/storesRack';
-import { MissileViews } from '../render/sim/aircraft/missileViews';
+import { buildHudFrame, ccipHud, gunHud, landingAid, seekerHud } from '../ui/flight/hudFrame';
+import { Explosions } from '../render/sim/aircraft/explosions';
+import { impactMass } from '../sim/flight/ordnance';
+import { gunSelected, rocketCounts } from '../sim/flight/storesRack';
+import { flyingOf, MissileViews } from '../render/sim/aircraft/missileViews';
 import { buildHeloHudFrame } from '../ui/flight/heloHud';
 import { flownGround } from './ground';
 import type { AirfieldGround, FlownTerrain } from './ground';
@@ -207,6 +209,7 @@ export class FreeFlight {
   private tracers: Tracers | null = null;
   /** Missiles in flight and their smoke (decision 297), and the trigger last frame. */
   private missileViews: MissileViews | null = null;
+  private explosions: Explosions | null = null;
   private triggerWas = false;
   /** The Kestrel's stores: its flight data's standard load (decision 289); null in a helicopter. */
   private rack: StoresRack | null = null;
@@ -405,8 +408,13 @@ export class FreeFlight {
         this.deps.radius,
       );
       const ground = this.ground;
+      // Bombs and rockets that reached the ground explode (decision 300).
+      this.explosions ??= new Explosions(deps.globe.vehicles, deps.globe.lighting);
+      for (const x of this.rack?.impacts.splice(0) ?? [])
+        this.explosions.add(x.at, impactMass(x), x.time);
+      this.explosions.place(this.gameTime, eye);
       this.missileViews.place(
-        this.state !== 'menu' && !this.helo ? (this.rack?.missiles ?? []) : [],
+        this.state !== 'menu' && !this.helo && this.rack ? flyingOf(this.rack) : [],
         this.gameTime,
         eye,
         deps.globe.sun,
@@ -581,14 +589,20 @@ export class FreeFlight {
     else spawnOnRunway(m, r, end);
     this.model = m;
     // The standard load is the flight data's own: the rack adds no mass or drag (decision 287).
-    const pylons = AIRCRAFT_BUNDLES[AIRCRAFT]!.pylons ?? [];
+    const bundle = AIRCRAFT_BUNDLES[AIRCRAFT]!;
+    const pylons = bundle.pylons ?? [];
+    // A loadout from the URL hangs its stores and fills its tanks (decision 300).
+    const chosen = this.options.loadout
+      ? bundle.airWar?.loadouts.find((l) => l.id === this.options.loadout)
+      : undefined;
     this.rack = new StoresRack(
       this.flightSpec,
       pylons,
-      standardStations(pylons, this.flightSpec.standardStores ?? {}),
-      { loadout: 'standard', expended: {} },
-      AIRCRAFT_BUNDLES[AIRCRAFT]!.gun,
+      chosen?.stations ?? standardStations(pylons, this.flightSpec.standardStores ?? {}),
+      { loadout: chosen?.id ?? 'standard', expended: {} },
+      bundle.gun,
     );
+    if (chosen) this.rack.load(m, this.rack.capacity);
     this.gearDamageTold = false;
     this.monitor = new FlightMonitor(this.runways, R);
     this.monitor.reset(spawn === 'air');
@@ -620,10 +634,11 @@ export class FreeFlight {
     this.crashAt = 0;
     // Scene: the aircraft, its shadow, the chase camera.
     const g = this.deps.globe;
-    // The Kestrel hangs its flight data's standard load: four short-range missiles (decision 288).
-    const stores = standardMounts(AIRCRAFT_BUNDLES[AIRCRAFT]!, this.flightSpec.standardStores);
+    // The Kestrel hangs its rack's stations: the flight data's standard load of four
+    // short-range missiles (decision 288), or the loadout the URL names (decision 300).
+    const stores = storeMounts(this.rack!.stations, storeModel);
     this.showView(
-      AIRCRAFT,
+      this.options.loadout ? `${AIRCRAFT}:${this.options.loadout}` : AIRCRAFT,
       () => new AircraftView(this.spec, this.flightSpec.cg, g.lighting, stores),
     );
     g.chase.rig = rigFromBundle(AIRCRAFT_BUNDLES[AIRCRAFT]!.rig!);
@@ -1260,7 +1275,11 @@ export class FreeFlight {
         return { id: a.id, pos: st.pos, vel: st.vel, time: this.gameTime };
       });
       this.rack.updateSeeker(m, av, this.gameTime, this.lockDirection(m));
+      // Bombs one per press, rockets while held (decision 300).
+      const kind = av.weapon ? STORES[av.weapon]?.kind : undefined;
+      this.rack.rocketTrigger = trigger && kind === 'rockets';
       if (trigger && !this.triggerWas && !gunSelected(av)) {
+        if (kind === 'bomb') this.rack.dropBomb(m, av);
         const shot = this.rack.launch(m, av, this.gameTime, 'own');
         if (shot) this.hud.message(shot.target ? 'Missile away' : 'Missile away, no lock', 2.5);
       }
@@ -1269,6 +1288,10 @@ export class FreeFlight {
     }
     this.triggerWas = trigger;
     frame.seeker = seekerHud(m, this.rack, av, this.deps.globe.chase.eye, this.gameTime);
+    const ground = this.ground;
+    frame.ccip = ground
+      ? ccipHud(m, this.rack, av, this.deps.globe.chase.eye, (d) => ground.height(d))
+      : null;
     const radar = this.displays.avionics.radar;
     frame.acmCone = radar.on && radar.mode === 'acm' && !radar.lock ? ACM_CONE : null;
     this.hud.draw(frame, project);
@@ -1618,6 +1641,7 @@ export class FreeFlight {
               this.rack.loaded,
               this.model?.tankFuel ?? 0,
               this.rack.gun?.rounds ?? null,
+              rocketCounts(this.rack.loaded, this.rack.state.expended),
             )
           : null,
       messages: this.hud.log.map((l) => ({

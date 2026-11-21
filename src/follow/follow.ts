@@ -55,11 +55,13 @@ import { storesEffect } from '../sim/flight/storesRack';
 import { DisplaySystem } from '../ui/displays/system';
 import { Hud, matrixProjector } from '../ui/flight/hud';
 import type { HudFrame } from '../ui/flight/hud';
-import { buildHudFrame, gunHud, landingAid, seekerHud } from '../ui/flight/hudFrame';
-import { gunSelected } from '../sim/flight/storesRack';
+import { buildHudFrame, ccipHud, gunHud, landingAid, seekerHud } from '../ui/flight/hudFrame';
+import { Explosions } from '../render/sim/aircraft/explosions';
+import { impactMass } from '../sim/flight/ordnance';
+import { gunSelected, rocketCounts } from '../sim/flight/storesRack';
 import type { HeatSource } from '../sim/flight/missile';
 import { analyticPose } from '../sim/air/analyticPose';
-import { MissileViews } from '../render/sim/aircraft/missileViews';
+import { flyingOf, MissileViews } from '../render/sim/aircraft/missileViews';
 import type { ControlCursor } from '../ui/flight/controlCursor';
 import { FlightInput, STICK_DEADZONE, STICK_FULL } from '../ui/flight/flightInput';
 import type { FlightAction } from '../ui/flight/flightInput';
@@ -203,6 +205,8 @@ export class Follow {
   private tracers: Tracers | null = null;
   /** The flight's missiles in flight and their smoke (decision 297). */
   private missileViews: MissileViews | null = null;
+  /** Bombs' and rockets' explosions (decision 300). */
+  private explosions: Explosions | null = null;
   /** The trigger as it was last frame: a missile leaves on its press. */
   private triggerWas = false;
   private poses: AnalyticPose[] = [];
@@ -784,6 +788,7 @@ export class Follow {
         a.rack.loaded,
         fm.tankFuel,
         a.rack.gun?.rounds ?? null,
+        rocketCounts(a.rack.loaded, a.rack.state.expended),
       );
     }
     const loads = flightStores(m).loads;
@@ -800,7 +805,13 @@ export class Follow {
       const fuel = flightFuel(s.fuel, m.route.fuel, capacity);
       tankFuel = Math.max(0, Math.min(tanks, fuel - spec.mass.fuel));
     }
-    return storesSnapshot(loads, loaded, tankFuel);
+    return storesSnapshot(
+      loads,
+      loaded,
+      tankFuel,
+      null,
+      rocketCounts(loaded, m.expended?.[this.slot] ?? {}),
+    );
   }
 
   /** The player drops their drop tanks (J, the stores format's button; decision 287). */
@@ -837,6 +848,7 @@ export class Follow {
     this.released?.clear();
     this.tracers?.place([], new Vec3d(), 1);
     this.missileViews?.clear();
+    this.explosions?.clear();
   }
 
   /** Advances the follow by `dt` real seconds at game time t; call before the scene renders. */
@@ -980,7 +992,11 @@ export class Follow {
     if (rack) {
       rack.sources = this.heatSources(m.side, ft);
       rack.updateSeeker(model, av, ft);
+      // Bombs one per press, rockets while held (decision 300).
+      const kind = av.weapon ? STORES[av.weapon]?.kind : undefined;
+      rack.rocketTrigger = inp.trigger && kind === 'rockets';
       if (inp.trigger && !this.triggerWas && !gunSelected(av)) {
+        if (kind === 'bomb') rack.dropBomb(model, av);
         const shot = rack.launch(model, av, ft, `m${m.id}:${this.slot}`);
         if (shot) this.hud.message(shot.target ? 'Missile away' : 'Missile away, no lock', 2.5);
       }
@@ -989,6 +1005,10 @@ export class Follow {
     }
     this.triggerWas = inp.trigger;
     frame.seeker = seekerHud(model, rack, av, this.deps.globe.chase.eye, ft);
+    const ground = this.airfield;
+    frame.ccip = ground
+      ? ccipHud(model, rack, av, this.deps.globe.chase.eye, (d) => ground.height(d))
+      : null;
     this.updateDisplays(m, airframeState(model), frame, t);
     if (this.panels !== 'clean') this.hud.draw(frame, project);
   }
@@ -1136,8 +1156,13 @@ export class Follow {
       g.vehicles.add(this.tracers.mesh);
     }
     this.missileViews ??= new MissileViews(g.vehicles, g.lighting, this.deps.radius);
+    // Bombs and rockets that reached the ground explode (decision 300).
+    this.explosions ??= new Explosions(g.vehicles, g.lighting);
+    for (const a of flight.aircraft)
+      for (const x of a.rack.impacts.splice(0)) this.explosions.add(x.at, impactMass(x), x.time);
+    this.explosions.place(flight.time, eye);
     this.missileViews.place(
-      flight.aircraft.flatMap((a) => a.rack.missiles),
+      flight.aircraft.flatMap((a) => flyingOf(a.rack)),
       flight.time,
       eye,
       g.sun,
@@ -1302,6 +1327,7 @@ export class Follow {
     this.released?.clear();
     this.tracers?.place([], new Vec3d(), 1);
     this.missileViews?.clear();
+    this.explosions?.clear();
     this.blend = null;
     this.missionId = null;
     this.hud.show(false);

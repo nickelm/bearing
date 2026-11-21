@@ -287,6 +287,7 @@ The land shades are proposal 0007's brighter starting values (decision 204); the
 | Midday sky | `#C9D8E3` |
 | Afterburner core | `#FFB347` |
 | Missile motor flame, while it burns; its smoke trail pale gray, lit as a surface turned to the sun, widening and thinning out over about 7 s (decision 297) | `#FF8C26` |
+| Bomb and rocket impacts: a warm flash that swells and shrinks within half a second, then a dark brown-gray cloud of smoke and dust that swells, rises and thins away over about 10 s, sized by the cube root of the store's mass (decision 300) | `#FF9933` flash, smoke `#3D3833` before light |
 | Gun tracers: short additive streaks along the round's flight, brighter at the head, at least about two pixels wide at any range, one round in five (decision 295) | `#FF9E38` to `#FFB347` |
 | Runway and deck lights | `#FFD27A` |
 | Navigation lights | `#FF3B30` (red), `#34C759` (green), `#FFFFFF` (white) |

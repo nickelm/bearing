@@ -31,6 +31,21 @@ export interface MissileSpec {
   life: number;
 }
 
+/** An unguided rocket of a pod (decision 300). */
+export interface RocketSpec {
+  /** Rockets per pod. */
+  count: number;
+  /** One rocket's mass (kg, propellant included) and drag area (m²). */
+  mass: number;
+  dragArea: number;
+  /** Motor: thrust (N), burn (s), propellant (kg). */
+  thrust: number;
+  burn: number;
+  propellant: number;
+  /** Rockets per second while the trigger is held. */
+  ripple: number;
+}
+
 export interface StoreSpec {
   id: string;
   name: string;
@@ -50,6 +65,26 @@ export interface StoreSpec {
   fuel: number;
   /** A missile's guidance and motor (decision 297), or null. */
   missile: MissileSpec | null;
+  /** A rocket pod's rockets (decision 300), or null. */
+  rocket: RocketSpec | null;
+}
+
+function parseRocket(raw: unknown, what: string): RocketSpec {
+  const o = raw as Record<string, unknown>;
+  const n = (k: string) => {
+    const v = o[k];
+    if (typeof v !== 'number' || !(v > 0)) throw new StoresError(`${what}.${k}: not > 0`);
+    return v;
+  };
+  return {
+    count: n('count'),
+    mass: n('mass'),
+    dragArea: n('dragArea'),
+    thrust: n('thrust'),
+    burn: n('burn'),
+    propellant: n('propellant'),
+    ripple: n('ripple'),
+  };
 }
 
 function parseMissile(raw: unknown, what: string): MissileSpec {
@@ -106,6 +141,7 @@ function parseCatalog(raw: unknown): Readonly<Record<string, StoreSpec>> {
       dragArea: num('dragArea'),
       fuel: kind === 'tank' ? num('fuel') : 0,
       missile: s.missile === undefined ? null : parseMissile(s.missile, `stores.${id}.missile`),
+      rocket: s.rocket === undefined ? null : parseRocket(s.rocket, `stores.${id}.rocket`),
     };
     if (spec.missile && spec.missile.propellant >= spec.mass)
       throw new StoresError(`stores.${id}.missile.motor.propellant: not below its mass`);

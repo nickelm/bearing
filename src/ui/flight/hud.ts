@@ -184,6 +184,17 @@ export interface HudFrame {
    */
   gun?: { point: [number, number, number]; rounds: number; armed: boolean } | null;
   /**
+   * The continuously computed impact point (decision 300), while a bomb or a rocket pod is
+   * selected: where it reaches the ground if released now (relative to the camera; null
+   * beyond a minute's fall), the seconds to impact, and the weapon with its count.
+   */
+  ccip?: {
+    point: [number, number, number] | null;
+    time: number | null;
+    label: string;
+    armed: boolean;
+  } | null;
+  /**
    * The IR missile's seeker circle (decision 297): where the seeker looks (a world
    * direction), on its target while it tracks (a point relative to the camera), the
    * cone's half angle (rad), and the missile's name with the count left.
@@ -402,6 +413,7 @@ export class Hud {
     if (f.target) this.targetBox(f.target, project, s);
     if (f.gun) this.pipper(f.gun, project, s);
     if (f.seeker) this.seekerCircle(f.seeker, project, s);
+    if (f.ccip) this.ccipPipper(f, f.ccip, project, s);
     if (f.control) drawControlCursor(c, f.control, project, W, H, s);
   }
 
@@ -479,6 +491,46 @@ export class Hud {
       'center',
       g.rounds > 0 ? HUD_COLOR : WARN_COLOR,
     );
+  }
+
+  /**
+   * The CCIP pipper (decision 300): a small ring with a center dot where the store would
+   * land, and the fall line from the flight path marker down to it; the weapon, its count
+   * and the time to impact beside the ring. Off the screen the line still points to it.
+   */
+  private ccipPipper(
+    f: HudFrame,
+    k: NonNullable<HudFrame['ccip']>,
+    project: Projector,
+    s: number,
+  ): void {
+    const c = this.ctx;
+    const fpm = Math.hypot(...f.velocity) > 0.5 ? project(...f.velocity, false) : null;
+    const p = k.point ? project(k.point[0], k.point[1], k.point[2], true) : null;
+    const r = 9 * s;
+    if (fpm && p) {
+      const dx = p.x - fpm.x;
+      const dy = p.y - fpm.y;
+      const d = Math.hypot(dx, dy);
+      if (d > r + 10 * s)
+        this.stroke(() => {
+          c.beginPath();
+          c.moveTo(fpm.x + (dx / d) * 10 * s, fpm.y + (dy / d) * 10 * s);
+          c.lineTo(p.x - (dx / d) * r, p.y - (dy / d) * r);
+        });
+    }
+    if (!p) {
+      if (fpm) this.text(`${k.label}  NO CCIP`, fpm.x, fpm.y + 40 * s, 'center');
+      return;
+    }
+    this.stroke(() => {
+      c.beginPath();
+      c.arc(p.x, p.y, r, 0, Math.PI * 2);
+      c.moveTo(p.x + 1.6 * s, p.y);
+      c.arc(p.x, p.y, 1.6 * s, 0, Math.PI * 2);
+    });
+    const tti = k.time === null ? '' : `  ${k.time.toFixed(1)} s`;
+    this.text(k.armed ? `${k.label}${tti}` : `${k.label} SAFE`, p.x + r + 8 * s, p.y, 'left');
   }
 
   /**

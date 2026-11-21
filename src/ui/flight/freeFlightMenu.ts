@@ -50,6 +50,11 @@ export interface FreeFlightOptions {
    * displays to find (decision 218). Off by default.
    */
   traffic: boolean;
+  /**
+   * The jet's loadout, one of the F-21's air-war loadouts by id (`?loadout=strike`), or
+   * null for the flight data's standard load of four missiles (decision 300).
+   */
+  loadout: string | null;
 }
 
 /** The jet's mouse modes: `aim`, the flight director flies to the ring; `direct`, the cursor is the stick. */
@@ -147,6 +152,7 @@ export const DEFAULT_OPTIONS: FreeFlightOptions = {
   uiScale: 1,
   showFps: true,
   traffic: false,
+  loadout: null,
 };
 
 /** The weather option of a card: the list of presets by name, and what the chosen one is like. */
