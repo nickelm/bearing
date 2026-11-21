@@ -16,9 +16,12 @@
  *   when it lives), with the fuel as a share of the route's load again. The worker
  *   turns that state into a route from there (`rejoinRoute`, R2.5).
  *
- * Fuel goes by share because the two models count it differently: the air war's
- * load includes drop tanks (the F-21's 5,800 kg), the flight model's tanks hold the
- * internal fuel (3,200 kg) until R2.6 hangs tanks on pylons.
+ * Fuel goes by share of the loadout's capacity, internal plus its drop tanks (the
+ * F-21's 3,200 + 2 × 1,120 kg, the air war's load: decision 287), which is the real
+ * fuel aboard: a campaign's range factor scales the route's load, not the aircraft's.
+ * Each aircraft hangs its loadout's stores on its flight model (`StoresRack`), with
+ * what full fidelity expended before taken off (decision 275); the tanks hold what the
+ * internal fuel does not.
  *
  * No render, DOM or worker imports: it runs on the main thread beside the flown
  * aircraft (owner decision 1a) and headless in tests.
@@ -30,10 +33,14 @@ import { Vec3d } from '../../core/vec3d';
 import type { AnalyticPose } from '../air/analyticPose';
 import type { Mission } from '../air/mission';
 import { routeState } from '../air/route';
+import { aircraftType } from '../air/aircraft';
+import { bundleOfType } from '../air/bundles';
+import { StoresRack } from './storesRack';
 import { neutralControls } from './controlLaws';
 import type { FlightControls } from './controlLaws';
 import { FlightModel } from './flightModel';
 import type { FlightSpec } from './flightSpec';
+import type { PylonSpec } from '../air/stores';
 import { FlownAircraft } from './flownAircraft';
 import { headingOf } from './runway';
 
@@ -50,6 +57,8 @@ export interface PromotedAircraft {
   slot: number;
   flown: FlownAircraft<FlightControls>;
   stores: StoresState;
+  /** The stores on its pylons, over `stores` (decision 287). */
+  rack: StoresRack;
   /** Damage, 0 (none) .. 1 (destroyed); R2.6's damage states set it. */
   damage: number;
 }
@@ -131,14 +140,29 @@ export function promoteFlight(
   poses: readonly Readonly<AnalyticPose>[],
 ): PromotedAircraft[] {
   const s = routeState(mission.route, t, radius);
-  const fuel = flightFuel(s.fuel, mission.route.fuel, spec.mass.fuel);
-  return poses.slice(0, mission.aircraft).map((p, slot) => ({
-    slot,
-    flown: aircraftFromPose(spec, radius, p, fuel, mission.aircraftType),
+  const { pylons, stations } = loadoutStations(mission.aircraftType, mission.loadout);
+  return poses.slice(0, mission.aircraft).map((p, slot) => {
     // What full fidelity expended before stays expended (decision 275).
-    stores: { loadout: mission.loadout, expended: { ...(mission.expended?.[slot] ?? {}) } },
-    damage: 0,
-  }));
+    const stores = { loadout: mission.loadout, expended: { ...(mission.expended?.[slot] ?? {}) } };
+    const rack = new StoresRack(spec, pylons, stations, stores);
+    const fuel = flightFuel(s.fuel, mission.route.fuel, rack.capacity);
+    const flown = aircraftFromPose(spec, radius, p, fuel, mission.aircraftType);
+    rack.load(flown.airframe as FlightModel, fuel);
+    return { slot, flown, stores, rack, damage: 0 };
+  });
+}
+
+/** The pylons of a type's bundle and a loadout's stations on them, where it has them. */
+export function loadoutStations(
+  typeId: string,
+  loadout: string,
+): { pylons: PylonSpec[] | null; stations: Record<string, string> | undefined } {
+  try {
+    const stations = aircraftType(typeId).loadouts.find((l) => l.id === loadout)?.stations;
+    return { pylons: bundleOfType(typeId).pylons, stations };
+  } catch {
+    return { pylons: null, stations: undefined };
+  }
 }
 
 /** A promoted flight folded back (R2.5): what the worker needs to carry it on analytically. */
@@ -168,7 +192,7 @@ export function demoteFlight(
   t: GameTime,
   radius: Meters,
   aircraft: readonly PromotedAircraft[],
-  /** The flight model's fuel capacity (kg; the spec's internal fuel). */
+  /** The loadout's fuel capacity (kg; internal plus its tanks, `StoresRack.capacity`). */
   capacity: number,
 ): DemotedFlight | null {
   const lost: DemotedFlight['lost'] = [];

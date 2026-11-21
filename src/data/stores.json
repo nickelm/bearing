@@ -1,5 +1,5 @@
 {
-  "notes": "The stores catalog (R2.6, decision 285): what pylons carry. Names are the setting's own; the reference is the real store the numbers come from. Mass in kg (a tank's full), length and diameter in m, dragArea in m2 (drag = dynamic pressure x dragArea, added for every store beyond an aircraft's standard load). Kinds: ir-missile, radar-missile, bomb, rockets, tank.",
+  "notes": "The stores catalog (R2.6, decision 285): what pylons carry. Names are the setting's own; the reference is the real store the numbers come from. Mass in kg (a tank's full; fuel is the kg of fuel a full tank holds, 1,400 l at 0.8 kg/l, which the engine burns before the internal fuel: decision 287), length and diameter in m, dragArea in m2 (drag = dynamic pressure x dragArea, added for every store beyond an aircraft's standard load). Kinds: ir-missile, radar-missile, bomb, rockets, tank.",
   "stores": {
     "srm": {
       "name": "short-range missile",
@@ -51,6 +51,7 @@
       "reference": "370 gal tank",
       "kind": "tank",
       "mass": 1260,
+      "fuel": 1120,
       "length": 4.6,
       "diameter": 0.66,
       "dragArea": 0.045

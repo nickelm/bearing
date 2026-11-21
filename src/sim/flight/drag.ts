@@ -4,6 +4,9 @@
  *
  *   CD = CD0(Mach) + k·CL²·(1 − ground effect) + CDsep(|α|) + gear + flaps + speedbrake + stores
  *
+ * The stores' term is the spec's `cdStores` plus the drag area of the stores hung beyond the
+ * standard load over the wing area (decision 287).
+ *
  * The speedbrake's drag grows as sin²δ / sin²δmax, as a hinged plate's; damaged gear doors
  * add their own increment to the gear's.
  */
@@ -49,6 +52,8 @@ export interface DragState {
   speedbrake: number;
   /** Ground effect 0..1 (exp(−2.5 h / span)). */
   groundEffect: number;
+  /** Drag area of stores beyond the standard load (m²; decision 287), 0 or absent for none. */
+  storesArea?: number;
 }
 
 /** Fills `out` with the drag terms for state `s` and returns their sum, CD. */
@@ -66,6 +71,7 @@ export function dragCoefficient(
   out.gear = a.cdGear * s.gear + (s.gearDamaged ? a.cdGearDamage : 0);
   out.flaps = a.cdFlaps * s.flaps;
   out.speedbrake = a.cdSpeedbrake * s.speedbrake;
-  out.stores = a.cdStores;
+  const area = s.storesArea ?? 0;
+  out.stores = area === 0 ? a.cdStores : a.cdStores + area / spec.wing.area;
   return out.cd0 + out.induced + out.separated + out.gear + out.flaps + out.speedbrake + out.stores;
 }

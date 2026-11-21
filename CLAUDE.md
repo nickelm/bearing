@@ -124,6 +124,7 @@ src/sim/            headless simulation; runs in a worker: event queue + fixed t
                     scripted test pilot, to be shared by AI and player (Free Flight, decision 134; R2 extends it to
                     campaign aircraft; the sensor model is in sensors/, decision 218); wind and gusts from the weather (wind.ts, decision 143);
                     the track hold on the wheels with free pedals (controlLaws.ts, decision 145);
+                    storesRack.ts (stores' mass, drag and drop tanks' fuel on the flight model; decision 287);
                     airframe.ts (the Airframe interface every flown aircraft implements), rigidBody.ts
                     (gravity, Euler's equations, the integrator, attitude) and contact.ts (ground query,
                     wheels, hard points), shared by the Kestrel and the helicopters (decision 154);

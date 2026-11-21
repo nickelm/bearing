@@ -26,6 +26,8 @@ export interface StoreSpec {
   diameter: number;
   /** m²: drag = dynamic pressure × dragArea. */
   dragArea: number;
+  /** kg of fuel a full tank holds (part of `mass`); 0 for anything but a tank. */
+  fuel: number;
 }
 
 export class StoresError extends Error {}
@@ -42,7 +44,7 @@ function parseCatalog(raw: unknown): Readonly<Record<string, StoreSpec>> {
     };
     const kind = s.kind as StoreKind;
     if (!KINDS.includes(kind)) throw new StoresError(`stores.${id}.kind: ${String(s.kind)}`);
-    out[id] = {
+    const spec: StoreSpec = {
       id,
       name: String(s.name),
       reference: String(s.reference ?? ''),
@@ -51,7 +53,10 @@ function parseCatalog(raw: unknown): Readonly<Record<string, StoreSpec>> {
       length: num('length'),
       diameter: num('diameter'),
       dragArea: num('dragArea'),
+      fuel: kind === 'tank' ? num('fuel') : 0,
     };
+    if (spec.fuel >= spec.mass) throw new StoresError(`stores.${id}.fuel: not below its mass`);
+    out[id] = spec;
   }
   return out;
 }

@@ -55,7 +55,17 @@ export interface PromotedFlightOptions {
   phase: (t: GameTime) => MissionPhase;
   /** The drawn model's wingspan (m): slots are in spans. */
   span: Meters;
+  /**
+   * How far the nearest enemy flight is from a point at a game time (m), for the AI's
+   * jettison before a fight (decision 287); absent: no enemy is known.
+   */
+  enemyDistance?: (pos: Readonly<Vec3d>, t: GameTime) => number;
 }
+
+/** An enemy flight this close makes the AI pilots drop their tanks before the fight (m). */
+export const FIGHT_RANGE = 40_000;
+/** Game seconds between the AI's looks for an enemy within FIGHT_RANGE. */
+const FIGHT_CHECK = 1;
 
 /** Steps per `advanceTo` at most: 8× at 60 frames a second, with room (R2.5's flight cap). */
 export const MAX_FLIGHT_STEPS = 40;
@@ -72,6 +82,8 @@ export class PromotedFlight {
   steps = 0;
   /** The lead's reference, sampled (the analytic pose costs hundreds of route lookups). */
   private leadReference: Reference;
+  /** When the AI last looked for an enemy within FIGHT_RANGE. */
+  private foughtAt = -Infinity;
 
   constructor(
     readonly mission: Readonly<PromotedMission>,
@@ -86,6 +98,11 @@ export class PromotedFlight {
     this.aircraft = promoteFlight(mission, t, radius, spec, poses);
     this.pilots = this.aircraft.map(() => new PoseTracker(() => null, ROUTE_GAINS));
     this.assignPilots();
+  }
+
+  /** The loadout's fuel capacity (kg): internal plus its drop tanks (decision 287). */
+  get capacity(): number {
+    return this.aircraft[0]?.rack.capacity ?? this.spec.mass.fuel;
   }
 
   /** The surviving aircraft, in slot order. */
@@ -155,13 +172,39 @@ export class PromotedFlight {
     // Beyond the cap the flight's clock jumps to now: it slows, it never runs behind.
     if (steps >= maxSteps && this.time < t) this.time = t;
     this.steps = steps;
-    if (steps > 0) this.assignPilots();
+    if (steps > 0) {
+      this.assignPilots();
+      this.jettisonBeforeFight();
+    }
     return steps;
+  }
+
+  /**
+   * The AI pilots drop their tanks when an enemy flight comes within FIGHT_RANGE of the
+   * lead (decision 287); the player's aircraft keeps its own until the player drops them.
+   */
+  private jettisonBeforeFight(): void {
+    const near = this.options.enemyDistance;
+    if (!near || this.time - this.foughtAt < FIGHT_CHECK) return;
+    this.foughtAt = this.time;
+    const lead = this.alive[0];
+    if (!lead || !this.aircraft.some((a) => a.slot !== this.playerSlot && a.rack.hasTanks)) return;
+    if (near(lead.flown.airframe.pos, this.time) > FIGHT_RANGE) return;
+    for (const a of this.alive)
+      if (a.slot !== this.playerSlot)
+        a.rack.jettisonTanks(a.flown.airframe as unknown as FlightModel);
+  }
+
+  /** The player drops their tanks (the jettison key, the stores format); how many went. */
+  jettisonPlayerTanks(): number {
+    const a = this.playerSlot === null ? undefined : this.bySlot(this.playerSlot);
+    if (!a || a.flown.crashed) return 0;
+    return a.rack.jettisonTanks(a.flown.airframe as unknown as FlightModel);
   }
 
   /** Folds the flight back into its analytic state (demotion). */
   demote(): DemotedFlight | null {
-    return demoteFlight(this.mission, this.time, this.radius, this.aircraft, this.spec.mass.fuel);
+    return demoteFlight(this.mission, this.time, this.radius, this.aircraft, this.capacity);
   }
 
   /**

@@ -121,7 +121,20 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
   /** Engine core 0 (idle) .. 1 (military), and afterburner 0..1. */
   power = 0;
   afterburner = 0;
+  /** Fuel aboard (kg): internal plus what the drop tanks hold (`tankFuel`). */
   fuel: number;
+  /**
+   * The part of `fuel` in drop tanks (kg), burned first (decision 287); 0 without tanks.
+   * Jettisoning the tanks takes it off `fuel`.
+   */
+  tankFuel = 0;
+  /**
+   * Stores beyond the flight data's standard load (decision 287): their mass without the
+   * tanks' fuel (kg; negative when fewer than the standard load hang) and their drag area
+   * (m²). The stores rack sets them (storesRack.ts); zero leaves the aircraft as its spec.
+   */
+  storesMass = 0;
+  storesDragArea = 0;
   /** Gear 0 (up) .. 1 (down); speedbrake 0 (in) .. 1 (out to `spec.speedbrake.maxDeflection`). */
   gear = 1;
   speedbrake = 0;
@@ -174,6 +187,7 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
       gearDamaged: false,
       speedbrake: 0,
       groundEffect: 0,
+      storesArea: 0,
     } as DragState,
   };
 
@@ -227,7 +241,7 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
 
   get mass(): number {
     const m = this.spec.mass;
-    return m.empty + m.payload + this.fuel;
+    return m.empty + m.payload + this.fuel + this.storesMass;
   }
 
   /** The wheels, as the points the aircraft stands on (Airframe). */
@@ -386,6 +400,7 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
     ds.gearDamaged = this.gearDamaged;
     ds.speedbrake = sbShare;
     ds.groundEffect = ge;
+    ds.storesArea = this.storesDragArea;
     const cd = dragCoefficient(spec, ds, tel.drag);
     const fb = sc.fb.set(0, 0, 0);
     let liftX = 0;
@@ -421,7 +436,11 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
     const wetShare = Math.min(1, this.afterburner * 5);
     // Net idle thrust goes negative at speed (ram drag): no fuel comes back.
     const fuelFlow = Math.max(0, thrust) * (eng.tsfcDry * (1 - wetShare) + eng.tsfcWet * wetShare);
-    if (!this.unlimitedFuel) this.fuel = Math.max(0, this.fuel - fuelFlow * dt);
+    if (!this.unlimitedFuel) {
+      // The tanks feed first (decision 287); their fuel is part of `fuel`.
+      this.fuel = Math.max(0, this.fuel - fuelFlow * dt);
+      if (this.tankFuel > 0) this.tankFuel = Math.max(0, this.tankFuel - fuelFlow * dt);
+    }
 
     // ---- Gravity (body) ----
     const gw = sc.a.copy(up).scale(-g * m);

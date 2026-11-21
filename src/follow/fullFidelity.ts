@@ -115,6 +115,8 @@ export interface FullFidelityContext {
   span: Meters;
   /** The campaign's weather, for the air the aircraft fly in (null: still air). */
   weather?: () => WeatherView | null;
+  /** How far the nearest enemy flight is from a point at a game time (m), for the AI's jettison. */
+  enemyDistance?: (pos: Readonly<Vec3d>, t: GameTime) => number;
 }
 
 export class FullFidelity {
@@ -139,6 +141,7 @@ export class FullFidelity {
       formation: (u) => formationAt(c.mission()?.timeline ?? m.timeline, c.formations, u),
       phase: (u) => routeState((c.mission() ?? m).route, u, c.radius).phase,
       span: c.span,
+      enemyDistance: c.enemyDistance,
     });
     // The air they fly in: the campaign's wind and gusts, as Free Flight's (decision 280).
     for (const a of this.flight.aircraft) this.giveWind(a);

@@ -33,7 +33,14 @@ export interface DisplayState {
 }
 
 /** Commands to the flight controls the strip's items toggle (gear, brakes), by the inputs' action names. */
-export type ControlsAction = 'gear' | 'speedbrake' | 'parkingBrake' | 'hoverHold' | 'mouseCapture';
+export type ControlsAction =
+  | 'gear'
+  | 'speedbrake'
+  | 'parkingBrake'
+  | 'hoverHold'
+  | 'mouseCapture'
+  /** Drops the drop tanks (decision 287): the stores format's button, the J key. */
+  | 'jettisonTanks';
 
 export type UiCommand =
   | { type: 'select-format'; slot: SlotId; format: FormatId }

@@ -324,12 +324,13 @@
     }
   ],
   "flight": {
-    "notes": "Tuning values from approximate public F-16C Block 50 figures: F110-GE-129 thrust less installation losses (about 5% military, 15% afterburner), wing 27.87 m2, inertias from NASA TP-1538, payload of four air-to-air missiles, pylons, gun ammunition and pilot. Angles in degrees, everything else SI. Rotational response comes from the control laws, bounded by an authority that scales with dynamic pressure (decision 134). Drag (decision 207): CD = CD0(Mach) + k CL^2 + CDsep(alpha) + gear, flaps, speedbrake (by sin^2 of its deflection) and stores; k for aspect ratio 3.2 and Oswald efficiency 0.8; the standard load of four air-to-air missiles is in the CD0 table, so cdStores is the increment for anything more. Idle thrust is net of ram drag and reaches zero by Mach 0.7. The speedbrake opens to 60 deg, 43 deg with the gear handle down; the gear moves at any speed, and more than damageMargin over its limit for damageTime fails its doors.",
+    "notes": "Tuning values from approximate public F-16C Block 50 figures: F110-GE-129 thrust less installation losses (about 5% military, 15% afterburner), wing 27.87 m2, inertias from NASA TP-1538, payload of four air-to-air missiles, pylons, gun ammunition and pilot. Angles in degrees, everything else SI. Rotational response comes from the control laws, bounded by an authority that scales with dynamic pressure (decision 134). Drag (decision 207): CD = CD0(Mach) + k CL^2 + CDsep(alpha) + gear, flaps, speedbrake (by sin^2 of its deflection) and stores; k for aspect ratio 3.2 and Oswald efficiency 0.8; the standard load of four air-to-air missiles is in the CD0 table, so cdStores is the increment for anything more; standardStores names them, and the stores rack adds the mass and drag area of any other stores (decision 287). Idle thrust is net of ram drag and reaches zero by Mach 0.7. The speedbrake opens to 60 deg, 43 deg with the gear handle down; the gear moves at any speed, and more than damageMargin over its limit for damageTime fails its doors.",
     "mass": {
       "empty": 8600,
       "fuel": 3200,
       "payload": 1500
     },
+    "standardStores": { "srm": 4 },
     "inertia": [17460, 102600, 116000],
     "cg": [-0.4, 0.1, 0],
     "wing": {
@@ -527,7 +528,7 @@
     "climbRate": 50,
     "combatRadiusKm": 550,
     "stationTimeMin": 15,
-    "fuel": 5800,
+    "fuel": 5440,
     "loadouts": [
       {
         "id": "air-to-air",

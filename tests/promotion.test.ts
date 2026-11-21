@@ -42,7 +42,13 @@ describe('promotion', () => {
       expect(model.gear).toBe(0);
       expect(a.flown.controls.gearDown).toBe(false);
       expect(model.power).toBeGreaterThan(0);
-      expect(model.fuel / model.spec.mass.fuel).toBeCloseTo(share, 9);
+      // The loadout's capacity is internal plus its two tanks (decision 287), which feed first.
+      expect(a.rack.capacity).toBe(3200 + 2 * 1120);
+      expect(model.fuel / a.rack.capacity).toBeCloseTo(share, 9);
+      expect(model.tankFuel).toBeCloseTo(model.fuel - model.spec.mass.fuel, 9);
+      // Beyond the four short-range missiles in the flight data: two medium-range missiles and two tanks.
+      expect(model.storesMass).toBeCloseTo(2 * 231 + 2 * (1260 - 1120), 9);
+      expect(model.storesDragArea).toBeCloseTo(2 * 0.025 + 2 * 0.045, 9);
       expect(a.stores).toEqual({ loadout: 'air-to-air', expended: {} });
     });
   });
@@ -131,8 +137,10 @@ describe('the AI pilots of a promoted CAP flight', () => {
     const course = analyticPose(m.route, t0, R).heading + Math.PI / 3;
     f.aircraft[0]!.flown.pilot = (_a, ctl, dt) =>
       director.fly(player, { course, gamma: 0, speed: 300 * KNOT, maxBank: Math.PI / 6 }, ctl, dt);
+    // Heavier with its tanks and their fuel (decision 287), the wingman takes two minutes to
+    // close up after the player's turn at 300 kt (90 s before the stores).
     let t = t0;
-    for (; t < t0 + 90; t += 1 / 30) f.advanceTo(t, seaLevel);
+    for (; t < t0 + 120; t += 1 / 30) f.advanceTo(t, seaLevel);
     const w = f.pilots[1]!.state;
     expect(Math.hypot(w.behind, w.aside, w.below)).toBeLessThan(500);
     // A straight course leaves the racetrack: the player is kilometers off the route.
@@ -160,8 +168,9 @@ describe('the AI pilots of a promoted CAP flight', () => {
       const p = analyticPose(route, f.time, R).pos;
       worstAfter = Math.max(worstAfter, lead(f.aircraft[0]!).pos.distanceTo(new Vec3d(...p)));
     }
-    // On its new route from the first second, through the turn back to the station.
-    expect(worstAfter).toBeLessThan(800);
+    // On its new route from the first second, through the turn back to the station: within
+    // 1.2 km with the tanks and their fuel at 9 km (800 m before the stores, decision 287).
+    expect(worstAfter).toBeLessThan(1200);
   }, 60_000);
 
   it('drops the highest slots the player does not fly when the campaign loses aircraft', () => {

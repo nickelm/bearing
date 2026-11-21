@@ -233,6 +233,11 @@ export class Follow {
     this.input = new FlightInput(canvas, this.capture);
     this.input.mode = 'mouse-aim';
     this.input.onAction = (a) => this.action(a);
+    // The strip's and the formats' buttons for the controls, as the keys (decision 287's jettison).
+    this.displays.onControls = (a) => {
+      if (a === 'jettisonTanks') this.action('jettison');
+      else if (a !== 'hoverHold') this.action(a);
+    };
     const key = (e: KeyboardEvent) => {
       if (this.missionId === null || e.ctrlKey || e.altKey || e.metaKey || e.repeat) return;
       if ((e.target as HTMLElement | null)?.closest?.('input, select, textarea')) return;
@@ -440,6 +445,9 @@ export class Follow {
       case 'parkingBrake':
         c.parkingBrake = !c.parkingBrake;
         break;
+      case 'jettison':
+        this.jettison();
+        break;
       case 'mouseCapture': {
         const freeing = this.capture.captured;
         this.capture.toggle();
@@ -471,7 +479,7 @@ export class Follow {
       case 'help':
         this.hud.message(
           [
-            'Mouse aim or W/S/A/D, Q/E rudder, Shift/Ctrl throttle, G gear, B speedbrake',
+            'Mouse aim or W/S/A/D, Q/E rudder, Shift/Ctrl throttle, G gear, B speedbrake, J tanks',
             'N mouse aim or direct, Tab frees the mouse, C or right drag looks, T hands back',
           ],
           8,
@@ -658,6 +666,7 @@ export class Follow {
           clearance: this.clearance,
           span: this.span,
           weather: this.deps.weather,
+          enemyDistance: (pos, u) => this.enemyDistance(m.side, pos, u),
         },
         this.flightSpec,
         m,
@@ -689,19 +698,7 @@ export class Follow {
     const R = this.deps.radius;
     const tp = m.target.point;
     const target = new Vec3d(tp[0], tp[1], tp[2]).scale(R);
-    let enemy = Infinity;
-    for (const e of this.deps.missions()) {
-      if (e.side === m.side || e.aircraft <= 0) continue;
-      const s = routeState(e.route, t, R);
-      if (!s.airborne) continue;
-      const r = R + s.altitude;
-      const d = Math.hypot(
-        s.point[0] * r - model.pos.x,
-        s.point[1] * r - model.pos.y,
-        s.point[2] * r - model.pos.z,
-      );
-      enemy = Math.min(enemy, d);
-    }
+    const enemy = this.enemyDistance(m.side, model.pos, t);
     return flightRateCap({
       airborne: !model.onGround,
       gearDown: model.gear > 0.01,
@@ -709,6 +706,27 @@ export class Follow {
       targetDistance: model.pos.clone().normalize().scale(R).distanceTo(target),
       enemyDistance: enemy,
     });
+  }
+
+  /** How far the nearest airborne flight of the other side is from `pos` at t (m), on its route. */
+  private enemyDistance(side: Mission['side'], pos: Readonly<Vec3d>, t: number): number {
+    const R = this.deps.radius;
+    let enemy = Infinity;
+    for (const e of this.deps.missions()) {
+      if (e.side === side || e.aircraft <= 0) continue;
+      const s = routeState(e.route, t, R);
+      if (!s.airborne) continue;
+      const r = R + s.altitude;
+      const d = Math.hypot(s.point[0] * r - pos.x, s.point[1] * r - pos.y, s.point[2] * r - pos.z);
+      enemy = Math.min(enemy, d);
+    }
+    return enemy;
+  }
+
+  /** The player drops their drop tanks (J, the stores format's button; decision 287). */
+  private jettison(): void {
+    const n = this.full?.flight.jettisonPlayerTanks() ?? 0;
+    this.hud.message(n > 0 ? 'Tanks jettisoned' : 'No tanks to jettison', 2.5);
   }
 
   /** The bar's take-over button: shown while the player may take over or flies. */
@@ -1052,7 +1070,7 @@ export class Follow {
       name: `${m.callsign} · ${b.name}`,
       profile: b.avionics,
       avionics: this.displays.avionics,
-      capacity: this.full ? this.full.spec.mass.fuel : (b.airWar?.fuel ?? m.route.fuel),
+      capacity: this.full ? this.full.flight.capacity : (b.airWar?.fuel ?? m.route.fuel),
       groundSpeed: p.groundSpeed,
       position: {
         lat: Math.asin(Math.max(-1, Math.min(1, p.pos[1] / d))),

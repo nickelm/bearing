@@ -240,8 +240,11 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 
 - [x] Pylons and loadouts in the bundles for the demo types: the stores catalog (`src/data/stores.json`), the F-21's five pylons and its two loadouts by station (decision 285)
 - [ ] Pylons and stations for the Vo-31, Vo-35 and A-15 with their geometry and flight data (R2.7)
-- [ ] Stores' mass and drag in the flight model (`storesLoad`; the F-21's CD0 table holds four air-to-air missiles)
-- [ ] Drop tanks with fuel (owner, decision 286): tanks carry fuel the engine burns first, the flight model's fuel is internal plus tanks (promotion's fuel share then maps the air war's load to the same total), tanks jettisonable (a key and the stores format), the AI jettisons before a fight; retune the AI-pilot tests if the tanks' drag moves them
+- [x] Stores' mass and drag in the flight model beyond the flight data's standard load (`StoresRack`, `standardStores`; decision 287)
+- [x] Drop tanks with fuel (owner, decision 286): tanks carry fuel the engine burns first, the flight model's fuel is internal plus tanks, the F-21's air-war load 5,440 kg to match, jettison by J and the AI within 40 km of an enemy flight; `tests/promotion.test.ts` retuned (decision 287)
+- [ ] The stores format's jettison button (`ControlsAction` `jettisonTanks`, wired in the follow) with the stores format
+- [ ] The approach energy cue (`energy.ts`) predicts without the stores' drag and mass; stores' CG and inertia stay the spec's (R2.10)
+- [ ] The AI's jettison reads enemy flights on their routes; from the sensors' picture once they read campaign contacts
 - [ ] Stores on pylons that disappear on release; jettison
 - [ ] Stores format and master arm; weapon selection triggers air-to-air and air-to-ground modes
 - [ ] Gun with a lead-computing pipper

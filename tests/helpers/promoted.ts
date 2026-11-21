@@ -14,6 +14,7 @@ import type { Route } from '../../src/sim/air/route';
 import type { Reference } from '../../src/sim/flight/aiPilot';
 import type { GroundQuery } from '../../src/sim/flight/airframe';
 import { PromotedFlight } from '../../src/sim/flight/promotedFlight';
+import type { PromotedFlightOptions } from '../../src/sim/flight/promotedFlight';
 import { missionPlugin } from '../../src/sim/command/missions/registry';
 import { kestrelSpec } from './flight';
 
@@ -80,7 +81,11 @@ export function routeReference(route: Route): Reference {
   };
 }
 
-export function promote(m: Mission, t: number): PromotedFlight {
+export function promote(
+  m: Mission,
+  t: number,
+  enemyDistance?: PromotedFlightOptions['enemyDistance'],
+): PromotedFlight {
   const formations = missionPlugin(m.type).formations;
   const lead = analyticPose(m.route, t, R);
   const f = formationAt(m.timeline, formations, t);
@@ -90,5 +95,6 @@ export function promote(m: Mission, t: number): PromotedFlight {
     formation: (u) => formationAt(m.timeline, formations, u),
     phase: (u) => routeState(m.route, u, R).phase,
     span: SPAN,
+    enemyDistance,
   });
 }

@@ -45,6 +45,11 @@ export interface WheelSpec {
 export interface FlightSpec {
   /** Masses (kg): empty with pilot, internal fuel, and payload (gun ammunition, wingtip missiles). */
   mass: { empty: number; fuel: number; payload: number };
+  /**
+   * The stores already in `mass.payload` and the CD0 table (store id → count; decision 287):
+   * the stores rack adds the mass and drag of anything beyond them. Absent: none.
+   */
+  standardStores?: Record<string, number>;
   /** Principal moments of inertia about the body axes (kg·m²): roll, pitch, yaw. */
   inertia: [number, number, number];
   /** Center of gravity (model frame, m). */
@@ -274,6 +279,12 @@ export function parseFlightSpec(raw: unknown, id = '?'): FlightSpec {
   pos(mass, 'empty', 'mass');
   num(mass, 'fuel', 'mass');
   num(mass, 'payload', 'mass');
+  if (s.standardStores !== undefined) {
+    const std = s.standardStores;
+    if (typeof std !== 'object' || std === null) fail('standardStores', 'not an object');
+    for (const [k, v] of Object.entries(std))
+      if (!Number.isInteger(v) || (v as number) < 0) fail(`standardStores.${k}`, 'not a count');
+  }
   const inertia = vec(s.inertia, 'inertia');
   if (!inertia.every((x) => x > 0)) fail('inertia', 'must be positive');
   vec(s.cg, 'cg');
