@@ -94,6 +94,9 @@ export function terrainArtSettings(
   quality: ArtQuality = 'medium',
   style: ArtStyle = 'bearing',
 ): TerrainArtSettings {
+  // Unknown names (a mistyped URL or preview option) fall back to the defaults.
+  if (!(ART_QUALITIES as readonly string[]).includes(quality)) quality = 'medium';
+  if (!(ART_STYLES as readonly string[]).includes(style)) style = 'bearing';
   const s = STYLE[style];
   if (quality === 'off') {
     return {

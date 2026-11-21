@@ -103,3 +103,11 @@ describe('world profiles', () => {
     expect(worldProfile('natural').poiKinds).toEqual([]);
   });
 });
+
+describe('terrain art settings from unknown names', () => {
+  it('falls back to medium and bearing', () => {
+    const s = terrainArtSettings('storybook' as never, 'ultra' as never);
+    expect(s.quality).toBe('medium');
+    expect(s.style).toBe('bearing');
+  });
+});
