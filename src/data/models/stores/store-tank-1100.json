@@ -1,0 +1,48 @@
+{
+  "name": "Centerline drop tank",
+  "class": "store",
+  "groups": {
+    "body": "steel"
+  },
+  "parts": [
+    {
+      "type": "loft",
+      "group": "body",
+      "sides": 8,
+      "stations": [
+        {
+          "x": 2.2,
+          "w": 0,
+          "h": 0
+        },
+        {
+          "x": 1.1,
+          "w": 0.3,
+          "h": 0.3
+        },
+        {
+          "x": -0.8800000000000001,
+          "w": 0.3,
+          "h": 0.3
+        },
+        {
+          "x": -2.2,
+          "w": 0,
+          "h": 0
+        }
+      ]
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "mirror": true,
+      "root": [-1.4520000000000002, 0, 0],
+      "rootChord": 0.528,
+      "tipChord": 0.3168,
+      "span": 0.33,
+      "sweep": 30,
+      "thickness": 0.04,
+      "dihedral": -30
+    }
+  ]
+}

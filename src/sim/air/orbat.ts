@@ -49,11 +49,28 @@ export interface Squadron {
   pilots: string[];
 }
 
+/** Whether base stocks `st` hold what a flight draws (fuel, munitions, tanks; decision 294). */
+export function stocked(
+  st: Readonly<BaseStocks>,
+  d: { fuel: number; munitions: number; tanks: number },
+): boolean {
+  return st.fuel >= d.fuel && st.munitions >= d.munitions && (st.tanks ?? 0) >= d.tanks;
+}
+
+/** Sets of drop tanks a base keeps per aircraft that can hang them (decision 294). */
+export const TANK_SETS = 3;
+
 export interface BaseStocks {
   /** Jet fuel (kg). */
   fuel: number;
   /** Munition loads (one per aircraft and armed sortie). */
   munitions: number;
+  /**
+   * Drop tanks (decision 294). Tanks leave with the aircraft that hang them and come back
+   * with those that return without dropping them; tanks jettisoned in a fight or lost with
+   * an aircraft are gone.
+   */
+  tanks: number;
 }
 
 export interface AirBaseRecord {
@@ -224,7 +241,7 @@ export function buildOrderOfBattle(input: CampaignInput, seed: WorldSeed): Order
       name: a.name,
       theater: a.theater,
       squadrons: [],
-      stocks: { fuel: 0, munitions: 0 },
+      stocks: { fuel: 0, munitions: 0, tanks: 0 },
     };
     bases.push(base);
     const r = root.fork(`base-${a.id}`);
@@ -261,7 +278,7 @@ export function buildOrderOfBattle(input: CampaignInput, seed: WorldSeed): Order
       name: c.name,
       theater: c.theater,
       squadrons: [],
-      stocks: { fuel: 0, munitions: 0 },
+      stocks: { fuel: 0, munitions: 0, tanks: 0 },
     };
     bases.push(base);
     for (const id of c.side === 'alliance' ? ALLIANCE_WING : PACT_WING) addSquadron(base, id);
@@ -275,6 +292,14 @@ export function buildOrderOfBattle(input: CampaignInput, seed: WorldSeed): Order
       const sorties = s.aircraft * SORTIES_PER_DAY * days;
       b.stocks.fuel += sorties * aircraftType(s.type).fuel;
       b.stocks.munitions += sorties;
+      // Tanks for the most any loadout hangs on every aircraft, TANK_SETS times over.
+      const most = Math.max(
+        0,
+        ...aircraftType(s.type).loadouts.map((l) =>
+          Object.values(l.tanks ?? {}).reduce((a, n) => a + n, 0),
+        ),
+      );
+      b.stocks.tanks += s.aircraft * most * TANK_SETS;
     }
   }
   return { squadrons, bases };

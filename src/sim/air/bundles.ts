@@ -23,7 +23,7 @@
  *   degrees), or `{ "kind": "helicopter" }` for the rig scaled by the main rotor.
  * - `pylons`, `calibration`: R2.6 and R2.2 fill them.
  */
-import { checkStations, parsePylons, StoresError } from './stores';
+import { checkStations, parsePylons, stationLoads, STORES, StoresError } from './stores';
 import type { PylonSpec } from './stores';
 import { HOUR, KM, KNOT, MINUTE } from '../../core/units';
 import type { AvionicsProfile } from '../avionics/profiles';
@@ -232,6 +232,17 @@ export function parseBundle(raw: unknown, id: string): AircraftBundle {
   } catch (e) {
     if (e instanceof StoresError) throw new BundleError(e.message);
     throw e;
+  }
+  // Each loadout's fuel is the flight data's internal fuel plus its tanks (decision 294).
+  const internal = (o.flight as { mass?: { fuel?: unknown } } | undefined)?.mass?.fuel;
+  for (const l of air?.type.loadouts ?? []) {
+    if (!l.stations || !pylons) continue;
+    const loads = stationLoads(l.stations, pylons);
+    const tanks = loads.filter((x) => STORES[x.store]?.kind === 'tank');
+    l.tanks = {};
+    for (const x of tanks) l.tanks[x.store] = (l.tanks[x.store] ?? 0) + 1;
+    if (typeof internal === 'number')
+      l.fuel = internal + tanks.reduce((s, x) => s + STORES[x.store]!.fuel, 0);
   }
   return {
     id,

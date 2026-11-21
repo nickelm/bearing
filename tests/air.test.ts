@@ -20,6 +20,7 @@ import {
   aircraftType,
   cruiseFlow,
   ONE_SIDED_ROLES,
+  loadoutsFor,
 } from '../src/sim/air/aircraft';
 import { MISSION_PROFILES, phaseTime } from '../src/sim/air/mission';
 import type { Mission } from '../src/sim/air/mission';
@@ -123,7 +124,8 @@ describe('mission routes', () => {
     const profile = MISSION_PROFILES[mission];
     return planMissionRoute({
       type,
-      loadout: type.loadouts.find((l) => l.id === profile.loadout) ?? type.loadouts[0]!,
+      // The profile's longest-reaching loadout (the F-21's strike/long; decision 294).
+      loadout: loadoutsFor(type, profile.loadout ?? '').at(-1)!,
       profile,
       radius: R,
       rangeFactor: rf,

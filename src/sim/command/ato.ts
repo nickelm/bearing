@@ -41,7 +41,9 @@ import { HOUR, MINUTE } from '../../core/units';
 import type { GameTime } from '../../core/units';
 import type { Simulation, TickProcess } from '../simulation';
 import type { StateHasher } from '../stateHash';
-import { aircraftType } from '../air/aircraft';
+import { aircraftType, loadoutsFor } from '../air/aircraft';
+import type { Loadout } from '../air/aircraft';
+import { stocked } from '../air/orbat';
 import type { AircraftRole } from '../air/aircraft';
 import type { AirOps } from '../air/airOps';
 import { MISSION_PROFILES } from '../air/mission';
@@ -484,7 +486,7 @@ export class AirTaskingOrders implements TickProcess {
     const profile = MISSION_PROFILES[type];
     const roles: readonly AircraftRole[] =
       (member.role === 'lead' ? need.roles : undefined) ?? profile.roles;
-    const candidates: { sq: number; dist: number; rank: number }[] = [];
+    const candidates: { sq: number; dist: number; rank: number; loadout: Loadout }[] = [];
     for (const sq of air.squadrons) {
       if (sq.side !== side) continue;
       if (need.base && (sq.base.kind !== need.base.kind || sq.base.id !== need.base.id)) continue;
@@ -511,13 +513,20 @@ export class AirTaskingOrders implements TickProcess {
       // target still goes to the types that fly it low first.
       const low = profile.lowRoles?.includes(at.role) ?? false;
       const rank = profile.rolesAlike ? (need.defended && !low ? 1 : 0) : order;
-      const loadout = at.loadouts.find((l) => l.id === profile.loadout) ?? at.loadouts[0]!;
+      // The heaviest of the profile's loadouts that reaches the target and that the base
+      // can hang (its drop tanks; decision 294).
       const dist = arcDistance(air.basePoint(sq.base, tot), need.target.point, R);
-      if (dist > at.combatRadius * loadout.radiusFactor * this.w.input.rangeFactor) continue;
       const stocks = air.base(sq.base).stocks;
-      const d = air.draw({ aircraftType: at.id, aircraft: at.flightSize, type });
-      if (stocks.fuel < d.fuel || stocks.munitions < d.munitions) continue;
-      candidates.push({ sq: sq.id, dist, rank });
+      const loadout = (profile.loadout ? loadoutsFor(at, profile.loadout) : [at.loadouts[0]!]).find(
+        (l) =>
+          dist <= at.combatRadius * l.radiusFactor * this.w.input.rangeFactor &&
+          stocked(
+            stocks,
+            air.draw({ aircraftType: at.id, aircraft: at.flightSize, type, loadout: l.id }),
+          ),
+      );
+      if (!loadout) continue;
+      candidates.push({ sq: sq.id, dist, rank, loadout });
     }
     candidates.sort((a, b) => a.rank - b.rank || a.dist - b.dist || a.sq - b.sq);
     this.failure = candidates.length === 0 ? 'no squadron' : 'route';
@@ -528,7 +537,7 @@ export class AirTaskingOrders implements TickProcess {
     for (const c of candidates.slice(0, CANDIDATES)) {
       const sq = air.squadrons[c.sq]!;
       const at = aircraftType(sq.type);
-      const loadout = at.loadouts.find((l) => l.id === profile.loadout) ?? at.loadouts[0]!;
+      const loadout = c.loadout;
       const plan = (launch: GameTime): Route | null =>
         planMissionRoute({
           type: at,
@@ -642,7 +651,7 @@ export class AirTaskingOrders implements TickProcess {
       if (!reason) {
         const d = air.draw(m);
         const st = air.base(m.base).stocks;
-        if (st.fuel < d.fuel || st.munitions < d.munitions) reason = 'stocks';
+        if (!stocked(st, d)) reason = 'stocks';
       }
       if (reason) {
         if (s.role === 'lead') dropped.add(s.key);

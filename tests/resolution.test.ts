@@ -171,6 +171,20 @@ describe('a day of resolved war', () => {
     expect(resolved.length).toBe(res.alliance.resolved + res.pact.resolved);
   });
 
+  it('drop tanks for fights, which do not come back to the base (decision 294)', () => {
+    const tanksOf = (m: Mission) => air.tanksHome({ ...m, expended: [] }) / Math.max(1, m.aircraft);
+    const fought = [...seen.values()].filter(
+      // Flights in a fight: their tanks count as expended (a target's `engaged` marks a look).
+      (m) => tanksOf(m) > 0 && (m.expended?.length ?? 0) > 0,
+    );
+    expect(fought.length).toBeGreaterThan(0);
+    for (const m of fought) expect(air.tanksHome(m), m.callsign).toBe(0);
+    const tanks = (x: SimWorld) =>
+      x.air!.orbat.bases.reduce((n, b) => n + (b.stocks.tanks ?? 0), 0);
+    const hanging = [...air.liveMissions()].reduce((n, m) => n + air.tanksHome(m), 0);
+    expect(tanks(w) + hanging).toBeLessThan(tanks(make()));
+  });
+
   it('brings aborted flights home and never resolves a mission twice', () => {
     const aborted = [...seen.values()].filter((m) => m.aborted);
     for (const m of aborted) {

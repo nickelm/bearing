@@ -71,9 +71,9 @@ describe('the stores format (decision 289)', () => {
     const st = snap().stores!;
     expect(st.weapons).toEqual([
       { id: 'srm', label: 'SRM', count: 2, mode: 'air-to-air' },
-      { id: 'bomb-900', label: 'B900', count: 1, mode: 'air-to-ground' },
+      { id: 'bomb-900', label: 'B900', count: 3, mode: 'air-to-ground' },
     ]);
-    expect(st.tanks).toBe(2);
+    expect(st.tanks).toBe(1);
     // Left wing to right.
     expect(st.stations[0]!.station).toBe('wingtip.left');
     expect(st.stations.at(-1)!.station).toBe('wingtip.right');

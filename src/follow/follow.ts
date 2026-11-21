@@ -84,6 +84,9 @@ import {
 } from './followFlight';
 import type { AirfieldShift, FollowedLook } from './followFlight';
 import { carrierFields, drawnGround } from './followFlight';
+import { ReleasedStores } from '../render/sim/aircraft/releasedStores';
+import { STORES } from '../sim/air/stores';
+import type { StationLoad } from '../sim/air/stores';
 import { drawnType, flightStores, loadedOf, spinningRotors } from './campaignTraffic';
 
 export interface FollowDeps {
@@ -184,6 +187,13 @@ export class Follow {
   private span = 10;
   private clearance = 90;
   private drawn: Drawn[] = [];
+  /** Stores falling from the flight (decision 294), and what each aircraft hung last frame. */
+  private released: ReleasedStores | null = null;
+  private readonly hung = new Map<
+    number,
+    { loads: StationLoad[]; tankFuel: number; tanks: number }
+  >();
+  private fallTime = 0;
   private poses: AnalyticPose[] = [];
   private lastTime = NaN;
   private settle = 0;
@@ -217,6 +227,7 @@ export class Follow {
     document.body.appendChild(this.bar);
     this.hud.show(false);
     this.displays.enabled = false;
+    this.displays.readOnly = true;
     this.displays.visible = false;
 
     const canvas = deps.canvas;
@@ -379,6 +390,7 @@ export class Follow {
     // The flown view: the HUD with the aircraft's own displays, their bindings live.
     this.displays.attach(a.flown);
     this.displays.enabled = true;
+    this.displays.readOnly = false;
     if (this.panels === 'hud') this.panels = 'all';
     this.applyPanels();
     this.hud.clearMessages();
@@ -424,6 +436,7 @@ export class Follow {
     this.input.enabled = false;
     this.capture.release();
     this.displays.enabled = false;
+    this.displays.readOnly = true;
     this.takenAt = null;
     this.crashedAt = null;
     this.applyPanels();
@@ -783,6 +796,8 @@ export class Follow {
       if (q) this.blend!.set(k, q.sub(new Vec3d(p.pos[0], p.pos[1], p.pos[2])));
     });
     for (const d of this.drawn) d.view.setCg([0, 0, 0]);
+    this.hung.clear();
+    this.released?.clear();
   }
 
   /** Advances the follow by `dt` real seconds at game time t; call before the scene renders. */
@@ -1052,6 +1067,30 @@ export class Follow {
   private placeAirframes(eye: Readonly<Vec3d>, rpp: number): void {
     const g = this.deps.globe;
     const ground = this.airfield!;
+    const groundAt = (d: Readonly<Vec3d>) => ground.height(d);
+    // Stores that left their pylons since the last frame fall away (decision 294).
+    const flight = this.full!.flight;
+    this.released ??= new ReleasedStores(g.vehicles, g.lighting, this.deps.radius);
+    for (const a of flight.aircraft) {
+      const m = a.flown.airframe as unknown as FlightModel;
+      const now = a.rack.loaded;
+      const before = this.hung.get(a.slot);
+      if (before && !m.crashed)
+        for (const l of before.loads)
+          if (!now.some((x) => x.station === l.station)) {
+            const s = STORES[l.store]!;
+            const fuel = s.kind === 'tank' && before.tanks > 0 ? before.tankFuel / before.tanks : 0;
+            this.released.release(l, m, this.flightSpec!.cg, s.mass - s.fuel + fuel);
+          }
+      this.hung.set(a.slot, {
+        loads: [...now],
+        tankFuel: m.tankFuel,
+        tanks: now.filter((l) => STORES[l.store]?.kind === 'tank').length,
+      });
+    }
+    this.released.update(Math.max(0, flight.time - this.fallTime), groundAt);
+    this.fallTime = flight.time;
+    this.released.place(eye, g.sun, rpp, groundAt);
     for (const d of this.drawn) {
       d.view.group.visible = false;
       d.view.shadowMesh.visible = false;
@@ -1180,6 +1219,8 @@ export class Follow {
     this.drawn = [];
     this.poses = [];
     this.full = null;
+    this.hung.clear();
+    this.released?.clear();
     this.blend = null;
     this.missionId = null;
     this.hud.show(false);

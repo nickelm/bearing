@@ -501,7 +501,7 @@
       "at": [-0.96, -0.55, 1.9],
       "carries": ["mrm", "bomb-230", "bomb-900", "rockets-19", "tank-1400"]
     },
-    { "id": "centerline", "at": [-0.6, -0.95, 0], "carries": ["tank-1400"] }
+    { "id": "centerline", "at": [-0.6, -0.95, 0], "carries": ["tank-1100"] }
   ],
   "airWar": {
     "id": "f21",
@@ -528,6 +528,17 @@
       },
       {
         "id": "strike",
+        "stores": "4 × 900 kg bombs, 2 short-range missiles, a centerline tank",
+        "radiusFactor": 0.6,
+        "stations": {
+          "wingtip": "srm",
+          "middle": "bomb-900",
+          "inner": "bomb-900",
+          "centerline": "tank-1100"
+        }
+      },
+      {
+        "id": "strike/long",
         "stores": "2 × 900 kg bombs, 2 short-range missiles, 2 tanks",
         "radiusFactor": 0.85,
         "stations": { "wingtip": "srm", "middle": "bomb-900", "inner": "tank-1400" }

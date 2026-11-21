@@ -31,7 +31,7 @@ import type { Dir } from '../../core/greatCircle';
 import { arcDistance, destination, initialHeading, toward } from '../../core/greatCircle';
 import { DEG, MINUTE } from '../../core/units';
 import type { GameTime, Meters } from '../../core/units';
-import { cruiseFlow, FLOW } from './aircraft';
+import { cruiseFlow, FLOW, loadoutFuel } from './aircraft';
 import { clearanceFor, floorRoute } from './terrainFloor';
 import type { GroundSource } from './terrainFloor';
 import type { AircraftType, Loadout } from './aircraft';
@@ -262,8 +262,9 @@ function outbound(
 function build(p: RoutePlanInput, stationTime: number, recovery: Dir): Route {
   const t = p.type;
   const f = flightOf(p);
-  const flow = cruiseFlow(t, p.loadout.radiusFactor);
-  const fuel = t.fuel * p.rangeFactor;
+  const load = loadoutFuel(t, p.loadout);
+  const flow = cruiseFlow(t, p.loadout.radiusFactor, load);
+  const fuel = load * p.rangeFactor;
   const start = p.basePoint(p.launch);
   const g = groundTimes(t, p.carrierBased);
   const b = new RouteBuilder(t, f.R, flow, start, p.launch, fuel);
@@ -307,7 +308,8 @@ export function planMissionRoute(p: RoutePlanInput): Route | null {
   if (routeFeasible(route)) return floored(route);
   if (p.profile.station !== 'orbit') return null;
   // Cut the station time by the shortfall at loiter flow.
-  const flow = cruiseFlow(p.type, p.loadout.radiusFactor) * FLOW.loiter;
+  const flow =
+    cruiseFlow(p.type, p.loadout.radiusFactor, loadoutFuel(p.type, p.loadout)) * FLOW.loiter;
   const short = route.reserve - routeEndFuel(route);
   stationTime -= short / flow + 1;
   if (stationTime < least) return null;
@@ -436,7 +438,8 @@ export function rejoinRoute(p: RejoinInput): Route {
   }
   let route = attempt(station);
   if (!routeFeasible(route) && station !== null && p.profile.station === 'orbit') {
-    const flow = cruiseFlow(p.type, p.loadout.radiusFactor) * FLOW.loiter;
+    const flow =
+      cruiseFlow(p.type, p.loadout.radiusFactor, loadoutFuel(p.type, p.loadout)) * FLOW.loiter;
     const cut = station - (route.reserve - routeEndFuel(route)) / flow - 1;
     route = attempt(cut >= LEAST_REJOIN_STATION ? cut : null);
   }

@@ -23,6 +23,7 @@ import { CubeGrid } from '../src/core/cubeGrid';
 import { HOUR } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
 import { campaignInput } from '../src/sim/command/campaignInput';
+import { aircraftType } from '../src/sim/air/aircraft';
 import { SimHost } from '../src/sim/host';
 import { applyInput, createSimWorld } from '../src/sim/world';
 import type { SimWorld } from '../src/sim/world';
@@ -50,6 +51,8 @@ interface Report {
   launched: string;
   /** Missions seen live, by type (sampled every step). */
   byType: string;
+  /** Missions of types with loadout variants, by type, mission and loadout (decision 294). */
+  loadouts: string;
   completed: string;
   meanAirborne: number;
   maxAirborne: number;
@@ -103,6 +106,7 @@ function day(seed: number): Report {
     same: false,
     launched: '',
     byType: '',
+    loadouts: '',
     completed: '',
     meanAirborne: 0,
     maxAirborne: 0,
@@ -119,6 +123,8 @@ function day(seed: number): Report {
     stepped.rate = RATE;
     stepped.autoSlowdown = false;
     const seen = new Map<string, string>();
+    /** Missions by type and loadout where a type has loadout variants (decision 294). */
+    const loads = new Map<string, string>();
     let airborne = 0;
     let samples = 0;
     let nextSample = 0;
@@ -136,7 +142,11 @@ function day(seed: number): Report {
       }
       report.worstStepMs = Math.max(report.worstStepMs, performance.now() - a);
       const air = stepped.world.air!;
-      for (const m of air.missions.values()) seen.set(`${m.side}:${m.id}`, `${m.side}:${m.type}`);
+      for (const m of air.missions.values()) {
+        seen.set(`${m.side}:${m.id}`, `${m.side}:${m.type}`);
+        if (aircraftType(m.aircraftType).loadouts.some((l) => l.id.includes('/')))
+          loads.set(`${m.side}:${m.id}`, `${m.aircraftType} ${m.type} ${m.loadout}`);
+      }
       if (stepped.time >= nextSample) {
         const n = air.airborneAt('alliance', stepped.time) + air.airborneAt('pact', stepped.time);
         airborne += n;
@@ -221,6 +231,12 @@ function day(seed: number): Report {
       .sort((x, y) => y[1] - x[1])
       .map(([t, n]) => `${t} ${n}`)
       .join(', ');
+    const lc = new Map<string, number>();
+    for (const l of loads.values()) lc.set(l, (lc.get(l) ?? 0) + 1);
+    report.loadouts = [...lc]
+      .sort((x, y) => (x[0] < y[0] ? -1 : 1))
+      .map(([t, n]) => `${t} ${n}`)
+      .join(', ');
     report.squadrons = air.squadrons.length;
     report.weatherSystems = sw.weather.systems.length;
     report.logEntries = sw.sim.log.size;
@@ -256,6 +272,8 @@ it('runs a day of war on the demo seeds', () => {
   }
   lines.push('', 'Missions seen by type, both sides:', '');
   for (const r of reports) lines.push(`- Seed ${r.seed}: ${r.byType || 'none'}`);
+  lines.push('', 'Loadouts of the types with variants (decision 294):', '');
+  for (const r of reports) lines.push(`- Seed ${r.seed}: ${r.loadouts || 'none'}`);
   lines.push('', 'The demo types by side (Alliance/Pact):', '');
   for (const r of reports) lines.push(`- Seed ${r.seed}: ${r.demo}`);
   lines.push('', 'Resolution:', '');

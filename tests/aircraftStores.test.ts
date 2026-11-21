@@ -37,6 +37,7 @@ describe('stores on pylons (decision 288)', () => {
     const { mounts } = typeLoadoutMounts(bundleOfType('f21'), 'strike');
     expect(mounts.map((m) => m.station).sort()).toEqual(
       [
+        'centerline',
         'inner.left',
         'inner.right',
         'middle.left',
@@ -60,7 +61,7 @@ describe('stores on pylons (decision 288)', () => {
     expect(visibleMeshes(v) - visibleMeshes(bare)).toBe(2 * mounts.length);
     v.setStores(['wingtip.right', 'wingtip.left']);
     expect(visibleMeshes(v) - visibleMeshes(bare)).toBe(4);
-    expect(v.storeStations).toHaveLength(6);
+    expect(v.storeStations).toHaveLength(7);
   });
 
   it('hangs nothing on a stand-in model', () => {

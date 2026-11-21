@@ -46,6 +46,11 @@ export class DisplaySystem {
   onControls: ((a: ControlsAction) => void) | null = null;
   /** Keys act only while flying. */
   enabled = false;
+  /**
+   * A spectator's displays (a followed aircraft the player does not fly): formats and slots
+   * still change, but avionics and controls commands are ignored (decision 294).
+   */
+  readOnly = false;
   /** The displays' scale (0.75–1.5), from the options (decision 200). */
   uiScale = 1;
   /** The player's edits to the master modes' presets, kept per viewer (decision 200). */
@@ -116,6 +121,7 @@ export class DisplaySystem {
 
   /** Applies a command from a click, a key or (later) the crew. */
   command(c: DisplayCommand): void {
+    if (this.readOnly && (c.to === 'controls' || c.to === 'avionics')) return;
     if (c.to === 'controls') {
       this.onControls?.(c.action);
       return;

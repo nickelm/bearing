@@ -19,6 +19,7 @@ describe('stores and pylons (decision 285)', () => {
       'mrm',
       'rockets-19',
       'srm',
+      'tank-1100',
       'tank-1400',
     ]);
     for (const s of Object.values(STORES)) expect(s.mass).toBeGreaterThan(50);
@@ -28,12 +29,15 @@ describe('stores and pylons (decision 285)', () => {
     const aa = stationLoads(loadout('air-to-air').stations!, f21.pylons!);
     expect(storeCounts(aa)).toEqual({ srm: 4, mrm: 2, 'tank-1400': 2 });
     const strike = stationLoads(loadout('strike').stations!, f21.pylons!);
-    expect(storeCounts(strike)).toEqual({ srm: 2, 'bomb-900': 2, 'tank-1400': 2 });
+    expect(storeCounts(strike)).toEqual({ srm: 2, 'bomb-900': 4, 'tank-1100': 1 });
+    // The long-range variant trades two bombs for two wing tanks (decision 294).
+    const long = stationLoads(loadout('strike/long').stations!, f21.pylons!);
+    expect(storeCounts(long)).toEqual({ srm: 2, 'bomb-900': 2, 'tank-1400': 2 });
     // Mirrored pylons carry on both sides, at mirrored places.
     const tips = aa.filter((l) => l.pylon === 'wingtip');
     expect(tips.map((l) => l.station)).toEqual(['wingtip.right', 'wingtip.left']);
     expect(tips[0]!.at[2]).toBe(-tips[1]!.at[2]);
-    expect(storesLoad(storeCounts(strike)).mass).toBeCloseTo(2 * 86 + 2 * 925 + 2 * 1260, 6);
+    expect(storesLoad(storeCounts(strike)).mass).toBeCloseTo(2 * 86 + 4 * 925 + 1050, 6);
   });
 
   it('counts what is left after stores are expended, never below zero', () => {

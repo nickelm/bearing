@@ -61,6 +61,17 @@
       "length": 4.6,
       "diameter": 0.66,
       "dragArea": 0.045
+    },
+    "tank-1100": {
+      "name": "1,100 l drop tank",
+      "short": "TANK",
+      "reference": "300 gal centerline tank",
+      "kind": "tank",
+      "mass": 1050,
+      "fuel": 910,
+      "length": 4.4,
+      "diameter": 0.6,
+      "dragArea": 0.04
     }
   }
 }

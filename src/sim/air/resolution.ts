@@ -179,6 +179,8 @@ export class MissionResolution implements PhaseHook, Stateful {
     cap.kills = (cap.kills ?? 0) + targetLosses + escortLosses.reduce((a, b) => a + b, 0);
     const shooter = escorts[0] ?? m;
     shooter.kills = (shooter.kills ?? 0) + capLosses;
+    // Everyone in the fight drops their tanks first (decision 294).
+    for (const x of [cap, ...escorts, m]) this.air.dropTanks(x);
     this.lose(cap, capLosses, pos, 'air-to-air', sim);
     escorts.forEach((e, i) => this.lose(e, escortLosses[i]!, pos, 'air-to-air', sim));
     this.lose(m, targetLosses, pos, 'air-to-air', sim);

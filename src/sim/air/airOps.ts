@@ -31,7 +31,7 @@ import type { StateHasher } from '../stateHash';
 import type { CampaignInput } from '../command/campaignInput';
 import { carrierState, carrierTrack } from '../naval/carrierGroup';
 import type { CarrierTrack } from '../naval/carrierGroup';
-import { aircraftType } from './aircraft';
+import { aircraftType, loadoutFuel, loadoutTanks } from './aircraft';
 import type { HandbackFix, HandbackLoss, HandbackStores } from '../eventLog';
 import { jumpInOpen, MISSION_PROFILES } from './mission';
 import type { BaseRef, Mission, MissionPhase } from './mission';
@@ -240,16 +240,43 @@ export class AirOps {
     return this.nextPackage++;
   }
 
-  /** Fuel and munitions a flight would draw from its base. */
-  draw(m: Pick<Mission, 'aircraftType' | 'aircraft' | 'type'>): {
+  /** Fuel, munitions and drop tanks a flight would draw from its base (tanks: decision 294). */
+  draw(m: Pick<Mission, 'aircraftType' | 'aircraft' | 'type' | 'loadout'>): {
     fuel: number;
     munitions: number;
+    tanks: number;
   } {
     const t = aircraftType(m.aircraftType);
+    const l = t.loadouts.find((x) => x.id === m.loadout);
+    const tanks = Object.values(l?.tanks ?? {}).reduce((a, n) => a + n, 0);
     return {
-      fuel: m.aircraft * t.fuel * this.input.rangeFactor,
+      fuel: m.aircraft * loadoutFuel(t, l) * this.input.rangeFactor,
       munitions: ARMED.has(m.type) ? m.aircraft : 0,
+      tanks: m.aircraft * tanks,
     };
+  }
+
+  /**
+   * The flight drops its tanks for a fight (decision 294): each aircraft's tanks count as
+   * expended, so they neither return to the base nor hang on it when promoted.
+   */
+  dropTanks(m: Mission): void {
+    const tanks = loadoutTanks(aircraftType(m.aircraftType), m.loadout);
+    if (Object.keys(tanks).length === 0 || m.aircraft <= 0) return;
+    const ex = Array.from({ length: m.aircraft }, (_, k) => ({ ...(m.expended?.[k] ?? {}) }));
+    for (const e of ex)
+      for (const [id, n] of Object.entries(tanks)) e[id] = Math.max(e[id] ?? 0, n);
+    m.expended = ex;
+  }
+
+  /** The tanks mission m brings home: those its surviving aircraft still hang (decision 294). */
+  tanksHome(m: Readonly<Mission>): number {
+    const tanks = loadoutTanks(aircraftType(m.aircraftType), m.loadout);
+    let n = 0;
+    for (let k = 0; k < m.aircraft; k++)
+      for (const [id, c] of Object.entries(tanks))
+        n += Math.max(0, c - (m.expended?.[k]?.[id] ?? 0));
+    return n;
   }
 
   /** Commits a planned mission: reserves its aircraft and stocks and schedules its phases. */
@@ -265,6 +292,7 @@ export class AirOps {
     const d = this.draw(m);
     base.stocks.fuel -= d.fuel;
     base.stocks.munitions -= d.munitions;
+    base.stocks.tanks = (base.stocks.tanks ?? 0) - d.tanks;
     this.missions.set(m.id, m);
     this.launched[m.side]++;
     sim.log.decision(sim.time, {
@@ -496,6 +524,9 @@ export class AirOps {
     this.completed[m.side]++;
     this.revision++;
     this.turnaround[m.squadron]! += m.aircraft;
+    // The tanks still hanging come back to the base it recovers at.
+    const home = this.base(m.base).stocks;
+    home.tanks = (home.tanks ?? 0) + this.tanksHome(m);
     const t = aircraftType(m.aircraftType);
     this.ready.push([m.squadron, sim.time + t.turnaround, m.aircraft]);
     sim.schedule(sim.time + t.turnaround, AIR_READY_EVENT, {
@@ -538,7 +569,10 @@ export class AirOps {
       .number(this.killed.pact);
     h.number(this.survivors.length);
     for (const sq of this.orbat.squadrons) h.number(sq.pilots.length);
-    for (const b of this.orbat.bases) h.number(b.stocks.fuel).number(b.stocks.munitions);
+    for (const b of this.orbat.bases)
+      h.number(b.stocks.fuel)
+        .number(b.stocks.munitions)
+        .number(b.stocks.tanks ?? 0);
     for (const m of this.missions.values()) {
       h.number(m.id).string(m.type).number(m.squadron).number(m.aircraft).number(m.seed);
       h.string(m.aborted ?? '');

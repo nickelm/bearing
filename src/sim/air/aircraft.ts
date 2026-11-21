@@ -74,6 +74,13 @@ export interface Loadout {
   radiusFactor: number;
   /** What hangs on each pylon (pylon id → store id; decision 285), where the bundle has pylons. */
   stations?: Record<string, string>;
+  /**
+   * Fuel with this load (kg): the flight data's internal fuel plus the drop tanks it hangs,
+   * where the bundle has both (decision 294); the type's `fuel` otherwise.
+   */
+  fuel?: number;
+  /** Drop tanks each aircraft hangs, by store id (decision 294). */
+  tanks?: Record<string, number>;
 }
 
 export interface AircraftType {
@@ -159,13 +166,32 @@ export function typesFor(side: Side, role: AircraftRole, carrier = false): Aircr
   return AIRCRAFT_TYPES.filter((t) => t.side === side && t.role === role && t.carrier === carrier);
 }
 
+/** The drop tanks each aircraft of type t hangs with loadout `id`, by store id (decision 294). */
+export function loadoutTanks(t: Readonly<AircraftType>, id: string): Record<string, number> {
+  return t.loadouts.find((l) => l.id === id)?.tanks ?? {};
+}
+
+/** The fuel a flight of type t carries with loadout l (kg; decision 294). */
+export function loadoutFuel(t: Readonly<AircraftType>, l: Readonly<Loadout> | undefined): number {
+  return l?.fuel ?? t.fuel;
+}
+
+/**
+ * The loadouts of type t for a mission profile's loadout `id` (decision 294): `id` itself
+ * and its variants `id/<name>`, in the bundle's order (the heaviest first, by convention).
+ */
+export function loadoutsFor(t: Readonly<AircraftType>, id: string): Loadout[] {
+  const out = t.loadouts.filter((l) => l.id === id || l.id.startsWith(`${id}/`));
+  return out.length > 0 ? out : [t.loadouts[0]!];
+}
+
 /**
  * Cruise fuel flow (kg/s) with a loadout: the flow at which the type's typical
  * profile (out and back over its radius at cruise speed, plus its station time
  * at loiter flow) uses its usable fuel. Real, before the range factor.
  */
-export function cruiseFlow(t: AircraftType, radiusFactor = 1): number {
-  const usable = t.fuel * (1 - FUEL_RESERVE);
+export function cruiseFlow(t: AircraftType, radiusFactor = 1, fuel = t.fuel): number {
+  const usable = fuel * (1 - FUEL_RESERVE);
   const radius = t.combatRadius * radiusFactor;
   return usable / ((2 * radius) / t.cruiseSpeed + t.stationTime * FLOW.loiter);
 }

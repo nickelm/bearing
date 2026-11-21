@@ -33,8 +33,9 @@ describe('stores on the flight model (decision 287)', () => {
     expect(aa.capacity).toBe(3200 + 2240);
     // The strike load hangs two short-range missiles fewer than the standard four.
     const strike = rack('strike');
-    expect(strike.effect.mass).toBeCloseTo(2 * 925 + 2 * 140 - 2 * 86, 9);
-    expect(strike.effect.dragArea).toBeCloseTo(2 * 0.035 + 2 * 0.045 - 2 * 0.008, 9);
+    expect(strike.effect.mass).toBeCloseTo(4 * 925 + (1050 - 910) - 2 * 86, 9);
+    expect(strike.effect.dragArea).toBeCloseTo(4 * 0.035 + 0.04 - 2 * 0.008, 9);
+    expect(strike.capacity).toBe(3200 + 910);
   });
 
   it('turns the drag area into the stores’ drag coefficient over the wing', () => {
@@ -54,14 +55,14 @@ describe('stores on the flight model (decision 287)', () => {
     expect(b - a).toBeCloseTo(0.14 / spec.wing.area, 12);
   });
 
-  it('every flown type’s air-war fuel is its internal fuel and its loadouts’ tanks', () => {
+  it('every flown type’s loadout fuel is its internal fuel and its tanks', () => {
     for (const b of Object.values(AIRCRAFT_BUNDLES)) {
       if (!b.hasFlight || b.hasRotors || !b.airWar || !b.pylons) continue;
       const spec = parseFlightSpec(modelSpec(b.id).flight, b.id);
       for (const l of b.airWar.loadouts) {
         if (!l.stations) continue;
         const r = new StoresRack(spec, b.pylons, l.stations, { loadout: l.id, expended: {} });
-        expect(r.capacity, `${b.id} ${l.id}`).toBe(b.airWar.fuel);
+        expect(r.capacity, `${b.id} ${l.id}`).toBe(l.fuel);
       }
     }
   });
