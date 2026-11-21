@@ -26,8 +26,8 @@ export const ZONE_AIR_TUNING = {
   /** Height fog's scale height above the area's mean ground (m). */
   fogScale: 450,
   /** Valley mist's density at its base (1/m) at full amount; its scale height (m). */
-  mistDensity: 1 / 350,
-  mistScale: 40,
+  mistDensity: 1 / 1400,
+  mistScale: 30,
   /** Mist pools this far (m) above the lowest ground around the camera. */
   mistLift: 15,
   /** Rings (m) around the camera where the ground is read. */
