@@ -259,7 +259,10 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] Acceptance check 8's pipper half in a scripted hard turn (`tools/render.preview.ts`), and the owner's look on the GPU
 - [ ] The AI's gun (R3: targets from the sensors' picture)
 - [ ] `tests/gpu/mapSoak.test.ts` fails on main under lavapipe (geometries 274 against a 234 peak while panning at the floor), with or without decision 295: look at the strategic map's relief tile caches after the cities' commits
-- [ ] IR missile with a seeker circle and simple guidance, one per side
+- [x] IR missile with a seeker circle and simple guidance, one per side (`srm`, `srm-p`; the seeker, proportional navigation, the proximity fuze, the HUD's seeker circle, launch on the trigger's press, flame and smoke; decision 297)
+- [ ] The seeker's tone (audio), flares and the seeker's lock-on against the sun and the ground (R3)
+- [ ] Heat sources from every aircraft of an enemy flight (formation slots), not its lead alone; line of sight for the seeker
+- [ ] The Pact's missile on a flown Pact fighter (R2.7: the Vo-31's pylons and flight data)
 - [ ] Unguided bombs with CCIP fall lines; rockets
 - [ ] Hit and kill resolution; minimal damage states; ejection from full fidelity
 - [ ] Sensors read campaign contacts: aggregate flights as radar targets, sites with radars as emitters

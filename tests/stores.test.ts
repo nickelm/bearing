@@ -19,10 +19,17 @@ describe('stores and pylons (decision 285)', () => {
       'mrm',
       'rockets-19',
       'srm',
+      'srm-p',
       'tank-1100',
       'tank-1400',
     ]);
     for (const s of Object.values(STORES)) expect(s.mass).toBeGreaterThan(50);
+    // One IR missile per side, each with its seeker, motor and guidance (decision 297).
+    for (const id of ['srm', 'srm-p']) {
+      const m = STORES[id]!.missile!;
+      expect(m.cone).toBeLessThan(m.gimbal);
+      expect(m.propellant).toBeLessThan(STORES[id]!.mass);
+    }
   });
 
   it('hangs the F-21’s loadouts as their descriptions say', () => {

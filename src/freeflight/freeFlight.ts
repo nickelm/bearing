@@ -105,7 +105,9 @@ import { flightStartTime } from './clock';
 import { writeFreeFlightParams } from './url';
 import type { FreeFlightUrl } from './url';
 import { FlightWeather } from './flightWeather';
-import { buildHudFrame, gunHud, landingAid } from '../ui/flight/hudFrame';
+import { buildHudFrame, gunHud, landingAid, seekerHud } from '../ui/flight/hudFrame';
+import { gunSelected } from '../sim/flight/storesRack';
+import { MissileViews } from '../render/sim/aircraft/missileViews';
 import { buildHeloHudFrame } from '../ui/flight/heloHud';
 import { flownGround } from './ground';
 import type { AirfieldGround, FlownTerrain } from './ground';
@@ -203,6 +205,9 @@ export class FreeFlight {
   private fuelCapacity = 0;
   /** The gun's tracers (decision 295), made with the first frame. */
   private tracers: Tracers | null = null;
+  /** Missiles in flight and their smoke (decision 297), and the trigger last frame. */
+  private missileViews: MissileViews | null = null;
+  private triggerWas = false;
   /** The Kestrel's stores: its flight data's standard load (decision 289); null in a helicopter. */
   private rack: StoresRack | null = null;
   /** The gear doors' failure has been announced this sortie. */
@@ -374,8 +379,11 @@ export class FreeFlight {
       }
     };
     deps.globe.beforeDraw = (eye) => {
-      if (this.view && (this.model || this.helo) && this.state !== 'menu')
+      if (this.view && (this.model || this.helo) && this.state !== 'menu') {
+        // A missile fired leaves its rail (decisions 288, 297).
+        if (this.rack && !this.helo) this.view.setStores(this.rack.loaded.map((l) => l.station));
         this.view.update(this.pose, eye);
+      }
       this.poseTraffic(eye);
       // The gun's tracers (decision 295).
       if (!this.tracers) {
@@ -383,11 +391,27 @@ export class FreeFlight {
         deps.globe.vehicles.add(this.tracers.mesh);
       }
       const cam = deps.globe.camera;
+      const rpp = (cam.fov * DEG) / Math.max(1, window.innerHeight);
       this.tracers.place(
         this.state !== 'menu' && !this.helo ? (this.rack?.gun?.live ?? []) : [],
         eye,
-        (cam.fov * DEG) / Math.max(1, window.innerHeight),
+        rpp,
         this.rack?.gun?.spec.muzzleVelocity,
+      );
+      // Missiles in flight and their smoke (decision 297).
+      this.missileViews ??= new MissileViews(
+        deps.globe.vehicles,
+        deps.globe.lighting,
+        this.deps.radius,
+      );
+      const ground = this.ground;
+      this.missileViews.place(
+        this.state !== 'menu' && !this.helo ? (this.rack?.missiles ?? []) : [],
+        this.gameTime,
+        eye,
+        deps.globe.sun,
+        rpp,
+        (d) => (ground ? ground.height(d) : 0),
       );
     };
     window.addEventListener('beforeunload', this.unload);
@@ -808,7 +832,7 @@ export class FreeFlight {
       this.gameTime += dt;
       // The Kestrel's gun fires and its rounds fly at the flight step (decision 295).
       if (this.rack && a === (this.model as unknown))
-        this.rack.stepGun(this.model!, f.avionics, dt);
+        this.rack.stepWeapons(this.model!, f.avionics, dt, this.gameTime - dt, this.ground);
       for (const e of this.monitor!.update(a, dt)) this.event(e);
     };
     this.flown = flown;
@@ -1224,14 +1248,27 @@ export class FreeFlight {
     this.updateDisplays(frame);
     frame.target = this.hudTarget(m, this.deps.globe.chase.eye);
     // The gun (decision 295): the trigger while flying, the pipper at the lock's range.
-    if (this.rack?.gun) this.rack.gun.trigger = this.state === 'flying' && this.input.trigger;
-    frame.gun = gunHud(
-      m,
-      this.rack,
-      this.displays.avionics,
-      this.deps.globe.chase.eye,
-      this.lockRange(m) ?? undefined,
-    );
+    const av = this.displays.avionics;
+    const trigger = this.state === 'flying' && this.input.trigger;
+    if (this.rack?.gun) this.rack.gun.trigger = trigger && gunSelected(av);
+    frame.gun = gunHud(m, this.rack, av, this.deps.globe.chase.eye, this.lockRange(m) ?? undefined);
+    // The IR missile (decision 297): the traffic as heat sources, the seeker slaved to a
+    // radar lock, a launch on the trigger's press, the outcomes as messages.
+    if (this.rack) {
+      this.rack.sources = (this.traffic?.aircraft ?? []).map((a) => {
+        const st = trafficState(a, this.gameTime, this.deps.radius);
+        return { id: a.id, pos: st.pos, vel: st.vel, time: this.gameTime };
+      });
+      this.rack.updateSeeker(m, av, this.gameTime, this.lockDirection(m));
+      if (trigger && !this.triggerWas && !gunSelected(av)) {
+        const shot = this.rack.launch(m, av, this.gameTime, 'own');
+        if (shot) this.hud.message(shot.target ? 'Missile away' : 'Missile away, no lock', 2.5);
+      }
+      for (const x of this.rack.finished.splice(0))
+        this.hud.message(x.state === 'hit' ? 'Missile hit' : 'Missile missed', 3);
+    }
+    this.triggerWas = trigger;
+    frame.seeker = seekerHud(m, this.rack, av, this.deps.globe.chase.eye, this.gameTime);
     const radar = this.displays.avionics.radar;
     frame.acmCone = radar.on && radar.mode === 'acm' && !radar.lock ? ACM_CONE : null;
     this.hud.draw(frame, project);
@@ -1497,6 +1534,14 @@ export class FreeFlight {
   }
 
   /** The locked contact as the HUD's target box: relative to the camera, with its range. */
+  /** The direction to the locked contact (world, unit), or null without a lock: the seeker slaves to it. */
+  private lockDirection(m: Airframe): Vec3d | null {
+    const lock = this.displays.avionics.radar.lock;
+    const c = lock ? this.sensors.picture.contacts.find((x) => x.id === lock) : undefined;
+    if (!c) return null;
+    return new Vec3d(c.pos[0] - m.pos.x, c.pos[1] - m.pos.y, c.pos[2] - m.pos.z).normalize();
+  }
+
   /** The locked contact's range (m), or null without a lock. */
   private lockRange(m: Airframe): number | null {
     const lock = this.displays.avionics.radar.lock;

@@ -286,6 +286,7 @@ The land shades are proposal 0007's brighter starting values (decision 204); the
 | Dusk sky, horizon to zenith | `#F6B07A` to `#7C6A8A` |
 | Midday sky | `#C9D8E3` |
 | Afterburner core | `#FFB347` |
+| Missile motor flame, while it burns; its smoke trail pale gray, lit as a surface turned to the sun, widening and thinning out over about 7 s (decision 297) | `#FF8C26` |
 | Gun tracers: short additive streaks along the round's flight, brighter at the head, at least about two pixels wide at any range, one round in five (decision 295) | `#FF9E38` to `#FFB347` |
 | Runway and deck lights | `#FFD27A` |
 | Navigation lights | `#FF3B30` (red), `#34C759` (green), `#FFFFFF` (white) |

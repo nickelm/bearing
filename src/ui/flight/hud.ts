@@ -184,6 +184,19 @@ export interface HudFrame {
    */
   gun?: { point: [number, number, number]; rounds: number; armed: boolean } | null;
   /**
+   * The IR missile's seeker circle (decision 297): where the seeker looks (a world
+   * direction), on its target while it tracks (a point relative to the camera), the
+   * cone's half angle (rad), and the missile's name with the count left.
+   */
+  seeker?: {
+    dir: [number, number, number];
+    point: [number, number, number] | null;
+    cone: number;
+    tracking: boolean;
+    label: string;
+    armed: boolean;
+  } | null;
+  /**
    * The radar's air combat mode cone about the boresight (half angle, rad), while it
    * searches in a dogfight (decision 223); else null.
    */
@@ -388,6 +401,7 @@ export class Hud {
     if (f.debug) this.debugPanel(f, 16, 64, s);
     if (f.target) this.targetBox(f.target, project, s);
     if (f.gun) this.pipper(f.gun, project, s);
+    if (f.seeker) this.seekerCircle(f.seeker, project, s);
     if (f.control) drawControlCursor(c, f.control, project, W, H, s);
   }
 
@@ -465,6 +479,30 @@ export class Hud {
       'center',
       g.rounds > 0 ? HUD_COLOR : WARN_COLOR,
     );
+  }
+
+  /**
+   * The seeker circle (decision 297): dashed while the seeker searches about the boresight,
+   * solid on the target it tracks; its size is the seeker's cone, at least a readable ring.
+   */
+  private seekerCircle(k: NonNullable<HudFrame['seeker']>, project: Projector, s: number): void {
+    const c = this.ctx;
+    const [x, y, z] = k.dir;
+    const p = k.point ? project(k.point[0], k.point[1], k.point[2], true) : project(x, y, z, false);
+    if (!p) return;
+    // The cone's edge: the direction tilted by the cone toward any perpendicular.
+    const px = Math.abs(y) < 0.9 ? [-z, 0, x] : [0, z, -y];
+    const n = Math.hypot(px[0]!, px[1]!, px[2]!) || 1;
+    const t = Math.tan(k.cone);
+    const e = project(x + (px[0]! / n) * t, y + (px[1]! / n) * t, z + (px[2]! / n) * t, false);
+    const r = Math.max(14 * s, e ? Math.hypot(e.x - p.x, e.y - p.y) : 30 * s);
+    this.stroke(() => {
+      c.beginPath();
+      c.setLineDash(k.tracking ? [] : [6 * s, 5 * s]);
+      c.arc(p.x, p.y, r, 0, Math.PI * 2);
+    });
+    c.setLineDash([]);
+    this.text(k.armed ? k.label : `${k.label} SAFE`, p.x, p.y + r + 14 * s, 'center');
   }
 
   // ---- Drawing helpers ----

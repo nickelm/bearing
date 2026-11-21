@@ -55,7 +55,11 @@ import { storesEffect } from '../sim/flight/storesRack';
 import { DisplaySystem } from '../ui/displays/system';
 import { Hud, matrixProjector } from '../ui/flight/hud';
 import type { HudFrame } from '../ui/flight/hud';
-import { buildHudFrame, gunHud, landingAid } from '../ui/flight/hudFrame';
+import { buildHudFrame, gunHud, landingAid, seekerHud } from '../ui/flight/hudFrame';
+import { gunSelected } from '../sim/flight/storesRack';
+import type { HeatSource } from '../sim/flight/missile';
+import { analyticPose } from '../sim/air/analyticPose';
+import { MissileViews } from '../render/sim/aircraft/missileViews';
 import type { ControlCursor } from '../ui/flight/controlCursor';
 import { FlightInput, STICK_DEADZONE, STICK_FULL } from '../ui/flight/flightInput';
 import type { FlightAction } from '../ui/flight/flightInput';
@@ -197,6 +201,10 @@ export class Follow {
   private fallTime = 0;
   /** The flight's gun tracers (decision 295). */
   private tracers: Tracers | null = null;
+  /** The flight's missiles in flight and their smoke (decision 297). */
+  private missileViews: MissileViews | null = null;
+  /** The trigger as it was last frame: a missile leaves on its press. */
+  private triggerWas = false;
   private poses: AnalyticPose[] = [];
   private lastTime = NaN;
   private settle = 0;
@@ -727,6 +735,27 @@ export class Follow {
     });
   }
 
+  /**
+   * The other side's airborne flights as heat sources at game time t (decision 297): each
+   * flight's lead where its route puts it, with its velocity.
+   */
+  private heatSources(side: Mission['side'], t: number): HeatSource[] {
+    const R = this.deps.radius;
+    const out: HeatSource[] = [];
+    for (const e of this.deps.missions()) {
+      if (e.side === side || e.aircraft <= 0) continue;
+      if (!routeState(e.route, t, R).airborne) continue;
+      const p = analyticPose(e.route, t, R);
+      out.push({
+        id: `m${e.id}`,
+        pos: new Vec3d(p.pos[0], p.pos[1], p.pos[2]),
+        vel: new Vec3d(p.velocity[0], p.velocity[1], p.velocity[2]),
+        time: t,
+      });
+    }
+    return out;
+  }
+
   /** How far the nearest airborne flight of the other side is from `pos` at t (m), on its route. */
   private enemyDistance(side: Mission['side'], pos: Readonly<Vec3d>, t: number): number {
     const R = this.deps.radius;
@@ -807,6 +836,7 @@ export class Follow {
     this.hung.clear();
     this.released?.clear();
     this.tracers?.place([], new Vec3d(), 1);
+    this.missileViews?.clear();
   }
 
   /** Advances the follow by `dt` real seconds at game time t; call before the scene renders. */
@@ -941,8 +971,24 @@ export class Follow {
     frame.panels = true;
     // The gun: the trigger from the input, the pipper on the HUD (decision 295).
     const rack = this.full?.followed(this.slot)?.rack ?? null;
-    if (rack?.gun) rack.gun.trigger = inp.trigger;
-    frame.gun = gunHud(model, rack, this.displays.avionics, this.deps.globe.chase.eye);
+    const av = this.displays.avionics;
+    if (rack?.gun) rack.gun.trigger = inp.trigger && gunSelected(av);
+    frame.gun = gunHud(model, rack, av, this.deps.globe.chase.eye);
+    // The IR missile (decision 297): the enemy's flights as heat sources, the seeker, a
+    // launch on the trigger's press, and the outcomes as messages.
+    const ft = this.full?.flight.time ?? t;
+    if (rack) {
+      rack.sources = this.heatSources(m.side, ft);
+      rack.updateSeeker(model, av, ft);
+      if (inp.trigger && !this.triggerWas && !gunSelected(av)) {
+        const shot = rack.launch(model, av, ft, `m${m.id}:${this.slot}`);
+        if (shot) this.hud.message(shot.target ? 'Missile away' : 'Missile away, no lock', 2.5);
+      }
+      for (const x of rack.finished.splice(0))
+        this.hud.message(x.state === 'hit' ? 'Missile hit' : 'Missile missed', 3);
+    }
+    this.triggerWas = inp.trigger;
+    frame.seeker = seekerHud(model, rack, av, this.deps.globe.chase.eye, ft);
     this.updateDisplays(m, airframeState(model), frame, t);
     if (this.panels !== 'clean') this.hud.draw(frame, project);
   }
@@ -1089,6 +1135,15 @@ export class Follow {
       this.tracers = new Tracers();
       g.vehicles.add(this.tracers.mesh);
     }
+    this.missileViews ??= new MissileViews(g.vehicles, g.lighting, this.deps.radius);
+    this.missileViews.place(
+      flight.aircraft.flatMap((a) => a.rack.missiles),
+      flight.time,
+      eye,
+      g.sun,
+      rpp,
+      groundAt,
+    );
     this.tracers.place(
       flight.aircraft.flatMap((a) => a.rack.gun?.live ?? []),
       eye,
@@ -1246,6 +1301,7 @@ export class Follow {
     this.hung.clear();
     this.released?.clear();
     this.tracers?.place([], new Vec3d(), 1);
+    this.missileViews?.clear();
     this.blend = null;
     this.missionId = null;
     this.hud.show(false);

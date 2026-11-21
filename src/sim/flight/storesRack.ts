@@ -27,6 +27,11 @@ import type { FlightSpec } from './flightSpec';
 import type { StoresState } from './promotion';
 import { GUN } from '../air/stores';
 import { Gun } from './gun';
+import { boresightOf, Missile, Seeker } from './missile';
+import type { HeatSource } from './missile';
+import type { GroundQuery } from './airframe';
+import { modelToBody } from './rigidBody';
+import { Vec3d } from '../../core/vec3d';
 import type { GunSpec } from './gun';
 import type { AvionicsState } from '../avionics/avionics';
 
@@ -81,6 +86,16 @@ export class StoresRack {
   private loadedList: StationLoad[];
   /** The internal gun, with the rounds not yet fired (decision 295), or null. */
   readonly gun: Gun | null;
+  /** The selected IR missile's seeker (decision 297), or null while none is selected. */
+  seeker: Seeker | null = null;
+  /** Missiles in flight, and those whose flight ended since the app last took them. */
+  readonly missiles: Missile[] = [];
+  readonly finished: Missile[] = [];
+  /**
+   * The aircraft its seekers and missiles can see (decision 297), refreshed by the app
+   * from the war or the traffic; between refreshes each is carried along its velocity.
+   */
+  sources: HeatSource[] = [];
 
   constructor(
     readonly spec: FlightSpec,
@@ -159,13 +174,88 @@ export class StoresRack {
   stepGun(m: FlightModel, avionics: Readonly<AvionicsState>, dt: number): number {
     const g = this.gun;
     if (!g) return 0;
-    const armed =
-      avionics.masterArm &&
-      !m.onGround &&
-      (avionics.weapon === GUN || avionics.masterMode === 'dogfight');
+    const armed = avionics.masterArm && !m.onGround && gunSelected(avionics);
     const n = g.step(m, this.spec.cg, dt, m.radius, armed);
     if (n > 0) this.state.expended[GUN] = (this.state.expended[GUN] ?? 0) + n;
     return n;
+  }
+
+  /**
+   * The selected IR missile's seeker looks again at game time t (decision 297), along the
+   * boresight or slaved to `slave` (a radar lock's direction). Null without one selected.
+   */
+  updateSeeker(
+    m: FlightModel,
+    avionics: Readonly<AvionicsState>,
+    t: number,
+    slave: Readonly<Vec3d> | null = null,
+  ): Seeker | null {
+    const w = avionics.weapon;
+    const spec = w ? STORES[w]?.missile : null;
+    if (
+      !w ||
+      !spec ||
+      STORES[w]?.kind !== 'ir-missile' ||
+      !this.loaded.some((l) => l.store === w)
+    ) {
+      this.seeker = null;
+      return null;
+    }
+    if (this.seeker?.spec !== spec) this.seeker = new Seeker(spec);
+    this.seeker.update(m.pos, boresightOf(m.q), this.sources, t, slave);
+    return this.seeker;
+  }
+
+  /**
+   * Launches the selected IR missile at game time t (decision 297): with master arm on, in
+   * the air, one left; it leaves its station with the aircraft's velocity, pushed clear,
+   * at the seeker's target. Returns it, or null.
+   */
+  launch(
+    m: FlightModel,
+    avionics: Readonly<AvionicsState>,
+    t: number,
+    shooter: string,
+  ): Missile | null {
+    const w = avionics.weapon;
+    const s = w ? STORES[w] : undefined;
+    if (!w || !s?.missile || !avionics.masterArm || m.onGround) return null;
+    const station = this.release(m, w);
+    if (!station) return null;
+    const pos = m.pos.clone().add(m.q.rotate(modelToBody(station.at, this.spec.cg)));
+    const vel = m.vel.clone().add(m.q.rotate(new Vec3d(0, 0, 3)));
+    const missile = new Missile(
+      w,
+      s.missile,
+      s.mass,
+      s.dragArea,
+      pos,
+      vel,
+      this.seeker?.target ?? null,
+      shooter,
+      t,
+    );
+    this.missiles.push(missile);
+    return missile;
+  }
+
+  /** Steps the gun and the missiles in flight by dt from game time t (decisions 295, 297). */
+  stepWeapons(
+    m: FlightModel,
+    avionics: Readonly<AvionicsState>,
+    dt: number,
+    t: number,
+    ground: GroundQuery | null = null,
+  ): void {
+    this.stepGun(m, avionics, dt);
+    for (let i = this.missiles.length - 1; i >= 0; i--) {
+      const x = this.missiles[i]!;
+      x.step(dt, t, m.radius, this.sources, ground ? (d) => ground.height(d) : null);
+      if (x.state !== 'flying') {
+        this.missiles.splice(i, 1);
+        this.finished.push(x);
+      }
+    }
   }
 
   /** Drops every tank with the fuel in it; returns how many went. */
@@ -175,4 +265,14 @@ export class StoresRack {
     m.tankFuel = 0;
     return tanks.length;
   }
+}
+
+/**
+ * Whether the trigger is the gun's (decisions 295, 297): the gun selected, or the dogfight
+ * mode with no weapon selected.
+ */
+export function gunSelected(avionics: Readonly<AvionicsState>): boolean {
+  return (
+    avionics.weapon === GUN || (avionics.masterMode === 'dogfight' && avionics.weapon === null)
+  );
 }

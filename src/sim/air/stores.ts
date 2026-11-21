@@ -13,6 +13,24 @@ export type Vec3 = [number, number, number];
 export type StoreKind = 'ir-missile' | 'radar-missile' | 'bomb' | 'rockets' | 'tank';
 const KINDS: readonly StoreKind[] = ['ir-missile', 'radar-missile', 'bomb', 'rockets', 'tank'];
 
+/** A guided missile's figures (decision 297). */
+export interface MissileSpec {
+  /** Seeker: how far it looks off its axis (rad), the cone it acquires in (rad), its lock range (m). */
+  gimbal: number;
+  cone: number;
+  lockRange: number;
+  /** Motor: thrust (N), burn time (s), propellant (kg, part of the store's mass). */
+  thrust: number;
+  burn: number;
+  propellant: number;
+  /** Proportional navigation's gain and the g it can pull at full dynamic pressure. */
+  gain: number;
+  maxG: number;
+  /** Proximity fuze radius (m) and how long it flies before it self-destructs (s). */
+  fuze: number;
+  life: number;
+}
+
 export interface StoreSpec {
   id: string;
   name: string;
@@ -30,6 +48,36 @@ export interface StoreSpec {
   dragArea: number;
   /** kg of fuel a full tank holds (part of `mass`); 0 for anything but a tank. */
   fuel: number;
+  /** A missile's guidance and motor (decision 297), or null. */
+  missile: MissileSpec | null;
+}
+
+function parseMissile(raw: unknown, what: string): MissileSpec {
+  const o = raw as Record<string, Record<string, unknown> | number>;
+  const n = (v: unknown, k: string) => {
+    if (typeof v !== 'number' || !(v > 0)) throw new StoresError(`${what}.${k}: not > 0`);
+    return v;
+  };
+  const sub = (k: string) => {
+    const v = o[k];
+    if (typeof v !== 'object' || v === null) throw new StoresError(`${what}.${k}: missing`);
+    return v;
+  };
+  const seeker = sub('seeker');
+  const motor = sub('motor');
+  const guidance = sub('guidance');
+  return {
+    gimbal: (n(seeker.gimbalDeg, 'seeker.gimbalDeg') * Math.PI) / 180,
+    cone: (n(seeker.coneDeg, 'seeker.coneDeg') * Math.PI) / 180,
+    lockRange: n(seeker.range, 'seeker.range'),
+    thrust: n(motor.thrust, 'motor.thrust'),
+    burn: n(motor.burn, 'motor.burn'),
+    propellant: n(motor.propellant, 'motor.propellant'),
+    gain: n(guidance.gain, 'guidance.gain'),
+    maxG: n(guidance.maxG, 'guidance.maxG'),
+    fuze: n(o.fuze, 'fuze'),
+    life: n(o.life, 'life'),
+  };
 }
 
 export class StoresError extends Error {}
@@ -57,7 +105,10 @@ function parseCatalog(raw: unknown): Readonly<Record<string, StoreSpec>> {
       diameter: num('diameter'),
       dragArea: num('dragArea'),
       fuel: kind === 'tank' ? num('fuel') : 0,
+      missile: s.missile === undefined ? null : parseMissile(s.missile, `stores.${id}.missile`),
     };
+    if (spec.missile && spec.missile.propellant >= spec.mass)
+      throw new StoresError(`stores.${id}.missile.motor.propellant: not below its mass`);
     if (spec.fuel >= spec.mass) throw new StoresError(`stores.${id}.fuel: not below its mass`);
     out[id] = spec;
   }

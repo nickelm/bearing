@@ -25,9 +25,11 @@ import {
 import type { Runway, RunwayEnd } from '../../sim/flight/runway';
 import type { ControlCursor } from './controlCursor';
 import { leadSolution, PIPPER_RANGE } from '../../sim/flight/gun';
+import { gunSelected } from '../../sim/flight/storesRack';
+import { sourceAt } from '../../sim/flight/missile';
+import { STORES } from '../../sim/air/stores';
 import type { StoresRack } from '../../sim/flight/storesRack';
 import type { AvionicsState } from '../../sim/avionics/avionics';
-import { GUN } from '../../sim/air/stores';
 import type { HoverHud, HudEnergy, HudFrame, HudLandingAid } from './hud';
 
 /** The speed trend vector looks this far ahead (s). */
@@ -335,9 +337,36 @@ export function gunHud(
 ): HudFrame['gun'] {
   const g = rack?.gun;
   if (!g || m.onGround) return null;
-  if (avionics.weapon !== GUN && avionics.masterMode !== 'dogfight') return null;
+  if (!gunSelected(avionics)) return null;
   const sol = leadSolution(m, g.spec, m.spec.cg, m.radius, range);
   if (!sol) return null;
   const at = m.pos.clone().add(m.q.rotate(sol.dir).scale(range)).sub(eye);
   return { point: [at.x, at.y, at.z], rounds: g.rounds, armed: avionics.masterArm };
+}
+
+/**
+ * The IR missile's seeker circle for the HUD (decision 297), while one is selected: where
+ * the seeker looks, as a direction while it searches and on its target (relative to the
+ * camera at `eye`) while it tracks, with the cone's half angle, and the missiles left.
+ */
+export function seekerHud(
+  m: FlightModel,
+  rack: Pick<StoresRack, 'seeker' | 'sources' | 'counts'> | null,
+  avionics: Readonly<AvionicsState>,
+  eye: Readonly<Vec3d>,
+  t: number,
+): HudFrame['seeker'] {
+  const sk = rack?.seeker;
+  const w = avionics.weapon;
+  if (!sk || !w || m.onGround) return null;
+  const src = sk.target ? rack.sources.find((s) => s.id === sk.target) : undefined;
+  const at = src ? sourceAt(src, t).sub(eye) : null;
+  return {
+    dir: [sk.dir.x, sk.dir.y, sk.dir.z],
+    point: at ? [at.x, at.y, at.z] : null,
+    cone: sk.spec.cone,
+    tracking: !!src,
+    label: `${STORES[w]?.short ?? w} ${rack.counts[w] ?? 0}`,
+    armed: avionics.masterArm,
+  };
 }

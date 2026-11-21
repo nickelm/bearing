@@ -1,5 +1,5 @@
 {
-  "notes": "The stores catalog (R2.6, decision 285): what pylons carry. Names are the setting's own, and short is the label the stores format and the HUD show (decision 289); the reference is the real store the numbers come from. Mass in kg (a tank's full; fuel is the kg of fuel a full tank holds, 1,400 l at 0.8 kg/l, which the engine burns before the internal fuel: decision 287), length and diameter in m, dragArea in m2 (drag = dynamic pressure x dragArea, added for every store beyond an aircraft's standard load). Kinds: ir-missile, radar-missile, bomb, rockets, tank.",
+  "notes": "The stores catalog (R2.6, decision 285): what pylons carry. Names are the setting's own, and short is the label the stores format and the HUD show (decision 289); the reference is the real store the numbers come from. Mass in kg (a tank's full; fuel is the kg of fuel a full tank holds, 1,400 l at 0.8 kg/l, which the engine burns before the internal fuel: decision 287), length and diameter in m, dragArea in m2 (drag = dynamic pressure x dragArea, added for every store beyond an aircraft's standard load). Kinds: ir-missile, radar-missile, bomb, rockets, tank. An IR missile's missile block (decision 297): its seeker's gimbal limit and acquisition cone (deg) and lock range (m), its motor's thrust (N), burn (s) and propellant (kg), proportional navigation's gain and its g limit, its proximity fuze's radius (m) and its life (s).",
   "stores": {
     "srm": {
       "name": "short-range missile",
@@ -9,7 +9,53 @@
       "mass": 86,
       "length": 2.87,
       "diameter": 0.127,
-      "dragArea": 0.008
+      "dragArea": 0.008,
+      "missile": {
+        "seeker": {
+          "gimbalDeg": 40,
+          "coneDeg": 2.5,
+          "range": 10000
+        },
+        "motor": {
+          "thrust": 12500,
+          "burn": 5.2,
+          "propellant": 27
+        },
+        "guidance": {
+          "gain": 4,
+          "maxG": 35
+        },
+        "fuze": 8,
+        "life": 40
+      }
+    },
+    "srm-p": {
+      "name": "short-range missile (Pact)",
+      "short": "SRM",
+      "reference": "R-73",
+      "kind": "ir-missile",
+      "mass": 105,
+      "length": 2.9,
+      "diameter": 0.17,
+      "dragArea": 0.011,
+      "missile": {
+        "seeker": {
+          "gimbalDeg": 60,
+          "coneDeg": 3,
+          "range": 12000
+        },
+        "motor": {
+          "thrust": 14000,
+          "burn": 5,
+          "propellant": 32
+        },
+        "guidance": {
+          "gain": 4,
+          "maxG": 40
+        },
+        "fuze": 9,
+        "life": 40
+      }
     },
     "mrm": {
       "name": "medium-range missile",

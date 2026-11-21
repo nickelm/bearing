@@ -251,14 +251,14 @@ export class PromotedFlight {
       if (a.slot === this.playerSlot) {
         // The player's input source: mouse aim's hook, or the controls as the input left them.
         a.flown.step(ground);
-        a.rack.stepGun(m, a.flown.avionics, FLIGHT_STEP);
+        a.rack.stepWeapons(m, a.flown.avionics, FLIGHT_STEP, t, ground);
         continue;
       }
       const pilot = this.pilots[i]!;
       a.flown.step(ground, (_af, ctl, dt) => void pilot.fly(m, t, ctl, dt));
       // The AI holds its fire until R3 gives it targets; rounds the player fired fly on.
       if (a.rack.gun) a.rack.gun.trigger = false;
-      a.rack.stepGun(m, a.flown.avionics, FLIGHT_STEP);
+      a.rack.stepWeapons(m, a.flown.avionics, FLIGHT_STEP, t, ground);
     }
     this.time = t + FLIGHT_STEP;
   }
