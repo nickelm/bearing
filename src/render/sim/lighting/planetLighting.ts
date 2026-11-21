@@ -228,9 +228,10 @@ export class PlanetLighting {
   readonly skyLean = uniform(0.5);
   /**
    * Starlight and airglow on the night side: under it snow is faintly visible and
-   * other ground stays a silhouette, darker than the sky above the horizon.
+   * other ground stays a silhouette, darker than the sky above the horizon. Dark enough
+   * that a moonless night needs a night vision system (decision 296; it was 0.02).
    */
-  readonly nightLight = uniform(0.02);
+  readonly nightLight = uniform(0.008);
   /** Unit vector toward the moon, world frame. */
   readonly moonDirection = uniform(new Vector3(0, -1, 0));
   /**
@@ -240,12 +241,12 @@ export class PlanetLighting {
    */
   readonly moonIlluminance = uniform(0);
   /**
-   * The full moon's light on a surface facing it at night, in display units: a twelfth of
-   * daylight, as for an eye adapted to the night. It has to be about that much to show at
-   * all: under the tone curve ground lit by less than about 0.05 is display black (at 0.02
-   * a full moon lit nothing, and the only light on the ground was the settlements' glow).
+   * The full moon's light on a surface facing it at night, in display units: a 23rd of
+   * daylight, as for an eye adapted to the night. Under the tone curve ground lit by less
+   * than about 0.05 is display black, so a full moon shows the land dimly and a part moon
+   * hardly at all: a night vision system is needed (decision 296; it was 0.12).
    */
-  fullMoon = 0.12;
+  fullMoon = 0.06;
   /**
    * Lightning (weather/lightning.ts): the light of the discharge under way on a surface under
    * it, in display units, and where it is, planet-centered (m). Zero between flashes.

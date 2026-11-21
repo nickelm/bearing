@@ -534,14 +534,14 @@ export class LightShading {
       const minBuilt = max(footprint, 1).mul(1.2);
       const wobble = edgeNoise.sub(0.5).mul(0.5).add(1);
       // The settlements' lights as points on a LIGHT_CELL lattice: a third of the cells hold
-      // a small bright spot, giving way to their mean (0.4 of the old even glow) where cells
-      // shrink below a few pixels (decision 296).
+      // a small bright spot, giving way to their mean (0.15 of the old even glow) where cells
+      // shrink below two pixels (decision 296): a dim warm glow, not lit ground.
       const P = p.mul(this.radius);
       const q = P.div(LIGHT_CELL);
       const h = fract(sin(dot(floor(q), vec3(127.1, 311.7, 74.7))).mul(43758.5453));
       const spot = smoothstep(0.3, 0.15, length(fract(q).sub(0.5)));
-      const resolved = clamp(float(LIGHT_CELL / 3).div(max(footprint, 1e-3)).sub(1), 0, 1);
-      const points = mix(float(0.4), step(h, 0.33).mul(spot).mul(10), resolved);
+      const resolved = clamp(float(LIGHT_CELL / 2).div(max(footprint, 1e-3)).sub(1), 0, 1);
+      const points = mix(float(0.15), step(h, 0.33).mul(spot).mul(4), resolved);
       // The halo off the built-up patch: none near the camera, all of it from orbit.
       const halo = smoothstep(150, 1500, footprint);
       Loop({ start: int(0), end: int(count), type: 'int' }, ({ i }) => {
