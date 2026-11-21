@@ -141,7 +141,9 @@ export function placeDressingTile(
       // them, and a slab sunk less overhangs a convex slope and shows its dark underside.
       let ground: number;
       if (spec.pose === 'upright') {
-        const r = Math.max(1, Math.round(extent / 3 / sampleM));
+        // The whole footprint, out to its edge: on a steep wall the ground keeps falling
+        // past a third of it, and a flat base left above it shows its dark underside.
+        const r = Math.max(1, Math.round((0.6 * extent) / sampleM));
         let low = Infinity;
         for (const [ox, oy] of [
           [0, 0],
@@ -151,7 +153,7 @@ export function placeDressingTile(
           [0, -r],
         ])
           low = Math.min(low, hAt(px + ox!, py + oy!));
-        ground = low - DRESSING_TUNING.sink * extent;
+        ground = low - DRESSING_TUNING.sink * extent - 0.25 * Math.min(slope, 2) * extent;
       } else {
         const x0 = Math.floor(px);
         const y0 = Math.floor(py);
