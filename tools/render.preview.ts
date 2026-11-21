@@ -935,9 +935,9 @@ function cityTargets(
   Vec3d | null
 > {
   type Out = Record<
-  'hilltown' | 'westcity' | 'eastcity' | 'village' | 'industry' | 'uscity' | 'asiacity',
-  Vec3d | null
->;
+    'hilltown' | 'westcity' | 'eastcity' | 'village' | 'industry' | 'uscity' | 'asiacity',
+    Vec3d | null
+  >;
   const none: Out = {
     hilltown: null,
     westcity: null,
@@ -1677,11 +1677,15 @@ it('renders preview views', async () => {
 
   const stations = observerStations(sited, params.radius);
   // SPOTS=all or a comma list of landscape kinds: observer views at landscape spots.
-  if (process.env.SPOTS) {
-    const kinds =
-      process.env.SPOTS === 'all'
+  // ART_VIEWS=1: Proposal 0010's standard views (decision 296), an alpine valley from 500 m, a
+  // canyon from 300 m and a coast from 1 km, at the glacial, canyon and cliffs spots.
+  const artViews = process.env.ART_VIEWS === '1';
+  if (process.env.SPOTS || artViews) {
+    const kinds = artViews
+      ? (['glacial', 'canyon', 'cliffs'] as (typeof SPOT_KINDS)[number][])
+      : process.env.SPOTS === 'all'
         ? [...SPOT_KINDS]
-        : (process.env.SPOTS.split(',') as (typeof SPOT_KINDS)[number][]);
+        : (process.env.SPOTS!.split(',') as (typeof SPOT_KINDS)[number][]);
     // The sun's compass azimuth at a spot at the spot views' local time, for framing.
     const spotHour = Number(process.env.SPOT_TIME ?? 15.5);
     const sunAzimuth = (p: Readonly<Vec3d>) => {
@@ -1736,15 +1740,25 @@ it('renders preview views', async () => {
       console.log(
         `spot ${k}: ${lat.toFixed(3)}, ${lon.toFixed(3)} facing ${(spot.facing / DEG).toFixed(0)}° at ${spot.height.toFixed(0)} m (${spot.note})`,
       );
+      const art = artViews
+        ? { glacial: 'art-valley', canyon: 'art-canyon', cliffs: 'art-coast' }[k as string]
+        : undefined;
       views.push({
-        name: `spot-${k}`,
+        name: art ?? `spot-${k}`,
         dLat: 0,
         dLon: 0,
         altitude: 0,
         tilt: 0,
         heading: 0,
         localTime: Number(process.env.SPOT_TIME ?? 15.5),
-        spot,
+        spot: art
+          ? {
+              ...spot,
+              height: { glacial: 500, canyon: 300 }[k as string] ?? 1000,
+              pitch: Math.min(spot.pitch, -0.12),
+            }
+          : spot,
+        ...(art ? { detail: true } : {}),
       });
     }
   }
