@@ -1887,10 +1887,12 @@ it('renders preview views', async () => {
       };
     };
     const falls = findWaterfalls(riverIndex, params.radius, params.seed).falls;
-    const tall = falls.reduce<(typeof falls)[number] | null>(
-      (a, f) => (!a || (f.top - f.bottom) * f.width > (a.top - a.bottom) * a.width ? f : a),
-      null,
-    );
+    const tall = falls
+      .filter((f) => f.run <= 1.5 * (f.top - f.bottom))
+      .reduce<(typeof falls)[number] | null>(
+        (a, f) => (!a || (f.top - f.bottom) * f.width > (a.top - a.bottom) * a.width ? f : a),
+        null,
+      );
     if (tall) {
       const lip = new Vec3d(...tall.lip);
       const foot = new Vec3d(...tall.foot);
@@ -1910,7 +1912,9 @@ it('renders preview views', async () => {
       }
       console.log(`art-${kind}: ${best.name}`);
       views.push(
-        framing(`art-${kind}`, new Vec3d(...best.dir), 1200, kind === 'lighthouse' ? 60 : 200, 20),
+        kind === 'lighthouse'
+          ? framing(`art-${kind}`, new Vec3d(...best.dir), 500, 40, 15)
+          : framing(`art-${kind}`, new Vec3d(...best.dir), 3000, 400, 15),
       );
     }
   }
