@@ -658,12 +658,15 @@ export function writePrisms(
       along += len;
     }
     for (let i = 1; i + 1 < n; i++) {
+      // Flag 2: a far roof that carries the block's mean light at night (decision 293).
+      const roof: [number, number, number, number] = [0, 0, 2, b / 997];
       w.tri(
         [poly[0]!, poly[1]!, gs[0]! - ref + top],
         [poly[i * 2]!, poly[i * 2 + 1]!, gs[i]! - ref + top],
         [poly[i * 2 + 2]!, poly[i * 2 + 3]!, gs[i + 1]! - ref + top],
         c,
         ref,
+        [roof, roof, roof],
       );
     }
   }

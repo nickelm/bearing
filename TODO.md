@@ -389,5 +389,6 @@ Runs beside the main line (`docs/proposals/0009-settlements-and-cities.md`, `doc
 - [x] Streets of any width drawn whole: fields name the nearest segment (decision 290).
 - [x] Plans take the roads and railways as drawn (decision 291).
 - [x] Downtowns and business districts; American and Southeast Asian styles (decision 292).
+- [x] Cities at night from afar; chunks culled at their ground (decision 293).
 - [ ] Targeting pod (P3–P5): set `CityLayer.zoom` from the pod's magnification (decision 279).
 - [ ] Wire settlement pads into `terrainEditsFor` once the sim's height service can take them (decision 264).

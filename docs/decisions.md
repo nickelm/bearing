@@ -4706,3 +4706,13 @@ Decision 256's AI checks had run gear down, and the gear's drag had been slowing
 - Every world's settlement styles change with this; that is presentation only (nothing in the campaign reads styles).
 
 **Reason:** the owner asked for cities whose centers are skylines (American, Southeast Asian) and for European cities whose business centers lie away from the old center.
+
+### 293. Cities at night from afar; chunks culled at their ground
+
+**Date:** 2026-11-21
+**Decision:**
+
+- **Culling.** A city chunk's cull sphere stands at the middle of the ground under it, exaggerated as the terrain is, with a radius of 760 m plus half the ground's range plus its tallest rise. It stood at sea level with a 1 km radius, so on high ground a chunk was culled while its buildings were still in view, and buildings popped in and out as the view panned.
+- **Far light.** At night the roofs of the far block prisms carry the block's mean light (18% of the window glow, by the settlement's lighting level), and their walls the mean window glow. Streetlights now stand on arterial and major streets of the far chunks too, every other lamp (80 m), out to the prism range. Near chunks keep a lamp every 40 m on all vehicle streets.
+
+**Reason:** the owner saw buildings popping at night and no town lights from a distance: the prisms' dark roofs covered the terrain's town glow (decision 71), and streetlights ended at 2 km.

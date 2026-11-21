@@ -32,6 +32,7 @@ import type { Node } from 'three/webgpu';
 import {
   abs,
   attribute,
+  min,
   cameraWorldMatrix,
   clamp,
   dot,
@@ -300,7 +301,7 @@ export class CityLayer {
     this.lightMaterial = lightPointMaterial(
       lighting,
       terrain.exaggerationUniform,
-      uniform(this.boxRange + 500),
+      uniform(this.prismRange + 500),
       this.lightBrightness,
     );
   }
@@ -789,7 +790,20 @@ export class CityLayer {
         }
         void key;
         if (c.mesh) {
-          const seen = !view || !sphereOutsideView(c.center, CHUNK, view);
+          // The cull sphere at the chunk's ground, not the sea: on high ground a sphere at
+          // sea level left the frustum while the buildings were still in view (decision 293).
+          const ud = c.mesh.userData;
+          const ex = this.terrain.exaggerationUniform.value;
+          const lift = (((ud.groundLo as number) + (ud.groundHi as number)) / 2) * ex;
+          const cull = c.center
+            .clone()
+            .normalize()
+            .scale(c.center.length() + lift);
+          const radius =
+            760 +
+            (((ud.groundHi as number) - (ud.groundLo as number)) / 2) * ex +
+            (ud.top as number);
+          const seen = !view || !sphereOutsideView(cull, radius, view);
           placeCameraRelative(c.mesh, c.origin, eye);
           // Chunks with nothing to draw stay hidden (no empty draws).
           c.mesh.visible = seen && (c.mesh.userData.triangles as number) > 0;
@@ -820,13 +834,16 @@ export class CityLayer {
         triangles += p.prisms.userData.triangles as number;
       }
       // Streetlights of the near chunks.
-      const lk = lit
-        .map((c) => this.chunkKey(p, c.ci, c.cj))
-        .sort((a, b) => a - b)
-        .join(',');
-      if (lk !== p.lightKey) {
+      // Near chunks light every street, far ones their arterials and majors (decision 293).
+      const keysOf = (l: Chunk[]) =>
+        l
+          .map((c) => this.chunkKey(p, c.ci, c.cj))
+          .sort((a, b) => a - b)
+          .join(',');
+      const lk = `${keysOf(lit)}|${keysOf(prismChunks)}`;
+      if (lk !== p.lightKey && (lk === '|' || performance.now() - t0 < this.buildBudgetMs)) {
         this.dropMesh(p.lights);
-        p.lights = lk ? this.buildLights(p, lit) : null;
+        p.lights = lk !== '|' ? this.buildLights(p, lit, prismChunks) : null;
         p.lightKey = lk;
       }
       if (p.lights) {
@@ -979,17 +996,35 @@ export class CityLayer {
     const up = origin.clone().normalize();
     mesh.userData.up = new Vector3(up.x, up.y, up.z);
     mesh.userData.triangles = g.triangles;
+    // The ground's range under it and the tallest rise, for the cull sphere.
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const h of g.ground) {
+      if (h < lo) lo = h;
+      if (h > hi) hi = h;
+    }
+    let top = 0;
+    const up3 = [up.x, up.y, up.z];
+    for (let i = 0; i < g.position.length; i += 3) {
+      const r =
+        g.position[i]! * up3[0]! + g.position[i + 1]! * up3[1]! + g.position[i + 2]! * up3[2]!;
+      if (r > top) top = r;
+    }
+    mesh.userData.groundLo = Number.isFinite(lo) ? lo : 0;
+    mesh.userData.groundHi = Number.isFinite(hi) ? hi : 0;
+    mesh.userData.top = top + 20;
     mesh.userData.level = this.levels.get(p.index) ?? 1;
     this.group.add(mesh);
     return mesh;
   }
 
-  private buildLights(p: PlanState, chunks: Chunk[]): Mesh | null {
+  private buildLights(p: PlanState, chunks: Chunk[], far: Chunk[] = []): Mesh | null {
     const plan = p.plan!;
     const level = this.levels.get(p.index) ?? 1;
     if (level <= 0) return null;
-    const origin = chunks[0]!.origin;
+    const origin = (chunks[0] ?? far[0])!.origin;
     const keys = new Set(chunks.map((c) => this.chunkKey(p, c.ci, c.cj)));
+    const farKeys = new Set(far.map((c) => this.chunkKey(p, c.ci, c.cj)));
     const ground = this.groundAt(p);
     const { streetPoints: sp, streetOffsets: so, streetKinds: sk } = plan;
     const kind = LIGHT_KINDS.window!;
@@ -1002,6 +1037,7 @@ export class CityLayer {
     const tmp: [number, number, number] = [0, 0, 0];
     for (let s = 0; s < sk.length; s++) {
       if (sk[s]! > StreetKind.Minor) continue;
+      const major = sk[s]! <= StreetKind.Major;
       let carry = 0;
       for (let i = so[s]!; i + 3 < so[s + 1]!; i += 2) {
         const ax = sp[i]!;
@@ -1010,7 +1046,13 @@ export class CityLayer {
         for (let t = carry; t < L; t += this.lightSpacing) {
           const x = ax + ((sp[i + 2]! - ax) * t) / L;
           const y = ay + ((sp[i + 3]! - ay) * t) / L;
-          if (!keys.has(this.chunkKey(p, Math.floor(x / CHUNK), Math.floor(y / CHUNK)))) continue;
+          const key = this.chunkKey(p, Math.floor(x / CHUNK), Math.floor(y / CHUNK));
+          // Far chunks: arterials and majors, every other lamp.
+          if (
+            !keys.has(key) &&
+            !(major && farKeys.has(key) && Math.round(t / this.lightSpacing) % 2 === 0)
+          )
+            continue;
           const h = ground(x, y);
           if (h === null) continue;
           p.frame.toSphere(x, y, tmp);
@@ -1219,11 +1261,14 @@ export class CityLayer {
       const night = nightFactor(upU as unknown as V3, L.sunDirection);
       // Far away a window is a sub-pixel speck: its mean glow instead.
       const glowNear = pane.mul(lit);
-      const glowFar = wall.z.mul(0.25).mul(level).mul(step(0.8, v));
+      const glowFar = min(wall.z, 1).mul(0.25).mul(level).mul(step(0.8, v));
       const glow = mix(glowFar, glowNear, near).mul(night);
-      const emissive = vec3(1, 0.72, 0.4)
-        .mul(glow)
-        .mul(select(abs(normal.dot(upU)).lessThan(0.5), 0.9, 0));
+      // Far block prisms' roofs carry the block's mean light, so a city glows from afar
+      // instead of hiding the terrain's town glow under dark roofs (decision 293).
+      const roofGlow = step(1.5, wall.z).mul(level).mul(0.18).mul(night);
+      const emissive = vec3(1, 0.72, 0.4).mul(
+        glow.mul(select(abs(normal.dot(upU)).lessThan(0.5), 0.9, 0)).add(roofGlow),
+      );
       return L.applyAerial(shaded.add(emissive) as V3, apIn as V3, apTr as V3);
     })();
     void clamp;
