@@ -241,6 +241,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] Pylons and loadouts in the bundles for the demo types: the stores catalog (`src/data/stores.json`), the F-21's five pylons and its two loadouts by station (decision 285)
 - [ ] Pylons and stations for the Vo-31, Vo-35 and A-15 with their geometry and flight data (R2.7)
 - [ ] Stores' mass and drag in the flight model (`storesLoad`; the F-21's CD0 table holds four air-to-air missiles)
+- [ ] Drop tanks with fuel (owner, decision 286): tanks carry fuel the engine burns first, the flight model's fuel is internal plus tanks (promotion's fuel share then maps the air war's load to the same total), tanks jettisonable (a key and the stores format), the AI jettisons before a fight; retune the AI-pilot tests if the tanks' drag moves them
 - [ ] Stores on pylons that disappear on release; jettison
 - [ ] Stores format and master arm; weapon selection triggers air-to-air and air-to-ground modes
 - [ ] Gun with a lead-computing pipper

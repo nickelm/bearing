@@ -4618,3 +4618,16 @@ Decision 256's AI checks had run gear down, and the gear's drag had been slowing
 **How it was checked.** `tests/stores.test.ts`: the catalog; the F-21's loadouts count as their texts; mirrored stations; the strike load's mass; stores left after some are expended; a station on a pylon that cannot carry its store refused. `tests/bundles.test.ts` with the F-21's gaps. The unit suite, the type check and lint pass.
 
 **Reason:** roadmap R2.6, *Pylons and loadouts in the bundles*.
+
+### 286. The owner's direction after R2.5: steerpoint routes, two set pieces, road bases, air refueling, drop tanks
+
+**Date:** 2026-11-21
+**Decision:** The owner's feedback after flying a take-over (owner, 2026-11-21), now in the roadmap:
+
+- **Routes with steerpoints** (new R3.7). Missions fly great-circle legs today; the final game plans routes as steerpoints against the threat: low-level legs along valleys and canyons under the radar horizon, ingress through holes in the air defense network, pop-up and initial points. Rule 9 holds: the planner reads the strategic graph and the air defense picture, and fitting a route to the terrain is the execution layer's, as aligning roads is. The steerpoints are what the moving map, the HUD's steering (R2.6) and the AI pilot follow.
+- **Two set pieces** (R4.2): the AWACS ambush (a low canyon run under the enemy's radar, a hard climb and an attack on an AEW orbit, after the F-15 campaign mission in DCS) and the deep strike from a road (a light attack aircraft dispersed to a road base, fast and very low deep into enemy territory, after the AJ-37 Viggen's doctrine).
+- **Road bases** (new R4.8): highway strips on straight aligned roads near the airbases, dispersal when a base is attacked (decision 254) or by doctrine, takeoff and landing on a road.
+- **Air refueling** (new R4.9): the Alliance plans tanker tracks into its packages, extending radius and station time in the aggregate; the Pact's few tankers serve its bombers; at full fidelity the player joins the boom or drogue.
+- **Drop tanks carry fuel** (R2.6, decision 285's question): tanks hold fuel the engine burns first and can be jettisoned, so the flight model's fuel matches the air war's load (the F-21's 5,800 kg) instead of mapping it by share (decision 256).
+
+**Reason:** the owner's review of R2.5.
