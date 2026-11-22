@@ -34,7 +34,7 @@ const SHOTS: Record<string, Shot> = {
   airburst: {
     view: 'range',
     setup: (s) => {
-      s.lookFrom(s.local(-500, -700, 120), s.local(0, 0, 220));
+      s.lookFrom(s.local(-160, -240, 170), s.local(0, 0, 225));
       s.effects.explode(s.local(0, 0, 230), 39, 'air');
     },
     at: [0.08, 0.5, 1.5, 5],

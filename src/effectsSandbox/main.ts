@@ -43,6 +43,13 @@ async function start(): Promise<void> {
 
   const sandbox = new EffectsSandbox(renderer, { post: !query.has('nopost') });
   (window as unknown as { bearingEffects: EffectsSandbox }).bearingEffects = sandbox;
+  // For tools: hold the clock, and step it by whole frames without drawing.
+  (window as unknown as { bearingEffectsPage: object }).bearingEffectsPage = {
+    pause: (on: boolean) => (state.paused = on),
+    step: (seconds: number, fps = 30) => {
+      for (let t = 0; t < seconds - 1e-9; t += 1 / fps) sandbox.frame(1 / fps, false);
+    },
+  };
   const resize = () => sandbox.resize(window.innerWidth, window.innerHeight);
   window.addEventListener('resize', resize);
   resize();

@@ -37,6 +37,7 @@ Guidance for Claude Code sessions in this repository. **`docs/roadmap.md` is the
 | Ground map               | `npx vitest run --config vitest.tools.config.ts tools/groundMap.preview.ts` (env: `SEED`, `LAT`/`LON`, `KM`, `ALT`, `RANGES`) → `tools/out/groundmap-<nm>.png` and `.json` (decision 226) |
 | Map CPU and GPU timings  | In the app: `?dev&cputime=1` logs the map's CPU per section and the app's frame every 5 s; `?dev&gputime=1` GPU time per view and pass (decisions 242, 245). Headless: `SCENE=strategic PERF=1 MOVE=1` in `tools/render.preview.ts` prints the map's CPU per section, still and panning |
 | Settlement plans         | `npx vitest run --config vitest.tools.config.ts tools/cities.preview.ts --disable-console-intercept` (env: `SEEDS` or `FROM`/`COUNT`, `CITIES`, `TOWNS`, `VILLAGES`, `DRAW`, `REPORT`, `OUT`; add `--testTimeout=7000000` for many seeds) → plan drawings and metrics (Proposal 0009) |
+| Effects sandbox          | `npm run dev`, then `/effects.html` (`?gputime` for GPU times, `?nopost`); headless: `npx vitest run --config vitest.tools.config.ts tools/effects.preview.ts --disable-console-intercept` (env: `SHOTS`, `W`, `H`, `POST=0`, `PERF`, `OUT`) → `tools/out/effects/`; in Chromium: `node tools/effects.screens.mjs` with `npm run preview` up (`MODE`, `SHOTS`, `OUT`) (decision 327) |
 | Browser smoke test       | `npm run build && npm run preview`, then `node tools/browser.smoke.mjs` (env: `MODE`, `WORLD`, `ONLY`, `SCENES`, `OUT`) → `tools/out/browser/` (decision 144); `ONLY=follow` follows a flight of each demo type with checks 7 and 10 (`FOLLOW`, `LOW=0`, `LOW_WAIT`, `NIGHT=0`; decisions 252, 253) |
 
 ## Directory map
@@ -52,7 +53,8 @@ docs/proposals/     owner proposals (do not reformat); 0001-two-views.md (decisi
                     0005-terrain-adaptive-networks.md (decision 161), 0006-displays-and-crew.md
                     (decision 189), 0007-world-diversity.md (decision 204),
                     0008-game-loop-and-campaign.md (decision 228), 0009-settlements-and-cities.md
-                    (decisions 259–270) and 0012-gunship-and-sensor-stations.md (decision 302) are accepted
+                    (decisions 259–270), 0011-stylized-effects.md (decisions 320–327) and
+                    0012-gunship-and-sensor-stations.md (decision 302) are accepted
 docs/roadmap.md     phases R0–R6 with milestones, dependencies and exit criteria: what to build next
 docs/status/        audits: audit-2026-11-18.md (status matrix, health, decisions for the owner) and
                     todo-2026-11-18.md (the earlier tracks' TODO, archived)
@@ -118,6 +120,7 @@ src/sim/            headless simulation; runs in a worker: event queue + fixed t
                     orders (ato.ts; decision 249) with front segments, supply lines, doctrine, the planning environment
                     (weather and daylight) and the squadron ledger; missions/ holds the mission plug-ins and their registry
                     (rule 16); later the intelligence picture
+  effects/          events.ts: the effect events the sim emits for the renderer (decision 326), plain data
   clock.ts          the one clock's rules: flight step, real-step cap, time rates (decision 243)
   flight/           flownAircraft.ts (the flown aircraft: airframe, controls, input source, avionics state,
                     stepping; decision 243); flight model, control laws, ground model, runways, outcomes, flight director and a
@@ -141,6 +144,11 @@ src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Bo
                     water/ (river segment tables and river shading), models/ (model spec format,
                     procedural builder, palettes and schemes; the specs are in src/data/models/, decision 106);
                     later the transition controller
+  sim/effects/      stylized smoke, fire and explosions (Proposal 0011, decisions 320–327): EffectsSystem (the facade:
+                    events, emitters by key, columns from damage states), the puff pool and its compute kernels
+                    (pool.ts, puffCompute.ts, puffModel.ts its CPU reference), the sphere-impostor material, curves,
+                    presets and explosion recipes, emitters, debris and ground marks, flash lights, ribbons
+                    (contrails, vortices), weapons.ts (motors and warheads)
   sim/city/         planned settlements (Proposal 0009): CityLayer (meshes by detail level, lights, plumes,
                     damage), cityMesh.ts (geometry), cityGround.ts (the urban ground's feature fields in the terrain)
   sim/              simulation view: GlobeScene, camera/ (observer, chase camera and stations), aircraft/
@@ -186,6 +194,7 @@ src/follow/         following a campaign flight on the main thread (R2.4, decisi
                     the drawn route; decision 272) and campaignTraffic.ts (other flights near the camera: full views
                     near, instanced beyond)
 src/viewer/         the model viewer page (viewer.html, a second Vite page; decision 106)
+src/effectsSandbox/ the effects sandbox page (effects.html, a third Vite page) and its scene (decision 327)
 src/workers/        worker entry points and message protocols; city.worker.ts plans settlements (decision 266)
 src/main.ts         app entry: WebGPU checks, renderer, scene, GUI
 tests/              Vitest unit tests (node); tests/gpu/ runs WGSL kernels on a real GPU via Dawn

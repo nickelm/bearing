@@ -4944,3 +4944,64 @@ The first run missed by 4.0 m at 610 m and 9.6 m at 900 m, growing with the squa
 **How it was checked.** The new test, the gun's and the hits' tests (the lead without a speed rate is unchanged), the unit suite, the type check and lint.
 
 **Reason:** roadmap R2.6, *acceptance check 8 with the pipper*.
+### 320. Stylized effects: toon-shaded sphere-impostor puffs, dithered, with depth
+
+**Date:** 2026-11-22
+**Decision:** Proposal 0011 is accepted (`docs/proposals/0011-stylized-effects.md`, plan `docs/plans/stylized-effects.md`). Smoke and fire are puffs: one camera-facing quad each, sized to the sphere's silhouette (r·d/√(d² − r²)) with room for a radius bump; the fragment shader intersects the view ray with the sphere, squashed along the local up by the look's squash, then with a radius bumped by a smooth function of the first hit's normal and the puff's seed; it writes the hit's depth (`depthNode`, through the camera's reversed projection), and shades it in three bands of the sun's light (0.12, 0.55, 1 at N·L −0.05 and 0.45) plus sky light, moonlight, a night floor and a thin rim, all from `PlanetLighting.at` at the hit, with aerial perspective at the puff's center per vertex. Glowing looks add color × glow. Coverage below 1 discards by a 4 × 4 ordered dither offset per puff. Puffs near the lens (4–14 m) and at the end of the draw range (60 km) dissolve. A puff is never drawn smaller than 0.9 pixel in radius. Everything a fragment needs is computed in the depth node, which three builds before the color. `docs/visual-style.md` gains *Effects*; *What to Avoid* now names puffs as the one toon-shaded element and bans alpha-blended smoke sprites. Decisions 320–327 are numbered beyond the main line's 301 at the time; renumber at merge if needed.
+
+**Reason:** the proposal's look (solid, round, toon-shaded puffs) with no sorting and two triangles per puff at any size; depth makes puffs cut into the ground and each other correctly, which alpha-blended billboards cannot.
+
+### 321. The puff pool on the GPU, its reference model, free-list slots and governor
+
+**Date:** 2026-11-22
+**Decision:** 20,000 puffs in six vec4 storage buffers (position and age, velocity and radius, color and glow, life/look/size/seed, floor/coverage/squash, tint). Each frame an update kernel steps every slot below the high-water mark, then a spawn kernel copies the frame's staged records (at most 4,096, one partial upload) into their slots with their curves at their birth age. The update relaxes velocity at the look's drag rate toward the wind (55% at the ground, full from 400 m), plus its rise speed times its rise curve along the local up, plus a per-puff fan (its seed's direction × turbulence × 0.6), plus a smooth turbulent acceleration; keeps the puff's center at or above the ground it was born over; and writes radius, color, glow and coverage from a table of 16 samples per curve. The curve table and the looks' motion rows share one buffer, since a stage binds at most eight storage buffers. Positions are relative to a floating anchor that moves when the camera is 2 km from it; the shift is computed in float64 and applied by the next update. `puffModel.ts` is the kernel line for line in TypeScript; `tests/gpu/puffs.test.ts` checks the GPU against it. Slots come from a free list refilled once a frame, lowest slot first, so the draw's instance count stays near the live count and short-lived core puffs never evict long-lived trail puffs (a ring allocator evicted 12,777 in the stress scene); when none is free, the slot that dies soonest gives way. Above 60% of the pool a governor scales every emitter's rate down linearly to 15%.
+
+**Reason:** the proposal's compute pass and budget; a reference model makes the shader testable on the CPU.
+
+### 322. Emitters: rate or spacing, sub-frame placement, distance detail, prewarm
+
+**Date:** 2026-11-22
+**Decision:** A stream sheds by its rate in time or by its spacing along a moving source's path, whichever is more, carrying fractions between frames; puffs due during a frame are placed between the source's last and current positions and born that much older. Beyond 3 km a stream's spacing and size grow and its rate falls by √(d / 3 km), at most 4×; beyond its preset's range it sheds nothing. Long-lived columns (fuel fire, burning target, chimney, cooling tower, mist) prewarm when they come into range: puffs of every age placed where the model's rise, wind and fan would have carried them. Emitters are keyed: moving sources are `track`ed each frame and stop 0.5 s after the last call; fixed sources (`fixed`) run until removed. The effects draw their own seeded random numbers (mulberry32), so previews repeat.
+
+**Reason:** an even chain of balls behind a missile at 1,000 m/s, counts independent of frame rate, and columns that are already tall when the camera returns (the proposal's persistence check).
+
+### 323. Explosions in five layers; debris and ground marks on the CPU
+
+**Date:** 2026-11-22
+**Decision:** `explosionRecipe(kind, explosive)` scales by k = ∛explosive (kg): a flash puff (radius 3.2k), a fireball of 5 + 3k glowing puffs (1.3k–2.1k) going yellow, orange, red and dark gray, then by kind a smoke cluster (air: dark gray; ground: brown dirt thrown up at 4k m/s and gray smoke; water: a white spray column that falls back and black smoke; fuel: a second rolling fireball and a column that burns on). Debris: 3 + 1.6k flat-shaded chunks (fewer, smaller and none smoking in the air), thrown at 3k–7k m/s in a cone, tumbling, trailing small puffs, lying on the ground 8 s; a ragged scorch of radius 1.5k for five minutes on the ground; a shockwave ring out to 9k in 0.6 s for ground blasts of 40 kg or more. Debris, scorches and rings are instanced meshes stepped on the CPU (at most 256 chunks and 128 marks). A blast's own fire (a fuel store's, a wreck's) burns ten minutes.
+
+**Reason:** the proposal's five layers; the owner asked for explosions somewhat more spectacular than real ones (decision 301).
+
+### 324. Flash lights through PlanetLighting
+
+**Date:** 2026-11-22
+**Decision:** At most four flash lights at once, the oldest dropped first; each rises in a tenth of its 0.25 s and falls off as reach² / (reach² + d²), with intensity 0.5k and reach 10k. `PlanetLighting` gains a `localLight` hook, set before materials are built, whose light every lit surface takes like sky light in `at()`; GlobeScene and the sandbox set it to the flash lights. With no lights lit the hook adds four zero terms per fragment.
+
+**Reason:** the proposal's capped point lights; lighting the ground through the shared lighting reaches every layer without touching each material.
+
+### 325. Contrails and wingtip vortices as ribbons
+
+**Date:** 2026-11-22
+**Decision:** Ribbons are strips facing the camera along a path recorded every 12 m (contrails) or 3 m (vortices), built camera-relative on the CPU each frame (at most 8,192 points), at least 1.5 pixels wide, widening with the square root of age and dissolving by the dither. A contrail forms at or above (T₀ + 40 °C) / 6.5 K/km over a surface temperature T₀ (at least 4 km), and lasts 45 s × (0.4 + 1.2 × humidity); vortices form at a load factor of 6 g in dry air down to 3.5 g in saturated air, and last 1.6 s. Nothing in the game calls `trail` yet: the flown aircraft's altitude, load factor and the weather's humidity are the game layer's to pass (TODO).
+
+**Reason:** the proposal's ribbons and their conditions; the Schmidt–Appleman threshold simplified to one temperature.
+
+### 326. The effect event interface; city plumes, downwash and weapons on the effects system
+
+**Date:** 2026-11-22
+**Decision:**
+
+- **Events** (`src/sim/effects/events.ts`, which imports nothing): `launch`, `hit`, `explosion`, `fire-started`, `fire-extinguished` and `aircraft-smoke`, plain serializable records, an `EffectSink` and an `EffectQueue`. The effects system implements the sink. Effects never feed back into sim state (rule 19 is untouched). Long-lived columns come whole from the game layer's damage states through `setColumns`; `fire-started` is a hint.
+- **GlobeScene** owns the system (`globe.effects`), updates it after `beforeDraw` with the weather's wind and the view's pixel angle, clears puffs on a cut (columns stay) and disposes it.
+- **City plumes** (decisions 268, 269) are fixed emitters keyed by plan and source (`city:<plan>:<i>`): chimney, cooling tower, or a burning column for a damaged landmark or a hit target; the city layer's billboards and its `wind` uniform are gone.
+- **Rotor downwash** (decision 182) keeps `washSurface` and the ground reading, and drives the `rotor-downwash` emitter (dust in the ground's color, gray grit, snow, spray as white puffs), scaled by the rotor's radius and the wash's strength; its sprites are gone, and it no longer needs the pipeline.
+- **Weapons.** `Explosions` and `MissileViews` take the effects system: an impact explodes by its warhead's explosive (decision 301), a wreck strikes as a 300 kg fuel fire, missiles trail by their motor and wrecks trail fire and black smoke. Their earlier meshes remain the fallback without an effects system. A weapon's motor is a table in `effects/weapons.ts` (`srm` reduced smoke; `srm-p`, `mrm`, rockets solid) until the stores catalog carries it.
+
+**Reason:** the proposal's integration section; the touches to Free Flight and the follow are one constructor argument and two calls each.
+
+### 327. The effects sandbox and its tools
+
+**Date:** 2026-11-22
+**Decision:** `effects.html` is a third Vite page (`src/effectsSandbox/`): a curved patch of the planet with the real sky and light, props to cut into, scripted actors for every preset (missiles by motor, a SAM, damaged and burning aircraft, flares, a hover, a contrail pass, a 7 g turn), buttons for every preset and explosion size and kind, wind, sun and air controls, camera stations with a mouse orbit, the proposal's stress scene, and with `?gputime` the compute time and, under *Measure*, the puffs' render share from interleaved frames. `tools/effects.preview.ts` renders the same scene headless on Dawn and times the stress scene; `tools/effects.screens.mjs` captures the built page in Chromium. In this cloud container Chromium's WebGPU device is lost at start on both lavapipe and SwiftShader, for the existing model viewer too, so the report's screenshots come from the Dawn renders.
+
+**Reason:** the session's phase 3 and 7; one scene for the page, the screenshots and the timings.

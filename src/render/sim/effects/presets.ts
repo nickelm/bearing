@@ -772,7 +772,7 @@ export function explosionRecipe(kind: ExplosionKind, explosive: number): Explosi
         count: n(8, 4, 44),
         size: [1.4 * k, 2.2 * k],
         speed: [2 * k, 5 * k],
-        up: 6 * k,
+        up: 4 * k,
         delay: 0.05,
         upward: 0.7,
       },

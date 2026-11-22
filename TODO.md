@@ -430,10 +430,19 @@ Runs beside the main line (`docs/proposals/0009-settlements-and-cities.md`, `doc
 `docs/proposals/0011-stylized-effects.md`, `docs/plans/stylized-effects.md`; branch `feature/stylized-effects`.
 
 - [x] Phase 0: survey, proposal, plan
-- [ ] Phase 1: puff renderer (sphere impostor, depth, toon ramp, rim, dithered fade, shape variation)
-- [ ] Phase 2: GPU simulation (curves, pool, spawn and update kernels, TypeScript reference)
-- [ ] Phase 3: effects sandbox page and headless preview
-- [ ] Phase 4: emitter presets, explosions' five layers, debris, decals, flash lights
-- [ ] Phase 5: contrails and wingtip vortices
-- [ ] Phase 6: event interface, long-lived columns, city plumes and rotor downwash migrated
-- [ ] Phase 7: verification, metrics, screenshots, visual-style *Effects*, decisions, report
+- [x] Phase 1: puff renderer (sphere impostor, depth, toon ramp, rim, dithered fade, shape variation; decision 320)
+- [x] Phase 2: GPU simulation (curves, pool, spawn and update kernels, TypeScript reference; decision 321)
+- [x] Phase 3: effects sandbox page and headless preview (decision 327)
+- [x] Phase 4: emitter presets, explosions' five layers, debris, decals, flash lights (decisions 322–324)
+- [x] Phase 5: contrails and wingtip vortices (decision 325)
+- [x] Phase 6: event interface, long-lived columns, city plumes and rotor downwash migrated, weapons' trails and impacts (decision 326)
+- [x] Phase 7: verification, metrics, screenshots, visual-style *Effects*, decisions, report
+- [ ] Owner: the budget on a real GPU: `effects.html?gputime`, *stress test*, then *Measure* (compute under 0.5 ms, puffs under 1.0 ms at 10,000 puffs); record in `docs/reports/stylized-effects-metrics.md`
+- [ ] Owner: `node tools/effects.screens.mjs` with `MODE=gpu` for Chromium screenshots (the cloud container's Chromium loses its WebGPU device at start)
+- [ ] Game layer: call `effects.ribbons.trail` for the flown and followed aircraft (engines above the contrail altitude, wingtips by load factor, humidity from the weather's cloud cover)
+- [ ] Game layer: `effects.setColumns` from the worker's target damage (`SnapshotMessage.damage`, decision 301) and `aircraft-smoke` events for damaged aircraft (R3)
+- [ ] Game layer: SAM launches as `launch` events with `fromGround` once SAMs fire (R3.4); ship hits once ships take damage (R4)
+- [ ] Stores catalog: a `motor` per missile and rocket in `src/data/stores.json`, replacing the table in `effects/weapons.ts`
+- [ ] Night: fire puffs light the smoke around them (a local light per burning column, or glow on nearby puffs); at night columns read as black silhouettes only
+- [ ] Cap a fire puff's glow under bloom so a fire at night reads orange, not white
+- [ ] The old fallback meshes in `aircraft/explosions.ts` and `missileViews.ts` can go once every scene has an effects system

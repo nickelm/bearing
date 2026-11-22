@@ -262,6 +262,19 @@ describe('emitters', () => {
     expect(Math.max(...smoke.map((s) => s.age ?? 0))).toBeGreaterThan(30);
   });
 
+  it('fills a column again when the camera leaves and comes back', () => {
+    const e = new Emitter('t', EMITTERS['burning-target']!, { pos: at, floor: R }, -600, 5);
+    const out: WorldSpawn[] = [];
+    const far = new Vec3d(0, R + 100, 200_000);
+    e.emit(1 / 30, 0, near, 1, new Vec3d(), out);
+    const first = out.length;
+    out.length = 0;
+    for (let t = 1; t < 120; t += 1) e.emit(1, t, far, 1, new Vec3d(), out);
+    expect(out.length).toBe(0);
+    e.emit(1 / 30, 120, near, 1, new Vec3d(), out);
+    expect(out.length).toBeGreaterThan(first * 0.7);
+  });
+
   it('draws the same puffs from the same seed', () => {
     const a = seededRandom(9);
     const b = seededRandom(9);
