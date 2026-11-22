@@ -166,7 +166,7 @@ The aircraft the player controls or follows uses a higher detail level of 1,500 
 ### Aircraft
 
 - **Construction.** Fuselages are lofts of 6- to 8-sided cross-sections; wings and tails are extruded planforms with a slight thickness and a sharp leading edge. Canopies are separate faceted pieces with a dark, glossy material.
-- **Recognition.** Aircraft are fictional analogues, so their proportions carry their identity: the F-111 analogue's swept wings and side-by-side canopy, the A-6 analogue's bulbous nose, the F-117 analogue's black facets. Exaggerate the features that distinguish types.
+- **Recognition.** Aircraft are fictional analogues, so their proportions carry their identity: the F-111 analogue's swept wings and side-by-side canopy, the A-6 analogue's bulbous nose, the F-117 analogue's black facets, the AC-31 gunship's guns and sensor turrets along the left side of a transport's fuselage. Exaggerate the features that distinguish types.
 - **Camouflage.** Large flat color patches assigned per face, following a few faction schemes (see *Palette*). No gradients within a face.
 - **Markings.** Fictional national insignia, modex numbers, and squadron codes as simple geometric decals or painted faces. Large numbers on carrier islands and tails are welcome (reference 1).
 - **Emissives.** Afterburners glow in a warm core with bloom. Navigation lights (red port, green starboard, white tail) and anti-collision beacons blink at night.
@@ -290,6 +290,8 @@ The land shades are proposal 0007's brighter starting values (decision 204); the
 | An aircraft shot down: its wreck falls tumbling, burning with a flame and a smoke trail, and explodes on the ground (decision 301) | the missiles' flame and smoke |
 | Bomb and rocket impacts: a warm flash that swells and shrinks within half a second, then a dark brown-gray cloud of smoke and dust that swells, rises and thins away over about 10 s, sized by the cube root of the store's mass (decision 300) | `#FF9933` flash, smoke `#3D3833` before light |
 | Gun tracers: short additive streaks along the round's flight, brighter at the head, at least about two pixels wide at any range, one round in five (decision 295) | `#FF9E38` to `#FFB347` |
+| Gunship impacts (decision 302; to be restyled with proposal 0011's effects): the 105 mm a large dirt and fire burst with a shockwave ring, debris and a scorch mark, and a camera kick in the gunner view; the 40 mm compact bursts in clusters of four; the 20 mm and 7.62 mm rapid sparkle and dust strikes stitching across the ground. Each weapon must be recognizable at a glance from the gunner view and the chase view | the bombs' flash and smoke, scaled per weapon |
+| Gunship tracers and muzzle flashes: bright dashes, at night cones of fire visible from the chase view and from far away; flashes along the gunship's left side | the gun tracers' colors |
 | Runway and deck lights | `#FFD27A` |
 | Navigation lights | `#FF3B30` (red), `#34C759` (green), `#FFFFFF` (white) |
 
@@ -347,7 +349,7 @@ Multifunction displays docked at the screen edges and a status strip carry what 
 | Status strip | Bottom center, below the aircraft | Strip | Discrete states |
 
 - **Fixed.** Each slot has one position and one set of bindings in every aircraft and helicopter. An aircraft may leave a slot empty, never move it, and an empty slot leaves the screen clearer. No free-floating windows.
-- **Central area.** The middle 60% of the width, above the strip, belongs to the aircraft and the HUD. Slots never enter it: on narrow screens they shrink to the side bands. A UI scale setting (0.75–1.5) resizes all slots together, until they meet the central column (at about 1.16 on 16:9). The rects come from `src/ui/displays/layout.ts` (decision 195).
+- **Central area.** The middle 60% of the width, above the strip, belongs to the aircraft and the HUD (at the gunner station, to the sensor image and its overlays; *Sensor Images*). Slots never enter it: on narrow screens they shrink to the side bands. A UI scale setting (0.75–1.5) resizes all slots together, until they meet the central column (at about 1.16 on 16:9). The rects come from `src/ui/displays/layout.ts` (decision 195).
 - **States.** Expanded, collapsed to a small labeled tab at its edge, or hidden. At most two large and two small displays are expanded at once.
 - **Calm.** Fades and expansions take about 300 ms and grow from the screen edge; nothing flashes or slides through the central area. An alert that brings a format forward highlights the bezel in amber instead.
 
@@ -384,6 +386,19 @@ Both skins use the monospaced type of *User Interface*.
 ### Sensor Images
 
 The targeting pod and the hook camera show grayscale thermal (white-hot or black-hot) or TV imagery, slightly noisy and low in resolution, with symbology in the skin's phosphor color.
+
+One sensor render mode draws them, the helicopter gunner sights and the gunship's gunner station (decision 302, proposal 0012):
+
+| Mode | Look |
+|---|---|
+| Infrared, white-hot | Grayscale thermal image, hot objects white |
+| Infrared, black-hot | The same, inverted |
+| Low-light TV | Monochrome, usable at dusk and by moonlight |
+| Color TV | The scene in color through the zoomed camera, slightly desaturated, with scanlines; a deliberate anachronism for daylight |
+
+- **Heat.** Each material carries a heat value in its model spec or terrain class: running engines and exhausts hot, fires and impacts very hot, people and animals warm, buildings and roads warm after sunset, terrain and vegetation cool, water cool. Values shift with time of day and weather.
+- **Treatment.** A modest resolution, bloom on hot spots, sensor noise and scanlines. Fireballs bloom white; smoke starts warm and cools to gray, and obscures the TV modes more than infrared.
+- **The gunner station** fills the screen with the sensor image; its reticle with the weapon's aim point, compass and north arrow, orbit status, weapon state, friendly strobes, talk-on markers and target labels take the HUD's place in the skin's phosphor color, and the five slots stay where they are. It is the one full-screen picture that is not the chase view, and it is still no cockpit.
 
 ### Status Strip
 
@@ -440,8 +455,10 @@ Before a visual milestone with simulation-view work closes, capture these views 
 14. The moving map's relative elevation mode in a scripted low-level run through a valley: terrain above the aircraft red and hatched, terrain within 500 ft below amber, both matching the ridges seen in the chase view.
 15. Zones: two adjacent zones from 2 km and 10 km, one across a barrier and one across a blend; each recognizable at a glance, the boundary at the barrier or soft over 1–2.5 km, never a seam (decisions 204, 205).
 16. Landmarks: an alpine range with glacial valleys, a basin-and-range desert with a salt flat, a moorland, a jungle river, a karst bay at 300 m with props within budget, and one natural wonder (decision 204).
+17. Sensor images: each of the four sensor modes over a convoy, a fire and people by night and by day; engines, fires and people read correctly in infrared, and smoke hides more in TV than in infrared (decision 302).
+18. Gunship fire: the 105 mm, 40 mm and 20 mm impacts and the tracers, each distinguishable from the gunner view and the chase view, and the gunner view within the frame budget during sustained fire (decision 302).
 
-Checks 1–5 are the views `mixed`, `conifer`, `range`, `dusk` and `beach` in `tools/render.preview.ts` (`VIEWS=checks`), aimed at places the preview finds in each world (decision 128); check 6 runs in the model viewer. Check 11 is the views `hover` and `skid` in `tools/render.preview.ts` and a Free Flight hover, from G1 on. Checks 7–10 are scripted flight sequences in `tools/render.preview.ts` and apply from milestone V4 (camera rig and flight path marker); for a followed campaign flight, checks 7 and 10 run in the `follow` part of `tools/browser.smoke.mjs` (decision 252); check 9 needs the flight model (P1), and the gun pipper part of check 8 needs guns (P4). Checks 12–14 apply from P2 (14 from P3): 12 and 13 as composites in `tools/hud/` and browser shots, 14 as a scripted Free Flight sequence. Checks 15 and 16 apply from W6 and W7 as `tools/render.preview.ts` views and spots (`zones`, `alpine`, `basin`, `moor`, `jungle`, `karst`, `wonder`).
+Checks 1–5 are the views `mixed`, `conifer`, `range`, `dusk` and `beach` in `tools/render.preview.ts` (`VIEWS=checks`), aimed at places the preview finds in each world (decision 128); check 6 runs in the model viewer. Check 11 is the views `hover` and `skid` in `tools/render.preview.ts` and a Free Flight hover, from G1 on. Checks 7–10 are scripted flight sequences in `tools/render.preview.ts` and apply from milestone V4 (camera rig and flight path marker); for a followed campaign flight, checks 7 and 10 run in the `follow` part of `tools/browser.smoke.mjs` (decision 252); check 9 needs the flight model (P1), and the gun pipper part of check 8 needs guns (P4). Checks 12–14 apply from P2 (14 from P3): 12 and 13 as composites in `tools/hud/` and browser shots, 14 as a scripted Free Flight sequence. Checks 15 and 16 apply from W6 and W7 as `tools/render.preview.ts` views and spots (`zones`, `alpine`, `basin`, `moor`, `jungle`, `karst`, `wonder`). Check 17 applies from R3.2's sensor render mode and check 18 from R4.10, the gunship.
 
 # Part II: Strategic View
 

@@ -336,11 +336,11 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 ## R3. Combat depth
 
 - [ ] R3.1 Intelligence (large)
-- [ ] R3.2 Sensors and displays in full (large)
-- [ ] R3.3 Weapons in full (large)
+- [ ] R3.2 Sensors and displays in full (large); with the sensor render mode for the pod, gunner sights and the gunner station (decision 302)
+- [ ] R3.3 Weapons in full (large); shells with time of flight, dispersion and fuzes, ready for the gunship's guns (decision 302)
 - [ ] R3.4 Air combat (medium)
 - [ ] R3.5 Air defense networks and scrambles (large)
-- [ ] R3.6 Ground entities and terrain in the sim (large)
+- [ ] R3.6 Ground entities and terrain in the sim (large); infantry in treelines and buildings, vehicles that scatter and hide, night convoys, return fire, infrared strobes, talk-on requests (decision 302)
 
 ## R4. Breadth
 
@@ -351,6 +351,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] R4.5 Crews (large)
 - [ ] R4.6 Naval war (large); with amphibious and airborne seizure of an airfield and a squadron staged onto it, the Iceland operation of *Red Storm Rising* (decision 254)
 - [ ] R4.7 Power lines (small)
+- [ ] R4.10 Gunship (large): the AC-31 Warden, its orbit, guns, gunner station, four missions and rules of engagement (proposal 0012, decision 302)
 
 ## R5. Dynamic campaign
 

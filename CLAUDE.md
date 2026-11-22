@@ -51,8 +51,8 @@ docs/proposals/     owner proposals (do not reformat); 0001-two-views.md (decisi
                     (decision 148), 0004-helicopter-flight.md (decision 149),
                     0005-terrain-adaptive-networks.md (decision 161), 0006-displays-and-crew.md
                     (decision 189), 0007-world-diversity.md (decision 204),
-                    0008-game-loop-and-campaign.md (decision 228) and 0009-settlements-and-cities.md
-                    (decisions 259–270) are accepted
+                    0008-game-loop-and-campaign.md (decision 228), 0009-settlements-and-cities.md
+                    (decisions 259–270) and 0012-gunship-and-sensor-stations.md (decision 302) are accepted
 docs/roadmap.md     phases R0–R6 with milestones, dependencies and exit criteria: what to build next
 docs/status/        audits: audit-2026-11-18.md (status matrix, health, decisions for the owner) and
                     todo-2026-11-18.md (the earlier tracks' TODO, archived)

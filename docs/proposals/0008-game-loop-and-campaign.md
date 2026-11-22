@@ -2,6 +2,8 @@
 
 *Drafted 2026-11-18. Status: accepted. Affects `docs/design.md`, `TODO.md`, `CLAUDE.md`, and all earlier proposals' roadmap sections, which this proposal and `docs/roadmap.md` supersede.*
 
+*Proposal 0012 (decision 302) adds the AC-31 gunship and its four missions to the breadth phase (R4.10), the Mi-24 analogue's convoy escort and armed reconnaissance, and a side's standing as ceasefire pressure.*
+
 ## Purpose
 
 The flight model works and the terrain is in good shape. Bearing now moves from a world and a flyable aircraft to a game: a war that plans, fights, and resolves itself, with the player jumping into any part of it. This proposal defines the game loop, the architecture for mission and aircraft types, the campaign, and the decisions that shape the roadmap. The first goal is a tech demo of one day of war; the project then continues to the full dynamic campaign.
