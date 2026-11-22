@@ -58,6 +58,8 @@ import type { HudFrame } from '../ui/flight/hud';
 import { buildHudFrame, ccipHud, gunHud, landingAid, seekerHud } from '../ui/flight/hudFrame';
 import { Explosions } from '../render/sim/aircraft/explosions';
 import { Wrecks } from '../render/sim/aircraft/wrecks';
+import { isPending } from '../sim/command/missions/plugin';
+import type { PhaseInterface } from '../sim/command/missions/plugin';
 import { campaignDatalink, campaignTargets } from './campaignSensors';
 import type { DefendedSite } from './campaignSensors';
 import { acmAcquire, SensorModel } from '../sim/sensors/sensors';
@@ -1473,6 +1475,32 @@ export class Follow {
     } else this.threatsHeard = new Map();
   }
 
+  /**
+   * The HUD's marks for the phase's cues (decision 304): the target where it is drawn (a
+   * bridge at its aim point) and the station, as diamonds with their range.
+   */
+  private hudMarks(m: Mission, ui: PhaseInterface, p: FollowedState): HudFrame['marks'] {
+    const want = ui.hud.includes('target')
+      ? 'target'
+      : ui.hud.includes('station')
+        ? 'station'
+        : null;
+    if (!want) return null;
+    const k = m.target.kind;
+    const aim = k === 'site' ? this.targetInfo?.aim(m.target.id) : null;
+    const d = new Vec3d(...(aim ?? m.target.point)).normalize();
+    const h = this.airfield ? this.airfield.height(d) : 0;
+    const at = d.scale(this.deps.radius + Math.max(0, h));
+    const eye = this.deps.globe.chase.eye;
+    const range = at.distanceTo(new Vec3d(...p.pos)) / 1852;
+    return [
+      {
+        point: [at.x - eye.x, at.y - eye.y, at.z - eye.z],
+        label: `${want === 'target' ? 'TGT' : 'STN'} ${range < 10 ? range.toFixed(1) : Math.round(range)}`,
+      },
+    ];
+  }
+
   /** The radar lock's contact where it is now (carried along its velocity), or null. */
   private lockedContact(t: number): { pos: Vec3d; range?: number } | null {
     const lock = this.displays.avionics.radar.lock;
@@ -1501,6 +1529,13 @@ export class Follow {
     this.updateSensors(m, p, t);
     // The locked contact's box on the HUD, carried along between scans (decision 303).
     frame.target ??= this.hudTarget(p, t);
+    // The phase's interface defaults: master mode, formats, weapons, cues (decision 304).
+    const ui = phaseInterface(m, t);
+    this.displays.setPhase(ui);
+    if (ui) {
+      if (!showsLandingAid(ui, this.displays.avionics.masterMode)) frame.aid = null;
+      frame.marks = this.hudMarks(m, ui, p);
+    }
     const helicopter = this.look?.rig?.kind === 'helicopter';
     const changed = this.displays.triggers({
       onGround: p.onGround,
@@ -1630,6 +1665,28 @@ interface FollowedState {
 }
 
 const arr3 = (v: Readonly<Vec3d>): [number, number, number] => [v.x, v.y, v.z];
+
+/** The interface defaults of mission m's phase at t (its plug-in's; decision 304), or null. */
+export function phaseInterface(m: Mission, t: number): PhaseInterface | null {
+  const ui = missionPlugin(m.type).interface;
+  if (isPending(ui)) return null;
+  const phase = missionPhase(m, t);
+  return phase === 'planned' ? null : (ui[phase] ?? null);
+}
+
+/**
+ * Whether the HUD shows the landing aid in a phase (decision 304): on the ground, on the
+ * approach, with the glide path cue, or while the triggers put the jet in approach mode.
+ */
+export function showsLandingAid(ui: PhaseInterface, mode: string): boolean {
+  return (
+    ui.masterMode === 'ground' ||
+    ui.masterMode === 'approach' ||
+    ui.hud.includes('glidepath') ||
+    mode === 'approach' ||
+    mode === 'ground'
+  );
+}
 
 /** The displays' view of a flown airframe (as Free Flight's). */
 function airframeState(m: FlightModel): FollowedState {

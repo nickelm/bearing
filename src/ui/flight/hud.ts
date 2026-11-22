@@ -184,6 +184,11 @@ export interface HudFrame {
    */
   gun?: { point: [number, number, number]; rounds: number; armed: boolean } | null;
   /**
+   * World-anchored marks the phase's cues ask for (decision 304): the target or the
+   * station, relative to the camera (m), as diamonds with a label.
+   */
+  marks?: { point: [number, number, number]; label: string }[] | null;
+  /**
    * The continuously computed impact point (decision 300), while a bomb or a rocket pod is
    * selected: where it reaches the ground if released now (relative to the camera; null
    * beyond a minute's fall), the seconds to impact, and the weapon with its count.
@@ -414,6 +419,7 @@ export class Hud {
     if (f.gun) this.pipper(f.gun, project, s);
     if (f.seeker) this.seekerCircle(f.seeker, project, s);
     if (f.ccip) this.ccipPipper(f, f.ccip, project, s);
+    for (const k of f.marks ?? []) this.diamond(k, project, s);
     if (f.control) drawControlCursor(c, f.control, project, W, H, s);
   }
 
@@ -491,6 +497,27 @@ export class Hud {
       'center',
       g.rounds > 0 ? HUD_COLOR : WARN_COLOR,
     );
+  }
+
+  /** A target or station mark (decision 304): a diamond with its label beside it. */
+  private diamond(
+    k: { point: [number, number, number]; label: string },
+    project: Projector,
+    s: number,
+  ): void {
+    const p = project(k.point[0], k.point[1], k.point[2], true);
+    if (!p) return;
+    const c = this.ctx;
+    const r = 8 * s;
+    this.stroke(() => {
+      c.beginPath();
+      c.moveTo(p.x, p.y - r);
+      c.lineTo(p.x + r, p.y);
+      c.lineTo(p.x, p.y + r);
+      c.lineTo(p.x - r, p.y);
+      c.closePath();
+    });
+    this.text(k.label, p.x + r + 6 * s, p.y, 'left');
   }
 
   /**

@@ -190,6 +190,11 @@ export interface ModeInputs {
   radarAltitude: number;
   groundSpeed: number;
   helicopter: boolean;
+  /**
+   * The mode the mission's phase asks for in the air (its plug-in's interface defaults,
+   * decision 304): the triggers fall back to it instead of navigation. Ground never counts.
+   */
+  cruise?: MasterMode;
 }
 
 /** The approach trigger's height, and the margin before it lets go. */
@@ -210,7 +215,7 @@ export function triggeredMode(current: MasterMode, i: ModeInputs): MasterMode {
     const limit = current === 'approach' ? APPROACH_EXIT : APPROACH_HEIGHT;
     if (i.radarAltitude < limit) return 'approach';
   }
-  return 'navigation';
+  return i.cruise && i.cruise !== 'ground' ? i.cruise : 'navigation';
 }
 
 /** Applies the triggers unless the player chose a mode; ground always wins. */

@@ -277,7 +277,8 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] Sensors read campaign contacts: aggregate flights as radar targets, sites with radars as emitters (`follow/campaignSensors.ts`: flights at their leads, the other side's radars and defended places as emitters, the datalink from an airborne AEW; the radar lock gives the pipper its range and slaves the seeker; decision 303)
 - [ ] Each aircraft of a flight as its own contact and target near the aircraft (formation slots), merging into one at range
 - [ ] Surface-to-air sites as entities (R3.5) in place of the defended places' stand-in radars; their launches
-- [ ] Interface defaults per mission type and phase: master mode, formats, HUD cues, declutter
+- [x] Interface defaults per mission type and phase: master mode, formats, HUD cues, declutter (the triggers' cruise mode, formats between edits and presets, weapon pre-selection, target and station diamonds, the landing aid on the ground and the approach only; decision 304)
+- [ ] The 'steering' cue with the route and waypoints (next task); the helicopters' 'landing-zone' cue (R2.9)
 - [ ] Route and waypoints on the moving map; HUD steering to the next waypoint; the front on the map
 - [ ] Direct control in cursor mode: an attitude and altitude hold as an assist (design §Cursor mode)
 - [ ] LOW FUEL in the status strip

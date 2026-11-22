@@ -4860,3 +4860,17 @@ Decision 256's AI checks had run gear down, and the gear's drag had been slowing
 **How it was checked.** `tests/campaignSensors.test.ts` on seed 7's campaign three hours in: every airborne flight in reach is a target at its lead, the own flight left out, emitters exactly on the other side's radar-carrying types; the other side's defended place tracks within 25 km and the own side's is left out; the datalink exists exactly while an own AEW flies and carries only the other side; a flight 20 km ahead becomes a radar contact under its `m<id>`. `tests/flightCap.test.ts` with the threat warning. The update costs about 0.15 ms on seed 4. The unit suite, the type check and lint pass.
 
 **Reason:** roadmap R2.6, *Sensors read campaign contacts*, and the TODOs it closes: the spectator's empty radar and threat formats (R2.4) and the flight cap's threats (R2.5).
+
+### 304. The mission phases' interface defaults applied: the cruise mode, formats, weapons, cues, declutter
+
+**Date:** 2026-11-22
+**Decision:** The `interface` part of a mission plug-in (rule 16; master mode, formats and HUD cues per phase, decision 249) now drives the followed or flown aircraft's displays and HUD, through the display system (`DisplaySystem.setPhase`, set by the follow every frame from the mission's phase).
+
+- **Master mode.** In the air the triggers fall back to the phase's mode instead of navigation (`ModeInputs.cruise`): a CAP is in air-to-air from the fence-in, an interdiction in air-to-ground over the target. Ground, the approach (gear down below 3,000 ft) and the hover still win, a phase's `ground` never counts in the air, and a mode or a weapon the player chose stays (`manual`).
+- **Formats.** In the phase's master mode its formats come after the player's edits of the mode's preset (decision 200) and before the preset's own (`applyPreset`'s `prefer`), expanded; a new phase applies them at once.
+- **Cues.** `aa-reticle` pre-selects the first air-to-air missile left (else the gun) in air-to-air, `ccip` the first bomb or rocket pod left in air-to-ground (`preselectWeapon`), unless the player chose a weapon or a mode, or one of the mode's weapons is selected. `target` and `station` draw a diamond on the HUD with its range: the target where it is drawn (a bridge at its aim point), the station's center on the ground. `steering` waits for the route task; the helicopters' `landing-zone` for R2.9.
+- **Declutter.** The landing aid shows on the ground, on the approach, with the `glidepath` cue, or while the triggers have the jet in approach or ground mode; elsewhere a mission's HUD leaves it off. Free Flight, which has no mission, is unchanged.
+
+**How it was checked.** `tests/phaseInterface.test.ts`: the triggers fall back to the phase's mode and still go to ground and approach; a phase's formats win over the preset and lose to the player's edit; the cues pre-select a missile on station, a bomb over the target, the gun once the missiles are gone, and nothing without the cue or after the player's choice; a CAP's station phase is air-to-air with the station cue and no landing aid, its approach shows it. The unit suite, the type check and lint pass. The owner checks it in a take-over on the GPU.
+
+**Reason:** roadmap R2.6, *Interface defaults per mission type and phase*.

@@ -13,12 +13,13 @@
  * caution. The flight inputs' tables do not use these keys (a test checks).
  */
 import { applyCommand, autoMode, initialAvionics } from '../../sim/avionics/avionics';
+import type { PhaseInterface } from '../../sim/command/missions/plugin';
 import type { AvionicsState, MasterMode, ModeInputs } from '../../sim/avionics/avionics';
-import type { SlotId } from '../../sim/avionics/profiles';
+import type { FormatId, SlotId } from '../../sim/avionics/profiles';
 import { DisplaysView } from './draw/displaysView';
 import { displayModel, lockCandidate } from './formats';
 import type { ControlsAction, DisplayCommand, DisplayModel, DisplayState } from './model';
-import { applyPreset, applyUi, initialDisplayState, recordEdit } from './presets';
+import { applyPreset, applyUi, initialDisplayState, preselectWeapon, recordEdit } from './presets';
 import type { PresetEdits } from './presets';
 import type { AircraftSnapshot } from './snapshot';
 import { cautionIds, stripModel } from './strip';
@@ -44,6 +45,8 @@ export class DisplaySystem {
   display: DisplayState | null = null;
   /** Commands for the flight controls (gear, brakes, hover hold, the mouse). */
   onControls: ((a: ControlsAction) => void) | null = null;
+  /** The mission phase's interface defaults (decision 304), or null. */
+  private phase: PhaseInterface | null = null;
   /** Keys act only while flying. */
   enabled = false;
   /**
@@ -100,18 +103,43 @@ export class DisplaySystem {
   /** Advances the master mode's triggers; returns whether the mode changed. */
   triggers(i: ModeInputs): boolean {
     const before = this.avionics.masterMode;
-    this.avionics = autoMode(this.avionics, i);
+    this.avionics = autoMode(this.avionics, { ...i, cruise: i.cruise ?? this.phase?.masterMode });
     return before !== this.avionics.masterMode;
+  }
+
+  /**
+   * The mission phase's interface defaults (decision 304), or null outside a mission: its
+   * master mode is the triggers' cruise mode, its formats come before the mode's preset,
+   * and its cues pre-select a weapon. A new phase applies its formats at once.
+   */
+  setPhase(p: PhaseInterface | null): void {
+    if (p === this.phase) return;
+    this.phase = p;
+    if (this.display && this.last)
+      this.display = applyPreset(
+        this.display,
+        { ...this.last, avionics: this.avionics },
+        this.edits,
+        this.prefer(),
+      );
+  }
+
+  /** The phase's formats, while the master mode is the one it asks for. */
+  private prefer(): Partial<Record<SlotId, FormatId[]>> {
+    const p = this.phase;
+    return p && p.masterMode === this.avionics.masterMode ? p.formats : {};
   }
 
   /** Builds the models from `snap` (whose `avionics` is replaced by this system's) and draws them. */
   update(snap: AircraftSnapshot, width?: number, height?: number): void {
+    this.avionics = preselectWeapon(this.avionics, snap.stores ?? null, this.phase?.hud ?? []);
     const s = { ...snap, avionics: this.avionics };
-    if (!this.display) this.display = initialDisplayState(s, this.edits);
+    if (!this.display)
+      this.display = applyPreset(initialDisplayState(s, this.edits), s, this.edits, this.prefer());
     if (this.display.uiScale !== this.uiScale)
       this.display = { ...this.display, uiScale: this.uiScale };
     else if (this.last && this.last.avionics.masterMode !== s.avionics.masterMode)
-      this.display = applyPreset(this.display, s, this.edits);
+      this.display = applyPreset(this.display, s, this.edits, this.prefer());
     this.last = s;
     const models: Partial<Record<SlotId, DisplayModel | null>> = {};
     for (const id of ['leftMfd', 'rightMfd', 'messages', 'threat'] as const)
@@ -132,7 +160,7 @@ export class DisplaySystem {
       this.avionics = applyCommand(this.avionics, c.command);
       if (this.last && this.display && before !== this.avionics.masterMode) {
         this.last = { ...this.last, avionics: this.avionics };
-        let d = applyPreset(this.display, this.last, this.edits);
+        let d = applyPreset(this.display, this.last, this.edits, this.prefer());
         // A weapon chosen on the stores format brings its master mode, but the format it
         // was chosen on stays where it is (owner, decision 298).
         if (c.command.type === 'select-weapon' && shown) {

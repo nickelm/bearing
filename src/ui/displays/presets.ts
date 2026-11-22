@@ -6,11 +6,13 @@
  * Pinned slots keep their format and state. Slots never move: a preset changes
  * only a slot's format and state.
  */
-import type { MasterMode } from '../../sim/avionics/avionics';
+import type { AvionicsState, MasterMode } from '../../sim/avionics/avionics';
+import { GUN } from '../../sim/air/stores';
+import type { HudCue } from '../../sim/command/missions/plugin';
 import type { FormatId, SlotId } from '../../sim/avionics/profiles';
 import { MAP_RANGES_NM, slotFormats } from './formats';
 import type { DisplayState, SlotDisplayState } from './model';
-import type { AircraftSnapshot } from './snapshot';
+import type { AircraftSnapshot, SnapshotStores } from './snapshot';
 
 type Want = { formats: FormatId[]; expanded: boolean };
 
@@ -81,8 +83,17 @@ export function applyPreset(
   d: DisplayState,
   s: AircraftSnapshot,
   edits: PresetEdits = {},
+  /**
+   * Formats the mission's phase prefers in this master mode (its plug-in's interface
+   * defaults, decision 304): between the player's edits and the mode's preset.
+   */
+  prefer: Partial<Record<SlotId, FormatId[]>> = {},
 ): DisplayState {
-  const preset = PRESETS[s.avionics.masterMode];
+  const base = PRESETS[s.avionics.masterMode];
+  const preset: Partial<Record<SlotId, Want>> = { ...base };
+  for (const [slot, formats] of Object.entries(prefer) as [SlotId, FormatId[]][])
+    if (formats.length)
+      preset[slot] = { formats: [...formats, ...(base[slot]?.formats ?? [])], expanded: true };
   const mine = edits[s.avionics.masterMode] ?? {};
   const slots = { ...d.slots };
   for (const id of SLOTS) {
@@ -173,4 +184,30 @@ export function applyUi(
     }
   }
   return { ...d, slots };
+}
+
+/**
+ * The weapon a phase's cues pre-select (decision 304): in air-to-air with the reticle cue
+ * the first air-to-air missile left (else the gun), in air-to-ground with the CCIP cue the
+ * first bomb or rocket pod left; nothing while the player chose the mode or a weapon
+ * (`manual`), or when one of the mode's weapons is already selected.
+ */
+export function preselectWeapon(
+  av: AvionicsState,
+  stores: SnapshotStores | null,
+  cues: readonly HudCue[],
+): AvionicsState {
+  if (av.manual || !stores) return av;
+  const want =
+    av.masterMode === 'air-to-air' && cues.includes('aa-reticle')
+      ? 'air-to-air'
+      : av.masterMode === 'air-to-ground' && cues.includes('ccip')
+        ? 'air-to-ground'
+        : null;
+  if (!want) return av;
+  const current = stores.weapons.find((w) => w.id === av.weapon);
+  if (current && current.mode === want) return av;
+  const left = stores.weapons.filter((w) => w.mode === want && w.count > 0);
+  const pick = left.find((w) => w.id !== GUN) ?? left[0];
+  return pick ? { ...av, weapon: pick.id } : av;
 }
