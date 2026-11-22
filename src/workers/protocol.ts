@@ -152,6 +152,11 @@ export interface SnapshotMessage {
   missions?: Mission[];
   /** The ground war's front lines and units (R2.3), sent when they change (hourly) and after init or seek. */
   ground?: GroundPicture;
+  /**
+   * Damage to target sites (id, 0..1) and road edges (edge, 0..1), sent when it changes and
+   * after init or seek (decision 301): the map marks damaged and destroyed targets.
+   */
+  damage?: { sites: [number, number][]; roads: [number, number][] };
 }
 
 export interface SimErrorMessage {

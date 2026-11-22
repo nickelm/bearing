@@ -36,6 +36,8 @@ let sentHours = new Set<number>();
 /** Air revision last sent (missions go out when it changes). */
 let sentAirRevision = -1;
 let sentGroundRevision = -1;
+/** The damage state's revision last sent (decision 301). */
+let sentDamageRevision = -1;
 let timer: ReturnType<typeof setTimeout> | null = null;
 
 function init(msg: InitMessage): void {
@@ -62,6 +64,7 @@ function init(msg: InitMessage): void {
   sentHours = new Set();
   sentAirRevision = -1;
   sentGroundRevision = -1;
+  sentDamageRevision = -1;
   lastSentTime = NaN;
   post([], false, true);
   lastReal = performance.now();
@@ -105,13 +108,15 @@ function post(
   const air = world.air;
   const airChanged = air !== null && (force || air.revision !== sentAirRevision);
   const groundMoved = world.ground !== null && world.ground.revision !== sentGroundRevision;
+  const damaged = world.damage !== null && world.damage.revision !== sentDamageRevision;
   if (
     !force &&
     weather.length === 0 &&
     flagged.length === 0 &&
     unchanged &&
     !airChanged &&
-    !groundMoved
+    !groundMoved &&
+    !damaged
   )
     return;
   sentHours = new Set(available);
@@ -128,6 +133,15 @@ function post(
   header[SnapshotField.AirborneAlliance] = air?.airborneAt('alliance', time) ?? 0;
   header[SnapshotField.AirbornePact] = air?.airborneAt('pact', time) ?? 0;
   const missions = airChanged ? air.liveMissions() : undefined;
+  const dmg = world.damage;
+  const damageChanged = dmg !== null && (force || dmg.revision !== sentDamageRevision);
+  const damage = damageChanged
+    ? {
+        sites: dmg.damaged().map((x) => [x.id, x.damage] as [number, number]),
+        roads: dmg.damagedRoads().map((x) => [x.edge, x.damage] as [number, number]),
+      }
+    : undefined;
+  if (damageChanged) sentDamageRevision = dmg.revision;
   const groundWar = world.ground;
   const groundChanged = groundWar !== null && (force || groundWar.revision !== sentGroundRevision);
   const ground = groundChanged ? groundWar.picture() : undefined;
@@ -146,6 +160,7 @@ function post(
       hash: force ? world.sim.hash() : undefined,
       missions,
       ground,
+      damage,
     },
     [header.buffer, ...weather.map((f) => f.data.buffer)],
   );
@@ -171,6 +186,7 @@ ctx.onmessage = (e) => {
           if (msg.time < host.time) sentHours = new Set();
           sentAirRevision = -1;
           sentGroundRevision = -1;
+          sentDamageRevision = -1;
           host.seek(msg.time);
           post([], false, true);
         } catch (err) {
@@ -222,6 +238,7 @@ ctx.onmessage = (e) => {
           sentHours = new Set();
           sentAirRevision = -1;
           sentGroundRevision = -1;
+          sentDamageRevision = -1;
           post([], false, true);
         } catch (err) {
           ctx.postMessage({ type: 'error', session, message: String(err) });

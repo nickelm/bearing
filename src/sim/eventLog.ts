@@ -37,6 +37,13 @@ export type CampaignInputEvent =
   /** The player takes over aircraft `slot` of a flight (R2.5): the mission is held. */
   | { kind: 'take-over'; mission: number; slot: number }
   /**
+   * Full fidelity destroyed an aircraft of flight `mission` (decision 301): where, by what
+   * (gun, missile, bomb, rocket), and the flight that shot it down, if any.
+   */
+  | { kind: 'shot-down'; mission: number; point: Dir; cause: string; by: number | null }
+  /** Full fidelity hit a target site or a road edge (decision 301): the hit's amount (0..1). */
+  | { kind: 'target-hit'; target: 'site' | 'road'; id: number; amount: number; by: number | null }
+  /**
    * The player hands a flight back (R2.5): where it is and what full fidelity lost.
    * The worker rebuilds its route from the fix and logs the losses (owner decision 1).
    */

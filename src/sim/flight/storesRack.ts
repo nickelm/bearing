@@ -28,7 +28,11 @@ import type { StoresState } from './promotion';
 import { GUN } from '../air/stores';
 import { Gun } from './gun';
 import { boresightOf, Missile, Seeker } from './missile';
+import { sourceAt } from './missile';
 import type { HeatSource } from './missile';
+import { AIRCRAFT_RADIUS, blast, groundDamage, ROUND_DAMAGE } from './damage';
+import type { GroundTargetKind } from './damage';
+import type { WarheadSpec } from '../air/stores';
 import { flyProjectile, launchProjectile } from './ordnance';
 import type { Impact, Projectile } from './ordnance';
 import type { GroundQuery } from './airframe';
@@ -101,6 +105,13 @@ export class StoresRack {
   /** Bombs and rockets falling or flying, and their impacts since the app last took them (decision 300). */
   readonly ordnance: Projectile[] = [];
   readonly impacts: Impact[] = [];
+  /**
+   * Ground targets the bombs and rockets can damage (decision 301), set by the app: the
+   * campaign's target sites and road edges near the flight, where they are drawn.
+   */
+  groundTargets: GroundTarget[] = [];
+  /** Hits since the app last took them (decision 301): on aircraft, or on ground targets. */
+  readonly hits: Hit[] = [];
   /** The trigger held for the selected rocket pods: they ripple while it is. */
   rocketTrigger = false;
   private rocketOwed = 0;
@@ -180,12 +191,34 @@ export class StoresRack {
    * the aircraft is off the ground and the gun is selected or the dogfight mode is up. The
    * rounds fired count as expended stores.
    */
-  stepGun(m: FlightModel, avionics: Readonly<AvionicsState>, dt: number): number {
+  stepGun(m: FlightModel, avionics: Readonly<AvionicsState>, dt: number, t = 0): number {
     const g = this.gun;
     if (!g) return 0;
     const armed = avionics.masterArm && !m.onGround && gunSelected(avionics);
     const n = g.step(m, this.spec.cg, dt, m.radius, armed);
     if (n > 0) this.state.expended[GUN] = (this.state.expended[GUN] ?? 0) + n;
+    // Rounds that passed within an aircraft's radius this step hit it (decision 301).
+    if (this.sources.length > 0) {
+      const at = new Vec3d();
+      for (let i = g.live.length - 1; i >= 0; i--) {
+        const r = g.live[i]!;
+        for (const s of this.sources) {
+          sourceAt(s, t + dt, at);
+          if (segmentDistance(r.pos, r.vel, dt, at) <= (s.radius ?? AIRCRAFT_RADIUS)) {
+            this.hits.push({
+              target: s.id,
+              air: true,
+              amount: ROUND_DAMAGE,
+              cause: 'gun',
+              at: r.pos.clone(),
+              time: t + dt,
+            });
+            g.live.splice(i, 1);
+            break;
+          }
+        }
+      }
+    }
     return n;
   }
 
@@ -303,7 +336,7 @@ export class StoresRack {
     t: number,
     ground: GroundQuery | null = null,
   ): void {
-    this.stepGun(m, avionics, dt);
+    this.stepGun(m, avionics, dt, t);
     this.stepRockets(m, avionics, dt);
     const groundAt = (d: Readonly<Vec3d>) => (ground ? ground.height(d) : 0);
     for (let i = this.ordnance.length - 1; i >= 0; i--) {
@@ -311,6 +344,8 @@ export class StoresRack {
       if (hit) {
         this.ordnance.splice(i, 1);
         this.impacts.push(hit);
+        const w = STORES[hit.store]?.warhead;
+        if (w) this.splash(w, hit.at, hit.time, hit.kind);
       } else if (this.ordnance[i]!.age > 120) this.ordnance.splice(i, 1);
     }
     for (let i = this.missiles.length - 1; i >= 0; i--) {
@@ -319,7 +354,33 @@ export class StoresRack {
       if (x.state !== 'flying') {
         this.missiles.splice(i, 1);
         this.finished.push(x);
+        const w = STORES[x.store]?.warhead;
+        if (x.burst && w) this.splash(w, x.burst.at, t + dt, 'missile');
       }
+    }
+  }
+
+  /**
+   * A warhead bursting at `at` (decision 301): its blast on every aircraft and ground target
+   * within its reach, as hits.
+   */
+  private splash(
+    w: Readonly<WarheadSpec>,
+    at: Readonly<Vec3d>,
+    t: number,
+    cause: Hit['cause'],
+  ): void {
+    const p = new Vec3d();
+    for (const s of this.sources) {
+      const d = Math.max(0, sourceAt(s, t, p).distanceTo(at) - (s.radius ?? AIRCRAFT_RADIUS));
+      const amount = blast(w, d);
+      if (amount > 0)
+        this.hits.push({ target: s.id, air: true, amount, cause, at: at.clone(), time: t });
+    }
+    for (const g of this.groundTargets) {
+      const amount = groundDamage(w, g.pos.distanceTo(at), g.kind);
+      if (amount > 0)
+        this.hits.push({ target: g.id, air: false, amount, cause, at: at.clone(), time: t });
     }
   }
 
@@ -359,4 +420,42 @@ export function rocketCounts(
   }
   for (const k of Object.keys(out)) out[k] = Math.max(0, out[k]! - (expended[rocketKey(k)] ?? 0));
   return out;
+}
+
+/** A ground target the bombs and rockets can damage (decision 301). */
+export interface GroundTarget {
+  /** `site:<id>` for a target site, `road:<edge>` for a road edge. */
+  id: string;
+  /** Where it is drawn (world, m). */
+  pos: Vec3d;
+  kind: GroundTargetKind;
+}
+
+/** A hit (decision 301): on an aircraft (damage 0..1 to add) or a ground target (a hit's amount). */
+export interface Hit {
+  target: string;
+  air: boolean;
+  amount: number;
+  cause: 'gun' | 'missile' | 'bomb' | 'rocket';
+  at: Vec3d;
+  time: number;
+}
+
+/** The least distance (m) from `p` to a round's path over the last dt, ending at `pos` with `vel`. */
+function segmentDistance(
+  pos: Readonly<Vec3d>,
+  vel: Readonly<Vec3d>,
+  dt: number,
+  p: Readonly<Vec3d>,
+): number {
+  // From a = pos − vel·dt to b = pos.
+  const ax = pos.x - vel.x * dt - p.x;
+  const ay = pos.y - vel.y * dt - p.y;
+  const az = pos.z - vel.z * dt - p.z;
+  const dx = vel.x * dt;
+  const dy = vel.y * dt;
+  const dz = vel.z * dt;
+  const l2 = dx * dx + dy * dy + dz * dz;
+  const k = l2 > 0 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy + az * dz) / l2)) : 0;
+  return Math.hypot(ax + dx * k, ay + dy * k, az + dz * k);
 }

@@ -147,6 +147,14 @@ export function applyInput(world: SimWorld, input: CampaignInputEvent): void {
       if (m) world.air!.hold(m, input.slot, world.sim);
       break;
     }
+    case 'shot-down': {
+      const m = world.air?.missions.get(input.mission);
+      if (m) world.resolution?.fullFidelityLoss(m, input.point, input.cause, input.by, world.sim);
+      break;
+    }
+    case 'target-hit':
+      world.resolution?.fullFidelityHit(input.target, input.id, input.amount, input.by);
+      break;
     case 'hand-back': {
       const m = world.air?.missions.get(input.mission);
       if (m) world.air!.release(m, input.fix, input.lost, world.sim, input.stores);

@@ -245,6 +245,31 @@ export class MissionResolution implements PhaseHook, Stateful {
     return this.air.missions.has(m.id);
   }
 
+  /**
+   * An aircraft of flight m destroyed at full fidelity (decision 301): lost as in the
+   * aggregate, with its crew's chances, and a kill for the flight that shot it down.
+   */
+  fullFidelityLoss(
+    m: Mission,
+    at: Readonly<Dir>,
+    cause: string,
+    by: number | null,
+    sim: Simulation,
+  ): void {
+    const shooter = by === null ? undefined : this.air.missions.get(by);
+    if (shooter) shooter.kills = (shooter.kills ?? 0) + 1;
+    this.lose(m, 1, at, cause, sim);
+  }
+
+  /** A target site or road edge hit at full fidelity (decision 301). */
+  fullFidelityHit(target: 'site' | 'road', id: number, amount: number, by: number | null): void {
+    if (!this.damage || !(amount > 0)) return;
+    if (target === 'site') this.damage.hit(id, amount);
+    else this.damage.hitRoad(id, amount);
+    const m = by === null ? undefined : this.air.missions.get(by);
+    if (m) this.stats[m.side].hits++;
+  }
+
   private lose(m: Mission, n: number, at: Readonly<Dir>, cause: string, sim: Simulation): void {
     if (n <= 0 || !this.alive(m)) return;
     this.air.lose(m, n, at, cause, sim);

@@ -80,6 +80,7 @@ import {
   alignmentCorridors,
   alignmentStats,
   matchBridges,
+  bridgeAimPoints,
 } from './worldgen/networks/alignments';
 import type { Alignments } from './worldgen/networks/alignments';
 import { AlignmentCancelled, buildAlignments } from './worldgen/networks/build';
@@ -364,6 +365,8 @@ async function main(): Promise<void> {
   sim.onWeather = showWeather;
   sim.onMissions = () => strategicView.setMissions(sim.missions);
   sim.onGround = () => strategicView.setGround(sim.ground);
+  // Damaged and destroyed targets on the map (decision 301).
+  sim.onDamage = () => strategicView.setDamage(sim.damage.sites);
 
   let grid = new CubeGrid(worldParams.resolution);
   const globe = new GlobeScene(renderer, { radius: DEFAULT_PLANET_PARAMS.radius, grid });
@@ -901,6 +904,27 @@ async function main(): Promise<void> {
         rail: strategic.graph.railways.bridges,
         spur: strategic.infrastructure.spurBridges,
       });
+      // Where bombs find the campaign's targets: bridges at their aim points (decision 301).
+      if (follow) {
+        const targets = strategic.infrastructure.targets;
+        const aims = alignments
+          ? bridgeAimPoints(alignments, {
+              road: strategic.graph.bridges,
+              rail: strategic.graph.railways.bridges,
+              spur: strategic.infrastructure.spurBridges,
+            })
+          : null;
+        follow.setTargetInfo({
+          aim: (id) => {
+            const b = targets[id]?.bridge;
+            const list = b && aims ? aims[b.list] : null;
+            if (!b || !list) return null;
+            const p = list.points;
+            return [p[b.index * 3]!, p[b.index * 3 + 1]!, p[b.index * 3 + 2]!];
+          },
+          kind: (id) => targets[id]?.kind ?? null,
+        });
+      }
       globe.terrainReady = true;
       // The first frames of a world load its tiles: the governor does not count them.
       governor.warmUp(performance.now());

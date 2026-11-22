@@ -59,6 +59,12 @@ export class SimClient {
   /** The ground war's front lines and units from the last update that carried them (R2.3). */
   ground: GroundPicture | null = null;
   onGround?: () => void;
+  /** Damage to target sites and road edges (decision 301), from the last update that carried it. */
+  damage: { sites: Map<number, number>; roads: Map<number, number> } = {
+    sites: new Map(),
+    roads: new Map(),
+  };
+  onDamage?: () => void;
   /** Called when the weather frames change. */
   onWeather: (() => void) | null = null;
   /** Called when the mission list changes. */
@@ -259,6 +265,10 @@ export class SimClient {
     if (msg.ground) {
       this.ground = msg.ground;
       this.onGround?.();
+    }
+    if (msg.damage) {
+      this.damage = { sites: new Map(msg.damage.sites), roads: new Map(msg.damage.roads) };
+      this.onDamage?.();
     }
   }
 }

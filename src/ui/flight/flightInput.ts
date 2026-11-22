@@ -37,6 +37,7 @@ export type FlightAction =
   | 'brakes'
   | 'parkingBrake'
   | 'fire'
+  | 'eject'
   | 'jettison'
   | 'mouseAim'
   | 'freeLook'
@@ -62,6 +63,7 @@ export const FLIGHT_BINDINGS: Record<FlightAction, string[]> = {
   brakes: ['Space'],
   parkingBrake: ['KeyP'],
   fire: ['Enter'],
+  eject: ['KeyX'],
   jettison: ['KeyJ'],
   mouseAim: ['KeyN'],
   freeLook: ['KeyC'],
@@ -88,6 +90,7 @@ export const ACTION_LABELS: Record<FlightAction, string> = {
   brakes: 'Wheel brakes (hold)',
   parkingBrake: 'Parking brake on / off',
   fire: 'Fire the gun (hold; or hold the left mouse button while the mouse flies), with master arm on',
+  eject: 'Eject (press twice within two seconds)',
   jettison: 'Jettison the drop tanks (a campaign aircraft that carries them)',
   mouseAim: 'Mouse aim (fly toward the ring) or direct (the mouse is the stick)',
   freeLook: 'Free look (hold; or hold the right mouse button); the view stays where you leave it',
@@ -106,6 +109,7 @@ const PRESS_ACTIONS = new Set<FlightAction>([
   'speedbrake',
   'parkingBrake',
   'jettison',
+  'eject',
   'mouseAim',
   'recenterView',
   'mouseCapture',

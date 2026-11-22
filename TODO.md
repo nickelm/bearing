@@ -266,7 +266,13 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] Unguided bombs with CCIP fall lines; rockets (`sim/flight/ordnance.ts`, the CCIP pipper, explosions, the F-21's CAS loadout, Free Flight's `loadout=`; decision 300)
 - [ ] Bomb release modes (pairs, ripple with spacing) and the delayed cue when the CCIP point is below the HUD (DTOS); craters and scorch decals at impacts
 - [ ] Rocket pods' mass falls as they fire (the pod's dry mass); rockets' warheads in hit resolution
-- [ ] Hit and kill resolution; minimal damage states; ejection from full fidelity
+- [x] Hit and kill resolution; minimal damage states; ejection from full fidelity (warheads, rounds and bursts on aircraft, bombs and rockets on target sites at their drawn aim points, `shot-down` and `target-hit` inputs, wrecks, the map's damage marks, ejection on X twice; decision 301)
+- [ ] Damaged aircraft smoke and turn home (enemy leads hit but not killed, the player's own once the AI fires; R3); damage to the player's aircraft from enemy fire (R3)
+- [ ] Heat sources and gun targets for every aircraft of an enemy flight, not its lead alone (formation slots)
+- [ ] The pilot's parachute after an ejection; Free Flight's ejection freezes the jet where it was
+- [ ] Bombs on targets other than the flight's own, on troops at the front (R2.8's vehicles) and on towns' sites (`CityLayer.setSiteDamage` from the campaign's damage)
+- [ ] The simulation view's bridges broken when cut
+- [ ] Owner's future weapons (2026-11-22): Mavericks (TV-guided air-to-ground missiles), splash damage tuned per target, explosions more spectacular, cluster bombs and fuel-air explosives, ripple and release-interval settings for rockets and bombs
 - [ ] Sensors read campaign contacts: aggregate flights as radar targets, sites with radars as emitters
 - [ ] Interface defaults per mission type and phase: master mode, formats, HUD cues, declutter
 - [ ] Route and waypoints on the moving map; HUD steering to the next waypoint; the front on the map

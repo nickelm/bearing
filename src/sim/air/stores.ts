@@ -31,6 +31,13 @@ export interface MissileSpec {
   life: number;
 }
 
+/** A warhead (decision 301): its explosive (kg), its lethal radius and its reach (m). */
+export interface WarheadSpec {
+  explosive: number;
+  lethal: number;
+  reach: number;
+}
+
 /** An unguided rocket of a pod (decision 300). */
 export interface RocketSpec {
   /** Rockets per pod. */
@@ -67,6 +74,20 @@ export interface StoreSpec {
   missile: MissileSpec | null;
   /** A rocket pod's rockets (decision 300), or null. */
   rocket: RocketSpec | null;
+  /** Its warhead (a pod's: each rocket's; decision 301), or null. */
+  warhead: WarheadSpec | null;
+}
+
+function parseWarhead(raw: unknown, what: string): WarheadSpec {
+  const o = raw as Record<string, unknown>;
+  const n = (k: string) => {
+    const v = o[k];
+    if (typeof v !== 'number' || !(v > 0)) throw new StoresError(`${what}.${k}: not > 0`);
+    return v;
+  };
+  const w = { explosive: n('explosive'), lethal: n('lethal'), reach: n('reach') };
+  if (w.reach <= w.lethal) throw new StoresError(`${what}.reach: not beyond the lethal radius`);
+  return w;
 }
 
 function parseRocket(raw: unknown, what: string): RocketSpec {
@@ -142,6 +163,7 @@ function parseCatalog(raw: unknown): Readonly<Record<string, StoreSpec>> {
       fuel: kind === 'tank' ? num('fuel') : 0,
       missile: s.missile === undefined ? null : parseMissile(s.missile, `stores.${id}.missile`),
       rocket: s.rocket === undefined ? null : parseRocket(s.rocket, `stores.${id}.rocket`),
+      warhead: s.warhead === undefined ? null : parseWarhead(s.warhead, `stores.${id}.warhead`),
     };
     if (spec.missile && spec.missile.propellant >= spec.mass)
       throw new StoresError(`stores.${id}.missile.motor.propellant: not below its mass`);

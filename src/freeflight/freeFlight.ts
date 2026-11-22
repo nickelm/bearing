@@ -107,6 +107,7 @@ import type { FreeFlightUrl } from './url';
 import { FlightWeather } from './flightWeather';
 import { buildHudFrame, ccipHud, gunHud, landingAid, seekerHud } from '../ui/flight/hudFrame';
 import { Explosions } from '../render/sim/aircraft/explosions';
+import { Wrecks } from '../render/sim/aircraft/wrecks';
 import { impactMass } from '../sim/flight/ordnance';
 import { gunSelected, rocketCounts } from '../sim/flight/storesRack';
 import { flyingOf, MissileViews } from '../render/sim/aircraft/missileViews';
@@ -210,6 +211,13 @@ export class FreeFlight {
   /** Missiles in flight and their smoke (decision 297), and the trigger last frame. */
   private missileViews: MissileViews | null = null;
   private explosions: Explosions | null = null;
+  /** Traffic shot down this sortie, damage done to the rest, and the falling wrecks (decision 301). */
+  private readonly downed = new Set<string>();
+  private readonly airDamage = new Map<string, number>();
+  private readonly wrecks = new Wrecks();
+  private wreckTime = 0;
+  /** When the eject key was first pressed (s): a second press within 2 s ejects. */
+  private ejectArmed = -Infinity;
   private triggerWas = false;
   /** The Kestrel's stores: its flight data's standard load (decision 289); null in a helicopter. */
   private rack: StoresRack | null = null;
@@ -412,9 +420,19 @@ export class FreeFlight {
       this.explosions ??= new Explosions(deps.globe.vehicles, deps.globe.lighting);
       for (const x of this.rack?.impacts.splice(0) ?? [])
         this.explosions.add(x.at, impactMass(x), x.time);
+      const explosions = this.explosions;
+      this.wrecks.update(
+        Math.max(0, this.gameTime - this.wreckTime),
+        this.deps.radius,
+        (d) => (ground ? ground.height(d) : 0),
+        (p) => explosions.add(p, 3000, this.gameTime),
+      );
+      this.wreckTime = this.gameTime;
       this.explosions.place(this.gameTime, eye);
       this.missileViews.place(
-        this.state !== 'menu' && !this.helo && this.rack ? flyingOf(this.rack) : [],
+        this.state !== 'menu' && !this.helo && this.rack
+          ? [...flyingOf(this.rack), ...this.wrecks.flying]
+          : [],
         this.gameTime,
         eye,
         deps.globe.sun,
@@ -954,6 +972,18 @@ export class FreeFlight {
       case 'parkingBrake':
         c.parkingBrake = !c.parkingBrake;
         break;
+      case 'eject': {
+        // X twice within 2 s (decision 301): the sortie ends as a crash the crew survives.
+        const now = performance.now() / 1000;
+        if (now - this.ejectArmed > 2) {
+          this.ejectArmed = now;
+          this.hud.message('Press X again to eject', 2);
+        } else if (this.model && !this.model.crashed && this.state === 'flying') {
+          this.ejectArmed = -Infinity;
+          this.model.crash('ejected; the crew is safe');
+        }
+        break;
+      }
       case 'mouseCapture':
         this.toggleCapture();
         break;
@@ -1270,10 +1300,25 @@ export class FreeFlight {
     // The IR missile (decision 297): the traffic as heat sources, the seeker slaved to a
     // radar lock, a launch on the trigger's press, the outcomes as messages.
     if (this.rack) {
-      this.rack.sources = (this.traffic?.aircraft ?? []).map((a) => {
-        const st = trafficState(a, this.gameTime, this.deps.radius);
-        return { id: a.id, pos: st.pos, vel: st.vel, time: this.gameTime };
-      });
+      this.rack.sources = (this.traffic?.aircraft ?? [])
+        .filter((a) => !this.downed.has(a.id))
+        .map((a) => {
+          const st = trafficState(a, this.gameTime, this.deps.radius);
+          return { id: a.id, pos: st.pos, vel: st.vel, time: this.gameTime };
+        });
+      // Hits on the traffic (decision 301): at full damage it is shot down and falls burning.
+      for (const h of this.rack.hits.splice(0)) {
+        if (!h.air || this.downed.has(h.target)) continue;
+        const total = (this.airDamage.get(h.target) ?? 0) + h.amount;
+        this.airDamage.set(h.target, total);
+        if (total < 1) continue;
+        this.downed.add(h.target);
+        const a = this.traffic?.aircraft.find((x) => x.id === h.target);
+        if (!a) continue;
+        const st = trafficState(a, h.time, this.deps.radius);
+        this.wrecks.add(a.model, st.pos, st.vel, this.downed.size);
+        this.hud.message('Splash', 4);
+      }
       this.rack.updateSeeker(m, av, this.gameTime, this.lockDirection(m));
       // Bombs one per press, rockets while held (decision 300).
       const kind = av.weapon ? STORES[av.weapon]?.kind : undefined;
@@ -1321,6 +1366,10 @@ export class FreeFlight {
     this.terrainSnap = null;
     this.terrainAt = -Infinity;
     const base = this.baseId !== null ? this.basePoints.get(this.baseId) : undefined;
+    // A new sortie: the traffic whole again (decision 301).
+    this.downed.clear();
+    this.airDamage.clear();
+    this.wrecks.clear();
     this.traffic =
       this.options.traffic && base
         ? buildTraffic(base, `base-${this.baseId}`, this.deps.radius)
@@ -1344,7 +1393,8 @@ export class FreeFlight {
   private poseTraffic(eye: Readonly<Vec3d>): void {
     const on = this.traffic !== null && this.state !== 'menu';
     for (const [id, v] of this.trafficViews) {
-      const a = on ? this.traffic!.aircraft.find((x) => x.id === id) : undefined;
+      const a =
+        on && !this.downed.has(id) ? this.traffic!.aircraft.find((x) => x.id === id) : undefined;
       v.group.visible = a !== undefined;
       v.shadowMesh.visible = false;
       if (!a) continue;
@@ -1388,7 +1438,9 @@ export class FreeFlight {
     const R = this.deps.radius;
     const own = { id: 'player', pos: m.pos };
     const targets: SensorTarget[] = this.traffic
-      ? trafficTargets(this.traffic, this.gameTime, R, (d) => ground.sensedHeight(d), own)
+      ? trafficTargets(this.traffic, this.gameTime, R, (d) => ground.sensedHeight(d), own).filter(
+          (t) => !this.downed.has(t.id),
+        )
       : [];
     const up = m.pos.clone().normalize();
     const sunUp = up.dot(this.deps.globe.sun);

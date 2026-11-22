@@ -32,6 +32,8 @@ export interface HeatSource {
   pos: Readonly<Vec3d>;
   vel: Readonly<Vec3d>;
   time: number;
+  /** How far from its point a round or a fuze reaches it (m; decision 301); a fighter's if absent. */
+  radius?: number;
 }
 
 /** Where source s is at time t, carried along its velocity. */

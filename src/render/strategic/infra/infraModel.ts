@@ -28,7 +28,11 @@ import type {
   RoadNetwork,
   StrategicGraph,
 } from '../../../worldgen/strategic/graph';
-import type { Infrastructure, TargetKind } from '../../../worldgen/strategic/infrastructure';
+import type {
+  Infrastructure,
+  TargetKind,
+  TargetSite,
+} from '../../../worldgen/strategic/infrastructure';
 import { builtUpRadius } from '../../../worldgen/strategic/urban';
 import { densify, FACTION_COLORS, siteBadge, SYMBOL_SHARE } from '../overlays/militaryModel';
 import type {
@@ -282,19 +286,24 @@ export function buildInfraOverlays(
   }
 
   // Bridges on roads and railways.
-  const bridgeMarks = (b: BridgeList, net: RoadNetwork, color: number) => {
+  const bridgeMarks = (b: BridgeList, net: RoadNetwork, color: number, list: string) => {
     const pts = smoothed(net);
     for (let i = 0; i < b.cells.length; i++) {
       const p: V = [b.points[i * 3]!, b.points[i * 3 + 1]!, b.points[i * 3 + 2]!];
       const road = b.road[i]!;
       if (road < 0) continue;
       const axis = tangentAt(pts[road]!, p);
-      marks.push({ ...symbol('bridge', p, color, BRIDGE_SIZE, REGION, axis), casing: 1.4 });
+      marks.push({
+        ...symbol('bridge', p, color, BRIDGE_SIZE, REGION, axis),
+        casing: 1.4,
+        // The campaign's damage recolors it (decision 301).
+        key: `bridge:${list}:${i}`,
+      });
     }
   };
-  bridgeMarks(graph.bridges, graph.roads, BRIDGE_COLOR);
-  if (infra) bridgeMarks(infra.spurBridges, infra.spurs, BRIDGE_COLOR);
-  bridgeMarks(graph.railways.bridges, graph.railways.lines, RAIL_COLOR);
+  bridgeMarks(graph.bridges, graph.roads, BRIDGE_COLOR, 'road');
+  if (infra) bridgeMarks(infra.spurBridges, infra.spurs, BRIDGE_COLOR, 'spur');
+  bridgeMarks(graph.railways.bridges, graph.railways.lines, RAIL_COLOR, 'rail');
 
   // Symbols at a town stand on its edge, spread round it (east first).
   const s = graph.settlements;
@@ -323,7 +332,10 @@ export function buildInfraOverlays(
       if (t.kind === 'bridge') continue;
       if (t.kind === 'rail-yard' && t.settlement >= 0) yardTargets.add(t.settlement);
       const point = edgeOf(t.settlement, t.point);
-      marks.push(site(TARGET_SHAPES[t.kind], point, FACTION_COLORS[t.side], SYMBOL_SIZE, REGION));
+      marks.push({
+        ...site(TARGET_SHAPES[t.kind], point, FACTION_COLORS[t.side], SYMBOL_SIZE, REGION),
+        key: `site:${t.id}`,
+      });
     }
   }
   const yards = graph.railways.yards;
@@ -345,4 +357,40 @@ export function buildInfraOverlays(
     }
   }
   return { lines, marks };
+}
+
+/** A damaged target's symbol (decision 301; Part II, Palette): amber, and red once destroyed or cut. */
+export const DAMAGED_COLOR = 0xd9922e;
+export const DESTROYED_COLOR = 0xb0302a;
+/** Damage from which a target is marked damaged, and destroyed (a bridge: cut, `BRIDGE_CUT`). */
+export const MARK_DAMAGED = 0.15;
+export const MARK_DESTROYED = 0.75;
+
+/**
+ * The infrastructure's marks with the campaign's damage on them (decision 301): each
+ * damaged target's symbol (a bridge's on its road or railway) in the damage colors.
+ */
+export function damagedInfra(
+  model: InfraOverlays,
+  targets: readonly TargetSite[],
+  damage: ReadonlyMap<number, number>,
+  bridgeCut: number,
+): InfraOverlays {
+  const color = new Map<string, number>();
+  for (const [id, d] of damage) {
+    const t = targets[id];
+    if (!t || d < MARK_DAMAGED) continue;
+    const key = t.bridge ? `bridge:${t.bridge.list}:${t.bridge.index}` : `site:${t.id}`;
+    const gone = d >= (t.bridge ? bridgeCut : MARK_DESTROYED);
+    color.set(key, gone ? DESTROYED_COLOR : DAMAGED_COLOR);
+  }
+  if (color.size === 0) return model;
+  return {
+    ...model,
+    marks: model.marks.map((m) => {
+      const c = m.key ? color.get(m.key) : undefined;
+      if (c === undefined) return m;
+      return m.badge ? { ...m, color: c, badge: { ...m.badge, rim: c } } : { ...m, color: c };
+    }),
+  };
 }

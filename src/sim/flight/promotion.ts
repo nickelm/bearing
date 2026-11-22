@@ -62,6 +62,8 @@ export interface PromotedAircraft {
   rack: StoresRack;
   /** Damage, 0 (none) .. 1 (destroyed); R2.6's damage states set it. */
   damage: number;
+  /** Why it was lost, when not a crash: `ejected` (decision 301). */
+  cause?: string;
 }
 
 /** The mission fields promotion reads. */
@@ -207,7 +209,7 @@ export function demoteFlight(
     const m = a.flown.airframe;
     if (m.crashed || a.damage >= 1) {
       const d = m.pos.clone().normalize();
-      lost.push({ slot: a.slot, point: [d.x, d.y, d.z], cause: m.crashed ?? 'damage' });
+      lost.push({ slot: a.slot, point: [d.x, d.y, d.z], cause: a.cause ?? m.crashed ?? 'damage' });
     } else alive.push(a);
   }
   const lead = alive[0];

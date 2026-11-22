@@ -58,7 +58,9 @@ import type { GroundLayer } from './overlays/groundModel';
 import type { GroundPicture } from '../../sim/ground/war';
 import type { MilitaryOverlays, OverlayLayer } from './overlays/militaryModel';
 import { Biome } from '../../worldgen/biomes';
-import { buildInfraOverlays, INFRA_LAYERS } from './infra/infraModel';
+import { buildInfraOverlays, damagedInfra, INFRA_LAYERS } from './infra/infraModel';
+import type { InfraOverlays } from './infra/infraModel';
+import { BRIDGE_CUT } from '../../sim/ground/damage';
 import type { InfraLayer } from './infra/infraModel';
 import { layoutCityGlyphs } from './infra/cityGlyphs';
 import { SETTLEMENT_GLYPHS } from './glyphLayout';
@@ -120,6 +122,9 @@ export class StrategicScene {
   /** The ground war's unit symbols (R2.3); its front line moves in `military`. */
   readonly groundLayer: MilitaryLayer<GroundLayer>;
   private groundPicture: GroundPicture | null = null;
+  /** The infrastructure overlays as built, and the campaign's damage on them (decision 301). */
+  private infraModel: InfraOverlays | null = null;
+  private siteDamage: ReadonlyMap<number, number> = new Map();
   private groundRevision = 0;
   private groundDrawn = '';
   /** What the air layer shows (decision 48: the side is a view). */
@@ -433,6 +438,22 @@ export class StrategicScene {
    * The ground war's picture from the worker (R2.3): the front lines move in the
    * military overlays and the unit symbols follow.
    */
+  /**
+   * The campaign's damage to target sites (id → 0..1; decision 301): the map's target and
+   * bridge symbols turn amber when damaged and red when destroyed or cut.
+   */
+  setDamage(sites: ReadonlyMap<number, number>): void {
+    this.siteDamage = sites;
+    const dry = this.dryHeight;
+    if (this.infraModel && dry) this.infraSites.setOverlays(this.withDamage(this.infraModel), dry);
+  }
+
+  private withDamage(infra: InfraOverlays): InfraOverlays {
+    const targets = this.strategicData?.infra?.targets;
+    if (!targets || this.siteDamage.size === 0) return infra;
+    return damagedInfra(infra, targets, this.siteDamage, BRIDGE_CUT);
+  }
+
   setGround(picture: GroundPicture | null): void {
     this.groundPicture = picture;
     this.groundRevision++;
@@ -653,8 +674,9 @@ export class StrategicScene {
         this.groundDrawn = '';
         this.military.setOverlays(military, dry);
         const infra = buildInfraOverlays(d.graph, d.infra);
+        this.infraModel = infra;
         this.infraLines.setOverlays(infra, dry);
-        this.infraSites.setOverlays(infra, dry);
+        this.infraSites.setOverlays(this.withDamage(infra), dry);
         this.labels.setLabels(
           buildLabels(d.graph, d.cast, heightAt, military, d.infra, this.zones),
         );

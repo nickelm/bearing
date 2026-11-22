@@ -32,6 +32,8 @@ export class DamageState implements Stateful {
   private readonly roads = new Map<number, number>();
   /** Attacks on troops at the front, in time order (R2.2; R2.3 applies them). */
   attacks: GroundAttack[] = [];
+  /** Counts changes to the sites' and roads' damage, for the main thread's copy (not state). */
+  revision = 0;
 
   constructor(private readonly targets: readonly TargetSite[]) {}
 
@@ -46,6 +48,7 @@ export class DamageState implements Stateful {
     const a = Math.min(1, Math.max(0, amount));
     const d = 1 - (1 - this.damage(id)) * (1 - a);
     if (d > 0) this.level.set(id, d);
+    if (a > 0) this.revision++;
     return d;
   }
 
@@ -59,6 +62,7 @@ export class DamageState implements Stateful {
     const a = Math.min(1, Math.max(0, amount));
     const d = 1 - (1 - this.roadDamage(e)) * (1 - a);
     if (d > 0) this.roads.set(e, d);
+    if (a > 0) this.revision++;
     return d;
   }
 

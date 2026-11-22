@@ -57,6 +57,11 @@ import { Hud, matrixProjector } from '../ui/flight/hud';
 import type { HudFrame } from '../ui/flight/hud';
 import { buildHudFrame, ccipHud, gunHud, landingAid, seekerHud } from '../ui/flight/hudFrame';
 import { Explosions } from '../render/sim/aircraft/explosions';
+import { Wrecks } from '../render/sim/aircraft/wrecks';
+import type { Dir } from '../core/greatCircle';
+import { GROUND_TARGETS } from '../sim/flight/damage';
+import type { GroundTarget, Hit } from '../sim/flight/storesRack';
+import { sourceAt } from '../sim/flight/missile';
 import { impactMass } from '../sim/flight/ordnance';
 import { gunSelected, rocketCounts } from '../sim/flight/storesRack';
 import type { HeatSource } from '../sim/flight/missile';
@@ -95,6 +100,17 @@ import { Tracers } from '../render/sim/aircraft/tracers';
 import { STORES } from '../sim/air/stores';
 import type { StationLoad } from '../sim/air/stores';
 import { drawnType, flightStores, loadedOf, spinningRotors } from './campaignTraffic';
+
+/** Seconds within which a second press of the eject key ejects (decision 301). */
+const EJECT_WINDOW = 2;
+
+/** Where the campaign's target sites are drawn and what kind each is (decision 301). */
+export interface TargetInfo {
+  /** A target site's aim point (unit direction): a bridge's where it is drawn; null: its own point. */
+  aim: (site: number) => Readonly<[number, number, number]> | null;
+  /** A target site's kind (bridge, depot…), or null. */
+  kind: (site: number) => string | null;
+}
 
 export interface FollowDeps {
   canvas: HTMLCanvasElement;
@@ -205,6 +221,14 @@ export class Follow {
   private tracers: Tracers | null = null;
   /** The flight's missiles in flight and their smoke (decision 297). */
   private missileViews: MissileViews | null = null;
+  /** Aircraft shot down, falling (decision 301), and the damage done to each enemy flight's lead. */
+  private readonly wrecks = new Wrecks();
+  private wreckTime = 0;
+  private readonly airDamage = new Map<string, number>();
+  /** Where the campaign's targets are drawn and what they are (decision 301), from the world. */
+  private targetInfo: TargetInfo | null = null;
+  /** When the eject key was first pressed: a second press within EJECT_WINDOW ejects. */
+  private ejectArmed = -Infinity;
   /** Bombs' and rockets' explosions (decision 300). */
   private explosions: Explosions | null = null;
   /** The trigger as it was last frame: a missile leaves on its press. */
@@ -478,6 +502,9 @@ export class Follow {
         break;
       case 'jettison':
         this.jettison();
+        break;
+      case 'eject':
+        this.eject();
         break;
       case 'mouseCapture': {
         const freeing = this.capture.captured;
@@ -760,6 +787,80 @@ export class Follow {
     return out;
   }
 
+  /** Where the campaign's targets are drawn and what they are (decision 301): set once the world is aligned. */
+  setTargetInfo(info: TargetInfo | null): void {
+    this.targetInfo = info;
+  }
+
+  /**
+   * The flight's own target as the bombs and rockets see it (decision 301): a target site
+   * where it is drawn (a bridge at its aim point) or a road edge at its point, on the drawn
+   * ground; none for stations and the front.
+   */
+  private groundTargets(m: Mission): GroundTarget[] {
+    const k = m.target.kind;
+    if ((k !== 'site' && k !== 'road') || !this.airfield) return [];
+    const dirArr = (k === 'site' ? this.targetInfo?.aim(m.target.id) : null) ?? m.target.point;
+    const dir = new Vec3d(dirArr[0], dirArr[1], dirArr[2]).normalize();
+    const kind = k === 'road' ? 'road' : (this.targetInfo?.kind(m.target.id) ?? 'default');
+    const h = this.airfield.height(dir);
+    return [
+      {
+        id: `${k}:${m.target.id}`,
+        pos: dir.scale(this.deps.radius + h),
+        kind: GROUND_TARGETS[kind] ?? GROUND_TARGETS.default!,
+      },
+    ];
+  }
+
+  /**
+   * A hit from full fidelity (decision 301). On an enemy flight's lead its damage adds up,
+   * and at 1 the aircraft is shot down: the worker loses it (`shot-down`) and its wreck
+   * falls. On a target site or road edge the hit goes to the worker (`target-hit`).
+   */
+  private applyHit(h: Hit, rack: { sources: readonly HeatSource[] }): void {
+    const m = this.mission();
+    const by = m?.id ?? null;
+    const d = h.at.clone().normalize();
+    const point: Dir = [d.x, d.y, d.z];
+    if (!h.air) {
+      const [kind, id] = h.target.split(':');
+      if (kind !== 'site' && kind !== 'road') return;
+      this.deps.post({ kind: 'target-hit', target: kind, id: Number(id), amount: h.amount, by });
+      if (h.amount >= 0.05) this.hud.message(`Target hit (${Math.round(h.amount * 100)}%)`, 3);
+      return;
+    }
+    const total = (this.airDamage.get(h.target) ?? 0) + h.amount;
+    if (total < 1) {
+      this.airDamage.set(h.target, total);
+      return;
+    }
+    this.airDamage.delete(h.target);
+    const id = Number(h.target.slice(1));
+    const e = this.deps.missions().find((x) => x.id === id);
+    if (!e) return;
+    this.deps.post({ kind: 'shot-down', mission: id, point, cause: h.cause, by });
+    this.hud.message(`Splash: ${e.callsign}`, 4);
+    const s = rack.sources.find((x) => x.id === h.target);
+    if (s) {
+      const look = followedLook(bundleOfType(e.aircraftType), AIRCRAFT_BUNDLES);
+      this.wrecks.add(look.drawn, sourceAt(s, h.time), s.vel, id + h.time);
+    }
+  }
+
+  /** The player ejects (decision 301): X twice within EJECT_WINDOW s; the flight goes back to the AI. */
+  private eject(): void {
+    const now = performance.now() / 1000;
+    if (now - this.ejectArmed > EJECT_WINDOW) {
+      this.ejectArmed = now;
+      this.hud.message('Press X again to eject', EJECT_WINDOW);
+      return;
+    }
+    this.ejectArmed = -Infinity;
+    if (!this.full?.flight.ejectPlayer()) return;
+    this.handBack('Ejected: the crew is down safely, and the flight carries on without you');
+  }
+
   /** How far the nearest airborne flight of the other side is from `pos` at t (m), on its route. */
   private enemyDistance(side: Mission['side'], pos: Readonly<Vec3d>, t: number): number {
     const R = this.deps.radius;
@@ -848,6 +949,8 @@ export class Follow {
     this.released?.clear();
     this.tracers?.place([], new Vec3d(), 1);
     this.missileViews?.clear();
+    this.wrecks.clear();
+    this.airDamage.clear();
     this.explosions?.clear();
   }
 
@@ -991,6 +1094,7 @@ export class Follow {
     const ft = this.full?.flight.time ?? t;
     if (rack) {
       rack.sources = this.heatSources(m.side, ft);
+      rack.groundTargets = this.groundTargets(m);
       rack.updateSeeker(model, av, ft);
       // Bombs one per press, rockets while held (decision 300).
       const kind = av.weapon ? STORES[av.weapon]?.kind : undefined;
@@ -1160,9 +1264,17 @@ export class Follow {
     this.explosions ??= new Explosions(g.vehicles, g.lighting);
     for (const a of flight.aircraft)
       for (const x of a.rack.impacts.splice(0)) this.explosions.add(x.at, impactMass(x), x.time);
+    // Hits: kills and damage to the campaign as logged inputs; the downed fall burning (decision 301).
+    for (const a of flight.aircraft)
+      for (const h of a.rack.hits.splice(0)) this.applyHit(h, a.rack);
+    const explosions = this.explosions;
+    this.wrecks.update(Math.max(0, flight.time - this.wreckTime), this.deps.radius, groundAt, (p) =>
+      explosions.add(p, 3000, flight.time),
+    );
+    this.wreckTime = flight.time;
     this.explosions.place(flight.time, eye);
     this.missileViews.place(
-      flight.aircraft.flatMap((a) => flyingOf(a.rack)),
+      [...flight.aircraft.flatMap((a) => flyingOf(a.rack)), ...this.wrecks.flying],
       flight.time,
       eye,
       g.sun,

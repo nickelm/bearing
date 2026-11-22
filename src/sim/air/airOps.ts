@@ -110,6 +110,9 @@ const ARMED = new Set([
   'strategic-bombing',
 ]);
 
+/** The cause of a loss whose crew ejected at full fidelity: all of it survives (decision 301). */
+export const EJECTED = 'ejected';
+
 export class AirOps {
   readonly orbat: OrderOfBattle;
   readonly carriers: CarrierTrack[];
@@ -347,7 +350,8 @@ export class AirOps {
     for (let i = 0; i < n * Math.max(1, t.crew); i++) {
       const pilot =
         sq.pilots.length > 0 ? sq.pilots.splice(r.int(sq.pilots.length), 1)[0]! : 'unknown';
-      if (r.nextFloat() < EJECT_CHANCE) {
+      // A crew that ejected at full fidelity survives (decision 301); otherwise its chances.
+      if (cause === EJECTED || r.nextFloat() < EJECT_CHANCE) {
         ejected++;
         this.survivors.push({
           id: this.nextSurvivor++,

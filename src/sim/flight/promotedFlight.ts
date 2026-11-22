@@ -195,6 +195,21 @@ export class PromotedFlight {
         a.rack.jettisonTanks(a.flown.airframe as unknown as FlightModel);
   }
 
+  /**
+   * The player ejects (decision 301): their aircraft is lost with its crew safe, its
+   * controls left at idle with the stick free, and it goes down unflown.
+   */
+  ejectPlayer(): boolean {
+    const a = this.playerSlot === null ? undefined : this.bySlot(this.playerSlot);
+    if (!a || a.flown.crashed || a.damage >= 1) return false;
+    a.damage = 1;
+    a.cause = 'ejected';
+    a.flown.pilot = null;
+    const c = a.flown.controls;
+    Object.assign(c, { pitch: 0, roll: 0, yaw: 0, throttle: 0 });
+    return true;
+  }
+
   /** The player drops their tanks (the jettison key, the stores format); how many went. */
   jettisonPlayerTanks(): number {
     const a = this.playerSlot === null ? undefined : this.bySlot(this.playerSlot);
@@ -251,6 +266,12 @@ export class PromotedFlight {
       if (a.slot === this.playerSlot) {
         // The player's input source: mouse aim's hook, or the controls as the input left them.
         a.flown.step(ground);
+        a.rack.stepWeapons(m, a.flown.avionics, FLIGHT_STEP, t, ground);
+        continue;
+      }
+      // Abandoned or destroyed: nobody flies it, and it goes down (decision 301).
+      if (a.damage >= 1) {
+        a.flown.step(ground, null);
         a.rack.stepWeapons(m, a.flown.avionics, FLIGHT_STEP, t, ground);
         continue;
       }
