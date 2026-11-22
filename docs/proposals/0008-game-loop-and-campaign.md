@@ -4,6 +4,8 @@
 
 *Proposal 0012 (decision 302) adds the AC-31 gunship and its four missions to the breadth phase (R4.10), the Mi-24 analogue's convoy escort and armed reconnaissance, and a side's standing as ceasefire pressure.*
 
+*Proposal 0013 (decision 331) splits the entity level for infantry into squads in the bubble and individual soldiers within 3–5 km, puts survivors on foot with enemy search parties, makes captured pilots and surrendered soldiers prisoners that count in the campaign, and rules out civilians for good (R3.8).*
+
 ## Purpose
 
 The flight model works and the terrain is in good shape. Bearing now moves from a world and a flyable aircraft to a game: a war that plans, fights, and resolves itself, with the player jumping into any part of it. This proposal defines the game loop, the architecture for mission and aircraft types, the campaign, and the decisions that shape the roadmap. The first goal is a tech demo of one day of war; the project then continues to the full dynamic campaign.

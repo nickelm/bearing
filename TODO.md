@@ -314,6 +314,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] Vehicles as targets for guns, rockets and bombs
 - [ ] Demotion folds losses back into the battalion's strength; nothing destroyed comes back
 - [ ] Test: CAS destroys promoted vehicles and the battalion's strength drops by the same count
+- [ ] Reduced infantry (if time allows; decision 331): a few squads per battalion near the player with the blocky figures, as targets, the dead turning gray and vanishing in a toon puff
 
 ### R2.9 Survivors and CSAR
 
@@ -355,7 +356,9 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] R3.3 Weapons in full (large); shells with time of flight, dispersion and fuzes, ready for the gunship's guns (decision 302)
 - [ ] R3.4 Air combat (medium)
 - [ ] R3.5 Air defense networks and scrambles (large)
-- [ ] R3.6 Ground entities and terrain in the sim (large); infantry in treelines and buildings, vehicles that scatter and hide, night convoys, return fire, infrared strobes, talk-on requests (decision 302)
+- [ ] R3.6 Ground entities and terrain in the sim (large); vehicles that scatter and hide, night convoys, return fire (decision 302)
+- [ ] R3.7 Routes with steerpoints (large)
+- [ ] R3.8 Infantry (large; Proposal 0013, decision 331): figure kit and animation, squads and individual soldiers, behavior and specialists, infantry in treelines and buildings, strobes and talk-on requests (decision 302), splash profiles calibrated (rule 18), reactions without gore, prisoners, survivors on foot and search parties, sensor looks, the stress scene, checks 19–20
 
 ## R4. Breadth
 

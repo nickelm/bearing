@@ -2,6 +2,8 @@
 
 *Drafted 2026-11-21. Status: accepted 2026-11-22 (decision 302). Affects `docs/roadmap.md`, `docs/visual-style.md`, `docs/proposals/0006-displays-and-crew.md`, `docs/proposals/0008-game-loop-and-campaign.md`, and `docs/proposals/0011-stylized-effects.md`.*
 
+*Proposal 0013 (decision 331) supplies the infantry the gunship fires on: blocky soldiers in companies, splash profiles for the 20 mm, 40 mm and 105 mm, surrender, and firing on prisoners as a cost to the side's standing. R4.10 depends on its milestone, R3.8.*
+
 ## Decision
 
 The Alliance gets a side-firing gunship, an analogue of the AC-130H Spectre (working name: **AC-31 Warden**). The AI pilot flies a pylon turn around the target while the player works the **gunner station**: a full-screen sensor view with a 105 mm howitzer, a 40 mm autocannon, and 20 mm cannons. The gunship flies only where its side holds the air, which makes it a reward for winning air superiority and suppressing air defenses.

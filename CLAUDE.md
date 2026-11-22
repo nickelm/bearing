@@ -54,7 +54,8 @@ docs/proposals/     owner proposals (do not reformat); 0001-two-views.md (decisi
                     (decision 189), 0007-world-diversity.md (decision 204),
                     0008-game-loop-and-campaign.md (decision 228), 0009-settlements-and-cities.md
                     (decisions 259–270), 0011-stylized-effects.md (decisions 320–327) and
-                    0012-gunship-and-sensor-stations.md (decision 302) are accepted; 0010-terrain-art-direction.md
+                    0012-gunship-and-sensor-stations.md (decision 302) and 0013-infantry.md (decision 331) are
+                    accepted; 0010-terrain-art-direction.md
                     was rejected (decision 328) and is kept for the record only
 docs/roadmap.md     phases R0–R6 with milestones, dependencies and exit criteria: what to build next
 docs/status/        audits: audit-2026-11-18.md (status matrix, health, decisions for the owner) and
@@ -279,6 +280,10 @@ These are the project conventions. Lint enforces some of them (marked ⚙).
     - ⚙ Nothing under `src/worldgen/settlements/` imports `campaign`, `sim`, `render`, `ui`, `freeflight` or `follow`, the war's parts of `worldgen/strategic/` (fronts, territory, infrastructure, sites) or anything named for factions. Urban styles key to cultural regions, never to sides.
     - A game layer reads settlements through their plain exports (districts, landmarks, candidate targets) and sets their lighting levels and damage states through the city layer; campaign logic still reads only the strategic graph (rule 9).
 
+21. **No civilians, no gore** (Proposal 0013, decision 331). This rule is permanent.
+    - No system models civilian people, or civilian vehicles, aircraft or ships that would carry them. Settlements hold buildings and military units only. The strategic graph's *civilian* roads and geography are places, not entities.
+    - Soldiers and downed pilots die without blood or dismemberment: the fallen turn gray within a few seconds and vanish in a toon puff, and no bodies accumulate.
+
 ## Fidelity as level of detail
 
 Fidelity is a level of detail in both space and time.
@@ -289,7 +294,7 @@ Fidelity is a level of detail in both space and time.
 Every unit exists at one of three levels:
 
 - **Aggregate:** formation, flight or convoy. Always simulated, cheaply.
-- **Entity:** individual vehicles and squads. Simulated only inside a promotion bubble of about 15–25 km around the player (around the followed or flown aircraft, or the simulation view's camera; decisions 49, 72, 94).
+- **Entity:** individual vehicles and squads. Simulated only inside a promotion bubble of about 15–25 km around the player (around the followed or flown aircraft, or the simulation view's camera; decisions 49, 72, 94). Infantry has two steps inside it: squads within about 20 km and individual soldiers within 3–5 km, both sim state on the worker; the GPU only interpolates and animates soldiers, and the sim decides who falls (decision 331).
 - **Full:** physical simulation (flight model, sensor model, flight director). Used only for the aircraft the player controls or follows, from roadmap R2.5; until then a followed aircraft flies its analytic route, and only Free Flight's aircraft run at full fidelity. The player flies and never commands ground or naval forces.
 
 Promotion expands a unit deterministically from its seed and current strength. Demotion folds entity losses back into aggregate strength, so nothing destroyed comes back. Design data models so that promotion is possible even before it is implemented.

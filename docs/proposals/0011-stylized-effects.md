@@ -2,6 +2,8 @@
 
 *Drafted 2026-11-21. Status: accepted. Affects `docs/visual-style.md`, `docs/proposals/0004-helicopters.md`, `docs/proposals/0009-settlements-and-cities.md`, `docs/roadmap.md`, and `CLAUDE.md`.*
 
+*Proposal 0013 (decision 331) adds the infantry's uses of the effects system: muzzle flashes and tracers of squads in contact, the dust of a soldier landing after a blast, and the small toon puff in which the dead vanish.*
+
 ## Goals
 
 Smoke, fire, and explosions in Bearing are stylized in the manner of Townscaper: **solid, round, toon-shaded puffs** that swell, rise, drift with the wind, darken, and shrink away. One effects system serves every source, from missile trails to chimneys, and it stays cheap enough for thousands of puffs. Contrails and wingtip vortices stay as thin ribbons.

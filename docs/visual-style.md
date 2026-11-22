@@ -1,6 +1,6 @@
 # Bearing: Visual Style Guide
 
-*Revision 6, 2026-11-17. Companion to `docs/design.md`. Revision 6 moves the terrain palette brighter and extends it to the twenty biomes and the surfaces of closed basins, volcanic rock and lagoons, adds zones with their own look, landform props and their budgets, salt lakes and playas, glaciers and fjords, gullies and natural wonders, with their checks in both parts (Proposal 0007, decision 204); revision 5 adds the displays and status strip: the allocation rule, slots, the display frame, faction skins and their palette tokens, the full-color moving map, and their acceptance checks (Proposal 0006, decision 189); revision 4 adds meanders and floodplains, roads and railways with their earthworks in the terrain, the bridge kit and its budgets, and bridge labels, dashed tunnels and generalized rivers on the map (Proposal 0005, decision 161); revision 3 adds the controlled aircraft, the HUD and displays, and their acceptance checks for third-person flight without cockpits (Proposal 0002, decision 94); revision 2 split the guide into two parts for the two views (Proposal 0001, decision 72).*
+*Revision 7, 2026-11-22. Companion to `docs/design.md`. Revision 7 adds infantry: the blocky soldier, its faction looks, levels of detail and readability scaling, reactions and death without gore, its budgets, and checks 19 and 20 (Proposal 0013, decision 331); revision 6 moves the terrain palette brighter and extends it to the twenty biomes and the surfaces of closed basins, volcanic rock and lagoons, adds zones with their own look, landform props and their budgets, salt lakes and playas, glaciers and fjords, gullies and natural wonders, with their checks in both parts (Proposal 0007, decision 204); revision 5 adds the displays and status strip: the allocation rule, slots, the display frame, faction skins and their palette tokens, the full-color moving map, and their acceptance checks (Proposal 0006, decision 189); revision 4 adds meanders and floodplains, roads and railways with their earthworks in the terrain, the bridge kit and its budgets, and bridge labels, dashed tunnels and generalized rivers on the map (Proposal 0005, decision 161); revision 3 adds the controlled aircraft, the HUD and displays, and their acceptance checks for third-person flight without cockpits (Proposal 0002, decision 94); revision 2 split the guide into two parts for the two views (Proposal 0001, decision 72).*
 
 ## Summary
 
@@ -152,6 +152,7 @@ A zone is a named region 16–63 km across (decision 205: the proposal's 100–4
 | Tank, IFV, SAM vehicle | 150–400 |
 | Truck, light vehicle | 80–200 |
 | Person | 60–150 |
+| Soldier (decision 331) | about 72 for the full figure with helmet, plus a few for its prop; 3 boxes (36) from 600 m, 1 box (12) from 2 km |
 | Building | 12–200 |
 | Ground cover (tufts, reeds, bushes, boulders, slabs, pebbles) | 8–40 (decision 172) |
 | Bridge, viaduct | About 300 (short beam) to 1,500 (long truss or viaduct) |
@@ -197,7 +198,20 @@ Helicopters are flown to the ground and hovered close to it (decision 149, propo
 ### Ground Vehicles and People
 
 - **Vehicles.** Boxy hulls, simple turrets, and chunky wheels or track blocks. Faction camouflage in two or three flat colors.
-- **People.** Toy-like figures (reference 3): box torso, block head with a few painted face details, helmets and flight suits as simple shapes. Deck crews wear color-coded jerseys. People appear only at close range: on airbases, carrier decks, and in cinematic views.
+- **People.** Toy-like figures (reference 3): box torso, block head with a few painted face details, helmets and flight suits as simple shapes. Deck crews wear color-coded jerseys. Crews appear at close range: on airbases, carrier decks, and in cinematic views. Soldiers appear in numbers wherever infantry is promoted. Every person is military; there are never civilians (decision 331).
+
+### Infantry
+
+Soldiers are blocky, toy-like figures in large numbers (Proposal 0013, decision 331).
+
+- **Figure.** Six flat-shaded, vertex-colored boxes (head, torso, two arms, two legs) and a deliberately oversized helmet that defines the side's silhouette and can pop off. Chunky proportions: a slightly large head and helmet, short legs, broad shoulders. Drawn at 1.4 times life size (1.3 to 1.5), the same size the sim uses for collision and hits.
+- **Sides.** Alliance: a large, rounded, low-brimmed helmet, woodland green with darker patches (the Alliance woodland scheme), olive webbing and a square pack. Pact: a large, tall dome, khaki and brown (the Pact tactical scheme), brown webbing and a round pack.
+- **Props.** A small box per role: rifle, machine gun, launcher tube or radio. Specialists read by a visible prop: a long tube for MANPADS teams, a short tube for RPG teams, a baseplate and tube for mortars, a radio aerial for forward observers.
+- **Downed pilots** wear a flight suit, an oversized flight helmet and a survival vest, and hang under a parachute canopy on the way down.
+- **Levels of detail.** The full figure with helmet and props under about 600 m; three boxes (head and helmet, body, legs) to 2 km; one box per soldier to 5 km; beyond, small clusters of sprites per squad, or nothing. Beyond about 1 km figures grow slightly with distance so they never fall below a few pixels in height; this is a rendering setting the player can turn off.
+- **Animation.** Each limb is a rigid box turning about its joint in the vertex shader, driven by the soldier's state, phase and speed, with no skinning: idle, walk, run, crouch-run, crawl; kneel and prone firing, throwing; mounting, dismounting, boarding, fast-roping, parachuting; carrying a comrade, hands up; knocked down, tumbling, getting up dazed, falling.
+- **Reactions.** A blast throws soldiers in its knockdown radius into tumbling arcs with limbs flailing; they land in a puff of dust, and helmets pop off and bounce away. Survivors stay down briefly, stagger up and run for cover. A fallen soldier lies still, desaturates to gray within a few seconds and vanishes in a small toon puff from the effects system, so no bodies accumulate. Dust, debris chunks and smoke puffs only: no blood and no dismemberment.
+- **Fire.** Muzzle flashes and tracers come from the effects system and the gun tracers' colors (*Light and Emissives*); they are what the air war sees of a firefight.
 
 ### Buildings and Bases
 
@@ -278,6 +292,8 @@ The land shades are proposal 0007's brighter starting values (decision 204); the
 | Pact bomber | `#A7ABAE` | Bare-metal bombers |
 | Alliance ship | `#8C949B`, waterline `#3A3E42` | Ships (decision 106) |
 | Pact ship | `#7E8A86`, waterline `#3A3E42` | Ships (decision 106) |
+| Alliance infantry | The woodland scheme, olive webbing | Soldiers' uniforms and kit (decision 331) |
+| Pact infantry | The tactical scheme's khaki and brown, brown webbing | Soldiers' uniforms and kit (decision 331) |
 
 ### Light and Emissives
 
@@ -411,7 +427,7 @@ One sensor render mode draws them, the helicopter gunner sights and the gunship'
 | Low-light TV | Monochrome, usable at dusk and by moonlight |
 | Color TV | The scene in color through the zoomed camera, slightly desaturated, with scanlines; a deliberate anachronism for daylight |
 
-- **Heat.** Each material carries a heat value in its model spec or terrain class: running engines and exhausts hot, fires and impacts very hot, people and animals warm, buildings and roads warm after sunset, terrain and vegetation cool, water cool. Values shift with time of day and weather.
+- **Heat.** Each material carries a heat value in its model spec or terrain class: running engines and exhausts hot, fires and impacts very hot, people and animals warm (soldiers glow; friendly infrared strobes blink), buildings and roads warm after sunset, terrain and vegetation cool, water cool. Values shift with time of day and weather.
 - **Treatment.** A modest resolution, bloom on hot spots, sensor noise and scanlines. Fireballs bloom white; smoke starts warm and cools to gray, and obscures the TV modes more than infrared.
 - **The gunner station** fills the screen with the sensor image; its reticle with the weapon's aim point, compass and north arrow, orbit status, weapon state, friendly strobes, talk-on markers and target labels take the HUD's place in the skin's phosphor color, and the five slots stay where they are. It is the one full-screen picture that is not the chase view, and it is still no cockpit.
 
@@ -436,6 +452,7 @@ Targets for a mid-range laptop in a desktop browser at 1080p:
 - Under 2 million triangles per frame in the densest view (low altitude over forest near a base).
 - Trees: near and edge radii by quality tier, to be stepped by the quality governor after the atmospheric effects: tablet 400 m and 1 km, laptop 600 m and 1.2 km (the defaults), desktop 1 km and 2 km. Over dense forest at the laptop tier, trees take about 0.46 M triangles in about 100 draws, and terrain with canopy shell about 0.55 M (decision 150). At least 30 fps on a laptop over forest at treetop height, and on a tablet at its tier.
 - Settlements (Proposal 0009): in the standard city views (a large city from 5 km and 1 km, a town from 300 m) at most 40 draw calls and 0.3 M triangles for buildings, and at most 1.5 ms of frame time over the same view without them (decision 267).
+- Infantry (decision 331): up to 5,000 individually drawn soldiers within range, at most about 0.4 M triangles across their levels of detail, their GPU update under 0.5 ms. A battalion attack with 1,500 soldiers seen from a gunship orbit stays within the frame budgets above.
 - Landform props: within about 6 km of the camera, instanced by kind, with two levels of detail; together at most 0.3 M triangles and 40 draw calls in the densest karst view (decision 204).
 - Atmospheric effects scale with the machine: the volumetric stage marches a quarter, a third (default) or a half of the resolution, and a governor steps its quality and then the particle count down before the frame rate falls under the target, and back up when there is headroom (decision 143). In clear weather the volumetric stage and the particle overlay leave the frame; the pipeline's bloom and grade remain (decision 144).
 
@@ -449,6 +466,8 @@ Targets for a mid-range laptop in a desktop browser at 1080p:
 - Thin geometry such as antennas, pitot tubes, and fine branches that alias at distance; omit them or thicken them.
 - Uniform scatter of identical trees; forests need clusters, edges, and value variation.
 - Real national insignia, unit badges, or manufacturer markings.
+- Gore: blood, dismemberment, or bodies that stay on the ground (decision 331).
+- Civilians of any kind, in any view (decision 331).
 - Free-floating windows, displays that move between modes, transitions through the central area, and color as the only cue on displays and the strip (decision 189).
 
 ## Acceptance Checks
@@ -473,8 +492,10 @@ Before a visual milestone with simulation-view work closes, capture these views 
 16. Landmarks: an alpine range with glacial valleys, a basin-and-range desert with a salt flat, a moorland, a jungle river, a karst bay at 300 m with props within budget, and one natural wonder (decision 204).
 17. Sensor images: each of the four sensor modes over a convoy, a fire and people by night and by day; engines, fires and people read correctly in infrared, and smoke hides more in TV than in infrared (decision 302).
 18. Gunship fire: the 105 mm, 40 mm and 20 mm impacts and the tracers, each distinguishable from the gunner view and the chase view, and the gunner view within the frame budget during sustained fire (decision 302).
+19. Infantry readability: squads of both sides in the open and at a treeline from 1 km, in color TV, low-light TV and infrared: visible, and recognizable by side from the helmets and uniforms (decision 331).
+20. Infantry in numbers: the stress scene (a battalion attack, 1,500 soldiers from a gunship orbit) within the frame budget; a bomb among a squad throws the knockdown radius into tumbling arcs, survivors get up, and the dead turn gray and vanish within the set time (decision 331).
 
-Checks 1–5 are the views `mixed`, `conifer`, `range`, `dusk` and `beach` in `tools/render.preview.ts` (`VIEWS=checks`), aimed at places the preview finds in each world (decision 128); check 6 runs in the model viewer. Check 11 is the views `hover` and `skid` in `tools/render.preview.ts` and a Free Flight hover, from G1 on. Checks 7–10 are scripted flight sequences in `tools/render.preview.ts` and apply from milestone V4 (camera rig and flight path marker); for a followed campaign flight, checks 7 and 10 run in the `follow` part of `tools/browser.smoke.mjs` (decision 252); check 9 needs the flight model (P1); the gun pipper part of check 8 is a scripted 6-g turn in `tests/pipperTurn.test.ts`, whose rounds pass within 10 mils of a target holding the turn under the pipper (decision 309), and the owner's look at the pipper on a target in a hard turn. Checks 12–14 apply from P2 (14 from P3): 12 and 13 as composites in `tools/hud/` and browser shots, 14 as a scripted Free Flight sequence. Checks 15 and 16 apply from W6 and W7 as `tools/render.preview.ts` views and spots (`zones`, `alpine`, `basin`, `moor`, `jungle`, `karst`, `wonder`). Check 17 applies from R3.2's sensor render mode and check 18 from R4.10, the gunship.
+Checks 1–5 are the views `mixed`, `conifer`, `range`, `dusk` and `beach` in `tools/render.preview.ts` (`VIEWS=checks`), aimed at places the preview finds in each world (decision 128); check 6 runs in the model viewer. Check 11 is the views `hover` and `skid` in `tools/render.preview.ts` and a Free Flight hover, from G1 on. Checks 7–10 are scripted flight sequences in `tools/render.preview.ts` and apply from milestone V4 (camera rig and flight path marker); for a followed campaign flight, checks 7 and 10 run in the `follow` part of `tools/browser.smoke.mjs` (decision 252); check 9 needs the flight model (P1); the gun pipper part of check 8 is a scripted 6-g turn in `tests/pipperTurn.test.ts`, whose rounds pass within 10 mils of a target holding the turn under the pipper (decision 309), and the owner's look at the pipper on a target in a hard turn. Checks 12–14 apply from P2 (14 from P3): 12 and 13 as composites in `tools/hud/` and browser shots, 14 as a scripted Free Flight sequence. Checks 15 and 16 apply from W6 and W7 as `tools/render.preview.ts` views and spots (`zones`, `alpine`, `basin`, `moor`, `jungle`, `karst`, `wonder`). Check 17 applies from R3.2's sensor render mode, check 18 from R4.10, the gunship, and checks 19 and 20 from R3.8, infantry.
 
 # Part II: Strategic View
 
