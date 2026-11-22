@@ -321,6 +321,8 @@ _Depends on all of R2._
 
 ## Out of Sync: Proposal 0011, Stylized Effects
 
+**State (2026-11-22):** done (decisions 320–327, 329); the owner accepted every preset in the sandbox on the GPU. What waits for other systems (SAM launches, ship hits, aggregate aircraft damage) and small polish are listed in `TODO.md`.
+
 Runs beside the phases (`docs/proposals/0011-stylized-effects.md`, `docs/plans/stylized-effects.md`, decisions 320–327; branch `feature/stylized-effects`): one effects system of toon-shaded puffs for smoke, fire and explosions, contrails and wingtip vortices, an effect event interface, and the city plumes and rotor downwash moved onto it. It covers the contrails and vortices of R6.6's flight effects and the smoke and fire of R3.3's damage effects; R3 and R4 hook their launches, hits, damage states and fires into its events. Open items are under *Out of sync* in `TODO.md`.
 
 ## Out of Sync: Proposal 0009, Settlements and Cities

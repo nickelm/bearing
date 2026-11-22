@@ -267,7 +267,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] Heat sources from every aircraft of an enemy flight (formation slots), not its lead alone; line of sight for the seeker
 - [ ] The Pact's missile on a flown Pact fighter (R2.7: the Vo-31's pylons and flight data)
 - [x] Unguided bombs with CCIP fall lines; rockets (`sim/flight/ordnance.ts`, the CCIP pipper, explosions, the F-21's CAS loadout, Free Flight's `loadout=`; decision 300)
-- [ ] Bomb release modes (pairs, ripple with spacing) and the delayed cue when the CCIP point is below the HUD (DTOS); craters and scorch decals at impacts
+- [ ] Bomb release modes (pairs, ripple with spacing) and the delayed cue when the CCIP point is below the HUD (DTOS); craters at impacts (scorch decals came with the effects, decision 323)
 - [ ] Rocket pods' mass falls as they fire (the pod's dry mass); rockets' warheads in hit resolution
 - [x] Hit and kill resolution; minimal damage states; ejection from full fidelity (warheads, rounds and bursts on aircraft, bombs and rockets on target sites at their drawn aim points, `shot-down` and `target-hit` inputs, wrecks, the map's damage marks, ejection on X twice; decision 301)
 - [ ] Damaged aircraft smoke and turn home (enemy leads hit but not killed, the player's own once the AI fires; R3); damage to the player's aircraft from enemy fire (R3)
@@ -429,9 +429,9 @@ Runs beside the main line (`docs/proposals/0009-settlements-and-cities.md`, `doc
 - [ ] Targeting pod (P3–P5): set `CityLayer.zoom` from the pod's magnification (decision 279).
 - [ ] Wire settlement pads into `terrainEditsFor` once the sim's height service can take them (decision 264).
 
-## Out of sync: Proposal 0011, stylized effects
+## Out of sync: Proposal 0011, stylized effects (done 2026-11-22)
 
-`docs/proposals/0011-stylized-effects.md`, `docs/plans/stylized-effects.md`; branch `feature/stylized-effects`.
+`docs/proposals/0011-stylized-effects.md`, `docs/plans/stylized-effects.md`; merged into `main`.
 
 - [x] Phase 0: survey, proposal, plan
 - [x] Phase 1: puff renderer (sphere impostor, depth, toon ramp, rim, dithered fade, shape variation; decision 320)
@@ -441,13 +441,15 @@ Runs beside the main line (`docs/proposals/0009-settlements-and-cities.md`, `doc
 - [x] Phase 5: contrails and wingtip vortices (decision 325)
 - [x] Phase 6: event interface, long-lived columns, city plumes and rotor downwash migrated, weapons' trails and impacts (decision 326)
 - [x] Phase 7: verification, metrics, screenshots, visual-style *Effects*, decisions, report
-- [ ] Owner: the budget on a real GPU: `effects.html?gputime`, *stress test*, then *Measure* (compute under 0.5 ms, puffs under 1.0 ms at 10,000 puffs); record in `docs/reports/stylized-effects-metrics.md`
-- [ ] Owner: `node tools/effects.screens.mjs` with `MODE=gpu` for Chromium screenshots (the cloud container's Chromium loses its WebGPU device at start)
+- [x] Owner: every preset and the stress test in `effects.html` on the GPU, accepted (2026-11-22); no timings recorded
 - [x] Game layer: contrails and vortices for the flown, followed and nearby campaign aircraft and Free Flight's traffic (`EffectsSystem.aircraft`, decision 329)
 - [x] Game layer: burning columns from the worker's target damage, towns' targets through their plans, and smoke from damaged full-fidelity aircraft (decision 329)
-- [ ] Damaged campaign aircraft (aggregate, analytic) smoke once R3 keeps their damage
-- [ ] Game layer: SAM launches as `launch` events with `fromGround` once SAMs fire (R3.4); ship hits once ships take damage (R4)
 - [x] Stores catalog: `smoke` per missile and rocket pod in `src/data/stores.json` (decision 329)
+
+Later, with the systems they wait for, or as polish (not part of the track):
+
+- [ ] SAM launches as `launch` events with `fromGround` once SAMs fire (R3.4); ship hits once ships take damage (R4)
+- [ ] Damaged campaign aircraft (aggregate, analytic) smoke once R3 keeps their damage
 - [ ] Night: fire puffs light the smoke around them (a local light per burning column, or glow on nearby puffs); at night columns read as black silhouettes only
 - [ ] Cap a fire puff's glow under bloom so a fire at night reads orange, not white
 - [ ] The old fallback meshes in `aircraft/explosions.ts` and `missileViews.ts` can go once every scene has an effects system
