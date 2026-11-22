@@ -39,6 +39,8 @@ export interface FlightCapInput {
   targetDistance: number;
   /** Distance to the nearest enemy flight in the air (m; Infinity: none). */
   enemyDistance: number;
+  /** The threat warning hears a radar tracking the aircraft or a launch (decision 303). */
+  threatened?: boolean;
 }
 
 /** Least height above the ground for cruise (m, about 1,000 ft). */
@@ -66,8 +68,10 @@ export function flightRateCap(i: Readonly<FlightCapInput>): {
         ? 'low'
         : i.enemyDistance < THREAT_RANGE
           ? 'enemy aircraft near'
-          : i.targetDistance < TARGET_AREA
-            ? 'in the target area'
-            : null;
+          : i.threatened
+            ? 'threat warning'
+            : i.targetDistance < TARGET_AREA
+              ? 'in the target area'
+              : null;
   return { rate: reason ? 1 : FLOWN_MAX_RATE, reason };
 }

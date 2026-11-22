@@ -48,7 +48,7 @@ import { missionPlugin } from '../sim/command/missions/registry';
 import type { Mission } from '../sim/air/mission';
 import { routeState } from '../sim/air/route';
 import { initialAvionics } from '../sim/avionics/avionics';
-import { snapshotFromHud, storesSnapshot } from '../ui/displays/aircraftSnapshot';
+import { relativePicture, snapshotFromHud, storesSnapshot } from '../ui/displays/aircraftSnapshot';
 import type { SnapshotStores } from '../ui/displays/snapshot';
 import { flightFuel } from '../sim/flight/promotion';
 import { storesEffect } from '../sim/flight/storesRack';
@@ -58,6 +58,15 @@ import type { HudFrame } from '../ui/flight/hud';
 import { buildHudFrame, ccipHud, gunHud, landingAid, seekerHud } from '../ui/flight/hudFrame';
 import { Explosions } from '../render/sim/aircraft/explosions';
 import { Wrecks } from '../render/sim/aircraft/wrecks';
+import { campaignDatalink, campaignTargets } from './campaignSensors';
+import type { DefendedSite } from './campaignSensors';
+import { acmAcquire, SensorModel } from '../sim/sensors/sensors';
+import type { SensorEnv } from '../sim/sensors/sensors';
+import { lineOfSight } from '../sim/sensors/lineOfSight';
+import { threatCalls } from '../ui/displays/calls';
+import type { ThreatTone } from '../ui/displays/calls';
+import type { SnapshotSensors, SnapshotThreat } from '../ui/displays/snapshot';
+
 import type { Dir } from '../core/greatCircle';
 import { GROUND_TARGETS } from '../sim/flight/damage';
 import type { GroundTarget, Hit } from '../sim/flight/storesRack';
@@ -110,6 +119,8 @@ export interface TargetInfo {
   aim: (site: number) => Readonly<[number, number, number]> | null;
   /** A target site's kind (bridge, depot…), or null. */
   kind: (site: number) => string | null;
+  /** The war's defended places, whose surface-to-air radars the sensors hear (decision 303). */
+  defended: DefendedSite[];
 }
 
 export interface FollowDeps {
@@ -130,6 +141,8 @@ export interface FollowDeps {
   weather?: () => WeatherView | null;
   /** Posts a player input to the campaign (logged in the worker; R1.4). */
   post: (input: CampaignInputEvent) => void;
+  /** Sounds a threat warning tone (decision 223); none: silent. */
+  tone?(kind: ThreatTone): void;
 }
 
 /** How long the worker has to hold a taken-over flight before the take-over counts as refused (ms). */
@@ -221,6 +234,11 @@ export class Follow {
   private tracers: Tracers | null = null;
   /** The flight's missiles in flight and their smoke (decision 297). */
   private missileViews: MissileViews | null = null;
+  /** The followed aircraft's sensors and their picture for the displays (decision 303). */
+  private readonly sensors = new SensorModel();
+  private sensorSnap: SnapshotSensors | null = null;
+  private sensorsAt = 0;
+  private threatsHeard = new Map<string, SnapshotThreat['state']>();
   /** Aircraft shot down, falling (decision 301), and the damage done to each enemy flight's lead. */
   private readonly wrecks = new Wrecks();
   private wreckTime = 0;
@@ -763,6 +781,8 @@ export class Follow {
       heightAboveGround: model.telemetry.radarAltitude,
       targetDistance: model.pos.clone().normalize().scale(R).distanceTo(target),
       enemyDistance: enemy,
+      // A radar tracking or a missile launched at the aircraft (decision 303).
+      threatened: (this.sensorSnap?.threats ?? []).some((x) => x.state !== 'search'),
     });
   }
 
@@ -1034,6 +1054,9 @@ export class Follow {
         radarAltitude: agl,
         groundSpeed: p.speed,
         pos: p.pos,
+        vel: p.velocity,
+        forward: p.forward,
+        up: p.up,
         track: p.heading,
         heading: p.heading,
       },
@@ -1088,14 +1111,27 @@ export class Follow {
     const rack = this.full?.followed(this.slot)?.rack ?? null;
     const av = this.displays.avionics;
     if (rack?.gun) rack.gun.trigger = inp.trigger && gunSelected(av);
-    frame.gun = gunHud(model, rack, av, this.deps.globe.chase.eye);
+    // A radar lock gives the pipper its range and slaves the seeker (decision 303).
+    const locked = this.lockedContact(t);
+    frame.gun = gunHud(
+      model,
+      rack,
+      av,
+      this.deps.globe.chase.eye,
+      locked ? locked.pos.distanceTo(model.pos) : undefined,
+    );
     // The IR missile (decision 297): the enemy's flights as heat sources, the seeker, a
     // launch on the trigger's press, and the outcomes as messages.
     const ft = this.full?.flight.time ?? t;
     if (rack) {
       rack.sources = this.heatSources(m.side, ft);
       rack.groundTargets = this.groundTargets(m);
-      rack.updateSeeker(model, av, ft);
+      rack.updateSeeker(
+        model,
+        av,
+        ft,
+        locked ? locked.pos.clone().sub(model.pos).normalize() : null,
+      );
       // Bombs one per press, rockets while held (decision 300).
       const kind = av.weapon ? STORES[av.weapon]?.kind : undefined;
       rack.rocketTrigger = inp.trigger && kind === 'rockets';
@@ -1340,10 +1376,131 @@ export class Follow {
     }
   }
 
+  /**
+   * The followed aircraft's sensors (decision 303): the war's flights and defended places
+   * as targets, the datalink while an early warning aircraft of its side flies, at 10 Hz;
+   * the picture goes to the displays, the HUD's target box and the flight cap. While the
+   * player flies, a lock the radar lost breaks, air combat mode locks, and the threat
+   * warning calls and sounds.
+   */
+  private updateSensors(m: Mission, p: FollowedState, t: number): void {
+    const now = performance.now();
+    if (now - this.sensorsAt < 100) return;
+    this.sensorsAt = now;
+    const profile = this.bundle?.avionics;
+    if (!profile) return;
+    const R = this.deps.radius;
+    const pos = new Vec3d(...p.pos);
+    const vel = new Vec3d(...p.vel);
+    const forward = new Vec3d(...p.forward);
+    const upBody = new Vec3d(...p.up);
+    const ground = this.airfield;
+    const groundAt = (d: Readonly<Vec3d>) => (ground ? ground.height(d) : 0);
+    const targets = campaignTargets(
+      this.deps.missions(),
+      t,
+      R,
+      { id: 'own', side: m.side, pos, exclude: m.id },
+      this.targetInfo?.defended ?? [],
+      groundAt,
+    );
+    const up = pos.clone().normalize();
+    const report = this.deps.weather?.()?.report(up, t);
+    const env: SensorEnv = {
+      time: t,
+      visibility:
+        report && p.radarAltitude < report.cloudBase
+          ? report.visibility
+          : Math.max(30_000, report?.visibility ?? 30_000),
+      daylight: Math.min(1, Math.max(0, (up.dot(this.deps.globe.sun) + 0.1) / 0.2)),
+      lineOfSight: ground
+        ? (a, b) => lineOfSight(a, b, R, { height: (d) => ground.sightHeight(d) })
+        : () => true,
+    };
+    const sys = profile.systems;
+    const av = this.displays.avionics;
+    const feed = sys.includes('datalink')
+      ? campaignDatalink(this.deps.missions(), t, R, m.side, targets)
+      : null;
+    const radar = sys.includes('radar-aa') ? (profile.radar ?? null) : null;
+    this.sensors.update(
+      {
+        id: 'own',
+        side: m.side,
+        pos,
+        vel,
+        forward,
+        up: upBody,
+        radar,
+        radarOn: av.radar.on,
+        radarMode: av.radar.mode,
+        lock: av.radar.lock,
+        rwr: sys.includes('rwr'),
+        datalink: feed !== null,
+      },
+      targets,
+      env,
+      feed,
+    );
+    const pic = this.sensors.picture;
+    if (this.flying) {
+      const lock = av.radar.lock;
+      if (lock && !pic.contacts.some((c) => c.id === lock && c.source === 'radar')) {
+        this.displays.command({ to: 'avionics', command: { type: 'radar-lock', id: null } });
+        this.hud.message('Lock lost', 3, true);
+      }
+      const r = this.displays.avionics.radar;
+      if (r.on && r.mode === 'acm' && !r.lock) {
+        const id = acmAcquire(pic, pos, forward, upBody, t);
+        if (id) this.displays.command({ to: 'avionics', command: { type: 'radar-lock', id } });
+      }
+    }
+    this.sensorSnap = relativePicture(
+      pic,
+      { pos, vel, forward, up: upBody },
+      R,
+      radar,
+      this.displays.avionics,
+      profile.skin,
+    );
+    if (this.flying) {
+      const called = threatCalls(this.threatsHeard, this.sensorSnap.threats);
+      this.threatsHeard = called.heard;
+      for (const c of called.calls) {
+        this.hud.message(c.text, 4, c.warn);
+        this.deps.tone?.(c.tone);
+      }
+    } else this.threatsHeard = new Map();
+  }
+
+  /** The radar lock's contact where it is now (carried along its velocity), or null. */
+  private lockedContact(t: number): { pos: Vec3d; range?: number } | null {
+    const lock = this.displays.avionics.radar.lock;
+    const c = lock ? this.sensors.picture.contacts.find((x) => x.id === lock) : undefined;
+    if (!c) return null;
+    const pos = new Vec3d(...c.pos).addScaled(new Vec3d(...c.vel), Math.max(0, t - c.seen));
+    return { pos };
+  }
+
+  /** The HUD's box on the locked contact (decision 218), with its range in nautical miles. */
+  private hudTarget(p: FollowedState, t: number): HudFrame['target'] {
+    const c = this.lockedContact(t);
+    if (!c) return null;
+    const eye = this.deps.globe.chase.eye;
+    const range = c.pos.distanceTo(new Vec3d(...p.pos));
+    return {
+      point: [c.pos.x - eye.x, c.pos.y - eye.y, c.pos.z - eye.z],
+      label: `${(range / 1852).toFixed(1)}`,
+    };
+  }
+
   /** The master mode's triggers every frame; the displays at 10 Hz (decision 199), read-only. */
   private updateDisplays(m: Mission, p: FollowedState, frame: HudFrame, t: number): void {
     const b = this.bundle;
     if (!b?.avionics) return;
+    this.updateSensors(m, p, t);
+    // The locked contact's box on the HUD, carried along between scans (decision 303).
+    frame.target ??= this.hudTarget(p, t);
     const helicopter = this.look?.rig?.kind === 'helicopter';
     const changed = this.displays.triggers({
       onGround: p.onGround,
@@ -1374,7 +1531,7 @@ export class Follow {
       control: this.flying ? (this.input.mode === 'mouse-aim' ? 'mouse aim' : 'direct') : 'AI',
       mouseFree: this.flying && !this.capture.captured,
       messages: [],
-      sensors: null,
+      sensors: this.sensorSnap,
       stores: this.storesOf(m, t),
     });
     this.displays.update(snap);
@@ -1466,7 +1623,13 @@ interface FollowedState {
   /** Track over the ground and heading (rad from north). */
   track: number;
   heading: number;
+  /** Velocity (m/s) and the nose's and canopy's directions (world), for the sensors (decision 303). */
+  vel: readonly [number, number, number];
+  forward: readonly [number, number, number];
+  up: readonly [number, number, number];
 }
+
+const arr3 = (v: Readonly<Vec3d>): [number, number, number] => [v.x, v.y, v.z];
 
 /** The displays' view of a flown airframe (as Free Flight's). */
 function airframeState(m: FlightModel): FollowedState {
@@ -1480,6 +1643,9 @@ function airframeState(m: FlightModel): FollowedState {
     radarAltitude: t.radarAltitude,
     groundSpeed: t.groundSpeed,
     pos: [m.pos.x, m.pos.y, m.pos.z],
+    vel: [m.vel.x, m.vel.y, m.vel.z],
+    forward: arr3(m.bodyAxis(0)),
+    up: arr3(m.bodyAxis(2).scale(-1)),
     track: vg.length() > 5 ? Math.atan2(vg.dot(east), vg.dot(north)) : t.heading,
     heading: t.heading,
   };

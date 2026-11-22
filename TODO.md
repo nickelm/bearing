@@ -201,7 +201,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] Taxi and take off in turn, the flight joining up after takeoff (owner; with R2.5's ground handling or later)
 - [ ] The Pact's own carrier model (its carrier draws the Alliance's)
 - [ ] Owner: the karst towers and other landform props are not in the one height function (R3.6), so low flights pass through them; keep, thin out or remove them?
-- [ ] Spectator displays' radar and threat formats are empty until R2.6's sensors read campaign contacts
+- [x] Spectator displays' radar and threat formats are empty until R2.6's sensors read campaign contacts (decision 303)
 - [x] Combat spread a nautical mile abeam, in meters whatever the span (owner; decision 258)
 - [x] Afterburner, control surfaces and speedbrake of the followed aircraft stay at rest until R2.5's flight model drives them (the F-21 at full fidelity; decision 272)
 
@@ -232,7 +232,8 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] Owner: on seed 4 no CAP is flown by the F-21 (CAPs are F-25 and F-28; the F-21 flies interdiction, about 7 a day), so take over is open only on F-21 interdiction until R2.7's flight data, or a stand-in flight model for fighters without their own (owner to decide)
 - [ ] Owner, on the GPU: take over an F-21 on a CAP station with T, fly with mouse aim, hand back with T; the wingman stays on you, and the flight flies back to its station
 - [x] Flight cap: up to 8× in cruise while flying, cancelled on any threat (decision 274)
-- [ ] Flight cap's threats from the sensors once they read campaign contacts (R2.6): RWR contacts and radar sites, not only enemy flights within 120 km; an 8× button in the time controls while flying
+- [x] Flight cap's threats from the sensors once they read campaign contacts (R2.6): a radar tracking the aircraft or a launch holds it at 1× (decision 303)
+- [ ] An 8× button in the time controls while flying
 - [x] Session consequences as logged campaign events at handback: losses, the rebuilt route, a `flight-session` record, the survivors' expended stores kept for the next promotion (decision 275)
 - [x] Test: take over and hand back at every phase of a CAP mission; the mission completes (`tests/handoverExit.test.ts`; decision 276)
 
@@ -273,7 +274,9 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] Bombs on targets other than the flight's own, on troops at the front (R2.8's vehicles) and on towns' sites (`CityLayer.setSiteDamage` from the campaign's damage)
 - [ ] The simulation view's bridges broken when cut
 - [ ] Owner's future weapons (2026-11-22): Mavericks (TV-guided air-to-ground missiles), splash damage tuned per target, explosions more spectacular, cluster bombs and fuel-air explosives, ripple and release-interval settings for rockets and bombs
-- [ ] Sensors read campaign contacts: aggregate flights as radar targets, sites with radars as emitters
+- [x] Sensors read campaign contacts: aggregate flights as radar targets, sites with radars as emitters (`follow/campaignSensors.ts`: flights at their leads, the other side's radars and defended places as emitters, the datalink from an airborne AEW; the radar lock gives the pipper its range and slaves the seeker; decision 303)
+- [ ] Each aircraft of a flight as its own contact and target near the aircraft (formation slots), merging into one at range
+- [ ] Surface-to-air sites as entities (R3.5) in place of the defended places' stand-in radars; their launches
 - [ ] Interface defaults per mission type and phase: master mode, formats, HUD cues, declutter
 - [ ] Route and waypoints on the moving map; HUD steering to the next waypoint; the front on the map
 - [ ] Direct control in cursor mode: an attitude and altitude hold as an assist (design §Cursor mode)

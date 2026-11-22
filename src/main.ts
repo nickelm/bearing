@@ -26,6 +26,7 @@ import { CITY_POPULATION } from './worldgen/settlements/tiers';
 import { StrategicScene } from './render/strategic/strategicScene';
 import { OVERLAY_LAYERS } from './render/strategic/overlays/militaryModel';
 import { INFRA_LAYERS } from './render/strategic/infra/infraModel';
+import { AIR_DEFENSE } from './sim/air/resolution';
 import { InfraScene } from './render/sim/infra/infraScene';
 import {
   AIRFIELD_FOOTPRINT,
@@ -524,6 +525,7 @@ async function main(): Promise<void> {
         rate: () => sim.rate,
         post: (input) => sim.input(input),
         weather: () => sim.weather,
+        tone: (kind) => audio.cue(kind),
       });
   // The campaign's aircraft near the camera (R2.4); the followed flight is Follow's to draw.
   const traffic = freeFlightMode
@@ -923,6 +925,17 @@ async function main(): Promise<void> {
             return [p[b.index * 3]!, p[b.index * 3 + 1]!, p[b.index * 3 + 2]!];
           },
           kind: (id) => targets[id]?.kind ?? null,
+          // Defended places carry surface-to-air radars for the sensors (decision 303).
+          defended: [
+            ...targets
+              .filter((x) => (AIR_DEFENSE[x.kind] ?? 0) > 0)
+              .map((x) => ({ id: `site:${x.id}`, side: x.side, point: x.point })),
+            ...strategic.infrastructure.airbases.map((a) => ({
+              id: `base:${a.id}`,
+              side: a.side,
+              point: a.point,
+            })),
+          ],
         });
       }
       globe.terrainReady = true;

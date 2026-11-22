@@ -4845,3 +4845,18 @@ Decision 256's AI checks had run gear down, and the gear's drag had been slowing
 `docs/design.md` (revision 13), `docs/visual-style.md`, `docs/roadmap.md` and `TODO.md` take the proposal in this commit; proposals 0006 and 0008 get a note.
 
 **Reason:** the owner's proposal. The gunship ties air superiority, air defense suppression, night operations and the ground war together, and its dependence on a safe sky makes the player's earlier missions visibly matter.
+
+### 303. The sensors read the campaign: flights as radar contacts, radars and defended places as emitters, the AEW's datalink
+
+**Date:** 2026-11-22
+**Decision:** A followed or flown campaign aircraft runs the sensor model of decision 218 on the war (`follow/campaignSensors.ts`), at 10 Hz, whether it flies at full fidelity or on its analytic route.
+
+- **Flights** within 400 km are radar targets, one per flight at its lead's analytic pose (`m<id>`, the id the missile seeker and the kills use), with a cross-section and size by role (a multirole fighter 4 m², a bomber or an AEW 40–60 m², the stealth striker 0.05 m²). A formation shows as one contact, as at a radar's resolution; each aircraft as its own contact near the aircraft waits for R3 (TODO).
+- **Emitters.** A flight of the other side whose type carries an air-to-air radar emits it, labelled by the digits of its name ("Vo-31" → "31"): tracking the aircraft within 80% of its range against a fighter and inside its scan, searching otherwise. The other side's defended places, the target sites with an air defense and the airbases, carry a surface-to-air radar (45 km, tracking within 25 km; SA6 for the Pact, HK for the Alliance), standing for the aggregate's point defenses until R3.5's sites. The own side's radars stay off the threat display.
+- **Datalink.** While an early warning aircraft of the own side is airborne, the other side's flights within 350 km of it reach the datalink, 5 s late and 400 m off.
+- **Environment.** Visibility and daylight from the campaign's weather and the sun, line of sight over the drawn ground (the follow's airfield ground).
+- **What reads it.** The displays' radar and threat formats (the spectator's too, read-only), the HUD's box on the locked contact (carried along its velocity between scans), the gun pipper's range from the lock, the IR seeker slaved to the lock, a lock the radar lost breaking with "Lock lost", air combat mode's lock, the threat warning's calls and tones while the player flies, and the flight cap, which a radar tracking the aircraft or a launch now holds at 1× ("threat warning").
+
+**How it was checked.** `tests/campaignSensors.test.ts` on seed 7's campaign three hours in: every airborne flight in reach is a target at its lead, the own flight left out, emitters exactly on the other side's radar-carrying types; the other side's defended place tracks within 25 km and the own side's is left out; the datalink exists exactly while an own AEW flies and carries only the other side; a flight 20 km ahead becomes a radar contact under its `m<id>`. `tests/flightCap.test.ts` with the threat warning. The update costs about 0.15 ms on seed 4. The unit suite, the type check and lint pass.
+
+**Reason:** roadmap R2.6, *Sensors read campaign contacts*, and the TODOs it closes: the spectator's empty radar and threat formats (R2.4) and the flight cap's threats (R2.5).

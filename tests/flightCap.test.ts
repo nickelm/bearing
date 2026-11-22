@@ -19,6 +19,7 @@ describe('the flight cap', () => {
   it('cancels on any threat, near the target, low, with the gear down or on the ground', () => {
     const cases: [Partial<FlightCapInput>, string][] = [
       [{ enemyDistance: 100_000 }, 'enemy aircraft near'],
+      [{ threatened: true }, 'threat warning'],
       [{ targetDistance: 30_000 }, 'in the target area'],
       [{ heightAboveGround: 150 }, 'low'],
       [{ gearDown: true }, 'gear down'],
