@@ -149,7 +149,8 @@ src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Bo
                     events, emitters by key, columns from damage states), the puff pool and its compute kernels
                     (pool.ts, puffCompute.ts, puffModel.ts its CPU reference), the sphere-impostor material, curves,
                     presets and explosion recipes, emitters, debris and ground marks, flash lights, ribbons
-                    (contrails, vortices), weapons.ts (motors and warheads)
+                    (contrails, vortices), weapons.ts (trails by the catalog's motor smoke, warheads), columns.ts (burning
+                    targets from damage), aircraftPose.ts
   sim/city/         planned settlements (Proposal 0009): CityLayer (meshes by detail level, lights, plumes,
                     damage), cityMesh.ts (geometry), cityGround.ts (the urban ground's feature fields in the terrain)
   sim/              simulation view: GlobeScene, camera/ (observer, chase camera and stations), aircraft/

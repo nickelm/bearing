@@ -57,6 +57,7 @@ import { Hud, matrixProjector } from '../ui/flight/hud';
 import type { HudFrame } from '../ui/flight/hud';
 import { buildHudFrame, ccipHud, gunHud, landingAid, seekerHud } from '../ui/flight/hudFrame';
 import { Explosions } from '../render/sim/aircraft/explosions';
+import { airframePose } from '../render/sim/effects/aircraftPose';
 import { Wrecks } from '../render/sim/aircraft/wrecks';
 import { isPending } from '../sim/command/missions/plugin';
 import type { PhaseInterface } from '../sim/command/missions/plugin';
@@ -1418,6 +1419,8 @@ export class Follow {
       d.view.sun.copy(g.sun);
       d.view.radPerPixel = rpp;
       d.view.update(pose, eye);
+      // Contrails, wingtip vortices and a damaged aircraft's smoke (decision 329).
+      g.effects.aircraft(`slot:${a.slot}`, airframePose(m, this.flightSpec!.wing.span, a.damage));
     }
   }
 

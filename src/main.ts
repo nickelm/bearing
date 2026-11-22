@@ -21,6 +21,8 @@ import { WonderKind } from './worldgen/strategic/graph';
 import { DEFAULT_PLANET_PARAMS } from './worldgen/params';
 import type { PlanetParams } from './worldgen/params';
 import { GlobeScene } from './render/sim/globeScene';
+import { fireColumns } from './render/sim/effects/columns';
+import type { TargetSite } from './worldgen/strategic/infrastructure';
 import { anchorsFromTargets, recordsOf } from './render/sim/city/cityLayer';
 import { CITY_POPULATION } from './worldgen/settlements/tiers';
 import { StrategicScene } from './render/strategic/strategicScene';
@@ -367,8 +369,15 @@ async function main(): Promise<void> {
   sim.onWeather = showWeather;
   sim.onMissions = () => strategicView.setMissions(sim.missions);
   sim.onGround = () => strategicView.setGround(sim.ground);
-  // Damaged and destroyed targets on the map (decision 301).
-  sim.onDamage = () => strategicView.setDamage(sim.damage.sites);
+  // Damaged and destroyed targets on the map (decision 301); in the simulation view they
+  // burn: towns' targets through their plans, the rest as the effects' columns (decision 329).
+  let damageSites: readonly TargetSite[] = [];
+  const showDamage = () => {
+    strategicView.setDamage(sim.damage.sites);
+    for (const [id, d] of sim.damage.sites) globe.cities.setSiteDamage(id, d);
+    globe.effects.setColumns(fireColumns(damageSites, sim.damage.sites, globe.lighting.radius));
+  };
+  sim.onDamage = showDamage;
 
   let grid = new CubeGrid(worldParams.resolution);
   const globe = new GlobeScene(renderer, { radius: DEFAULT_PLANET_PARAMS.radius, grid });
@@ -574,6 +583,8 @@ async function main(): Promise<void> {
   };
   const showStrategic = (s: StrategicWorld | null) => {
     freeFlight?.setStrategic(s);
+    damageSites = s?.infrastructure.targets ?? [];
+    showDamage();
     globe.strategic.setWorld(s?.graph ?? null, s?.campaign.cast ?? null, s?.infrastructure ?? null);
     strategicView.setStrategic(
       s?.graph ?? null,

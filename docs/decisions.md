@@ -5032,3 +5032,18 @@ The first run missed by 4.0 m at 610 m and 9.6 m at 900 m, growing with the squa
 **Decision:** The owner rejected Proposal 0010 (relief scale, rock dressing, curvature and strata shading, valley mist and other zone air, waterfalls, points of interest and viewshed composition). It is kept in `docs/proposals/0010-terrain-art-direction.md` with its status set to rejected, its text otherwise as drafted. Nothing in it is to be implemented, and no other document changes on its account; ideas from it return only through a new proposal.
 
 **Reason:** the owner's decision.
+
+### 329. The effects in the game: contrails, vortices, damage smoke, burning targets, motors in the catalog
+
+**Date:** 2026-11-22
+**Decision:**
+
+- **Aircraft.** `EffectsSystem.aircraft(key, pose)` takes an aircraft's position, velocity, body axes, load factor, size and damage each frame it is drawn, and draws its contrails (two engines at the tail, while it flies above the contrail altitude), its wingtip vortices (while its load factor passes the threshold for the air's humidity and it flies faster than 60 m/s) and, between 0.05 and 1 of damage, its smoke (damaged below 0.5, on fire above). Free Flight's Kestrel and its scripted traffic (a banked turn pulls 1 / cos(bank) g), the follow's full-fidelity aircraft (with their damage) and the campaign's traffic within 40 km of the camera (contrails only) call it.
+- **The air.** The scene sets the effects' surface temperature and humidity each frame from the weather at the camera: the report's temperature, and 0.8 × cloud cover plus 0.2 in precipitation for humidity.
+- **Burning targets.** On every damage update from the worker (decision 301), each damaged target site reaches the city layer (`setSiteDamage`, decision 279), so a town's target burns through its plan, and `fireColumns` turns every other damaged site (0.15 and up, not bridges) into a column: fuel depots and refineries as fuel fires, the rest as burning targets, harder with more damage. A new world sets the columns again.
+- **Motors.** Every missile and rocket pod in `src/data/stores.json` names its motor's smoke (`smoke`: `solid`, `reduced-smoke` or `sam`), and the catalog's check requires it; `srm` reduced smoke, `srm-p`, `mrm` and the rockets solid. `effects/weapons.ts` reads it and its table is gone. This supersedes decision 326's table and decision 325's note that nothing calls the ribbons.
+
+**How it was checked.** `tests/effectsIntegration.test.ts`: trails from the catalog, every missile and pod with a smoke, columns by kind and damage with bridges and town targets left out, contrails only at 10 km and not at 3 km at 15 °C, vortices at 7 g, smoke only while damaged. The unit suite, the type check and lint pass. SAMs and ships do not fire or burn yet; their `launch` and fire events wait for R3.4 and R4.
+
+**Reason:** the owner asked for the new effects to be integrated into the game.
+

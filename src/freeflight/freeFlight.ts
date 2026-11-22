@@ -108,6 +108,7 @@ import type { FreeFlightUrl } from './url';
 import { FlightWeather } from './flightWeather';
 import { buildHudFrame, ccipHud, gunHud, landingAid, seekerHud } from '../ui/flight/hudFrame';
 import { Explosions } from '../render/sim/aircraft/explosions';
+import { airframePose } from '../render/sim/effects/aircraftPose';
 import { Wrecks } from '../render/sim/aircraft/wrecks';
 import { gunSelected, rocketCounts } from '../sim/flight/storesRack';
 import { flyingOf, MissileViews } from '../render/sim/aircraft/missileViews';
@@ -396,6 +397,9 @@ export class FreeFlight {
         // A missile fired leaves its rail (decisions 288, 297).
         if (this.rack && !this.helo) this.view.setStores(this.rack.loaded.map((l) => l.station));
         this.view.update(this.pose, eye);
+        // Contrails and wingtip vortices (decision 329).
+        if (this.model && !this.helo && !this.model.crashed)
+          deps.globe.effects.aircraft('flown', airframePose(this.model, this.flightSpec.wing.span));
       }
       this.poseTraffic(eye);
       // The gun's tracers (decision 295).
@@ -1438,6 +1442,16 @@ export class FreeFlight {
         },
         eye,
       );
+      // Its contrails and vortices: a banked turn pulls 1 / cos(bank) g (decision 329).
+      this.deps.globe.effects.aircraft(`traffic:${id}`, {
+        pos: st.pos,
+        vel: st.vel,
+        forward: fwd,
+        right,
+        load: 1 / Math.max(0.1, c),
+        span: 10,
+        length: 16,
+      });
     }
   }
 

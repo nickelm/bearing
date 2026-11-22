@@ -45,7 +45,7 @@ import {
   trailPreset,
 } from './presets';
 import type { Burst, PresetId } from './presets';
-import { Ribbons } from './ribbons';
+import { contrailForms, Ribbons, vortexForms } from './ribbons';
 
 /** Seconds after its last `track` that a moving source stops. */
 export const STALE = 0.5;
@@ -90,6 +90,25 @@ export interface EffectsStats {
 
 const v3 = (a: readonly [number, number, number]) => new Vec3d(a[0], a[1], a[2]);
 
+/** An aircraft as the effects see it each frame (`EffectsSystem.aircraft`). */
+export interface AircraftPose {
+  /** Its center (world, m) and velocity (m/s). */
+  pos: Readonly<Vec3d>;
+  vel: Readonly<Vec3d>;
+  /** Unit body axes: forward and the right wing (world). */
+  forward: Readonly<Vec3d>;
+  right: Readonly<Vec3d>;
+  /** Load factor (g). */
+  load: number;
+  /** Wingspan and length (m). */
+  span: number;
+  length: number;
+  /** Damage 0..1 (decision 301): smoke from 0.05, on fire from 0.5; none when it is shot down. */
+  damage?: number;
+  /** Engines side by side at the tail (1 or 2). */
+  engines?: number;
+}
+
 /** Which preset a long-lived fire of a kind shows. */
 function columnPreset(c: FireColumn): PresetId {
   return c.kind === 'fuel' || c.kind === 'ship' ? 'fuel-fire' : 'burning-target';
@@ -117,6 +136,11 @@ export class EffectsSystem implements EffectSink {
     rateScale: 1,
   };
   enabled = true;
+  /**
+   * The air for contrails and vortices: the surface temperature (°C) under the camera and a
+   * humidity 0..1 (the weather's cloud cover); the scene sets it from the weather.
+   */
+  readonly air = { temperature: 15, humidity: 0.4 };
   /** Ground height (m above the radius) along a unit direction, or null if unknown. */
   groundAt: (dir: Readonly<Vec3d>) => number | null = () => 0;
   private readonly geometry = new InstancedBufferGeometry();
@@ -247,6 +271,31 @@ export class EffectsSystem implements EffectSink {
       vel,
       dir: vel.clone().normalize().scale(-1),
     });
+  }
+
+  /**
+   * An aircraft's contrails (above the contrail altitude), wingtip vortices (above the load
+   * factor for the air's humidity) and damage smoke, each frame it is drawn (decision 329).
+   */
+  aircraft(key: string, a: AircraftPose): void {
+    const now = this.clock;
+    const altitude = a.pos.length() - this.radius;
+    const humidity = this.air.humidity;
+    const contrail = contrailForms(altitude, this.air.temperature);
+    const engines = a.engines ?? 2;
+    const tail = a.pos.clone().addScaled(a.forward, -0.5 * a.length);
+    for (let i = 0; i < engines; i++) {
+      const side = engines === 1 ? 0 : i === 0 ? -1 : 1;
+      const p = tail.clone().addScaled(a.right, side * 1.2);
+      this.ribbons.trail(`${key}:c${i}`, 'contrail', p, contrail, now, humidity);
+    }
+    const vortex = vortexForms(a.load, humidity) && a.vel.length() > 60;
+    for (const side of [-1, 1]) {
+      const p = a.pos.clone().addScaled(a.right, (side * a.span) / 2);
+      this.ribbons.trail(`${key}:v${side}`, 'vortex', p, vortex, now);
+    }
+    const d = a.damage ?? 0;
+    if (d >= 0.05 && d < 1) this.trackAircraft(key, a.pos, a.vel, d >= 0.5 ? 'burning' : 'damaged');
   }
 
   /** A moving source's emitter, made or moved; it stops `STALE` seconds after the last call. */
@@ -519,6 +568,11 @@ export class EffectsSystem implements EffectSink {
     s.dispatches = this.buffers.dispatches;
     s.overwritten = this.pool.overwritten;
     s.rateScale = rateScale;
+  }
+
+  /** Emitters running now (stats are refreshed only by `update`). */
+  get emitterCount(): number {
+    return this.emitters.size;
   }
 
   /** The effect clock (s). */

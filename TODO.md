@@ -443,10 +443,11 @@ Runs beside the main line (`docs/proposals/0009-settlements-and-cities.md`, `doc
 - [x] Phase 7: verification, metrics, screenshots, visual-style *Effects*, decisions, report
 - [ ] Owner: the budget on a real GPU: `effects.html?gputime`, *stress test*, then *Measure* (compute under 0.5 ms, puffs under 1.0 ms at 10,000 puffs); record in `docs/reports/stylized-effects-metrics.md`
 - [ ] Owner: `node tools/effects.screens.mjs` with `MODE=gpu` for Chromium screenshots (the cloud container's Chromium loses its WebGPU device at start)
-- [ ] Game layer: call `effects.ribbons.trail` for the flown and followed aircraft (engines above the contrail altitude, wingtips by load factor, humidity from the weather's cloud cover)
-- [ ] Game layer: `effects.setColumns` from the worker's target damage (`SnapshotMessage.damage`, decision 301) and `aircraft-smoke` events for damaged aircraft (R3)
+- [x] Game layer: contrails and vortices for the flown, followed and nearby campaign aircraft and Free Flight's traffic (`EffectsSystem.aircraft`, decision 329)
+- [x] Game layer: burning columns from the worker's target damage, towns' targets through their plans, and smoke from damaged full-fidelity aircraft (decision 329)
+- [ ] Damaged campaign aircraft (aggregate, analytic) smoke once R3 keeps their damage
 - [ ] Game layer: SAM launches as `launch` events with `fromGround` once SAMs fire (R3.4); ship hits once ships take damage (R4)
-- [ ] Stores catalog: a `motor` per missile and rocket in `src/data/stores.json`, replacing the table in `effects/weapons.ts`
+- [x] Stores catalog: `smoke` per missile and rocket pod in `src/data/stores.json` (decision 329)
 - [ ] Night: fire puffs light the smoke around them (a local light per burning column, or glow on nearby puffs); at night columns read as black silhouettes only
 - [ ] Cap a fire puff's glow under bloom so a fire at night reads orange, not white
 - [ ] The old fallback meshes in `aircraft/explosions.ts` and `missileViews.ts` can go once every scene has an effects system

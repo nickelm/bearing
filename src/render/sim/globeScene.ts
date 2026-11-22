@@ -470,6 +470,13 @@ export class GlobeScene {
     // World object placement: float64 subtraction first, then write float32.
     placePlanetCentered(this.globe.group, o.eye);
     this.beforeDraw?.(o.eye);
+    // The air contrails and vortices form in: the surface temperature under the camera and
+    // the cloud cover for humidity (decision 329).
+    if (this.weatherView?.ready) {
+      const r = this.weatherView.report(this.scratch.copy(o.eye).normalize(), this.gameTime);
+      this.effects.air.temperature = r.temperature;
+      this.effects.air.humidity = Math.min(1, r.cloudCover * 0.8 + (r.precipitation > 0 ? 0.2 : 0));
+    }
     // After the owners have moved their sources and fired their events this frame.
     const w = this.weatherState.wind.value;
     this.effects.update(this.renderer, {

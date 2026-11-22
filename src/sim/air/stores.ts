@@ -6,6 +6,7 @@
  * full fidelity read the same stores.
  */
 import catalog from '../../data/stores.json';
+import type { MotorKind } from '../effects/events';
 
 /** A point in the model's frame (m). */
 export type Vec3 = [number, number, number];
@@ -76,7 +77,14 @@ export interface StoreSpec {
   rocket: RocketSpec | null;
   /** Its warhead (a pod's: each rocket's; decision 301), or null. */
   warhead: WarheadSpec | null;
+  /**
+   * How its motor smokes (a pod's: each rocket's), which decides its trail in the effects
+   * (Proposal 0011, decision 329); null for a store with no motor.
+   */
+  smoke: MotorKind | null;
 }
+
+const SMOKES: readonly MotorKind[] = ['solid', 'reduced-smoke', 'sam'];
 
 function parseWarhead(raw: unknown, what: string): WarheadSpec {
   const o = raw as Record<string, unknown>;
@@ -164,7 +172,14 @@ function parseCatalog(raw: unknown): Readonly<Record<string, StoreSpec>> {
       missile: s.missile === undefined ? null : parseMissile(s.missile, `stores.${id}.missile`),
       rocket: s.rocket === undefined ? null : parseRocket(s.rocket, `stores.${id}.rocket`),
       warhead: s.warhead === undefined ? null : parseWarhead(s.warhead, `stores.${id}.warhead`),
+      smoke: s.smoke === undefined ? null : (s.smoke as MotorKind),
     };
+    if (spec.smoke !== null && !SMOKES.includes(spec.smoke))
+      throw new StoresError(`stores.${id}.smoke: ${String(s.smoke)}`);
+    if ((kind.endsWith('missile') || kind === 'rockets') && spec.smoke === null)
+      throw new StoresError(
+        `stores.${id}.smoke: a missile or a rocket pod names its motor's smoke`,
+      );
     if (spec.missile && spec.missile.propellant >= spec.mass)
       throw new StoresError(`stores.${id}.missile.motor.propellant: not below its mass`);
     if (spec.fuel >= spec.mass) throw new StoresError(`stores.${id}.fuel: not below its mass`);

@@ -156,6 +156,9 @@ interface Placed {
   distance: number;
 }
 
+/** Campaign aircraft within this distance (m) of the camera leave contrails. */
+const CONTRAIL_RANGE = 40_000;
+
 export class CampaignTraffic {
   /** The followed mission, drawn by Follow. */
   exclude: number | null = null;
@@ -255,6 +258,21 @@ export class CampaignTraffic {
       const kept = this.near.get(a.key);
       const close = a.distance < (kept ? NEAR_KEEP : NEAR_RANGE) && near < MAX_NEAR;
       const gear = gearDown(a.pose, Math.max(0, a.pose.altitude - a.ground));
+      // Contrails above the contrail altitude, near enough to see (decision 329).
+      if (a.distance < CONTRAIL_RANGE) {
+        const p = a.pose;
+        const forward = new Vec3d(p.forward[0], p.forward[1], p.forward[2]);
+        const up = new Vec3d(p.up[0], p.up[1], p.up[2]);
+        g.effects.aircraft(`traffic:${a.key}`, {
+          pos: new Vec3d(p.pos[0], p.pos[1], p.pos[2]),
+          vel: forward.clone().scale(200),
+          forward,
+          right: forward.clone().cross(up).normalize(),
+          load: 1,
+          span: 12,
+          length: 16,
+        });
+      }
       if (!close) {
         far.push({
           spec: a.type.spec,

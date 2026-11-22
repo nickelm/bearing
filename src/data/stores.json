@@ -2,6 +2,7 @@
   "notes": "The stores catalog (R2.6, decision 285): what pylons carry. Names are the setting's own, and short is the label the stores format and the HUD show (decision 289); the reference is the real store the numbers come from. Mass in kg (a tank's full; fuel is the kg of fuel a full tank holds, 1,400 l at 0.8 kg/l, which the engine burns before the internal fuel: decision 287), length and diameter in m, dragArea in m2 (drag = dynamic pressure x dragArea, added for every store beyond an aircraft's standard load). Kinds: ir-missile, radar-missile, bomb, rockets, tank. An IR missile's missile block (decision 297): its seeker's gimbal limit and acquisition cone (deg) and lock range (m), its motor's thrust (N), burn (s) and propellant (kg), proportional navigation's gain and its g limit, its proximity fuze's radius (m) and its life (s). A rocket pod's rocket block (decision 300): rockets per pod, each rocket's mass (kg) and drag area (m2), its motor's thrust (N), burn (s) and propellant (kg), and the ripple rate (rockets per second) while the trigger is held. A warhead (decision 301): its explosive (kg; a rocket pod's per rocket), the lethal radius (m) inside which it destroys an aircraft or does its full damage, and the reach (m) to which its damage falls off as (lethal / distance)^2. Radii are generous on purpose (owner): explosives are a little more effective and spectacular than real ones.",
   "stores": {
     "srm": {
+      "smoke": "reduced-smoke",
       "name": "short-range missile",
       "short": "SRM",
       "reference": "AIM-9M",
@@ -35,6 +36,7 @@
       }
     },
     "srm-p": {
+      "smoke": "solid",
       "name": "short-range missile (Pact)",
       "short": "SRM",
       "reference": "R-73",
@@ -68,6 +70,7 @@
       }
     },
     "mrm": {
+      "smoke": "solid",
       "name": "medium-range missile",
       "short": "MRM",
       "reference": "AIM-7M",
@@ -113,6 +116,7 @@
       }
     },
     "rockets-19": {
+      "smoke": "solid",
       "name": "rocket pod, 19 rockets",
       "short": "RKT",
       "reference": "LAU-61",
