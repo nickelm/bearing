@@ -19,24 +19,24 @@ _Written 2026-11-22 before any code, for the out-of-sync session that implements
 
 ### Event interface (`src/sim/effects/events.ts`)
 
-Plain, serializable types the sim may produce and the renderer consumes: `launch` (weapon, motor, where, direction), `hit` (where, what), `explosion` (where, explosive mass, kind: air burst, ground, water, fuel), `fire-started` and `fire-extinguished` (a keyed long-lived fire), `damage` (an aircraft's smoke state), plus `EffectSink`, the one method `handle(event)`. The module imports only `core`. Effects never feed back into sim state (proposal, *Integration*).
+Plain, serializable types the sim may produce and the renderer consumes: `launch` (weapon, motor, where, direction), `hit` (where, what), `explosion` (where, explosive mass, kind: air burst, ground, water, fuel), `fire-started` and `fire-extinguished` (a keyed long-lived fire), `damage` (an aircraft's smoke state), plus `EffectSink`, the one method `handle(event)`. The module imports only `core`. Effects never feed back into sim state (proposal, _Integration_).
 
 ### The puff system (`src/render/sim/effects/`)
 
-| File | Contents |
-|---|---|
-| `curves.ts` | Life curves (keys over 0..1 of life) sampled into a table of 16 entries per curve; the table is one storage buffer the compute and the material read |
-| `presets.ts` | Puff kinds (look: radius, color, rise, buoyancy, drag, emissive) and the 15 emitter presets of the proposal; explosion sizes; the motor-to-trail lookup for weapons |
-| `puffModel.ts` | The puff integrator in TypeScript: the reference the compute kernel mirrors, used by tests |
-| `pool.ts` | The CPU side of the pool: a ring of 20,000 slots, each slot's death time, the live count, the spawn staging records |
-| `puffCompute.ts` | Two TSL kernels: spawn (copies the frame's staging records into their slots) and update (forces, life curves, floating-origin shift) |
-| `puffMaterial.ts` | The sphere impostor: camera-facing quad, ray–sphere hit with squash and a radius bump, depth written, three-band toon ramp and rim, ordered-dither fade, emissive fire |
-| `emitters.ts` | Emitter runtime: fixed or moving sources, spacing along a path or rate in time, sub-frame interpolation, distance LOD, prewarm |
-| `explosions.ts` | The five layers: flash, fireball, smoke, debris, ground ring and scorch |
-| `debris.ts`, `decals.ts` | Flat-shaded chunks on ballistic paths; scorch discs and shockwave rings on the ground |
-| `lights.ts` | Up to four flash lights a frame, the oldest dropped first, fed to `PlanetLighting` |
-| `ribbons.ts` | Contrails and wingtip vortices: camera-facing strips along recorded paths |
-| `effectsSystem.ts` | The facade: `handle(event)`, emitters by key, `setColumns`, `update(frame)`, `stats` |
+| File                     | Contents                                                                                                                                                               |
+| ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `curves.ts`              | Life curves (keys over 0..1 of life) sampled into a table of 16 entries per curve; the table is one storage buffer the compute and the material read                   |
+| `presets.ts`             | Puff kinds (look: radius, color, rise, buoyancy, drag, emissive) and the 15 emitter presets of the proposal; explosion sizes; the motor-to-trail lookup for weapons    |
+| `puffModel.ts`           | The puff integrator in TypeScript: the reference the compute kernel mirrors, used by tests                                                                             |
+| `pool.ts`                | The CPU side of the pool: a ring of 20,000 slots, each slot's death time, the live count, the spawn staging records                                                    |
+| `puffCompute.ts`         | Two TSL kernels: spawn (copies the frame's staging records into their slots) and update (forces, life curves, floating-origin shift)                                   |
+| `puffMaterial.ts`        | The sphere impostor: camera-facing quad, ray–sphere hit with squash and a radius bump, depth written, three-band toon ramp and rim, ordered-dither fade, emissive fire |
+| `emitters.ts`            | Emitter runtime: fixed or moving sources, spacing along a path or rate in time, sub-frame interpolation, distance LOD, prewarm                                         |
+| `explosions.ts`          | The five layers: flash, fireball, smoke, debris, ground ring and scorch                                                                                                |
+| `debris.ts`, `decals.ts` | Flat-shaded chunks on ballistic paths; scorch discs and shockwave rings on the ground                                                                                  |
+| `lights.ts`              | Up to four flash lights a frame, the oldest dropped first, fed to `PlanetLighting`                                                                                     |
+| `ribbons.ts`             | Contrails and wingtip vortices: camera-facing strips along recorded paths                                                                                              |
+| `effectsSystem.ts`       | The facade: `handle(event)`, emitters by key, `setColumns`, `update(frame)`, `stats`                                                                                   |
 
 **Floating origin.** Puffs are stored in float32 relative to an anchor near the camera; the anchor moves when the camera is 2 km from it, and the next update shifts every puff by the difference (computed in float64 on the CPU). The material adds `anchor − eye`, also computed in float64 (rule 4).
 
@@ -63,7 +63,7 @@ Plain, serializable types the sim may produce and the renderer consumes: `launch
 4. Emitters and explosions: the presets, the five layers, debris, decals, flash lights.
 5. Ribbons.
 6. Integration as above.
-7. Verification: the proposal's checks, `docs/reports/stylized-effects-metrics.md`, screenshots, the *Effects* section of `docs/visual-style.md`, decisions, `docs/reports/stylized-effects-report.md`.
+7. Verification: the proposal's checks, `docs/reports/stylized-effects-metrics.md`, screenshots, the _Effects_ section of `docs/visual-style.md`, decisions, `docs/reports/stylized-effects-report.md`.
 
 ## Risks
 

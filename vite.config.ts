@@ -62,11 +62,12 @@ export default defineConfig(({ command, isPreview }) => ({
   build: {
     // WebGPU-only project: every supported browser handles modern syntax and top-level await.
     target: 'esnext',
-    // Two pages: the game and the model viewer (decision 106).
+    // Three pages: the game, the model viewer (decision 106) and the effects sandbox (decision 327).
     rollupOptions: {
       input: {
         main: join(import.meta.dirname, 'index.html'),
         viewer: join(import.meta.dirname, 'viewer.html'),
+        effects: join(import.meta.dirname, 'effects.html'),
       },
     },
     // three/webgpu alone is ~850 kB minified; revisit with code splitting in milestone 8.

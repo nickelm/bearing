@@ -276,6 +276,12 @@ export class PlanetLighting {
    * gray and dim by it (`overcastSky`). Set before materials are built.
    */
   overcast: ((p: Vec3Node) => Node<'float'>) | null = null;
+  /**
+   * Optional light from local sources at a camera-relative point, taken like sky light:
+   * the explosions' flash lights (effects/flashLights.ts, decision 324). Set before
+   * materials are built.
+   */
+  localLight: ((relative: Vec3Node) => Vec3Node) | null = null;
 
   constructor(readonly radius = PLANET_RADIUS) {
     this.atmosphere = new AtmosphereNodes(
@@ -450,8 +456,11 @@ export class PlanetLighting {
       up,
       // Surfaces are exposed above the sky under a low sun (`surfaceExposure`).
       sunlight: this.sunlightAt(p).mul(this.surfaceGain).toVar() as Vec3Node,
-      // A lightning flash lights surfaces as a brief, bright sky.
-      sky: sky.add(this.flashAt(p)).toVar() as Vec3Node,
+      // A lightning flash lights surfaces as a brief, bright sky; so do the explosions' flashes.
+      sky: (this.localLight
+        ? sky.add(this.flashAt(p)).add(this.localLight(relative))
+        : sky.add(this.flashAt(p))
+      ).toVar() as Vec3Node,
       moonlight: this.moonlightAt(p).toVar() as Vec3Node,
       moonSky: this.moonSkyAt(up).toVar() as Vec3Node,
     };
