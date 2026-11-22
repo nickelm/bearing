@@ -54,7 +54,8 @@ docs/proposals/     owner proposals (do not reformat); 0001-two-views.md (decisi
                     (decision 189), 0007-world-diversity.md (decision 204),
                     0008-game-loop-and-campaign.md (decision 228), 0009-settlements-and-cities.md
                     (decisions 259–270), 0011-stylized-effects.md (decisions 320–327) and
-                    0012-gunship-and-sensor-stations.md (decision 302) are accepted
+                    0012-gunship-and-sensor-stations.md (decision 302) are accepted; 0010-terrain-art-direction.md
+                    was rejected (decision 328) and is kept for the record only
 docs/roadmap.md     phases R0–R6 with milestones, dependencies and exit criteria: what to build next
 docs/status/        audits: audit-2026-11-18.md (status matrix, health, decisions for the owner) and
                     todo-2026-11-18.md (the earlier tracks' TODO, archived)

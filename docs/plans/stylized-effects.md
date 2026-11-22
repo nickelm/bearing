@@ -13,7 +13,7 @@ _Written 2026-11-22 before any code, for the out-of-sync session that implements
 - **Contrails, wingtip vortices, flares**: none. Roadmap R6.6 lists flight effects (vapor, contrails, heat shimmer); R3.3 lists damage effects (smoke, fire, missing parts) and countermeasures.
 - **Weapons and damage events.** The rack (`sim/flight/storesRack.ts`) holds `impacts` (where, when, mass) and the live missiles, rounds and falling stores; hits reach the campaign as `shot-down` and `target-hit` inputs (decision 301); the worker sends target damage to the main thread (`SnapshotMessage.damage`). There is no effect event stream; the views poll the rack.
 - **Light.** `PlanetLighting` (one sun, sky, moon, night floor and a lightning flash as a point light), `particleLight` for particles at the camera, `aerialPerspective` per vertex. The renderer uses a reversed depth buffer (decision 112). No local point lights.
-- **Proposal 0010**, named in the session's instructions, is not in the repository; nothing here depends on it.
+- **Proposal 0010** (terrain art direction), named in the session's instructions, was rejected by the owner (decision 328) and added to `docs/proposals/` for the record; nothing here depends on it.
 
 ## Architecture
 

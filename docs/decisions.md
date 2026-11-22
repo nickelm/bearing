@@ -5005,3 +5005,10 @@ The first run missed by 4.0 m at 610 m and 9.6 m at 900 m, growing with the squa
 **Decision:** `effects.html` is a third Vite page (`src/effectsSandbox/`): a curved patch of the planet with the real sky and light, props to cut into, scripted actors for every preset (missiles by motor, a SAM, damaged and burning aircraft, flares, a hover, a contrail pass, a 7 g turn), buttons for every preset and explosion size and kind, wind, sun and air controls, camera stations with a mouse orbit, the proposal's stress scene, and with `?gputime` the compute time and, under *Measure*, the puffs' render share from interleaved frames. `tools/effects.preview.ts` renders the same scene headless on Dawn and times the stress scene; `tools/effects.screens.mjs` captures the built page in Chromium. In this cloud container Chromium's WebGPU device is lost at start on both lavapipe and SwiftShader, for the existing model viewer too, so the report's screenshots come from the Dawn renders.
 
 **Reason:** the session's phase 3 and 7; one scene for the page, the screenshots and the timings.
+
+### 328. Proposal 0010, terrain art direction, rejected
+
+**Date:** 2026-11-22
+**Decision:** The owner rejected Proposal 0010 (relief scale, rock dressing, curvature and strata shading, valley mist and other zone air, waterfalls, points of interest and viewshed composition). It is kept in `docs/proposals/0010-terrain-art-direction.md` with its status set to rejected, its text otherwise as drafted. Nothing in it is to be implemented, and no other document changes on its account; ideas from it return only through a new proposal.
+
+**Reason:** the owner's decision.
