@@ -69,6 +69,7 @@ import { threatCalls } from '../ui/displays/calls';
 import type { ThreatTone } from '../ui/displays/calls';
 import type { SnapshotSensors, SnapshotThreat } from '../ui/displays/snapshot';
 
+import { arcDistance, initialHeading } from '../core/greatCircle';
 import type { Dir } from '../core/greatCircle';
 import { GROUND_TARGETS } from '../sim/flight/damage';
 import type { GroundTarget, Hit } from '../sim/flight/storesRack';
@@ -92,7 +93,10 @@ import type { FlightSpec } from '../sim/flight/flightSpec';
 import type { Runway } from '../sim/flight/runway';
 import { flownGround } from '../freeflight/ground';
 import type { AirfieldGround, FlownTerrain } from '../freeflight/ground';
-import { FullFidelity, flightSpecOfType, fullFidelityWanted } from './fullFidelity';
+import { FullFidelity, flightSpecOfType, fullFidelityWanted, routeKey } from './fullFidelity';
+import { nextWaypoint, routeWaypoints, sequenceWaypoints } from '../sim/air/waypoints';
+import type { Waypoint } from '../sim/air/waypoints';
+import { frontsSnapshot, routeSnapshot } from '../ui/displays/routeSnapshot';
 import { PHASE_LABELS } from '../ui/missionSearch/model';
 import {
   drawnAltitude,
@@ -210,6 +214,8 @@ export class Follow {
   private readonly title: HTMLSpanElement;
   /** The flight model's ground and the sited runways (R2.5), once the terrain is ready. */
   private airfield: AirfieldGround | null = null;
+  /** The followed mission's waypoints and those reached (decision 305), for the route's key. */
+  private nav: { key: string; wps: Waypoint[]; passed: Set<number> } | null = null;
   private runways: Runway[] = [];
   /** The followed type's fixed-wing flight data, or null: it flies analytically. */
   private flightSpec: FlightSpec | null = null;
@@ -1536,6 +1542,9 @@ export class Follow {
       if (!showsLandingAid(ui, this.displays.avionics.masterMode)) frame.aid = null;
       frame.marks = this.hudMarks(m, ui, p);
     }
+    // The flight plan: the next waypoint, and steering to it under the phase's cue (decision 305).
+    const nav = this.navigation(m, p, t);
+    frame.steering = ui?.hud.includes('steering') ? this.steeringCue(nav, p) : null;
     const helicopter = this.look?.rig?.kind === 'helicopter';
     const changed = this.displays.triggers({
       onGround: p.onGround,
@@ -1568,9 +1577,50 @@ export class Follow {
       messages: [],
       sensors: this.sensorSnap,
       stores: this.storesOf(m, t),
+      route: routeSnapshot(nav.wps, nav.next, unitOf(p.pos), this.deps.radius),
+      fronts: frontsSnapshot(this.deps.strategic.frontLines(), unitOf(p.pos), this.deps.radius),
     });
     this.displays.update(snap);
     this.requestMap(snap.position);
+  }
+
+  /**
+   * The followed mission's waypoints and the next one (decision 305): read again when the
+   * route changes (a handback's, an abort's), sequenced by the phase and by passing within
+   * 2 nm of the next.
+   */
+  private navigation(m: Mission, p: FollowedState, t: number): { wps: Waypoint[]; next: number } {
+    const key = `${m.id}:${routeKey(m)}`;
+    if (this.nav?.key !== key) this.nav = { key, wps: routeWaypoints(m.route), passed: new Set() };
+    const { wps, passed } = this.nav;
+    const phase = missionPhase(m, t);
+    let next = nextWaypoint(wps, phase, passed);
+    if (sequenceWaypoints(wps, next, unitOf(p.pos), this.deps.radius, passed))
+      next = nextWaypoint(wps, phase, passed);
+    return { wps, next };
+  }
+
+  /** The HUD's steering to the next waypoint (decision 305): label, bearing, distance, time, diamond. */
+  private steeringCue(
+    nav: { wps: Waypoint[]; next: number },
+    p: FollowedState,
+  ): HudFrame['steering'] {
+    const w = nav.wps[nav.next];
+    if (!w) return null;
+    const R = this.deps.radius;
+    const from = unitOf(p.pos);
+    const distance = arcDistance(from, w.point, R);
+    const d = new Vec3d(...w.point);
+    const h = this.airfield ? this.airfield.height(d) : 0;
+    const at = d.scale(R + Math.max(0, h));
+    const eye = this.deps.globe.chase.eye;
+    return {
+      label: `${nav.next + 1} ${w.label}`,
+      bearing: initialHeading(from, w.point),
+      distance,
+      eta: p.groundSpeed > 20 ? distance / p.groundSpeed : null,
+      point: [at.x - eye.x, at.y - eye.y, at.z - eye.z],
+    };
   }
 
   /** The moving map's picture every half second while a display shows it (as Free Flight's). */
@@ -1665,6 +1715,12 @@ interface FollowedState {
 }
 
 const arr3 = (v: Readonly<Vec3d>): [number, number, number] => [v.x, v.y, v.z];
+
+/** A world position's unit direction. */
+function unitOf(p: readonly [number, number, number]): [number, number, number] {
+  const r = Math.hypot(p[0], p[1], p[2]) || 1;
+  return [p[0] / r, p[1] / r, p[2] / r];
+}
 
 /** The interface defaults of mission m's phase at t (its plug-in's; decision 304), or null. */
 export function phaseInterface(m: Mission, t: number): PhaseInterface | null {

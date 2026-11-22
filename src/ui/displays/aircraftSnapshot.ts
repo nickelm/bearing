@@ -11,6 +11,8 @@ import type {
   AircraftSnapshot,
   SnapshotMessage,
   SnapshotSensors,
+  SnapshotFront,
+  SnapshotRoute,
   SnapshotStores,
 } from './snapshot';
 import { GUN, STORES, weaponMode } from '../../sim/air/stores';
@@ -116,6 +118,9 @@ export interface SnapshotExtras {
   sensors: SnapshotSensors | null;
   /** The stores on the pylons (decision 289), or null. */
   stores?: SnapshotStores | null;
+  /** The mission's flight plan and the fronts near the aircraft (decision 305). */
+  route?: SnapshotRoute | null;
+  fronts?: SnapshotFront[] | null;
 }
 
 /**
@@ -225,5 +230,7 @@ export function snapshotFromHud(f: HudFrame, x: SnapshotExtras): AircraftSnapsho
     messages: x.messages,
     sensors: x.sensors,
     stores: x.stores ?? null,
+    route: x.route ?? null,
+    fronts: x.fronts ?? null,
   };
 }

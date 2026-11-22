@@ -278,8 +278,11 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] Each aircraft of a flight as its own contact and target near the aircraft (formation slots), merging into one at range
 - [ ] Surface-to-air sites as entities (R3.5) in place of the defended places' stand-in radars; their launches
 - [x] Interface defaults per mission type and phase: master mode, formats, HUD cues, declutter (the triggers' cruise mode, formats between edits and presets, weapon pre-selection, target and station diamonds, the landing aid on the ground and the approach only; decision 304)
-- [ ] The 'steering' cue with the route and waypoints (next task); the helicopters' 'landing-zone' cue (R2.9)
-- [ ] Route and waypoints on the moving map; HUD steering to the next waypoint; the front on the map
+- [ ] The helicopters' 'landing-zone' cue (R2.9)
+- [x] Route and waypoints on the moving map; HUD steering to the next waypoint; the front on the map (waypoints from the route's phases, sequenced by phase or within 2 nm; the map's projection for every symbol; the front in the elevation modes; the picture without flights and units; decision 305)
+- [ ] Datalink tracks, threat rings and the bullseye on the moving map (with the intraflight datalink task and R3.2)
+- [ ] Waypoint callouts and a waypoint step key (the crewmate's in R4; a key or bezel button to step the steerpoint by hand)
+- [ ] The AI pilots steer by the same waypoints (R3, the flight director's navigation)
 - [ ] Direct control in cursor mode: an attitude and altitude hold as an assist (design §Cursor mode)
 - [ ] LOW FUEL in the status strip
 - [ ] The player's own flight on the HUD (markers on the other aircraft) and on the moving map and radar by intraflight datalink (decision 258)

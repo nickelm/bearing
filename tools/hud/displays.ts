@@ -20,6 +20,12 @@ import type {
   SnapshotSensors,
 } from '../../src/ui/displays/snapshot';
 import { DisplaySystem } from '../../src/ui/displays/system';
+import { destination } from '../../src/core/greatCircle';
+import type { Dir } from '../../src/core/greatCircle';
+import { latLonToDirection } from '../../src/core/coords';
+import { WAYPOINT_LABELS } from '../../src/sim/air/waypoints';
+import type { Waypoint, WaypointKind } from '../../src/sim/air/waypoints';
+import { frontsSnapshot, routeSnapshot } from '../../src/ui/displays/routeSnapshot';
 
 export async function drawDisplays(q: URLSearchParams): Promise<void> {
   const mode = (q.get('displays') ?? 'navigation') as MasterMode;
@@ -83,7 +89,34 @@ export async function drawDisplays(q: URLSearchParams): Promise<void> {
   // `&terrain=<file in tools/out>&mapmode=elevation|relative`: the moving map's elevation
   // samples from tools/groundMap.preview.ts (decision 227).
   const terrain = q.get('terrain');
-  if (terrain) snap.terrain = (await (await fetch(`../out/${terrain}`)).json()) as never;
+  if (terrain === 'flat') snap.terrain = flatTerrain(Number(q.get('mapnm') ?? 20) * 1852);
+  else if (terrain) snap.terrain = (await (await fetch(`../out/${terrain}`)).json()) as never;
+  // `&route=1`: a made-up flight plan and a front around the aircraft (decision 305), the
+  // IP passed and the target next.
+  if (q.get('route') === '1') {
+    const v = latLonToDirection(snap.position.lat, snap.position.lon);
+    const here: Dir = [v.x, v.y, v.z];
+    const R = snap.position.radius;
+    const at = (b: number, d: number) => destination(here, snap.track + b, d, R);
+    const wp = (kind: WaypointKind, point: Dir): Waypoint => ({
+      kind,
+      label: WAYPOINT_LABELS[kind],
+      point,
+      time: 0,
+      passedFrom: 'egress',
+    });
+    const wps = [
+      wp('base', at(Math.PI + 0.3, 90_000)),
+      wp('ip', at(Math.PI - 0.2, 12_000)),
+      wp('target', at(0.15, 24_000)),
+      wp('home', at(Math.PI + 0.5, 80_000)),
+    ];
+    snap.route = routeSnapshot(wps, 2, here, R);
+    const line: number[] = [];
+    for (let k = -60; k <= 60; k += 2)
+      line.push(...destination(at(0, 30_000), snap.track + Math.PI / 2, k * 1000, R));
+    snap.fronts = frontsSnapshot([{ points: line, teeth: 1, color: 0x2f6fb5 }], here, R);
+  }
   // The jet's strike load with one bomb gone, and the bombs selected in air-to-ground (decision 289).
   if (!helo) {
     const b = AIRCRAFT_BUNDLES['alliance-fighter']!;
@@ -190,4 +223,13 @@ function picture(ground: boolean, skin: 'alliance' | 'pact'): SnapshotSensors {
       { id: 'bandit-2', kind: '29', azimuth: 0.45, state: 'launch', ground: false },
     ],
   };
+}
+
+/** Gently rolling made-up heights for the elevation modes (`&terrain=flat`). */
+function flatTerrain(halfExtent: number): NonNullable<AircraftSnapshot['terrain']> {
+  const n = 64;
+  const heights: number[] = [];
+  for (let r = 0; r < n; r++)
+    for (let c = 0; c < n; c++) heights.push(300 + 250 * Math.sin(c / 7) * Math.cos(r / 9));
+  return { n, halfExtent, rotation: 0, heights, water: new Array(n * n).fill(0), altitude: 3000 };
 }

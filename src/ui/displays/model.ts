@@ -69,7 +69,20 @@ export type ScreenItem =
       align: 'left' | 'center' | 'right';
       tone: Tone;
     }
-  | { kind: 'line'; points: [number, number][]; tone: Tone; width?: number }
+  /**
+   * A polyline. Over the map (decision 305) a line may carry its own color (CSS) instead
+   * of the tone's, a pale casing under it, a dash, or be a filled shape (a front's teeth).
+   */
+  | {
+      kind: 'line';
+      points: [number, number][];
+      tone: Tone;
+      width?: number;
+      color?: string;
+      casing?: string;
+      dashed?: boolean;
+      fill?: boolean;
+    }
   | { kind: 'arc'; x: number; y: number; r: number; tone: Tone; dashed?: boolean }
   /**
    * The moving map's picture (decision 201): the strategic view's rendering around

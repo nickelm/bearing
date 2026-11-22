@@ -14,7 +14,7 @@
 import type { FormatId, SlotId } from '../../sim/avionics/profiles';
 import type { BezelButton, DisplayModel, DisplayState, ScreenItem, Tone } from './model';
 import { BEZEL_BUTTONS, SMALL_BUTTONS } from './model';
-import type { AircraftSnapshot } from './snapshot';
+import type { AircraftSnapshot, MapBearing } from './snapshot';
 import { ACM_CONE } from '../../sim/sensors/sensors';
 import { elevationItems } from './elevation';
 
@@ -381,6 +381,9 @@ function movingMapFormat(s: AircraftSnapshot, d: DisplayState): ScreenItem[] {
         radius: s.position.radius,
       },
     ]),
+    // The fronts: in the chart they are in the picture; the elevation modes draw them.
+    ...(elevation ? frontItems(s, half, rotation) : []),
+    ...routeItems(s, half, rotation, fig),
     { kind: 'arc', x: 0.5, y: 0.5, r: 0.25, tone: 'normal', dashed: true },
     text(0.5 + 0.25 * 0.72, 0.5 + 0.25 * 0.72 + 0.06, fig(half / 2), 'small', 'left', 'normal'),
     { kind: 'line', points: [pt(1, 0), pt(-1, 0)], tone: 'normal', width: 2 },
@@ -404,31 +407,63 @@ function destinationMark(
 ): ScreenItem[] {
   const d = s.destination;
   if (!d) return [];
-  const rel = d.bearing - rotation;
-  const edge = 0.44;
-  const r = (d.distance / half) * 0.5;
-  const inside = r <= edge;
-  const k = inside ? r : edge;
-  const x = 0.5 + k * Math.sin(rel);
-  const y = 0.5 - k * Math.cos(rel);
-  const q = 0.022;
-  if (inside)
-    return [
-      {
-        kind: 'line',
-        points: [
-          [x, y - q],
-          [x + q, y],
-          [x, y + q],
-          [x - q, y],
-          [x, y - q],
-        ],
-        tone: 'normal',
-        width: 2,
-      },
-      text(x + 0.035, y + 0.012, d.label, 'small', 'left', 'normal'),
-    ];
-  // A caret at the edge, pointing out along the bearing.
+  const at: MapBearing = [d.bearing, d.distance];
+  const [x, y] = mapPlace(at, s.position.radius, half, rotation);
+  if (onMap(x, y)) return [diamondItem(x, y, 0.022, 'normal', 2), label(x, y, d.label)];
+  return edgeCaret(at, rotation, `${d.label} ${fig(d.distance)}`);
+}
+
+/** The strategic camera's vertical field of view (StrategicScene's 45°): the map picture's. */
+export const MAP_FOV_Y = (45 * Math.PI) / 180;
+/** How far from the center a place still counts as on the map (screen fractions). */
+const MAP_EDGE = 0.44;
+
+/**
+ * Where a place lies on the moving map (decision 305), in screen fractions: the picture's
+ * own projection, a camera straight down over the aircraft at the height that shows the
+ * picture's half extent (√2 × the screen's) at its edge, so a waypoint sits where the
+ * picture draws its ground. A place beyond that camera's horizon goes to the horizon,
+ * along its bearing (always off the screen).
+ */
+export function mapPlace(
+  at: Readonly<MapBearing>,
+  R: number,
+  half: number,
+  rotation: number,
+): [number, number] {
+  const H = (half * Math.SQRT2) / Math.tan(MAP_FOV_Y / 2);
+  const th = Math.min(at[1] / R, Math.acos(R / (R + H)));
+  const m = (H * R * Math.sin(th)) / (H + R * (1 - Math.cos(th)));
+  const r = (m / half) * 0.5;
+  const rel = at[0] - rotation;
+  return [0.5 + r * Math.sin(rel), 0.5 - r * Math.cos(rel)];
+}
+
+const onMap = (x: number, y: number) => Math.hypot(x - 0.5, y - 0.5) <= MAP_EDGE;
+
+function diamondItem(x: number, y: number, q: number, tone: Tone, width: number): ScreenItem {
+  return {
+    kind: 'line',
+    points: [
+      [x, y - q],
+      [x + q, y],
+      [x, y + q],
+      [x - q, y],
+      [x, y - q],
+    ],
+    tone,
+    width,
+  };
+}
+
+const label = (x: number, y: number, t: string, tone: Tone = 'normal') =>
+  text(x + 0.035, y + 0.012, t, 'small', 'left', tone);
+
+/** A caret at the map's edge pointing out along a place's bearing, with its label. */
+function edgeCaret(at: Readonly<MapBearing>, rotation: number, t: string): ScreenItem[] {
+  const rel = at[0] - rotation;
+  const x = 0.5 + MAP_EDGE * Math.sin(rel);
+  const y = 0.5 - MAP_EDGE * Math.cos(rel);
   const tip = (a: number, l: number): [number, number] => [
     x + l * Math.sin(rel + a),
     y - l * Math.cos(rel + a),
@@ -440,16 +475,144 @@ function destinationMark(
       tone: 'normal',
       width: 2,
     },
-    text(
-      x,
-      y + (Math.cos(rel) > 0 ? 0.07 : -0.045),
-      `${d.label} ${fig(d.distance)}`,
-      'small',
-      'center',
-      'normal',
-    ),
+    text(x, y + (Math.cos(rel) > 0 ? 0.07 : -0.045), t, 'small', 'center', 'normal'),
   ];
 }
+
+/**
+ * The flight plan on the map (decision 305): the legs between the waypoints (flown ones
+ * dim, the one to the next waypoint wider), each waypoint's symbol with its number and
+ * name (a circle; a triangle for the target, a ring around the station's racetrack, a
+ * square for a landing field), the next one drawn bold, and a caret at the edge with its
+ * distance when it lies beyond the range.
+ */
+function routeItems(
+  s: AircraftSnapshot,
+  half: number,
+  rotation: number,
+  fig: (m: number) => string,
+): ScreenItem[] {
+  const r = s.route;
+  if (!r) return [];
+  const R = s.position.radius;
+  const place = (at: Readonly<MapBearing>) => mapPlace(at, R, half, rotation);
+  const items: ScreenItem[] = [];
+  const next = r.next < 0 ? r.waypoints.length : r.next;
+  r.legs.forEach((leg, i) => {
+    const flown = i + 1 < next;
+    items.push({
+      kind: 'line',
+      points: leg.map(place),
+      tone: flown ? 'dim' : 'normal',
+      width: i + 1 === next ? 2 : 1.5,
+    });
+  });
+  r.waypoints.forEach((w, i) => {
+    const [x, y] = place(w.at);
+    if (!onMap(x, y)) return;
+    const tone: Tone = i < next ? 'dim' : 'normal';
+    const width = i === next ? 3 : 1.5;
+    const q = 0.018;
+    if (w.kind === 'target')
+      items.push({
+        kind: 'line',
+        points: [
+          [x, y - q * 1.3],
+          [x + q * 1.15, y + q * 0.7],
+          [x - q * 1.15, y + q * 0.7],
+          [x, y - q * 1.3],
+        ],
+        tone,
+        width,
+      });
+    else if (w.kind === 'landing')
+      items.push({
+        kind: 'line',
+        points: [
+          [x - q, y - q],
+          [x + q, y - q],
+          [x + q, y + q],
+          [x - q, y + q],
+          [x - q, y - q],
+        ],
+        tone,
+        width,
+      });
+    else {
+      items.push({ kind: 'arc', x, y, r: q, tone });
+      if (i === next) items.push({ kind: 'arc', x, y, r: q * 0.45, tone });
+    }
+    if (w.kind === 'station') items.push({ kind: 'arc', x, y, r: q * 2.4, tone, dashed: true });
+    items.push(label(x, y, `${w.number} ${w.label}`, tone));
+  });
+  const n = r.waypoints[r.next];
+  if (n) {
+    const [x, y] = place(n.at);
+    if (!onMap(x, y))
+      items.push(...edgeCaret(n.at, rotation, `${n.number} ${n.label} ${fig(n.at[1])}`));
+  }
+  return items;
+}
+
+/**
+ * The fronts on the elevation modes (decision 305), as the strategic map draws them: a
+ * dark line on a pale casing with teeth in the attacker's color on its side.
+ */
+function frontItems(s: AircraftSnapshot, half: number, rotation: number): ScreenItem[] {
+  const R = s.position.radius;
+  const items: ScreenItem[] = [];
+  for (const f of s.fronts ?? []) {
+    const pts = f.points.map((p) => mapPlace(p, R, half, rotation));
+    items.push({
+      kind: 'line',
+      points: pts,
+      tone: 'normal',
+      width: 2,
+      color: FRONT_INK,
+      casing: FRONT_CASING,
+    });
+    // Teeth every TOOTH_PERIOD along the line, on its attacker's side. The screen's y runs
+    // down, so the left of a direction (dx, dy) is (dy, −dx).
+    let carry = TOOTH_PERIOD / 2;
+    for (let i = 0; i + 1 < pts.length; i++) {
+      const [ax, ay] = pts[i]!;
+      const [bx, by] = pts[i + 1]!;
+      const len = Math.hypot(bx - ax, by - ay);
+      if (len < 1e-9) continue;
+      const ux = (bx - ax) / len;
+      const uy = (by - ay) / len;
+      const nx = uy * f.teeth;
+      const ny = -ux * f.teeth;
+      for (let d = carry; d < len; d += TOOTH_PERIOD) {
+        const cx = ax + ux * d;
+        const cy = ay + uy * d;
+        if (Math.abs(cx - 0.5) > 0.5 || Math.abs(cy - 0.5) > 0.5) continue;
+        const b = TOOTH_BASE / 2;
+        items.push({
+          kind: 'line',
+          points: [
+            [cx - ux * b, cy - uy * b],
+            [cx + nx * TOOTH_HEIGHT, cy + ny * TOOTH_HEIGHT],
+            [cx + ux * b, cy + uy * b],
+          ],
+          tone: 'normal',
+          color: f.color,
+          fill: true,
+        });
+      }
+      carry = (((carry - len) % TOOTH_PERIOD) + TOOTH_PERIOD) % TOOTH_PERIOD;
+    }
+  }
+  return items;
+}
+
+/** The front's ink and casing, as Part II's (militaryModel.ts FRONT_COLOR, CASING_COLOR). */
+const FRONT_INK = '#2a2a2a';
+const FRONT_CASING = '#f4efe4';
+/** Its teeth (screen fractions): base, height and spacing. */
+const TOOTH_BASE = 0.034;
+const TOOTH_HEIGHT = 0.026;
+const TOOTH_PERIOD = 0.075;
 
 /**
  * The contact LOCK takes (and the L key): the nearest radar contact in the scope, or

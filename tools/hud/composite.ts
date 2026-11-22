@@ -73,6 +73,21 @@ async function main(): Promise<void> {
       armed: true,
     };
   }
+  // `&steering=1`: steering to a waypoint 20° right of the nose, 14 nm out (decision 305);
+  // the landing aid gives way to the steering block.
+  if (query.get('steering') === '1') {
+    const v = shot.frame.velocity;
+    const n = Math.hypot(v[0], v[1], v[2]);
+    const d = 26_000;
+    shot.frame.aid = null;
+    shot.frame.steering = {
+      label: '2 IP',
+      bearing: shot.frame.heading + (20 * Math.PI) / 180,
+      distance: d,
+      eta: d / 230,
+      point: [(v[0] / n) * d + 0.36 * d, (v[1] / n) * d - 2000, (v[2] / n) * d],
+    };
+  }
   // `&gun=1`: the gun pipper (decision 295) a little below the boresight, 610 m out.
   if (query.get('gun') === '1') {
     const b = shot.frame.boresight;

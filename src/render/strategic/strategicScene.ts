@@ -122,6 +122,7 @@ export class StrategicScene {
   /** The ground war's unit symbols (R2.3); its front line moves in `military`. */
   readonly groundLayer: MilitaryLayer<GroundLayer>;
   private groundPicture: GroundPicture | null = null;
+  private fronts: { points: Float64Array; teeth: 1 | -1; color: number }[] = [];
   /** The infrastructure overlays as built, and the campaign's damage on them (decision 301). */
   private infraModel: InfraOverlays | null = null;
   private siteDamage: ReadonlyMap<number, number> = new Map();
@@ -425,6 +426,7 @@ export class StrategicScene {
     this.airRevision++;
     this.groundPicture = null;
     this.groundRevision++;
+    this.fronts = [];
     this.lightsDirty = true;
   }
 
@@ -587,7 +589,21 @@ export class StrategicScene {
     const live = this.groundPicture
       ? new Map(this.groundPicture.fronts.map((f) => [f.theater, f.points]))
       : null;
-    return buildMilitaryOverlays(graph, cast, territory, live);
+    const overlays = buildMilitaryOverlays(graph, cast, territory, live);
+    this.fronts = overlays.lines.flatMap((l) =>
+      l.layer === 'front' && l.style.teeth
+        ? [{ points: l.points, teeth: l.style.teeth.side, color: l.style.teeth.color }]
+        : [],
+    );
+    return overlays;
+  }
+
+  /**
+   * The front lines as the map draws them now (decision 305): unit directions, the teeth's
+   * side and the attacker's color, for the moving map's elevation modes.
+   */
+  frontLines(): readonly { points: Float64Array; teeth: 1 | -1; color: number }[] {
+    return this.fronts;
   }
 
   /** Shows or hides roads, railways or site symbols (decision 104); route names go with roads. */
@@ -869,6 +885,10 @@ export class StrategicScene {
     // 150 km from center to edge) they would cover the map, so it shows the relief alone.
     const glyphs = this.showGlyphs;
     this.showGlyphs = glyphs && halfExtent >= MAP_GLYPHS_FROM;
+    // Flights, carrier groups and units are the war's truth: the displays show what the
+    // aircraft's sensors know (rule 12), so the picture leaves them out (decision 305).
+    this.air.group.visible = false;
+    this.groundLayer.group.visible = false;
     this.labels.invalidate();
     this.renderer.setRenderTarget(target);
     try {
@@ -883,6 +903,8 @@ export class StrategicScene {
       this.camera.updateProjectionMatrix();
       this.forceSettle = false;
       this.showGlyphs = glyphs;
+      this.air.group.visible = true;
+      this.groundLayer.group.visible = true;
       this.labels.invalidate();
     }
   }

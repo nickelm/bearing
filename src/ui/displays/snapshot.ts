@@ -140,4 +140,34 @@ export interface AircraftSnapshot {
   terrain?: SnapshotTerrain | null;
   /** The stores on the pylons (decision 289); absent or null without a stores rack. */
   stores?: SnapshotStores | null;
+  /** The mission's flight plan (decision 305); absent or null without one (Free Flight). */
+  route?: SnapshotRoute | null;
+  /** The fronts near the aircraft (decision 305), for the moving map's elevation modes. */
+  fronts?: SnapshotFront[] | null;
+}
+
+/** A place relative to the aircraft: its true bearing (rad) and its distance over the ground (m). */
+export type MapBearing = [bearing: number, distance: number];
+
+/**
+ * The flight plan as the navigation system holds it (decision 305): its waypoints in
+ * order, where each is from the aircraft, and the legs between them as samples at most
+ * ROUTE_STEP apart (legs[i] runs from waypoint i to i + 1).
+ */
+export interface SnapshotRoute {
+  waypoints: { number: number; kind: string; label: string; at: MapBearing }[];
+  /** The waypoint steered to, or −1 when every one is passed. */
+  next: number;
+  legs: MapBearing[][];
+}
+
+/**
+ * A front line near the aircraft (decision 305): samples along it, its teeth's side (+1 on
+ * its left looking along the samples, −1 on its right: the attacker's side, as on the
+ * strategic map) and the attacker's color (CSS).
+ */
+export interface SnapshotFront {
+  points: MapBearing[];
+  teeth: 1 | -1;
+  color: string;
 }

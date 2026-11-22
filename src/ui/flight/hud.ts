@@ -189,6 +189,19 @@ export interface HudFrame {
    */
   marks?: { point: [number, number, number]; label: string }[] | null;
   /**
+   * Steering to the next waypoint (decision 305), under the phase's steering cue: its
+   * number and name, true bearing (rad), distance (m), time to go (s; null when slow) and
+   * where it is relative to the camera (m) for its diamond. The heading tape carries a
+   * caret at its bearing.
+   */
+  steering?: {
+    label: string;
+    bearing: number;
+    distance: number;
+    eta: number | null;
+    point: [number, number, number] | null;
+  } | null;
+  /**
    * The continuously computed impact point (decision 300), while a bomb or a rocket pod is
    * selected: where it reaches the ground if released now (relative to the camera; null
    * beyond a minute's fall), the seconds to impact, and the weapon with its count.
@@ -411,7 +424,8 @@ export class Hud {
     this.attitude(f, cx - tx + 6 * s, cy + span + 118 * s, s);
     this.status(f, cx + tx, cy + span + 44 * s, s);
     if (hv) this.landingZone(f, hv, cx + tx - 150 * s, cy - span - 120 * s, s);
-    else this.landingAid(f, cx + tx - 150 * s, cy - span - 120 * s, s);
+    else if (f.aid) this.landingAid(f, cx + tx - 150 * s, cy - span - 120 * s, s);
+    else this.steeringBlock(f, cx + tx - 150 * s, cy - span - 120 * s, s);
     this.messagesAndWarnings(f, cx, 130 * s, s);
     // Below the app's frame-time readout.
     if (f.debug) this.debugPanel(f, 16, 64, s);
@@ -420,6 +434,8 @@ export class Hud {
     if (f.seeker) this.seekerCircle(f.seeker, project, s);
     if (f.ccip) this.ccipPipper(f, f.ccip, project, s);
     for (const k of f.marks ?? []) this.diamond(k, project, s);
+    const st = f.steering;
+    if (st?.point) this.diamond({ point: st.point, label: st.label }, project, s);
     if (f.control) drawControlCursor(c, f.control, project, W, H, s);
   }
 
@@ -864,6 +880,53 @@ export class Hud {
         this.text(String(v).padStart(3, '0'), tx, y - 10 * s, 'center');
     }
     this.text(String(Math.round(hdg) % 360).padStart(3, '0'), x, y - 10 * s, 'center');
+    // The steering caret (decision 305): a small diamond under the tape at the bearing to
+    // the next waypoint, or an arrow at the tape's end toward it.
+    const st = f.steering;
+    if (st) {
+      const off = ((((st.bearing / DEG - hdg) % 360) + 540) % 360) - 180;
+      const k = Math.max(-30, Math.min(30, off));
+      const sx = x + k * pxPerDeg;
+      const sy = y + 32 * s;
+      const r = 5 * s;
+      this.stroke(() => {
+        c.beginPath();
+        if (Math.abs(off) <= 30) {
+          c.moveTo(sx, sy - r);
+          c.lineTo(sx + r, sy);
+          c.lineTo(sx, sy + r);
+          c.lineTo(sx - r, sy);
+          c.closePath();
+        } else {
+          const d = Math.sign(off);
+          c.moveTo(sx - d * r, sy - r);
+          c.lineTo(sx, sy);
+          c.lineTo(sx - d * r, sy + r);
+        }
+      });
+    }
+  }
+
+  /**
+   * The steering data (decision 305) where the landing aid would be: the next waypoint's
+   * number and name, its distance, bearing and the time to go at the ground speed.
+   */
+  private steeringBlock(f: HudFrame, x: number, y: number, s: number): void {
+    const st = f.steering;
+    if (!st) return;
+    const nm = st.distance / NAUTICAL_MILE;
+    const brg = String(Math.round((((st.bearing / DEG) % 360) + 360) % 360) % 360).padStart(3, '0');
+    const ete =
+      st.eta === null || st.eta > 99 * 60
+        ? '--:--'
+        : `${Math.floor(st.eta / 60)}:${String(Math.floor(st.eta % 60)).padStart(2, '0')}`;
+    this.text(`> ${st.label}`, x, y - 22 * s, 'left');
+    this.text(
+      `${nm < 10 ? nm.toFixed(1) : Math.round(nm)} NM  ${brg}°  ${ete}`,
+      x,
+      y - 4 * s,
+      'left',
+    );
   }
 
   // ---- Attitude, numbers, status ----

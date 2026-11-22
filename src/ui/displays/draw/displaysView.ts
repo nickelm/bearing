@@ -537,9 +537,23 @@ function drawItem(
       break;
     case 'line':
       c.lineWidth = it.width ?? 1.5;
+      if (it.color) c.strokeStyle = c.fillStyle = it.color;
+      if (it.dashed) c.setLineDash([5, 4]);
       c.beginPath();
       it.points.forEach(([x, y], i) => (i ? c.lineTo(x * w, y * h) : c.moveTo(x * w, y * h)));
-      haloStroke(c);
+      if (it.fill) {
+        c.closePath();
+        c.fill();
+      } else if (it.casing) {
+        // A pale casing under the line instead of the dark halo (the front, decision 305).
+        const ink = c.strokeStyle;
+        c.strokeStyle = it.casing;
+        c.lineWidth = (it.width ?? 1.5) + 2.5;
+        c.stroke();
+        c.strokeStyle = ink;
+        c.lineWidth = it.width ?? 1.5;
+        c.stroke();
+      } else haloStroke(c);
       break;
     case 'arc':
       if (it.dashed) c.setLineDash([4, 4]);
