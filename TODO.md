@@ -283,7 +283,8 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] Datalink tracks, threat rings and the bullseye on the moving map (with the intraflight datalink task and R3.2)
 - [ ] Waypoint callouts and a waypoint step key (the crewmate's in R4; a key or bezel button to step the steerpoint by hand)
 - [ ] The AI pilots steer by the same waypoints (R3, the flight director's navigation)
-- [ ] Direct control in cursor mode: an attitude and altitude hold as an assist (design §Cursor mode)
+- [x] Direct control in cursor mode: an attitude and altitude hold as an assist (design §Cursor mode; `sim/flight/holds.ts`, Free Flight and the take-over; decision 306)
+- [ ] A pause-menu switch for the hold, if keyboard pilots want the bare laws; the hold's references set by hand (altitude and heading select) with R4's autopilot panel
 - [ ] LOW FUEL in the status strip
 - [ ] The player's own flight on the HUD (markers on the other aircraft) and on the moving map and radar by intraflight datalink (decision 258)
 - [ ] Acceptance check 8 with the pipper

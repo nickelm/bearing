@@ -282,7 +282,11 @@ async function main(): Promise<void> {
     key('Escape');
     click(ff.pause.el, 'Change airbase');
     frame();
-    check(first.wetness === Math.min(1, +(2.5 * first.rain).toFixed(2)), `${preset}: wet at once`);
+    // Both figures are rounded to 0.01 before they get here, so the product is off by up to 0.0125.
+    check(
+      Math.abs(first.wetness - Math.min(1, 2.5 * first.rain)) <= 0.015,
+      `${preset}: wet at once`,
+    );
     check(Math.abs(advanced - 100 / 60) < 0.02, `${preset}: 100 frames fly 1.67 s`);
     check(paused === 'paused' && held && resumed === 'flying', `${preset}: pause holds the clocks`);
     check(
@@ -698,6 +702,23 @@ async function main(): Promise<void> {
     );
     await press('Tab');
     await captureSettles(false);
+    // Direct control with the mouse free, the gear up and clear of the ground: the hold
+    // flies and the strip says so (decision 306).
+    ff.input.mode = 'direct';
+    key('KeyG');
+    for (let i = 0; i < 1500 && (m.gear > 0.5 || m.telemetry.radarAltitude < 80); i++) fly();
+    for (let i = 0; i < 120; i++) fly();
+    // The displays update at 10 Hz of real time.
+    await new Promise((r) => setTimeout(r, 150));
+    fly();
+    const hold = (ff as unknown as { hold: { label: string | null } }).hold.label;
+    const strip = document.body.textContent?.includes(hold?.toUpperCase() ?? '-') ?? false;
+    result.hold = { hold, strip, gear: m.gear, agl: Math.round(m.telemetry.radarAltitude) };
+    check(
+      hold !== null && strip,
+      `Kestrel: direct control's hold flies with the mouse free (${JSON.stringify(result.hold)})`,
+    );
+    ff.input.mode = 'mouse-aim';
   }
   // The right button's free look and V reach the camera (decision 198); how it eases back is
   // tested in tests/freeFlightView.test.ts, since this page draws nothing.

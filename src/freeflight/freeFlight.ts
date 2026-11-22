@@ -85,6 +85,7 @@ import { groundRadarRange } from '../sim/avionics/avionics';
 import type { DatalinkFeed, SensorEnv, SensorTarget } from '../sim/sensors/sensors';
 import { buildTraffic, trafficState, trafficTargets } from './traffic';
 import { MovingMap } from '../render/strategic/movingMap';
+import { AttitudeHold, holdAllowed } from '../sim/flight/holds';
 import { mapRange } from '../ui/displays/formats';
 import {
   DEFAULT_OPTIONS,
@@ -230,6 +231,8 @@ export class FreeFlight {
    * keys fly, so a keyboard takeoff is never taken over at liftoff (decision 206).
    */
   private aimEngaged = false;
+  /** Direct control's hold while the player's hand is off the stick (decision 306). */
+  private readonly hold = new AttitudeHold();
   /** Whether the page shows a sortie (the body's `ff-flying` class). */
   private sortieShown = false;
   private mapAt = -Infinity;
@@ -638,6 +641,7 @@ export class FreeFlight {
     this.temperatureShift = this.weather.temperatureShift(r.center, this.gameTime);
     // The input source: the scripted pilot, mouse aim in the air once engaged, else the keys.
     const flown = new FlownAircraft(m, this.input.controls, AIRCRAFT);
+    this.hold.release();
     flown.pilot = (_a, ctl, dt) => {
       if (this.pilot) this.pilot.fly(m, ctl, dt);
       else if (
@@ -645,8 +649,14 @@ export class FreeFlight {
         this.aimEngaged &&
         this.state === 'flying' &&
         !m.onGround
-      )
+      ) {
+        this.hold.release();
         this.mouseAim(m, ctl);
+      } else if (this.state === 'flying' && this.input.handsOff && holdAllowed(m)) {
+        // Direct control, the hand off the stick: the hold flies (decision 306).
+        if (!this.hold.engaged) this.hold.engage(m);
+        this.hold.fly(this.director, m, ctl, dt);
+      } else this.hold.release();
     };
     this.attach(flown);
     this.crashAt = 0;
@@ -1290,6 +1300,7 @@ export class FreeFlight {
         : null,
     });
     frame.panels = true;
+    frame.holds = this.hold.label ? [this.hold.label] : [];
     this.updateDisplays(frame);
     frame.target = this.hudTarget(m, this.deps.globe.chase.eye);
     // The gun (decision 295): the trigger while flying, the pipper at the lock's range.

@@ -184,6 +184,7 @@ export function snapshotFromHud(f: HudFrame, x: SnapshotExtras): AircraftSnapsho
     const t = m.toLowerCase();
     if (t === 'hover hold' || t === 'alt hold') holds.push(t);
   }
+  for (const h of f.holds ?? []) if (!holds.includes(h)) holds.push(h);
   return {
     time: x.time,
     kind: hv ? 'helicopter' : 'jet',

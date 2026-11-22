@@ -95,6 +95,8 @@ import { flownGround } from '../freeflight/ground';
 import type { AirfieldGround, FlownTerrain } from '../freeflight/ground';
 import { FullFidelity, flightSpecOfType, fullFidelityWanted, routeKey } from './fullFidelity';
 import { nextWaypoint, routeWaypoints, sequenceWaypoints } from '../sim/air/waypoints';
+import { AttitudeHold, holdAllowed } from '../sim/flight/holds';
+import { FLIGHT_STEP } from '../sim/flight/rigidBody';
 import type { Waypoint } from '../sim/air/waypoints';
 import { frontsSnapshot, routeSnapshot } from '../ui/displays/routeSnapshot';
 import { PHASE_LABELS } from '../ui/missionSearch/model';
@@ -214,6 +216,8 @@ export class Follow {
   private readonly title: HTMLSpanElement;
   /** The flight model's ground and the sited runways (R2.5), once the terrain is ready. */
   private airfield: AirfieldGround | null = null;
+  /** Direct control's hold while the player's hand is off the stick (decision 306). */
+  private readonly hold = new AttitudeHold();
   /** The followed mission's waypoints and those reached (decision 305), for the route's key. */
   private nav: { key: string; wps: Waypoint[]; passed: Set<number> } | null = null;
   private runways: Runway[] = [];
@@ -439,12 +443,19 @@ export class Follow {
     if (!f.flight.takeOver(a.slot)) return false;
     // The input source: the jet's controls as the input holds them, mouse aim over them once
     // the mouse is captured (as Free Flight's; the pilot hook and the input share the controls).
+    this.hold.release();
     a.flown.pilot = (_af, ctl) => {
       Object.assign(ctl, inp.controls);
       if (inp.mode === 'mouse-aim' && this.aimEngaged && !model.onGround) {
+        this.hold.release();
         flyMouseAim(this.director, model, this.aimDirection(), ctl, inp);
         Object.assign(inp.controls, ctl);
-      }
+      } else if (inp.handsOff && holdAllowed(model)) {
+        // Direct control, the hand off the stick: the hold flies (decision 306).
+        if (!this.hold.engaged) this.hold.engage(model);
+        this.hold.fly(this.director, model, ctl, FLIGHT_STEP);
+        Object.assign(inp.controls, ctl);
+      } else this.hold.release();
     };
     this.slot = a.slot;
     this.takenAt = performance.now();
@@ -1115,6 +1126,7 @@ export class Follow {
       timing: null,
     });
     frame.panels = true;
+    frame.holds = this.hold.label ? [this.hold.label] : [];
     // The gun: the trigger from the input, the pipper on the HUD (decision 295).
     const rack = this.full?.followed(this.slot)?.rack ?? null;
     const av = this.displays.avionics;

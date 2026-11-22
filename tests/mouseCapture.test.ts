@@ -154,6 +154,36 @@ describe('the capture key and the inputs', () => {
     input.dispose();
   });
 
+  it('hands direct control to the hold only with the mouse free and the stick let go (decision 306)', () => {
+    const win = new EventTarget();
+    vi.stubGlobal('window', win);
+    const f = fakeLock();
+    const cap = new MouseCapture(f.el, f.doc, f.schedule);
+    const input = new FlightInput(new EventTarget() as unknown as HTMLElement, cap);
+    input.enabled = true;
+    input.mode = 'direct';
+    expect(input.handsOff).toBe(true);
+    const key = (type: 'keydown' | 'keyup', code: string) => {
+      const e = new Event(type, { cancelable: true }) as Event & { code: string };
+      e.code = code;
+      win.dispatchEvent(e);
+    };
+    key('keydown', 'KeyS');
+    expect(input.handsOff).toBe(false);
+    key('keyup', 'KeyS');
+    expect(input.handsOff).toBe(true);
+    // A captured mouse is the stick; mouse aim has the director; a pause has the controls.
+    cap.grab();
+    expect(input.handsOff).toBe(false);
+    cap.release();
+    input.mode = 'mouse-aim';
+    expect(input.handsOff).toBe(false);
+    input.mode = 'direct';
+    input.enabled = false;
+    expect(input.handsOff).toBe(false);
+    input.dispose();
+  });
+
   it('rotates on the wheels with the ring in mouse aim, and with the stick in direct (decision 217)', () => {
     vi.stubGlobal('window', new EventTarget());
     const f = fakeLock();

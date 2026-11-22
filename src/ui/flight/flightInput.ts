@@ -386,6 +386,21 @@ export class FlightInput {
     this.centerCursor();
   }
 
+  /** A gamepad's or flight stick's stick was off center at the last update. */
+  private padStick = false;
+
+  /**
+   * Direct control with the pilot's hand off the stick (decision 306): the mouse free and
+   * no stick key or gamepad stick held. The app's hold then flies.
+   */
+  get handsOff(): boolean {
+    if (!this.enabled || this.mode !== 'direct' || this.capture?.captured) return false;
+    if (this.padStick) return false;
+    return !(['pitchDown', 'pitchUp', 'rollLeft', 'rollRight'] as const).some((k) =>
+      this.isHeld(k),
+    );
+  }
+
   /** Advances the held keys, mouse and gamepad by `dt` real seconds. */
   update(dt: number): void {
     const c = this.controls;
@@ -460,7 +475,8 @@ export class FlightInput {
     const dz = (v: number | undefined) => (v === undefined || Math.abs(v) < 0.08 ? 0 : v);
     const x = dz(pad.axes[0]);
     const y = dz(pad.axes[1]);
-    if (x !== 0 || y !== 0) {
+    this.padStick = x !== 0 || y !== 0;
+    if (this.padStick) {
       this.controls.roll = clamp(x, -1, 1);
       this.controls.pitch = clamp(y, -1, 1);
     }

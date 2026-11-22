@@ -188,6 +188,8 @@ export interface HudFrame {
    * station, relative to the camera (m), as diamonds with a label.
    */
   marks?: { point: [number, number, number]; label: string }[] | null;
+  /** The control layer's holds that fly the jet (decision 306): 'alt hold' or 'att hold', for the strip. */
+  holds?: string[];
   /**
    * Steering to the next waypoint (decision 305), under the phase's steering cue: its
    * number and name, true bearing (rad), distance (m), time to go (s; null when slow) and
