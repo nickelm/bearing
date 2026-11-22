@@ -53,7 +53,7 @@ function snap(over: Partial<AircraftSnapshot> = {}, avionics?: AvionicsState): A
     cas: 220,
     groundSpeed: 220,
     radarAltitude: 3000,
-    fuel: { mass: 2600, capacity: 2630, unlimited: false, joker: 920, bingo: 526 },
+    fuel: { mass: 2600, capacity: 2630, unlimited: false, joker: 920, bingo: 526, low: 263 },
     engine: { lever: 0.6, power: 0.7, afterburner: 0 },
     gear: { position: 0, down: false, fixed: false, overspeed: false },
     speedbrake: 0,

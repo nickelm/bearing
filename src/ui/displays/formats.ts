@@ -210,15 +210,19 @@ function fuelText(s: AircraftSnapshot, kg: number): string {
   return `${(Math.round(kg / LB / 10) * 10).toLocaleString('en-US')} LB`;
 }
 
-/** Engines and fuel: the fuel's level against joker and bingo, the throttle and power. */
+/**
+ * Engines and fuel: the internal fuel's level with joker, bingo and low fuel marked on it
+ * (decision 307), its tone from all the fuel aboard as the strip's, the throttle and power.
+ */
 function enginesFormat(s: AircraftSnapshot): ScreenItem[] {
   const f = s.fuel;
   const frac = f.capacity > 0 ? Math.min(1, f.mass / f.capacity) : 0;
+  const all = f.total ?? f.mass;
   const tone: Tone = f.unlimited
     ? 'normal'
-    : f.mass < f.bingo
+    : all < f.bingo
       ? 'warning'
-      : f.mass < f.joker
+      : all < f.joker
         ? 'caution'
         : 'normal';
   const items: ScreenItem[] = [
@@ -228,11 +232,13 @@ function enginesFormat(s: AircraftSnapshot): ScreenItem[] {
   ];
   if (!f.unlimited && f.capacity > 0) {
     for (const [v, name] of [
-      // Short marks: the two sit close (35% and 20%), and full words collided.
+      // Short marks: they sit close (35%, 20% and 10%), and full words collided.
       [f.joker, 'J'],
       [f.bingo, 'B'],
+      [f.low, 'L'],
     ] as const) {
-      const x = 0.08 + 0.5 * (v / f.capacity);
+      // A mission's joker can be more than the internal tanks hold: at the bar's end.
+      const x = 0.08 + 0.5 * Math.max(0, Math.min(1, v / f.capacity));
       items.push({
         kind: 'line',
         points: [

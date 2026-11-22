@@ -52,8 +52,11 @@ export function stripModel(s: AircraftSnapshot): StripModel {
   // Doors failed in an overspeed: the gear stays down whatever the handle (decision 207).
   if (g.damaged) add('gear-doors', 'GEAR DOORS', 'caution');
   if (!s.fuel.unlimited) {
-    if (s.fuel.mass < s.fuel.bingo) add('bingo', 'BINGO', 'warning');
-    else if (s.fuel.mass < s.fuel.joker) add('joker', 'JOKER', 'caution');
+    // All the fuel aboard against the three (decision 307): below the reserve LOW FUEL.
+    const fuel = s.fuel.total ?? s.fuel.mass;
+    if (fuel < s.fuel.low) add('low-fuel', 'LOW FUEL', 'warning');
+    else if (fuel < s.fuel.bingo) add('bingo', 'BINGO', 'warning');
+    else if (fuel < s.fuel.joker) add('joker', 'JOKER', 'caution');
   }
   if (s.parkingBrake && s.onGround && s.kind === 'jet' && s.engine.lever > 0.5)
     add('park-thr', 'PARK BRK', 'caution', { to: 'controls', action: 'parkingBrake' });

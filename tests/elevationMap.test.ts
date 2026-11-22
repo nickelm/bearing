@@ -77,7 +77,7 @@ describe('the map mode (decision 227)', () => {
       cas: 200,
       groundSpeed: 200,
       radarAltitude: 1000,
-      fuel: { mass: 1, capacity: 1, unlimited: true, joker: 0, bingo: 0 },
+      fuel: { mass: 1, capacity: 1, unlimited: true, joker: 0, bingo: 0, low: 0 },
       engine: { lever: 0.5, power: 0.5, afterburner: 0 },
       gear: { position: 0, down: false, fixed: false, overspeed: false },
       speedbrake: 0,

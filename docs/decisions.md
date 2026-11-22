@@ -4906,3 +4906,16 @@ Before, freeing the mouse in direct control centered the stick. The pitch law th
 **How it was checked.** `tests/holds.test.ts` on the Kestrel's flight model: let go nearly level, it levels the wings and holds the track within 1° and the altitude within 15 m over 30 s; let go in a 20° bank it holds the bank within 3° and the altitude within 25 m for 20 s while still turning, where the laws alone sink further; let go in a climb it holds the flight path within 1.5°; it stays out with the gear down. `tests/mouseCapture.test.ts`: the input is hands-off only in direct control, enabled, with the mouse free and no stick key held. `tools/freeflight.session.mjs` flies the real `FreeFlight` class: after the mouse-aim takeoff, direct control with the mouse free and the gear up engages the hold and the strip shows it. The session's check that drizzle wets the ground at once now allows for its two figures' rounding (0.36 against 2.5 × 0.14). The Kestrel's lockstep fixture is unchanged (the test pilot does not use the input). The unit suite, the type check and lint pass.
 
 **Reason:** roadmap R2.6, *direct control in cursor mode*: the free cursor works the displays, so the jet must keep flying sensibly while it does.
+
+### 307. LOW FUEL in the strip, and a mission's joker and bingo from its route
+
+**Date:** 2026-11-22
+**Decision:** The status strip shows JOKER (caution), BINGO and LOW FUEL (warnings), one at a time, as decision 189's reading 4 placed them, against all the fuel aboard, drop tanks included (`AircraftSnapshot.fuel.total`; until now the strip read the internal fuel, which stays full while the tanks burn first, so a mission far from home could never warn before the tanks were dry).
+
+- **On a mission** the three come from the route (`sim/air/fuelStates.ts`), in its kilograms per aircraft: low fuel is the planned reserve (FUEL_RESERVE of the departure load, what the plan lands with); bingo is the fuel to fly home from where the aircraft is, the distance at the type's cruise speed and the route's cruise flow, plus the reserve (the descent and approach burn less, so it errs safe); joker is bingo plus three minutes at combat flow, the fuel at which to leave the target or the station so a last engagement still leaves bingo. A jet at full fidelity takes them by share of its load, as promotion gives it fuel (decision 287); a flight on its analytic route reads them in the route's kilograms.
+- **Free Flight** keeps its shares of the internal load (joker 35%, bingo 20%), and low fuel is the same 10% reserve.
+- **The engines format** marks low fuel (L) beside J and B on the internal fuel's bar, a mark beyond what the internal tanks hold at the bar's end, and takes its tone from all the fuel aboard, as the strip does.
+
+**How it was checked.** `tests/fuelStates.test.ts`: low fuel is the route's reserve, bingo grows with the way home and joker is a fight's more wherever the aircraft is; the plan itself holds more than bingo over the target and lands with at least the reserve; the strip shows JOKER, then BINGO, then LOW FUEL in its place, and counts the drop tanks. The unit suite, the type check and lint pass.
+
+**Reason:** roadmap R2.6's TODO, *LOW FUEL in the status strip*; the joker and bingo of a mission were Free Flight's fixed shares, which say nothing about the way home.

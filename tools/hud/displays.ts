@@ -54,7 +54,14 @@ export async function drawDisplays(q: URLSearchParams): Promise<void> {
     cas: ground ? 0 : approach ? 75 : 210,
     groundSpeed: ground ? 0 : 210,
     radarAltitude: ground ? 0 : approach ? 400 : 3000,
-    fuel: { mass: alerts ? 400 : 1600, capacity: 2630, unlimited: false, joker: 920, bingo: 526 },
+    fuel: {
+      mass: alerts ? 400 : 1600,
+      capacity: 2630,
+      unlimited: false,
+      joker: 920,
+      bingo: 526,
+      low: 263,
+    },
     engine: {
       lever: alerts ? 0.9 : ground ? 0 : 0.72,
       power: ground ? 0.1 : 0.8,

@@ -16,6 +16,8 @@ import type {
   SnapshotStores,
 } from './snapshot';
 import { GUN, STORES, weaponMode } from '../../sim/air/stores';
+import { FUEL_RESERVE } from '../../sim/air/aircraft';
+import type { FuelStates } from '../../sim/air/fuelStates';
 import type { StationLoad } from '../../sim/air/stores';
 import { Vec3d } from '../../core/vec3d';
 import { radarDisplayRange } from '../../sim/avionics/avionics';
@@ -118,6 +120,10 @@ export interface SnapshotExtras {
   sensors: SnapshotSensors | null;
   /** The stores on the pylons (decision 289), or null. */
   stores?: SnapshotStores | null;
+  /** A mission's joker, bingo and low fuel in the snapshot's kilograms (decision 307); shares of the load if absent. */
+  fuelStates?: FuelStates | null;
+  /** All the fuel aboard, drop tanks included (kg); the frame's fuel if absent. */
+  fuelTotal?: number;
   /** The mission's flight plan and the fronts near the aircraft (decision 305). */
   route?: SnapshotRoute | null;
   fronts?: SnapshotFront[] | null;
@@ -205,8 +211,10 @@ export function snapshotFromHud(f: HudFrame, x: SnapshotExtras): AircraftSnapsho
       mass: f.fuel,
       capacity: x.capacity,
       unlimited: f.unlimitedFuel,
-      joker: JOKER_SHARE * x.capacity,
-      bingo: BINGO_SHARE * x.capacity,
+      joker: x.fuelStates?.joker ?? JOKER_SHARE * x.capacity,
+      bingo: x.fuelStates?.bingo ?? BINGO_SHARE * x.capacity,
+      low: x.fuelStates?.low ?? FUEL_RESERVE * x.capacity,
+      total: x.fuelTotal ?? f.fuel,
     },
     engine: {
       lever: hv ? Math.min(1, hv.torque) : f.throttle,

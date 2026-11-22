@@ -34,7 +34,7 @@ const snap = (masterMode: AircraftSnapshot['avionics']['masterMode']): AircraftS
   cas: 200,
   groundSpeed: 200,
   radarAltitude: 3000,
-  fuel: { mass: 4000, capacity: 5440, unlimited: false, joker: 1900, bingo: 1100 },
+  fuel: { mass: 4000, capacity: 5440, unlimited: false, joker: 1900, bingo: 1100, low: 544 },
   engine: { lever: 0.6, power: 0.6, afterburner: 0 },
   gear: { position: 0, down: false, fixed: false, overspeed: false },
   speedbrake: 0,

@@ -107,9 +107,15 @@ export interface AircraftSnapshot {
     mass: number;
     capacity: number;
     unlimited: boolean;
-    /** Joker and bingo (kg): Free Flight's defaults until missions set them. */
+    /**
+     * Joker, bingo and low fuel (kg; decision 307): on a mission from its route (fuel to get
+     * home plus the reserve, and a fight's more for joker), in Free Flight shares of the load.
+     */
     joker: number;
     bingo: number;
+    low: number;
+    /** All the fuel aboard, drop tanks included (kg), which the three are compared with; `mass` if absent. */
+    total?: number;
   };
   engine: {
     /** Throttle lever 0..1, engine power 0..1, afterburner stage 0 (off) to 5. */

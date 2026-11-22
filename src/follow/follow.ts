@@ -96,6 +96,9 @@ import type { AirfieldGround, FlownTerrain } from '../freeflight/ground';
 import { FullFidelity, flightSpecOfType, fullFidelityWanted, routeKey } from './fullFidelity';
 import { nextWaypoint, routeWaypoints, sequenceWaypoints } from '../sim/air/waypoints';
 import { AttitudeHold, holdAllowed } from '../sim/flight/holds';
+import { fuelStates } from '../sim/air/fuelStates';
+import type { FuelStates } from '../sim/air/fuelStates';
+import { aircraftType } from '../sim/air/aircraft';
 import { FLIGHT_STEP } from '../sim/flight/rigidBody';
 import type { Waypoint } from '../sim/air/waypoints';
 import { frontsSnapshot, routeSnapshot } from '../ui/displays/routeSnapshot';
@@ -1589,11 +1592,42 @@ export class Follow {
       messages: [],
       sensors: this.sensorSnap,
       stores: this.storesOf(m, t),
+      ...this.fuelFigures(m, nav.wps, p),
       route: routeSnapshot(nav.wps, nav.next, unitOf(p.pos), this.deps.radius),
       fronts: frontsSnapshot(this.deps.strategic.frontLines(), unitOf(p.pos), this.deps.radius),
     });
     this.displays.update(snap);
     this.requestMap(snap.position);
+  }
+
+  /**
+   * Joker, bingo and low fuel from the mission's route (decision 307), in the snapshot's
+   * kilograms: the flight model's for an aircraft at full fidelity (by share of its load, as
+   * promotion gives it fuel), the route's for one on its analytic route; and all the fuel aboard.
+   */
+  private fuelFigures(
+    m: Mission,
+    wps: readonly Waypoint[],
+    p: FollowedState,
+  ): { fuelStates: FuelStates | null; fuelTotal?: number } {
+    const home = wps.find((w) => w.kind === 'home')?.point;
+    if (!home) return { fuelStates: null };
+    const R = this.deps.radius;
+    const plan = fuelStates(
+      m.route,
+      unitOf(p.pos),
+      home,
+      R,
+      aircraftType(m.aircraftType).cruiseSpeed,
+    );
+    const a = this.full?.followed(this.slot);
+    if (!a || m.route.fuel <= 0) return { fuelStates: plan };
+    const k = a.rack.capacity / m.route.fuel;
+    const fm = a.flown.airframe as unknown as FlightModel;
+    return {
+      fuelStates: { joker: plan.joker * k, bingo: plan.bingo * k, low: plan.low * k },
+      fuelTotal: fm.fuel + fm.tankFuel,
+    };
   }
 
   /**

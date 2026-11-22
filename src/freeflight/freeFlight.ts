@@ -1692,6 +1692,8 @@ export class FreeFlight {
       profile,
       avionics: this.displays.avionics,
       capacity: this.fuelCapacity,
+      // Drop tanks count toward joker, bingo and low fuel (decision 307).
+      fuelTotal: f.fuel + (this.helo ? 0 : (this.model?.tankFuel ?? 0)),
       groundSpeed: t.groundSpeed,
       fixedGear: this.helo !== null,
       control,
