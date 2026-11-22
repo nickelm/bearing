@@ -109,7 +109,6 @@ import { FlightWeather } from './flightWeather';
 import { buildHudFrame, ccipHud, gunHud, landingAid, seekerHud } from '../ui/flight/hudFrame';
 import { Explosions } from '../render/sim/aircraft/explosions';
 import { Wrecks } from '../render/sim/aircraft/wrecks';
-import { impactMass } from '../sim/flight/ordnance';
 import { gunSelected, rocketCounts } from '../sim/flight/storesRack';
 import { flyingOf, MissileViews } from '../render/sim/aircraft/missileViews';
 import { buildHeloHudFrame } from '../ui/flight/heloHud';
@@ -417,18 +416,23 @@ export class FreeFlight {
         deps.globe.vehicles,
         deps.globe.lighting,
         this.deps.radius,
+        deps.globe.effects,
       );
       const ground = this.ground;
       // Bombs and rockets that reached the ground explode (decision 300).
-      this.explosions ??= new Explosions(deps.globe.vehicles, deps.globe.lighting);
-      for (const x of this.rack?.impacts.splice(0) ?? [])
-        this.explosions.add(x.at, impactMass(x), x.time);
+      // The scene's effects system draws them (Proposal 0011, decision 326).
+      this.explosions ??= new Explosions(
+        deps.globe.vehicles,
+        deps.globe.lighting,
+        deps.globe.effects,
+      );
+      for (const x of this.rack?.impacts.splice(0) ?? []) this.explosions.impact(x);
       const explosions = this.explosions;
       this.wrecks.update(
         Math.max(0, this.gameTime - this.wreckTime),
         this.deps.radius,
         (d) => (ground ? ground.height(d) : 0),
-        (p) => explosions.add(p, 3000, this.gameTime),
+        (p) => explosions.wreck(p, this.gameTime),
       );
       this.wreckTime = this.gameTime;
       this.explosions.place(this.gameTime, eye);

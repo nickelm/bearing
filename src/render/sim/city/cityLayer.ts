@@ -33,10 +33,8 @@ import {
   abs,
   attribute,
   min,
-  cameraWorldMatrix,
   clamp,
   dot,
-  time,
   float,
   floor,
   fract,
@@ -79,6 +77,7 @@ import type { FromCityWorker, ToCityWorker } from '../../../workers/cityProtocol
 import { CityCore } from '../../../workers/cityCore';
 import { LIGHT_KINDS, lightPointMaterial, lightQuad } from '../infra/lightPoints';
 import { nightFactor } from '../infra/roadShading';
+import type { EffectsSystem } from '../effects/effectsSystem';
 import type { PlanetLighting } from '../lighting/planetLighting';
 import type { TerrainRenderer } from '../terrain/terrainRenderer';
 import { CHUNKS_PER_PLAN, FIELD_SLOTS, PLAN_SLOTS } from './cityGround';
@@ -152,8 +151,9 @@ interface PlanState {
   prismKey: string;
   lights: Mesh | null;
   lightKey: string;
-  plumes: Mesh | null;
-  plumesTried: boolean;
+  /** The effects system's keys of this plan's plumes, or null until they are placed. */
+  plumeKeys: string[] | null;
+  plumesDirty: boolean;
   coverage: Float32Array | null;
   damage: Uint8Array | null;
   lastUsed: number;
@@ -251,6 +251,8 @@ export function recordsOf(sites: readonly { key: string }[]): (i: number) => num
 export class CityLayer {
   readonly group = new Group();
   enabled = false;
+  /** The effects system the plumes go to (set by the scene); without one, no plumes. */
+  effects: EffectsSystem | null = null;
   /** Detail ranges (m from the camera to a chunk's nearest point). */
   kitRange = 600;
   boxRange = 2000;
@@ -390,8 +392,8 @@ export class CityLayer {
       prismKey: '',
       lights: null,
       lightKey: '',
-      plumes: null,
-      plumesTried: false,
+      plumeKeys: null,
+      plumesDirty: false,
       coverage: null,
       damage: null,
       lastUsed: this.frame,
@@ -423,8 +425,7 @@ export class CityLayer {
     );
     const c = p.chunks.get(key);
     if (c && !this.patchDamage(p, c, b, state)) c.dirty = true;
-    if (p.plumes) p.plumes.userData.dirty = true;
-    else p.plumesTried = false;
+    p.plumesDirty = true;
     return true;
   }
 
@@ -853,22 +854,19 @@ export class CityLayer {
         p.lights.visible = true;
         draws++;
       }
-      // Smoke and steam over stacks and cooling towers (and burning landmarks, decision 269).
+      // Smoke and steam over stacks and cooling towers (and burning landmarks, decision 269),
+      // as the effects system's emitters (Proposal 0011, decision 326).
       if (
-        (!p.plumesTried || p.plumes?.userData.dirty) &&
+        this.effects &&
+        (!p.plumeKeys || p.plumesDirty) &&
         performance.now() - t0 < this.buildBudgetMs
       ) {
-        const mesh = this.buildPlumes(p);
-        if (mesh !== undefined) {
-          this.dropMesh(p.plumes);
-          p.plumes = mesh;
-          p.plumesTried = true;
+        const keys = this.placePlumes(p, this.effects);
+        if (keys !== undefined) {
+          for (const k of p.plumeKeys ?? []) if (!keys.includes(k)) this.effects.remove(k);
+          p.plumeKeys = keys;
+          p.plumesDirty = false;
         }
-      }
-      if (p.plumes) {
-        placeCameraRelative(p.plumes, p.plumes.userData.origin as Vec3d, eye);
-        p.plumes.visible = true;
-        draws++;
       }
     }
     this.stats.plans = [...this.plans.values()].filter((p) => p.plan).length;
@@ -898,7 +896,7 @@ export class CityLayer {
     for (const c of p.chunks.values()) this.dropMesh(c.mesh);
     this.dropMesh(p.prisms);
     this.dropMesh(p.lights);
-    this.dropMesh(p.plumes);
+    for (const k of p.plumeKeys ?? []) this.effects?.remove(k);
     this.plans.delete(p.index);
   }
 
@@ -1085,15 +1083,13 @@ export class CityLayer {
     return mesh;
   }
 
-  /** Puffs per plume. */
-  static readonly PUFFS = 10;
-
   /**
-   * Plumes (Phase 7, decision 268): PUFFS soft billboards per source rising from its top
-   * and drifting downwind, cycling in age; smoke from stacks, steam from cooling towers,
-   * dark smoke from damaged landmarks and targets. Undefined while the ground is missing.
+   * Plumes (Phase 7, decision 268; Proposal 0011, decision 326): an emitter of the effects
+   * system per source at its top: smoke from stacks, steam from cooling towers, a burning
+   * column from damaged landmarks and targets (decision 269). Returns the emitters' keys, or
+   * undefined while the ground is missing.
    */
-  private buildPlumes(p: PlanState): Mesh | null | undefined {
+  private placePlumes(p: PlanState, effects: EffectsSystem): string[] | undefined {
     const plan = p.plan!;
     const sources: { x: number; y: number; top: number; kind: number }[] = [];
     for (const li of plan.plumes) {
@@ -1117,98 +1113,29 @@ export class CityLayer {
         if (hit) sources.push({ x: t.x, y: t.y, top: 8, kind: 2 });
       }
     }
-    if (sources.length === 0) return null;
     const ground = this.groundAt(p);
     const R = this.world!.radius;
-    const d0 = p.frame.toSphere(sources[0]!.x, sources[0]!.y);
-    const origin = new Vec3d(d0[0] * R, d0[1] * R, d0[2] * R);
-    const n = sources.length * CityLayer.PUFFS;
-    const base = new Float32Array(n * 3);
-    const params = new Float32Array(n * 4);
+    const ex = this.terrain.exaggerationUniform.value;
     const tmp: [number, number, number] = [0, 0, 0];
-    let k = 0;
-    for (const s of sources) {
+    const placed: { key: string; at: Vec3d; kind: number }[] = [];
+    for (const [i, s] of sources.entries()) {
       const h = ground(s.x, s.y);
       if (h === null) return undefined;
       p.frame.toSphere(s.x, s.y, tmp);
-      for (let q = 0; q < CityLayer.PUFFS; q++, k++) {
-        base.set([tmp[0] * R - origin.x, tmp[1] * R - origin.y, tmp[2] * R - origin.z], k * 3);
-        params.set([h + s.top, q / CityLayer.PUFFS, s.kind, ((k * 0.6180339) % 1) * 6.283], k * 4);
-      }
+      const r = R + (h + s.top) * ex;
+      placed.push({
+        key: `city:${p.index}:${i}`,
+        at: new Vec3d(tmp[0] * r, tmp[1] * r, tmp[2] * r),
+        kind: s.kind,
+      });
     }
-    const g = new InstancedBufferGeometry();
-    g.setAttribute('position', this.quad.getAttribute('position'));
-    g.setIndex(this.quad.getIndex());
-    g.setAttribute('pBase', new InstancedBufferAttribute(base, 3));
-    g.setAttribute('pParams', new InstancedBufferAttribute(params, 4));
-    g.instanceCount = n;
-    const mesh = new Mesh(g, this.plumeMaterial);
-    mesh.frustumCulled = false;
-    mesh.renderOrder = 2;
-    const up = origin.clone().normalize();
-    mesh.userData.up = new Vector3(up.x, up.y, up.z);
-    mesh.userData.origin = origin;
-    this.group.add(mesh);
-    return mesh;
-  }
-
-  /** The wind (world, m/s) that carries the plumes; the scene sets it from the weather. */
-  readonly wind = uniform(new Vector3(0, 0, 0));
-  private plumeMaterialCache: MeshBasicNodeMaterial | null = null;
-
-  private get plumeMaterial(): MeshBasicNodeMaterial {
-    if (this.plumeMaterialCache) return this.plumeMaterialCache;
-    const L = this.lighting;
-    const m = new MeshBasicNodeMaterial({ transparent: true, depthWrite: false });
-    const upU = uniform(new Vector3(0, 1, 0)).onObjectUpdate(
-      ({ object }) => (object?.userData.up as Vector3 | undefined) ?? new Vector3(0, 1, 0),
-    );
-    const base = attribute('pBase', 'vec3');
-    const prm = attribute('pParams', 'vec4');
-    const corner = attribute('position', 'vec3');
-    const vCorner = varyingProperty('vec3', 'vPlumeCorner');
-    const vAge = varyingProperty('float', 'vPlumeAge');
-    const vKind = varyingProperty('float', 'vPlumeKind');
-    const vWorld = varyingProperty('vec3', 'vPlumeWorld');
-    const ex = this.terrain.exaggerationUniform;
-    m.positionNode = Fn(() => {
-      // Age cycles over 40 s; a puff rises 60 m and drifts with the wind (at least a breeze).
-      const age = fract(time.mul(0.025).add(prm.y));
-      const wind = this.wind.add(upU.mul(0)).toVar();
-      const breeze = select(length(wind).lessThan(0.5), vec3(2, 0, 0), wind);
-      const steam = prm.z.equal(1);
-      const rise = select(steam, float(90), float(60));
-      const center = base
-        .add(upU.mul(prm.x.mul(ex).add(age.mul(rise))))
-        .add(breeze.mul(age.mul(40)))
-        .add(vec3(sin(prm.w), 0, sin(prm.w.mul(1.7))).mul(age.mul(8)));
-      const size = select(steam, float(14), float(8)).mul(age.mul(3).add(1));
-      const right = cameraWorldMatrix.mul(vec4(1, 0, 0, 0)).xyz;
-      const camUp = cameraWorldMatrix.mul(vec4(0, 1, 0, 0)).xyz;
-      vCorner.assign(corner);
-      vAge.assign(age);
-      vKind.assign(prm.z);
-      const p = center
-        .add(right.mul(corner.x.mul(size).mul(0.5)))
-        .add(camUp.mul(corner.y.mul(size).mul(0.5)));
-      vWorld.assign(modelWorldMatrix.mul(vec4(p, 1)).xyz);
-      return p;
-    })();
-    m.colorNode = Fn(() => {
-      const r2 = dot(vCorner.xy, vCorner.xy);
-      const soft = clamp(float(1).sub(r2), 0, 1).pow(1.5);
-      const fade = smoothstep(0, 0.08, vAge).mul(float(1).sub(vAge));
-      const color = select(
-        vKind.equal(1),
-        vec3(0.92, 0.92, 0.94),
-        select(vKind.equal(2), vec3(0.12, 0.11, 0.1), vec3(0.55, 0.53, 0.5)),
-      );
-      const lit = L.shadeDiffuse(color as V3, normalize(upU) as unknown as V3, vWorld as V3);
-      const alpha = soft.mul(fade).mul(select(vKind.equal(1), float(0.55), float(0.7)));
-      return vec4(lit, alpha);
-    })();
-    this.plumeMaterialCache = m;
-    return m;
+    for (const q of placed) {
+      const floor = q.at.length() - (q.kind === 2 ? 0 : 1);
+      if (q.kind === 2) {
+        effects.fixed(q.key, 'burning-target', { pos: q.at, floor, scale: 0.7, strength: 0.7 });
+      } else effects.fixed(q.key, q.kind === 1 ? 'cooling-tower' : 'chimney', { pos: q.at, floor });
+    }
+    return placed.map((q) => q.key);
   }
 
   /**
@@ -1302,6 +1229,5 @@ export class CityLayer {
     this.planner?.dispose();
     this.material.dispose();
     this.lightMaterial.dispose();
-    this.plumeMaterialCache?.dispose();
   }
 }

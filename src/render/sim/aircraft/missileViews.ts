@@ -34,6 +34,8 @@ export interface Flying {
   burning: boolean;
 }
 import type { PlanetLighting } from '../lighting/planetLighting';
+import type { EffectsSystem } from '../effects/effectsSystem';
+import { trailOf } from '../effects/weapons';
 import { AircraftView } from './aircraftView';
 import { storeModel } from './storeMounts';
 import { MODEL_SPECS } from '../../common/models/library';
@@ -70,11 +72,22 @@ export class MissileViews {
   private readonly d = new Vector3();
   private readonly x = new Vector3(1, 0, 0);
 
+  /**
+   * Draws the missiles' smoke trails and the wrecks' fire and smoke (Proposal 0011, decision
+   * 326) by their motors; without it, the box segments below.
+   */
+  private readonly effects: EffectsSystem | null;
+  /** Small ids for the effects' emitter keys, by the sim's own object. */
+  private readonly ids = new WeakMap<object, number>();
+  private nextId = 0;
+
   constructor(
     private readonly vehicles: Group,
     private readonly lighting: PlanetLighting,
     private readonly radius: number,
+    effects: EffectsSystem | null = null,
   ) {
+    this.effects = effects;
     const g = new BoxGeometry(1, 1, 1);
     g.translate(-0.5, 0, 0);
     const mat = new MeshBasicNodeMaterial({
@@ -161,7 +174,13 @@ export class MissileViews {
       );
       v.flame.visible = ms.burning;
       v.flame.scale.set(1.6, 1, 1);
-      if (ms.burning && t - v.lastAt >= SMOKE_STEP) {
+      if (this.effects) {
+        let id = this.ids.get(ms.key);
+        if (id === undefined) this.ids.set(ms.key, (id = this.nextId++));
+        const trail = trailOf(ms.model);
+        if (trail === 'wreck') this.effects.trackAircraft(`wreck${id}`, ms.pos, ms.vel, 'burning');
+        else this.effects.trackMissile(`${id}`, trail, ms.burning, ms.pos, ms.vel);
+      } else if (ms.burning && t - v.lastAt >= SMOKE_STEP) {
         this.puffs.push({ pos: ms.pos.clone(), born: t, prev: v.last });
         v.last = ms.pos.clone();
         v.lastAt = t;

@@ -74,7 +74,6 @@ import type { Dir } from '../core/greatCircle';
 import { GROUND_TARGETS } from '../sim/flight/damage';
 import type { GroundTarget, Hit } from '../sim/flight/storesRack';
 import { sourceAt } from '../sim/flight/missile';
-import { impactMass } from '../sim/flight/ordnance';
 import { gunSelected, rocketCounts } from '../sim/flight/storesRack';
 import type { HeatSource } from '../sim/flight/missile';
 import { analyticPose } from '../sim/air/analyticPose';
@@ -1318,17 +1317,18 @@ export class Follow {
       this.tracers = new Tracers();
       g.vehicles.add(this.tracers.mesh);
     }
-    this.missileViews ??= new MissileViews(g.vehicles, g.lighting, this.deps.radius);
+    this.missileViews ??= new MissileViews(g.vehicles, g.lighting, this.deps.radius, g.effects);
     // Bombs and rockets that reached the ground explode (decision 300).
-    this.explosions ??= new Explosions(g.vehicles, g.lighting);
+    // The scene's effects system draws them (Proposal 0011, decision 326).
+    this.explosions ??= new Explosions(g.vehicles, g.lighting, g.effects);
     for (const a of flight.aircraft)
-      for (const x of a.rack.impacts.splice(0)) this.explosions.add(x.at, impactMass(x), x.time);
+      for (const x of a.rack.impacts.splice(0)) this.explosions.impact(x);
     // Hits: kills and damage to the campaign as logged inputs; the downed fall burning (decision 301).
     for (const a of flight.aircraft)
       for (const h of a.rack.hits.splice(0)) this.applyHit(h, a.rack);
     const explosions = this.explosions;
     this.wrecks.update(Math.max(0, flight.time - this.wreckTime), this.deps.radius, groundAt, (p) =>
-      explosions.add(p, 3000, flight.time),
+      explosions.wreck(p, flight.time),
     );
     this.wreckTime = flight.time;
     this.explosions.place(flight.time, eye);

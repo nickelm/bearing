@@ -1,67 +1,21 @@
 /**
- * What a rotor's downwash raises from the ground (G5; decisions 168, 169, 182):
- * soft, wispy sprites of dust, grit, snow or spray that roll out from under
- * the rotor, drawn in the pipeline's overlay (post/simPipeline.ts) like the
- * weather's particles (weather/precipitation.ts), whose light they share.
+ * What a rotor's downwash raises from the ground (G5; decisions 168, 169, 182; Proposal 0011,
+ * decision 326): low puffs of dust, grit, snow or spray that roll out from under the rotor,
+ * drawn by the effects system (`effects/`) as its `rotor-downwash` emitter.
  *
- * - **Which.** Once per frame `washSurface` reads the ground where the wash
- *   meets it: spray over the sea, lakes and rivers; snow powder where snow
- *   lies; ochre dust (in the ground's own color) on deserts, beaches and dry
- *   grass and scrub; gray grit on rock, gravel, tundra, alpine ground and
- *   pavement; nothing on green ground, where the flattened grass is the cue
- *   (decision 176). Wet ground raises less dust and grit.
- * - **Where.** No state per sprite. Each instance's direction, speed, size,
- *   life and phase come from a hash of its index, and its place is a function
- *   of its age: out from the wash's center along the ground, fast and then
- *   slowing as the wall jet spreads to about three rotor radii, rising as it
- *   goes into a low billow, and carried off with the wind. A sprite reborn at
- *   the end of its life starts again under the rotor, so the cloud follows the
- *   helicopter.
- * - **How it looks.** A quad facing the camera, stretched along its motion,
- *   swelling and thinning with age; its opacity falls off from the middle and
- *   its edge is eaten by value noise, so it reads wispy, not as a disc. It
- *   fades against the scene's depth over a meter and a half, so it never cuts
- *   a hard line into the ground, and it fades near the lens.
- * - **How much.** Up to `DUST_CAP` instances times the particles' quality
- *   factor, scaled by the wash's strength and the surface; none, and no draw,
- *   without a wash.
+ * - **Which.** Once the wash has moved a few meters, `washSurface` reads the ground where
+ *   the wash meets it: spray over the sea, lakes and rivers; snow powder where snow lies;
+ *   ochre dust (in the ground's own color) on deserts, beaches and dry grass and scrub; gray
+ *   grit on rock, gravel, tundra, alpine ground and pavement; nothing on green ground,
+ *   where the flattened grass is the cue (decision 176). Wet ground raises less dust and
+ *   grit.
+ * - **Where.** The emitter sits at the wash's center on the ground, scaled by the rotor's
+ *   radius: its puffs are thrown out across the ground, slow as the wall jet spreads, rise
+ *   into a low billow and drift off with the wind (the puff model's forces).
+ * - **How much.** The emitter's rate scales with the wash's strength and the surface's
+ *   amount and the particles' quality factor; none without a wash, and none above 50 kt
+ *   over the ground (decision 191).
  */
-import {
-  BufferAttribute,
-  DoubleSide,
-  Group,
-  InstancedBufferGeometry,
-  Mesh,
-  MeshBasicNodeMaterial,
-  Vector3,
-} from 'three/webgpu';
-import type { Node } from 'three/webgpu';
-import {
-  clamp,
-  cos,
-  cross,
-  dot,
-  float,
-  floor,
-  Fn,
-  fract,
-  hash,
-  instanceIndex,
-  length,
-  max,
-  min,
-  mix,
-  normalize,
-  positionGeometry,
-  pow,
-  sin,
-  smoothstep,
-  uint,
-  uniform,
-  varyingProperty,
-  vec2,
-  vec4,
-} from 'three/tsl';
 import { Vec3d } from '../../../core/vec3d';
 import { directionToCubeFace } from '../../../core/coords';
 import { tileForDirection, TILE_TEXELS } from '../../../core/tiles';
@@ -80,13 +34,11 @@ import {
 } from '../../common/terrain/tileMesh';
 import { riverStretches, treeDataTile } from '../forest/forestLayer';
 import type { InfraScene } from '../infra/infraScene';
-import type { PlanetLighting } from '../lighting/planetLighting';
 import type { LandShading } from '../terrain/landShading';
 import type { TerrainRenderer } from '../terrain/terrainRenderer';
-import { particleLight } from '../weather/precipitation';
+import type { EffectsSystem } from '../effects/effectsSystem';
+import type { LookId } from '../effects/presets';
 import type { GroundDownwash } from './groundCoverLayer';
-
-type F = Node<'float'>;
 
 /** What the wash raises. */
 export type WashKind = 'none' | 'dust' | 'grit' | 'snow' | 'spray';
@@ -149,36 +101,28 @@ export function washSurface(s: WashSite): WashSurface {
   }
 }
 
-/** Sprites at full strength and quality factor 1. */
-export const DUST_CAP = 240;
+/** Puffs a second at full strength and quality factor 1 (the preset's rate) and their mean life (s). */
+const WASH_RATE = 40;
+const WASH_LIFE = 3.1;
 /**
  * Dust is raised only by a slow helicopter (the owner's request, decision 191): in full
  * below 30 kt over the ground, none above 50 kt.
  */
 const DUST_SLOW = 15.4;
 const DUST_FAST = 25.7;
-/** A sprite never spans more than this share of its distance from the lens (overdraw). */
-const MAX_ANGULAR_SIZE = 0.3;
 /** The wash moves this far (m) before the ground under it is read again. */
 const SURFACE_STEP = 3;
 /** The wash's outwash speed (m/s) at which it raises all it can. */
 const FULL_WASH = 10;
-/** A sprite's life (s), shortest and longest. */
-const LIFE: readonly [number, number] = [2.2, 4];
-/** How far out a sprite travels, in rotor radii (from the start of its run). */
-const RUN = 2.8;
 
-/** Each kind's tint (linear, times the light), opacity and least and greatest size in rotor radii. */
+/** Each kind's look and tint (linear; dust takes the ground's own color). */
 const LOOK: Readonly<
-  Record<
-    Exclude<WashKind, 'none'>,
-    { tint: [number, number, number]; opacity: number; size: [number, number] }
-  >
+  Record<Exclude<WashKind, 'none'>, { look: LookId; tint: [number, number, number] }>
 > = {
-  dust: { tint: [0.6, 0.48, 0.33], opacity: 0.32, size: [0.3, 1.0] },
-  grit: { tint: [0.42, 0.4, 0.37], opacity: 0.34, size: [0.22, 0.7] },
-  snow: { tint: [0.92, 0.94, 0.97], opacity: 0.36, size: [0.3, 1.1] },
-  spray: { tint: [0.82, 0.87, 0.92], opacity: 0.38, size: [0.25, 0.8] },
+  dust: { look: 'dust', tint: [0.6, 0.48, 0.33] },
+  grit: { look: 'dust', tint: [0.42, 0.4, 0.37] },
+  snow: { look: 'snow-dust', tint: [0.98, 0.99, 1] },
+  spray: { look: 'snow-dust', tint: [0.84, 0.89, 0.94] },
 };
 
 /** What `RotorDust.update` needs each frame. */
@@ -197,32 +141,10 @@ export interface RotorDustFrame {
 }
 
 export class RotorDust {
-  /** The sprites; add it to the pipeline's overlay scene. */
-  readonly group = new Group();
   enabled = true;
-  /** What was raised last frame, and how many sprites were drawn. */
+  /** What was raised last frame, and about how many puffs it keeps in the air. */
   readonly stats = { kind: 'none' as WashKind, count: 0 };
-  private readonly geometry = new InstancedBufferGeometry();
-  private readonly mesh: Mesh;
   private infra: InfraScene | null = null;
-  private warmed = false;
-  private readonly u = {
-    time: uniform(0),
-    center: uniform(new Vector3()),
-    east: uniform(new Vector3(1, 0, 0)),
-    north: uniform(new Vector3(0, 0, 1)),
-    zenith: uniform(new Vector3(0, 1, 0)),
-    right: uniform(new Vector3(1, 0, 0)),
-    upward: uniform(new Vector3(0, 1, 0)),
-    wind: uniform(new Vector3()),
-    radius: uniform(4),
-    strength: uniform(0),
-    tint: uniform(new Vector3(1, 1, 1)),
-    opacity: uniform(0),
-    sizes: uniform(new Vector3(0.3, 1, 0)),
-    ambient: uniform(new Vector3()),
-    sun: uniform(new Vector3()),
-  };
   private readonly scratch = new Vec3d();
   /** The ground under the wash as last read, and where. */
   private surface: (WashSurface & { color: [number, number, number] | null }) | null = null;
@@ -233,121 +155,12 @@ export class RotorDust {
     private readonly terrain: TerrainRenderer,
     private readonly climate: ClimateTexture,
     private readonly land: LandShading,
-    private readonly lighting: PlanetLighting,
-    sceneDistance: F,
-  ) {
-    // x across the sprite, y along its motion, both −1..1.
-    this.geometry.setAttribute(
-      'position',
-      new BufferAttribute(new Float32Array([-1, -1, 0, 1, -1, 0, -1, 1, 0, 1, 1, 0]), 3),
-    );
-    this.geometry.setIndex([0, 1, 2, 2, 1, 3]);
-    this.geometry.instanceCount = 0;
-    this.mesh = new Mesh(this.geometry, this.material(sceneDistance));
-    this.mesh.name = 'rotor dust';
-    this.mesh.frustumCulled = false;
-    this.mesh.visible = false;
-    this.group.add(this.mesh);
-    this.group.visible = false;
-  }
+    private readonly effects: EffectsSystem,
+  ) {}
 
   /** Pavement and towns, for grit on runways and aprons. */
   setInfrastructure(scene: InfraScene | null): void {
     this.infra = scene;
-  }
-
-  private material(sceneDistance: F): MeshBasicNodeMaterial {
-    const u = this.u;
-    const m = new MeshBasicNodeMaterial({
-      transparent: true,
-      depthTest: false,
-      depthWrite: false,
-      side: DoubleSide,
-    });
-    m.name = 'rotor dust';
-    const vColor = varyingProperty('vec3', 'vDustColor');
-    const vOpacity = varyingProperty('float', 'vDustOpacity');
-    const vDistance = varyingProperty('float', 'vDustDistance');
-    const vSeed = varyingProperty('float', 'vDustSeed');
-    m.positionNode = Fn(() => {
-      const index = instanceIndex.mul(uint(8));
-      const rand = (k: number): F => hash(index.add(uint(k))) as F;
-      const life = mix(float(LIFE[0]), float(LIFE[1]), rand(0));
-      const cycle = u.time.div(life).add(rand(1));
-      const age = fract(cycle).toVar();
-      // Each rebirth goes out in a new direction.
-      const born = floor(cycle);
-      const turn = fract(rand(2).add(born.mul(0.618034))).mul(2 * Math.PI);
-      const out = u.east.mul(cos(turn)).add(u.north.mul(sin(turn)));
-      const pace = mix(float(0.6), float(1.3), rand(3));
-      const R = u.radius;
-      // The wall jet: fast at first, slowing as it spreads.
-      const run = float(1).sub(pow(float(1).sub(age), 2));
-      const r = R.mul(float(0.5).add(run.mul(RUN).mul(pace)));
-      // It rises as it rolls out, into a low billow.
-      const lift = R.mul(mix(float(0.08), float(0.9), pow(age, 0.7))).mul(
-        mix(float(0.5), float(1.2), rand(4)),
-      );
-      const carried = u.wind.mul(age.mul(life).mul(0.7));
-      const p = u.center.add(out.mul(r)).add(u.zenith.mul(lift)).add(carried).toVar();
-      // Never wider than a share of its distance: sprites by the lens would fill the screen
-      // many times over (decision 191).
-      const size = min(
-        R.mul(mix(u.sizes.x, u.sizes.y, rand(5))).mul(age.mul(1.2).add(0.4)),
-        length(p).mul(MAX_ANGULAR_SIZE),
-      );
-      // Along its motion on screen: out and up.
-      const motion = out
-        .mul(
-          R.mul(RUN)
-            .mul(pace)
-            .mul(float(2).mul(float(1).sub(age))),
-        )
-        .add(u.zenith.mul(R.mul(0.5)))
-        .add(u.wind);
-      const view = normalize(p);
-      const across = motion.sub(view.mul(dot(motion, view)));
-      const along = normalize(across.add(u.upward.mul(1e-3)));
-      const side = normalize(cross(along, view));
-      const corner = p
-        .add(along.mul(size.mul(1.5)).mul(positionGeometry.y))
-        .add(side.mul(size).mul(positionGeometry.x));
-      const distance = length(corner);
-      // In, then out: born thick under the rotor, thinning as it spreads.
-      const fade = smoothstep(0, 0.12, age).mul(pow(float(1).sub(age), 1.3));
-      const opacity = u.opacity
-        .mul(u.strength)
-        .mul(fade)
-        .mul(smoothstep(3, 10, distance));
-      vOpacity.assign(opacity);
-      vDistance.assign(distance);
-      vSeed.assign(rand(6).add(born.mul(0.37)));
-      // Toward the sun the dust glows; its shade varies a little per sprite.
-      const toSun = max(dot(view, this.lighting.sunDirection), 0);
-      const scatter = pow(toSun, 4).mul(1.2).add(0.35);
-      const shade = mix(float(0.85), float(1.1), rand(7));
-      vColor.assign(u.tint.mul(shade).mul(u.ambient.add(u.sun.mul(scatter))));
-      return corner;
-    })();
-    m.colorNode = Fn(() => {
-      const q = positionGeometry.xy;
-      const d = dot(q, q);
-      // Value noise over the sprite eats its edge: wisps, not a disc.
-      const g = q.mul(2.2).add(vec2(vSeed.mul(17.3), vSeed.mul(29.1)));
-      const cell = floor(g);
-      const f = fract(g);
-      const s = f.mul(f).mul(f.mul(-2).add(3));
-      const h = (x: number, y: number) =>
-        fract(sin(dot(cell.add(vec2(x, y)), vec2(127.1, 311.7))).mul(43758.5453));
-      const n = mix(mix(h(0, 0), h(1, 0), s.x), mix(h(0, 1), h(1, 1), s.x), s.y);
-      const shape = clamp(float(1).sub(d), 0, 1).mul(
-        smoothstep(0.35, 0.8, n.add(float(0.35).sub(d.mul(0.45)))),
-      );
-      // Soft against the ground and whatever else is nearer.
-      const clear = smoothstep(float(0), float(1.5), sceneDistance.sub(vDistance));
-      return vec4(vColor, vOpacity.mul(shape).mul(clear));
-    })();
-    return m;
   }
 
   /** What the ground under the wash gives (see `washSurface`), or none if its data is not loaded. */
@@ -406,11 +219,9 @@ export class RotorDust {
   }
 
   update(f: RotorDustFrame): void {
-    const u = this.u;
-    u.time.value += f.dt;
     const wash = this.enabled ? f.wash : null;
-    let count = 0;
     let kind: WashKind = 'none';
+    let count = 0;
     const slow =
       wash?.groundSpeed === undefined
         ? 1
@@ -424,8 +235,11 @@ export class RotorDust {
       const s = this.surface;
       kind = s.kind;
       if (s.kind !== 'none' && s.amount > 0) {
-        const strength = Math.min(1, wash.speed / FULL_WASH) * s.amount * slow;
-        count = Math.round(DUST_CAP * Math.min(2, Math.max(0, f.density)) * Math.min(1, strength));
+        const strength =
+          Math.min(1, wash.speed / FULL_WASH) *
+          s.amount *
+          slow *
+          Math.min(2, Math.max(0, f.density));
         const look = LOOK[s.kind];
         // Dust takes the ground's color, lighter: what it is made of.
         const tint =
@@ -436,50 +250,22 @@ export class RotorDust {
                 number,
               ])
             : look.tint;
-        u.tint.value.set(...tint);
-        u.opacity.value = look.opacity;
-        u.sizes.value.set(look.size[0], look.size[1], 0);
-        u.strength.value = strength;
-        u.radius.value = wash.radius;
-        u.center.value.set(
-          wash.center.x - f.eye.x,
-          wash.center.y - f.eye.y,
-          wash.center.z - f.eye.z,
-        );
-        const up = this.scratch.copy(wash.center).normalize();
-        const east = new Vec3d(0, 1, 0).cross(up);
-        if (east.length() < 1e-6) east.set(1, 0, 0);
-        east.normalize();
-        const north = up.clone().cross(east);
-        u.east.value.set(east.x, east.y, east.z);
-        u.north.value.set(north.x, north.y, north.z);
-        u.zenith.value.set(up.x, up.y, up.z);
-        const w = f.wind;
-        const vertical = w.x * up.x + w.y * up.y + w.z * up.z;
-        u.wind.value.set(w.x - up.x * vertical, w.y - up.y * vertical, w.z - up.z * vertical);
-        const light = particleLight(this.lighting);
-        u.ambient.value.set(...light.ambient);
-        u.sun.value.set(...light.sun);
+        this.effects.track('rotor-wash', 'rotor-downwash', {
+          pos: wash.center,
+          scale: wash.radius,
+          strength,
+          tint,
+          look: look.look,
+          floor: wash.center.length(),
+        });
+        count = Math.round(WASH_RATE * strength * WASH_LIFE);
       }
     }
-    if (count === 0 && !this.warmed && this.enabled) {
-      // One sprite of no opacity in the first frame: the material compiles before it is needed.
-      this.warmed = true;
-      this.geometry.instanceCount = 1;
-      u.strength.value = 0;
-      this.mesh.visible = this.group.visible = true;
-      this.stats.kind = 'none';
-      this.stats.count = 0;
-      return;
-    }
-    this.geometry.instanceCount = count;
-    this.mesh.visible = this.group.visible = count > 0;
     this.stats.kind = kind;
     this.stats.count = count;
   }
 
   dispose(): void {
-    this.geometry.dispose();
-    (this.mesh.material as MeshBasicNodeMaterial).dispose();
+    this.effects.remove('rotor-wash');
   }
 }

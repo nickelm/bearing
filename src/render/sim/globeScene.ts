@@ -49,6 +49,8 @@ import { MotionEstimate } from '../common/terrain/prefetch';
 import { OrbitCamera, attachOrbitInput } from '../common/orbitCamera';
 import { StrategicOverlay } from '../strategic/strategicOverlay';
 import { CityLayer } from './city/cityLayer';
+import { EffectsSystem } from './effects/effectsSystem';
+import { FlashLights } from './effects/flashLights';
 import { StructureLayer } from './infra/structureLayer';
 import { BridgeLayer } from './infra/bridgeLayer';
 import type { InfraScene } from './infra/infraScene';
@@ -163,7 +165,16 @@ export class GlobeScene {
    * overlay; null without a pipeline. `precipitation.enabled` switches the particles.
    */
   precipitation: Precipitation | null = null;
-  /** Dust, grit, snow and spray raised by a rotor's downwash (decision 182), in the overlay; null without a pipeline. */
+  /**
+   * Smoke, fire, explosions, contrails and vortices (Proposal 0011, decisions 320–327): the
+   * owners of sources (Free Flight, the follow, the city layer, the rotor's wash) track
+   * emitters and send effect events to it; the scene steps and draws it each frame.
+   */
+  readonly effects: EffectsSystem;
+  /** The explosions' flash lights, which light every surface (decision 324). */
+  readonly flashLights = new FlashLights();
+  private readonly effectsWind = new Vec3d();
+  /** Dust, grit, snow and spray raised by a rotor's downwash (decisions 182, 326), as the effects' puffs. */
   rotorDust: RotorDust | null = null;
   /**
    * Lightning: flashes, the bolt and thunder (weather/lightning.ts). The app sets its `seed`
@@ -206,6 +217,8 @@ export class GlobeScene {
     this.observer = new ObserverCamera(options.radius);
     this.chase = new ChaseCamera(options.radius);
     this.lighting = new PlanetLighting(options.radius);
+    // The explosions' flashes light every surface: hooked before lit materials are built.
+    this.lighting.localLight = (relative) => this.flashLights.at(relative);
     // Clouds first: their shadow hook must be in place before lit materials are built.
     this.clouds = new CloudLayer(options.radius, this.lighting, this.weather);
     this.lighting.sunVisibility = (p) => this.clouds.shadow(p);
@@ -248,6 +261,12 @@ export class GlobeScene {
       this.strategic.group,
       this.vehicles,
     );
+    // Smoke, fire, explosions and ribbons (Proposal 0011): one system for every source.
+    this.effects = new EffectsSystem(this.lighting, options.radius, this.flashLights);
+    this.effects.groundAt = (d) =>
+      this.useTiles && this.terrainReady ? this.terrain.displayHeightAt(d) : 0;
+    this.cities.effects = this.effects;
+    this.scene.add(this.effects.group);
 
     // Scene lights serve only the M1 grid mesh (a debug view); the terrain lights itself.
     // Light directions are translation-invariant, so camera-relative offsets do not affect them.
@@ -280,15 +299,9 @@ export class GlobeScene {
         this.pipeline.sceneDistance,
       );
       this.pipeline.overlay.add(this.precipitation.group, this.lightning.group);
-      this.rotorDust = new RotorDust(
-        this.terrain,
-        this.climate,
-        this.terrain.land,
-        this.lighting,
-        this.pipeline.sceneDistance,
-      );
-      this.pipeline.overlay.add(this.rotorDust.group);
     }
+    // The wash's puffs are the effects system's (decision 326): solid, so no pipeline needed.
+    this.rotorDust = new RotorDust(this.terrain, this.climate, this.terrain.land, this.effects);
 
     this.inputEnabled = options.input !== false;
   }
@@ -457,6 +470,14 @@ export class GlobeScene {
     // World object placement: float64 subtraction first, then write float32.
     placePlanetCentered(this.globe.group, o.eye);
     this.beforeDraw?.(o.eye);
+    // After the owners have moved their sources and fired their events this frame.
+    const w = this.weatherState.wind.value;
+    this.effects.update(this.renderer, {
+      eye: o.eye,
+      dt: effectDt,
+      wind: this.effectsWind.set(w.x, w.y, w.z),
+      pixelAngle: fovY / bufferHeight,
+    });
 
     // Micro-facets only while the camera is low enough to see them (decision 168).
     this.terrain.micro.setCamera(aboveGround);
@@ -508,8 +529,6 @@ export class GlobeScene {
       this.cities.enabled = this.structures.enabled && this.citiesOn && this.cities.hasWorld;
       this.structures.towns = !this.cities.enabled;
       this.structures.update(o.eye, aboveGround, cull);
-      const gw = this.groundCover.groundWind;
-      this.cities.wind.value.set(gw.x, gw.y, gw.z);
       this.cities.update(o.eye, aboveGround, cull);
       this.props.update(o.eye, aboveGround);
       this.bridges.update(o.eye, aboveGround);
@@ -518,7 +537,6 @@ export class GlobeScene {
       this.forest.group.visible = false;
       this.groundCover.group.visible = false;
       this.props.group.visible = false;
-      if (this.rotorDust) this.rotorDust.group.visible = false;
       this.structures.group.visible = false;
       this.cities.group.visible = false;
     }
@@ -578,6 +596,7 @@ export class GlobeScene {
     this.volumetrics.reset();
     this.precipitation?.reset();
     this.lightning.reset();
+    this.effects.clear();
     this.shadows.reset();
     this.onCut?.();
   }
@@ -599,6 +618,7 @@ export class GlobeScene {
     this.lighting.atmosphere.dispose();
     this.precipitation?.dispose();
     this.rotorDust?.dispose();
+    this.effects.dispose();
     this.lightning.dispose();
     this.pipeline?.dispose();
   }

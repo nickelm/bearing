@@ -1,9 +1,12 @@
 /**
- * Explosions where bombs and rockets reach the ground (decision 300; visual-style Part I,
- * Light and Emissives): a warm flash that swells and shrinks within half a second, and a
- * dark smoke cloud that swells, rises and thins away over about ten seconds, both sized by
- * the cube root of the store's mass. Two instanced meshes with shared materials, so a
- * ripple of rockets costs no new pipelines; placed camera-relative each frame (rule 4).
+ * Explosions where bombs and rockets reach the ground and where wrecks strike it (decisions
+ * 300, 301). With the scene's effects system (Proposal 0011, decision 326) they are its
+ * explosions: flash, fireball, smoke, debris, scorch and ring, sized by the warhead's
+ * explosive, and a wreck's strike a fuel fire that burns on. Without one (a scene with no
+ * effects), the earlier look: a warm flash that swells and shrinks within half a second,
+ * and a dark smoke cloud that swells, rises and thins away over about ten seconds, both
+ * sized by the cube root of the store's mass. Two instanced meshes with shared materials,
+ * placed camera-relative each frame (rule 4).
  */
 import {
   AdditiveBlending,
@@ -18,6 +21,10 @@ import type { Group } from 'three/webgpu';
 import { float, positionWorld, vec3 } from 'three/tsl';
 import type { Vec3d } from '../../../core/vec3d';
 import type { PlanetLighting } from '../lighting/planetLighting';
+import type { EffectsSystem } from '../effects/effectsSystem';
+import { explosiveOf } from '../effects/weapons';
+import type { Impact } from '../../../sim/flight/ordnance';
+import { impactMass } from '../../../sim/flight/ordnance';
 
 const MAX = 128;
 /** The flash's life and the smoke's (s). */
@@ -44,6 +51,7 @@ export class Explosions {
   constructor(
     private readonly vehicles: Group,
     lighting: PlanetLighting,
+    private readonly effects: EffectsSystem | null = null,
   ) {
     const g = new IcosahedronGeometry(1, 1);
     const fm = new MeshBasicNodeMaterial({
@@ -68,8 +76,24 @@ export class Explosions {
     }
   }
 
+  /** A bomb or rocket that reached the ground. */
+  impact(x: Impact): void {
+    if (this.effects) this.effects.explode(x.at, explosiveOf(x.store, impactMass(x)), 'ground');
+    else this.add(x.at, impactMass(x), x.time);
+  }
+
+  /** A wreck that struck the ground at `at` at game time t: it explodes and burns on. */
+  wreck(at: Readonly<Vec3d>, t: number): void {
+    if (this.effects) this.effects.explode(at, 300, 'fuel');
+    else this.add(at, 3000, t);
+  }
+
   /** An explosion of a store of `mass` (kg) at `at` (world, m) at game time t. */
   add(at: Readonly<Vec3d>, mass: number, t: number): void {
+    if (this.effects) {
+      this.effects.explode(at, mass * 0.4, 'ground');
+      return;
+    }
     if (this.blasts.length >= MAX) this.blasts.shift();
     this.blasts.push({
       at: at.clone(),
