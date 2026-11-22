@@ -112,6 +112,15 @@ const SLOWING: Curve = [
   [1, 0.4],
 ];
 const NONE: Curve = [[0, 0]];
+/**
+ * Embers: a negative glow is the fire's light on a column's underside (decision 330),
+ * strongest at the base and gone a third of the way up.
+ */
+const EMBERS: Curve = [
+  [0, -0.35],
+  [0.12, -0.15],
+  [0.3, 0],
+];
 const gray = (t: number, v: number): readonly [number, number, number, number] => [t, v, v, v];
 
 const look = (
@@ -278,6 +287,7 @@ export const LOOKS: readonly Look[] = [
   look('column-black', {
     life: [45, 60],
     color: [gray(0, 0.05), gray(0.6, 0.06), gray(1, 0.09)],
+    glow: EMBERS,
     radius: BILLOW,
     riseSpeed: 9,
     rise: SLOWING,
@@ -288,6 +298,7 @@ export const LOOKS: readonly Look[] = [
   look('column-gray', {
     life: [40, 55],
     color: [gray(0, 0.16), gray(0.6, 0.22), gray(1, 0.26)],
+    glow: EMBERS,
     radius: BILLOW,
     riseSpeed: 7,
     rise: SLOWING,

@@ -450,6 +450,6 @@ Later, with the systems they wait for, or as polish (not part of the track):
 
 - [ ] SAM launches as `launch` events with `fromGround` once SAMs fire (R3.4); ship hits once ships take damage (R4)
 - [ ] Damaged campaign aircraft (aggregate, analytic) smoke once R3 keeps their damage
-- [ ] Night: fire puffs light the smoke around them (a local light per burning column, or glow on nearby puffs); at night columns read as black silhouettes only
-- [ ] Cap a fire puff's glow under bloom so a fire at night reads orange, not white
-- [ ] The old fallback meshes in `aircraft/explosions.ts` and `missileViews.ts` can go once every scene has an effects system
+- [x] Night: a burning column's lower third takes its fire's light on its underside (embers, decision 330)
+- [x] A saturated flame held under a peak brightness, so fire reads orange at night, not white (decision 330)
+- [x] The old fallback meshes in `aircraft/explosions.ts` and `missileViews.ts` removed (decision 330)

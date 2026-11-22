@@ -5047,3 +5047,16 @@ The first run missed by 4.0 m at 610 m and 9.6 m at 900 m, growing with the squa
 
 **Reason:** the owner asked for the new effects to be integrated into the game.
 
+### 330. Effects polish: fire held orange, embers under burning columns, the old meshes gone
+
+**Date:** 2026-11-22
+**Decision:**
+
+- **Fire's peak.** A glowing puff's flame (its albedo × glow × a hint of the light bands) is scaled down so its brightest channel is at most 0.6 (`FIRE_PEAK`), by its albedo's saturation: fully for saturated fire (saturation 0.5 and up), not at all for a nearly white flash (0.2 and below). At 1.6 the night's fireballs still read cream; at 0.6 they read orange, and by day the fireball goes cream, orange and red as before.
+- **Embers.** A negative glow is embers: light of the fire under a burning column, added as `[1, 0.42, 0.12]` × ember, 0.4 all round and up to 1.0 on the side facing down, not multiplied by the smoke's dark albedo. The column looks (`column-black`, `column-gray`) carry it over the first third of their life (0.35 at birth, 0.15 at 12%, none from 30%), so a burning depot's base glows at night and is faintly warm by day.
+- **The fallback meshes** of decisions 297 and 300 are gone: `Explosions` and `MissileViews` require the effects system (every scene has one, decision 326), and only the missile's model and flame stay in `MissileViews`.
+
+**How it was checked.** The sandbox's night strike and depot rendered headless on Dawn and compared with the earlier frames. The unit suite, the type check and lint pass.
+
+**Reason:** the two night issues and the cleanup left open in decision 329's TODO; the owner chose to finish the effects' polish.
+

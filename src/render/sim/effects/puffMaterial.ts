@@ -41,6 +41,7 @@ import {
   If,
   length,
   max,
+  min,
   mix,
   mod,
   normalize,
@@ -65,6 +66,10 @@ type V4 = Node<'vec4'>;
 export const TOON_BANDS: readonly [number, number, number] = [0.12, 0.55, 1];
 /** N·L at which the shadow turns to midtone, and the midtone to highlight. */
 export const TOON_EDGES: readonly [number, number] = [-0.05, 0.45];
+/** The brightest a saturated flame is drawn (radiance, the brightest channel). */
+export const FIRE_PEAK = 0.6;
+/** The embers' color under a burning column (radiance per unit of ember). */
+export const EMBER_COLOR: readonly [number, number, number] = [1, 0.42, 0.12];
 /** Room for the radius bump around the sphere (share of the radius). */
 const BUMP = 0.12;
 /** Puffs nearer than this (m) dissolve: the lens never sits inside a ball. */
@@ -245,9 +250,26 @@ export function puffMaterial(
       .add(night) as V3;
     if (o.localLight) light = light.add(o.localLight(hit)) as V3;
     const albedo = vColor.xyz;
-    const glow = vColor.w;
-    const lit = albedo.mul(light);
-    const fire = albedo.mul(glow).mul(band.mul(0.35).add(0.65));
+    // Glow above zero is the puff's own fire; below zero, embers: the light of the fire
+    // beneath a burning column, on the column's underside (decision 330).
+    const glow = max(vColor.w, 0);
+    const ember = max(vColor.w.negate(), 0);
+    const lit = albedo
+      .mul(light)
+      .add(vec3(...EMBER_COLOR).mul(ember.mul(max(dot(n, at.up).negate(), 0).mul(0.6).add(0.4))));
+    // Fire keeps its hue: a saturated flame is held under FIRE_PEAK, so tone mapping and the
+    // bloom do not wash it to white; a flash (nearly white) is not held.
+    const flame = albedo.mul(glow).mul(band.mul(0.35).add(0.65));
+    const peak = max(max(flame.x, flame.y), max(flame.z, 1e-4));
+    const saturation = float(1).sub(
+      min(min(albedo.x, albedo.y), albedo.z).div(max(max(albedo.x, albedo.y), max(albedo.z, 1e-4))),
+    );
+    const hold = mix(
+      float(1),
+      min(float(1), float(FIRE_PEAK).div(peak)),
+      smoothstep(0.2, 0.5, saturation),
+    );
+    const fire = flame.mul(hold);
     radiance.assign(mix(lit, fire.add(lit.mul(0.3)), clamp(glow, 0, 1)));
     // The hit's depth: puffs are solids in the depth buffer.
     const clip = cameraProjectionMatrix.mul(cameraViewMatrix.mul(vec4(hit, 1)));

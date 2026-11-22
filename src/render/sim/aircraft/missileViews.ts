@@ -1,24 +1,18 @@
 /**
  * Missiles in flight (decision 297; visual-style Part I, Aircraft): each drawn as its
- * store's model along its velocity, a short warm flame at its tail while the motor burns,
- * and a smoke trail left behind it: segments every SMOKE_STEP seconds that widen as they
- * age and thin out over SMOKE_LIFE, one instanced mesh for every trail. Placed
- * camera-relative each frame (rule 4).
+ * store's model along its velocity and a short warm flame at its tail while the motor burns.
+ * Its trail, by its motor's smoke, is the effects system's (decisions 326, 329, 330); so is a
+ * burning wreck's fire and smoke. Placed camera-relative each frame (rule 4).
  */
 import {
   AdditiveBlending,
-  BoxGeometry,
   ConeGeometry,
   DoubleSide,
-  InstancedMesh,
-  Matrix4,
   Mesh,
   MeshBasicNodeMaterial,
-  Quaternion,
-  Vector3,
 } from 'three/webgpu';
 import type { Group } from 'three/webgpu';
-import { float, positionLocal, positionWorld, vec3 } from 'three/tsl';
+import { float, positionLocal, vec3 } from 'three/tsl';
 import { Quatd } from '../../../core/quat';
 import { Vec3d } from '../../../core/vec3d';
 /**
@@ -40,43 +34,16 @@ import { AircraftView } from './aircraftView';
 import { storeModel } from './storeMounts';
 import { MODEL_SPECS } from '../../common/models/library';
 
-/** Seconds between smoke points, and how long a point lasts. */
-const SMOKE_STEP = 0.06;
-const SMOKE_LIFE = 7;
-const MAX_SMOKE = 1200;
-
-interface Puff {
-  pos: Vec3d;
-  born: number;
-  /** The trail's previous point (null at a trail's start). */
-  prev: Vec3d | null;
-}
-
 interface View {
   view: AircraftView;
   flame: Mesh;
-  last: Vec3d | null;
-  lastAt: number;
 }
 
 export class MissileViews {
   private readonly views = new Map<object, View>();
-  private readonly puffs: Puff[] = [];
-  private readonly smoke: InstancedMesh;
   private readonly flameGeo: ConeGeometry;
   private readonly flameMat: MeshBasicNodeMaterial;
-  private readonly m = new Matrix4();
-  private readonly q = new Quaternion();
-  private readonly p = new Vector3();
-  private readonly s = new Vector3();
-  private readonly d = new Vector3();
-  private readonly x = new Vector3(1, 0, 0);
 
-  /**
-   * Draws the missiles' smoke trails and the wrecks' fire and smoke (Proposal 0011, decision
-   * 326) by their motors; without it, the box segments below.
-   */
-  private readonly effects: EffectsSystem | null;
   /** Small ids for the effects' emitter keys, by the sim's own object. */
   private readonly ids = new WeakMap<object, number>();
   private nextId = 0;
@@ -85,25 +52,9 @@ export class MissileViews {
     private readonly vehicles: Group,
     private readonly lighting: PlanetLighting,
     private readonly radius: number,
-    effects: EffectsSystem | null = null,
+    /** Draws the trails: missiles' by their motors, wrecks' fire and smoke (decisions 326, 330). */
+    private readonly effects: EffectsSystem,
   ) {
-    this.effects = effects;
-    const g = new BoxGeometry(1, 1, 1);
-    g.translate(-0.5, 0, 0);
-    const mat = new MeshBasicNodeMaterial({
-      transparent: true,
-      depthWrite: false,
-      side: DoubleSide,
-    });
-    // Pale gray smoke lit as a surface turned to the sun (it scatters), never pure white.
-    mat.colorNode = lighting
-      .shadeDiffuse(vec3(0.78, 0.78, 0.76), lighting.sunDirection as never, positionWorld as never)
-      .mul(0.7);
-    mat.opacityNode = float(0.32);
-    this.smoke = new InstancedMesh(g, mat, MAX_SMOKE);
-    this.smoke.count = 0;
-    this.smoke.frustumCulled = false;
-    vehicles.add(this.smoke);
     this.flameGeo = new ConeGeometry(0.09, 1, 6, 1, true);
     this.flameGeo.translate(0, -0.5, 0);
     this.flameGeo.rotateZ(-Math.PI / 2);
@@ -120,11 +71,11 @@ export class MissileViews {
 
   /**
    * Draws `missiles` for the frame at game time t from `eye`: views for new ones, gone
-   * for ended ones, smoke from those burning; `groundAt` lays their shadows.
+   * for ended ones, trails from the effects system; `groundAt` lays their shadows.
    */
   place(
     missiles: readonly Flying[],
-    t: number,
+    _t: number,
     eye: Readonly<Vec3d>,
     sun: Readonly<Vec3d>,
     radPerPixel: number,
@@ -145,7 +96,7 @@ export class MissileViews {
         flame.position.set(tailOf(spec), 0, 0);
         view.group.add(flame);
         this.vehicles.add(view.group, view.shadowMesh);
-        v = { view, flame, last: null, lastAt: -Infinity };
+        v = { view, flame };
         this.views.set(ms.key, v);
       }
       const speed = ms.vel.length();
@@ -174,33 +125,21 @@ export class MissileViews {
       );
       v.flame.visible = ms.burning;
       v.flame.scale.set(1.6, 1, 1);
-      if (this.effects) {
-        let id = this.ids.get(ms.key);
-        if (id === undefined) this.ids.set(ms.key, (id = this.nextId++));
-        const trail = trailOf(ms.model);
-        if (trail === 'wreck') this.effects.trackAircraft(`wreck${id}`, ms.pos, ms.vel, 'burning');
-        else this.effects.trackMissile(`${id}`, trail, ms.burning, ms.pos, ms.vel);
-      } else if (ms.burning && t - v.lastAt >= SMOKE_STEP) {
-        this.puffs.push({ pos: ms.pos.clone(), born: t, prev: v.last });
-        v.last = ms.pos.clone();
-        v.lastAt = t;
-      } else if (!ms.burning) v.last = null;
+      let id = this.ids.get(ms.key);
+      if (id === undefined) this.ids.set(ms.key, (id = this.nextId++));
+      const trail = trailOf(ms.model);
+      if (trail === 'wreck') this.effects.trackAircraft(`wreck${id}`, ms.pos, ms.vel, 'burning');
+      else this.effects.trackMissile(`${id}`, trail, ms.burning, ms.pos, ms.vel);
     }
-    this.placeSmoke(t, eye, radPerPixel);
   }
 
-  /** Removes every missile and its smoke. */
+  /** Removes every missile (their trails stop with them). */
   clear(): void {
     for (const [k, v] of this.views) this.drop(k, v);
-    this.puffs.length = 0;
-    this.smoke.count = 0;
   }
 
   dispose(): void {
     this.clear();
-    this.vehicles.remove(this.smoke);
-    this.smoke.geometry.dispose();
-    (this.smoke.material as MeshBasicNodeMaterial).dispose();
     this.flameGeo.dispose();
     this.flameMat.dispose();
   }
@@ -209,30 +148,6 @@ export class MissileViews {
     this.vehicles.remove(v.view.group, v.view.shadowMesh);
     v.view.dispose();
     this.views.delete(k);
-  }
-
-  /** The trail's segments, widening with age and thinning out at the end of their life. */
-  private placeSmoke(t: number, eye: Readonly<Vec3d>, radPerPixel: number): void {
-    while (this.puffs.length > 0 && t - this.puffs[0]!.born > SMOKE_LIFE) this.puffs.shift();
-    while (this.puffs.length > MAX_SMOKE) this.puffs.shift();
-    let n = 0;
-    for (const p of this.puffs) {
-      if (!p.prev) continue;
-      const age = Math.max(0, t - p.born);
-      const fade = Math.min(1, (SMOKE_LIFE - age) / 2);
-      this.p.set(p.pos.x - eye.x, p.pos.y - eye.y, p.pos.z - eye.z);
-      this.d.set(p.pos.x - p.prev.x, p.pos.y - p.prev.y, p.pos.z - p.prev.z);
-      const len = this.d.length();
-      if (len < 0.01) continue;
-      this.d.multiplyScalar(1 / len);
-      this.q.setFromUnitVectors(this.x, this.d);
-      const w = Math.max(0.5 + 0.6 * age, this.p.length() * radPerPixel * 1.5) * fade;
-      this.s.set(len, w, w);
-      this.m.compose(this.p, this.q, this.s);
-      this.smoke.setMatrixAt(n++, this.m);
-    }
-    this.smoke.count = n;
-    this.smoke.instanceMatrix.needsUpdate = true;
   }
 }
 
