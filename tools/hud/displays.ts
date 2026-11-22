@@ -25,7 +25,8 @@ import type { Dir } from '../../src/core/greatCircle';
 import { latLonToDirection } from '../../src/core/coords';
 import { WAYPOINT_LABELS } from '../../src/sim/air/waypoints';
 import type { Waypoint, WaypointKind } from '../../src/sim/air/waypoints';
-import { frontsSnapshot, routeSnapshot } from '../../src/ui/displays/routeSnapshot';
+import { flightSnapshot, frontsSnapshot, routeSnapshot } from '../../src/ui/displays/routeSnapshot';
+import { Vec3d } from '../../src/core/vec3d';
 
 export async function drawDisplays(q: URLSearchParams): Promise<void> {
   const mode = (q.get('displays') ?? 'navigation') as MasterMode;
@@ -122,6 +123,25 @@ export async function drawDisplays(q: URLSearchParams): Promise<void> {
     const line: number[] = [];
     for (let k = -60; k <= 60; k += 2)
       line.push(...destination(at(0, 30_000), snap.track + Math.PI / 2, k * 1000, R));
+    // The wingman a mile abeam right, the second element two miles out (decision 308).
+    const h = new Vec3d(...here);
+    const east = new Vec3d(0, 1, 0).cross(h).normalize();
+    const north = h.clone().cross(east);
+    const nose = north.clone().scale(Math.cos(snap.track)).addScaled(east, Math.sin(snap.track));
+    const right = nose.clone().cross(h);
+    const own = h.clone().scale(R + 3000);
+    snap.flight = flightSnapshot(
+      { pos: own, forward: nose, up: h },
+      [1852, 3704, 5556].map((d, k) => ({
+        number: k + 2,
+        pos: own
+          .clone()
+          .addScaled(right, d)
+          .addScaled(nose, -30 * (k + 1)),
+        vel: nose.clone().scale(220),
+      })),
+      R,
+    );
     snap.fronts = frontsSnapshot([{ points: line, teeth: 1, color: 0x2f6fb5 }], here, R);
   }
   // The jet's strike load with one bomb gone, and the bombs selected in air-to-ground (decision 289).
@@ -166,6 +186,14 @@ export async function drawDisplays(q: URLSearchParams): Promise<void> {
     });
   }
   sys.update(snap);
+  // `&mapsteps=<n>`: the map's range stepped n times (+ wider) from 20 nm.
+  const steps = Number(q.get('mapsteps') ?? 0);
+  for (let k = 0; k < Math.abs(steps); k++)
+    sys.command({
+      to: 'ui',
+      command: { type: 'map-range', slot: 'leftMfd', delta: steps > 0 ? 1 : -1 },
+    });
+  if (steps) sys.update({ ...snap, time: snap.time + 0.5 });
   const mapMode = q.get('mapmode');
   for (let k = 0; k < (mapMode === 'relative' ? 2 : mapMode === 'elevation' ? 1 : 0); k++)
     sys.command({ to: 'ui', command: { type: 'map-mode', slot: 'leftMfd' } });

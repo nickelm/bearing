@@ -287,7 +287,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] A pause-menu switch for the hold, if keyboard pilots want the bare laws; the hold's references set by hand (altitude and heading select) with R4's autopilot panel
 - [x] LOW FUEL in the status strip (with a mission's joker and bingo from its route, drop tanks counted; decision 307)
 - [ ] Fuel calls in the messages (JOKER, BINGO; the crewmate's in R4) and the AI turning home at bingo at full fidelity (R3)
-- [ ] The player's own flight on the HUD (markers on the other aircraft) and on the moving map and radar by intraflight datalink (decision 258)
+- [x] The player's own flight on the HUD (markers on the other aircraft) and on the moving map and radar by intraflight datalink (decision 258; rings with numbers, the map's numbers all or none; decision 308)
 - [ ] Acceptance check 8 with the pipper
 - [ ] Owner: a CAP kill and a bridge hit, both visible in the campaign state
 

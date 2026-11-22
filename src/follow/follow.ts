@@ -101,7 +101,7 @@ import type { FuelStates } from '../sim/air/fuelStates';
 import { aircraftType } from '../sim/air/aircraft';
 import { FLIGHT_STEP } from '../sim/flight/rigidBody';
 import type { Waypoint } from '../sim/air/waypoints';
-import { frontsSnapshot, routeSnapshot } from '../ui/displays/routeSnapshot';
+import { flightSnapshot, frontsSnapshot, routeSnapshot } from '../ui/displays/routeSnapshot';
 import { PHASE_LABELS } from '../ui/missionSearch/model';
 import {
   drawnAltitude,
@@ -1560,6 +1560,13 @@ export class Follow {
     // The flight plan: the next waypoint, and steering to it under the phase's cue (decision 305).
     const nav = this.navigation(m, p, t);
     frame.steering = ui?.hud.includes('steering') ? this.steeringCue(nav, p) : null;
+    // The own flight by the intraflight datalink: rings on the HUD (decision 308).
+    const mates = this.flightMates();
+    const eye = this.deps.globe.chase.eye;
+    frame.flight = mates.map((k) => ({
+      point: [k.pos.x - eye.x, k.pos.y - eye.y, k.pos.z - eye.z],
+      label: String(k.number),
+    }));
     const helicopter = this.look?.rig?.kind === 'helicopter';
     const changed = this.displays.triggers({
       onGround: p.onGround,
@@ -1594,10 +1601,35 @@ export class Follow {
       stores: this.storesOf(m, t),
       ...this.fuelFigures(m, nav.wps, p),
       route: routeSnapshot(nav.wps, nav.next, unitOf(p.pos), this.deps.radius),
+      flight: flightSnapshot(
+        { pos: new Vec3d(...p.pos), forward: new Vec3d(...p.forward), up: new Vec3d(...p.up) },
+        mates,
+        this.deps.radius,
+      ),
       fronts: frontsSnapshot(this.deps.strategic.frontLines(), unitOf(p.pos), this.deps.radius),
     });
     this.displays.update(snap);
     this.requestMap(snap.position);
+  }
+
+  /**
+   * The flight's other aircraft (decision 308), numbered from the lead: the airframes at
+   * full fidelity, the drawn formation's poses on the analytic route.
+   */
+  private flightMates(): { number: number; pos: Vec3d; vel: Vec3d }[] {
+    if (this.full)
+      return this.full.flight.alive
+        .filter((a) => a.slot !== this.slot)
+        .map((a) => ({
+          number: a.slot + 1,
+          pos: a.flown.airframe.pos.clone(),
+          vel: a.flown.airframe.vel.clone(),
+        }));
+    return this.poses.flatMap((q, k) =>
+      k === this.slot
+        ? []
+        : [{ number: k + 1, pos: new Vec3d(...q.pos), vel: new Vec3d(...q.velocity) }],
+    );
   }
 
   /**

@@ -4919,3 +4919,17 @@ Before, freeing the mouse in direct control centered the stick. The pitch law th
 **How it was checked.** `tests/fuelStates.test.ts`: low fuel is the route's reserve, bingo grows with the way home and joker is a fight's more wherever the aircraft is; the plan itself holds more than bingo over the target and lands with at least the reserve; the strip shows JOKER, then BINGO, then LOW FUEL in its place, and counts the drop tanks. The unit suite, the type check and lint pass.
 
 **Reason:** roadmap R2.6's TODO, *LOW FUEL in the status strip*; the joker and bingo of a mission were Free Flight's fixed shares, which say nothing about the way home.
+
+### 308. The own flight by the intraflight datalink: rings on the HUD, the moving map and the radar
+
+**Date:** 2026-11-22
+**Decision:** The other aircraft of the followed or flown aircraft's flight (decision 258's smaller item) show on its HUD, moving map and radar, as an intraflight datalink would put them there.
+
+- **Positions.** At full fidelity the airframes of the flight's surviving aircraft; on the analytic route the drawn formation's poses. Each carries its number in the flight (1 is the lead). `AircraftSnapshot.flight` holds them relative to the aircraft (range, azimuth and elevation off the nose, altitude, heading) and as bearing and distance for the map (`flightSnapshot`).
+- **HUD:** a small ring on each with its number above, world-anchored (`HudFrame.flight`), so a wingman a mile abeam, a speck at that range, is found at a glance.
+- **Moving map:** a small ring at each, placed by the picture's projection (decision 305), with its number only when every number clears the own ship and the others; at 20 nm a flight in combat spread is a cluster of rings by the own ship, and a lone number over it would mislead. At 5 and 10 nm the numbers show.
+- **Radar:** within the scan and range, a friend's circle with the number beside it, wherever the radar looks; they are not lockable.
+
+**How it was checked.** `tests/waypoints.test.ts`: a wingman a mile abeam right sits at 90° off the nose, a little above, its heading and map bearing right, its ground distance the mile scaled to the ground; the map draws its ring at 20 nm without its number, and with it at 5 nm; a flight member ahead shows with its number on the radar. `tools/hud/composite.html` gained `&flight=1`, and the displays' `&route=1` a flight in combat spread with `&mapsteps=<n>` for the range; both were looked at in Chromium. The unit suite, the type check and lint pass.
+
+**Reason:** roadmap R2.6, *the player's own flight always in view* (decision 258).

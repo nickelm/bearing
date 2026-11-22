@@ -11,6 +11,7 @@ import type {
   AircraftSnapshot,
   SnapshotMessage,
   SnapshotSensors,
+  SnapshotFlightMate,
   SnapshotFront,
   SnapshotRoute,
   SnapshotStores,
@@ -124,6 +125,8 @@ export interface SnapshotExtras {
   fuelStates?: FuelStates | null;
   /** All the fuel aboard, drop tanks included (kg); the frame's fuel if absent. */
   fuelTotal?: number;
+  /** The other aircraft of the own flight (decision 308). */
+  flight?: SnapshotFlightMate[] | null;
   /** The mission's flight plan and the fronts near the aircraft (decision 305). */
   route?: SnapshotRoute | null;
   fronts?: SnapshotFront[] | null;
@@ -241,5 +244,6 @@ export function snapshotFromHud(f: HudFrame, x: SnapshotExtras): AircraftSnapsho
     stores: x.stores ?? null,
     route: x.route ?? null,
     fronts: x.fronts ?? null,
+    flight: x.flight ?? null,
   };
 }

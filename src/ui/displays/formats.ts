@@ -390,6 +390,7 @@ function movingMapFormat(s: AircraftSnapshot, d: DisplayState): ScreenItem[] {
     // The fronts: in the chart they are in the picture; the elevation modes draw them.
     ...(elevation ? frontItems(s, half, rotation) : []),
     ...routeItems(s, half, rotation, fig),
+    ...flightItems(s, half, rotation),
     { kind: 'arc', x: 0.5, y: 0.5, r: 0.25, tone: 'normal', dashed: true },
     text(0.5 + 0.25 * 0.72, 0.5 + 0.25 * 0.72 + 0.06, fig(half / 2), 'small', 'left', 'normal'),
     { kind: 'line', points: [pt(1, 0), pt(-1, 0)], tone: 'normal', width: 2 },
@@ -558,6 +559,30 @@ function routeItems(
       items.push(...edgeCaret(n.at, rotation, `${n.number} ${n.label} ${fig(n.at[1])}`));
   }
   return items;
+}
+
+/**
+ * The own flight on the map (decision 308): each other aircraft as a friend's circle with
+ * its number in the flight, by the intraflight datalink.
+ */
+function flightItems(s: AircraftSnapshot, half: number, rotation: number): ScreenItem[] {
+  const rings: ScreenItem[] = [];
+  const labels: ScreenItem[] = [];
+  // The numbers only when every one clears the own ship and the others: at long range a
+  // flight in combat spread is a cluster of rings, and a lone number over it would mislead.
+  const taken: [number, number][] = [[0.5, 0.5]];
+  let clear = true;
+  for (const f of s.flight ?? []) {
+    const [x, y] = mapPlace(f.at, s.position.radius, half, rotation);
+    if (!onMap(x, y)) continue;
+    rings.push({ kind: 'arc', x, y, r: 0.011, tone: 'normal' });
+    const ly = y - 0.03;
+    if (taken.some(([tx, ty]) => Math.abs(tx - x) < 0.045 && Math.abs(ty - ly) < 0.05))
+      clear = false;
+    taken.push([x, ly]);
+    labels.push(text(x, ly, String(f.number), 'small', 'center', 'normal'));
+  }
+  return clear ? [...rings, ...labels] : rings;
 }
 
 /**
@@ -781,6 +806,15 @@ function radarFormat(s: AircraftSnapshot): ScreenItem[] {
       items.push({ kind: 'arc', x, y, r: 0.04, tone: 'normal' });
       locked = c;
     }
+  }
+  // The own flight by the intraflight datalink (decision 308): a friend's circle with its
+  // number, wherever the radar looks.
+  for (const f of s.flight ?? []) {
+    if (Math.abs(f.azimuth) > r.azimuth || f.range > scale) continue;
+    const x = xAt(f.azimuth);
+    const y = y1 - ((y1 - y0) * f.range) / scale;
+    items.push({ kind: 'arc', x, y, r: 0.018, tone: 'normal' });
+    items.push(text(x + 0.03, y + 0.012, String(f.number), 'small', 'left', 'normal'));
   }
   if (locked) {
     const rng = pact

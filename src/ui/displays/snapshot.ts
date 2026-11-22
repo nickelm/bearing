@@ -150,6 +150,23 @@ export interface AircraftSnapshot {
   route?: SnapshotRoute | null;
   /** The fronts near the aircraft (decision 305), for the moving map's elevation modes. */
   fronts?: SnapshotFront[] | null;
+  /** The other aircraft of its own flight by the intraflight datalink (decision 308). */
+  flight?: SnapshotFlightMate[] | null;
+}
+
+/**
+ * Another aircraft of the aircraft's own flight (decision 308): its place in the flight (1,
+ * the lead, to 4), where it is off the nose (range m; azimuth and elevation rad, + right and
+ * up), its altitude (m), true heading (rad), and its bearing and distance for the map.
+ */
+export interface SnapshotFlightMate {
+  number: number;
+  range: number;
+  azimuth: number;
+  elevation: number;
+  altitude: number;
+  heading: number;
+  at: MapBearing;
 }
 
 /** A place relative to the aircraft: its true bearing (rad) and its distance over the ground (m). */

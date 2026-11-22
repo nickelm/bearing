@@ -188,6 +188,12 @@ export interface HudFrame {
    * station, relative to the camera (m), as diamonds with a label.
    */
   marks?: { point: [number, number, number]; label: string }[] | null;
+  /**
+   * The other aircraft of the own flight (decision 308), relative to the camera (m), with
+   * their number in the flight: a small ring on each, so a wingman a mile abeam is found at
+   * a glance.
+   */
+  flight?: { point: [number, number, number]; label: string }[] | null;
   /** The control layer's holds that fly the jet (decision 306): 'alt hold' or 'att hold', for the strip. */
   holds?: string[];
   /**
@@ -438,6 +444,7 @@ export class Hud {
     for (const k of f.marks ?? []) this.diamond(k, project, s);
     const st = f.steering;
     if (st?.point) this.diamond({ point: st.point, label: st.label }, project, s);
+    for (const k of f.flight ?? []) this.flightMark(k, project, s);
     if (f.control) drawControlCursor(c, f.control, project, W, H, s);
   }
 
@@ -515,6 +522,23 @@ export class Hud {
       'center',
       g.rounds > 0 ? HUD_COLOR : WARN_COLOR,
     );
+  }
+
+  /** Another aircraft of the own flight (decision 308): a small ring with its number above it. */
+  private flightMark(
+    k: { point: [number, number, number]; label: string },
+    project: Projector,
+    s: number,
+  ): void {
+    const p = project(k.point[0], k.point[1], k.point[2], true);
+    if (!p) return;
+    const c = this.ctx;
+    const r = 7 * s;
+    this.stroke(() => {
+      c.beginPath();
+      c.arc(p.x, p.y, r, 0, Math.PI * 2);
+    });
+    this.text(k.label, p.x, p.y - r - 9 * s, 'center');
   }
 
   /** A target or station mark (decision 304): a diamond with its label beside it. */

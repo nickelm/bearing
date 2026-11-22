@@ -6,7 +6,8 @@
 import { arcDistance, initialHeading, slerp } from '../../core/greatCircle';
 import type { Dir } from '../../core/greatCircle';
 import type { Waypoint } from '../../sim/air/waypoints';
-import type { MapBearing, SnapshotFront, SnapshotRoute } from './snapshot';
+import { Vec3d } from '../../core/vec3d';
+import type { MapBearing, SnapshotFlightMate, SnapshotFront, SnapshotRoute } from './snapshot';
 
 /** The longest step between a leg's samples (m). */
 export const ROUTE_STEP = 10_000;
@@ -90,4 +91,37 @@ export function frontsSnapshot(
     flush();
   }
   return out;
+}
+
+/**
+ * The flight's other aircraft relative to the aircraft at `own` (decision 308), by the
+ * intraflight datalink: each with its number in the flight, where it is off the nose and
+ * on the map.
+ */
+export function flightSnapshot(
+  own: { pos: Readonly<Vec3d>; forward: Readonly<Vec3d>; up: Readonly<Vec3d> },
+  mates: readonly { number: number; pos: Readonly<Vec3d>; vel: Readonly<Vec3d> }[],
+  R: number,
+): SnapshotFlightMate[] {
+  const right = own.forward.clone().cross(own.up).normalize();
+  const from = own.pos.clone().normalize();
+  const fromDir: Dir = [from.x, from.y, from.z];
+  return mates.map((mt) => {
+    const d = mt.pos.clone().sub(own.pos);
+    const x = d.dot(own.forward);
+    const y = d.dot(right);
+    const z = d.dot(own.up);
+    const up = mt.pos.clone().normalize();
+    const east = new Vec3d(0, 1, 0).cross(up).normalize();
+    const north = up.clone().cross(east);
+    return {
+      number: mt.number,
+      range: d.length(),
+      azimuth: Math.atan2(y, x),
+      elevation: Math.atan2(z, Math.hypot(x, y)),
+      altitude: mt.pos.length() - R,
+      heading: Math.atan2(mt.vel.dot(east), mt.vel.dot(north)),
+      at: mapBearing(fromDir, [up.x, up.y, up.z], R),
+    };
+  });
 }

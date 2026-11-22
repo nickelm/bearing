@@ -8,6 +8,7 @@ import { latLonToDirection } from '../src/core/coords';
 import { arcDistance, destination } from '../src/core/greatCircle';
 import type { Dir } from '../src/core/greatCircle';
 import { DEG, NAUTICAL_MILE } from '../src/core/units';
+import { Vec3d } from '../src/core/vec3d';
 import { AIRCRAFT_TYPES } from '../src/sim/air/aircraft';
 import { MISSION_PROFILES } from '../src/sim/air/mission';
 import { FENCE_IN, planMissionRoute } from '../src/sim/air/missionRoute';
@@ -23,6 +24,7 @@ import { displayModel, MAP_FOV_Y, mapPlace, mapRange } from '../src/ui/displays/
 import type { ScreenItem } from '../src/ui/displays/model';
 import { applyUi, initialDisplayState } from '../src/ui/displays/presets';
 import {
+  flightSnapshot,
   FRONT_REACH,
   frontsSnapshot,
   mapBearing,
@@ -251,5 +253,72 @@ describe('the moving map (decision 305)', () => {
     const [b, dd] = mapBearing(at, p, R);
     expect(b).toBeCloseTo(0.7, 6);
     expect(dd).toBeCloseTo(50_000, 0);
+  });
+});
+
+describe('the own flight by the intraflight datalink (decision 308)', () => {
+  // The aircraft at (45.84°, 17.19°) heading north at 3,000 m; its wingman a mile abeam right.
+  const at = dir(0.8 / DEG, 0.3 / DEG);
+  const up = new Vec3d(...at);
+  const east = new Vec3d(0, 1, 0).cross(up).normalize();
+  const north = up.clone().cross(east);
+  const pos = up.clone().scale(R + 3000);
+  const mate = pos.clone().addScaled(east, NAUTICAL_MILE).addScaled(up, 150);
+  const flight = flightSnapshot(
+    { pos, forward: north, up },
+    [{ number: 2, pos: mate, vel: north.clone().scale(200) }],
+    R,
+  );
+
+  it('places a wingman off the nose and on the map', () => {
+    const [f] = flight;
+    expect(f!.number).toBe(2);
+    expect(f!.range).toBeCloseTo(Math.hypot(NAUTICAL_MILE, 150), 0);
+    expect(f!.azimuth / DEG).toBeCloseTo(90, 0);
+    expect(f!.elevation).toBeGreaterThan(0);
+    expect(f!.altitude).toBeGreaterThan(3000);
+    expect(f!.heading).toBeCloseTo(0, 2);
+    expect(f!.at[0] / DEG).toBeCloseTo(90, 0);
+    expect(f!.at[1]).toBeCloseTo((NAUTICAL_MILE * R) / (R + 3000), -1);
+  });
+
+  it('draws it on the moving map with its number, and on the radar within its scan', () => {
+    const s = snap({ flight });
+    let d = initialDisplayState(s);
+    // At 20 nm the ring sits by the own ship, too close for its number; at 5 nm it clears.
+    const map = () => displayModel(s, d, 'leftMfd')!.items;
+    expect(map().filter((i) => i.kind === 'arc' && i.r === 0.011)).toHaveLength(1);
+    expect(texts(map())).not.toContain('2');
+    for (let i = 0; i < 2; i++)
+      d = applyUi(d, s, { type: 'map-range', slot: 'leftMfd', delta: -1 });
+    expect(texts(map())).toContain('2');
+    const ahead = flightSnapshot(
+      { pos, forward: north, up },
+      [{ number: 3, pos: pos.clone().addScaled(north, 8000), vel: north.clone().scale(200) }],
+      R,
+    );
+    const withRadar = snap({
+      flight: ahead,
+      sensors: {
+        radar: {
+          on: true,
+          mode: 'rws',
+          range: 20 * NAUTICAL_MILE,
+          lock: null,
+          azimuth: 1,
+          elevation: 0.5,
+        },
+        contacts: [],
+        threats: [],
+      },
+    });
+    const dr = applyUi(initialDisplayState(withRadar), withRadar, {
+      type: 'select-format',
+      slot: 'rightMfd',
+      format: 'radar-aa',
+    });
+    const radar = displayModel(withRadar, dr, 'rightMfd')!;
+    expect(radar.format).toBe('radar-aa');
+    expect(texts(radar.items)).toContain('3');
   });
 });

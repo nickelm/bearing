@@ -88,6 +88,14 @@ async function main(): Promise<void> {
       point: [(v[0] / n) * d + 0.36 * d, (v[1] / n) * d - 2000, (v[2] / n) * d],
     };
   }
+  // `&flight=1`: the own flight's rings (decision 308), a wingman 1,500 m off to the right.
+  if (query.get('flight') === '1') {
+    const v = shot.frame.velocity;
+    const n = Math.hypot(v[0], v[1], v[2]);
+    shot.frame.flight = [
+      { point: [(v[0] / n) * 900 + 1400, (v[1] / n) * 900 + 40, (v[2] / n) * 900], label: '2' },
+    ];
+  }
   // `&gun=1`: the gun pipper (decision 295) a little below the boresight, 610 m out.
   if (query.get('gun') === '1') {
     const b = shot.frame.boresight;
