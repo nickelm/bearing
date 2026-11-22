@@ -424,3 +424,16 @@ Runs beside the main line (`docs/proposals/0009-settlements-and-cities.md`, `doc
 - [ ] `tools/render.preview.ts`: `moonlit-range` cannot find a sun 30° down at the peak's latitude in August and renders at 11:00; take the lowest sun of the night when the wanted elevation is out of reach.
 - [ ] Targeting pod (P3–P5): set `CityLayer.zoom` from the pod's magnification (decision 279).
 - [ ] Wire settlement pads into `terrainEditsFor` once the sim's height service can take them (decision 264).
+
+## Out of sync: Proposal 0011, stylized effects
+
+`docs/proposals/0011-stylized-effects.md`, `docs/plans/stylized-effects.md`; branch `feature/stylized-effects`.
+
+- [x] Phase 0: survey, proposal, plan
+- [ ] Phase 1: puff renderer (sphere impostor, depth, toon ramp, rim, dithered fade, shape variation)
+- [ ] Phase 2: GPU simulation (curves, pool, spawn and update kernels, TypeScript reference)
+- [ ] Phase 3: effects sandbox page and headless preview
+- [ ] Phase 4: emitter presets, explosions' five layers, debris, decals, flash lights
+- [ ] Phase 5: contrails and wingtip vortices
+- [ ] Phase 6: event interface, long-lived columns, city plumes and rotor downwash migrated
+- [ ] Phase 7: verification, metrics, screenshots, visual-style *Effects*, decisions, report
