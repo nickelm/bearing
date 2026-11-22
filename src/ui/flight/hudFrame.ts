@@ -339,7 +339,17 @@ export function gunHud(
   const g = rack?.gun;
   if (!g || m.onGround) return null;
   if (!gunSelected(avionics)) return null;
-  const sol = leadSolution(m, g.spec, m.spec.cg, m.radius, range);
+  // The true airspeed's rate from the calibrated one's (the HUD's speed trend), for the
+  // speed a hard turn bleeds (decision 309).
+  const t = m.telemetry;
+  const speedRate = t.casRate * (t.tas / Math.max(1, t.cas));
+  const sol = leadSolution(
+    { pos: m.pos, vel: m.vel, q: m.q, omega: m.omega, speedRate },
+    g.spec,
+    m.spec.cg,
+    m.radius,
+    range,
+  );
   if (!sol) return null;
   const at = m.pos.clone().add(m.q.rotate(sol.dir).scale(range)).sub(eye);
   return { point: [at.x, at.y, at.z], rounds: g.rounds, armed: avionics.masterArm };

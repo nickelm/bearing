@@ -71,6 +71,11 @@ export interface Shooter {
   q: Readonly<Quatd>;
   /** Body rates p, q, r (rad/s). */
   omega: Readonly<Vec3d>;
+  /**
+   * How fast its speed changes (m/s², + accelerating), for the lead (decision 309): a
+   * hard turn bleeds speed, and a target holding the turn bleeds it too. 0 if absent.
+   */
+  speedRate?: number;
 }
 
 /** The muzzle's world position and a round's initial velocity (the aircraft's plus the muzzle's). */
@@ -177,14 +182,17 @@ export function leadSolution(
   const rate = w.length();
   const axis = rate > 1e-6 ? w.clone().scale(1 / rate) : new Vec3d(1, 0, 0);
   const own = s.pos.clone();
+  const speed = Math.max(1, s.vel.length());
   const dt = 0.005;
   let t = 0;
   const rel = new Vec3d();
   while (t < ROUND_LIFE) {
     stepRound(round, spec, dt, R);
     t += dt;
-    const v = rate > 1e-6 ? rotateAbout(s.vel, axis, rate * (t - dt / 2)) : s.vel;
-    own.addScaled(v, dt);
+    const mid = t - dt / 2;
+    const v = rate > 1e-6 ? rotateAbout(s.vel, axis, rate * mid) : s.vel;
+    // The speed it gains or bleeds along its path meanwhile.
+    own.addScaled(v, dt * (1 + ((s.speedRate ?? 0) * mid) / speed));
     rel.copy(round.pos).sub(own);
     if (rel.length() >= range) {
       // Seen in the shooter's frame as turned by then: undo the turn, then the attitude.

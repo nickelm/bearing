@@ -4933,3 +4933,14 @@ Before, freeing the mouse in direct control centered the stick. The pitch law th
 **How it was checked.** `tests/waypoints.test.ts`: a wingman a mile abeam right sits at 90° off the nose, a little above, its heading and map bearing right, its ground distance the mile scaled to the ground; the map draws its ring at 20 nm without its number, and with it at 5 nm; a flight member ahead shows with its number on the radar. `tools/hud/composite.html` gained `&flight=1`, and the displays' `&route=1` a flight in combat spread with `&mapsteps=<n>` for the range; both were looked at in Chromium. The unit suite, the type check and lint pass.
 
 **Reason:** roadmap R2.6, *the player's own flight always in view* (decision 258).
+
+### 309. Check 8's gun pipper in a hard turn, and the speed a turn bleeds in the lead
+
+**Date:** 2026-11-22
+**Decision:** Part I's check 8 (the flight path marker and gun pipper stay accurate during hard maneuvers) gets its pipper half as a scripted test, `tests/pipperTurn.test.ts`: the Kestrel rolls to 60° of bank and pulls about 6 g through its flight model; a target holds that turn (fixed in the shooter's turning frame) where the HUD's pipper (`gunHud`) sits, at 400 m, the pipper's 610 m and 900 m; one round fired then must pass within 10 mils of the range of it, and within a fighter's radius (6 m) at 610 m and closer. With the nose on the target instead the round misses by about 125 m (200 mils), the lead the pipper gives.
+
+The first run missed by 4.0 m at 610 m and 9.6 m at 900 m, growing with the square of the time of flight: in a 6-g turn the jet bleeds speed, and the lead solution assumed a steady turn at the speed of the moment. `Shooter.speedRate` (the true airspeed's rate, from the HUD's low-passed calibrated rate scaled by TAS/CAS) now carries the shooter along its turn at the changing speed: 1.5 m at 400 m, 3.5 m at 610 m and 7.5 m at 900 m. What is left is the turn's rising rate as the speed falls at a held load factor, which a solution at the present rate leaves out; a TODO keeps it in case long shots look off to the owner. The flight path marker half of check 8 stands as before: it is projected from the velocity at a great distance, so the chase camera's offset gives it no parallax. The on-screen half, the pipper on a target in a hard turn, is the owner's look on the GPU.
+
+**How it was checked.** The new test, the gun's and the hits' tests (the lead without a speed rate is unchanged), the unit suite, the type check and lint.
+
+**Reason:** roadmap R2.6, *acceptance check 8 with the pipper*.

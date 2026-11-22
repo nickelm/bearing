@@ -257,7 +257,9 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] The Pact skin's stores labels (Cyrillic-style or its own short names) with the skins' label work
 - [x] Gun with a lead-computing pipper (the bundle's `gun`, `sim/flight/gun.ts`, the trigger on Enter and the left button, tracers, GUN on the stores format; decision 295)
 - [ ] Gun hits (the next task: rounds against aircraft and the ground), muzzle flash and the gun's sound
-- [ ] Acceptance check 8's pipper half in a scripted hard turn (`tools/render.preview.ts`), and the owner's look on the GPU
+- [x] Acceptance check 8's pipper half in a scripted hard turn: `tests/pipperTurn.test.ts`, the lead with the speed a hard turn bleeds (decision 309)
+- [ ] Check 8: the owner's look at the pipper on a target in a hard turn on the GPU
+- [ ] The lead with the turn's rising rate as the speed bleeds (7.5 m at 900 m today), if the owner finds long shots off
 - [ ] The AI's gun (R3: targets from the sensors' picture)
 - [ ] `tests/gpu/mapSoak.test.ts` fails on main under lavapipe (geometries 274 against a 234 peak while panning at the floor), with or without decision 295: look at the strategic map's relief tile caches after the cities' commits
 - [x] IR missile with a seeker circle and simple guidance, one per side (`srm`, `srm-p`; the seeker, proportional navigation, the proximity fuze, the HUD's seeker circle, launch on the trigger's press, flame and smoke; decision 297)
@@ -288,7 +290,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] LOW FUEL in the status strip (with a mission's joker and bingo from its route, drop tanks counted; decision 307)
 - [ ] Fuel calls in the messages (JOKER, BINGO; the crewmate's in R4) and the AI turning home at bingo at full fidelity (R3)
 - [x] The player's own flight on the HUD (markers on the other aircraft) and on the moving map and radar by intraflight datalink (decision 258; rings with numbers, the map's numbers all or none; decision 308)
-- [ ] Acceptance check 8 with the pipper
+- [ ] Acceptance check 8 with the pipper: scripted half done (`tests/pipperTurn.test.ts`, decision 309); the owner's look on the GPU remains
 - [ ] Owner: a CAP kill and a bridge hit, both visible in the campaign state
 
 ### R2.7 The demo roster
