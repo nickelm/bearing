@@ -18,9 +18,19 @@ import {
   SEQUENCE_RADIUS,
   sequenceWaypoints,
 } from '../src/sim/air/waypoints';
-import { initialAvionics } from '../src/sim/avionics/avionics';
+import { applyCommand, initialAvionics } from '../src/sim/avionics/avionics';
 import { AVIONICS_PROFILES } from '../src/sim/avionics/profiles';
-import { displayModel, MAP_FOV_Y, mapPlace, mapRange } from '../src/ui/displays/formats';
+import {
+  displayModel,
+  MAP_DEPRESSED_Y,
+  MAP_FOV_Y,
+  mapAhead,
+  mapPictureScale,
+  mapPlace,
+  mapRange,
+  steerpointStep,
+} from '../src/ui/displays/formats';
+import { newPhase } from '../src/follow/follow';
 import type { ScreenItem } from '../src/ui/displays/model';
 import { applyUi, initialDisplayState } from '../src/ui/displays/presets';
 import {
@@ -93,6 +103,9 @@ describe('waypoints from the route (decision 305)', () => {
     const far = destination(wps[2]!.point, 0.4, SEQUENCE_RADIUS * 1.2, R);
     expect(sequenceWaypoints(wps, 2, far, R, passed)).toBe(false);
     expect(sequenceWaypoints(wps, 3, base, R, passed)).toBe(false);
+    // Over the target itself it stays the steerpoint until the egress (decision 310).
+    expect(sequenceWaypoints(wps, 2, wps[2]!.point, R, passed)).toBe(false);
+    expect(nextWaypoint(wps, 'on-target', passed)).toBe(2);
   });
 });
 
@@ -320,5 +333,74 @@ describe('the own flight by the intraflight datalink (decision 308)', () => {
     const radar = displayModel(withRadar, dr, 'rightMfd')!;
     expect(radar.format).toBe('radar-aa');
     expect(texts(radar.items)).toContain('3');
+  });
+});
+
+describe('the steerpoint by hand and the depressed map (decision 310)', () => {
+  const wps = routeWaypoints(plan('interdiction'));
+  const at = dir(0.8 / DEG, 0.3 / DEG);
+
+  it('steps up and down the plan, wrapping, and goes back to auto', () => {
+    const r = routeSnapshot(wps, 2, at, R);
+    expect(steerpointStep(r, 1)).toBe(3);
+    expect(steerpointStep({ ...r, next: 3 }, 1)).toBe(0);
+    expect(steerpointStep({ ...r, next: 0 }, -1)).toBe(3);
+    // All passed: up starts from the first.
+    expect(steerpointStep({ ...r, next: -1 }, 1)).toBe(0);
+    let av = initialAvionics(false);
+    av = applyCommand(av, { type: 'steerpoint', index: 2 });
+    expect(av.steerpoint).toBe(2);
+    expect(applyCommand(av, { type: 'steerpoint', index: null }).steerpoint).toBeNull();
+    // The map's buttons: STPT up and down, and AUTO (MAN while chosen by hand).
+    const s = snap({ route: r });
+    const m = displayModel(s, initialDisplayState(s), 'leftMfd')!;
+    expect(m.buttons[16]).toMatchObject({
+      label: 'STPT▲',
+      command: { to: 'avionics', command: { type: 'steerpoint', index: 3 } },
+    });
+    expect(m.buttons[15]?.command).toMatchObject({ command: { index: 1 } });
+    expect(m.buttons[17]).toMatchObject({ label: 'AUTO', active: false });
+    const hand = snap({ route: routeSnapshot(wps, 1, at, R, true) });
+    const mm = displayModel(hand, initialDisplayState(hand), 'leftMfd')!;
+    expect(mm.buttons[17]).toMatchObject({
+      label: 'MAN',
+      active: true,
+      command: { to: 'avionics', command: { type: 'steerpoint', index: null } },
+    });
+  });
+
+  it('puts the own ship low with more ahead, its picture larger so a turn still fills it', () => {
+    const half = 20 * NAUTICAL_MILE;
+    expect(mapPlace([0, 0], R, half, 0, true)).toEqual([0.5, MAP_DEPRESSED_Y]);
+    // A place straight ahead at the range sits half a screen above the own ship.
+    const [, y] = mapPlace([0, half], R, half, 0, true);
+    expect(MAP_DEPRESSED_Y - y).toBeGreaterThan(0.45);
+    expect(MAP_DEPRESSED_Y - y).toBeLessThan(0.5);
+    expect(mapPictureScale({ depressed: true })).toBeGreaterThan(Math.hypot(1, 1.5));
+    expect(mapAhead({ depressed: true }, half)).toBeCloseTo(half / 2, 6);
+    expect(mapAhead({}, half)).toBe(0);
+    const s = snap({ route: routeSnapshot(wps, 1, at, R) });
+    let d = initialDisplayState(s);
+    d = applyUi(d, s, { type: 'map-depress', slot: 'leftMfd' });
+    const m = displayModel(s, d, 'leftMfd')!;
+    expect(m.buttons[8]).toMatchObject({ label: 'DEP', active: true });
+    expect(m.items.find((i) => i.kind === 'map')).toMatchObject({ centerY: MAP_DEPRESSED_Y });
+    expect(m.items.find((i) => i.kind === 'arc' && i.dashed && i.r === 0.25)).toMatchObject({
+      y: MAP_DEPRESSED_Y,
+    });
+    // A caret for a far steerpoint stays inside the screen.
+    for (const it of m.items)
+      if (it.kind === 'text') {
+        expect(it.x).toBeGreaterThanOrEqual(0);
+        expect(it.x).toBeLessThanOrEqual(1);
+      }
+  });
+
+  it('drops the clock to 1× on a new phase, once (newPhase)', () => {
+    expect(newPhase(null, 7, 'ingress')).toBeNull();
+    expect(newPhase({ mission: 7, phase: 'ingress' }, 7, 'ingress')).toBeNull();
+    expect(newPhase({ mission: 7, phase: 'ingress' }, 7, 'fence-in')).toBe('fence-in');
+    expect(newPhase({ mission: 6, phase: 'ingress' }, 7, 'fence-in')).toBeNull();
+    expect(newPhase({ mission: 7, phase: 'recovery' }, 7, 'complete')).toBeNull();
   });
 });

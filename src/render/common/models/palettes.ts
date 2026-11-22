@@ -56,6 +56,8 @@ export const SCHEMES: Record<string, CamoScheme> = {
 export const MODEL_COLORS: Record<string, string> = {
   // Aircraft.
   canopy: '#1E2A33',
+  // The gold tint of the F-16's and F-22's coated canopies, muted to the palette (owner, decision 310).
+  'canopy-gold': '#8A713F',
   intake: '#2A2C2E',
   nozzle: '#4A4642',
   radome: '#5E6266',

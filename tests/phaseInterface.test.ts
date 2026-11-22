@@ -7,7 +7,12 @@ import type { ModeInputs } from '../src/sim/avionics/avionics';
 import { AVIONICS_PROFILES } from '../src/sim/avionics/profiles';
 import { missionPlugin } from '../src/sim/command/missions/registry';
 import type { PhaseInterface } from '../src/sim/command/missions/plugin';
-import { applyPreset, initialDisplayState, preselectWeapon } from '../src/ui/displays/presets';
+import {
+  applyPreset,
+  editsForNewPhase,
+  initialDisplayState,
+  preselectWeapon,
+} from '../src/ui/displays/presets';
 import type { AircraftSnapshot, SnapshotStores } from '../src/ui/displays/snapshot';
 import { capMission, phaseStart } from './helpers/promoted';
 
@@ -88,6 +93,26 @@ describe('a phase’s formats (decision 304)', () => {
       { leftMfd: ['engines'] },
     );
     expect(edited.slots.leftMfd.format).toBe('stores');
+  });
+
+  it('come up when a new phase begins even where the player once chose another (decision 310)', () => {
+    // The map chosen by hand in air-to-ground mode in an earlier sortie, saved as an edit.
+    const edits = {
+      'air-to-ground': { leftMfd: { format: 'moving-map' as const, expanded: true } },
+    };
+    const fenceIn = missionPlugin('interdiction').interface as Record<string, PhaseInterface>;
+    const formats = fenceIn['fence-in']!.formats;
+    const s = snap('air-to-ground');
+    const d0 = initialDisplayState(snap('navigation'));
+    expect(applyPreset(d0, s, edits, formats).slots.leftMfd.format).toBe('moving-map');
+    const fresh = editsForNewPhase(edits, 'air-to-ground', formats);
+    expect(applyPreset(d0, s, fresh, formats).slots.leftMfd.format).toBe('stores');
+    // Only the slots the phase names lose their edits, and only in its mode.
+    const more = {
+      ...edits,
+      navigation: { leftMfd: { format: 'engines' as const, expanded: true } },
+    };
+    expect(editsForNewPhase(more, 'air-to-ground', formats).navigation).toEqual(more.navigation);
   });
 });
 

@@ -13,7 +13,9 @@ export type DisplayHotAction =
   | 'dogfight'
   | 'masterCaution'
   | 'radarLock'
-  | 'radarBreak';
+  | 'radarBreak'
+  | 'steerpointNext'
+  | 'steerpointPrevious';
 
 /** Key codes per hot action (KeyboardEvent.code). */
 export const DISPLAY_BINDINGS: Record<DisplayHotAction, string[]> = {
@@ -26,6 +28,8 @@ export const DISPLAY_BINDINGS: Record<DisplayHotAction, string[]> = {
   masterCaution: ['KeyK'],
   radarLock: ['KeyL'],
   radarBreak: ['KeyU'],
+  steerpointNext: ['BracketRight'],
+  steerpointPrevious: ['BracketLeft'],
 };
 
 export const DISPLAY_LABELS: Record<DisplayHotAction, string> = {
@@ -38,4 +42,6 @@ export const DISPLAY_LABELS: Record<DisplayHotAction, string> = {
   masterCaution: 'Acknowledge the master caution',
   radarLock: 'Radar: lock the nearest contact, again for the next (decision 218)',
   radarBreak: 'Radar: break the lock',
+  steerpointNext: "Steerpoint: the next waypoint, by hand (the map's AUTO goes back; decision 310)",
+  steerpointPrevious: 'Steerpoint: the previous waypoint, by hand',
 };

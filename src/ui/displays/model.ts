@@ -29,7 +29,7 @@ export interface DisplayState {
    * mode: the strategic chart, elevation tints, or terrain against the aircraft's altitude
    * (decision 227).
    */
-  map: { range: number; northUp: boolean; mode: MapMode };
+  map: { range: number; northUp: boolean; mode: MapMode; depressed?: boolean };
 }
 
 /** Commands to the flight controls the strip's items toggle (gear, brakes), by the inputs' action names. */
@@ -48,7 +48,9 @@ export type UiCommand =
   | { type: 'pin'; slot: SlotId; pinned: boolean }
   | { type: 'map-range'; slot: SlotId; delta: 1 | -1 }
   | { type: 'map-orient'; slot: SlotId }
-  | { type: 'map-mode'; slot: SlotId };
+  | { type: 'map-mode'; slot: SlotId }
+  /** The own ship centered or low on the map (decision 310). */
+  | { type: 'map-depress'; slot: SlotId };
 
 export type MapMode = 'chart' | 'elevation' | 'relative';
 
@@ -97,6 +99,8 @@ export type ScreenItem =
       rotation: number;
       /** The planet's radius (m), to place the aircraft on a picture drawn a moment ago. */
       radius: number;
+      /** Where the aircraft sits down the screen (0.5 centered; decision 310). */
+      centerY?: number;
     }
   /** A log of lines, wrapped to the screen's width and stacked up from the bottom, newest last. */
   | { kind: 'log'; lines: { text: string; tone: Tone }[] }

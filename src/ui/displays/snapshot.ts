@@ -66,6 +66,8 @@ export interface SnapshotSensors {
 export interface SnapshotTerrain {
   n: number;
   halfExtent: number;
+  /** How far ahead of the aircraft (m, up the map) the samples are centered: a depressed map's (decision 310). */
+  ahead?: number;
   rotation: number;
   heights: number[];
   water: number[];
@@ -181,6 +183,8 @@ export interface SnapshotRoute {
   waypoints: { number: number; kind: string; label: string; at: MapBearing }[];
   /** The waypoint steered to, or −1 when every one is passed. */
   next: number;
+  /** The pilot chose it by hand (decision 310); else the navigation system sequences. */
+  manual?: boolean;
   legs: MapBearing[][];
 }
 

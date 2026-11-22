@@ -138,6 +138,7 @@ import {
 import { WeatherAudio } from './ui/audio/weatherAudio';
 import { DEFAULT_OPTIONS } from './ui/flight/freeFlightMenu';
 import { weatherLine } from './ui/weatherLine';
+import { PHASE_LABELS } from './ui/missionSearch/model';
 import { TimeControls } from './ui/timeControls';
 import { hasTouch, TouchControls } from './ui/touchControls';
 import { GenerationCancelled, WorldgenClient } from './workers/worldgenClient';
@@ -1681,6 +1682,12 @@ async function main(): Promise<void> {
     timeControls.keysEnabled = !follow?.flying;
     // The flight the player flies is drawn where it is, on the map and the moving map (decision 284).
     strategicView.setHeldFlight(follow?.heldFlight() ?? null);
+    // A new phase of the followed mission drops the clock to 1× (decision 310).
+    const entered = follow?.active ? follow.phaseChange(gameTime) : null;
+    if (entered && sim.rate > 1) {
+      sim.setRate(1);
+      timeControls.notify(`Back to 1×: ${PHASE_LABELS[entered]}`, 4000);
+    }
     // The flight cap (R2.5): up to 8× in cruise while the player flies, back to 1× on any threat.
     if (follow?.flying && sim.rate > 1) {
       const cap = follow.rateCap(gameTime);

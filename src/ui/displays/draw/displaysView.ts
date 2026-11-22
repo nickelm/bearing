@@ -579,7 +579,7 @@ function drawItem(
       c.beginPath();
       c.rect(0, 0, w, h);
       c.clip();
-      c.translate(w / 2, h / 2);
+      c.translate(w / 2, h * (it.centerY ?? 0.5));
       c.rotate(-it.rotation);
       c.scale(mPerPicPx / mPerScreenPx, mPerPicPx / mPerScreenPx);
       c.drawImage(pic.image, -pic.size / 2 - east / mPerPicPx, -pic.size / 2 + north / mPerPicPx);

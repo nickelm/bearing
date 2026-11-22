@@ -49,6 +49,16 @@ const FORMATS: Partial<Record<FormatId, Format>> = {
   stores: storesFormat,
 };
 
+/** The steerpoint `step` places up (+1) or down (−1) the plan from the one steered to, wrapping. */
+export function steerpointStep(
+  r: Readonly<{ waypoints: unknown[]; next: number }>,
+  step: 1 | -1,
+): number {
+  const n = r.waypoints.length;
+  const from = r.next < 0 ? n - 1 : r.next;
+  return (((from + step) % n) + n) % n;
+}
+
 /** The moving map's ranges, center to edge (nautical miles; decision 201). */
 export const MAP_RANGES_NM = [5, 10, 20, 40, 80, 160] as const;
 /** The same steps in round kilometers for Pact skins (decision 227). */
@@ -99,12 +109,43 @@ export function displayModel(
       active: false,
       command: { to: 'ui', command: { type: 'map-orient', slot } },
     };
+    // Below them: the own ship centered or low with more ahead (decision 310).
+    buttons[8] = {
+      label: d.map.depressed ? 'DEP' : 'CEN',
+      active: d.map.depressed === true,
+      command: { to: 'ui', command: { type: 'map-depress', slot } },
+    };
     // Below it: the map's mode, chart, elevation or relative (decision 227).
     buttons[7] = {
       label: d.map.mode === 'chart' ? 'CHRT' : d.map.mode === 'elevation' ? 'ELEV' : 'REL',
       active: d.map.mode !== 'chart',
       command: { to: 'ui', command: { type: 'map-mode', slot } },
     };
+    // Left side, lower: the steerpoint by hand, up and down the plan, and back to auto (decision 310).
+    const n = s.route?.waypoints.length ?? 0;
+    if (n > 0) {
+      const r = s.route!;
+      for (const [i, label, step] of [
+        [16, 'STPT▲', 1],
+        [15, 'STPT▼', -1],
+      ] as const)
+        buttons[i] = {
+          label,
+          active: false,
+          command: {
+            to: 'avionics',
+            command: { type: 'steerpoint', index: steerpointStep(r, step) },
+          },
+        };
+      buttons[17] = {
+        label: r.manual ? 'MAN' : 'AUTO',
+        active: r.manual === true,
+        command: {
+          to: 'avionics',
+          command: { type: 'steerpoint', index: r.manual ? null : Math.max(0, r.next) },
+        },
+      };
+    }
   }
   if (format === 'radar-ag') {
     // Left side, top: the ground map's range (decision 226).
@@ -362,18 +403,26 @@ function movingMapFormat(s: AircraftSnapshot, d: DisplayState): ScreenItem[] {
   const pact = s.profile.skin === 'pact';
   const half = mapRange(s.profile.skin, d.map.range);
   const rotation = d.map.northUp ? 0 : s.track;
+  const depressed = d.map.depressed === true;
+  const v: MapFrame = { half, rotation, depressed };
+  const cy = depressed ? MAP_DEPRESSED_Y : 0.5;
   const fig = (m: number) => (pact ? `${Math.round(m / 1000)} KM` : `${Math.round(m / NM)} NM`);
   // The aircraft: pointing along its track on a north-up map, straight up on a track-up one.
   const a = d.map.northUp ? s.track : 0;
   const pt = (fwd: number, right: number): [number, number] => [
     0.5 + (Math.sin(a) * fwd + Math.cos(a) * right) * 0.035,
-    0.5 - (Math.cos(a) * fwd - Math.sin(a) * right) * 0.035,
+    cy - (Math.cos(a) * fwd - Math.sin(a) * right) * 0.035,
   ];
   // The elevation modes (decision 227) draw the snapshot's heights when they were sampled
-  // for this range; until then, the chart.
+  // for this range and layout (the screen's center ahead of a depressed own ship); until
+  // then, the chart.
   const t = s.terrain;
+  const ahead = mapAhead(d.map, half);
   const elevation =
-    d.map.mode !== 'chart' && t && Math.abs(t.halfExtent - half) < 1
+    d.map.mode !== 'chart' &&
+    t &&
+    Math.abs(t.halfExtent - half) < 1 &&
+    Math.abs((t.ahead ?? 0) - ahead) < 1
       ? elevationItems(t, d.map.mode, pact)
       : null;
   return [
@@ -385,18 +434,27 @@ function movingMapFormat(s: AircraftSnapshot, d: DisplayState): ScreenItem[] {
         halfExtent: half,
         rotation,
         radius: s.position.radius,
+        centerY: cy,
       },
     ]),
     // The fronts: in the chart they are in the picture; the elevation modes draw them.
-    ...(elevation ? frontItems(s, half, rotation) : []),
-    ...routeItems(s, half, rotation, fig),
-    ...flightItems(s, half, rotation),
-    { kind: 'arc', x: 0.5, y: 0.5, r: 0.25, tone: 'normal', dashed: true },
-    text(0.5 + 0.25 * 0.72, 0.5 + 0.25 * 0.72 + 0.06, fig(half / 2), 'small', 'left', 'normal'),
+    ...(elevation ? frontItems(s, v) : []),
+    ...routeItems(s, v, fig),
+    ...flightItems(s, v),
+    { kind: 'arc', x: 0.5, y: cy, r: 0.25, tone: 'normal', dashed: true },
+    // The ring's figure below it on its right, above it with the own ship low.
+    text(
+      0.5 + 0.25 * 0.72,
+      depressed ? cy - 0.25 * 0.72 - 0.02 : cy + 0.25 * 0.72 + 0.06,
+      fig(half / 2),
+      'small',
+      'left',
+      'normal',
+    ),
     { kind: 'line', points: [pt(1, 0), pt(-1, 0)], tone: 'normal', width: 2 },
     { kind: 'line', points: [pt(0.2, -0.8), pt(0.2, 0.8)], tone: 'normal', width: 2 },
     { kind: 'line', points: [pt(-0.8, -0.35), pt(-0.8, 0.35)], tone: 'normal', width: 2 },
-    ...destinationMark(s, half, rotation, fig),
+    ...destinationMark(s, v, fig),
     // The range under the range buttons; the orientation is the TRK / N-UP button's label.
     text(0.04, 0.42, fig(half), 'small', 'left', 'normal'),
   ];
@@ -408,22 +466,50 @@ function movingMapFormat(s: AircraftSnapshot, d: DisplayState): ScreenItem[] {
  */
 function destinationMark(
   s: AircraftSnapshot,
-  half: number,
-  rotation: number,
+  v: MapFrame,
   fig: (m: number) => string,
 ): ScreenItem[] {
   const d = s.destination;
   if (!d) return [];
   const at: MapBearing = [d.bearing, d.distance];
-  const [x, y] = mapPlace(at, s.position.radius, half, rotation);
+  const [x, y] = mapPlace(at, s.position.radius, v.half, v.rotation, v.depressed);
   if (onMap(x, y)) return [diamondItem(x, y, 0.022, 'normal', 2), label(x, y, d.label)];
-  return edgeCaret(at, rotation, `${d.label} ${fig(d.distance)}`);
+  return edgeCaret(at, v, `${d.label} ${fig(d.distance)}`);
+}
+
+/**
+ * How the map is laid out: its range (m, own ship to the screen's side), its turn (rad,
+ * the track in track-up) and whether the own ship sits low (decision 310).
+ */
+interface MapFrame {
+  half: number;
+  rotation: number;
+  depressed: boolean;
+}
+
+/** Where the own ship sits down the screen with the map depressed (DEP): more ahead. */
+export const MAP_DEPRESSED_Y = 0.75;
+
+/**
+ * The picture's half extent over the screen's range: √2 centered, so a turned picture still
+ * fills the screen; with the own ship low the farthest corner is 1.8 ranges away.
+ */
+export function mapPictureScale(map: Readonly<{ depressed?: boolean }>): number {
+  return map.depressed ? 1.85 : Math.SQRT2;
+}
+
+/**
+ * How far ahead of the own ship (m, up the screen) the screen's center lies: 0 centered,
+ * half a range with the own ship low (decision 310). The elevation modes sample around it.
+ */
+export function mapAhead(map: Readonly<{ depressed?: boolean }>, half: number): number {
+  return map.depressed ? (MAP_DEPRESSED_Y - 0.5) * 2 * half : 0;
 }
 
 /** The strategic camera's vertical field of view (StrategicScene's 45°): the map picture's. */
 export const MAP_FOV_Y = (45 * Math.PI) / 180;
-/** How far from the center a place still counts as on the map (screen fractions). */
-const MAP_EDGE = 0.44;
+/** The band inside the screen's edges where places no longer count as on the map (screen fractions). */
+const MAP_EDGE = 0.06;
 
 /**
  * Where a place lies on the moving map (decision 305), in screen fractions: the picture's
@@ -437,16 +523,19 @@ export function mapPlace(
   R: number,
   half: number,
   rotation: number,
+  depressed = false,
 ): [number, number] {
-  const H = (half * Math.SQRT2) / Math.tan(MAP_FOV_Y / 2);
+  const H = (half * mapPictureScale({ depressed })) / Math.tan(MAP_FOV_Y / 2);
   const th = Math.min(at[1] / R, Math.acos(R / (R + H)));
   const m = (H * R * Math.sin(th)) / (H + R * (1 - Math.cos(th)));
   const r = (m / half) * 0.5;
   const rel = at[0] - rotation;
-  return [0.5 + r * Math.sin(rel), 0.5 - r * Math.cos(rel)];
+  const cy = depressed ? MAP_DEPRESSED_Y : 0.5;
+  return [0.5 + r * Math.sin(rel), cy - r * Math.cos(rel)];
 }
 
-const onMap = (x: number, y: number) => Math.hypot(x - 0.5, y - 0.5) <= MAP_EDGE;
+const onMap = (x: number, y: number) =>
+  x >= MAP_EDGE && x <= 1 - MAP_EDGE && y >= MAP_EDGE && y <= 1 - MAP_EDGE;
 
 function diamondItem(x: number, y: number, q: number, tone: Tone, width: number): ScreenItem {
   return {
@@ -467,10 +556,20 @@ const label = (x: number, y: number, t: string, tone: Tone = 'normal') =>
   text(x + 0.035, y + 0.012, t, 'small', 'left', tone);
 
 /** A caret at the map's edge pointing out along a place's bearing, with its label. */
-function edgeCaret(at: Readonly<MapBearing>, rotation: number, t: string): ScreenItem[] {
-  const rel = at[0] - rotation;
-  const x = 0.5 + MAP_EDGE * Math.sin(rel);
-  const y = 0.5 - MAP_EDGE * Math.cos(rel);
+function edgeCaret(at: Readonly<MapBearing>, v: MapFrame, t: string): ScreenItem[] {
+  const rel = at[0] - v.rotation;
+  const cy = v.depressed ? MAP_DEPRESSED_Y : 0.5;
+  // From the own ship along the bearing to the band inside the screen's edges.
+  const dx = Math.sin(rel);
+  const dy = -Math.cos(rel);
+  const lo = MAP_EDGE;
+  const hi = 1 - MAP_EDGE;
+  const reach = Math.min(
+    dx > 1e-9 ? (hi - 0.5) / dx : dx < -1e-9 ? (lo - 0.5) / dx : Infinity,
+    dy > 1e-9 ? (hi - cy) / dy : dy < -1e-9 ? (lo - cy) / dy : Infinity,
+  );
+  const x = 0.5 + reach * dx;
+  const y = cy + reach * dy;
   const tip = (a: number, l: number): [number, number] => [
     x + l * Math.sin(rel + a),
     y - l * Math.cos(rel + a),
@@ -482,7 +581,15 @@ function edgeCaret(at: Readonly<MapBearing>, rotation: number, t: string): Scree
       tone: 'normal',
       width: 2,
     },
-    text(x, y + (Math.cos(rel) > 0 ? 0.07 : -0.045), t, 'small', 'center', 'normal'),
+    // Kept inside the screen: toward the middle from a caret near a side.
+    text(
+      x > 0.7 ? x + 0.02 : x < 0.3 ? x - 0.02 : x,
+      y + (Math.cos(rel) > 0 ? 0.07 : -0.045),
+      t,
+      'small',
+      x > 0.7 ? 'right' : x < 0.3 ? 'left' : 'center',
+      'normal',
+    ),
   ];
 }
 
@@ -493,16 +600,11 @@ function edgeCaret(at: Readonly<MapBearing>, rotation: number, t: string): Scree
  * square for a landing field), the next one drawn bold, and a caret at the edge with its
  * distance when it lies beyond the range.
  */
-function routeItems(
-  s: AircraftSnapshot,
-  half: number,
-  rotation: number,
-  fig: (m: number) => string,
-): ScreenItem[] {
+function routeItems(s: AircraftSnapshot, v: MapFrame, fig: (m: number) => string): ScreenItem[] {
   const r = s.route;
   if (!r) return [];
   const R = s.position.radius;
-  const place = (at: Readonly<MapBearing>) => mapPlace(at, R, half, rotation);
+  const place = (at: Readonly<MapBearing>) => mapPlace(at, R, v.half, v.rotation, v.depressed);
   const items: ScreenItem[] = [];
   const next = r.next < 0 ? r.waypoints.length : r.next;
   r.legs.forEach((leg, i) => {
@@ -555,8 +657,7 @@ function routeItems(
   const n = r.waypoints[r.next];
   if (n) {
     const [x, y] = place(n.at);
-    if (!onMap(x, y))
-      items.push(...edgeCaret(n.at, rotation, `${n.number} ${n.label} ${fig(n.at[1])}`));
+    if (!onMap(x, y)) items.push(...edgeCaret(n.at, v, `${n.number} ${n.label} ${fig(n.at[1])}`));
   }
   return items;
 }
@@ -565,15 +666,15 @@ function routeItems(
  * The own flight on the map (decision 308): each other aircraft as a friend's circle with
  * its number in the flight, by the intraflight datalink.
  */
-function flightItems(s: AircraftSnapshot, half: number, rotation: number): ScreenItem[] {
+function flightItems(s: AircraftSnapshot, v: MapFrame): ScreenItem[] {
   const rings: ScreenItem[] = [];
   const labels: ScreenItem[] = [];
   // The numbers only when every one clears the own ship and the others: at long range a
   // flight in combat spread is a cluster of rings, and a lone number over it would mislead.
-  const taken: [number, number][] = [[0.5, 0.5]];
+  const taken: [number, number][] = [[0.5, v.depressed ? MAP_DEPRESSED_Y : 0.5]];
   let clear = true;
   for (const f of s.flight ?? []) {
-    const [x, y] = mapPlace(f.at, s.position.radius, half, rotation);
+    const [x, y] = mapPlace(f.at, s.position.radius, v.half, v.rotation, v.depressed);
     if (!onMap(x, y)) continue;
     rings.push({ kind: 'arc', x, y, r: 0.011, tone: 'normal' });
     const ly = y - 0.03;
@@ -589,11 +690,11 @@ function flightItems(s: AircraftSnapshot, half: number, rotation: number): Scree
  * The fronts on the elevation modes (decision 305), as the strategic map draws them: a
  * dark line on a pale casing with teeth in the attacker's color on its side.
  */
-function frontItems(s: AircraftSnapshot, half: number, rotation: number): ScreenItem[] {
+function frontItems(s: AircraftSnapshot, v: MapFrame): ScreenItem[] {
   const R = s.position.radius;
   const items: ScreenItem[] = [];
   for (const f of s.fronts ?? []) {
-    const pts = f.points.map((p) => mapPlace(p, R, half, rotation));
+    const pts = f.points.map((p) => mapPlace(p, R, v.half, v.rotation, v.depressed));
     items.push({
       kind: 'line',
       points: pts,

@@ -28,6 +28,7 @@ export function routeSnapshot(
   next: number,
   from: Readonly<Dir>,
   R: number,
+  manual = false,
 ): SnapshotRoute {
   const legs: MapBearing[][] = [];
   for (let i = 0; i + 1 < wps.length; i++) {
@@ -46,6 +47,7 @@ export function routeSnapshot(
       at: mapBearing(from, w.point, R),
     })),
     next,
+    manual,
     legs,
   };
 }

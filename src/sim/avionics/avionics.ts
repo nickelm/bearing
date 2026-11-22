@@ -63,6 +63,11 @@ export interface AvionicsState {
   groundRadar: { range: number };
   /** The weapon selected (a store id; decision 289), or null. */
   weapon: string | null;
+  /**
+   * The steerpoint chosen by hand (an index into the mission's waypoints; decision 310), or
+   * absent or null while the navigation system sequences them itself.
+   */
+  steerpoint?: number | null;
 }
 
 export type AvionicsCommand =
@@ -78,7 +83,9 @@ export type AvionicsCommand =
   | { type: 'radar-lock'; id: string | null }
   | { type: 'ground-radar-range'; delta: 1 | -1 }
   /** Selects a weapon (a store id, null for none); a weapon brings its master mode (decision 289). */
-  | { type: 'select-weapon'; weapon: string | null };
+  | { type: 'select-weapon'; weapon: string | null }
+  /** Steers to a waypoint chosen by hand (its index), or back to automatic with null (decision 310). */
+  | { type: 'steerpoint'; index: number | null };
 
 export function initialAvionics(onGround: boolean): AvionicsState {
   return {
@@ -110,6 +117,8 @@ export function applyCommand(s: AvionicsState, c: AvionicsCommand): AvionicsStat
           : s.weapon;
       return { ...s, masterMode: c.mode, manual: true, radar: leaveAcm(s.radar), weapon };
     }
+    case 'steerpoint':
+      return { ...s, steerpoint: c.index === null ? null : Math.max(0, Math.round(c.index)) };
     case 'select-weapon': {
       const mode = c.weapon ? weaponMode(c.weapon) : null;
       if (!mode) return { ...s, weapon: c.weapon };

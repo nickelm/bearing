@@ -186,6 +186,9 @@ export async function drawDisplays(q: URLSearchParams): Promise<void> {
     });
   }
   sys.update(snap);
+  // `&dep=1`: the own ship low on the map (decision 310).
+  if (q.get('dep') === '1')
+    sys.command({ to: 'ui', command: { type: 'map-depress', slot: 'leftMfd' } });
   // `&mapsteps=<n>`: the map's range stepped n times (+ wider) from 20 nm.
   const steps = Number(q.get('mapsteps') ?? 0);
   for (let k = 0; k < Math.abs(steps); k++)

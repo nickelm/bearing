@@ -17,9 +17,16 @@ import type { PhaseInterface } from '../../sim/command/missions/plugin';
 import type { AvionicsState, MasterMode, ModeInputs } from '../../sim/avionics/avionics';
 import type { FormatId, SlotId } from '../../sim/avionics/profiles';
 import { DisplaysView } from './draw/displaysView';
-import { displayModel, lockCandidate } from './formats';
+import { displayModel, lockCandidate, steerpointStep } from './formats';
 import type { ControlsAction, DisplayCommand, DisplayModel, DisplayState } from './model';
-import { applyPreset, applyUi, initialDisplayState, preselectWeapon, recordEdit } from './presets';
+import {
+  applyPreset,
+  applyUi,
+  editsForNewPhase,
+  initialDisplayState,
+  preselectWeapon,
+  recordEdit,
+} from './presets';
 import type { PresetEdits } from './presets';
 import type { AircraftSnapshot } from './snapshot';
 import { cautionIds, stripModel } from './strip';
@@ -47,6 +54,8 @@ export class DisplaySystem {
   onControls: ((a: ControlsAction) => void) | null = null;
   /** The mission phase's interface defaults (decision 304), or null. */
   private phase: PhaseInterface | null = null;
+  /** A new phase whose formats have not come up yet: they wait for its master mode (decision 310). */
+  private phaseFresh = false;
   /** Keys act only while flying. */
   enabled = false;
   /**
@@ -115,6 +124,7 @@ export class DisplaySystem {
   setPhase(p: PhaseInterface | null): void {
     if (p === this.phase) return;
     this.phase = p;
+    this.phaseFresh = p !== null;
     if (this.display && this.last)
       this.display = applyPreset(
         this.display,
@@ -122,6 +132,22 @@ export class DisplaySystem {
         this.edits,
         this.prefer(),
       );
+    this.applyNewPhase();
+  }
+
+  /**
+   * A new phase's formats, once its master mode is up (the triggers switch it a moment
+   * after the phase begins): they win over the player's earlier edits of that mode once,
+   * so the stores format comes up at the fence-in even if the map was once chosen there.
+   */
+  private applyNewPhase(): void {
+    const p = this.phase;
+    if (!this.phaseFresh || !p || !this.display || !this.last) return;
+    if (p.masterMode !== this.avionics.masterMode) return;
+    const s = { ...this.last, avionics: this.avionics };
+    const edits = editsForNewPhase(this.edits, p.masterMode, p.formats);
+    this.display = applyPreset(this.display, s, edits, p.formats);
+    this.phaseFresh = false;
   }
 
   /** The phase's formats, while the master mode is the one it asks for. */
@@ -141,6 +167,7 @@ export class DisplaySystem {
     else if (this.last && this.last.avionics.masterMode !== s.avionics.masterMode)
       this.display = applyPreset(this.display, s, this.edits, this.prefer());
     this.last = s;
+    this.applyNewPhase();
     const models: Partial<Record<SlotId, DisplayModel | null>> = {};
     for (const id of ['leftMfd', 'rightMfd', 'messages', 'threat'] as const)
       models[id] = displayModel(s, this.display, id);
@@ -206,6 +233,12 @@ export class DisplaySystem {
         a === 'radarLock' ? lockCandidate({ ...this.last, avionics: this.avionics }) : null;
       if (a === 'radarLock' && !id) return;
       return this.command({ to: 'avionics', command: { type: 'radar-lock', id } });
+    }
+    if (a === 'steerpointNext' || a === 'steerpointPrevious') {
+      const r = this.last?.route;
+      if (!r || r.waypoints.length === 0) return;
+      const index = steerpointStep(r, a === 'steerpointNext' ? 1 : -1);
+      return this.command({ to: 'avionics', command: { type: 'steerpoint', index } });
     }
     if (a === 'masterCaution') {
       if (!this.last) return;

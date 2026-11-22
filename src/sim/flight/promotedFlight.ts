@@ -29,6 +29,7 @@ import type { HandbackFix, HandbackLoss, HandbackStores } from '../eventLog';
 import { Vec3d } from '../../core/vec3d';
 import type { AnalyticPose } from '../air/analyticPose';
 import { slotPose } from '../air/formation';
+import { routeState } from '../air/route';
 import type { FormationState } from '../air/formation';
 import type { MissionPhase } from '../air/mission';
 import type { GroundQuery } from './airframe';
@@ -82,8 +83,9 @@ export class PromotedFlight {
   steps = 0;
   /** The lead's reference, sampled (the analytic pose costs hundreds of route lookups). */
   private leadReference: Reference;
-  /** When the AI last looked for an enemy within FIGHT_RANGE. */
+  /** When the AI last looked for an enemy within FIGHT_RANGE, and whether one was. */
   private foughtAt = -Infinity;
+  private enemyNear = false;
 
   constructor(
     readonly mission: Readonly<PromotedMission>,
@@ -175,21 +177,35 @@ export class PromotedFlight {
     if (steps > 0) {
       this.assignPilots();
       this.jettisonBeforeFight();
+      const combat = this.inCombat();
+      for (const p of this.pilots) p.combat = combat;
     }
     return steps;
   }
 
   /**
+   * Whether the flight fights now (decision 310): on the route's attack pass (its combat
+   * regime) or with an enemy flight within FIGHT_RANGE of the lead (as last looked).
+   */
+  private inCombat(): boolean {
+    const s = routeState(this.mission.route, this.time, this.radius);
+    if (s.segment >= 0 && this.mission.route.segments[s.segment]!.regime === 'combat') return true;
+    return this.enemyNear;
+  }
+
+  /**
    * The AI pilots drop their tanks when an enemy flight comes within FIGHT_RANGE of the
    * lead (decision 287); the player's aircraft keeps its own until the player drops them.
+   * The look also tells the pilots they fight (decision 310).
    */
   private jettisonBeforeFight(): void {
     const near = this.options.enemyDistance;
     if (!near || this.time - this.foughtAt < FIGHT_CHECK) return;
     this.foughtAt = this.time;
     const lead = this.alive[0];
-    if (!lead || !this.aircraft.some((a) => a.slot !== this.playerSlot && a.rack.hasTanks)) return;
-    if (near(lead.flown.airframe.pos, this.time) > FIGHT_RANGE) return;
+    this.enemyNear = !!lead && near(lead.flown.airframe.pos, this.time) <= FIGHT_RANGE;
+    if (!this.enemyNear) return;
+    if (!this.aircraft.some((a) => a.slot !== this.playerSlot && a.rack.hasTanks)) return;
     for (const a of this.alive)
       if (a.slot !== this.playerSlot)
         a.rack.jettisonTanks(a.flown.airframe as unknown as FlightModel);

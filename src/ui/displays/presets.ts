@@ -78,6 +78,22 @@ export type PresetEdits = Partial<
   Record<MasterMode, Partial<Record<SlotId, { format: FormatId; expanded: boolean }>>>
 >;
 
+/**
+ * The player's edits less those of the slots a new phase names in `mode` (decision 310):
+ * when a phase begins, its formats come up even where the player once chose another
+ * format in that mode; the player's choices after that stand again.
+ */
+export function editsForNewPhase(
+  edits: PresetEdits,
+  mode: MasterMode,
+  formats: Partial<Record<SlotId, FormatId[]>>,
+): PresetEdits {
+  const mine = { ...(edits[mode] ?? {}) };
+  for (const [slot, list] of Object.entries(formats) as [SlotId, FormatId[]][])
+    if (list.length) delete mine[slot];
+  return { ...edits, [mode]: mine };
+}
+
 /** Applies the snapshot's master mode's preset, and the player's edits, to every unpinned slot. */
 export function applyPreset(
   d: DisplayState,
@@ -182,6 +198,8 @@ export function applyUi(
       const modes = ['chart', 'elevation', 'relative'] as const;
       return { ...d, map: { ...d.map, mode: modes[(modes.indexOf(d.map.mode) + 1) % 3]! } };
     }
+    case 'map-depress':
+      return { ...d, map: { ...d.map, depressed: !d.map.depressed } };
   }
   return { ...d, slots };
 }

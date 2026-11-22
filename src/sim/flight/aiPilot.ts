@@ -27,8 +27,16 @@
  * never asks more load than the airspeed gives at 8° of angle of attack, and below
  * the least speed (8° of angle of attack at 1 g) the nose goes down, so a
  * route that climbs faster than the type can is followed late, and a tight turn at
- * altitude wide, never at the stall. Far behind (`afterburnerBehind`) or short of
- * speed (AB_SHORT), the throttle may enter the afterburner.
+ * altitude wide, never at the stall.
+ *
+ * **The afterburner** is for the fight (decision 310): in combat (`combat`: the attack
+ * pass, an enemy within reach) the throttle may enter it far behind (`afterburnerBehind`)
+ * or short of speed (AB_SHORT); outside it, military power is the most, except for a
+ * wingman rejoining from out of position (`rejoinBehind`), which takes the afterburner's
+ * second stage at most (REJOIN_LEVER): at 9 km a loaded jet gains so little at military
+ * power that a wingman thrown wide by a turn would only fall further back. The lead does
+ * the same only when it is far behind its route's point; a little behind, it closes at
+ * military power.
  */
 import { DEG } from '../../core/units';
 import type { GameTime } from '../../core/units';
@@ -101,8 +109,10 @@ export interface TrackerGains {
   vertical: number;
   maxClimb: number;
   maxDescent: number;
-  /** Distance behind (m) beyond which the afterburner may be used. */
+  /** Distance behind (m) beyond which the afterburner may be used in combat. */
   afterburnerBehind: number;
+  /** Distance behind (m) beyond which it may be used outside combat, to rejoin; Infinity: never. */
+  rejoinBehind: number;
   /** Bank limit (rad). */
   maxBank: number;
 }
@@ -118,6 +128,7 @@ export const ROUTE_GAINS: Readonly<TrackerGains> = {
   maxClimb: 25 * DEG,
   maxDescent: 15 * DEG,
   afterburnerBehind: 4000,
+  rejoinBehind: 1500,
   maxBank: 60 * DEG,
 };
 
@@ -132,6 +143,7 @@ export const FORMATION_GAINS: Readonly<TrackerGains> = {
   maxClimb: 30 * DEG,
   maxDescent: 20 * DEG,
   afterburnerBehind: 1500,
+  rejoinBehind: 1500,
   maxBank: 70 * DEG,
 };
 
@@ -139,6 +151,8 @@ export const FORMATION_GAINS: Readonly<TrackerGains> = {
 export const SPEED_MARGIN = 30;
 /** Airspeed short of the command (m/s) at which the afterburner may be used. */
 export const AB_SHORT = 10;
+/** The most lever a rejoin outside combat takes: the afterburner's second of five stages. */
+export const REJOIN_LEVER = 0.89;
 /**
  * Calibrated airspeed over the command (m/s) at which the speedbrake comes out, and under
  * which it goes in again: a wingman coming out of the outside of a turn has tens of m/s
@@ -180,6 +194,8 @@ export class PoseTracker {
   private readonly e = new Vec3d();
   private readonly a = new Vec3d();
   private readonly r = new Vec3d();
+  /** The flight fights (the attack pass, an enemy within reach): the afterburner is allowed. */
+  combat = false;
 
   constructor(
     public reference: Reference,
@@ -253,7 +269,10 @@ export class PoseTracker {
           MIN_BANK,
           Math.min(g.maxBank * (1 - 0.5 * short), Math.acos(clamp((least / tel.cas) ** 2, 0, 1))),
         ),
-        afterburner: behind > g.afterburnerBehind || cas - tel.cas > AB_SHORT,
+        afterburner: this.combat
+          ? behind > g.afterburnerBehind || cas - tel.cas > AB_SHORT
+          : Math.hypot(behind, aside) > g.rejoinBehind,
+        maxLever: this.combat ? 1 : REJOIN_LEVER,
       },
       ctl,
       dt,

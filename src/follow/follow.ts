@@ -37,7 +37,7 @@ import type { GlobeScene } from '../render/sim/globeScene';
 import { MovingMap } from '../render/strategic/movingMap';
 import type { HeldFlight } from '../render/strategic/overlays/airModel';
 import type { StrategicScene } from '../render/strategic/strategicScene';
-import { mapRange } from '../ui/displays/formats';
+import { mapPictureScale, mapRange } from '../ui/displays/formats';
 import type { AnalyticPose } from '../sim/air/analyticPose';
 import { AIRCRAFT_BUNDLES, bundleOfType } from '../sim/air/bundles';
 import type { AircraftBundle } from '../sim/air/bundles';
@@ -45,7 +45,7 @@ import { jumpInOpen, missionPhase } from '../sim/air/mission';
 import { carrierState } from '../sim/naval/carrierGroup';
 import type { CarrierTrack } from '../sim/naval/carrierGroup';
 import { missionPlugin } from '../sim/command/missions/registry';
-import type { Mission } from '../sim/air/mission';
+import type { Mission, MissionPhase } from '../sim/air/mission';
 import { routeState } from '../sim/air/route';
 import { initialAvionics } from '../sim/avionics/avionics';
 import { relativePicture, snapshotFromHud, storesSnapshot } from '../ui/displays/aircraftSnapshot';
@@ -95,6 +95,7 @@ import type { AirfieldGround, FlownTerrain } from '../freeflight/ground';
 import { FullFidelity, flightSpecOfType, fullFidelityWanted, routeKey } from './fullFidelity';
 import { nextWaypoint, routeWaypoints, sequenceWaypoints } from '../sim/air/waypoints';
 import { AttitudeHold, holdAllowed } from '../sim/flight/holds';
+import { calibratedAirspeed, standardAtmosphere } from '../sim/flight/atmosphere';
 import { fuelStates } from '../sim/air/fuelStates';
 import type { FuelStates } from '../sim/air/fuelStates';
 import { aircraftType } from '../sim/air/aircraft';
@@ -220,6 +221,8 @@ export class Follow {
   private airfield: AirfieldGround | null = null;
   /** Direct control's hold while the player's hand is off the stick (decision 306). */
   private readonly hold = new AttitudeHold();
+  /** The followed mission's phase at the last look, for the clock's kick-out (decision 310). */
+  private phaseSeen: { mission: number; phase: MissionPhase | 'planned' } | null = null;
   /** The followed mission's waypoints and those reached (decision 305), for the route's key. */
   private nav: { key: string; wps: Waypoint[]; passed: Set<number> } | null = null;
   private runways: Runway[] = [];
@@ -778,6 +781,23 @@ export class Follow {
       this.slot = a.slot;
       followAirframe(g.chase.target, a.flown.airframe);
     }
+  }
+
+  /**
+   * The followed mission's new phase, once, when it changed since the last call (decision
+   * 310), else null: the app drops the clock back to 1× there, so time acceleration does
+   * not carry the player through the fence-in or the attack. Call it every frame.
+   */
+  phaseChange(t: number): MissionPhase | null {
+    const m = this.mission();
+    if (!m) {
+      this.phaseSeen = null;
+      return null;
+    }
+    const phase = missionPhase(m, t);
+    const was = this.phaseSeen;
+    this.phaseSeen = { mission: m.id, phase };
+    return newPhase(was, m.id, phase);
   }
 
   /**
@@ -1350,9 +1370,11 @@ export class Follow {
       const m = a.flown.airframe as unknown as FlightModel;
       const now = a.rack.loaded;
       const before = this.hung.get(a.slot);
+      // Only tanks fall as released stores: bombs, rockets and missiles fly as the rack's
+      // projectiles (MissileViews), and a second copy of each fell beside them (decision 310).
       if (before && !m.crashed)
         for (const l of before.loads)
-          if (!now.some((x) => x.station === l.station)) {
+          if (STORES[l.store]?.kind === 'tank' && !now.some((x) => x.station === l.station)) {
             const s = STORES[l.store]!;
             const fuel = s.kind === 'tank' && before.tanks > 0 ? before.tankFuel / before.tanks : 0;
             this.released.release(l, m, this.flightSpec!.cg, s.mass - s.fuel + fuel);
@@ -1507,9 +1529,7 @@ export class Follow {
         ? 'station'
         : null;
     if (!want) return null;
-    const k = m.target.kind;
-    const aim = k === 'site' ? this.targetInfo?.aim(m.target.id) : null;
-    const d = new Vec3d(...(aim ?? m.target.point)).normalize();
+    const d = new Vec3d(...this.targetPoint(m)).normalize();
     const h = this.airfield ? this.airfield.height(d) : 0;
     const at = d.scale(this.deps.radius + Math.max(0, h));
     const eye = this.deps.globe.chase.eye;
@@ -1558,8 +1578,12 @@ export class Follow {
       frame.marks = this.hudMarks(m, ui, p);
     }
     // The flight plan: the next waypoint, and steering to it under the phase's cue (decision 305).
+    // The target's and station's cues steer too, so the distance to the target shows and a
+    // re-attack keeps it (decision 310); a steerpoint chosen by hand always steers.
     const nav = this.navigation(m, p, t);
-    frame.steering = ui?.hud.includes('steering') ? this.steeringCue(nav, p) : null;
+    const marked = !!ui && (ui.hud.includes('target') || ui.hud.includes('station'));
+    const steer = !!ui && (ui.hud.includes('steering') || marked);
+    frame.steering = steer || nav.manual ? this.steeringCue(m, nav, p, marked) : null;
     // The own flight by the intraflight datalink: rings on the HUD (decision 308).
     const mates = this.flightMates();
     const eye = this.deps.globe.chase.eye;
@@ -1600,7 +1624,7 @@ export class Follow {
       sensors: this.sensorSnap,
       stores: this.storesOf(m, t),
       ...this.fuelFigures(m, nav.wps, p),
-      route: routeSnapshot(nav.wps, nav.next, unitOf(p.pos), this.deps.radius),
+      route: routeSnapshot(nav.wps, nav.next, unitOf(p.pos), this.deps.radius, nav.manual),
       flight: flightSnapshot(
         { pos: new Vec3d(...p.pos), forward: new Vec3d(...p.forward), up: new Vec3d(...p.up) },
         mates,
@@ -1667,7 +1691,7 @@ export class Follow {
    * route changes (a handback's, an abort's), sequenced by the phase and by passing within
    * 2 nm of the next.
    */
-  private navigation(m: Mission, p: FollowedState, t: number): { wps: Waypoint[]; next: number } {
+  private navigation(m: Mission, p: FollowedState, t: number): Navigation {
     const key = `${m.id}:${routeKey(m)}`;
     if (this.nav?.key !== key) this.nav = { key, wps: routeWaypoints(m.route), passed: new Set() };
     const { wps, passed } = this.nav;
@@ -1675,29 +1699,48 @@ export class Follow {
     let next = nextWaypoint(wps, phase, passed);
     if (sequenceWaypoints(wps, next, unitOf(p.pos), this.deps.radius, passed))
       next = nextWaypoint(wps, phase, passed);
-    return { wps, next };
+    // A steerpoint chosen by hand holds until the pilot steps again or goes back to auto
+    // (decision 310).
+    const hand = this.displays.avionics.steerpoint;
+    if (hand !== null && hand !== undefined && hand < wps.length)
+      return { wps, next: hand, manual: true };
+    return { wps, next, manual: false };
   }
 
-  /** The HUD's steering to the next waypoint (decision 305): label, bearing, distance, time, diamond. */
+  /** The target's point as drawn: a bridge at its aim point (decision 304), else the target's. */
+  private targetPoint(m: Mission): Dir {
+    const aim = m.target.kind === 'site' ? this.targetInfo?.aim(m.target.id) : null;
+    const p = aim ?? m.target.point;
+    return [p[0], p[1], p[2]];
+  }
+
+  /**
+   * The HUD's steering to the steerpoint (decisions 305, 310): label, bearing, distance,
+   * time to go, and its diamond unless the phase's target or station mark already draws it.
+   */
   private steeringCue(
-    nav: { wps: Waypoint[]; next: number },
+    m: Mission,
+    nav: Navigation,
     p: FollowedState,
+    marked: boolean,
   ): HudFrame['steering'] {
     const w = nav.wps[nav.next];
     if (!w) return null;
     const R = this.deps.radius;
     const from = unitOf(p.pos);
-    const distance = arcDistance(from, w.point, R);
-    const d = new Vec3d(...w.point);
+    const point = w.kind === 'target' ? this.targetPoint(m) : w.point;
+    const distance = arcDistance(from, point, R);
+    const d = new Vec3d(...point).normalize();
     const h = this.airfield ? this.airfield.height(d) : 0;
     const at = d.scale(R + Math.max(0, h));
     const eye = this.deps.globe.chase.eye;
+    const work = w.kind === 'target' || w.kind === 'station';
     return {
-      label: `${nav.next + 1} ${w.label}`,
-      bearing: initialHeading(from, w.point),
+      label: `${nav.next + 1} ${w.label}${nav.manual ? ' MAN' : ''}`,
+      bearing: initialHeading(from, point),
       distance,
       eta: p.groundSpeed > 20 ? distance / p.groundSpeed : null,
-      point: [at.x - eye.x, at.y - eye.y, at.z - eye.z],
+      point: work && marked ? null : [at.x - eye.x, at.y - eye.y, at.z - eye.z],
     };
   }
 
@@ -1717,7 +1760,7 @@ export class Follow {
     this.movingMap ??= new MovingMap(strategic, strategic.gpu, 512);
     const id = this.missionId;
     void this.movingMap
-      .picture(at.lat, at.lon, half * Math.SQRT2)
+      .picture(at.lat, at.lon, half * mapPictureScale(d.map))
       .then((pic) => {
         if (pic && this.missionId === id)
           this.displays.view.setMapPicture({ ...pic, flipY: false });
@@ -1738,11 +1781,16 @@ export class Follow {
       : this.flightSpec
         ? ''
         : ' · no flight model yet (follow only)';
+    // Both speeds, named (decision 310): the HUD's calibrated airspeed, and the ground speed
+    // the map moves at, about half as much again at 9 km.
     const flown = this.full?.followed(this.slot)?.flown.airframe;
-    const speed = Math.round(
-      (flown ? flown.telemetry.groundSpeed : (this.poses[this.slot]?.speed ?? 0)) / KNOT,
-    );
-    this.title.textContent = `Following ${m.callsign} · ${this.bundle?.name ?? m.aircraftType}${stand}${who} · ${label}${full} · ${speed} kt`;
+    const pose = this.poses[this.slot];
+    const gs = flown ? flown.telemetry.groundSpeed : (pose?.speed ?? 0);
+    const cas = flown
+      ? flown.telemetry.cas
+      : calibratedAirspeed(gs, standardAtmosphere(Math.max(0, pose?.altitude ?? 0)));
+    const kt = (v: number) => Math.round(v / KNOT);
+    this.title.textContent = `Following ${m.callsign} · ${this.bundle?.name ?? m.aircraftType}${stand}${who} · ${label}${full} · ${kt(cas)} kt CAS · ${kt(gs)} kt GS`;
   }
 
   /** Removes the drawn flight, the HUD and the displays. */
@@ -1793,6 +1841,27 @@ interface FollowedState {
 }
 
 const arr3 = (v: Readonly<Vec3d>): [number, number, number] => [v.x, v.y, v.z];
+
+/**
+ * The phase a mission entered since the last look, or null (decision 310): not the first
+ * look, not another mission, not before the start or at the end.
+ */
+export function newPhase(
+  was: { mission: number; phase: MissionPhase | 'planned' } | null,
+  mission: number,
+  phase: MissionPhase | 'planned',
+): MissionPhase | null {
+  if (!was || was.mission !== mission || was.phase === phase) return null;
+  if (phase === 'planned' || phase === 'complete') return null;
+  return phase;
+}
+
+/** The mission's waypoints and the steerpoint: the next one, or one chosen by hand. */
+interface Navigation {
+  wps: Waypoint[];
+  next: number;
+  manual: boolean;
+}
 
 /** A world position's unit direction. */
 function unitOf(p: readonly [number, number, number]): [number, number, number] {

@@ -291,6 +291,10 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] Fuel calls in the messages (JOKER, BINGO; the crewmate's in R4) and the AI turning home at bingo at full fidelity (R3)
 - [x] The player's own flight on the HUD (markers on the other aircraft) and on the moving map and radar by intraflight datalink (decision 258; rings with numbers, the map's numbers all or none; decision 308)
 - [ ] Acceptance check 8 with the pipper: scripted half done (`tests/pipperTurn.test.ts`, decision 309); the owner's look on the GPU remains
+- [x] Owner's review of R2.6 (2026-11-22; decision 310): the AI at military power outside combat; bombs and missiles drawn once; the target kept as steerpoint and steered to with its distance; the steerpoint by hand (STPT, [ and ]); a new phase's formats over old edits; 1× at each new phase; CAS and GS named in the bar; the map's DEP own ship; the gold canopy
+- [ ] Wingmen in spread on the outside of the turn home fall up to 7 km behind their slots and rejoin at the afterburner's second stage: combat spread's tactical turns (R3.4)
+- [ ] The route's climb (50 m/s for the F-21) is more than military power sustains near the top with a load: the lead falls up to 3.5 km behind; plan the climb from the type's military-power climb (with calibration, rule 18)
+- [ ] The elevation modes in a followed or taken-over flight (the follow samples no terrain yet; Free Flight does)
 - [ ] Owner: a CAP kill and a bridge hit, both visible in the campaign state
 
 ### R2.7 The demo roster

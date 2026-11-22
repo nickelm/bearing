@@ -86,7 +86,7 @@ import type { DatalinkFeed, SensorEnv, SensorTarget } from '../sim/sensors/senso
 import { buildTraffic, trafficState, trafficTargets } from './traffic';
 import { MovingMap } from '../render/strategic/movingMap';
 import { AttitudeHold, holdAllowed } from '../sim/flight/holds';
-import { mapRange } from '../ui/displays/formats';
+import { mapAhead, mapPictureScale, mapRange } from '../ui/displays/formats';
 import {
   DEFAULT_OPTIONS,
   FreeFlightMenu,
@@ -1585,12 +1585,20 @@ export class FreeFlight {
     const altitude = m.pos.length() - R;
     const half = mapRange(AVIONICS_PROFILES[this.displayModel]?.skin ?? 'alliance', d.map.range);
     const rotation = d.map.northUp ? 0 : track;
+    // A depressed map's screen center lies ahead of the aircraft (decision 310).
+    const ahead = mapAhead(d.map, half);
     const t = this.terrainSnap;
     const now = performance.now();
     const turned = t
       ? Math.abs(Math.atan2(Math.sin(rotation - t.rotation), Math.cos(rotation - t.rotation)))
       : 0;
-    if (t && t.halfExtent === half && turned < 3 * DEG && now - this.terrainAt < 1000)
+    if (
+      t &&
+      t.halfExtent === half &&
+      (t.ahead ?? 0) === ahead &&
+      turned < 3 * DEG &&
+      now - this.terrainAt < 1000
+    )
       return { ...t, altitude };
     const n = 80;
     const up = m.pos.clone().normalize();
@@ -1606,7 +1614,7 @@ export class FreeFlight {
     for (let j = 0; j < n; j++)
       for (let i = 0; i < n; i++) {
         const x = (((i + 0.5) / n) * 2 - 1) * half;
-        const y = (1 - ((j + 0.5) / n) * 2) * half;
+        const y = (1 - ((j + 0.5) / n) * 2) * half + ahead;
         const g = Math.hypot(x, y);
         horiz.copy(fwd).scale(y).addScaled(right, x);
         if (g > 0) horiz.scale(1 / g);
@@ -1618,7 +1626,7 @@ export class FreeFlight {
         water[j * n + i] = wet ? 1 : 0;
         heights[j * n + i] = wet ? 0 : Math.round(ground.sensedHeight(dir));
       }
-    this.terrainSnap = { n, halfExtent: half, rotation, heights, water, altitude };
+    this.terrainSnap = { n, halfExtent: half, ahead, rotation, heights, water, altitude };
     this.terrainAt = now;
     return this.terrainSnap;
   }
@@ -1740,7 +1748,7 @@ export class FreeFlight {
     const half = mapRange(AVIONICS_PROFILES[this.displayModel]?.skin ?? 'alliance', d.map.range);
     this.movingMap ??= new MovingMap(this.deps.strategic, this.deps.strategic.gpu, 512);
     void this.movingMap
-      .picture(at.lat, at.lon, half * Math.SQRT2)
+      .picture(at.lat, at.lon, half * mapPictureScale(d.map))
       .then((pic) => {
         if (pic) this.displays.view.setMapPicture({ ...pic, flipY: MAP_FLIP_Y });
       })

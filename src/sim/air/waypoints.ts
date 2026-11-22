@@ -9,8 +9,11 @@
  *   ingress, the turn off the target and the way home all run along great circles
  *   between them, so straight legs from point to point are the plan as flown.
  * - **Sequencing.** A waypoint is passed once the mission's phase has gone past it (the
- *   IP from the fence-in, the target or station from the egress, the base at once), or once the aircraft came within SEQUENCE_RADIUS of it, as an F-16's
- *   steerpoints sequence at 2 nm. The next waypoint is the first one not passed.
+ *   IP from the fence-in, the target or station from the egress, the base at once); a
+ *   turn point also once the aircraft came within SEQUENCE_RADIUS of it, as an F-16's
+ *   steerpoints sequence at 2 nm. The target and the station never pass by proximity, so
+ *   overflying the target keeps steering to it (decision 310). The next waypoint is the
+ *   first one not passed; the pilot may choose another by hand (`AvionicsState.steerpoint`).
  */
 import { arcDistance } from '../../core/greatCircle';
 import type { Dir } from '../../core/greatCircle';
@@ -97,7 +100,12 @@ export function nextWaypoint(
   return -1;
 }
 
-/** Marks the next waypoint passed when `pos` (a unit direction) is within SEQUENCE_RADIUS of it. */
+/**
+ * Marks the next waypoint passed when `pos` (a unit direction) is within SEQUENCE_RADIUS of
+ * it. Only turn points (the IP) sequence so: the target and the station stay the steerpoint
+ * until their phase ends, so a pass over the target or a re-attack keeps steering to it, and
+ * home is where the flight ends (decision 310).
+ */
 export function sequenceWaypoints(
   wps: readonly Waypoint[],
   next: number,
@@ -106,7 +114,7 @@ export function sequenceWaypoints(
   passed: Set<number>,
 ): boolean {
   const w = wps[next];
-  if (!w || w.kind === 'home') return false;
+  if (!w || w.kind !== 'ip') return false;
   if (arcDistance(w.point, pos, radius) > SEQUENCE_RADIUS) return false;
   passed.add(next);
   return true;

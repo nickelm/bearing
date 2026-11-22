@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { KNOT } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
 import { FlightDirector } from '../src/sim/flight/flightDirector';
+import { REJOIN_LEVER } from '../src/sim/flight/aiPilot';
+import { MIL_DETENT } from '../src/sim/flight/controlLaws';
 import { analyticPose } from '../src/sim/air/analyticPose';
 import { formationAt, slotPose } from '../src/sim/air/formation';
 import { routeState } from '../src/sim/air/route';
@@ -99,9 +101,19 @@ describe('the AI pilots of a promoted CAP flight', () => {
     let worst = 0;
     let worstOnStation = 0;
     let worstWing = 0;
+    // The most lever each aircraft took, and the share of the flight in afterburner.
+    const levers = [0, 0];
+    let samples = 0;
+    let burning = 0;
     for (let t = t0; t < t1; t += 1 / 30) {
       f.advanceTo(t, seaLevel);
       if (f.steps === 0) continue;
+      samples++;
+      f.aircraft.forEach((a, k) => {
+        const lever = (a.flown.controls as { throttle: number }).throttle;
+        levers[k] = Math.max(levers[k]!, lever);
+        if (lever > MIL_DETENT + 0.005) burning++;
+      });
       const e = lead(f.aircraft[0]!).pos.distanceTo(
         new Vec3d(...analyticPose(pair.route, f.time, R).pos),
       );
@@ -119,10 +131,17 @@ describe('the AI pilots of a promoted CAP flight', () => {
       expect(lead(a).gear).toBe(0);
       expect(lead(a).gearDamaged).toBe(false);
     }
-    // The route climbs at the F-21's 50 m/s, a little more than its military power sustains near the top (decision 283).
-    expect(worst).toBeLessThan(2000);
+    // The route climbs at the F-21's 50 m/s, a little more than its military power sustains
+    // near the top (decision 283), and the lead keeps to military power outside combat
+    // (decision 310): it falls up to about 3.5 km behind its point and closes again.
+    expect(worst).toBeLessThan(4000);
     expect(worstOnStation).toBeLessThan(400);
-    expect(worstWing).toBeLessThan(600);
+    // At a mile in the racetrack's turns, rejoining at the second stage at most: under 1 km.
+    expect(worstWing).toBeLessThan(1000);
+    // A CAP outside combat: military power at most, but for a rejoin's second stage now and
+    // then, short of a twentieth of the flight (decision 310; the climb was half afterburner).
+    for (const l of levers) expect(l).toBeLessThanOrEqual(REJOIN_LEVER + 1e-9);
+    expect(burning / (2 * samples)).toBeLessThan(0.05);
     expect(lead(f.aircraft[0]!).fuel).toBeLessThan(fuel0);
   }, 120_000);
 
@@ -140,9 +159,16 @@ describe('the AI pilots of a promoted CAP flight', () => {
     // Heavier with its tanks and their fuel (decision 287), the wingman takes two minutes to
     // close up after the player's turn at 300 kt (90 s before the stores).
     let t = t0;
-    for (; t < t0 + 120; t += 1 / 30) f.advanceTo(t, seaLevel);
+    // Outside combat it rejoins at the afterburner's second stage at most (decision 310):
+    // about 1.3 km off its slot after two minutes and closing (500 m at full afterburner).
+    let lever = 0;
+    for (; t < t0 + 120; t += 1 / 30) {
+      f.advanceTo(t, seaLevel);
+      lever = Math.max(lever, (f.aircraft[1]!.flown.controls as { throttle: number }).throttle);
+    }
     const w = f.pilots[1]!.state;
-    expect(Math.hypot(w.behind, w.aside, w.below)).toBeLessThan(500);
+    expect(Math.hypot(w.behind, w.aside, w.below)).toBeLessThan(1500);
+    expect(lever).toBeLessThanOrEqual(REJOIN_LEVER);
     // A straight course leaves the racetrack: the player is kilometers off the route.
     const off = player.pos.distanceTo(new Vec3d(...analyticPose(m.route, f.time, R).pos));
     expect(off).toBeGreaterThan(5000);
@@ -169,8 +195,9 @@ describe('the AI pilots of a promoted CAP flight', () => {
       worstAfter = Math.max(worstAfter, lead(f.aircraft[0]!).pos.distanceTo(new Vec3d(...p)));
     }
     // On its new route from the first second, through the turn back to the station: within
-    // 1.2 km with the tanks and their fuel at 9 km (800 m before the stores, decision 287).
-    expect(worstAfter).toBeLessThan(1200);
+    // 3 km with the tanks and their fuel at 9 km, rejoining at the afterburner's second stage
+    // at most (1.2 km at full afterburner, decision 310; 800 m before the stores, decision 287).
+    expect(worstAfter).toBeLessThan(3000);
   }, 60_000);
 
   it('drops the highest slots the player does not fly when the campaign loses aircraft', () => {
