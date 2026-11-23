@@ -101,6 +101,25 @@ describe('mission search', () => {
     expect(timeToAction(x, on)).toBe(0);
     expect(timeToAction(x, phaseTime(x, 'approach') + 1)).toBeLessThan(0);
   });
+
+  it('shows a route rebuilt after its action as past, with no NaN, last in its rank (decision 312)', () => {
+    // A flight handed back in its egress: the rebuilt route starts there, with no on-target.
+    const x = missions.find((m) => m.side === 'alliance' && m.aircraft > 0)!;
+    const egress = phaseTime(x, 'egress');
+    const after: Mission = { ...x, timeline: x.timeline.filter((e) => e.time >= egress) };
+    const rows = missionRows(
+      [after, ...missions.filter((m) => m !== x)],
+      'alliance',
+      egress + 60,
+      NO_FILTERS,
+      names,
+    );
+    const row = rows.find((r) => r.id === x.id)!;
+    expect(row.action).toBe('action past');
+    for (const r of rows) expect(r.action).not.toMatch(/NaN|Infinity/);
+    const past = rows.filter((r) => r.timeToAction < 0);
+    expect(past.at(-1)!.id).toBe(x.id);
+  });
 });
 
 describe('a subscription', () => {

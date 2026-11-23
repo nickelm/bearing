@@ -167,8 +167,11 @@ export function missionRows(
       phaseLabel: PHASE_LABELS[phase],
       threat,
       timeToAction: toAction,
-      action:
-        toAction === 0
+      // A route rebuilt after its action (a handback in the egress, an abort) keeps no time
+      // on target: the action is past, its time unknown (decision 312).
+      action: !Number.isFinite(toAction)
+        ? 'action past'
+        : toAction === 0
           ? 'on target'
           : toAction > 0
             ? `in ${minutes(toAction)}`
@@ -179,11 +182,11 @@ export function missionRows(
     });
   }
   const rank = (r: MissionRow) => (r.timeToAction === 0 ? 0 : r.timeToAction > 0 ? 1 : 2);
+  // An unknown past action sorts after every known one (−Infinity − −Infinity is NaN).
+  const tta = (r: MissionRow) => (Number.isFinite(r.timeToAction) ? r.timeToAction : -1e15);
   rows.sort(
     (a, b) =>
-      rank(a) - rank(b) ||
-      (rank(a) === 2 ? b.timeToAction - a.timeToAction : a.timeToAction - b.timeToAction) ||
-      a.id - b.id,
+      rank(a) - rank(b) || (rank(a) === 2 ? tta(b) - tta(a) : tta(a) - tta(b)) || a.id - b.id,
   );
   return rows;
 }

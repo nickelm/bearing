@@ -300,6 +300,9 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] The interdiction's turn off the target at 9 km (60° bank, 2 g) is more than a loaded F-21 sustains: the lead falls behind and the spread wingmen 8–17 km; plan the egress turn by altitude (as the rejoin's 45°), and R3.4's tactical turns
 - [ ] Carrier departures as cyclic operations: each aircraft from one of four catapults at its own time, the flight joining up overhead (owner, later)
 - [ ] ATC and the pattern (owner, later; R4.5 Crews and radio): ground, departure, tower and approach, the reverse when landing, for a player who wants the administrative part
+- [x] Owner's notes (2026-11-23; decision 312): no NaN for a flight whose rebuilt route has no time on target; the F-21's retracted gear hidden; a bomb or rocket that misses says how far from the target
+- [ ] Bombs on any bridge or site near the impact, not the flight's own target alone (the owner bombed a bridge with no effect; with R2.8's vehicles and towns' sites)
+- [ ] Tactical airlift (owner, 2026-11-23): low-level runs into forward fields near the front, terrain masking through valleys and canyons, a short-field landing; with the C-150 flyable (R2.7 if time allows, else R4)
 - [ ] Owner: a CAP kill and a bridge hit, both visible in the campaign state
 
 ### R2.7 The demo roster

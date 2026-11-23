@@ -537,6 +537,9 @@ export class AircraftView {
           v = 1 - pose.gear;
           break;
       }
+      // Gear fully up is behind its doors (decision 312): a strut's hinge end would stick
+      // out of a fuselage narrower than the track, so retracted pieces are not drawn.
+      if (piece.channel === 'gear') pivot.visible = pose.gear > 0.02;
       v = Math.max(-1, Math.min(1, v));
       // A mirrored piece turns the mirror way about its mirrored axis.
       const angle = piece.angle * v * (s > 0 ? 1 : -1);

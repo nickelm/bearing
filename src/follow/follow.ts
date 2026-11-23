@@ -23,7 +23,7 @@
  * mission ends or its last aircraft is lost, the view returns to the map.
  */
 import type { PerspectiveCamera } from 'three/webgpu';
-import { DEG, KNOT } from '../core/units';
+import { DEG, FOOT, KNOT } from '../core/units';
 import type { Meters } from '../core/units';
 import { Quatd } from '../core/quat';
 import { Vec3d } from '../core/vec3d';
@@ -74,6 +74,7 @@ import { arcDistance, initialHeading } from '../core/greatCircle';
 import type { Dir } from '../core/greatCircle';
 import { GROUND_TARGETS } from '../sim/flight/damage';
 import type { GroundTarget, Hit } from '../sim/flight/storesRack';
+import type { Impact } from '../sim/flight/ordnance';
 import { sourceAt } from '../sim/flight/missile';
 import { gunSelected, rocketCounts } from '../sim/flight/storesRack';
 import type { HeatSource } from '../sim/flight/missile';
@@ -876,6 +877,23 @@ export class Follow {
   }
 
   /**
+   * The player's bomb or rocket beyond reach of the flight's target (decision 312): how far
+   * from it, so a bomb on the wrong bridge or a long release is plain; a hit says so itself.
+   */
+  private reportImpact(x: Impact, targets: readonly GroundTarget[]): void {
+    const tgt = targets[0];
+    if (!tgt) return;
+    const w = STORES[x.store]?.warhead;
+    const d = x.at.distanceTo(tgt.pos) - tgt.kind.size;
+    if (w && d <= w.reach) return;
+    const ft = Math.round(Math.max(0, d) / FOOT / 10) * 10;
+    this.hud.message(
+      `${x.kind === 'bomb' ? 'Bomb' : 'Rocket'} missed: ${ft.toLocaleString('en-US')} ft from TGT`,
+      3,
+    );
+  }
+
+  /**
    * A hit from full fidelity (decision 301). On an enemy flight's lead its damage adds up,
    * and at 1 the aircraft is shot down: the worker loses it (`shot-down`) and its wreck
    * falls. On a target site or road edge the hit goes to the worker (`target-hit`).
@@ -1343,7 +1361,10 @@ export class Follow {
     // The scene's effects system draws them (Proposal 0011, decision 326).
     this.explosions ??= new Explosions(g.vehicles, g.lighting, g.effects);
     for (const a of flight.aircraft)
-      for (const x of a.rack.impacts.splice(0)) this.explosions.impact(x);
+      for (const x of a.rack.impacts.splice(0)) {
+        this.explosions.impact(x);
+        if (a.slot === flight.playerSlot) this.reportImpact(x, a.rack.groundTargets);
+      }
     // Hits: kills and damage to the campaign as logged inputs; the downed fall burning (decision 301).
     for (const a of flight.aircraft)
       for (const h of a.rack.hits.splice(0)) this.applyHit(h, a.rack);

@@ -4980,6 +4980,20 @@ The first run missed by 4.0 m at 610 m and 9.6 m at 900 m, growing with the squa
 
 **Reason:** the owner's second review of R2.6.
 
+### 312. The owner's notes: no NaN in mission search, the F-21's gear hidden when up, a missed bomb says by how much
+
+**Date:** 2026-11-23
+**Decision:**
+
+- **Mission search.** A flight handed back after its attack gets a route rebuilt from the egress (decision 257), with no on-target phase, so its time to action was −Infinity and the row read "Infinity h NaN min ago"; the sort's subtraction of two infinities gave NaN too. Such a row now reads "action past" and sorts after every known time.
+- **Gear when up.** The F-21's main gear folds inward about a fore-and-aft hinge 1.2 m out, wider than the fuselage below the wing root, so with the wheels inside the strut's upper end stayed outside. Gear fully up (`pose.gear` ≤ 0.02) is no longer drawn, as if behind its doors; the struts still swing while they move. This holds for every model's gear channel.
+- **A missed bomb.** Bombs and rockets damage only the flight's own target so far (a TODO extends it). The owner bombed a bridge and saw nothing; now the player's bomb or rocket that lands beyond its warhead's reach of the target says so on the HUD with the distance ("Bomb missed: 460 ft from TGT"), and a hit keeps its "Target hit" message.
+- **For later (TODO):** low-level tactical airlift into forward fields with the C-150, as the owner asked.
+
+**How it was checked.** `tests/missionSearch.test.ts`: a mission whose timeline starts at the egress reads "action past", no row shows NaN or Infinity, and it sorts last among the past. The unit suite, the type check and lint pass.
+
+**Reason:** the owner's notes on the second review.
+
 ### 320. Stylized effects: toon-shaded sphere-impostor puffs, dithered, with depth
 
 **Date:** 2026-11-22
