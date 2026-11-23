@@ -5278,3 +5278,17 @@ The per-vertex coverage, albedo and side (±1) go to the GPU as one vec3 attribu
 **How it was checked.** `tests/groundUnits.test.ts`: with forest over half the ground, every vehicle of a promoted battalion stands on the open half, and none is drawn or targeted before the terrain's data is there. `tests/promotion.test.ts` passes with the larger sizes. The unit suite, the type check and lint pass.
 
 **Reason:** the owner's review.
+
+### 337. The ground controller's mark on CAS
+
+**Date:** 2026-11-23
+**Decision:** The owner could not find a tank on a CAS sortie and asked for a ground controller's mark. Until R3.8's forward observers and talk-on requests (decisions 302, 331), a controller on the ground marks the enemy for a CAS flight on station.
+
+- **A HUD cue.** `HudCue` gains `'ground-mark'`; the CAS plug-in's on-target phase shows it (rule 16: the plug-in names the cue, the follow draws whatever cue a phase lists).
+- **What is marked** (`GroundUnits.controllerMark`): the nearest enemy fighting battalion (tank, mechanized or air defense) whose anchor lies within 15 km of the aircraft, held while it has vehicles left. While it is promoted, the mark is the middle of one of its companies' alive vehicles (the one nearest the aircraft when first marked, held while it has one left, then the next); otherwise its anchor. When it is gone, the next nearest is marked.
+- **How it shows.** On the HUD a diamond with the kind and range in nautical miles (`ARMOR 3.2`, `MECH`, `SAM`); on the moving map an amber X in a square with the same label, or a caret at the edge with its distance beyond the range; and when a battalion is newly marked, a message: "Ground: enemy armor marked / 2 o'clock, 4.1 nm".
+- **Its source.** The mark comes from the side's own ground forces, which know where the enemy in front of them is; it is the battalion's anchor or its promoted vehicles, not the aircraft's sensors. Rule 12 limits the displays to the sensor picture for contacts the aircraft senses; a controller's report reaches it by radio, as the messages do. R3.8 replaces it with talk-on requests from the forward observers.
+
+**How it was checked.** `tests/groundUnits.test.ts`: the nearest enemy fighting battalion in range is marked (not one's own side's, not logistics), held when the aircraft is nearer another, marked at a company's middle once promoted, and the next one is marked when it is gone; a side with no enemy near gets none. The unit suite, the type check and lint pass.
+
+**Reason:** the owner's request; CAS needs a way to find the enemy before R3.8.

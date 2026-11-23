@@ -441,6 +441,7 @@ function movingMapFormat(s: AircraftSnapshot, d: DisplayState): ScreenItem[] {
     // The fronts: in the chart they are in the picture; the elevation modes draw them.
     ...(elevation ? frontItems(s, v) : []),
     ...routeItems(s, v, fig),
+    ...markItems(s, v, fig),
     ...flightItems(s, v),
     { kind: 'arc', x: 0.5, y: cy, r: 0.25, tone: 'normal', dashed: true },
     // The ring's figure below it on its right, above it with the own ship low.
@@ -661,6 +662,52 @@ function routeItems(s: AircraftSnapshot, v: MapFrame, fig: (m: number) => string
     if (!onMap(x, y)) items.push(...edgeCaret(n.at, v, `${n.number} ${n.label} ${fig(n.at[1])}`));
   }
   return items;
+}
+
+/**
+ * The ground controller's mark (decision 337): an X in a square in the caution tone with
+ * its label, or a caret at the edge with its distance beyond the range.
+ */
+function markItems(s: AircraftSnapshot, v: MapFrame, fig: (m: number) => string): ScreenItem[] {
+  const k = s.mark;
+  if (!k) return [];
+  const [x, y] = mapPlace(k.at, s.position.radius, v.half, v.rotation, v.depressed);
+  if (!onMap(x, y)) return edgeCaret(k.at, v, `${k.label} ${fig(k.at[1])}`);
+  const q = 0.022;
+  const tone: Tone = 'caution';
+  return [
+    {
+      kind: 'line',
+      points: [
+        [x - q, y - q],
+        [x + q, y + q],
+      ],
+      tone,
+      width: 2,
+    },
+    {
+      kind: 'line',
+      points: [
+        [x - q, y + q],
+        [x + q, y - q],
+      ],
+      tone,
+      width: 2,
+    },
+    {
+      kind: 'line',
+      points: [
+        [x - q, y - q],
+        [x + q, y - q],
+        [x + q, y + q],
+        [x - q, y + q],
+        [x - q, y - q],
+      ],
+      tone,
+      width: 1.5,
+    },
+    label(x, y, k.label, tone),
+  ];
 }
 
 /**

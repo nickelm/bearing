@@ -68,6 +68,14 @@ export const ROAD_SNAP: Meters = 400;
 export const VEHICLE_CENTER = 1.2 * VEHICLE_SCALE;
 /** The explosive a destroyed vehicle's cook-off is drawn with (kg). */
 const COOK_OFF: Record<VehicleType, number> = { tank: 60, ifv: 40, shorad: 40, truck: 20 };
+/** The ground controller marks enemy battalions of these kinds within MARK_RANGE of the aircraft (decision 337). */
+export const MARK_RANGE: Meters = 15_000;
+const MARK_KINDS = new Set(['tank', 'mechanized', 'air-defense']);
+const MARK_LABELS: Record<string, string> = {
+  tank: 'ARMOR',
+  mechanized: 'MECH',
+  'air-defense': 'SAM',
+};
 /** Vehicles keep out of forest denser than this and of water, moved up to SITE_REACH on rings SITE_STEP apart (m). */
 export const OPEN_FOREST = 0.3;
 export const SITE_REACH: Meters = 600;
@@ -480,6 +488,83 @@ export class GroundUnits {
       });
     }
     return out;
+  }
+
+  // ---- The ground controller's mark (decision 337) ----
+
+  /** The battalion marked, and its company (roster index mod 3) once promoted. */
+  private marked: { side: Side; battalion: number; company?: number } | null = null;
+
+  /**
+   * The ground controller's mark for a flight of `side` at `at` (decision 337): the
+   * nearest enemy fighting battalion (tank, mechanized or air defense) whose anchor lies
+   * within MARK_RANGE, held while it has vehicles left. Promoted, the mark is the middle
+   * of its company nearest the aircraft, of the vehicles still alive; otherwise its
+   * anchor. Null when none is near. `fresh` is true the first time a battalion is marked.
+   */
+  controllerMark(
+    side: Side,
+    at: Readonly<Vec3d>,
+  ): { point: Dir; label: string; battalion: number; fresh: boolean } | null {
+    const here = at.clone().normalize();
+    const c: Dir = [here.x, here.y, here.z];
+    const enemy = side === 'alliance' ? 'pact' : 'alliance';
+    const candidate = (b: BattalionPicture) =>
+      b.side === enemy &&
+      b.strength > 0 &&
+      MARK_KINDS.has(b.kind) &&
+      this.arc(b.point, c) <= MARK_RANGE &&
+      this.markPoint(b, here) !== null;
+    let fresh = false;
+    let b =
+      this.marked?.side === side
+        ? this.battalions.find((x) => x.id === this.marked!.battalion)
+        : undefined;
+    if (!b || !candidate(b)) {
+      b = undefined;
+      let best = Infinity;
+      for (const x of this.battalions) {
+        if (!candidate(x)) continue;
+        const d = this.arc(x.point, c);
+        if (d < best) {
+          best = d;
+          b = x;
+        }
+      }
+      this.marked = b ? { side, battalion: b.id } : null;
+      fresh = !!b;
+    }
+    if (!b) return null;
+    return {
+      point: this.markPoint(b, here)!,
+      label: MARK_LABELS[b.kind] ?? 'TROOPS',
+      battalion: b.id,
+      fresh,
+    };
+  }
+
+  /** Where battalion b is marked: its nearest company's alive vehicles' middle, or its anchor; null if none is left. */
+  private markPoint(b: BattalionPicture, here: Readonly<Vec3d>): Dir | null {
+    const pr = this.promoted.get(b.id);
+    if (!pr) return [...b.point] as Dir;
+    const alive = pr.vehicles.filter(
+      (v) => v.sited && v.type !== 'truck' && !this.damage.destroyed(v.key),
+    );
+    const pool = alive.length > 0 ? alive : pr.vehicles.filter((v) => v.sited);
+    if (pool.length === 0) return null;
+    // The company marked holds while it has a vehicle left; else the nearest one's.
+    const held = this.marked?.battalion === b.id ? this.marked.company : undefined;
+    const ofHeld = pool.filter((v) => v.type !== 'truck' && v.index % 3 === held);
+    const nearest =
+      ofHeld[0] ?? pool.reduce((a, v) => (v.dir.distanceTo(here) < a.dir.distanceTo(here) ? v : a));
+    if (this.marked?.battalion === b.id && nearest.type !== 'truck')
+      this.marked.company = nearest.index % 3;
+    const company = pool.filter((v) => v.type !== 'truck' && v.index % 3 === nearest.index % 3);
+    const group = company.length > 0 && nearest.type !== 'truck' ? company : [nearest];
+    const m = new Vec3d();
+    for (const v of group) m.add(v.dir);
+    m.normalize();
+    return [m.x, m.y, m.z];
   }
 
   // ---- Targets and hits ----

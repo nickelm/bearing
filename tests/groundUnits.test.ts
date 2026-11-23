@@ -152,3 +152,48 @@ describe('vehicles out of the woods (decision 336)', () => {
     for (const t of ts) expect(t.pos.clone().normalize().y).toBeLessThanOrEqual(edge[1]);
   });
 });
+
+describe('the ground controller’s mark (decision 337)', () => {
+  it('marks the nearest enemy fighting battalion in range, holds it, and moves on when it is gone', () => {
+    const { globe } = scene();
+    const u = new GroundUnits(globe, R, () => {});
+    const near = destination(HOME, 0, 6_000, R);
+    const far = destination(HOME, 1, 11_000, R);
+    const own = destination(HOME, 2, 2_000, R);
+    const trucks = destination(HOME, 3, 3_000, R);
+    u.setPicture(
+      picture([
+        bn(1, near),
+        bn(2, far, { kind: 'tank' }),
+        bn(3, own, { side: 'alliance' }),
+        bn(4, trucks, { kind: 'logistics' }),
+      ]),
+    );
+    // From high up nothing is promoted: the mark is the battalion's anchor.
+    const high = eyeOver(HOME, 30_000);
+    const a = u.controllerMark('alliance', high)!;
+    expect(a.battalion).toBe(1);
+    expect(a.label).toBe('MECH');
+    expect(a.fresh).toBe(true);
+    expect(a.point).toEqual(near);
+    // Held, even when the aircraft is nearer another one.
+    const b = u.controllerMark('alliance', eyeOver(far, 30_000))!;
+    expect(b.battalion).toBe(1);
+    expect(b.fresh).toBe(false);
+    // Promoted, the mark is the middle of a company's vehicles, near the anchor.
+    u.place(eyeOver(near));
+    const c = u.controllerMark('alliance', eyeOver(near))!;
+    expect(c.battalion).toBe(1);
+    const off = new Vec3d(...c.point).distanceTo(new Vec3d(...near)) * R;
+    expect(off).toBeGreaterThan(1);
+    expect(off).toBeLessThan(1000);
+    // Its fighting vehicles destroyed and the battalion gone from the picture: the next one.
+    u.setPicture(picture([bn(1, near, { strength: 0 }), bn(2, far, { kind: 'tank' })]));
+    const d = u.controllerMark('alliance', high)!;
+    expect(d.battalion).toBe(2);
+    expect(d.label).toBe('ARMOR');
+    expect(d.fresh).toBe(true);
+    // Nothing for a side whose enemy has nothing near.
+    expect(u.controllerMark('pact', high)).toBeNull();
+  });
+});

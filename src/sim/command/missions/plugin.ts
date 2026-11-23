@@ -225,9 +225,19 @@ export interface BriefingInput {
 
 export type BriefingTemplate = (b: BriefingInput) => string;
 
-/** HUD cues a phase shows (R2.6 draws them). */
+/**
+ * HUD cues a phase shows (R2.6 draws them). 'ground-mark': the ground controller's mark on
+ * the nearest enemy company, on the HUD and the moving map (decision 337).
+ */
 export type HudCue =
-  'steering' | 'station' | 'target' | 'ccip' | 'aa-reticle' | 'glidepath' | 'landing-zone';
+  | 'steering'
+  | 'station'
+  | 'target'
+  | 'ccip'
+  | 'aa-reticle'
+  | 'glidepath'
+  | 'landing-zone'
+  | 'ground-mark';
 
 export interface PhaseInterface {
   masterMode: MasterMode;

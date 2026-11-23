@@ -106,7 +106,12 @@ import type { FuelStates } from '../sim/air/fuelStates';
 import { aircraftType } from '../sim/air/aircraft';
 import { FLIGHT_STEP } from '../sim/flight/rigidBody';
 import type { Waypoint } from '../sim/air/waypoints';
-import { flightSnapshot, frontsSnapshot, routeSnapshot } from '../ui/displays/routeSnapshot';
+import {
+  flightSnapshot,
+  frontsSnapshot,
+  mapBearing,
+  routeSnapshot,
+} from '../ui/displays/routeSnapshot';
 import { PHASE_LABELS } from '../ui/missionSearch/model';
 import {
   drawnAltitude,
@@ -167,6 +172,12 @@ export interface FollowDeps {
 
 /** Target sites within this distance of the flown aircraft can be hit (m; R2.8). */
 export const SITE_RANGE = 12_000;
+/** What the ground controller calls a marked battalion (decision 337). */
+const MARK_WORDS: Record<string, string> = {
+  ARMOR: 'armor',
+  MECH: 'mechanized infantry',
+  SAM: 'air defense',
+};
 /** What the HUD calls a destroyed vehicle (R2.8). */
 const VEHICLE_NAMES: Record<VehicleType, string> = {
   tank: 'Tank',
@@ -221,6 +232,8 @@ export class Follow {
   readonly displays = new DisplaySystem();
   /** What shows besides the scene (V). */
   panels: FollowPanels = 'hud';
+  /** The ground controller's mark this frame, for the moving map (decision 337). */
+  private groundMark: { point: Dir; label: string } | null = null;
   /** When the follow began (ms, `performance.now()`): the messages display's clock. */
   private followedAt = 0;
   private readonly bar: HTMLDivElement;
@@ -1622,18 +1635,44 @@ export class Follow {
       : ui.hud.includes('station')
         ? 'station'
         : null;
-    if (!want) return null;
-    const d = new Vec3d(...this.targetPoint(m)).normalize();
-    const h = this.airfield ? this.airfield.height(d) : 0;
-    const at = d.scale(this.deps.radius + Math.max(0, h));
     const eye = this.deps.globe.chase.eye;
-    const range = at.distanceTo(new Vec3d(...p.pos)) / 1852;
-    return [
-      {
+    const here = new Vec3d(...p.pos);
+    const marks: NonNullable<HudFrame['marks']> = [];
+    const put = (dir: Readonly<Dir>, name: string) => {
+      const d = new Vec3d(...dir).normalize();
+      const h = this.airfield ? this.airfield.height(d) : 0;
+      const at = d.scale(this.deps.radius + Math.max(0, h));
+      const range = at.distanceTo(here) / 1852;
+      marks.push({
         point: [at.x - eye.x, at.y - eye.y, at.z - eye.z],
-        label: `${want === 'target' ? 'TGT' : 'STN'} ${range < 10 ? range.toFixed(1) : Math.round(range)}`,
-      },
-    ];
+        label: `${name} ${range < 10 ? range.toFixed(1) : Math.round(range)}`,
+      });
+    };
+    if (want) put(this.targetPoint(m), want === 'target' ? 'TGT' : 'STN');
+    // The ground controller's mark on the nearest enemy company (decision 337).
+    this.groundMark = null;
+    if (ui.hud.includes('ground-mark')) {
+      const k = this.deps.groundUnits?.()?.controllerMark(m.side, here);
+      if (k) {
+        this.groundMark = { point: k.point, label: k.label };
+        put(k.point, k.label);
+        if (k.fresh) {
+          const nm = arcDistance(unitOf(p.pos), k.point, this.deps.radius) / 1852;
+          const clock = Math.round(
+            (((initialHeading(unitOf(p.pos), k.point) - p.heading) / (2 * Math.PI)) * 12 + 12) %
+              12 || 12,
+          );
+          this.hud.message(
+            [
+              `Ground: enemy ${MARK_WORDS[k.label] ?? 'troops'} marked`,
+              `${clock} o'clock, ${nm.toFixed(1)} nm`,
+            ],
+            6,
+          );
+        }
+      }
+    }
+    return marks.length > 0 ? marks : null;
   }
 
   /** The radar lock's contact where it is now (carried along its velocity), or null. */
@@ -1730,6 +1769,12 @@ export class Follow {
         this.deps.radius,
       ),
       fronts: frontsSnapshot(this.deps.strategic.frontLines(), unitOf(p.pos), this.deps.radius),
+      mark: this.groundMark
+        ? {
+            at: mapBearing(unitOf(p.pos), this.groundMark.point, this.deps.radius),
+            label: this.groundMark.label,
+          }
+        : null,
     });
     this.displays.update(snap);
     this.requestMap(snap.position);
