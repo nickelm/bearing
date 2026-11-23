@@ -31,6 +31,13 @@ interface Targets {
 
 /** Public figures, loosely: what each type's flight data must reach. */
 const TARGETS: Record<string, Targets> = {
+  // A-10A: takeoff run about 700 m clean, 706 km/h at sea level, stall near 100 kt at landing weight.
+  a15: {
+    rotateKt: [105, 135],
+    rollM: [500, 1100],
+    stallKt: [88, 120],
+    seaLevelMach: [0.55, 0.64],
+  },
   // MiG-29: takeoff run 250–600 m in afterburner, about 1,500 km/h at sea level.
   'pact-fighter': {
     rotateKt: [120, 150],

@@ -68,7 +68,7 @@ describe('aircraft bundles', () => {
     expect(gaps('ve18')).toBe('flight, pylons, calibration');
     expect(gaps('vo31')).toBe('calibration');
     expect(gaps('vo35')).toBe('calibration');
-    expect(gaps('a15')).toBe('flight, pylons, calibration');
+    expect(gaps('a15')).toBe('calibration');
     expect(gaps('c150')).toBe('flight, pylons, calibration');
     // Every type the demo's orders fly has its model and rig (R2.7's exit): the types a day
     // of war flew on the demo seeds 4, 10 and 7 (2026-11-23), and the helicopters R2.9 adds.

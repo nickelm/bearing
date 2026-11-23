@@ -574,6 +574,10 @@ def ar45r():
     return m, groups, jet_rig(25, 5)
 
 
+# The A-15's pylons: their span station (m) and depth (m).
+A15_PYLONS = ((2.6, 0.3), (3.8, 0.3), (5.0, 0.3), (6.2, 0.25))
+
+
 def a15():
     m = Model()
     m.loft('body', [
@@ -598,13 +602,18 @@ def a15():
     m.box('body', [-3.4, 1.0, 0.75], [2.0, 0.5, 0.25], mirror=True)
     # The tailplane with fins at its tips.
     m.wing('body', [-6.0, 0.8, 0.3], 2.0, 1.6, 2.7, 2, thickness=0.06)
-    m.wing('body', [-6.0, 0.0, 2.9], 2.4, 1.6, 3.2, 8, thickness=0.06, vertical=True)
+    m.wing('body', [-6.0, 0.4, 2.9], 2.4, 1.6, 2.9, 8, thickness=0.06, vertical=True)
+    # Pylons under the wing: inner, middle, outer and the missiles' tip station (its bundle's
+    # stations, decision 317).
+    for z, h_ in A15_PYLONS:
+        m.box('store', [0.3, -0.05 + z * T(R(2)) - 0.08 - h_ / 2, z], [1.4, h_, 0.07],
+              mirror=True)
     m.tip_lights(1.0, 0.4, 8.7, [-7.8, 0.85, 0])
     m.light('beacon', [-1.5, 1.4, 0])
-    m.leg(6.0, 0.4, -0.4, -1.6, 0.32, width=0.25, back=-1)
+    m.leg(6.0, 0.4, -0.4, -1.65, 0.32, width=0.25, back=-1)
     m.leg(0.7, 1.7, -0.6, -1.55, 0.42, width=0.3, mirror=True)
     groups = {'body': 'camo', 'canopy': 'canopy', 'intake': 'intake', 'nozzle': 'nozzle',
-              'gear': '#B8BCBE', 'tire': '#2B2C2E'}
+              'store': 'steel', 'gear': '#B8BCBE', 'tire': '#2B2C2E'}
     return m, groups, jet_rig(22, 5)
 
 

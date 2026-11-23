@@ -31,9 +31,17 @@ import { Vec3d } from '../../src/core/vec3d';
 export async function drawDisplays(q: URLSearchParams): Promise<void> {
   const mode = (q.get('displays') ?? 'navigation') as MasterMode;
   const helo = q.get('aircraft') === 'utility';
-  // `&aircraft=vo35`: the Pact's attack aircraft, without a radar (checks 12–13, R2.7).
+  // `&aircraft=vo35`: the Pact's attack aircraft, without a radar; `vo31` its fighter
+  // (checks 12–13, R2.7).
   const attack = q.get('aircraft') === 'vo35';
-  const bundleId = helo ? 'alliance-utility-helo' : attack ? 'pact-strike' : 'alliance-fighter';
+  const vo31 = q.get('aircraft') === 'vo31';
+  const bundleId = helo
+    ? 'alliance-utility-helo'
+    : attack
+      ? 'pact-strike'
+      : vo31
+        ? 'pact-fighter'
+        : 'alliance-fighter';
   const base = AVIONICS_PROFILES[bundleId]!;
   const profile = {
     ...base,
@@ -151,11 +159,20 @@ export async function drawDisplays(q: URLSearchParams): Promise<void> {
   if (!helo) {
     const b = AIRCRAFT_BUNDLES[bundleId]!;
     const loads = stationLoads(
-      b.airWar!.loadouts.find((l) => l.id === (attack ? 'cas' : 'strike'))!.stations!,
+      b.airWar!.loadouts.find((l) => l.id === (attack ? 'cas' : vo31 ? 'air-to-air' : 'strike'))!
+        .stations!,
       b.pylons!,
     );
-    const gone: Record<string, number> = attack ? { 'bomb-250-p': 1 } : { 'bomb-900': 1 };
-    snap.stores = storesSnapshot(loads, loadedStations(loads, gone), attack ? 1280 : 1400);
+    const gone: Record<string, number> = attack
+      ? { 'bomb-250-p': 1 }
+      : vo31
+        ? { 'srm-p': 1 }
+        : { 'bomb-900': 1 };
+    snap.stores = storesSnapshot(
+      loads,
+      loadedStations(loads, gone),
+      attack ? 1280 : vo31 ? 1200 : 1400,
+    );
   }
   const sys = new DisplaySystem();
   sys.edits = {};

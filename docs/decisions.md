@@ -5051,6 +5051,17 @@ The first run missed by 4.0 m at 610 m and 9.6 m at 900 m, growing with the squa
 
 **Reason:** R2.7's exit criterion: every type on the demo's orders has a model.
 
+### 317. The A-15 is flown: flight data, pylons and its gun
+
+**Date:** 2026-11-23
+**Decision:**
+
+- **Flight data** from approximate public A-10A figures: two TF34s of 40.3 kN each without afterburner, installed at 76.6 kN, lapsing steeply with speed and altitude as a high-bypass turbofan does (58 kN at Mach 0.4 at sea level); a straight, cambered 47 m² wing of 17.53 m span that stalls near 19°, with large flaps; a draggy airframe (CD0 0.042) whose drag rises from Mach 0.6; 5,000 kg of internal fuel, the air-war entry's load; a 7.3 g limit, 17° of angle of attack, a 110°/s roll rate and an on-speed angle of attack of 10°. It makes 389 kt at sea level, stalls at 100 KCAS in the landing configuration, lifts off after about 680 m and flies the test pilot's circuit (`tests/flightTypes.test.ts`).
+- **Stores and gun.** Four pylons a wing: inner, middle, outer and a tip station for the missiles. The stores catalog has no Maverick or cluster bomb yet (the owner's future weapons), so the air-war loadout's six missiles and four cluster bombs become four 230 kg bombs, two rocket pods and two short-range missiles, and its description says so. The gun is the GAU-8 analogue: 1,174 rounds of 30 mm at 65 a second and 1,010 m/s. The nose gear stands 0.4 m right of the centerline, as the A-10's does beside its gun.
+- **Flown.** Free Flight offers it (`aircraft=a15`), a followed A-15 flight is promoted and can be taken over, and `tests/jetPromotion.test.ts` flies an A-15 close air support flight from the climb-out to the approach.
+
+**Reason:** R2.7 lists the A-15 as flyable if time allows (owner decision 5); it flies the Alliance's close air support on the demo seeds, where R2.8's promoted vehicles are its targets.
+
 ### 320. Stylized effects: toon-shaded sphere-impostor puffs, dithered, with depth
 
 **Date:** 2026-11-22

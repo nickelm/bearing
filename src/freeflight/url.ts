@@ -3,7 +3,7 @@
  * returns to the same flight:
  *
  *   ?mode=freeflight&seed=…&base=…&tod=…&weather=<preset>&spawn=runway|air
- *     &fuel=unlimited|limited&wind=off&aircraft=kestrel|vo31|vo35|scout|utility&control=aim|direct
+ *     &fuel=unlimited|limited&wind=off&aircraft=kestrel|a15|vo31|vo35|scout|utility&control=aim|direct
  *     &invert=aim,stick,helo&autopilot
  *
  * `weather` is a preset of sim/weather/presets.ts (`fair` by default, `live`

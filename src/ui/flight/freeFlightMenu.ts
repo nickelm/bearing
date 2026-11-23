@@ -11,8 +11,8 @@ import type { WeatherPreset } from '../../sim/weather/presets';
 
 export type SpawnKind = 'runway' | 'air';
 
-/** The jets to fly: the F-21 Kestrel, and the Pact's Vo-31 and Vo-35 (roadmap R2.7). */
-export type JetChoice = 'kestrel' | 'vo31' | 'vo35';
+/** The jets to fly: the F-21 Kestrel and A-15, and the Pact's Vo-31 and Vo-35 (roadmap R2.7). */
+export type JetChoice = 'kestrel' | 'a15' | 'vo31' | 'vo35';
 
 /** The aircraft to fly: a jet, or one of the H1 helicopters (Proposal 0004). */
 export type AircraftChoice = JetChoice | 'scout' | 'utility';
@@ -20,6 +20,7 @@ export type AircraftChoice = JetChoice | 'scout' | 'utility';
 /** Each jet's bundle. */
 export const JET_BUNDLES: Readonly<Record<JetChoice, string>> = {
   kestrel: 'alliance-fighter',
+  a15: 'a15',
   vo31: 'pact-fighter',
   vo35: 'pact-strike',
 };
@@ -31,6 +32,7 @@ export function isJet(a: AircraftChoice): a is JetChoice {
 
 export const AIRCRAFT_CHOICES: { id: AircraftChoice; label: string; note: string }[] = [
   { id: 'kestrel', label: 'F-21 Kestrel', note: 'Fighter (F-16 analogue)' },
+  { id: 'a15', label: 'A-15 Buzzard', note: 'Attack aircraft (A-10 analogue)' },
   { id: 'vo31', label: 'Vo-31 Strizh', note: 'Pact fighter (MiG-29 analogue)' },
   { id: 'vo35', label: 'Vo-35 Molot', note: 'Pact attack aircraft (Su-25 analogue)' },
   { id: 'scout', label: 'MH-14 Wren', note: 'Light scout helicopter (Little Bird analogue)' },

@@ -1,6 +1,6 @@
 /**
- * The Pact's flyable jets at full fidelity (roadmap R2.7): a Vo-31 CAP and a Vo-35 close air
- * support flight promoted from their routes fly them from the climb-out to the approach
+ * R2.7's flyable jets at full fidelity: a Vo-31 CAP and Vo-35 and A-15 close air support
+ * flights promoted from their routes fly them from the climb-out to the approach
  * through the same AI pilots, director and flight model as the F-21's (rule 12), without a
  * crash, the lead near its route, the gear up and fuel burned.
  */
@@ -17,6 +17,7 @@ const lead = (a: { flown: { airframe: unknown } }) => a.flown.airframe as Flight
 describe.each([
   ['vo31', 'pact-fighter', 'cap'],
   ['vo35', 'pact-strike', 'cas'],
+  ['a15', 'a15', 'cas'],
 ] as const)('a promoted %s flight', (type, bundle, mission) => {
   it(`flies its ${mission} route from the climb-out to the approach`, () => {
     const m = { ...capMission(type, mission), aircraft: 2 };

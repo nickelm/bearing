@@ -325,7 +325,8 @@ Started 2026-11-23, in parallel with R2.8 in a second session (decisions 314–3
 - [ ] Models for the types outside the demo's orders, which stand in by class and side today: A-14, F-30, F-130, AH-70, CH-60, Ve-36 (R4.1)
 - [ ] The Pact's transports and bombers in the Pact's own markings; the Su-24 and F-111 analogues set further apart if the owner mixes them up
 - [x] Silhouette check (Part I check 6) for every new model: `tools/models.preview.ts`, compared on contact sheets by class (decision 316)
-- [ ] A-15 (A-10 analogue): model spec, flight data, laws (if time allows; owner decision 5)
+- [x] A-15 (A-10 analogue): model spec, flight data, laws, pylons and the GAU-8 analogue; Free Flight's `aircraft=a15` (decision 317)
+- [ ] The A-15's Mavericks and cluster bombs with the owner's future weapons; the A-10's eleven stations (four a wing and three under the fuselage today drawn as four a wing)
 - [ ] C-150 (C-130 analogue): flight data, laws, transport rig (if time allows)
 - [ ] Owner, on the GPU: fly the Vo-31 and the Vo-35 in Free Flight; follow and take over a Pact flight; the new models in the campaign
 

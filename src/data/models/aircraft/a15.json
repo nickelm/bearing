@@ -7,6 +7,7 @@
     "canopy": "canopy",
     "intake": "intake",
     "nozzle": "nozzle",
+    "store": "steel",
     "gear": "#B8BCBE",
     "tire": "#2B2C2E"
   },
@@ -162,19 +163,47 @@
     {
       "type": "wing",
       "group": "body",
-      "root": [-6.0, 0.0, 2.9],
+      "root": [-6.0, 0.4, 2.9],
       "rootChord": 2.4,
       "tipChord": 1.6,
-      "span": 3.2,
+      "span": 2.9,
       "sweep": 8,
       "thickness": 0.06,
       "mirror": true,
       "vertical": true
     },
     {
+      "type": "box",
+      "group": "store",
+      "center": [0.3, -0.1892059993214559, 2.6],
+      "size": [1.4, 0.3, 0.07],
+      "mirror": true
+    },
+    {
+      "type": "box",
+      "group": "store",
+      "center": [0.3, -0.14730107593135863, 3.8],
+      "size": [1.4, 0.3, 0.07],
+      "mirror": true
+    },
+    {
+      "type": "box",
+      "group": "store",
+      "center": [0.3, -0.10539615254126136, 5.0],
+      "size": [1.4, 0.3, 0.07],
+      "mirror": true
+    },
+    {
+      "type": "box",
+      "group": "store",
+      "center": [0.3, -0.03849122915116408, 6.2],
+      "size": [1.4, 0.25, 0.07],
+      "mirror": true
+    },
+    {
       "type": "cylinder",
       "group": "gear",
-      "to": [6.0, -1.6, 0.4],
+      "to": [6.0, -1.65, 0.4],
       "radius": 0.12,
       "sides": 6,
       "anim": {
@@ -190,7 +219,7 @@
     {
       "type": "cylinder",
       "group": "tire",
-      "to": [6.0, -1.6, 0.525],
+      "to": [6.0, -1.65, 0.525],
       "radius": 0.32,
       "sides": 8,
       "anim": {
@@ -201,7 +230,7 @@
         ],
         "angle": -100
       },
-      "from": [6.0, -1.6, 0.275]
+      "from": [6.0, -1.65, 0.275]
     },
     {
       "type": "cylinder",
@@ -267,6 +296,178 @@
     "stretchPerAccel": 0.25,
     "fovDeg": 50
   },
+  "flight": {
+    "notes": "Tuning values from approximate public A-10A figures: two TF34-GE-100 turbofans of 40.3 kN each without afterburner, installed at 76.6 kN, with the high bypass ratio's steep lapse with speed and altitude; wing 47 m2, span 17.53 m, aspect ratio 6.5 (k for Oswald efficiency 0.8); a draggy airframe with its pods, pylons and two short-range missiles in the standard load, and 1,174 rounds; a cambered, straight wing that stalls near 19 deg, large flaps with the gear; drag divergence near Mach 0.6. Inertias estimated from mass and size. The speedbrakes split the ailerons. Angles in degrees, everything else SI.",
+    "mass": {
+      "empty": 11400,
+      "fuel": 5000,
+      "payload": 1550
+    },
+    "standardStores": {
+      "srm": 2
+    },
+    "inertia": [40000, 90000, 120000],
+    "cg": [1.3, 0.4, 0],
+    "wing": {
+      "area": 47,
+      "span": 17.53,
+      "chord": 2.73
+    },
+    "aero": {
+      "cl": {
+        "x": [
+          -90, -60, -40, -30, -20, -15, -10, -5, 0, 5, 10, 13, 15, 17, 19, 22, 25, 30, 35, 40, 50,
+          60, 75, 90
+        ],
+        "y": [
+          0, -0.8, -1, -0.95, -1.0, -0.95, -0.7, -0.3, 0.15, 0.57, 0.97, 1.17, 1.28, 1.36, 1.34,
+          1.22, 1.12, 1.06, 1.02, 1.0, 0.95, 0.8, 0.45, 0
+        ]
+      },
+      "flapCl": 0.35,
+      "flapFadeAlpha": 20,
+      "cd0": {
+        "x": [0, 0.5, 0.6, 0.65, 0.7, 0.75, 0.8, 0.9, 1.0],
+        "y": [0.042, 0.042, 0.045, 0.05, 0.058, 0.07, 0.09, 0.13, 0.16]
+      },
+      "induced": 0.061,
+      "cdSeparated": {
+        "x": [0, 18, 21, 25, 30, 40, 60, 90],
+        "y": [0, 0, 0.02, 0.1, 0.25, 0.55, 1, 1.25]
+      },
+      "cdGear": 0.012,
+      "cdFlaps": 0.012,
+      "cdSpeedbrake": 0.07,
+      "cdStores": 0,
+      "cdGearDamage": 0.008,
+      "cmSpeedbrake": 0,
+      "cyBeta": -1,
+      "cnBeta": 0.12,
+      "clp": -0.5,
+      "cmq": -6,
+      "cnr": -0.45,
+      "groundEffectLift": 0.2,
+      "groundEffectDrag": 0.45
+    },
+    "engine": {
+      "thrust": {
+        "altitude": [0, 3000, 6000, 9000, 12000, 15000],
+        "mach": [0, 0.4, 0.8, 1, 1.2, 1.6, 2],
+        "idle": [
+          [4050.0, 2340.0, -450.0, -720.0, -900.0, -1080.0, -1260.0],
+          [3190.0, 1840.0, -350.0, -570.0, -710.0, -850.0, -990.0],
+          [2470.0, 1420.0, -270.0, -440.0, -550.0, -660.0, -760.0],
+          [1870.0, 1080.0, -210.0, -330.0, -410.0, -500.0, -580.0],
+          [1350.0, 780.0, -150.0, -240.0, -300.0, -360.0, -420.0],
+          [930.0, 540.0, -100.0, -160.0, -210.0, -240.0, -290.0]
+        ],
+        "military": [
+          [76600, 58000, 47000, 44000, 42000, 38000, 34000],
+          [59750.0, 45240.0, 36660.0, 34320.0, 32760.0, 29640.0, 26520.0],
+          [44430.0, 33640.0, 27260.0, 25520.0, 24360.0, 22040.0, 19720.0],
+          [32170.0, 24360.0, 19740.0, 18480.0, 17640.0, 15960.0, 14280.0],
+          [22210.0, 16820.0, 13630.0, 12760.0, 12180.0, 11020.0, 9860.0],
+          [14550.0, 11020.0, 8930.0, 8360.0, 7980.0, 7220.0, 6460.0]
+        ]
+      },
+      "spoolUp": 3.0,
+      "spoolDown": 1.8,
+      "tsfcDry": 1.05e-5
+    },
+    "controls": {
+      "rollAuthority": 0.05,
+      "pitchAuthority": 0.25,
+      "yawAuthority": 0.04,
+      "maxRollRate": 110,
+      "maxPitchRate": 12,
+      "maxLoad": 7.3,
+      "minLoad": -3,
+      "maxAlpha": 17,
+      "minAlpha": -8,
+      "maxSideslip": 8,
+      "blendLow": 75,
+      "blendHigh": 110,
+      "loadGain": 0.5,
+      "rateGain": [8, 15, 4],
+      "sideslipGain": 2,
+      "alphaGain": 4,
+      "rateIntegral": 4,
+      "groundPitchRate": 5,
+      "groundGain": 5,
+      "derotationRate": 2.5,
+      "holdGain": 0.12,
+      "approachAlpha": 10
+    },
+    "gear": {
+      "wheels": [
+        {
+          "name": "nose",
+          "at": [6.0, -1.97, 0.4],
+          "stiffness": 420000,
+          "damping": 55000,
+          "travel": 0.3,
+          "steerable": true,
+          "braked": false
+        },
+        {
+          "name": "left",
+          "at": [0.7, -1.97, -1.7],
+          "stiffness": 900000,
+          "damping": 120000,
+          "travel": 0.3,
+          "steerable": false,
+          "braked": true
+        },
+        {
+          "name": "right",
+          "at": [0.7, -1.97, 1.7],
+          "stiffness": 900000,
+          "damping": 120000,
+          "travel": 0.3,
+          "steerable": false,
+          "braked": true
+        }
+      ],
+      "transit": 4,
+      "maxSpeed": 103,
+      "retractSpeed": 103,
+      "damageMargin": 10.3,
+      "damageTime": 3,
+      "rolling": 0.025,
+      "braking": 0.5,
+      "lateral": 0.55,
+      "gripStiffness": 400000,
+      "gripDamping": 40000,
+      "steerLow": 32,
+      "steerHigh": 3,
+      "steerFade": 12,
+      "steerOff": 35,
+      "cornering": 6
+    },
+    "speedbrake": {
+      "transit": 1.5,
+      "maxDeflection": 60,
+      "gearDownDeflection": 60
+    },
+    "contacts": [
+      [8.6, 0.05, 0],
+      [4.6, 2.0, 0],
+      [3.0, -0.55, 0],
+      [0.6, 0.25, 8.75],
+      [0.6, 0.25, -8.75],
+      [-0.2, -0.5, 8.45],
+      [-0.2, -0.5, -8.45],
+      [-8.0, 0.4, 2.9],
+      [-8.0, 0.4, -2.9],
+      [-7.6, 3.2, 2.9],
+      [-7.6, 3.2, -2.9],
+      [-3.0, 0.9, 1.2],
+      [-3.0, 0.9, -1.2],
+      [0.7, -0.8, 1.7],
+      [0.7, -0.8, -1.7],
+      [-7.6, 0.55, 0]
+    ]
+  },
   "airWar": {
     "id": "a15",
     "order": 7,
@@ -286,8 +487,14 @@
     "loadouts": [
       {
         "id": "cas",
-        "stores": "cannon, 6 anti-tank missiles, 4 cluster bombs",
-        "radiusFactor": 0.9
+        "stores": "cannon, 4 × 230 kg bombs, 2 rocket pods, 2 short-range missiles",
+        "radiusFactor": 0.9,
+        "stations": {
+          "inner": "bomb-230",
+          "middle": "bomb-230",
+          "outer": "rockets-19",
+          "tip": "srm"
+        }
       }
     ]
   },
@@ -303,5 +510,42 @@
     },
     "rotorGauges": false,
     "crew": []
+  },
+  "pylons": [
+    {
+      "id": "inner",
+      "mirror": true,
+      "at": [0.3, -0.5, 2.6],
+      "carries": ["bomb-230", "bomb-900", "rockets-19", "tank-1400"]
+    },
+    {
+      "id": "middle",
+      "mirror": true,
+      "at": [0.3, -0.48, 3.8],
+      "carries": ["bomb-230", "rockets-19"]
+    },
+    {
+      "id": "outer",
+      "mirror": true,
+      "at": [0.3, -0.45, 5.0],
+      "carries": ["bomb-230", "rockets-19"]
+    },
+    {
+      "id": "tip",
+      "mirror": true,
+      "at": [0.3, -0.24, 6.2],
+      "carries": ["srm"]
+    }
+  ],
+  "gun": {
+    "name": "30 mm rotary cannon",
+    "reference": "GAU-8/A, PGU-14 rounds",
+    "rounds": 1174,
+    "rate": 65,
+    "muzzleVelocity": 1010,
+    "at": [8.6, 0.05, 0],
+    "roundMass": 0.425,
+    "roundDragArea": 0.00025,
+    "tracerEvery": 5
   }
 }
