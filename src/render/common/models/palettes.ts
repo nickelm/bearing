@@ -37,6 +37,8 @@ export const SCHEMES: Record<string, CamoScheme> = {
     patch: 4,
   },
   'pact-bomber': { name: 'Pact bomber', colors: ['#A7ABAE'], patch: 10 },
+  // Destroyed vehicles (decision 333): every camouflaged face burnt to charred browns and black.
+  burnt: { name: 'Burnt', colors: ['#2E2A26', '#3B342D', '#211F1C'], patch: 1.5 },
   // Ground cover (decisions 172, 174, 178): rock shades per face, and gray rock with lichen,
   // cool grays a little darker than warm open ground so boulders stand out from it; the
   // bounce light keeps their shaded sides from going black.

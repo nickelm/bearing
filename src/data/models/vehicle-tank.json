@@ -1,0 +1,134 @@
+{
+  "name": "Main battle tank",
+  "class": "tank",
+  "scheme": "alliance-woodland",
+  "ground": true,
+  "groups": {
+    "hull": "camo",
+    "track": "#2E2C29",
+    "gun": "camo",
+    "hatch": "#3A3833",
+    "wheel": "#3F3C37"
+  },
+  "parts": [
+    {
+      "type": "box",
+      "group": "track",
+      "center": [0, 0.5, 1.45],
+      "size": [7.4, 1.0, 0.7],
+      "bevel": 0.3,
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "wheel",
+      "from": [-3.35, 0.5, 1.05],
+      "to": [-3.35, 0.5, 1.82],
+      "radius": 0.5,
+      "sides": 6,
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "wheel",
+      "from": [3.35, 0.5, 1.05],
+      "to": [3.35, 0.5, 1.82],
+      "radius": 0.5,
+      "sides": 6,
+      "mirror": true
+    },
+    {
+      "type": "loft",
+      "group": "hull",
+      "sides": 4,
+      "stations": [
+        {
+          "x": -3.6,
+          "y": 1.25,
+          "w": 1.6,
+          "h": 0.42,
+          "square": 1
+        },
+        {
+          "x": 2.5,
+          "y": 1.25,
+          "w": 1.6,
+          "h": 0.42,
+          "square": 1
+        },
+        {
+          "x": 3.7,
+          "y": 1.0,
+          "w": 1.5,
+          "h": 0.2,
+          "square": 1
+        }
+      ]
+    },
+    {
+      "type": "loft",
+      "group": "hull",
+      "sides": 6,
+      "stations": [
+        {
+          "x": -2.6,
+          "y": 2.0,
+          "w": 1.25,
+          "h": 0.32,
+          "square": 0.4
+        },
+        {
+          "x": -1.7,
+          "y": 2.05,
+          "w": 1.6,
+          "h": 0.4,
+          "square": 0.4
+        },
+        {
+          "x": 0.6,
+          "y": 2.05,
+          "w": 1.6,
+          "h": 0.4,
+          "square": 0.4
+        },
+        {
+          "x": 1.7,
+          "y": 2.0,
+          "w": 1.0,
+          "h": 0.28,
+          "square": 0.4
+        }
+      ]
+    },
+    {
+      "type": "cylinder",
+      "group": "gun",
+      "from": [1.6, 2.05, 0],
+      "to": [6.6, 2.1, 0],
+      "radius": 0.12,
+      "sides": 6
+    },
+    {
+      "type": "cylinder",
+      "group": "gun",
+      "from": [4.1, 2.08, 0],
+      "to": [4.7, 2.09, 0],
+      "radius": 0.19,
+      "sides": 6
+    },
+    {
+      "type": "cylinder",
+      "group": "hatch",
+      "from": [-0.9, 2.4, 0.6],
+      "to": [-0.9, 2.68, 0.6],
+      "radius": 0.36,
+      "sides": 6
+    },
+    {
+      "type": "box",
+      "group": "hull",
+      "center": [-1.9, 2.32, -0.7],
+      "size": [0.9, 0.22, 0.6]
+    }
+  ]
+}

@@ -327,7 +327,7 @@ Started 2026-11-23, in parallel with R2.8 in a second session (decisions 314–3
 
 ### R2.8 Minimal entity promotion
 
-- [ ] Vehicle model specs: tank, infantry fighting vehicle, truck, short-range air defense vehicle (classes `tank` and `truck`, 150–400 and 80–200 triangles; the sides' schemes); silhouettes and counts in `tools/models.preview.ts` (check 6)
+- [x] Vehicle model specs: tank, infantry fighting vehicle, truck, short-range air defense vehicle (classes `tank` and `truck`, 150–400 and 80–200 triangles; the sides' schemes); silhouettes and counts in `tools/models.preview.ts` (check 6): tank 256, IFV 204, SHORAD 224, truck 124 triangles; a `burnt` scheme for wrecks
 - [ ] Rosters: each battalion kind's vehicles (counts by type, a representative order so the first few show the mix), the vehicle count N that strength stands for (`sim/ground/promotion.ts`)
 - [ ] Promotion, pure: a battalion's promoted vehicles from its seed, strength and killed list, laid out round an anchor (company clusters facing the enemy); deterministic; tests
 - [ ] Battalions placed in the ground war (along their segment, depth by kind) and sent in the ground picture with seed, strength and killed vehicles

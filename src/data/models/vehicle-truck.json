@@ -1,0 +1,64 @@
+{
+  "name": "Military truck",
+  "class": "truck",
+  "scheme": "alliance-woodland",
+  "ground": true,
+  "groups": {
+    "body": "camo",
+    "canvas": "camo",
+    "tire": "#2A2A2A",
+    "chassis": "#3A3833"
+  },
+  "parts": [
+    {
+      "type": "box",
+      "group": "chassis",
+      "center": [-0.15, 0.95, 0],
+      "size": [6.6, 0.3, 2.0]
+    },
+    {
+      "type": "box",
+      "group": "body",
+      "center": [2.55, 1.75, 0],
+      "size": [1.8, 1.5, 2.4],
+      "bevel": 0.25
+    },
+    {
+      "type": "box",
+      "group": "canopy",
+      "center": [3.46, 2.05, 0],
+      "size": [0.04, 0.5, 2.0]
+    },
+    {
+      "type": "box",
+      "group": "canvas",
+      "center": [-0.95, 2.0, 0],
+      "size": [4.6, 1.8, 2.45],
+      "bevel": 0.4
+    },
+    {
+      "type": "cylinder",
+      "group": "tire",
+      "from": [2.6, 0.55, -1.2],
+      "to": [2.6, 0.55, 1.2],
+      "radius": 0.55,
+      "sides": 6
+    },
+    {
+      "type": "cylinder",
+      "group": "tire",
+      "from": [-0.4, 0.55, -1.2],
+      "to": [-0.4, 0.55, 1.2],
+      "radius": 0.55,
+      "sides": 6
+    },
+    {
+      "type": "cylinder",
+      "group": "tire",
+      "from": [-1.9, 0.55, -1.2],
+      "to": [-1.9, 0.55, 1.2],
+      "radius": 0.55,
+      "sides": 6
+    }
+  ]
+}

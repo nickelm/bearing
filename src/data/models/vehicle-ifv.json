@@ -1,0 +1,97 @@
+{
+  "name": "Infantry fighting vehicle",
+  "class": "tank",
+  "scheme": "alliance-woodland",
+  "ground": true,
+  "groups": {
+    "hull": "camo",
+    "track": "#2E2C29",
+    "gun": "#3A3833",
+    "launcher": "camo",
+    "door": "#3A3833",
+    "wheel": "#3F3C37"
+  },
+  "parts": [
+    {
+      "type": "box",
+      "group": "track",
+      "center": [0, 0.45, 1.35],
+      "size": [6.4, 0.9, 0.6],
+      "bevel": 0.25,
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "wheel",
+      "from": [-2.9, 0.45, 1.05],
+      "to": [-2.9, 0.45, 1.82],
+      "radius": 0.45,
+      "sides": 6,
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "wheel",
+      "from": [2.9, 0.45, 1.05],
+      "to": [2.9, 0.45, 1.82],
+      "radius": 0.45,
+      "sides": 6,
+      "mirror": true
+    },
+    {
+      "type": "loft",
+      "group": "hull",
+      "sides": 4,
+      "stations": [
+        {
+          "x": -3.3,
+          "y": 1.5,
+          "w": 1.55,
+          "h": 0.72,
+          "square": 1
+        },
+        {
+          "x": 1.6,
+          "y": 1.5,
+          "w": 1.55,
+          "h": 0.72,
+          "square": 1
+        },
+        {
+          "x": 3.3,
+          "y": 1.05,
+          "w": 1.45,
+          "h": 0.28,
+          "square": 1
+        }
+      ]
+    },
+    {
+      "type": "box",
+      "group": "hull",
+      "center": [0.1, 2.5, 0.35],
+      "size": [1.9, 0.56, 1.7],
+      "bevel": 0.2
+    },
+    {
+      "type": "cylinder",
+      "group": "gun",
+      "from": [1.0, 2.5, 0.35],
+      "to": [3.9, 2.55, 0.35],
+      "radius": 0.08,
+      "sides": 6
+    },
+    {
+      "type": "box",
+      "group": "launcher",
+      "center": [-0.1, 2.62, 1.38],
+      "size": [1.4, 0.36, 0.32]
+    },
+    {
+      "type": "box",
+      "group": "door",
+      "center": [-3.33, 1.4, 0],
+      "size": [0.08, 1.0, 1.1]
+    }
+  ]
+}
