@@ -4994,6 +4994,19 @@ The first run missed by 4.0 m at 610 m and 9.6 m at 900 m, growing with the squa
 
 **Reason:** the owner's notes on the second review.
 
+### 313. R2.6 closed; CAP stations stay at 90 minutes
+
+**Date:** 2026-11-23
+**Decision:**
+
+- **R2.6 is done.** The owner shot down an AI aircraft on CAP with an F-21 and hit a bridge with bombs on interdiction, on the GPU on seed 4, and both reached the campaign's state (the exit criterion). Acceptance check 8 passes: the scripted half in a 6-g turn (decision 309) and the owner's look at the pipper. Checks 12–13 pass in `tools/displays.screens.mjs`: every master mode, both skins, 1366 × 768 and 1920 × 1080 and the color-vision views, every shot within the clutter limits. The milestone's work is in decisions 285–289, 294, 295, 297, 298, 300, 301 and 303–312.
+- **CAP stations stay at 90 minutes.** The owner asked why a CAP landed with half its fuel (decision 311's review). Holding a station to joker instead, three hours at most, changed the war on seed 4 over a day: the Alliance flew 19 CAP sorties instead of 33 and 23 interdictions instead of 19, its successful missions fell from 43 to 27, each side left 8 CAP requests unfilled because far stations could not hold 20 minutes with a fight's fuel in hand, and one front segment moved 15 km. The owner chose the 90-minute station: landing with fuel in hand is fine. The experiment was reverted; joker and bingo (decision 307) still drive the status strip.
+- **Open, in `TODO.md`:** the follow-ups the reviews found (formation in the interdiction's egress turn, the route's climb against military power, the elevation modes in a followed flight, bombs on any bridge or site near the impact, gun hits, pylons drawn under the stores), and the owner's later items (carrier cyclic operations, ATC and the pattern, tactical airlift).
+
+**How it was checked.** The owner's run on the GPU; `tests/pipperTurn.test.ts`; the displays tool. The unit suite and the type check pass.
+
+**Reason:** the owner's sign-off of R2.6 on 2026-11-23.
+
 ### 320. Stylized effects: toon-shaded sphere-impostor puffs, dithered, with depth
 
 **Date:** 2026-11-22

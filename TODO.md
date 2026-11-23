@@ -258,7 +258,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] Gun with a lead-computing pipper (the bundle's `gun`, `sim/flight/gun.ts`, the trigger on Enter and the left button, tracers, GUN on the stores format; decision 295)
 - [ ] Gun hits (the next task: rounds against aircraft and the ground), muzzle flash and the gun's sound
 - [x] Acceptance check 8's pipper half in a scripted hard turn: `tests/pipperTurn.test.ts`, the lead with the speed a hard turn bleeds (decision 309)
-- [ ] Check 8: the owner's look at the pipper on a target in a hard turn on the GPU
+- [x] Check 8: the owner's look at the pipper on a target in a hard turn on the GPU (signed off 2026-11-23 with R2.6; decision 313)
 - [ ] The lead with the turn's rising rate as the speed bleeds (7.5 m at 900 m today), if the owner finds long shots off
 - [ ] The AI's gun (R3: targets from the sensors' picture)
 - [ ] `tests/gpu/mapSoak.test.ts` fails on main under lavapipe (geometries 274 against a 234 peak while panning at the floor), with or without decision 295: look at the strategic map's relief tile caches after the cities' commits
@@ -290,20 +290,20 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [x] LOW FUEL in the status strip (with a mission's joker and bingo from its route, drop tanks counted; decision 307)
 - [ ] Fuel calls in the messages (JOKER, BINGO; the crewmate's in R4) and the AI turning home at bingo at full fidelity (R3)
 - [x] The player's own flight on the HUD (markers on the other aircraft) and on the moving map and radar by intraflight datalink (decision 258; rings with numbers, the map's numbers all or none; decision 308)
-- [ ] Acceptance check 8 with the pipper: scripted half done (`tests/pipperTurn.test.ts`, decision 309); the owner's look on the GPU remains
+- [x] Acceptance check 8 with the pipper: the scripted half (`tests/pipperTurn.test.ts`, decision 309) and the owner's look on the GPU (decision 313)
 - [x] Owner's review of R2.6 (2026-11-22; decision 310): the AI at military power outside combat; bombs and missiles drawn once; the target kept as steerpoint and steered to with its distance; the steerpoint by hand (STPT, [ and ]); a new phase's formats over old edits; 1× at each new phase; CAS and GS named in the bar; the map's DEP own ship; the gold canopy
 - [ ] Wingmen in spread on the outside of the turn home fall up to 7 km behind their slots and rejoin at the afterburner's second stage: combat spread's tactical turns (R3.4)
 - [ ] The route's climb (50 m/s for the F-21) is more than military power sustains near the top with a load: the lead falls up to 3.5 km behind; plan the climb from the type's military-power climb (with calibration, rule 18)
 - [ ] The elevation modes in a followed or taken-over flight (the follow samples no terrain yet; Free Flight does)
 - [x] Owner's second review (2026-11-23; decision 311): the lead at 90% of military power with no afterburner outside combat, wingmen rejoining at the second stage beyond 1.5 km, the strike's egress run as combat; each crash in a take-over reported once (the fourth aircraft was dropped); steering on the HUD whenever airborne; refused presses flash red; the selected flight's panel beside mission search
-- [ ] CAP held to joker instead of 90 minutes (owner's question): a station until bingo plus a fight's fuel, three hours at most. Measured on seed 4 over a day: Alliance CAP sorties 33 → 19, interdiction 19 → 23, the Alliance's successful missions 43 → 27, CAP unfilled by route 8 a side (far stations cannot hold 20 minutes with a fight in hand), one front segment 15 km. Waiting on the owner's call; relief before joker with it
+- [x] CAP held to joker instead of 90 minutes: declined by the owner (2026-11-23, decision 313); stations stay at 90 minutes, and a CAP that lands with fuel in hand is fine. The experiment: a station until bingo plus a fight's fuel, three hours at most. Measured on seed 4 over a day: Alliance CAP sorties 33 → 19, interdiction 19 → 23, the Alliance's successful missions 43 → 27, CAP unfilled by route 8 a side (far stations cannot hold 20 minutes with a fight in hand), one front segment 15 km. Reverted
 - [ ] The interdiction's turn off the target at 9 km (60° bank, 2 g) is more than a loaded F-21 sustains: the lead falls behind and the spread wingmen 8–17 km; plan the egress turn by altitude (as the rejoin's 45°), and R3.4's tactical turns
 - [ ] Carrier departures as cyclic operations: each aircraft from one of four catapults at its own time, the flight joining up overhead (owner, later)
 - [ ] ATC and the pattern (owner, later; R4.5 Crews and radio): ground, departure, tower and approach, the reverse when landing, for a player who wants the administrative part
 - [x] Owner's notes (2026-11-23; decision 312): no NaN for a flight whose rebuilt route has no time on target; the F-21's retracted gear hidden; a bomb or rocket that misses says how far from the target
 - [ ] Bombs on any bridge or site near the impact, not the flight's own target alone (the owner bombed a bridge with no effect; with R2.8's vehicles and towns' sites)
 - [ ] Tactical airlift (owner, 2026-11-23): low-level runs into forward fields near the front, terrain masking through valleys and canyons, a short-field landing; with the C-150 flyable (R2.7 if time allows, else R4)
-- [ ] Owner: a CAP kill and a bridge hit, both visible in the campaign state
+- [x] Owner, on the GPU (signed off 2026-11-23; decision 313): a CAP kill and a bridge hit, both visible in the campaign state; R2.6 closed
 
 ### R2.7 The demo roster
 

@@ -15,7 +15,7 @@ _Adopted 2026-11-18 with Proposal 0008 (`docs/proposals/0008-game-loop-and-campa
 | ----------------------- | ---------------------------------------------------------------------------- | ---------- | ----------------- |
 | R0. Audit and reconcile | Know what exists; documents match the code                                   | —          | done (this audit) |
 | R1. Consolidation       | What the demo needs from earlier tracks, and nothing more                    | R1.1–R1.8  | done              |
-| R2. One day of war      | The thin, complete loop: the tech demo                                       | R2.1–R2.12 | R2.1–R2.3 done, R2.4 built |
+| R2. One day of war      | The thin, complete loop: the tech demo                                       | R2.1–R2.12 | R2.1–R2.4 and R2.6 done, R2.5 done in code |
 | R3. Combat depth        | Sensors, weapons, air combat, air defense, ground entities, infantry         | R3.1–R3.8  |                   |
 | R4. Breadth             | Roster, mission catalog, helicopters, transport, crews, naval war, gunship   | R4.1–R4.10 |                   |
 | R5. Dynamic campaign    | Logistics, morale, weeks of war, saves, consequences                         | R5.1–R5.6  |                   |
@@ -216,6 +216,8 @@ _Depends on R1.5, R1.7, R2.5._
 - Acceptance check 8 with the pipper.
 
 **Exit:** the player shoots down an AI aircraft on CAP and hits a bridge with bombs on interdiction, and both reach the campaign's state.
+
+**State (2026-11-23):** done (decisions 285–289, 294, 295, 297, 298, 300, 301, 303–313): the owner shot down an AI aircraft on CAP and hit a bridge with bombs on interdiction on the GPU, and both reached the campaign's state; check 8 passes (the scripted pipper test and the owner's look), and checks 12–13 pass in the displays tool (every shot within the clutter limits, both skins, both sizes, the color-vision views). CAP stations stay at 90 minutes (decision 313). Follow-ups are in `TODO.md`.
 
 ### R2.7 The Demo Roster — large
 
