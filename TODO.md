@@ -327,8 +327,9 @@ Started 2026-11-23, in parallel with R2.8 in a second session (decisions 314–3
 - [x] Silhouette check (Part I check 6) for every new model: `tools/models.preview.ts`, compared on contact sheets by class (decision 316)
 - [x] A-15 (A-10 analogue): model spec, flight data, laws, pylons and the GAU-8 analogue; Free Flight's `aircraft=a15` (decision 317)
 - [ ] The A-15's Mavericks and cluster bombs with the owner's future weapons; the A-10's eleven stations (four a wing and three under the fuselage today drawn as four a wing)
-- [ ] C-150 (C-130 analogue): flight data, laws, transport rig (if time allows)
-- [ ] Owner, on the GPU: fly the Vo-31 and the Vo-35 in Free Flight; follow and take over a Pact flight; the new models in the campaign
+- [ ] C-150 (C-130 analogue): flight data, laws, transport rig: AI-flown for the demo; with R4's tactical airlift (the test pilot's circuit flies fighter speeds, and the airlift's landing at a forward field needs the AI's full-fidelity landing)
+- [x] `tools/freeflight.session.mjs` starts the A-15, Vo-31 and Vo-35 from the start screen: their own flight data and names, the brake off and the throttle forward, no afterburner on the Vo-35, the Pact's side for the Vo-31 and Vo-35
+- [ ] Owner, on the GPU: fly the Vo-31, Vo-35 and A-15 in Free Flight; follow and take over a Pact flight and an A-15; the new models in the campaign
 
 ### R2.8 Minimal entity promotion
 

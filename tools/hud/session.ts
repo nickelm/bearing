@@ -522,13 +522,68 @@ async function main(): Promise<void> {
     click(ff.pause.el, 'Change airbase');
     frame();
   }
+  // R2.7's jets (decisions 315, 317): each on the runway with its own flight data, the brake
+  // released and the throttle forward; the Vo-35's lever stops at military power, the Pact's
+  // jets read metric on the HUD and meet the other side's traffic.
+  const jets: Record<string, unknown> = {};
+  result.jets = jets;
+  for (const [choice, bundle] of [
+    ['a15', 'A-15 Buzzard'],
+    ['vo31', 'Vo-31 Strizh'],
+    ['vo35', 'Vo-35 Molot'],
+  ] as const) {
+    aircraft.value = choice;
+    aircraft.dispatchEvent(new Event('change', { bubbles: true }));
+    click(menuEl, 'Fly');
+    for (let i = 0; i < 10; i++) frame();
+    const m = ff.flight.model;
+    check(m !== null && ff.flight.helo === null && ff.state === 'flying', `${choice}: flies`);
+    if (!m) continue;
+    key('KeyP');
+    hold('ShiftLeft', 150);
+    for (let i = 0; i < 120; i++) frame();
+    const inner = ff as unknown as {
+      displayName: string;
+      traffic: { aircraft: { side: string; model: string }[] } | null;
+      side: string;
+    };
+    const enemies = (inner.traffic?.aircraft ?? []).filter((x) => x.side !== inner.side);
+    jets[choice] = {
+      name: inner.displayName,
+      mass: Math.round(m.mass),
+      lever: +ff.input.controls.throttle.toFixed(3),
+      afterburner: m.afterburner,
+      speed: Math.round(m.telemetry.cas),
+      side: inner.side,
+      enemies: enemies.map((x) => x.model),
+      crashed: m.crashed,
+    };
+    check(inner.displayName === bundle, `${choice}: its own name (${inner.displayName})`);
+    check(!m.crashed && m.telemetry.cas > 3, `${choice}: rolls on the throttle without a crash`);
+    if (choice === 'vo35')
+      check(
+        ff.input.controls.throttle <= 0.8 + 1e-9 && m.afterburner === 0,
+        'vo35: no afterburner',
+      );
+    if (choice !== 'a15') {
+      check(inner.side === 'pact', `${choice}: flies for the Pact`);
+      check(
+        !inner.traffic || enemies.every((x) => !x.model.startsWith('pact')),
+        `${choice}: its traffic's enemies are the Alliance's`,
+      );
+    }
+    check(location.search.includes(`aircraft=${choice}`), `${choice}: in the URL`);
+    key('Escape');
+    click(ff.pause.el, 'Change airbase');
+    frame();
+  }
   aircraft.value = 'kestrel';
   aircraft.dispatchEvent(new Event('change', { bubbles: true }));
   click(menuEl, 'Fly');
   for (let i = 0; i < 20; i++) frame();
   check(
     ff.flight.model !== null && ff.flight.helo === null && ff.state === 'flying',
-    'the Kestrel after the helicopters',
+    'the Kestrel after the helicopters and the other jets',
   );
   await press('shot:session-kestrel');
   // The displays and the strip (decision 199): shown in flight, a strip item works the
