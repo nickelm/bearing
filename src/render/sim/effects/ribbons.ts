@@ -13,7 +13,7 @@
  * wingtip) and whether it forms now; the path is recorded every few meters. The strip is
  * built on the CPU each frame, camera-relative (rule 4): there are at most `MAX_POINTS`.
  *
- * - **Shape** (decision 331). A contrail condenses some way behind the engine: it shows
+ * - **Shape** (decision 332). A contrail condenses some way behind the engine: it shows
  *   from `form` seconds of age, never at the nozzle. Its width varies point to point, so the
  *   trail is lumpy, and it never spans more than about 1.4° from the camera, and dissolves
  *   within `near` of the lens: a chase camera sitting on the trail never sees it as a wall.
