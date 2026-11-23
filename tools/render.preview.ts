@@ -524,9 +524,9 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     localTime: 10,
     target: 'meadow',
     sunHeading: 120 * DEG,
-    observerBack: 380,
-    eyeHeight: 45,
-    pitch: -9 * DEG,
+    observerBack: 160,
+    eyeHeight: 18,
+    pitch: -6 * DEG,
     detail: true,
   },
   {
