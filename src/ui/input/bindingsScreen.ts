@@ -95,6 +95,8 @@ export class BindingsScreen {
   constructor() {
     Object.assign(this.el.style, {
       zIndex: '40',
+      // Opaque enough to read over the pause menu it opens from.
+      background: 'rgb(14 16 18 / 0.95)',
       maxHeight: 'calc(100vh - 32px)',
       overflowY: 'auto',
       width: 'min(56rem, calc(100vw - 32px))',
@@ -180,7 +182,7 @@ export class BindingsScreen {
 
   render(): void {
     this.monitor.length = 0;
-    const tabs = h('div', { className: 'ff-buttons' });
+    const tabs = h('div', { className: 'ff-buttons pad-row' });
     const tab = (label: string, on: boolean, fn: () => void) => {
       const b = h('button', { textContent: label, className: on ? 'ff-primary' : '' });
       b.addEventListener('click', fn);
@@ -190,7 +192,7 @@ export class BindingsScreen {
       tab('Keyboard and mouse', this.device === 'keyboard', () => this.set('keyboard', this.cls)),
       tab('Gamepad', this.device === 'gamepad', () => this.set('gamepad', this.cls)),
       tab('Joystick', this.device === 'joystick', () => this.set('joystick', this.cls)),
-      h('span', { textContent: ' · ' }),
+      h('span', { textContent: '·' }),
       tab('Jets', this.cls === 'fixed', () => this.set(this.device, 'fixed')),
       tab('Helicopters', this.cls === 'rotary', () => this.set(this.device, 'rotary')),
     );
@@ -414,9 +416,14 @@ export class BindingsScreen {
         h(
           'tr',
           {},
-          h('td', { textContent: AXIS_LABELS[id] }),
+          h(
+            'td',
+            { title: 'Live: the raw axis (top) and the tuned value (bottom)' },
+            AXIS_LABELS[id],
+            meter(raw),
+            meter(tuned),
+          ),
           h('td', {}, ...cells),
-          h('td', { title: 'Raw (top) and tuned (bottom)' }, meter(raw), meter(tuned)),
         ),
       );
     }
@@ -631,7 +638,7 @@ export class BindingsScreen {
       h('h2', { textContent: 'Profiles' }),
       h(
         'div',
-        { className: 'ff-buttons' },
+        { className: 'ff-buttons pad-row' },
         b(
           `Reset ${this.device === 'keyboard' ? 'the keys' : `this ${this.device}`} to defaults`,
           () => {

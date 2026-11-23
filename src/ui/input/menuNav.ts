@@ -115,7 +115,11 @@ class MenuNav {
     document.addEventListener('pointermove', () => this.ring(null), { passive: true });
     this.style = document.createElement('style');
     this.style.textContent = `.pad-focus { outline: 2px solid #ffb347 !important; outline-offset: 1px; }
-tr.pad-focus { outline-offset: -2px; }`;
+tr.pad-focus { outline-offset: -2px; }
+.ff-card .ff-buttons.pad-row { flex-direction: row; flex-wrap: wrap; align-items: center; }
+.pad-bindings table { width: 100%; border-collapse: collapse; }
+.pad-bindings td { padding: 3px 6px 3px 0; vertical-align: top; }
+.pad-bindings tr + tr td { border-top: 1px solid rgb(255 255 255 / 0.08); }`;
     document.head.append(this.style);
   }
 
