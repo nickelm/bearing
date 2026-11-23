@@ -676,6 +676,8 @@ async function followPart() {
         displays: document.querySelectorAll('.mfd, .display, [class*="slot"]').length,
         title: document.querySelector('.follow-title')?.textContent ?? '',
         rate: b.sim.rate,
+        // Promoted battalions, vehicles and wrecks near the camera (R2.8).
+        units: b.groundUnits ? { ...b.groundUnits.stats } : null,
       };
     });
   const leave = async (id) => {
@@ -732,7 +734,7 @@ async function followPart() {
     await frames(Math.round(60 / Math.max(1, slow / 4)));
     const s = await followState();
     log(
-      `follow ${type}: ${s.title}; camera ${s.height} m up, ${s.distance} m back, ${s.offAxisDeg}° off axis`,
+      `follow ${type}: ${s.title}; camera ${s.height} m up, ${s.distance} m back, ${s.offAxisDeg}° off axis; ground units ${JSON.stringify(s.units)}`,
     );
     check(
       s.active && s.view === 'simulation' && s.camera === 'chase',

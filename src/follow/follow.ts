@@ -62,6 +62,8 @@ import { Wrecks } from '../render/sim/aircraft/wrecks';
 import { isPending } from '../sim/command/missions/plugin';
 import type { PhaseInterface } from '../sim/command/missions/plugin';
 import { campaignDatalink, campaignTargets } from './campaignSensors';
+import type { GroundUnits } from './groundUnits';
+import type { VehicleType } from '../sim/ground/promotion';
 import type { DefendedSite } from './campaignSensors';
 import { acmAcquire, SensorModel } from '../sim/sensors/sensors';
 import type { SensorEnv } from '../sim/sensors/sensors';
@@ -134,6 +136,8 @@ export interface TargetInfo {
   kind: (site: number) => string | null;
   /** The war's defended places, whose surface-to-air radars the sensors hear (decision 303). */
   defended: DefendedSite[];
+  /** Every target site and its point (unit direction): bombs hurt any site they land by (R2.8). */
+  sites?: readonly { id: number; point: Readonly<[number, number, number]> }[];
 }
 
 export interface FollowDeps {
@@ -156,7 +160,19 @@ export interface FollowDeps {
   post: (input: CampaignInputEvent) => void;
   /** Sounds a threat warning tone (decision 223); none: silent. */
   tone?(kind: ThreatTone): void;
+  /** The promoted vehicles near the player (R2.8): the rack's targets beside the flight's own. */
+  groundUnits?: () => GroundUnits | null;
 }
+
+/** Target sites within this distance of the flown aircraft can be hit (m; R2.8). */
+export const SITE_RANGE = 12_000;
+/** What the HUD calls a destroyed vehicle (R2.8). */
+const VEHICLE_NAMES: Record<VehicleType, string> = {
+  tank: 'Tank',
+  ifv: 'IFV',
+  shorad: 'SAM vehicle',
+  truck: 'Truck',
+};
 
 /** How long the worker has to hold a taken-over flight before the take-over counts as refused (ms). */
 export const HOLD_WAIT = 3000;
@@ -877,6 +893,35 @@ export class Follow {
   }
 
   /**
+   * The campaign's other target sites within SITE_RANGE of the aircraft (R2.8): a bomb or
+   * rocket hurts any site it lands by, not the flight's own alone (the owner bombed a
+   * bridge that was not the flight's target, with no effect). Bridges at their aim points.
+   */
+  private sitesNear(m: Mission, at: Readonly<Vec3d>): GroundTarget[] {
+    const info = this.targetInfo;
+    if (!info?.sites || !this.airfield) return [];
+    const own = m.target.kind === 'site' ? m.target.id : -1;
+    const R = this.deps.radius;
+    const here = at.clone().normalize();
+    const cos = Math.cos(SITE_RANGE / R);
+    const out: GroundTarget[] = [];
+    for (const s of info.sites) {
+      if (s.id === own) continue;
+      const p = s.point;
+      if (p[0] * here.x + p[1] * here.y + p[2] * here.z < cos) continue;
+      const a = info.aim(s.id) ?? p;
+      const dir = new Vec3d(a[0], a[1], a[2]).normalize();
+      const kind = info.kind(s.id) ?? 'default';
+      out.push({
+        id: `site:${s.id}`,
+        pos: dir.scale(R + this.airfield.height(dir)),
+        kind: GROUND_TARGETS[kind] ?? GROUND_TARGETS.default!,
+      });
+    }
+    return out;
+  }
+
+  /**
    * The player's bomb or rocket beyond reach of the flight's target (decision 312): how far
    * from it, so a bomb on the wrong bridge or a long release is plain; a hit says so itself.
    */
@@ -904,6 +949,12 @@ export class Follow {
     const d = h.at.clone().normalize();
     const point: Dir = [d.x, d.y, d.z];
     if (!h.air) {
+      // A promoted vehicle (R2.8): its damage adds up; destroyed, it goes to the worker.
+      if (h.target.startsWith('vehicle:')) {
+        const t = this.deps.groundUnits?.()?.hit(h, by);
+        if (t) this.hud.message(`${VEHICLE_NAMES[t]} destroyed`, 3);
+        return;
+      }
       const [kind, id] = h.target.split(':');
       if (kind !== 'site' && kind !== 'road') return;
       this.deps.post({ kind: 'target-hit', target: kind, id: Number(id), amount: h.amount, by });
@@ -1186,7 +1237,11 @@ export class Follow {
     const ft = this.full?.flight.time ?? t;
     if (rack) {
       rack.sources = this.heatSources(m.side, ft);
-      rack.groundTargets = this.groundTargets(m);
+      rack.groundTargets = [
+        ...this.groundTargets(m),
+        ...this.sitesNear(m, model.pos),
+        ...(this.deps.groundUnits?.()?.targets(model.pos) ?? []),
+      ];
       rack.updateSeeker(
         model,
         av,

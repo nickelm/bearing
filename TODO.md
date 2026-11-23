@@ -332,10 +332,13 @@ Started 2026-11-23, in parallel with R2.8 in a second session (decisions 314–3
 - [x] Promotion, pure: a battalion's promoted vehicles from its seed, strength and killed list, laid out round an anchor (company clusters facing the enemy); deterministic; tests
 - [x] Battalions placed in the ground war (along their segment, depth by kind) and sent in the ground picture with seed, strength and killed vehicles
 - [x] The `vehicle-destroyed` input: the worker marks the vehicle killed, lowers the battalion's strength by 1/N and keeps its wreck's point; saved state and hash; tests
-- [ ] Main thread (`follow/groundUnits.ts`): battalions within the bubble of the camera promoted, anchors held while promoted, vehicles on the drawn ground, trucks on aligned roads; instanced draw; wrecks in a burnt scheme with a burning column; the bubble off above 16× and above 20 km
-- [ ] Vehicles as targets: bombs' and rockets' splash and gun rounds (hardness and size by type); damage adds up per vehicle; destroyed at 1: explosion, wreck, the input, a HUD message
-- [ ] Bombs and rockets on any target site near the impact, not the flight's own alone (the R2.6 follow-up)
-- [ ] Test: CAS destroys promoted vehicles and the battalion's strength drops by the same count (`tests/promotion.test.ts`)
+- [x] Main thread (`follow/groundUnits.ts`): battalions within the bubble of the camera promoted, anchors held while promoted, vehicles on the drawn ground, trucks on aligned roads; instanced draw; wrecks in a burnt scheme with a burning column; the bubble off above 16× and above 20 km
+- [x] Vehicles as targets: bombs' and rockets' splash and gun rounds (hardness and size by type); damage adds up per vehicle; destroyed at 1: explosion, wreck, the input, a HUD message
+- [x] Bombs and rockets on any target site near the impact, not the flight's own alone (the R2.6 follow-up)
+- [x] Test: CAS destroys promoted vehicles and the battalion's strength drops by the same count (`tests/promotion.test.ts`)
+- [ ] Ink outlines and contact shadows for the vehicles (instanced without either today, as campaign traffic)
+- [ ] Rounds that reach the ground: impacts and dust where they land (they pass through it today)
+- [ ] Damaged vehicles (smoke, R3) and damage kept past demotion; vehicles that move, scatter and return fire (R3.6)
 - [ ] Docs: decisions 333 on, design §Entities, visual-style Part I vehicles, roadmap state, CLAUDE.md's directory map
 - [ ] Owner on the GPU: vehicles in a followed CAS flight on seed 4, a take-over that destroys some, the battalion's strength after
 - [ ] Reduced infantry (if time allows; decision 331): a few squads per battalion near the player with the blocky figures, as targets, the dead turning gray and vanishing in a toon puff

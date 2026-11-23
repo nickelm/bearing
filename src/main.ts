@@ -117,6 +117,7 @@ import { MissionSearchPanel } from './ui/missionSearch/panel';
 import { Follow } from './follow/follow';
 import { normalize } from './core/greatCircle';
 import { CampaignTraffic } from './follow/campaignTraffic';
+import { GroundUnits } from './follow/groundUnits';
 import { carrierTrack } from './sim/naval/carrierGroup';
 import { SidePanel } from './ui/sidePanel';
 import { routeState } from './sim/air/route';
@@ -169,6 +170,8 @@ export interface BearingHandle {
   readonly followMission: (id: number) => boolean;
   /** The campaign's other aircraft near the camera (R2.4). */
   readonly traffic: CampaignTraffic | null;
+  /** Promoted vehicles near the camera and their wrecks (R2.8): `stats` counts them. */
+  readonly groundUnits: GroundUnits | null;
   /** The view on screen. */
   readonly view: () => 'simulation' | 'strategic';
 }
@@ -368,14 +371,25 @@ async function main(): Promise<void> {
   };
   sim.onWeather = showWeather;
   sim.onMissions = () => strategicView.setMissions(sim.missions);
-  sim.onGround = () => strategicView.setGround(sim.ground);
+  sim.onGround = () => {
+    strategicView.setGround(sim.ground);
+    groundUnits?.setPicture(sim.ground);
+  };
   // Damaged and destroyed targets on the map (decision 301); in the simulation view they
   // burn: towns' targets through their plans, the rest as the effects' columns (decision 329).
   let damageSites: readonly TargetSite[] = [];
+  /** Promoted vehicles and their wrecks near the player (R2.8), set once the scene exists. */
+  let groundUnits: GroundUnits | null = null;
+  let columnsShown = 0;
+  const showColumns = () =>
+    globe.effects.setColumns([
+      ...fireColumns(damageSites, sim.damage.sites, globe.lighting.radius),
+      ...(groundUnits?.columns(gameTime, null) ?? []),
+    ]);
   const showDamage = () => {
     strategicView.setDamage(sim.damage.sites);
     for (const [id, d] of sim.damage.sites) globe.cities.setSiteDamage(id, d);
-    globe.effects.setColumns(fireColumns(damageSites, sim.damage.sites, globe.lighting.radius));
+    showColumns();
   };
   sim.onDamage = showDamage;
 
@@ -536,15 +550,26 @@ async function main(): Promise<void> {
         post: (input) => sim.input(input),
         weather: () => sim.weather,
         tone: (kind) => audio.cue(kind),
+        groundUnits: () => groundUnits,
       });
   // The campaign's aircraft near the camera (R2.4); the followed flight is Follow's to draw.
   const traffic = freeFlightMode
     ? null
     : new CampaignTraffic(globe, DEFAULT_PLANET_PARAMS.radius, () => sim.missions);
+  // Battalions near the camera promoted into vehicles, and their wrecks (R2.8, decision 335).
+  groundUnits = freeFlightMode
+    ? null
+    : new GroundUnits(globe, DEFAULT_PLANET_PARAMS.radius, (input) => sim.input(input));
+  if (groundUnits) {
+    groundUnits.onWrecks = showColumns;
+    groundUnits.setPicture(sim.ground);
+  }
   if (follow && traffic) {
+    const units = groundUnits;
     globe.beforeDraw = (eye) => {
       follow.place(eye);
       traffic.place(eye);
+      units?.place(eye);
     };
   }
   /** Follows mission `id` at 1× (the subscription's offer says so); false if it cannot be followed yet. */
@@ -913,6 +938,7 @@ async function main(): Promise<void> {
           (i) => strategic.graph.settlements.population[i]! >= CITY_POPULATION,
         ),
       );
+      groundUnits?.setRoads(alignments);
       globe.bridges.setAlignments(alignments, {
         road: strategic.graph.bridges,
         rail: strategic.graph.railways.bridges,
@@ -937,6 +963,8 @@ async function main(): Promise<void> {
             return [p[b.index * 3]!, p[b.index * 3 + 1]!, p[b.index * 3 + 2]!];
           },
           kind: (id) => targets[id]?.kind ?? null,
+          // Every site, so a bomb or rocket hurts whatever it lands by (R2.8).
+          sites: targets.map((x) => ({ id: x.id, point: x.point })),
           // Defended places carry surface-to-air radars for the sensors (decision 303).
           defended: [
             ...targets
@@ -1634,6 +1662,7 @@ async function main(): Promise<void> {
       follow,
       followMission,
       traffic,
+      groundUnits,
       view: () => activeView,
     };
   }
@@ -1713,6 +1742,15 @@ async function main(): Promise<void> {
     if (traffic) {
       traffic.time = gameTime;
       traffic.exclude = follow?.missionId ?? null;
+    }
+    if (groundUnits) {
+      groundUnits.time = gameTime;
+      groundUnits.rate = sim.rate;
+      // The wrecks' columns fade as they burn down.
+      if (performance.now() - columnsShown > 5000) {
+        columnsShown = performance.now();
+        showColumns();
+      }
     }
     globe.gameTime = gameTime;
     // A standing clock holds the weather's motion, the particles and the sound.
