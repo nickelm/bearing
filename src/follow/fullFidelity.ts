@@ -3,7 +3,7 @@
  * `PromotedFlight`, without three.js or the DOM.
  *
  * - **When.** A followed flight is promoted when its type has fixed-wing flight
- *   data (`flightSpecOfType`: today the F-21 alone) and it is inside its jump-in
+ *   data (`flightSpecOfType`: the F-21, Vo-31 and Vo-35, R2.7) and it is inside its jump-in
  *   window (climb-out to approach), while the clock runs no faster than the flight
  *   cap (8×), since faster the flight model could not keep up (`fullFidelityWanted`).
  *   It is demoted at the approach, when the clock runs faster, and when the follow

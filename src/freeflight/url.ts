@@ -3,7 +3,7 @@
  * returns to the same flight:
  *
  *   ?mode=freeflight&seed=…&base=…&tod=…&weather=<preset>&spawn=runway|air
- *     &fuel=unlimited|limited&wind=off&aircraft=kestrel|scout|utility&control=aim|direct
+ *     &fuel=unlimited|limited&wind=off&aircraft=kestrel|vo31|vo35|scout|utility&control=aim|direct
  *     &invert=aim,stick,helo&autopilot
  *
  * `weather` is a preset of sim/weather/presets.ts (`fair` by default, `live`
@@ -14,6 +14,7 @@
  */
 import { WEATHER_PRESETS } from '../sim/weather/presets';
 import type { WeatherPreset } from '../sim/weather/presets';
+import { AIRCRAFT_CHOICES } from '../ui/flight/freeFlightMenu';
 import type { FreeFlightOptions } from '../ui/flight/freeFlightMenu';
 
 /** What the URL asks for. */
@@ -50,8 +51,8 @@ export function parseFreeFlightUrl(q: URLSearchParams, seed: string): FreeFlight
   const ui = Number(q.get('ui'));
   if (q.has('ui') && Number.isFinite(ui)) options.uiScale = Math.min(1.5, Math.max(0.75, ui));
   const aircraft = q.get('aircraft');
-  if (aircraft === 'kestrel' || aircraft === 'scout' || aircraft === 'utility')
-    options.aircraft = aircraft;
+  const choice = AIRCRAFT_CHOICES.find((c) => c.id === aircraft);
+  if (choice) options.aircraft = choice.id;
   if (q.has('invert')) {
     const kinds = (q.get('invert') ?? '').split(',');
     options.invertAim = kinds.includes('aim') || kinds.includes('jet');

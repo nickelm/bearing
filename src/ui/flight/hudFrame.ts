@@ -6,6 +6,7 @@
  */
 import { DEG } from '../../core/units';
 import { Vec3d } from '../../core/vec3d';
+import { MIL_DETENT } from '../../sim/flight/controlLaws';
 import type { FlightControls } from '../../sim/flight/controlLaws';
 import type { Airframe } from '../../sim/flight/airframe';
 import { approachEnergy, approachSpeed, ON_SPEED_MARGIN } from '../../sim/flight/energy';
@@ -120,8 +121,22 @@ export function landingAid(
   };
 }
 
-/** The angle-of-attack bracket's top, center and bottom (rad): fast, on speed, slow (decision 208). */
+/**
+ * The Kestrel's angle-of-attack bracket's top, center and bottom (rad): fast, on speed, slow
+ * (decision 208). Another type's centers on its own on-speed angle (`approachAlpha`, R2.7).
+ */
 export const BRACKET_ALPHA = { top: 11 * DEG, center: 13 * DEG, bottom: 15 * DEG } as const;
+
+/** Type `spec`'s bracket: the Kestrel's shifted to its on-speed angle of attack. */
+export function bracketAlpha(spec: Pick<FlightModel['spec'], 'controls'>): typeof BRACKET_ALPHA {
+  const d = spec.controls.approachAlpha - BRACKET_ALPHA.center;
+  if (d === 0) return BRACKET_ALPHA;
+  return {
+    top: BRACKET_ALPHA.top + d,
+    center: BRACKET_ALPHA.center + d,
+    bottom: BRACKET_ALPHA.bottom + d,
+  } as typeof BRACKET_ALPHA;
+}
 
 /**
  * The angle-of-attack bracket's world directions (decision 208): where the flight path
@@ -152,10 +167,11 @@ export function aoaBracket(
       .normalize();
     return [d.x, d.y, d.z];
   };
+  const br = bracketAlpha(m.spec);
   return {
-    top: turn(t.alpha - BRACKET_ALPHA.top),
-    center: turn(t.alpha - BRACKET_ALPHA.center),
-    bottom: turn(t.alpha - BRACKET_ALPHA.bottom),
+    top: turn(t.alpha - br.top),
+    center: turn(t.alpha - br.center),
+    bottom: turn(t.alpha - br.bottom),
   };
 }
 
@@ -184,7 +200,8 @@ export function buildHudFrame(
     alpha: tel.alpha,
     beta: tel.beta,
     load: tel.load,
-    throttle: c.throttle,
+    // Without an afterburner the lever's travel past military is no stage of it.
+    throttle: m.spec.engine.thrust.afterburner ? c.throttle : Math.min(c.throttle, MIL_DETENT),
     power: m.power,
     afterburner: m.afterburner,
     fuel: m.fuel,

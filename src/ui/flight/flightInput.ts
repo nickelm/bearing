@@ -148,12 +148,15 @@ export function throttleStep(
   dir: 1 | -1,
   step: number,
   stoppedAt: number | null,
+  max = 1,
 ): { lever: number; stoppedAt: number | null } {
-  for (const d of DETENTS)
+  // An engine without an afterburner: the lever ends at the military detent.
+  const detents = DETENTS.filter((d) => d <= max);
+  for (const d of detents)
     if (stoppedAt === d && Math.abs(lever - d) < 1e-9) return { lever, stoppedAt };
-  let next = clamp(lever + dir * step, 0, 1);
+  let next = clamp(lever + dir * step, 0, max);
   if (next > MIL_DETENT && next < AB_GATE) next = dir > 0 ? AB_GATE : MIL_DETENT;
-  for (const d of dir > 0 ? DETENTS : [...DETENTS].reverse()) {
+  for (const d of dir > 0 ? detents : [...detents].reverse()) {
     const crossing = dir > 0 ? lever < d && next >= d : lever > d && next <= d;
     if (crossing) return { lever: d, stoppedAt: d };
   }
@@ -174,6 +177,8 @@ const DETENTS = [0, MIL_DETENT, AB_GATE];
 
 export class FlightInput {
   readonly controls: FlightControls = neutralControls();
+  /** The lever's end: 1, or the military detent for an engine without an afterburner. */
+  maxLever = 1;
   mode: ControlMode = 'direct';
   /** Mouse wheel notches while looking around (positive: farther); otherwise the wheel is the throttle. */
   zoomSteps = 0;
@@ -371,7 +376,7 @@ export class FlightInput {
   }
 
   private moveThrottle(lever: number, dir: 1 | -1, step: number): number {
-    const r = throttleStep(lever, dir, step, this.stoppedAt);
+    const r = throttleStep(lever, dir, step, this.stoppedAt, this.maxLever);
     this.stoppedAt = r.stoppedAt;
     return r.lever;
   }
@@ -490,7 +495,7 @@ export class FlightInput {
       Math.abs(t) > 0.001 &&
       pad.mapping !== 'standard'
     )
-      this.controls.throttle = clamp((1 - t) / 2, 0, 1);
+      this.controls.throttle = clamp((1 - t) / 2, 0, this.maxLever);
     // Standard gamepads: right trigger (7) brakes.
     const rt = pad.buttons[7];
     if (rt && rt.value > 0.1) {

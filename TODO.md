@@ -314,12 +314,14 @@ Started 2026-11-23, in parallel with R2.8 in a second session (decisions 314–3
 - [x] Vo-31: flight data from public MiG-29 figures (two RD-33s), its gear and contact points from the model, its control laws' parameters; performance against the air-war table (decision 314; the tail raised for 14.6° of clearance)
 - [x] Plausibility per flyable type: `tests/flightModel.test.ts`'s plausibility checks run for every bundle with flight data, with targets per type (takeoff, stall, top speed at sea level, level flight at 300 kt, cruise at military power, climb); `tools/flight.preview.ts` with `TYPE`
 - [x] Engines without an afterburner in the flight model (the Su-25's; decision 314); the Kestrel's lockstep unchanged
-- [ ] The throttle's detent and the HUD's and strip's afterburner readouts for an engine without one
-- [ ] Vo-35 (Su-25 analogue): stores out of the body, ten pylons and loadouts by station, its gun (GSh-30-2), flight data and control laws
-- [ ] Flying them: Free Flight's `aircraft=vo31|vo35` and the start screen's choice; following and taking over Pact flights at full fidelity; the route's climb rate from the type's military-power climb where the table asks for more
-- [ ] The Pact skin in the HUD: km/h, meters and kilometers (the displays have their units already)
-- [ ] Checks 12–13 for an attack aircraft (the Vo-35) in `tools/displays.screens.mjs`
-- [ ] AI-only models: E-5 first (the owner asked for a proper AWACS; the C-150 stands in for it until then), then F-25, KC-40, Vo-37, Ra-44, Ra-60, Ve-28 and the Pact utility helicopter Ve-18 (the Alliance's UH-68 exists)
+- [x] The throttle's detent and the HUD's and strip's afterburner readouts for an engine without one (decision 315)
+- [x] Vo-35 (Su-25 analogue): stores out of the body, ten pylons and loadouts by station, its gun (GSh-30-2), flight data and control laws (decision 315)
+- [x] Flying them: Free Flight's `aircraft=vo31|vo35` and the start screen's choice, its traffic mirrored for a Pact player; following and taking over Pact flights at full fidelity (`tests/pactPromotion.test.ts`; decision 315)
+- [ ] The Vo-31's route climb (the air-war table's 150 m/s) is more than military power sustains: the lead falls 3.4 km behind in the climb; with the F-21's climb item below (calibration, rule 18)
+- [x] The Pact skin in the HUD: km/h, meters, m/s, kilometers and kg; the angle-of-attack bracket and approach speed per type (decision 315)
+- [x] Checks 12–13 for an attack aircraft (the Vo-35) in `tools/displays.screens.mjs` (`AIRCRAFT=vo35`; every shot within the clutter limits, decision 315)
+- [x] AI-only models: E-5 first (the owner asked for a proper AWACS), then F-25, KC-40, Vo-37, Ra-44, Ra-60, Ve-28 and the Pact utility helicopter Ve-18 (the Alliance's UH-68 exists): `tools/models/aircraft.py` writes their geometry and rigs into the bundles
+- [ ] The rest of the demo's orders (a day of war on seeds 4, 10 and 7 flies them): F-28, Ar-23, Ar-45R, A-15, Ra-90, RF-34 (and the F-34G on its geometry), B-40, Vo-33, Ra-78 (on the Ra-60's airframe), Ra-84, and the Vo-37P on the Vo-37's
 - [ ] Silhouette check (Part I check 6) for every new model
 - [ ] A-15 (A-10 analogue): model spec, flight data, laws (if time allows; owner decision 5)
 - [ ] C-150 (C-130 analogue): flight data, laws, transport rig (if time allows)

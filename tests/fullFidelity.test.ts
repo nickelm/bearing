@@ -49,11 +49,11 @@ function fullFlight(get: () => Mission, t: number): FullFidelity {
 }
 
 describe('a followed flight at full fidelity', () => {
-  it('has flight data for the F-21 alone among the fixed-wing types today', () => {
+  it('has flight data for the F-21, the Vo-31 (and its carrier variant) and the Vo-35 (R2.7)', () => {
     const flown = AIRCRAFT_TYPES.filter((t) => flightSpecOfType(t.id, flightData) !== null).map(
       (t) => t.id,
     );
-    expect(flown).toEqual(['f21']);
+    expect(flown.sort()).toEqual(['f21', 'vo31', 'vo31k', 'vo35']);
   });
 
   it('is wanted inside the jump-in window, at the flight cap or slower, never at the approach', () => {

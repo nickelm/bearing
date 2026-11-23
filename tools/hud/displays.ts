@@ -31,7 +31,10 @@ import { Vec3d } from '../../src/core/vec3d';
 export async function drawDisplays(q: URLSearchParams): Promise<void> {
   const mode = (q.get('displays') ?? 'navigation') as MasterMode;
   const helo = q.get('aircraft') === 'utility';
-  const base = AVIONICS_PROFILES[helo ? 'alliance-utility-helo' : 'alliance-fighter']!;
+  // `&aircraft=vo35`: the Pact's attack aircraft, without a radar (checks 12–13, R2.7).
+  const attack = q.get('aircraft') === 'vo35';
+  const bundleId = helo ? 'alliance-utility-helo' : attack ? 'pact-strike' : 'alliance-fighter';
+  const base = AVIONICS_PROFILES[bundleId]!;
   const profile = {
     ...base,
     skin: q.get('skin') === 'pact' ? ('pact' as const) : ('alliance' as const),
@@ -43,7 +46,7 @@ export async function drawDisplays(q: URLSearchParams): Promise<void> {
   const snap: AircraftSnapshot = {
     time: 412,
     kind: helo ? 'helicopter' : 'jet',
-    name: helo ? 'UH-68 Heron' : 'F-21 Kestrel',
+    name: AIRCRAFT_BUNDLES[bundleId]!.name,
     profile,
     avionics: initialAvionics(ground),
     position: { lat: 0.8, lon: 0.3, radius: 1_000_000 },
@@ -146,12 +149,13 @@ export async function drawDisplays(q: URLSearchParams): Promise<void> {
   }
   // The jet's strike load with one bomb gone, and the bombs selected in air-to-ground (decision 289).
   if (!helo) {
-    const b = AIRCRAFT_BUNDLES['alliance-fighter']!;
+    const b = AIRCRAFT_BUNDLES[bundleId]!;
     const loads = stationLoads(
-      b.airWar!.loadouts.find((l) => l.id === 'strike')!.stations!,
+      b.airWar!.loadouts.find((l) => l.id === (attack ? 'cas' : 'strike'))!.stations!,
       b.pylons!,
     );
-    snap.stores = storesSnapshot(loads, loadedStations(loads, { 'bomb-900': 1 }), 1400);
+    const gone: Record<string, number> = attack ? { 'bomb-250-p': 1 } : { 'bomb-900': 1 };
+    snap.stores = storesSnapshot(loads, loadedStations(loads, gone), attack ? 1280 : 1400);
   }
   const sys = new DisplaySystem();
   sys.edits = {};

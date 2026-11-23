@@ -2,6 +2,354 @@
   "name": "E-5 Watchman",
   "class": "bomber",
   "scheme": "alliance-air",
+  "groups": {
+    "body": "camo",
+    "canopy": "canopy",
+    "intake": "intake",
+    "nozzle": "nozzle",
+    "dome": "#9AA1A8",
+    "band": "#3E4348",
+    "gear": "#B8BCBE",
+    "tire": "#2B2C2E"
+  },
+  "parts": [
+    {
+      "type": "loft",
+      "group": "body",
+      "sides": 8,
+      "stations": [
+        {
+          "x": 23.3,
+          "y": 0.1,
+          "w": 0,
+          "h": 0
+        },
+        {
+          "x": 22.400000000000002,
+          "y": 0.05,
+          "w": 0.9,
+          "h": 0.85
+        },
+        {
+          "x": 20.7,
+          "y": 0.1,
+          "w": 1.6,
+          "h": 1.7
+        },
+        {
+          "x": 17.3,
+          "y": 0.15,
+          "w": 1.9,
+          "h": 1.9569999999999999
+        },
+        {
+          "x": -10.3,
+          "y": 0,
+          "w": 1.9,
+          "h": 1.9569999999999999
+        },
+        {
+          "x": -15.8,
+          "y": 0.45,
+          "w": 1.35,
+          "h": 1.35
+        },
+        {
+          "x": -20.3,
+          "y": 0.95,
+          "w": 0.6,
+          "h": 0.6
+        },
+        {
+          "x": -23.3,
+          "y": 1.25,
+          "w": 0.15,
+          "h": 0.15
+        }
+      ]
+    },
+    {
+      "type": "loft",
+      "group": "canopy",
+      "sides": 6,
+      "stations": [
+        {
+          "x": 21.400000000000002,
+          "y": 0.6,
+          "w": 1.15,
+          "h": 0.5,
+          "square": 0.4
+        },
+        {
+          "x": 20.7,
+          "y": 0.95,
+          "w": 1.55,
+          "h": 0.6,
+          "square": 0.4
+        },
+        {
+          "x": 19.900000000000002,
+          "y": 1.05,
+          "w": 1.7,
+          "h": 0.55,
+          "square": 0.4
+        }
+      ]
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [4.5, -1.15, 1.7],
+      "rootChord": 9.6,
+      "tipChord": 2.3,
+      "span": 20.3,
+      "sweep": 35,
+      "thickness": 0.1,
+      "dihedral": 7,
+      "mirror": true
+    },
+    {
+      "type": "box",
+      "group": "body",
+      "center": [0.2999999999999998, -1.25, 0],
+      "size": [8.4, 0.7, 3.6],
+      "bevel": 0.3
+    },
+    {
+      "type": "cylinder",
+      "group": "body",
+      "to": [-1.6911829677953456, -1.9001280028534437, 7.4],
+      "radius": 0.72,
+      "sides": 8,
+      "from": [2.9088170322046545, -2.000128002853444, 7.4],
+      "radius2": 0.5184,
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "intake",
+      "to": [3.0088170322046546, -2.000128002853444, 7.4],
+      "radius": 0.612,
+      "sides": 8,
+      "from": [2.9588170322046548, -2.000128002853444, 7.4],
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "nozzle",
+      "to": [-2.1911829677953456, -1.8501280028534435, 7.4],
+      "radius": 0.504,
+      "sides": 8,
+      "from": [-1.6911829677953456, -1.9001280028534437, 7.4],
+      "radius2": 0.396,
+      "mirror": true
+    },
+    {
+      "type": "box",
+      "group": "body",
+      "center": [-0.0911829677953454, -1.2001280028534436, 7.4],
+      "size": [3.0, 1.1, 0.25],
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "body",
+      "to": [-6.522614981442344, -1.0529145326234017, 14.3],
+      "radius": 0.72,
+      "sides": 8,
+      "from": [-1.922614981442344, -1.1529145326234018, 14.3],
+      "radius2": 0.5184,
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "intake",
+      "to": [-1.822614981442344, -1.1529145326234018, 14.3],
+      "radius": 0.612,
+      "sides": 8,
+      "from": [-1.8726149814423438, -1.1529145326234018, 14.3],
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "nozzle",
+      "to": [-7.022614981442344, -1.0029145326234017, 14.3],
+      "radius": 0.504,
+      "sides": 8,
+      "from": [-6.522614981442344, -1.0529145326234017, 14.3],
+      "radius2": 0.396,
+      "mirror": true
+    },
+    {
+      "type": "box",
+      "group": "body",
+      "center": [-4.922614981442344, -0.3529145326234018, 14.3],
+      "size": [3.0, 1.1, 0.25],
+      "mirror": true
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [-14.700000000000001, 1.5, 0],
+      "rootChord": 8.4,
+      "tipChord": 2.8,
+      "span": 7.6,
+      "sweep": 35,
+      "thickness": 0.09,
+      "vertical": true
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [-17.3, 0.8, 0.6],
+      "rootChord": 5.0,
+      "tipChord": 1.6,
+      "span": 6.6,
+      "sweep": 35,
+      "thickness": 0.08,
+      "dihedral": 7,
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "gear",
+      "to": [17.8, -3.1, 0],
+      "radius": 0.12,
+      "sides": 6,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [17.8, -1.6, -0.4],
+          [17.8, -1.6, 0.4]
+        ],
+        "angle": -100
+      },
+      "from": [17.8, -1.6, 0]
+    },
+    {
+      "type": "cylinder",
+      "group": "tire",
+      "to": [17.8, -3.1, 0.25],
+      "radius": 0.5,
+      "sides": 8,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [17.8, -1.6, -0.4],
+          [17.8, -1.6, 0.4]
+        ],
+        "angle": -100
+      },
+      "from": [17.8, -3.1, -0.25]
+    },
+    {
+      "type": "cylinder",
+      "group": "gear",
+      "to": [-1.5, -2.95, 3.1],
+      "radius": 0.12,
+      "sides": 6,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [-1.5, -1.4, 2.7],
+          [-1.5, -1.4, 3.5]
+        ],
+        "angle": 100
+      },
+      "from": [-1.5, -1.4, 3.1],
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "tire",
+      "to": [-1.5, -2.95, 3.45],
+      "radius": 0.65,
+      "sides": 8,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [-1.5, -1.4, 2.7],
+          [-1.5, -1.4, 3.5]
+        ],
+        "angle": 100
+      },
+      "from": [-1.5, -2.95, 2.75],
+      "mirror": true
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [-5.2, 1.8, 0.55],
+      "rootChord": 3.0,
+      "tipChord": 2.2,
+      "span": 3.0,
+      "sweep": 25,
+      "thickness": 0.12,
+      "dihedral": -8,
+      "mirror": true,
+      "vertical": true
+    },
+    {
+      "type": "cylinder",
+      "group": "dome",
+      "to": [-7.6, 5.6, 0],
+      "radius": 4.0,
+      "sides": 8,
+      "from": [-7.6, 4.699999999999999, 0],
+      "radius2": 4.55
+    },
+    {
+      "type": "cylinder",
+      "group": "dome",
+      "to": [-7.6, 6.5, 0],
+      "radius": 4.55,
+      "sides": 8,
+      "from": [-7.6, 5.6, 0],
+      "radius2": 4.0
+    },
+    {
+      "type": "cylinder",
+      "group": "band",
+      "to": [-7.6, 5.6499999999999995, 0],
+      "radius": 4.6,
+      "sides": 8,
+      "from": [-7.6, 5.55, 0],
+      "radius2": 4.6
+    }
+  ],
+  "emissives": [
+    {
+      "kind": "nav-red",
+      "at": [-11.314213025657107, 1.3425265863289635, -21.9]
+    },
+    {
+      "kind": "nav-green",
+      "at": [-11.314213025657107, 1.3425265863289635, 21.9]
+    },
+    {
+      "kind": "nav-white",
+      "at": [-23.1, 1.25, 0]
+    },
+    {
+      "kind": "beacon",
+      "at": [2, 1.95, 0]
+    },
+    {
+      "kind": "beacon",
+      "at": [2, -1.95, 0]
+    }
+  ],
+  "rig": {
+    "kind": "fast-jet",
+    "distance": 80,
+    "height": 16,
+    "groundDistance": 60.0,
+    "groundHeight": 10.4,
+    "rotation": 2.5,
+    "stretch": 1.5,
+    "stretchPerAccel": 0.4,
+    "fovDeg": 50
+  },
   "airWar": {
     "id": "e5",
     "order": 11,

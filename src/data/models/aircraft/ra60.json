@@ -2,6 +2,372 @@
   "name": "Ra-60 Zarya",
   "class": "bomber",
   "scheme": "pact-air",
+  "groups": {
+    "body": "camo",
+    "canopy": "canopy",
+    "intake": "intake",
+    "nozzle": "nozzle",
+    "dome": "#9AA1A8",
+    "band": "#3E4348",
+    "gear": "#B8BCBE",
+    "tire": "#2B2C2E"
+  },
+  "parts": [
+    {
+      "type": "loft",
+      "group": "body",
+      "sides": 8,
+      "stations": [
+        {
+          "x": 23.5,
+          "y": -0.6,
+          "w": 0,
+          "h": 0
+        },
+        {
+          "x": 22.9,
+          "y": -0.65,
+          "w": 0.8,
+          "h": 0.7
+        },
+        {
+          "x": 21.3,
+          "y": -0.35,
+          "w": 1.7,
+          "h": 1.6
+        },
+        {
+          "x": 18.5,
+          "y": 0,
+          "w": 2.2,
+          "h": 2.3,
+          "square": 0.3
+        },
+        {
+          "x": -6.0,
+          "y": 0,
+          "w": 2.25,
+          "h": 2.35,
+          "square": 0.35
+        },
+        {
+          "x": -13.0,
+          "y": 1.0,
+          "w": 1.5,
+          "h": 1.5,
+          "square": 0.3
+        },
+        {
+          "x": -19.5,
+          "y": 1.9,
+          "w": 0.75,
+          "h": 0.75
+        },
+        {
+          "x": -23.5,
+          "y": 2.2,
+          "w": 0.35,
+          "h": 0.4
+        }
+      ]
+    },
+    {
+      "type": "loft",
+      "group": "canopy",
+      "sides": 6,
+      "stations": [
+        {
+          "x": 21.9,
+          "y": 0.7,
+          "w": 1.0,
+          "h": 0.45,
+          "square": 0.4
+        },
+        {
+          "x": 20.9,
+          "y": 1.15,
+          "w": 1.6,
+          "h": 0.55,
+          "square": 0.4
+        },
+        {
+          "x": 20.1,
+          "y": 1.25,
+          "w": 1.75,
+          "h": 0.5,
+          "square": 0.4
+        }
+      ]
+    },
+    {
+      "type": "blob",
+      "group": "canopy",
+      "center": [22.5, -0.9, 0],
+      "radius": [1.0, 0.55, 0.75],
+      "detail": 0
+    },
+    {
+      "type": "box",
+      "group": "body",
+      "center": [1.5, 2.3, 0],
+      "size": [6.4, 0.6, 4.0],
+      "bevel": 0.25
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [5.0, 2.4, 1.9],
+      "rootChord": 7.6,
+      "tipChord": 2.4,
+      "span": 23.0,
+      "sweep": 25,
+      "thickness": 0.1,
+      "dihedral": -3,
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "body",
+      "to": [0.20835400667150683, 0.7036834373697063, 6.6],
+      "radius": 0.85,
+      "sides": 8,
+      "from": [5.208354006671507, 0.6036834373697062, 6.6],
+      "radius2": 0.62,
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "intake",
+      "to": [5.308354006671507, 0.6036834373697062, 6.6],
+      "radius": 0.75,
+      "sides": 8,
+      "from": [5.258354006671507, 0.6036834373697062, 6.6],
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "nozzle",
+      "to": [-0.29164599332849317, 0.7536834373697063, 6.6],
+      "radius": 0.6,
+      "sides": 8,
+      "from": [0.20835400667150683, 0.7036834373697063, 6.6],
+      "radius2": 0.48,
+      "mirror": true
+    },
+    {
+      "type": "box",
+      "group": "body",
+      "center": [2.408354006671507, 1.4536834373697063, 6.6],
+      "size": [3.0, 1.0, 0.25],
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "body",
+      "to": [-2.589491942258485, 0.38923676167145893, 12.6],
+      "radius": 0.85,
+      "sides": 8,
+      "from": [2.410508057741515, 0.28923676167145884, 12.6],
+      "radius2": 0.62,
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "intake",
+      "to": [2.5105080577415153, 0.28923676167145884, 12.6],
+      "radius": 0.75,
+      "sides": 8,
+      "from": [2.4605080577415155, 0.28923676167145884, 12.6],
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "nozzle",
+      "to": [-3.089491942258485, 0.439236761671459, 12.6],
+      "radius": 0.6,
+      "sides": 8,
+      "from": [-2.589491942258485, 0.38923676167145893, 12.6],
+      "radius2": 0.48,
+      "mirror": true
+    },
+    {
+      "type": "box",
+      "group": "body",
+      "center": [-0.3894919422584847, 1.139236761671459, 12.6],
+      "size": [3.0, 1.0, 0.25],
+      "mirror": true
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [-14.5, 2.6, 0],
+      "rootChord": 6.4,
+      "tipChord": 4.2,
+      "span": 6.8,
+      "sweep": 38,
+      "thickness": 0.09,
+      "vertical": true
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [-19.6, 9.3, 0.3],
+      "rootChord": 4.6,
+      "tipChord": 2.0,
+      "span": 8.6,
+      "sweep": 30,
+      "thickness": 0.08,
+      "dihedral": -4,
+      "mirror": true
+    },
+    {
+      "type": "box",
+      "group": "body",
+      "center": [-1.0, -1.8, 2.15],
+      "size": [9.0, 1.4, 1.1],
+      "bevel": 0.3,
+      "mirror": true
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [-6.0, 2.3, 0.6],
+      "rootChord": 3.2,
+      "tipChord": 2.4,
+      "span": 2.2,
+      "sweep": 25,
+      "thickness": 0.12,
+      "dihedral": -8,
+      "mirror": true,
+      "vertical": true
+    },
+    {
+      "type": "cylinder",
+      "group": "dome",
+      "to": [-8.2, 5.2, 0],
+      "radius": 4.3,
+      "sides": 8,
+      "from": [-8.2, 4.25, 0],
+      "radius2": 5.25
+    },
+    {
+      "type": "cylinder",
+      "group": "dome",
+      "to": [-8.2, 6.15, 0],
+      "radius": 5.25,
+      "sides": 8,
+      "from": [-8.2, 5.2, 0],
+      "radius2": 4.3
+    },
+    {
+      "type": "cylinder",
+      "group": "band",
+      "to": [-8.2, 5.25, 0],
+      "radius": 5.3,
+      "sides": 8,
+      "from": [-8.2, 5.15, 0],
+      "radius2": 5.3
+    },
+    {
+      "type": "cylinder",
+      "group": "gear",
+      "to": [18.5, -3.3, 0],
+      "radius": 0.12,
+      "sides": 6,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [18.5, -2.0, -0.4],
+          [18.5, -2.0, 0.4]
+        ],
+        "angle": -100
+      },
+      "from": [18.5, -2.0, 0]
+    },
+    {
+      "type": "cylinder",
+      "group": "tire",
+      "to": [18.5, -3.3, 0.25],
+      "radius": 0.55,
+      "sides": 8,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [18.5, -2.0, -0.4],
+          [18.5, -2.0, 0.4]
+        ],
+        "angle": -100
+      },
+      "from": [18.5, -3.3, -0.25]
+    },
+    {
+      "type": "cylinder",
+      "group": "gear",
+      "to": [-1.0, -3.2, 2.15],
+      "radius": 0.12,
+      "sides": 6,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [-1.0, -2.3, 1.75],
+          [-1.0, -2.3, 2.55]
+        ],
+        "angle": 100
+      },
+      "from": [-1.0, -2.3, 2.15],
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "tire",
+      "to": [-1.0, -3.2, 2.4499999999999997],
+      "radius": 0.7,
+      "sides": 8,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [-1.0, -2.3, 1.75],
+          [-1.0, -2.3, 2.55]
+        ],
+        "angle": 100
+      },
+      "from": [-1.0, -3.2, 1.8499999999999999],
+      "mirror": true
+    }
+  ],
+  "emissives": [
+    {
+      "kind": "nav-red",
+      "at": [-6.6, 1.2, -24.8]
+    },
+    {
+      "kind": "nav-green",
+      "at": [-6.6, 1.2, 24.8]
+    },
+    {
+      "kind": "nav-white",
+      "at": [-23.6, 2.2, 0]
+    },
+    {
+      "kind": "beacon",
+      "at": [-2, 2.95, 0]
+    },
+    {
+      "kind": "beacon",
+      "at": [-2, -2.5, 0]
+    }
+  ],
+  "rig": {
+    "kind": "fast-jet",
+    "distance": 84,
+    "height": 18,
+    "groundDistance": 63.0,
+    "groundHeight": 11.7,
+    "rotation": 2.5,
+    "stretch": 1.5,
+    "stretchPerAccel": 0.4,
+    "fovDeg": 50
+  },
   "airWar": {
     "id": "ra60",
     "order": 26,

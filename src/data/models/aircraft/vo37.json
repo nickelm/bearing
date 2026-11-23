@@ -1,7 +1,269 @@
 {
   "name": "Vo-37 Grom",
   "class": "strike",
-  "scheme": "pact-air",
+  "scheme": "pact-tactical",
+  "groups": {
+    "body": "camo",
+    "canopy": "canopy",
+    "intake": "intake",
+    "nozzle": "nozzle",
+    "gear": "#B8BCBE",
+    "tire": "#2B2C2E"
+  },
+  "parts": [
+    {
+      "type": "loft",
+      "group": "body",
+      "sides": 8,
+      "stations": [
+        {
+          "x": 11.2,
+          "y": 0.3,
+          "w": 0,
+          "h": 0
+        },
+        {
+          "x": 10.0,
+          "y": 0.3,
+          "w": 0.55,
+          "h": 0.55
+        },
+        {
+          "x": 8.2,
+          "y": 0.35,
+          "w": 0.9,
+          "h": 0.85
+        },
+        {
+          "x": 6.4,
+          "y": 0.45,
+          "w": 1.15,
+          "h": 0.95,
+          "square": 0.4
+        },
+        {
+          "x": 3.0,
+          "y": 0.35,
+          "w": 1.55,
+          "h": 0.85,
+          "square": 0.7
+        },
+        {
+          "x": -3.0,
+          "y": 0.3,
+          "w": 1.5,
+          "h": 0.8,
+          "square": 0.7
+        },
+        {
+          "x": -7.0,
+          "y": 0.35,
+          "w": 1.2,
+          "h": 0.65,
+          "square": 0.6
+        },
+        {
+          "x": -9.6,
+          "y": 0.5,
+          "w": 0.95,
+          "h": 0.5,
+          "square": 0.5
+        }
+      ]
+    },
+    {
+      "type": "blob",
+      "group": "canopy",
+      "center": [6.3, 1.25, 0],
+      "radius": [1.6, 0.5, 0.85],
+      "detail": 1,
+      "half": true
+    },
+    {
+      "type": "box",
+      "group": "body",
+      "center": [2.6, 0.2, 1.55],
+      "size": [4.2, 1.1, 0.9],
+      "bevel": 0.1,
+      "mirror": true
+    },
+    {
+      "type": "box",
+      "group": "intake",
+      "center": [4.72, 0.2, 1.55],
+      "size": [0.05, 1.0, 0.8],
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "nozzle",
+      "to": [-10.3, 0.25, 0.6],
+      "radius": 0.52,
+      "sides": 8,
+      "from": [-9.6, 0.25, 0.6],
+      "radius2": 0.46,
+      "mirror": true
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [3.4, 0.55, 1.9],
+      "rootChord": 3.6,
+      "tipChord": 2.6,
+      "span": 1.3,
+      "sweep": 70,
+      "thickness": 0.06,
+      "mirror": true
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [0.6, 0.55, 3.0],
+      "rootChord": 3.1,
+      "tipChord": 1.3,
+      "span": 6.2,
+      "sweep": 45,
+      "thickness": 0.05,
+      "dihedral": -2,
+      "mirror": true
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [-4.6, 1.0, 0],
+      "rootChord": 4.6,
+      "tipChord": 1.6,
+      "span": 4.2,
+      "sweep": 48,
+      "thickness": 0.05,
+      "vertical": true
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [-6.6, -0.2, 0.7],
+      "rootChord": 1.4,
+      "tipChord": 0.8,
+      "span": 0.8,
+      "sweep": 40,
+      "thickness": 0.05,
+      "dihedral": 150,
+      "mirror": true,
+      "vertical": true
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [-7.0, 0.4, 1.0],
+      "rootChord": 3.2,
+      "tipChord": 1.4,
+      "span": 3.2,
+      "sweep": 45,
+      "thickness": 0.05,
+      "dihedral": -4,
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "gear",
+      "to": [6.6, -1.85, 0],
+      "radius": 0.12,
+      "sides": 6,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [6.6, -0.4, -0.4],
+          [6.6, -0.4, 0.4]
+        ],
+        "angle": -100
+      },
+      "from": [6.6, -0.4, 0]
+    },
+    {
+      "type": "cylinder",
+      "group": "tire",
+      "to": [6.6, -1.85, 0.12],
+      "radius": 0.32,
+      "sides": 8,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [6.6, -0.4, -0.4],
+          [6.6, -0.4, 0.4]
+        ],
+        "angle": -100
+      },
+      "from": [6.6, -1.85, -0.12]
+    },
+    {
+      "type": "cylinder",
+      "group": "gear",
+      "to": [-1.2, -1.8, 1.6],
+      "radius": 0.12,
+      "sides": 6,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [-1.2, -0.5, 1.2000000000000002],
+          [-1.2, -0.5, 2.0]
+        ],
+        "angle": 100
+      },
+      "from": [-1.2, -0.5, 1.6],
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "tire",
+      "to": [-1.2, -1.8, 1.77],
+      "radius": 0.42,
+      "sides": 8,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [-1.2, -0.5, 1.2000000000000002],
+          [-1.2, -0.5, 2.0]
+        ],
+        "angle": 100
+      },
+      "from": [-1.2, -1.8, 1.4300000000000002],
+      "mirror": true
+    }
+  ],
+  "emissives": [
+    {
+      "kind": "afterburner",
+      "at": [-10.35, 0.25, 0.6],
+      "mirror": true
+    },
+    {
+      "kind": "nav-red",
+      "at": [-6.3, 0.35, -8.8]
+    },
+    {
+      "kind": "nav-green",
+      "at": [-6.3, 0.35, 8.8]
+    },
+    {
+      "kind": "nav-white",
+      "at": [-9.8, 4.6, 0]
+    },
+    {
+      "kind": "beacon",
+      "at": [-1, 1.05, 0]
+    }
+  ],
+  "rig": {
+    "kind": "fast-jet",
+    "distance": 24,
+    "height": 5,
+    "groundDistance": 18.0,
+    "groundHeight": 3.2,
+    "rotation": 3.0,
+    "stretch": 2,
+    "stretchPerAccel": 0.25,
+    "fovDeg": 50
+  },
   "airWar": {
     "id": "vo37",
     "order": 21,
@@ -23,7 +285,7 @@
     "loadouts": [
       {
         "id": "strike",
-        "stores": "6 \u00d7 500 kg bombs, 2 tanks",
+        "stores": "6 × 500 kg bombs, 2 tanks",
         "radiusFactor": 0.9
       }
     ]

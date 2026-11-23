@@ -88,6 +88,7 @@ import type { FlightAction } from '../ui/flight/flightInput';
 import { MouseCapture } from '../ui/flight/mouseCapture';
 import { aimDirection, flyMouseAim } from '../ui/flight/mouseAim';
 import { FlightDirector } from '../sim/flight/flightDirector';
+import { MIL_DETENT } from '../sim/flight/controlLaws';
 import type { CampaignInputEvent } from '../sim/eventLog';
 import type { WeatherView } from '../sim/weather/frame';
 import { flightRateCap } from '../sim/clock';
@@ -457,8 +458,10 @@ export class Follow {
     if (!a) return false;
     const model = a.flown.airframe as unknown as FlightModel;
     const inp = this.input;
-    inp.reset(false, a.flown.controls.throttle);
+    inp.maxLever = model.spec.engine.thrust.afterburner ? 1 : MIL_DETENT;
+    inp.reset(false, Math.min(a.flown.controls.throttle, inp.maxLever));
     Object.assign(inp.controls, a.flown.controls);
+    inp.controls.throttle = Math.min(inp.controls.throttle, inp.maxLever);
     inp.mode = 'mouse-aim';
     inp.centerCursor();
     this.director.reset();
@@ -1646,6 +1649,8 @@ export class Follow {
   private updateDisplays(m: Mission, p: FollowedState, frame: HudFrame, t: number): void {
     const b = this.bundle;
     if (!b?.avionics) return;
+    // The skin's units on the HUD: the Pact's metric (R2.7).
+    frame.units = b.avionics.skin === 'pact' ? 'metric' : 'imperial';
     this.updateSensors(m, p, t);
     // The locked contact's box on the HUD, carried along between scans (decision 303).
     frame.target ??= this.hudTarget(p, t);

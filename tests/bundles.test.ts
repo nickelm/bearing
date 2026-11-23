@@ -58,13 +58,15 @@ describe('aircraft bundles', () => {
       bundleGaps(bundles.find((b) => b.airWar?.id === typeId)!).join(', ');
     expect(gaps('f21')).toBe('calibration');
     expect(gaps('uh68')).toBe('pylons, calibration');
-    expect(gaps('ve18')).toBe('geometry, flight, rig, pylons, calibration');
+    expect(gaps('ve18')).toBe('flight, pylons, calibration');
     expect(gaps('vo31')).toBe('calibration');
-    expect(gaps('vo35')).toBe('flight, pylons, calibration');
+    expect(gaps('vo35')).toBe('calibration');
     expect(gaps('a15')).toBe('geometry, flight, rig, pylons, calibration');
     expect(gaps('c150')).toBe('flight, pylons, calibration');
+    // The AI-only types of the demo's orders have their models and rigs (R2.7).
     for (const id of ['f25', 'e5', 'kc40', 'vo37', 'ra44', 'ra60', 've28']) {
-      expect(gaps(id), id).toContain('geometry');
+      expect(gaps(id), id).not.toContain('geometry');
+      expect(gaps(id), id).not.toContain('rig');
     }
   });
 });

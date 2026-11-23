@@ -26,7 +26,9 @@ import { modelSpec } from '../render/common/models/library';
 import type { StrategicScene } from '../render/strategic/strategicScene';
 import { FlightDirector } from '../sim/flight/flightDirector';
 import { aimDirection, flyMouseAim } from '../ui/flight/mouseAim';
+import { MIL_DETENT } from '../sim/flight/controlLaws';
 import type { FlightControls } from '../sim/flight/controlLaws';
+import type { Side } from '../campaign/cast';
 import { followAirframe, rigFromBundle } from '../render/sim/camera/chaseCamera';
 import { AIRCRAFT_BUNDLES } from '../sim/air/bundles';
 import type { Airframe } from '../sim/flight/airframe';
@@ -92,10 +94,13 @@ import {
   FreeFlightMenu,
   invertKey,
   invertNote,
+  isJet,
+  JET_BUNDLES,
 } from '../ui/flight/freeFlightMenu';
 import type {
   AircraftChoice,
   BaseEntry,
+  JetChoice,
   JetControl,
   FreeFlightOptions,
   SpawnKind,
@@ -146,9 +151,8 @@ type State = 'menu' | 'flying' | 'paused' | 'summary';
 
 /** Most physics steps per frame: a stalled tab catches up at most a quarter second. */
 const MAX_STEPS = 30;
-const AIRCRAFT = 'alliance-fighter';
 /** The helicopters' model specs (track H1, Proposal 0004). */
-const HELICOPTERS: Record<Exclude<AircraftChoice, 'kestrel'>, string> = {
+const HELICOPTERS: Record<Exclude<AircraftChoice, JetChoice>, string> = {
   scout: 'alliance-scout-helo',
   utility: 'alliance-utility-helo',
 };
@@ -203,7 +207,7 @@ export class FreeFlight {
   readonly heloInput: HeloInput;
   /** The displays and the status strip (Proposal 0006, decision 199). */
   readonly displays: DisplaySystem;
-  private displayModel = AIRCRAFT;
+  private displayModel = JET_BUNDLES.kestrel;
   private displayName = 'F-21 Kestrel';
   private sortieAt = 0;
   private fuelCapacity = 0;
@@ -268,8 +272,12 @@ export class FreeFlight {
   /** The flown aircraft (R1.5): the airframe, its controls and the stepping, for either kind. */
   private flown: FlownAircraft<FlightControls> | FlownAircraft<RotorControls> | null = null;
   private crashAt = 0;
-  private readonly spec = modelSpec(AIRCRAFT);
-  private readonly flightSpec = parseFlightSpec(this.spec.flight, AIRCRAFT);
+  /** The jet flown (R2.7): its bundle, model spec and flight data, the Kestrel's at first. */
+  private jet: string = JET_BUNDLES.kestrel;
+  private spec = modelSpec(this.jet);
+  private flightSpec = parseFlightSpec(this.spec.flight, this.jet);
+  /** The side the player flies for: the jet's or the helicopter's. */
+  private side: Side = 'alliance';
   private readonly pose: AircraftPose;
   /** The mode's weather: the world's model, shown as the chosen preset. */
   private readonly weather: FlightWeather;
@@ -602,10 +610,19 @@ export class FreeFlight {
     this.writeUrl(id);
     this.applyInvert();
     this.applyGraphics();
-    if (this.options.aircraft !== 'kestrel') {
-      this.startHelo(r, spawn, this.options.aircraft);
+    const choice = this.options.aircraft;
+    if (!isJet(choice)) {
+      this.side = 'alliance';
+      this.startHelo(r, spawn, choice);
       return;
     }
+    if (JET_BUNDLES[choice] !== this.jet) {
+      this.jet = JET_BUNDLES[choice];
+      this.spec = modelSpec(this.jet);
+      this.flightSpec = parseFlightSpec(this.spec.flight, this.jet);
+    }
+    const AIRCRAFT = this.jet;
+    this.side = AIRCRAFT_BUNDLES[AIRCRAFT]!.airWar?.side ?? 'alliance';
     this.helo = null;
     this.heloInput.enabled = false;
     this.capture.release();
@@ -636,6 +653,7 @@ export class FreeFlight {
     this.monitor = new FlightMonitor(this.runways, R);
     this.monitor.reset(spawn === 'air');
     // An air start holds about the throttle for 300 kt (trim is near 0.15 of the lever).
+    this.input.maxLever = this.flightSpec.engine.thrust.afterburner ? 1 : MIL_DETENT;
     this.input.reset(spawn === 'runway', spawn === 'air' ? 0.2 : 0);
     this.input.mode = CONTROL_MODE[this.options.control];
     this.aimEngaged = false;
@@ -703,7 +721,7 @@ export class FreeFlight {
         : [`Air start over ${r.name}`, 'Tab or a click: fly with the mouse, H for help'],
       7,
     );
-    this.displayName = 'F-21 Kestrel';
+    this.displayName = AIRCRAFT_BUNDLES[AIRCRAFT]!.name;
     this.startDisplays(AIRCRAFT, spawn === 'runway');
     this.state = 'flying';
     this.input.enabled = true;
@@ -730,7 +748,7 @@ export class FreeFlight {
    * Spawns a helicopter at runway `r`: on the ground beside the runway's middle, or hovering
    * 150 m above it, rotor turning (a hot start, decision 151).
    */
-  private startHelo(r: Runway, spawn: SpawnKind, choice: Exclude<AircraftChoice, 'kestrel'>): void {
+  private startHelo(r: Runway, spawn: SpawnKind, choice: Exclude<AircraftChoice, JetChoice>): void {
     const R = this.deps.radius;
     const id = HELICOPTERS[choice];
     if (this.heloSpec?.model.id !== id) {
@@ -1391,10 +1409,11 @@ export class FreeFlight {
     this.wrecks.clear();
     this.traffic =
       this.options.traffic && base
-        ? buildTraffic(base, `base-${this.baseId}`, this.deps.radius)
+        ? buildTraffic(base, `base-${this.baseId}`, this.deps.radius, this.side)
         : null;
     for (const a of this.traffic?.aircraft ?? []) {
-      if (this.trafficViews.has(a.id)) continue;
+      // Keyed by model as well: a Pact player's traffic flies the other side's types (R2.7).
+      if (this.trafficViews.has(`${a.id}/${a.model}`)) continue;
       const spec = modelSpec(a.model);
       const b = AIRCRAFT_BUNDLES[a.model];
       const standard = (spec.flight as { standardStores?: Record<string, number> } | undefined)
@@ -1404,16 +1423,17 @@ export class FreeFlight {
       v.planetRadius = this.deps.radius;
       v.shadowMesh.visible = false;
       this.deps.globe.vehicles.add(v.group, v.shadowMesh);
-      this.trafficViews.set(a.id, v);
+      this.trafficViews.set(`${a.id}/${a.model}`, v);
     }
   }
 
   /** Places the traffic's views for the frame about to be drawn (camera-relative, rule 4). */
   private poseTraffic(eye: Readonly<Vec3d>): void {
     const on = this.traffic !== null && this.state !== 'menu';
-    for (const [id, v] of this.trafficViews) {
-      const a =
-        on && !this.downed.has(id) ? this.traffic!.aircraft.find((x) => x.id === id) : undefined;
+    for (const [key, v] of this.trafficViews) {
+      const a = on
+        ? this.traffic!.aircraft.find((x) => `${x.id}/${x.model}` === key && !this.downed.has(x.id))
+        : undefined;
       v.group.visible = a !== undefined;
       v.shadowMesh.visible = false;
       if (!a) continue;
@@ -1443,7 +1463,7 @@ export class FreeFlight {
         eye,
       );
       // Its contrails and vortices: a banked turn pulls 1 / cos(bank) g (decision 329).
-      this.deps.globe.effects.aircraft(`traffic:${id}`, {
+      this.deps.globe.effects.aircraft(`traffic:${a.id}`, {
         pos: st.pos,
         vel: st.vel,
         forward: fwd,
@@ -1500,7 +1520,7 @@ export class FreeFlight {
     this.sensors.update(
       {
         id: own.id,
-        side: 'alliance',
+        side: this.side,
         pos: m.pos,
         vel: m.vel,
         forward,
@@ -1677,6 +1697,8 @@ export class FreeFlight {
     const m: Airframe | null = this.helo ?? this.model;
     const profile = AVIONICS_PROFILES[this.displayModel];
     if (!m || !profile) return;
+    // The skin's units on the HUD: the Pact's metric (R2.7).
+    f.units = profile.skin === 'pact' ? 'metric' : 'imperial';
     const t = m.telemetry;
     const changed = this.displays.triggers({
       onGround: m.onGround,

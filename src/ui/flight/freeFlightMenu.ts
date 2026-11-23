@@ -11,11 +11,28 @@ import type { WeatherPreset } from '../../sim/weather/presets';
 
 export type SpawnKind = 'runway' | 'air';
 
-/** The aircraft to fly: the F-21 Kestrel, or one of the H1 helicopters (Proposal 0004). */
-export type AircraftChoice = 'kestrel' | 'scout' | 'utility';
+/** The jets to fly: the F-21 Kestrel, and the Pact's Vo-31 and Vo-35 (roadmap R2.7). */
+export type JetChoice = 'kestrel' | 'vo31' | 'vo35';
+
+/** The aircraft to fly: a jet, or one of the H1 helicopters (Proposal 0004). */
+export type AircraftChoice = JetChoice | 'scout' | 'utility';
+
+/** Each jet's bundle. */
+export const JET_BUNDLES: Readonly<Record<JetChoice, string>> = {
+  kestrel: 'alliance-fighter',
+  vo31: 'pact-fighter',
+  vo35: 'pact-strike',
+};
+
+/** Whether `a` is a jet (else a helicopter). */
+export function isJet(a: AircraftChoice): a is JetChoice {
+  return a in JET_BUNDLES;
+}
 
 export const AIRCRAFT_CHOICES: { id: AircraftChoice; label: string; note: string }[] = [
   { id: 'kestrel', label: 'F-21 Kestrel', note: 'Fighter (F-16 analogue)' },
+  { id: 'vo31', label: 'Vo-31 Strizh', note: 'Pact fighter (MiG-29 analogue)' },
+  { id: 'vo35', label: 'Vo-35 Molot', note: 'Pact attack aircraft (Su-25 analogue)' },
   { id: 'scout', label: 'MH-14 Wren', note: 'Light scout helicopter (Little Bird analogue)' },
   { id: 'utility', label: 'UH-68 Heron', note: 'Utility helicopter (Black Hawk analogue)' },
 ];
@@ -64,7 +81,7 @@ export type InvertKey = 'invertAim' | 'invertStick' | 'invertHelo';
 
 /** Which inversion setting applies to `aircraft` flown with `control`. */
 export function invertKey(aircraft: AircraftChoice, control: JetControl): InvertKey {
-  if (aircraft !== 'kestrel') return 'invertHelo';
+  if (!isJet(aircraft)) return 'invertHelo';
   return control === 'aim' ? 'invertAim' : 'invertStick';
 }
 
@@ -117,7 +134,7 @@ export function mouseRow(
   const box = el.querySelector('.ff-invert') as HTMLInputElement;
   const note = el.querySelector('.ff-invert-note') as HTMLSpanElement;
   const sync = () => {
-    row.hidden = options.aircraft !== 'kestrel';
+    row.hidden = !isJet(options.aircraft);
     select.value = options.control;
     const k = invertKey(options.aircraft, options.control);
     box.checked = options[k];
@@ -338,7 +355,7 @@ export class FreeFlightMenu {
         AIRCRAFT_CHOICES.find((c) => c.id === this.options.aircraft) ?? AIRCRAFT_CHOICES[0]!;
       aircraft.value = a.id;
       aircraftNote.textContent = a.note;
-      const helo = a.id !== 'kestrel';
+      const helo = !isJet(a.id);
       spawnGround.textContent = helo ? 'On the ground beside the runway' : 'On the runway';
       spawnAir.textContent = helo ? 'In the air (150 m, hovering)' : 'In the air (3,000 m, 300 kt)';
       showInvert();

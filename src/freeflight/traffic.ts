@@ -37,6 +37,8 @@ export interface TrafficSite {
   kind: string;
   /** Range inside which it tracks the player (m). */
   trackRange: number;
+  /** Its side: the Pact's unless the player flies for the Pact. */
+  side?: Side;
 }
 
 /** The Pact fighters' radar: the MiG-29 analogue's profile (decision 224). */
@@ -73,8 +75,35 @@ export function trafficState(
   return { pos, vel: tangent.scale(a.speed), heading, bank };
 }
 
-/** The traffic around base point `base` (unit), laid out by a hash of `key`. */
+/** The other side's model for a traffic aircraft when the player flies for the Pact (R2.7). */
+const MIRRORED: Readonly<Record<string, { model: string; kind: string }>> = {
+  'pact-fighter': { model: 'alliance-fighter', kind: '16' },
+  'pact-strike': { model: 'alliance-strike', kind: '' },
+  'alliance-fighter': { model: 'pact-fighter', kind: '' },
+};
+
+const other = (s: Side): Side => (s === 'alliance' ? 'pact' : 'alliance');
+
+/**
+ * The traffic around base point `base` (unit), laid out by a hash of `key`, for a player
+ * of side `own`: the Alliance's traffic as it was, or for a Pact player its mirror, the
+ * same circles flown by the other side's types.
+ */
 export function buildTraffic(
+  base: Readonly<Vec3d>,
+  key: string,
+  radius: number,
+  own: Side = 'alliance',
+): { aircraft: TrafficAircraft[]; sites: TrafficSite[] } {
+  const t = buildAllianceTraffic(base, key, radius);
+  if (own === 'alliance') return t;
+  return {
+    aircraft: t.aircraft.map((a) => ({ ...a, side: other(a.side), ...MIRRORED[a.model] })),
+    sites: t.sites.map((x) => ({ ...x, kind: 'HK', side: 'alliance' as Side })),
+  };
+}
+
+function buildAllianceTraffic(
   base: Readonly<Vec3d>,
   key: string,
   radius: number,
@@ -202,7 +231,7 @@ export function trafficTargets(
     const tracking = own.pos.clone().sub(pos).length() < site.trackRange;
     out.push({
       id: site.id,
-      side: 'pact',
+      side: site.side ?? 'pact',
       pos,
       vel: new Vec3d(0, 0, 0),
       rcs: 30,

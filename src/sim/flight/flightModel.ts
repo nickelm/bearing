@@ -434,7 +434,9 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
     const th = eng.thrust;
     const idle = lookup2(th.altitude, th.mach, th.idle, altitude, mach);
     const mil = lookup2(th.altitude, th.mach, th.military, altitude, mach);
-    const wet = th.afterburner ? lookup2(th.altitude, th.mach, th.afterburner, altitude, mach) : mil;
+    const wet = th.afterburner
+      ? lookup2(th.altitude, th.mach, th.afterburner, altitude, mach)
+      : mil;
     const thrust = hasFuel ? idle + (mil - idle) * this.power + (wet - mil) * this.afterburner : 0;
     fb.x += thrust;
     const wetShare = Math.min(1, this.afterburner * 5);

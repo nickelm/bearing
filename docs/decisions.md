@@ -5023,6 +5023,21 @@ The first run missed by 4.0 m at 610 m and 9.6 m at 900 m, growing with the squa
 
 **Reason:** R2.7 makes the Vo-31 flyable (owner decision 5), and the F-21 needed a CAP adversary that flies the same flight model.
 
+### 315. The Pact's jets are flown: the Vo-35's flight data, Free Flight's choice, the HUD in the Pact's units, Pact flights at full fidelity
+
+**Date:** 2026-11-23
+**Decision:**
+
+- **The Vo-35's flight data** come from approximate public Su-25 figures: two R-95Sh turbojets of 40.2 kN each, installed at 76.4 kN, without an afterburner (decision 314's optional table); a straight 30.1 m² wing of 14.36 m span whose drag rises from Mach 0.75; a stall near 20° with large flaps; a 6.5 g limit, 18° of angle of attack and a 140°/s roll rate; 3,020 kg of internal fuel, so two 800 l tanks make the air-war entry's 4,300 kg. The plausibility test's targets: a takeoff roll of 450–900 m, a landing-configuration stall at 95–125 KCAS, Mach 0.76–0.84 at sea level. It makes Mach 0.82, stalls at 113 KCAS, and flies the test pilot's circuit.
+- **The Vo-35's stores and gun.** Its stores leave its body as the Vo-31's did, and five pylons a wing carry them: inner, inboard, middle, outboard and outer. The air-war loadout is four 250 kg bombs, two rocket pods, two tanks and two short-range missiles (the Su-25's usual ten stations). The gun is a GSh-30-2 analogue: 250 rounds of 30 mm at 50 a second. The main gear moves under the nacelles, 2.3 m apart.
+- **Free Flight flies them.** The start screen and the URL (`aircraft=vo31`, `aircraft=vo35`) choose the Vo-31 and the Vo-35 beside the Kestrel and the helicopters. The jet's bundle supplies everything: its model, flight data, stores, gun, rig, avionics profile and name. A Pact jet's scripted traffic is mirrored: the same circles, flown by F-21s and an A-15 analogue for the Alliance, with the ground radars the Alliance's, so the sensors see enemies. Its own flight is the Pact's Vo-31.
+- **Pact flights at full fidelity.** A followed Vo-31 or Vo-35 flight (or a Vo-31K, which is drawn with the Vo-31's geometry) is promoted and can be taken over like the F-21's, since promotion reads the type's flight data. `tests/pactPromotion.test.ts` flies a Vo-31 CAP and a Vo-35 close air support flight from the climb-out to the approach: no crash, the gear up, the lead at 90% of military power at most, within 3.4 km of its route in the climb and 1.4 km on station.
+- **The HUD in the Pact's units.** The visual style's skins table already gave the Pact kilometers per hour, meters and kilometers for every readout. The HUD now follows the skin: the speed tape in km/h (ticks every 20, labels every 100), the altitude tape in meters (ticks every 50, labels every 100), the climb in m/s, distances in km and fuel in kg. The Alliance's readouts are unchanged.
+- **Checks 12–13 for an attack aircraft.** `tools/displays.screens.mjs` draws the Vo-35 (no radar, ten stations, the Pact skin) in its master modes (`AIRCRAFT=vo35`); every shot stays within the clutter limits, and its stores format shows the ten stations in two staggered rows, with the tanks' fuel in kilograms.
+- **Per-type cues.** The approach speed and the angle-of-attack bracket center on the type's on-speed angle of attack (`approachAlpha`): 13° on the Kestrel and the Vo-31, 11° on the Vo-35. An engine without an afterburner ends the player's lever at the military detent, and the HUD and the strip never show an afterburner stage for it.
+
+**Reason:** R2.7's flyable roster (owner decision 5): the Vo-31 and Vo-35 flown and followed, with the Pact skin seen in them.
+
 ### 320. Stylized effects: toon-shaded sphere-impostor puffs, dithered, with depth
 
 **Date:** 2026-11-22

@@ -1,13 +1,15 @@
 /**
  * Part I's acceptance checks 12 and 13 for the displays and the status strip
  * (decision 200): the real DisplaySystem over the stand-in scene in each master
- * mode, for the Kestrel and the Heron, in both faction skins, at 1366 × 768 and
+ * mode, for the Kestrel and the Heron in both faction skins and the Vo-35 (an attack
+ * aircraft without a radar, R2.7) in the Pact's, at 1366 × 768 and
  * 1920 × 1080, and each also as seen with protanopia, deuteranopia and tritanopia
  * (Chromium's own emulation). With the dev server up (npm run dev):
  *
  *   node tools/displays.screens.mjs [http://localhost:5173]
  *
- * Env: OUT_DIR (default tools/out/displays), MODES, SIZES (e.g. 1366x768,1920x1080),
+ * Env: OUT_DIR (default tools/out/displays), MODES, AIRCRAFT (kestrel,utility,vo35), SIZES
+ * (e.g. 1366x768,1920x1080),
  * CVD=0 to leave the color-vision views out. Prints, per shot, how many large and small
  * displays are expanded and whether any slot reaches into the central column.
  */
@@ -29,12 +31,17 @@ const cvd = process.env.CVD === '0' ? [] : ['protanopia', 'deuteranopia', 'trita
 
 const browser = await chromium.launch();
 const problems = [];
+// The Vo-35: an attack aircraft without a radar, in its own skin (R2.7).
+const attackModes = ['ground', 'navigation', 'approach', 'air-to-ground'];
+const aircraftList = (process.env.AIRCRAFT ?? 'kestrel,utility,vo35').split(',');
+const skinsOf = (aircraft) => (aircraft === 'vo35' ? ['pact'] : ['alliance', 'pact']);
 for (const [aircraft, modes] of [
   ['kestrel', jetModes],
   ['utility', heloModes],
-])
+  ['vo35', attackModes],
+].filter(([a]) => aircraftList.includes(a)))
   for (const mode of modes.filter((m) => !only || only.includes(m)))
-    for (const skin of ['alliance', 'pact'])
+    for (const skin of skinsOf(aircraft))
       for (const [width, height] of sizes) {
         const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
         await page.goto(

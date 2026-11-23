@@ -1,4 +1,4 @@
-/** A promoted F-21 CAP flight over a flat sea-level world, for the full-fidelity tests (R2.5). */
+/** A promoted CAP or CAS flight over a flat sea-level world, for the full-fidelity tests (R2.5, R2.7). */
 import { latLonToDirection } from '../../src/core/coords';
 import type { Dir } from '../../src/core/greatCircle';
 import { DEG } from '../../src/core/units';
@@ -29,12 +29,13 @@ export const dir = (lat: number, lon: number): Dir => {
 /** Flat ground at sea level, all field. */
 export const seaLevel: GroundQuery = { height: () => 0, surface: () => 'field' };
 
-export function capMission(type = 'f21'): Mission {
+export function capMission(type = 'f21', mission: 'cap' | 'cas' = 'cap'): Mission {
   const t = aircraftType(type);
+  const loadout = t.loadouts.find((l) => l.id === MISSION_PROFILES[mission].loadout)!;
   const route = planMissionRoute({
     type: t,
-    loadout: t.loadouts[0]!,
-    profile: MISSION_PROFILES.cap,
+    loadout,
+    profile: MISSION_PROFILES[mission],
     radius: R,
     rangeFactor: 1,
     basePoint: () => dir(40, 10),
@@ -45,18 +46,21 @@ export function capMission(type = 'f21'): Mission {
   })!;
   return {
     id: 7,
-    type: 'cap',
-    side: 'alliance',
+    type: mission,
+    side: t.side,
     theater: 0,
     package: 1,
     squadron: 0,
     unit: 'Test Squadron',
     aircraftType: type,
     aircraft: 4,
-    loadout: 'air-to-air',
+    loadout: loadout.id,
     callsign: 'Test 1',
     base: { kind: 'airbase', id: 0 },
-    target: { kind: 'station', id: -1, name: 'Station', point: dir(42, 13) },
+    target:
+      mission === 'cap'
+        ? { kind: 'station', id: -1, name: 'Station', point: dir(42, 13) }
+        : { kind: 'front', id: -1, name: 'Front', point: dir(42, 13) },
     need: '',
     needKey: '',
     score: 0,
@@ -85,12 +89,13 @@ export function promote(
   m: Mission,
   t: number,
   enemyDistance?: PromotedFlightOptions['enemyDistance'],
+  spec = kestrelSpec(),
 ): PromotedFlight {
   const formations = missionPlugin(m.type).formations;
   const lead = analyticPose(m.route, t, R);
   const f = formationAt(m.timeline, formations, t);
   const poses = Array.from({ length: m.aircraft }, (_, k) => slotPose(lead, k, f, SPAN));
-  return new PromotedFlight(m, t, R, kestrelSpec(), poses, {
+  return new PromotedFlight(m, t, R, spec, poses, {
     lead: routeReference(m.route),
     formation: (u) => formationAt(m.timeline, formations, u),
     phase: (u) => routeState(m.route, u, R).phase,

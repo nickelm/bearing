@@ -29,15 +29,22 @@ import { lookup, lookup2 } from './flightSpec';
 import type { FlightSpec } from './flightSpec';
 import { AIM_POINT, GLIDE_PATH } from './runway';
 
-/** On-speed angle of attack: the middle of the HUD's angle-of-attack bracket (decision 208). */
+/**
+ * The Kestrel's on-speed angle of attack: the middle of the HUD's angle-of-attack bracket
+ * (decision 208). Each type's is its flight data's `approachAlpha` (R2.7).
+ */
 export const ON_SPEED_ALPHA = 13 * DEG;
 /** Within this much over the approach speed the aircraft counts as slowed (m/s). */
 export const ON_SPEED_MARGIN = 5 * KNOT;
 /** The cue is green while the distance to slow is under this share of the distance left. */
 export const ENERGY_MARGIN = 0.8;
 
-/** Approach speed (CAS, m/s) at `mass` kg: 1 g at `alpha` with gear and flaps down. */
-export function approachSpeed(spec: FlightSpec, mass: number, alpha = ON_SPEED_ALPHA): number {
+/** Approach speed (CAS, m/s) at `mass` kg: 1 g at `alpha` (the type's on-speed) with gear and flaps down. */
+export function approachSpeed(
+  spec: FlightSpec,
+  mass: number,
+  alpha = spec.controls.approachAlpha,
+): number {
   const cl = lookup(spec.aero.cl, alpha) + spec.aero.flapCl;
   return Math.sqrt((2 * mass * G0) / (SEA_LEVEL_DENSITY * spec.wing.area * cl));
 }

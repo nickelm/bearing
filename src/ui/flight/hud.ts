@@ -29,7 +29,7 @@
  * (Part I, HUD and Displays; tuned in P2).
  */
 import './flight.css';
-import { DEG, FOOT, KNOT, NAUTICAL_MILE } from '../../core/units';
+import { DEG, FOOT, KM, KMH, KNOT, NAUTICAL_MILE } from '../../core/units';
 import type { Vec3d } from '../../core/vec3d';
 import type { FlightWarning } from '../../sim/flight/outcomes';
 import { drawControlCursor } from './controlCursor';
@@ -127,6 +127,8 @@ export const SEVERE_HAZARDS: ReadonlySet<string> = new Set([
 ]);
 
 export interface HudFrame {
+  /** The readouts' units: the skin's (absent: the Alliance's imperial units). */
+  units?: HudUnits;
   cas: number;
   mach: number;
   altitude: number;
@@ -324,6 +326,73 @@ export function verticalSpeedText(fpm: number): string {
   if (v === 0) return '0';
   return `${v > 0 ? '+' : '−'}${Math.abs(v).toLocaleString('en-US')}`;
 }
+
+/**
+ * The readouts' units (visual-style Part I, _Skins_; R2.7): the Alliance's knots, feet,
+ * feet per minute, nautical miles and pounds, or the Pact's kilometers per hour, meters,
+ * meters per second, kilometers and kilograms. The tapes' ticks and windows follow them.
+ */
+export type HudUnits = 'imperial' | 'metric';
+
+interface UnitSet {
+  /** Meters per second per unit of the speed tape, its minor and labeled ticks and half window. */
+  speed: number;
+  speedMinor: number;
+  speedMajor: number;
+  speedHalf: number;
+  /** Meters per unit of the altitude tape, its minor and labeled ticks and half window. */
+  altitude: number;
+  altMinor: number;
+  altMajor: number;
+  altHalf: number;
+  /** The radar altitude shows below this (tape units). */
+  radarMax: number;
+  climb: (v: number) => string;
+  distance: (d: number) => string;
+  fuel: (kg: number) => string;
+}
+
+const short = (x: number) => (x < 10 ? x.toFixed(1) : String(Math.round(x)));
+
+export const HUD_UNITS: Readonly<Record<HudUnits, UnitSet>> = {
+  imperial: {
+    speed: KNOT,
+    speedMinor: 10,
+    speedMajor: 50,
+    speedHalf: 60,
+    altitude: FOOT,
+    altMinor: 100,
+    altMajor: 500,
+    altHalf: 500,
+    radarMax: 1500,
+    climb: (v) => {
+      const fpm = (v / FOOT) * 60;
+      return `${fpm >= 0 ? '+' : '−'}${Math.abs(Math.round(fpm / 10) * 10).toLocaleString('en-US')} fpm`;
+    },
+    distance: (d) => `${short(d / NAUTICAL_MILE)} NM`,
+    fuel: (kg) => {
+      const lb = Math.round(kg / 0.453_592 / 10) * 10;
+      return `${lb > 0 ? lb.toLocaleString('en-US') : 0} LB`;
+    },
+  },
+  metric: {
+    speed: KMH,
+    speedMinor: 20,
+    speedMajor: 100,
+    speedHalf: 120,
+    altitude: 1,
+    altMinor: 50,
+    altMajor: 100,
+    altHalf: 150,
+    radarMax: 500,
+    climb: (v) => `${v >= 0 ? '+' : '−'}${Math.abs(v).toFixed(Math.abs(v) < 10 ? 1 : 0)} m/s`,
+    distance: (d) => `${short(d / KM)} KM`,
+    fuel: (kg) => {
+      const r = Math.round(kg / 10) * 10;
+      return `${r > 0 ? r.toLocaleString('en-US') : 0} KG`;
+    },
+  },
+};
 
 /** A landing zone's distance: feet to the nearest 10 within 0.3 NM, nautical miles beyond. */
 export function hoverDistance(d: number): string {
@@ -729,27 +798,37 @@ export class Hud {
 
   private speedTape(f: HudFrame, x: number, y: number, s: number): void {
     const c = this.ctx;
-    const kias = f.cas / KNOT;
+    const u = HUD_UNITS[f.units ?? 'imperial'];
+    const kias = f.cas / u.speed;
     const span = 120 * s;
-    const pxPerKt = span / 60;
+    const half = u.speedHalf;
+    const pxPerKt = span / half;
     this.stroke(() => {
       c.beginPath();
       c.moveTo(x + 30 * s, y - span);
       c.lineTo(x + 30 * s, y + span);
-      for (let v = Math.ceil((kias - 60) / 10) * 10; v <= kias + 60; v += 10) {
+      for (
+        let v = Math.ceil((kias - half) / u.speedMinor) * u.speedMinor;
+        v <= kias + half;
+        v += u.speedMinor
+      ) {
         if (v < 0) continue;
         const ty = y - (v - kias) * pxPerKt;
         c.moveTo(x + 30 * s, ty);
-        c.lineTo(x + (v % 50 === 0 ? 18 : 23) * s, ty);
+        c.lineTo(x + (v % u.speedMajor === 0 ? 18 : 23) * s, ty);
       }
     });
-    for (let v = Math.ceil((kias - 60) / 50) * 50; v <= kias + 60; v += 50) {
+    for (
+      let v = Math.ceil((kias - half) / u.speedMajor) * u.speedMajor;
+      v <= kias + half;
+      v += u.speedMajor
+    ) {
       if (v < 0) continue;
       const ty = y - (v - kias) * pxPerKt;
       if (Math.abs(ty - y) > 14 * s) this.text(String(v), x + 14 * s, ty, 'right');
     }
     this.box(x - 30 * s, y, 58 * s, `${Math.round(kias)}`, 'right');
-    if (f.speedCues && !f.hover) this.speedCues(f.speedCues, kias, x, y, s, pxPerKt, span);
+    if (f.speedCues && !f.hover) this.speedCues(f.speedCues, kias, u.speed, x, y, s, pxPerKt, span);
     if (f.hover) {
       const gs = Math.hypot(f.hover.velocity.forward, f.hover.velocity.right) / KNOT;
       this.text(`GS ${Math.round(gs)}`, x + 28 * s, y + span + 18 * s, 'right');
@@ -767,6 +846,7 @@ export class Hud {
   private speedCues(
     q: HudSpeedCues,
     kias: number,
+    unit: number,
     x: number,
     y: number,
     s: number,
@@ -777,7 +857,7 @@ export class Hud {
     const at = (kt: number) => y - (kt - kias) * pxPerKt;
     const inside = (ty: number) => Math.abs(ty - y) <= span;
     const tape = x + 30 * s;
-    const gy = at(q.gearLimit / KNOT);
+    const gy = at(q.gearLimit / unit);
     if (inside(gy)) {
       this.stroke(
         () => {
@@ -792,7 +872,7 @@ export class Hud {
       );
       this.text('G', tape + 24 * s, gy - 1.5 * s, 'left');
     }
-    const ay = at(q.approach / KNOT);
+    const ay = at(q.approach / unit);
     if (inside(ay)) {
       this.stroke(() => {
         c.beginPath();
@@ -803,7 +883,7 @@ export class Hud {
       });
     }
     // The trend: hidden under 1 kt of change in 10 s.
-    const dKt = q.trend / KNOT - kias;
+    const dKt = q.trend / unit - kias;
     if (Math.abs(dKt) >= 1) {
       const tip = y - Math.max(-span, Math.min(span, dKt * pxPerKt));
       const tx = tape + 5 * s;
@@ -831,37 +911,39 @@ export class Hud {
 
   private altitudeTape(f: HudFrame, x: number, y: number, s: number): void {
     const c = this.ctx;
-    const ft = f.altitude / FOOT;
+    const u = HUD_UNITS[f.units ?? 'imperial'];
+    const ft = f.altitude / u.altitude;
     const span = 120 * s;
-    const window = 1000;
-    const pxPerFt = span / (window / 2);
+    const half = u.altHalf;
+    const pxPerFt = span / half;
     this.stroke(() => {
       c.beginPath();
       c.moveTo(x - 30 * s, y - span);
       c.lineTo(x - 30 * s, y + span);
-      for (let v = Math.ceil((ft - window / 2) / 100) * 100; v <= ft + window / 2; v += 100) {
+      for (
+        let v = Math.ceil((ft - half) / u.altMinor) * u.altMinor;
+        v <= ft + half;
+        v += u.altMinor
+      ) {
         const ty = y - (v - ft) * pxPerFt;
         c.moveTo(x - 30 * s, ty);
-        c.lineTo(x - (v % 500 === 0 ? 18 : 23) * s, ty);
+        c.lineTo(x - (v % u.altMajor === 0 ? 18 : 23) * s, ty);
       }
     });
-    for (let v = Math.ceil((ft - window / 2) / 500) * 500; v <= ft + window / 2; v += 500) {
+    for (
+      let v = Math.ceil((ft - half) / u.altMajor) * u.altMajor;
+      v <= ft + half;
+      v += u.altMajor
+    ) {
       const ty = y - (v - ft) * pxPerFt;
       if (Math.abs(ty - y) > 14 * s) this.text(v.toLocaleString('en-US'), x - 14 * s, ty, 'left');
     }
     this.box(x + 36 * s, y, 74 * s, Math.round(ft).toLocaleString('en-US'), 'left');
     // The helicopter layout writes it beside the radar altitude (hoverAltitude).
-    const vs = (f.verticalSpeed / FOOT) * 60;
-    if (!f.hover)
-      this.text(
-        `${vs >= 0 ? '+' : '−'}${Math.abs(Math.round(vs / 10) * 10).toLocaleString('en-US')} fpm`,
-        x - 28 * s,
-        y - span - 18 * s,
-        'left',
-      );
-    const ra = f.radarAltitude / FOOT;
+    if (!f.hover) this.text(u.climb(f.verticalSpeed), x - 28 * s, y - span - 18 * s, 'left');
+    const ra = f.radarAltitude / u.altitude;
     // The helicopter layout draws its own radar altitude (hoverAltitude).
-    if (ra < 1500 && !f.hover)
+    if (ra < u.radarMax && !f.hover)
       this.text(
         `R ${Math.max(0, Math.round(ra)).toLocaleString('en-US')}`,
         x - 28 * s,
@@ -940,19 +1022,14 @@ export class Hud {
   private steeringBlock(f: HudFrame, x: number, y: number, s: number): void {
     const st = f.steering;
     if (!st) return;
-    const nm = st.distance / NAUTICAL_MILE;
+    const u = HUD_UNITS[f.units ?? 'imperial'];
     const brg = String(Math.round((((st.bearing / DEG) % 360) + 360) % 360) % 360).padStart(3, '0');
     const ete =
       st.eta === null || st.eta > 99 * 60
         ? '--:--'
         : `${Math.floor(st.eta / 60)}:${String(Math.floor(st.eta % 60)).padStart(2, '0')}`;
     this.text(`> ${st.label}`, x, y - 22 * s, 'left');
-    this.text(
-      `${nm < 10 ? nm.toFixed(1) : Math.round(nm)} NM  ${brg}°  ${ete}`,
-      x,
-      y - 4 * s,
-      'left',
-    );
+    this.text(`${u.distance(st.distance)}  ${brg}°  ${ete}`, x, y - 4 * s, 'left');
   }
 
   // ---- Attitude, numbers, status ----
@@ -1084,15 +1161,10 @@ export class Hud {
     const a = f.aid;
     if (!a) return;
     const c = this.ctx;
-    const nm = a.distance / NAUTICAL_MILE;
+    const u = HUD_UNITS[f.units ?? 'imperial'];
     const brg = String(Math.round((((a.bearing / DEG) % 360) + 360) % 360)).padStart(3, '0');
     this.text(`${a.name}`, x, y - 22 * s, 'left');
-    this.text(
-      `RWY ${a.designator}  ${nm < 10 ? nm.toFixed(1) : Math.round(nm)} NM  ${brg}°`,
-      x,
-      y - 4 * s,
-      'left',
-    );
+    this.text(`RWY ${a.designator}  ${u.distance(a.distance)}  ${brg}°`, x, y - 4 * s, 'left');
     // Deviation box: localizer (vertical bar) and glideslope (horizontal bar).
     const bw = 56 * s;
     const bx = x + bw / 2;
@@ -1404,9 +1476,9 @@ export class Hud {
   }
 
   private fuelLine(f: HudFrame): [string, string?] {
-    const lb = Math.round(f.fuel / 0.453_592 / 10) * 10;
+    const u = HUD_UNITS[f.units ?? 'imperial'];
     return [
-      `FUEL ${lb > 0 ? lb.toLocaleString('en-US') : 0} LB${f.unlimitedFuel ? ' ∞' : ''}`,
+      `FUEL ${u.fuel(f.fuel)}${f.unlimitedFuel ? ' ∞' : ''}`,
       f.fuel < 500 && !f.unlimitedFuel ? WARN_COLOR : undefined,
     ];
   }

@@ -2,6 +2,253 @@
   "name": "F-25 Peregrine",
   "class": "fighter",
   "scheme": "alliance-air",
+  "groups": {
+    "body": "camo",
+    "canopy": "canopy",
+    "intake": "intake",
+    "nozzle": "nozzle",
+    "gear": "#B8BCBE",
+    "tire": "#2B2C2E"
+  },
+  "parts": [
+    {
+      "type": "loft",
+      "group": "body",
+      "sides": 8,
+      "stations": [
+        {
+          "x": 9.6,
+          "y": 0.25,
+          "w": 0,
+          "h": 0
+        },
+        {
+          "x": 8.6,
+          "y": 0.25,
+          "w": 0.32,
+          "h": 0.32
+        },
+        {
+          "x": 7.0,
+          "y": 0.3,
+          "w": 0.55,
+          "h": 0.55
+        },
+        {
+          "x": 5.4,
+          "y": 0.4,
+          "w": 0.68,
+          "h": 0.72
+        },
+        {
+          "x": 3.6,
+          "y": 0.35,
+          "w": 1.0,
+          "h": 0.6,
+          "square": 0.5
+        },
+        {
+          "x": 0,
+          "y": 0.3,
+          "w": 1.25,
+          "h": 0.5,
+          "square": 0.7
+        },
+        {
+          "x": -4.5,
+          "y": 0.3,
+          "w": 1.15,
+          "h": 0.45,
+          "square": 0.7
+        },
+        {
+          "x": -7.0,
+          "y": 0.3,
+          "w": 0.6,
+          "h": 0.3,
+          "square": 0.5
+        }
+      ]
+    },
+    {
+      "type": "box",
+      "group": "body",
+      "center": [2.4, -0.05, 1.35],
+      "size": [4.8, 1.2, 1.0],
+      "bevel": 0.12,
+      "mirror": true
+    },
+    {
+      "type": "box",
+      "group": "intake",
+      "center": [4.82, 0.0, 1.35],
+      "size": [0.05, 1.05, 0.9],
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "body",
+      "to": [-7.6, 0.2, 0.62],
+      "radius": 0.62,
+      "sides": 8,
+      "from": [0, 0.15, 0.62],
+      "radius2": 0.55,
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "nozzle",
+      "to": [-8.4, 0.2, 0.62],
+      "radius": 0.55,
+      "sides": 8,
+      "from": [-7.6, 0.2, 0.62],
+      "radius2": 0.48,
+      "mirror": true
+    },
+    {
+      "type": "blob",
+      "group": "canopy",
+      "center": [5.0, 1.05, 0],
+      "radius": [1.9, 0.55, 0.5],
+      "detail": 1,
+      "half": true
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [1.6, 0.35, 1.8],
+      "rootChord": 5.6,
+      "tipChord": 1.6,
+      "span": 4.7,
+      "sweep": 45,
+      "thickness": 0.05,
+      "mirror": true
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [-5.2, 0.2, 1.4],
+      "rootChord": 3.0,
+      "tipChord": 1.2,
+      "span": 2.9,
+      "sweep": 45,
+      "thickness": 0.05,
+      "mirror": true
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [-4.0, 0.7, 1.1],
+      "rootChord": 3.2,
+      "tipChord": 1.3,
+      "span": 3.0,
+      "sweep": 36,
+      "thickness": 0.05,
+      "dihedral": -2,
+      "mirror": true,
+      "vertical": true
+    },
+    {
+      "type": "cylinder",
+      "group": "gear",
+      "to": [5.3, -1.75, 0],
+      "radius": 0.12,
+      "sides": 6,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [5.3, -0.25, -0.4],
+          [5.3, -0.25, 0.4]
+        ],
+        "angle": -100
+      },
+      "from": [5.3, -0.25, 0]
+    },
+    {
+      "type": "cylinder",
+      "group": "tire",
+      "to": [5.3, -1.75, 0.11],
+      "radius": 0.3,
+      "sides": 8,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [5.3, -0.25, -0.4],
+          [5.3, -0.25, 0.4]
+        ],
+        "angle": -100
+      },
+      "from": [5.3, -1.75, -0.11]
+    },
+    {
+      "type": "cylinder",
+      "group": "gear",
+      "to": [-0.6, -1.68, 1.3],
+      "radius": 0.12,
+      "sides": 6,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [-0.6, -0.3, 0.9],
+          [-0.6, -0.3, 1.7000000000000002]
+        ],
+        "angle": 100
+      },
+      "from": [-0.6, -0.3, 1.3],
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "tire",
+      "to": [-0.6, -1.68, 1.44],
+      "radius": 0.37,
+      "sides": 8,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [-0.6, -0.3, 0.9],
+          [-0.6, -0.3, 1.7000000000000002]
+        ],
+        "angle": 100
+      },
+      "from": [-0.6, -1.68, 1.1600000000000001],
+      "mirror": true
+    }
+  ],
+  "emissives": [
+    {
+      "kind": "afterburner",
+      "at": [-8.45, 0.2, 0.62],
+      "mirror": true
+    },
+    {
+      "kind": "nav-red",
+      "at": [-2.5, 0.35, -6.4]
+    },
+    {
+      "kind": "nav-green",
+      "at": [-2.5, 0.35, 6.4]
+    },
+    {
+      "kind": "nav-white",
+      "at": [-7.2, 3.6, 1.2]
+    },
+    {
+      "kind": "beacon",
+      "at": [-1, 0.85, 0]
+    }
+  ],
+  "rig": {
+    "kind": "fast-jet",
+    "distance": 21,
+    "height": 4.4,
+    "groundDistance": 15.8,
+    "groundHeight": 2.9,
+    "rotation": 3.0,
+    "stretch": 2,
+    "stretchPerAccel": 0.25,
+    "fovDeg": 50
+  },
   "airWar": {
     "id": "f25",
     "order": 0,

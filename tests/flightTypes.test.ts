@@ -38,6 +38,13 @@ const TARGETS: Record<string, Targets> = {
     stallKt: [95, 125],
     seaLevelMach: [1.12, 1.25],
   },
+  // Su-25: takeoff run about 600 m, 975 km/h at sea level clean, landing at 225–260 km/h.
+  'pact-strike': {
+    rotateKt: [125, 155],
+    rollM: [450, 900],
+    stallKt: [95, 125],
+    seaLevelMach: [0.76, 0.84],
+  },
 };
 
 const runway = testRunway();
@@ -243,9 +250,8 @@ describe.each(types)('%s', (id) => {
     ctl.gearDown = false;
     const fd = new FlightDirector();
     // The autothrottle holds the cruise speed's CAS; it needs less than military power.
-    let cas = 0;
     for (let i = 0; i < 2 / FLIGHT_STEP; i++) m.step(ctl, ground);
-    cas = m.telemetry.cas;
+    const cas = m.telemetry.cas;
     for (let i = 0; i < 90 / FLIGHT_STEP; i++) {
       fd.fly(m, { course: end.heading, gamma: 0, speed: cas }, ctl, FLIGHT_STEP);
       m.step(ctl, ground);
