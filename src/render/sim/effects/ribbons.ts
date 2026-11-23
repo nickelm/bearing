@@ -12,6 +12,14 @@
  * The owner of a source calls `trail` each frame with each point that trails (an engine, a
  * wingtip) and whether it forms now; the path is recorded every few meters. The strip is
  * built on the CPU each frame, camera-relative (rule 4): there are at most `MAX_POINTS`.
+ *
+ * - **Shape** (decision 331). A contrail condenses some way behind the engine: it shows
+ *   from `form` seconds of age, never at the nozzle. Its width varies point to point, so the
+ *   trail is lumpy, and it never spans more than about 1.4° from the camera, and dissolves
+ *   within `near` of the lens: a chase camera sitting on the trail never sees it as a wall.
+ * - **Shading.** The strip is shaded as the tube it stands for: across its width the normal
+ *   turns from the side through the camera to the other side, lit in the puffs' three bands
+ *   with their rim; only its age and the lens dissolve it, never its edges.
  */
 import {
   BufferAttribute,
@@ -21,10 +29,25 @@ import {
   MeshBasicNodeMaterial,
 } from 'three/webgpu';
 import type { Group, Node } from 'three/webgpu';
-import { attribute, float, Fn, normalWorld, positionWorld, vec3, vec4 } from 'three/tsl';
+import {
+  abs,
+  attribute,
+  dot,
+  float,
+  Fn,
+  max,
+  mix,
+  normalize,
+  positionWorld,
+  smoothstep,
+  sqrt,
+  vec3,
+  vec4,
+} from 'three/tsl';
 import { Vec3d } from '../../../core/vec3d';
 import type { PlanetLighting } from '../lighting/planetLighting';
 import { ditherDiscard } from './debris';
+import { TOON_BANDS, TOON_EDGES } from './puffMaterial';
 
 type F = Node<'float'>;
 type V3 = Node<'vec3'>;
@@ -55,14 +78,44 @@ export function vortexForms(loadFactor: number, humidity: number): boolean {
 
 export type RibbonKind = 'contrail' | 'vortex';
 
-const LOOK: Readonly<
-  Record<
-    RibbonKind,
-    { life: number; width: readonly [number, number]; step: number; albedo: number }
-  >
-> = {
-  contrail: { life: 45, width: [1.2, 14], step: 12, albedo: 0.9 },
-  vortex: { life: 1.6, width: [0.25, 0.8], step: 3, albedo: 0.95 },
+interface RibbonLook {
+  /** Seconds a point lasts. */
+  life: number;
+  /** Width (m) when it forms and at the end of its life. */
+  width: readonly [number, number];
+  /** Meters between recorded points. */
+  step: number;
+  albedo: number;
+  /** Age (s) at which it starts to show and is fully formed. */
+  form: readonly [number, number];
+  /** Distance (m) from the camera within which it dissolves, and beyond which it is whole. */
+  near: readonly [number, number];
+}
+
+const LOOK: Readonly<Record<RibbonKind, RibbonLook>> = {
+  contrail: {
+    life: 45,
+    width: [1.6, 10],
+    step: 12,
+    albedo: 0.9,
+    form: [0.15, 0.4],
+    near: [15, 60],
+  },
+  vortex: { life: 1.6, width: [0.2, 0.6], step: 3, albedo: 0.95, form: [0, 0.05], near: [4, 15] },
+};
+/** The widest a ribbon is drawn, as a share of its distance (about 1.4°). */
+const MAX_ANGULAR_WIDTH = 0.025;
+/** Point-to-point variation of the width, ±. */
+const LUMPS = 0.3;
+
+const smooth = (a: number, b: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+/** A fixed hash 0..1 of a number. */
+const hash01 = (x: number) => {
+  const h = Math.sin(x * 12.9898 + 78.233) * 43758.5453;
+  return h - Math.floor(h);
 };
 
 interface Point {
@@ -87,8 +140,14 @@ export class Ribbons {
   private readonly geometry = new BufferGeometry();
   private readonly mesh: Mesh;
   private readonly position = new BufferAttribute(new Float32Array(MAX_POINTS * 2 * 3), 3);
-  private readonly fade = new BufferAttribute(new Float32Array(MAX_POINTS * 2), 1);
-  private readonly shade = new BufferAttribute(new Float32Array(MAX_POINTS * 2), 1);
+  /**
+   * Per vertex: coverage, albedo, and −1 or +1 at the strip's two edges (the shader turns it
+   * into the tube's normal). One attribute: three separate single floats beside a vec3 came
+   * through with the coverage wrong.
+   */
+  private readonly data = new BufferAttribute(new Float32Array(MAX_POINTS * 2 * 3), 3);
+  /** The strip's unit side direction at each point. */
+  private readonly sideDir = new BufferAttribute(new Float32Array(MAX_POINTS * 2 * 3), 3);
   private readonly index = new BufferAttribute(new Uint32Array(MAX_POINTS * 6), 1);
   /** Points drawn last frame. */
   points = 0;
@@ -98,23 +157,43 @@ export class Ribbons {
     lighting: PlanetLighting,
   ) {
     this.geometry.setAttribute('position', this.position);
-    this.geometry.setAttribute('ribbonFade', this.fade);
-    this.geometry.setAttribute('ribbonShade', this.shade);
+    this.geometry.setAttribute('ribbonData', this.data);
+    this.geometry.setAttribute('ribbonSide', this.sideDir);
     this.geometry.setIndex(this.index);
     this.geometry.setDrawRange(0, 0);
     const m = new MeshBasicNodeMaterial({ side: DoubleSide });
     m.name = 'ribbons';
+    const L = lighting;
     m.colorNode = Fn(() => {
-      ditherDiscard(attribute('ribbonFade', 'float') as F, float(0.2));
-      const albedo = vec3(attribute('ribbonShade', 'float') as F);
-      // Lit as a surface facing the sun half way: flat, a little brighter on the sun's side.
-      return vec4(
-        lighting
-          .shadeDiffuse(albedo, lighting.sunDirection as unknown as V3, positionWorld as V3)
-          .mul(0.8)
-          .add(lighting.shadeDiffuse(albedo, normalWorld as V3, positionWorld as V3).mul(0.2)),
-        1,
+      const d = attribute('ribbonData', 'vec3') as V3;
+      const a = d.z as F;
+      // Only age and the lens dissolve it: a thin strip's dithered edges read as noise.
+      ditherDiscard(d.x as F, float(0.2));
+      const albedo = vec3(d.y as F);
+      // The tube's normal: from the side, through the camera, to the other side.
+      const toCamera = normalize(positionWorld.negate());
+      const side = normalize(attribute('ribbonSide', 'vec3') as V3);
+      const n = normalize(side.mul(a).add(toCamera.mul(sqrt(max(float(1).sub(a.mul(a)), 0)))));
+      const at = L.at(positionWorld as V3);
+      const ndl = dot(n, L.sunDirection);
+      const w = 0.05;
+      const band = mix(
+        mix(
+          float(TOON_BANDS[0]),
+          float(TOON_BANDS[1]),
+          smoothstep(TOON_EDGES[0] - w, TOON_EDGES[0] + w, ndl),
+        ),
+        float(TOON_BANDS[2]),
+        smoothstep(TOON_EDGES[1] - w, TOON_EDGES[1] + w, ndl),
       );
+      // A thin tube scatters light all round: its shadow side stays lighter than a puff's.
+      const light = at.sunlight
+        .mul(band.mul(0.7).add(0.3))
+        .add(at.sky)
+        .add(at.moonlight.mul(0.5))
+        .add(at.moonSky);
+      const rim = smoothstep(0.75, 0.95, abs(a)).mul(0.3);
+      return vec4(albedo.mul(light.add(at.sky.mul(rim))), 1);
     })();
     this.mesh = new Mesh(this.geometry, m);
     this.mesh.name = 'ribbons';
@@ -164,8 +243,7 @@ export class Ribbons {
     let v = 0;
     let n = 0;
     const P = this.position.array as Float32Array;
-    const A = this.fade.array as Float32Array;
-    const S = this.shade.array as Float32Array;
+    const DATA = this.data.array as Float32Array;
     const I = this.index.array as Uint32Array;
     const c = new Vec3d();
     const t = new Vec3d();
@@ -182,12 +260,19 @@ export class Ribbons {
       for (let i = 0; i < pts.length && v < MAX_POINTS; i++) {
         const p = pts[i]!;
         const joint = Number.isNaN(p.born);
-        const k = joint ? 1 : Math.min(1, Math.max(0, now - p.born) / r.life);
+        const age = joint ? r.life : Math.max(0, now - p.born);
+        const k = Math.min(1, age / r.life);
         c.copy(p.pos).sub(eye);
-        // Never thinner than a pixel and a half: a far contrail is a line, not a dotted one.
-        const width = Math.max(
-          look.width[0] + (look.width[1] - look.width[0]) * Math.sqrt(k),
-          c.length() * pixel * 1.5,
+        const dist = c.length();
+        // Lumpy, never thinner than a pixel and a half (a far contrail is a line, not a dotted
+        // one) and never wider than MAX_ANGULAR_WIDTH of its distance.
+        const lump = 1 + LUMPS * (2 * hash01(joint ? i : p.born * 7.31) - 1);
+        const width = Math.min(
+          Math.max(
+            (look.width[0] + (look.width[1] - look.width[0]) * Math.sqrt(k)) * lump,
+            dist * pixel * 1.5,
+          ),
+          Math.max(dist * MAX_ANGULAR_WIDTH, dist * pixel * 1.5),
         );
         const a = pts[Math.max(0, i - 1)]!.pos;
         const b = pts[Math.min(pts.length - 1, i + 1)]!.pos;
@@ -200,10 +285,20 @@ export class Ribbons {
           [c.x + side.x, c.y + side.y, c.z + side.z, c.x - side.x, c.y - side.y, c.z - side.z],
           v * 6,
         );
-        // Dissolves over its last two thirds; a run's joint has none.
-        const f = joint ? 0 : Math.min(1, (1 - k) * 1.5);
-        A[v * 2] = A[v * 2 + 1] = f;
-        S[v * 2] = S[v * 2 + 1] = look.albedo;
+        // Forms behind its source, dissolves near the lens and over its last two thirds; a
+        // run's joint has none.
+        const f = joint
+          ? 0
+          : Math.min(1, (1 - k) * 1.5) *
+            smooth(look.form[0], look.form[1], age) *
+            smooth(look.near[0], look.near[1], dist);
+        DATA.set([f, look.albedo, 1, f, look.albedo, -1], v * 6);
+        const D = this.sideDir.array as Float32Array;
+        const sl = side.length() || 1;
+        D.set(
+          [side.x / sl, side.y / sl, side.z / sl, side.x / sl, side.y / sl, side.z / sl],
+          v * 6,
+        );
         if (i > 0) {
           const o = (v - 1) * 2;
           I.set([o, o + 1, o + 2, o + 2, o + 1, o + 3], n);
@@ -214,8 +309,8 @@ export class Ribbons {
     }
     this.points = v;
     this.position.needsUpdate = true;
-    this.fade.needsUpdate = true;
-    this.shade.needsUpdate = true;
+    this.data.needsUpdate = true;
+    this.sideDir.needsUpdate = true;
     this.index.needsUpdate = true;
     this.geometry.setDrawRange(0, n);
     this.mesh.visible = n > 0;

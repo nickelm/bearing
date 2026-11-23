@@ -5079,3 +5079,20 @@ The first run missed by 4.0 m at 610 m and 9.6 m at 900 m, growing with the squa
 `docs/design.md` (revision 14), `docs/visual-style.md`, `docs/roadmap.md`, `TODO.md` and `CLAUDE.md` take the proposal in this commit; proposals 0008, 0011 and 0012 get a note. The proposal's affects line named `0012-gunship.md`; it now names the file as it is, `0012-gunship-and-sensor-stations.md`.
 
 **Reason:** the owner's proposal. Close air support, the gunship, attack helicopters and CSAR all work against soldiers on the ground, and rigid boxes animated without skinning spend the budget on numbers, readability and behavior instead of on few, small, static figures.
+
+### 331. Contrails as round tubes that form behind the engines and keep off the lens
+
+**Date:** 2026-11-23
+**Decision:** The owner saw the Kestrel's contrails from the chase camera as two huge flat wedges. The newest stretch of trail, between the aircraft and a chase camera sitting on its path, was drawn metres wide a few metres from the lens, and it started at the nozzle. Ribbons (decision 325) now:
+
+- **form behind their source:** a contrail shows from 0.15 s of age and is whole at 0.4 s, about 40–100 m behind the engines at fighter speeds (vortices at once);
+- **keep off the lens:** a ribbon dissolves within 15 m of the camera and is whole from 60 m (vortices 4–15 m), and it is never wider than 2.5% of its distance (about 1.4°);
+- **read as tubes:** across its width the normal turns from one side through the camera to the other, lit in the puffs' three bands (softened, since a thin tube scatters light all round) with a rim; the width varies ±30% from point to point; contrails are 1.6 m wide when they form and 10 m at the end of their life (were 1.2 and 14);
+- **dissolve only by age and the lens:** a dithered edge on a strip a few pixels wide read as noise, so the edges are solid.
+
+The per-vertex coverage, albedo and side (±1) go to the GPU as one vec3 attribute.
+
+**How it was checked.** New sandbox shots `contrail-chase` (the camera 40 m behind and 8 m above, as the game's chase camera) and `contrail-side` (90 m to the side) in `tools/effects.preview.ts`: from the chase position nothing stands before the lens; from the side the trail is a round, lumpy tube that condenses in behind the aircraft. The unit suite, the type check and lint pass.
+
+**Reason:** the owner's report from Free Flight.
+

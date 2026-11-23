@@ -502,6 +502,39 @@ export class EffectsSandbox {
     });
   }
 
+  /**
+   * An aircraft at 9 km leaving contrails, the camera chasing it as the game's chase camera
+   * does: `back` m behind and `above` m above, looking along its path.
+   */
+  chase(seconds = 60, back = 40, above = 8, side = 0): void {
+    let age = 0;
+    const effects = this.effects;
+    const alt = 9_000;
+    this.actors.push({
+      step: (dt) => {
+        age += dt;
+        const n = -6000 + age * 250;
+        const pos = this.local(0, n, alt);
+        const ahead = this.local(0, n + 1, alt)
+          .sub(pos)
+          .normalize();
+        const up = pos.clone().normalize();
+        effects.aircraft('chase', {
+          pos,
+          vel: ahead.clone().scale(250),
+          forward: ahead,
+          right: ahead.clone().cross(up).normalize(),
+          load: 1,
+          span: 10,
+          length: 16,
+        });
+        const look = side === 0 ? this.local(0, n + 400, alt) : this.local(0, n - back, alt);
+        this.lookFrom(this.local(side, n - back, alt + above), look, 50);
+        return age < seconds;
+      },
+    });
+  }
+
   /** An aircraft in a hard turn at `g` over the range: vortices from its wingtips. */
   hardTurn(g = 6, seconds = 12): void {
     let age = 0;

@@ -70,6 +70,8 @@ const SHOTS: Record<string, Shot> = {
     },
     at: [30],
   },
+  'contrail-chase': { view: 'contrails', setup: (s) => s.chase(), at: [3, 20] },
+  'contrail-side': { view: 'contrails', setup: (s) => s.chase(60, 150, 25, 90), at: [3, 20] },
   chimneys: {
     view: 'works',
     setup: (s) => {
