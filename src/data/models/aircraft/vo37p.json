@@ -1,7 +1,19 @@
 {
   "name": "Vo-37P Grom",
   "class": "strike",
-  "scheme": "pact-air",
+  "scheme": "pact-tactical",
+  "model": "vo37",
+  "rig": {
+    "kind": "fast-jet",
+    "distance": 24,
+    "height": 5,
+    "groundDistance": 18.0,
+    "groundHeight": 3.2,
+    "rotation": 3.0,
+    "stretch": 2,
+    "stretchPerAccel": 0.25,
+    "fovDeg": 50
+  },
   "airWar": {
     "id": "vo37p",
     "order": 22,

@@ -38,15 +38,21 @@ describe('a followed type’s look', () => {
   });
 
   it('stands in for a type without geometry by class and side, in its own scheme', () => {
-    expect(look('f25')).toMatchObject({ drawn: 'alliance-fighter', standIn: true });
-    expect(look('f25').scheme).toBe(bundleOfType('f25').scheme ?? 'alliance-air');
-    expect(look('vo33')).toMatchObject({ drawn: 'pact-fighter', standIn: true });
-    expect(look('vo37')).toMatchObject({ drawn: 'pact-strike', standIn: true });
-    expect(look('ra44')).toMatchObject({ drawn: 'c150', standIn: true });
-    expect(look('ra44').scheme).toBe(bundleOfType('ra44').scheme);
+    expect(look('f30')).toMatchObject({ drawn: 'alliance-fighter', standIn: true });
+    expect(look('f30').scheme).toBe(bundleOfType('f30').scheme ?? 'alliance-air');
+    expect(look('a14')).toMatchObject({ drawn: 'alliance-strike', standIn: true });
     // A helicopter stands in for a helicopter and keeps the rotor-scaled rig.
-    expect(look('ve18')).toMatchObject({ drawn: 'alliance-utility-helo', standIn: true });
+    expect(look('ve36')).toMatchObject({ drawn: 'alliance-utility-helo', standIn: true });
+    expect(look('ve36').rig?.kind).toBe('helicopter');
+  });
+
+  it('draws the demo’s types with their own models (R2.7), a variant with its base’s', () => {
+    expect(look('f25')).toMatchObject({ drawn: 'f25', standIn: false });
+    expect(look('ra44')).toMatchObject({ drawn: 'ra44', standIn: false });
+    expect(look('ve18')).toMatchObject({ drawn: 've18', standIn: false });
     expect(look('ve18').rig?.kind).toBe('helicopter');
+    expect(look('vo37p')).toMatchObject({ drawn: 'vo37', standIn: false });
+    expect(look('f34g')).toMatchObject({ drawn: 'rf34', standIn: false });
   });
 
   it('gives every type in the air war a drawable model, a known scheme and a rig', () => {

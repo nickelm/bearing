@@ -284,7 +284,7 @@ def ra44():
     return m, groups, jet_rig(72, 14)
 
 
-def ra60():
+def il76(dome=True):
     m = Model()
     h = 23.5
     m.loft('body', [
@@ -317,20 +317,27 @@ def ra60():
     m.wing('body', [-19.6, 9.3, 0.3], 4.6, 2.0, 8.6, 30, thickness=0.08, dihedral=-4)
     # Gear sponsons, the rotodome on two struts.
     m.box('body', [-1.0, -1.8, 2.15], [9.0, 1.4, 1.1], bevel=0.3, mirror=True)
-    m.wing('body', [-6.0, 2.3, 0.6], 3.2, 2.4, 2.2, 25, thickness=0.12, vertical=True,
-           dihedral=-8)
-    cx, cy = -8.2, 5.2
-    m.cyl('dome', [cx, cy - 0.95, 0], [cx, cy, 0], 4.3, 5.25, sides=8)
-    m.cyl('dome', [cx, cy, 0], [cx, cy + 0.95, 0], 5.25, 4.3, sides=8)
-    m.cyl('band', [cx, cy - 0.05, 0], [cx, cy + 0.05, 0], 5.3, 5.3, sides=8)
+    if dome:
+        m.wing('body', [-6.0, 2.3, 0.6], 3.2, 2.4, 2.2, 25, thickness=0.12, vertical=True,
+               dihedral=-8)
+        cx, cy = -8.2, 5.2
+        m.cyl('dome', [cx, cy - 0.95, 0], [cx, cy, 0], 4.3, 5.25, sides=8)
+        m.cyl('dome', [cx, cy, 0], [cx, cy + 0.95, 0], 5.25, 4.3, sides=8)
+        m.cyl('band', [cx, cy - 0.05, 0], [cx, cy + 0.05, 0], 5.3, 5.3, sides=8)
     m.tip_lights(-6.6, 1.2, 24.8, [-h - 0.1, 2.2, 0])
     m.light('beacon', [-2, 2.95, 0])
     m.light('beacon', [-2, -2.5, 0])
     m.leg(h - 5.0, 0, -2.0, -3.3, 0.55, width=0.5, back=-1)
     m.leg(-1.0, 2.15, -2.3, -3.2, 0.7, width=0.6, mirror=True)
     groups = {'body': 'camo', 'canopy': 'canopy', 'intake': 'intake', 'nozzle': 'nozzle',
-              'dome': '#9AA1A8', 'band': '#3E4348', 'gear': '#B8BCBE', 'tire': '#2B2C2E'}
+              'gear': '#B8BCBE', 'tire': '#2B2C2E'}
+    if dome:
+        groups.update(dome='#9AA1A8', band='#3E4348')
     return m, groups, jet_rig(84, 18)
+
+
+def ra60():
+    return il76(dome=True)
 
 
 # ---- Ve-28 (Mi-24) and Ve-18 (Mi-8) ----
@@ -426,9 +433,359 @@ def ve18():
     return m, groups, dict(kind='helicopter')
 
 
-MODELS = dict(e5=e5, kc40=kc40, f25=f25, vo37=vo37, ra44=ra44, ra60=ra60, ve28=ve28, ve18=ve18)
-# Schemes: the palette's Pact tactical for strike aircraft and helicopters (visual style).
-SCHEMES = dict(vo37='pact-tactical', ve28='pact-tactical', ve18='pact-tactical')
+# ---- More fighters: F-28 (F-14A), Ar-23 (MiG-23ML), Vo-33 (Su-27) ----
+
+def f28():
+    m = Model()
+    m.loft('body', [
+        (9.6, 0.3, 0, 0),
+        (8.6, 0.3, 0.38, 0.38),
+        (7.0, 0.35, 0.62, 0.62),
+        (5.0, 0.45, 0.78, 0.8),
+        (3.0, 0.4, 1.4, 0.55, 0.6),
+        (-3.0, 0.35, 1.5, 0.45, 0.7),
+        (-7.0, 0.35, 0.9, 0.32, 0.6),
+        (-8.6, 0.35, 0.5, 0.2),
+    ])
+    m.blob('canopy', [4.6, 1.15, 0], [2.1, 0.55, 0.52], detail=1, half=True)
+    # Widely spaced nacelles with square intakes.
+    m.box('body', [2.6, -0.05, 1.55], [4.0, 1.1, 1.0], bevel=0.12, mirror=True)
+    m.box('intake', [4.62, 0.0, 1.55], [0.05, 0.95, 0.85], mirror=True)
+    m.cyl('body', [0.6, -0.05, 1.55], [-7.4, 0.0, 1.55], 0.6, 0.52, mirror=True)
+    m.cyl('nozzle', [-7.4, 0.0, 1.55], [-8.2, 0.0, 1.55], 0.52, 0.45, mirror=True)
+    # The glove and the wings at 35° (in between), stabilators, two fins over the nacelles.
+    m.wing('body', [3.2, 0.45, 1.4], 4.4, 3.0, 1.4, 68, thickness=0.05)
+    m.wing('body', [0.0, 0.45, 2.8], 3.0, 1.2, 6.8, 35, thickness=0.05)
+    m.wing('body', [-5.4, 0.25, 2.0], 3.0, 1.1, 3.0, 45, thickness=0.05)
+    m.wing('body', [-4.6, 0.5, 1.55], 3.4, 1.2, 3.0, 45, thickness=0.05, vertical=True,
+           dihedral=-5)
+    m.tip_lights(-3.0, 0.45, 9.5, [-7.9, 3.4, 1.8])
+    m.light('beacon', [-1, 0.9, 0])
+    m.leg(6.2, 0, -0.3, -1.75, 0.3, width=0.22, back=-1)
+    m.leg(-0.8, 1.9, -0.4, -1.68, 0.37, width=0.28, mirror=True)
+    m.emissives.insert(0, dict(kind='afterburner', at=[-8.25, 0.0, 1.55], mirror=True))
+    groups = {'body': 'camo', 'canopy': 'canopy', 'intake': 'intake', 'nozzle': 'nozzle',
+              'gear': '#B8BCBE', 'tire': '#2B2C2E'}
+    return m, groups, jet_rig(22, 4.6)
+
+
+def ar23():
+    m = Model()
+    m.loft('body', [
+        (8.4, 0.3, 0, 0),
+        (7.4, 0.3, 0.42, 0.42),
+        (5.8, 0.35, 0.62, 0.62),
+        (4.0, 0.45, 0.75, 0.8),
+        (1.0, 0.35, 0.95, 0.8, 0.5),
+        (-4.0, 0.3, 0.85, 0.7, 0.5),
+        (-7.4, 0.3, 0.62, 0.6),
+    ])
+    m.blob('canopy', [4.4, 1.05, 0], [1.4, 0.45, 0.45], detail=1, half=True)
+    # D-shaped side intakes with splitters.
+    m.box('body', [1.6, 0.25, 1.0], [4.2, 1.2, 0.7], bevel=0.15, mirror=True)
+    m.box('intake', [3.72, 0.25, 1.0], [0.05, 1.05, 0.55], mirror=True)
+    m.cyl('nozzle', [-7.4, 0.3, 0], [-8.1, 0.3, 0], 0.58, 0.5)
+    # Glove, wings at 45°, a big fin with a dorsal fillet, a folding ventral fin.
+    m.wing('body', [1.4, 0.55, 0.9], 3.0, 2.2, 1.0, 60, thickness=0.06)
+    m.wing('body', [-0.4, 0.55, 1.9], 2.8, 1.0, 5.2, 45, thickness=0.05, dihedral=-2)
+    m.wing('body', [-3.2, 0.95, 0], 4.2, 1.4, 3.4, 55, thickness=0.05, mirror=False,
+           vertical=True)
+    m.wing('body', [-5.6, -0.3, 0], 1.8, 1.0, 1.1, 40, thickness=0.05, mirror=False,
+           vertical=True, dihedral=180)
+    m.wing('body', [-5.0, 0.35, 0.7], 2.6, 1.0, 2.5, 50, thickness=0.05, dihedral=-3)
+    m.tip_lights(-4.6, 0.4, 6.9, [-7.4, 4.1, 0])
+    m.light('beacon', [-0.5, 1.15, 0])
+    m.leg(5.2, 0, -0.4, -1.6, 0.27, width=0.22, back=-1)
+    m.leg(-0.4, 1.1, -0.45, -1.55, 0.36, width=0.28, mirror=True)
+    m.emissives.insert(0, dict(kind='afterburner', at=[-8.15, 0.3, 0]))
+    groups = {'body': 'camo', 'canopy': 'canopy', 'intake': 'intake', 'nozzle': 'nozzle',
+              'gear': '#B8BCBE', 'tire': '#2B2C2E'}
+    return m, groups, jet_rig(20, 4.2)
+
+
+def vo33():
+    m = Model()
+    # The Su-27's long, drooped nose and spine, widely spaced nacelles, a tail stinger.
+    m.loft('body', [
+        (11.2, 0.15, 0, 0),
+        (10.0, 0.15, 0.38, 0.38),
+        (8.2, 0.25, 0.62, 0.62),
+        (6.4, 0.45, 0.75, 0.75),
+        (4.4, 0.45, 1.0, 0.6, 0.5),
+        (0, 0.4, 1.5, 0.45, 0.7),
+        (-4.0, 0.35, 1.3, 0.4, 0.6),
+        (-7.5, 0.35, 0.45, 0.3),
+        (-10.2, 0.35, 0.22, 0.2),
+    ])
+    m.blob('canopy', [6.1, 1.25, 0], [1.6, 0.55, 0.5], detail=1, half=True)
+    m.cyl('body', [3.4, -0.35, 1.25], [-7.6, -0.2, 1.25], 0.66, 0.55, mirror=True)
+    m.box('body', [3.4, -0.4, 1.25], [3.2, 1.0, 1.05], bevel=0.12, mirror=True)
+    m.box('intake', [5.02, -0.45, 1.25], [0.05, 0.9, 0.95], mirror=True)
+    m.cyl('nozzle', [-7.6, -0.2, 1.25], [-8.5, -0.2, 1.25], 0.55, 0.48, mirror=True)
+    # Root extensions, an ogival wing, stabilators on booms, fins outboard of the engines.
+    m.wing('body', [5.2, 0.4, 0.9], 4.0, 0.4, 1.3, 75, thickness=0.04)
+    m.wing('body', [1.2, 0.4, 2.0], 5.0, 1.2, 5.3, 42, thickness=0.05)
+    m.wing('body', [-5.8, 0.2, 2.0], 2.8, 1.1, 2.6, 45, thickness=0.05)
+    m.wing('body', [-4.4, 0.55, 2.1], 3.4, 1.1, 3.6, 45, thickness=0.05, vertical=True)
+    # Wingtip rails with short-range missiles.
+    m.cyl('store', [-1.8, 0.4, 7.35], [-4.6, 0.4, 7.35], 0.09, sides=4, mirror=True)
+    m.tip_lights(-3.6, 0.4, 7.2, [-10.2, 0.35, 0])
+    m.light('beacon', [-1, 0.85, 0])
+    m.leg(6.0, 0, -0.35, -1.95, 0.32, width=0.24, back=-1)
+    m.leg(-0.6, 2.0, -0.45, -1.88, 0.4, width=0.3, mirror=True)
+    m.emissives.insert(0, dict(kind='afterburner', at=[-8.55, -0.2, 1.25], mirror=True))
+    groups = {'body': 'camo', 'canopy': 'canopy', 'intake': 'intake', 'nozzle': 'nozzle',
+              'store': 'paint-white', 'gear': '#B8BCBE', 'tire': '#2B2C2E'}
+    return m, groups, jet_rig(23, 4.8)
+
+
+# ---- Strike and reconnaissance: Ar-45R (MiG-25RB), A-15 (A-10A), RF-34 (RF-4C) ----
+
+def ar45r():
+    m = Model()
+    m.loft('body', [
+        (11.6, 0.2, 0, 0),
+        (10.2, 0.2, 0.45, 0.45),
+        (8.2, 0.3, 0.7, 0.72),
+        (6.4, 0.45, 0.8, 0.85),
+        (2.0, 0.4, 1.0, 0.75, 0.5),
+        (-6.0, 0.35, 0.95, 0.6, 0.5),
+        (-9.0, 0.35, 0.5, 0.4),
+    ])
+    m.blob('canopy', [6.5, 1.25, 0], [1.4, 0.45, 0.48], detail=1, half=True)
+    # Huge rectangular intakes and engines side by side.
+    m.box('body', [1.4, 0.1, 1.35], [8.4, 1.6, 1.25], bevel=0.12, mirror=True)
+    m.box('intake', [5.62, 0.15, 1.35], [0.05, 1.4, 1.05], mirror=True)
+    m.cyl('body', [-2.8, 0.15, 0.9], [-9.4, 0.25, 0.9], 0.82, 0.7, mirror=True)
+    m.cyl('nozzle', [-9.4, 0.25, 0.9], [-10.3, 0.25, 0.9], 0.7, 0.62, mirror=True)
+    m.wing('body', [-0.6, 0.85, 1.9], 6.0, 1.6, 5.1, 40, thickness=0.04, dihedral=-5)
+    m.wing('body', [-6.4, 0.6, 1.5], 3.4, 1.3, 2.9, 50, thickness=0.05)
+    m.wing('body', [-5.8, 1.0, 1.6], 3.8, 1.4, 3.6, 50, thickness=0.05, vertical=True,
+           dihedral=-8)
+    m.wing('body', [-7.6, -0.6, 1.2], 1.8, 1.0, 1.0, 40, thickness=0.05, vertical=True,
+           dihedral=170)
+    m.tip_lights(-5.2, 0.4, 6.9, [-10.0, 4.2, 2.1])
+    m.light('beacon', [-1, 1.2, 0])
+    m.leg(7.4, 0, -0.3, -2.0, 0.34, width=0.25, back=-1)
+    m.leg(-1.4, 2.1, -0.2, -1.95, 0.45, width=0.32, mirror=True)
+    m.emissives.insert(0, dict(kind='afterburner', at=[-10.35, 0.25, 0.9], mirror=True))
+    groups = {'body': 'camo', 'canopy': 'canopy', 'intake': 'intake', 'nozzle': 'nozzle',
+              'gear': '#B8BCBE', 'tire': '#2B2C2E'}
+    return m, groups, jet_rig(25, 5)
+
+
+def a15():
+    m = Model()
+    m.loft('body', [
+        (8.1, 0.35, 0.1, 0.1),
+        (7.7, 0.3, 0.55, 0.55),
+        (6.2, 0.35, 0.85, 0.9, 0.4),
+        (4.2, 0.45, 0.9, 1.0, 0.5),
+        (0.0, 0.4, 0.85, 0.95, 0.5),
+        (-4.5, 0.6, 0.55, 0.6, 0.4),
+        (-7.6, 0.85, 0.3, 0.3),
+    ])
+    # The gun's muzzle under the nose, the bubble canopy.
+    m.cyl('nozzle', [8.1, 0.05, 0], [8.6, 0.05, 0], 0.09, sides=6)
+    m.blob('canopy', [4.6, 1.4, 0], [1.2, 0.6, 0.6], detail=1, half=True)
+    # Straight wing, the gear's pods under it, two engine pods on the rear fuselage.
+    m.wing('body', [1.8, -0.05, 0.6], 3.0, 1.9, 8.15, 2, thickness=0.12, dihedral=2)
+    m.box('body', [0.7, -0.45, 1.7], [2.6, 0.7, 0.6], bevel=0.2, mirror=True)
+    m.wing('body', [0.0, 0.15, 7.0], 1.9, 1.3, 1.6, 2, thickness=0.06, dihedral=-25)
+    m.cyl('body', [-1.6, 1.55, 1.2], [-5.2, 1.5, 1.2], 0.68, 0.55, mirror=True)
+    m.cyl('intake', [-1.55, 1.55, 1.2], [-1.6, 1.55, 1.2], 0.6, mirror=True)
+    m.cyl('nozzle', [-5.2, 1.5, 1.2], [-5.6, 1.5, 1.2], 0.55, 0.48, mirror=True)
+    m.box('body', [-3.4, 1.0, 0.75], [2.0, 0.5, 0.25], mirror=True)
+    # The tailplane with fins at its tips.
+    m.wing('body', [-6.0, 0.8, 0.3], 2.0, 1.6, 2.7, 2, thickness=0.06)
+    m.wing('body', [-6.0, 0.0, 2.9], 2.4, 1.6, 3.2, 8, thickness=0.06, vertical=True)
+    m.tip_lights(1.0, 0.4, 8.7, [-7.8, 0.85, 0])
+    m.light('beacon', [-1.5, 1.4, 0])
+    m.leg(6.0, 0.4, -0.4, -1.6, 0.32, width=0.25, back=-1)
+    m.leg(0.7, 1.7, -0.6, -1.55, 0.42, width=0.3, mirror=True)
+    groups = {'body': 'camo', 'canopy': 'canopy', 'intake': 'intake', 'nozzle': 'nozzle',
+              'gear': '#B8BCBE', 'tire': '#2B2C2E'}
+    return m, groups, jet_rig(22, 5)
+
+
+def rf34():
+    m = Model()
+    # The F-4's long, camera-nosed reconnaissance version.
+    m.loft('body', [
+        (10.2, 0.0, 0, 0),
+        (9.2, 0.0, 0.4, 0.38),
+        (7.4, 0.15, 0.62, 0.62),
+        (5.4, 0.35, 0.75, 0.8),
+        (2.0, 0.4, 0.95, 0.85, 0.5),
+        (-3.0, 0.3, 1.05, 0.8, 0.5),
+        (-7.0, 0.55, 0.45, 0.45),
+        (-9.0, 0.75, 0.25, 0.25),
+    ])
+    m.blob('canopy', [4.3, 1.15, 0], [2.4, 0.5, 0.5], detail=1, half=True)
+    m.box('body', [2.0, 0.15, 1.05], [4.6, 1.1, 0.7], bevel=0.15, mirror=True)
+    m.box('intake', [4.32, 0.2, 1.05], [0.05, 0.95, 0.55], mirror=True)
+    m.cyl('nozzle', [-4.6, -0.2, 0.55], [-5.4, -0.15, 0.55], 0.45, 0.4, mirror=True)
+    # Wing swept 45° with the outer panels' dihedral, anhedral stabilators, the fin.
+    m.wing('body', [1.2, 0.15, 1.3], 5.0, 2.4, 3.2, 45, thickness=0.05)
+    m.wing('body', [-2.0, 0.15, 4.5], 2.4, 1.2, 1.4, 45, thickness=0.05, dihedral=12)
+    m.wing('body', [-6.6, 0.75, 0.4], 2.4, 1.0, 2.6, 45, thickness=0.05, dihedral=-23)
+    m.wing('body', [-4.8, 0.9, 0], 4.2, 1.2, 3.0, 55, thickness=0.05, mirror=False,
+           vertical=True)
+    m.cyl('store', [1.6, -0.75, 0], [-2.8, -0.75, 0], 0.32, sides=6)
+    m.tip_lights(-3.8, 0.45, 5.9, [-9.0, 3.9, 0])
+    m.light('beacon', [-1, 1.05, 0])
+    m.leg(6.2, 0, -0.45, -1.9, 0.27, width=0.22, back=-1)
+    m.leg(-0.6, 2.5, -0.15, -1.85, 0.4, width=0.3, mirror=True)
+    m.emissives.insert(0, dict(kind='afterburner', at=[-5.45, -0.15, 0.55], mirror=True))
+    groups = {'body': 'camo', 'canopy': 'canopy', 'intake': 'intake', 'nozzle': 'nozzle',
+              'store': 'steel', 'gear': '#B8BCBE', 'tire': '#2B2C2E'}
+    return m, groups, jet_rig(22, 4.6)
+
+
+# ---- Bombers: Ra-90 (Tu-95MS), B-40 (B-52G), Ra-84 (Tu-22M3); the tanker Ra-78 (Il-78) ----
+
+def ra90():
+    m = Model()
+    h = 24.7
+    m.loft('body', [
+        (h, 0.0, 0, 0),
+        (h - 1.0, 0.0, 0.9, 0.85),
+        (h - 3.0, 0.2, 1.5, 1.5),
+        (h - 7.0, 0.3, 1.45, 1.45),
+        (-12.0, 0.3, 1.45, 1.45),
+        (-20.0, 0.6, 0.9, 0.9),
+        (-h, 0.9, 0.4, 0.45),
+    ])
+    m.loft('canopy', [(h - 3.2, 1.05, 0.9, 0.4, 0.4), (h - 4.2, 1.45, 1.15, 0.45, 0.4),
+                      (h - 5.2, 1.5, 1.2, 0.4, 0.4)], sides=6)
+    m.wing('body', [5.0, 0.6, 1.4], 7.6, 2.6, 23.6, 35, thickness=0.1, dihedral=-2)
+    for z in (6.8, 13.2):
+        le = 5.0 - (z - 1.4) * T(R(35))
+        y = 0.6 - (z - 1.4) * T(R(2))
+        m.cyl('body', [le + 2.0, y - 0.15, z], [le - 6.5, y - 0.3, z], 0.82, 0.55, mirror=True)
+        m.blob('nozzle', [le + 2.0, y - 0.15, z], [0.7, 0.55, 0.55], mirror=True)
+        for k, (dx, d) in enumerate(((2.6, 1), (3.3, -1))):
+            for side in (-1, 1):
+                m.rotors.append(dict(hub=[le + dx, y - 0.15, side * z], axis=[1, 0, 0],
+                                     radius=2.8, blades=4, chord=0.32, direction=d,
+                                     group='prop'))
+    m.wing('body', [-14.5, 1.3, 0], 8.6, 3.0, 7.8, 42, thickness=0.09, mirror=False,
+           vertical=True)
+    m.wing('body', [-17.4, 0.9, 0.6], 6.0, 2.2, 6.4, 40, thickness=0.08)
+    m.tip_lights(5.0 - 23.6 * T(R(35)) - 1.2, -0.2, 24.9, [-h - 0.1, 0.9, 0])
+    m.light('beacon', [-2, 1.55, 0])
+    m.light('beacon', [-2, -1.55, 0])
+    m.leg(h - 4.5, 0, -1.2, -2.7, 0.5, width=0.45, back=-1)
+    m.leg(-1.0, 6.8, -0.6, -2.6, 0.62, width=0.6, mirror=True)
+    groups = {'body': 'camo', 'canopy': 'canopy', 'nozzle': 'nozzle', 'prop': '#34373A',
+              'gear': '#B8BCBE', 'tire': '#2B2C2E'}
+    return m, groups, jet_rig(84, 17)
+
+
+def b40():
+    m = Model()
+    h = 24.5
+    m.loft('body', [
+        (h, -0.3, 0, 0),
+        (h - 1.0, -0.3, 0.95, 0.9),
+        (h - 3.2, 0.0, 1.45, 1.55, 0.3),
+        (h - 7.0, 0.2, 1.55, 1.8, 0.4),
+        (-12.0, 0.2, 1.5, 1.75, 0.45),
+        (-20.0, 0.5, 0.95, 1.05, 0.4),
+        (-h, 0.8, 0.45, 0.55),
+    ])
+    m.loft('canopy', [(h - 2.2, 0.55, 0.9, 0.4, 0.4), (h - 3.0, 0.95, 1.2, 0.5, 0.4),
+                      (h - 3.8, 1.05, 1.3, 0.45, 0.4)], sides=6)
+    # High wing swept 35°, drooping, with four pods of two engines on pylons.
+    m.wing('body', [4.5, 1.55, 1.3], 9.0, 2.6, 26.8, 35, thickness=0.09, dihedral=-2)
+    for z in (8.6, 16.6):
+        le = 4.5 - (z - 1.3) * T(R(35))
+        y = 1.55 - (z - 1.3) * T(R(2))
+        for dz in (-0.6, 0.6):
+            m.cyl('body', [le + 3.8, y - 1.6, z + dz], [le - 0.6, y - 1.55, z + dz], 0.55, 0.42,
+                  mirror=True)
+            m.cyl('intake', [le + 3.85, y - 1.6, z + dz], [le + 3.9, y - 1.6, z + dz], 0.48,
+                  mirror=True)
+        m.box('body', [le + 1.4, y - 0.75, z], [3.4, 1.2, 0.3], mirror=True)
+    # Tall fin (the G's shorter one), stabilizer, the outrigger wheels near the tips.
+    m.wing('body', [-14.6, 1.6, 0], 9.0, 4.0, 7.6, 38, thickness=0.08, mirror=False,
+           vertical=True)
+    m.wing('body', [-18.6, 0.9, 0.7], 6.0, 2.4, 7.5, 38, thickness=0.08)
+    m.tip_lights(4.5 - 26.8 * T(R(35)) - 1.2, 0.6, 28.0, [-h - 0.1, 0.8, 0])
+    m.light('beacon', [-2, 1.95, 0])
+    m.light('beacon', [-2, -1.6, 0])
+    # Bicycle gear in two pairs under the fuselage, outriggers at the wings.
+    m.leg(8.0, 1.0, -1.4, -2.8, 0.55, width=0.5, mirror=True, back=-1)
+    m.leg(-6.0, 1.0, -1.4, -2.8, 0.55, width=0.5, mirror=True)
+    m.leg(4.5 - 21.0 * T(R(35)) - 3.0, 22.3, 0.6, -2.5, 0.3, width=0.25, mirror=True,
+          strut=0.08)
+    groups = {'body': 'camo', 'canopy': 'canopy', 'intake': 'intake', 'gear': '#B8BCBE',
+              'tire': '#2B2C2E'}
+    return m, groups, jet_rig(86, 18)
+
+
+def ra84():
+    m = Model()
+    h = 21.0
+    m.loft('body', [
+        (h, 0.2, 0, 0),
+        (h - 1.6, 0.2, 0.7, 0.7),
+        (h - 4.0, 0.35, 1.15, 1.15),
+        (h - 6.5, 0.5, 1.3, 1.3, 0.3),
+        (0.0, 0.5, 1.6, 1.25, 0.6),
+        (-12.0, 0.5, 1.5, 1.15, 0.6),
+        (-17.4, 0.6, 1.2, 0.9, 0.5),
+    ])
+    m.loft('canopy', [(h - 4.4, 1.3, 0.9, 0.45, 0.4), (h - 5.2, 1.7, 1.15, 0.5, 0.4),
+                      (h - 6.2, 1.8, 1.25, 0.45, 0.4)], sides=6)
+    # Wedge intakes beside the cockpit.
+    m.box('body', [4.5, 0.5, 1.75], [10.0, 2.0, 1.2], bevel=0.2, mirror=True)
+    m.box('intake', [9.52, 0.5, 1.75], [0.05, 1.8, 1.0], mirror=True)
+    m.cyl('nozzle', [-17.4, 0.6, 0.6], [-18.6, 0.6, 0.6], 0.62, 0.55, mirror=True)
+    # Fixed glove and the outer wings at 40° (between 20° and 65°), a tall fin with a dorsal.
+    m.wing('body', [3.0, 1.0, 1.9], 9.0, 6.0, 4.6, 55, thickness=0.06)
+    m.wing('body', [-2.4, 1.0, 6.5], 5.4, 2.0, 10.6, 40, thickness=0.06, dihedral=-2)
+    m.wing('body', [-9.6, 1.6, 0], 8.0, 2.2, 6.6, 55, thickness=0.07, mirror=False,
+           vertical=True)
+    m.wing('body', [-13.6, 0.9, 1.0], 5.2, 2.0, 6.0, 50, thickness=0.07, dihedral=-4)
+    m.tip_lights(-2.4 - 10.6 * T(R(40)) - 1.0, 0.65, 17.0, [-17.6, 8.3, 0])
+    m.light('beacon', [-2, 1.8, 0])
+    m.light('beacon', [-2, -0.8, 0])
+    # The dorsal fillet, the tail gunner's turret, the refueling probe's stub.
+    m.wing('body', [-4.6, 1.6, 0], 5.6, 0.6, 1.4, 75, thickness=0.08, mirror=False,
+           vertical=True)
+    m.blob('canopy', [-17.9, 1.3, 0], [0.9, 0.55, 0.55], detail=1)
+    m.cyl('body', [h - 1.2, 0.9, 0], [h + 0.6, 0.85, 0], 0.07, sides=4)
+    # Six-wheeled main bogies: three tires in a row each side.
+    m.leg(h - 6.0, 0, -0.6, -2.4, 0.42, width=0.4, back=-1)
+    for x in (-2.9, -4.0, -5.1):
+        m.leg(x, 2.6, -0.4, -2.35, 0.5, width=0.45, mirror=True)
+    m.emissives.insert(0, dict(kind='afterburner', at=[-18.65, 0.6, 0.6], mirror=True))
+    groups = {'body': 'camo', 'canopy': 'canopy', 'intake': 'intake', 'nozzle': 'nozzle',
+              'gear': '#B8BCBE', 'tire': '#2B2C2E'}
+    return m, groups, jet_rig(64, 13)
+
+
+def ra78():
+    """The Il-78 tanker: the Ra-60's airframe without its rotodome, with three hose pods."""
+    m, groups, rig = il76(dome=False)
+    for at in ([-8.0, 0.4, 14.5], [-8.0, 0.4, -14.5]):
+        m.cyl('store', [at[0] + 2.2, at[1], at[2]], [at[0] - 2.2, at[1], at[2]], 0.45, 0.3,
+              sides=6)
+    m.box('store', [-19.5, 0.6, 2.6], [3.4, 0.9, 0.8], bevel=0.2)
+    groups['store'] = 'steel'
+    return m, groups, rig
+
+
+MODELS = dict(e5=e5, kc40=kc40, f25=f25, vo37=vo37, ra44=ra44, ra60=ra60, ve28=ve28, ve18=ve18,
+              f28=f28, ar23=ar23, vo33=vo33, ar45r=ar45r, a15=a15, rf34=rf34, ra90=ra90,
+              b40=b40, ra84=ra84, ra78=ra78)
+# Variants drawn with another type's geometry (the bundle's `model`) and its rig.
+VARIANTS = dict(f34g='rf34', vo37p='vo37')
+# Schemes: the palette's Pact tactical for strike aircraft and helicopters, its bare-metal
+# bomber scheme for the bombers (visual style).
+SCHEMES = dict(vo37='pact-tactical', ve28='pact-tactical', ve18='pact-tactical', ra90='pact-bomber',
+               ra84='pact-bomber')
 
 
 def write(id_):
@@ -452,6 +809,24 @@ def write(id_):
     open(path, 'w').write(json.dumps(out, indent=2, ensure_ascii=False) + '\n')
 
 
+def write_variant(id_):
+    path = f'src/data/models/aircraft/{id_}.json'
+    b = json.load(open(path))
+    base = VARIANTS[id_]
+    rig = json.load(open(f'src/data/models/aircraft/{base}.json'))['rig']
+    out = {k: b[k] for k in ('name', 'class', 'scheme')}
+    out['scheme'] = SCHEMES.get(base, b['scheme'])
+    out['model'] = base
+    out['rig'] = rig
+    for k, v in b.items():
+        if k not in out:
+            out[k] = v
+    open(path, 'w').write(json.dumps(out, indent=2, ensure_ascii=False) + '\n')
+
+
 if __name__ == '__main__':
-    for id_ in sys.argv[1:] or MODELS:
-        write(id_)
+    for id_ in sys.argv[1:] or [*MODELS, *VARIANTS]:
+        if id_ in VARIANTS:
+            write_variant(id_)
+        else:
+            write(id_)

@@ -321,8 +321,10 @@ Started 2026-11-23, in parallel with R2.8 in a second session (decisions 314–3
 - [x] The Pact skin in the HUD: km/h, meters, m/s, kilometers and kg; the angle-of-attack bracket and approach speed per type (decision 315)
 - [x] Checks 12–13 for an attack aircraft (the Vo-35) in `tools/displays.screens.mjs` (`AIRCRAFT=vo35`; every shot within the clutter limits, decision 315)
 - [x] AI-only models: E-5 first (the owner asked for a proper AWACS), then F-25, KC-40, Vo-37, Ra-44, Ra-60, Ve-28 and the Pact utility helicopter Ve-18 (the Alliance's UH-68 exists): `tools/models/aircraft.py` writes their geometry and rigs into the bundles
-- [ ] The rest of the demo's orders (a day of war on seeds 4, 10 and 7 flies them): F-28, Ar-23, Ar-45R, A-15, Ra-90, RF-34 (and the F-34G on its geometry), B-40, Vo-33, Ra-78 (on the Ra-60's airframe), Ra-84, and the Vo-37P on the Vo-37's
-- [ ] Silhouette check (Part I check 6) for every new model
+- [x] The rest of the demo's orders (a day of war on seeds 4, 10 and 7 flies them): F-28, Ar-23, Ar-45R, A-15, Ra-90, RF-34 (and the F-34G on its geometry), B-40, Vo-33, Ra-78 (on the Ra-60's airframe), Ra-84, and the Vo-37P on the Vo-37's (decision 316)
+- [ ] Models for the types outside the demo's orders, which stand in by class and side today: A-14, F-30, F-130, AH-70, CH-60, Ve-36 (R4.1)
+- [ ] The Pact's transports and bombers in the Pact's own markings; the Su-24 and F-111 analogues set further apart if the owner mixes them up
+- [x] Silhouette check (Part I check 6) for every new model: `tools/models.preview.ts`, compared on contact sheets by class (decision 316)
 - [ ] A-15 (A-10 analogue): model spec, flight data, laws (if time allows; owner decision 5)
 - [ ] C-150 (C-130 analogue): flight data, laws, transport rig (if time allows)
 - [ ] Owner, on the GPU: fly the Vo-31 and the Vo-35 in Free Flight; follow and take over a Pact flight; the new models in the campaign

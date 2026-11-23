@@ -2,6 +2,261 @@
   "name": "RF-34 Magpie",
   "class": "strike",
   "scheme": "alliance-air",
+  "groups": {
+    "body": "camo",
+    "canopy": "canopy",
+    "intake": "intake",
+    "nozzle": "nozzle",
+    "store": "steel",
+    "gear": "#B8BCBE",
+    "tire": "#2B2C2E"
+  },
+  "parts": [
+    {
+      "type": "loft",
+      "group": "body",
+      "sides": 8,
+      "stations": [
+        {
+          "x": 10.2,
+          "y": 0.0,
+          "w": 0,
+          "h": 0
+        },
+        {
+          "x": 9.2,
+          "y": 0.0,
+          "w": 0.4,
+          "h": 0.38
+        },
+        {
+          "x": 7.4,
+          "y": 0.15,
+          "w": 0.62,
+          "h": 0.62
+        },
+        {
+          "x": 5.4,
+          "y": 0.35,
+          "w": 0.75,
+          "h": 0.8
+        },
+        {
+          "x": 2.0,
+          "y": 0.4,
+          "w": 0.95,
+          "h": 0.85,
+          "square": 0.5
+        },
+        {
+          "x": -3.0,
+          "y": 0.3,
+          "w": 1.05,
+          "h": 0.8,
+          "square": 0.5
+        },
+        {
+          "x": -7.0,
+          "y": 0.55,
+          "w": 0.45,
+          "h": 0.45
+        },
+        {
+          "x": -9.0,
+          "y": 0.75,
+          "w": 0.25,
+          "h": 0.25
+        }
+      ]
+    },
+    {
+      "type": "blob",
+      "group": "canopy",
+      "center": [4.3, 1.15, 0],
+      "radius": [2.4, 0.5, 0.5],
+      "detail": 1,
+      "half": true
+    },
+    {
+      "type": "box",
+      "group": "body",
+      "center": [2.0, 0.15, 1.05],
+      "size": [4.6, 1.1, 0.7],
+      "bevel": 0.15,
+      "mirror": true
+    },
+    {
+      "type": "box",
+      "group": "intake",
+      "center": [4.32, 0.2, 1.05],
+      "size": [0.05, 0.95, 0.55],
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "nozzle",
+      "to": [-5.4, -0.15, 0.55],
+      "radius": 0.45,
+      "sides": 8,
+      "from": [-4.6, -0.2, 0.55],
+      "radius2": 0.4,
+      "mirror": true
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [1.2, 0.15, 1.3],
+      "rootChord": 5.0,
+      "tipChord": 2.4,
+      "span": 3.2,
+      "sweep": 45,
+      "thickness": 0.05,
+      "mirror": true
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [-2.0, 0.15, 4.5],
+      "rootChord": 2.4,
+      "tipChord": 1.2,
+      "span": 1.4,
+      "sweep": 45,
+      "thickness": 0.05,
+      "dihedral": 12,
+      "mirror": true
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [-6.6, 0.75, 0.4],
+      "rootChord": 2.4,
+      "tipChord": 1.0,
+      "span": 2.6,
+      "sweep": 45,
+      "thickness": 0.05,
+      "dihedral": -23,
+      "mirror": true
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [-4.8, 0.9, 0],
+      "rootChord": 4.2,
+      "tipChord": 1.2,
+      "span": 3.0,
+      "sweep": 55,
+      "thickness": 0.05,
+      "vertical": true
+    },
+    {
+      "type": "cylinder",
+      "group": "store",
+      "to": [-2.8, -0.75, 0],
+      "radius": 0.32,
+      "sides": 6,
+      "from": [1.6, -0.75, 0]
+    },
+    {
+      "type": "cylinder",
+      "group": "gear",
+      "to": [6.2, -1.9, 0],
+      "radius": 0.12,
+      "sides": 6,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [6.2, -0.45, -0.4],
+          [6.2, -0.45, 0.4]
+        ],
+        "angle": -100
+      },
+      "from": [6.2, -0.45, 0]
+    },
+    {
+      "type": "cylinder",
+      "group": "tire",
+      "to": [6.2, -1.9, 0.11],
+      "radius": 0.27,
+      "sides": 8,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [6.2, -0.45, -0.4],
+          [6.2, -0.45, 0.4]
+        ],
+        "angle": -100
+      },
+      "from": [6.2, -1.9, -0.11]
+    },
+    {
+      "type": "cylinder",
+      "group": "gear",
+      "to": [-0.6, -1.85, 2.5],
+      "radius": 0.12,
+      "sides": 6,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [-0.6, -0.15, 2.1],
+          [-0.6, -0.15, 2.9]
+        ],
+        "angle": 100
+      },
+      "from": [-0.6, -0.15, 2.5],
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "tire",
+      "to": [-0.6, -1.85, 2.65],
+      "radius": 0.4,
+      "sides": 8,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [-0.6, -0.15, 2.1],
+          [-0.6, -0.15, 2.9]
+        ],
+        "angle": 100
+      },
+      "from": [-0.6, -1.85, 2.35],
+      "mirror": true
+    }
+  ],
+  "emissives": [
+    {
+      "kind": "afterburner",
+      "at": [-5.45, -0.15, 0.55],
+      "mirror": true
+    },
+    {
+      "kind": "nav-red",
+      "at": [-3.8, 0.45, -5.9]
+    },
+    {
+      "kind": "nav-green",
+      "at": [-3.8, 0.45, 5.9]
+    },
+    {
+      "kind": "nav-white",
+      "at": [-9.0, 3.9, 0]
+    },
+    {
+      "kind": "beacon",
+      "at": [-1, 1.05, 0]
+    }
+  ],
+  "rig": {
+    "kind": "fast-jet",
+    "distance": 22,
+    "height": 4.6,
+    "groundDistance": 16.5,
+    "groundHeight": 3.0,
+    "rotation": 3.0,
+    "stretch": 2,
+    "stretchPerAccel": 0.25,
+    "fovDeg": 50
+  },
   "airWar": {
     "id": "rf34",
     "order": 9,

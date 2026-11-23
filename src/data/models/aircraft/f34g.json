@@ -2,6 +2,18 @@
   "name": "F-34G Magpie",
   "class": "strike",
   "scheme": "alliance-air",
+  "model": "rf34",
+  "rig": {
+    "kind": "fast-jet",
+    "distance": 22,
+    "height": 4.6,
+    "groundDistance": 16.5,
+    "groundHeight": 3.0,
+    "rotation": 3.0,
+    "stretch": 2,
+    "stretchPerAccel": 0.25,
+    "fovDeg": 50
+  },
   "airWar": {
     "id": "f34g",
     "order": 8,

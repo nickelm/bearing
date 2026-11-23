@@ -5038,6 +5038,19 @@ The first run missed by 4.0 m at 610 m and 9.6 m at 900 m, growing with the squa
 
 **Reason:** R2.7's flyable roster (owner decision 5): the Vo-31 and Vo-35 flown and followed, with the Pact skin seen in them.
 
+### 316. A model for every type on the demo's orders, generated into the bundles
+
+**Date:** 2026-11-23
+**Decision:**
+
+- **Which types.** R2.7's exit asks for a model for every type on the demo's orders. The roadmap listed eight AI-only types. A day of war on the demo seeds 4, 10 and 7 flies twelve more that only had stand-ins: the F-28 (F-14A), Ar-23 (MiG-23ML), Vo-33 (Su-27), Ar-45R (MiG-25RB), A-15 (A-10A), RF-34 (RF-4C), F-34G (F-4G), B-40 (B-52G), Ra-78 (Il-78), Ra-84 (Tu-22M3), Ra-90 (Tu-95MS) and Vo-37P (Su-24 with anti-radiation missiles). Each now has its own geometry: the E-5 (with its rotodome on struts, the owner's AWACS), KC-40 (with its boom), F-25, Vo-37, Ra-44, Ra-60, Ve-28 and Ve-18, and the twelve above. The F-34G is drawn with the RF-34's geometry and the Vo-37P with the Vo-37's, through their bundles' `model`, as the Vo-31K is with the Vo-31's. `tests/bundles.test.ts` lists the types of the demo's orders and requires a model and a rig for each.
+- **Generated, not drawn by hand.** `tools/models/aircraft.py` writes each model's parts, groups, rotors, emissives and chase-camera rig into its bundle and leaves the bundle's other blocks alone, as `tools/models/carrier.py` writes the carrier. One script keeps the family alike: the E-5 and KC-40 share one 707-type airframe, the Ra-60 and Ra-78 one Il-76-type airframe, and every fixed-wing model stands on gear that moves on the `gear` channel, so the flying model leaves it out. Swing-wing types (F-28, Ar-23, Vo-37, Ra-84) are drawn with their wings at mid sweep.
+- **Budgets and schemes.** Every model is within its class's triangle budget: fighters and strike aircraft 470–650, bombers and transports 770–1,070 (the Ra-90 and Ra-44 add their propeller discs), helicopters 670–730. The Vo-37, Ve-28 and Ve-18 take the palette's Pact tactical scheme, and the Ra-84 and Ra-90 its bare-metal bomber scheme.
+- **Check 6.** The silhouettes, compared on sheets by class (fighters, strike, large aircraft, helicopters), leave every type identifiable. The closest pairs are the closest real ones, the Vo-37 and F-124 (Su-24 and F-111) and the Ra-44 and C-150 (An-12 and C-130), and they still differ in their side and front views.
+- **Stand-ins** remain for the types outside the demo's orders: the A-14, F-30, F-130, AH-70, CH-60 and Ve-36.
+
+**Reason:** R2.7's exit criterion: every type on the demo's orders has a model.
+
 ### 320. Stylized effects: toon-shaded sphere-impostor puffs, dithered, with depth
 
 **Date:** 2026-11-22

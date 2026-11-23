@@ -7,10 +7,10 @@
     "canopy": "canopy",
     "intake": "intake",
     "nozzle": "nozzle",
-    "dome": "#9AA1A8",
-    "band": "#3E4348",
     "gear": "#B8BCBE",
-    "tire": "#2B2C2E"
+    "tire": "#2B2C2E",
+    "dome": "#9AA1A8",
+    "band": "#3E4348"
   },
   "parts": [
     {

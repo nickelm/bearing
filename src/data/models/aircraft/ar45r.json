@@ -2,6 +2,259 @@
   "name": "Ar-45R Sapsan",
   "class": "strike",
   "scheme": "pact-air",
+  "groups": {
+    "body": "camo",
+    "canopy": "canopy",
+    "intake": "intake",
+    "nozzle": "nozzle",
+    "gear": "#B8BCBE",
+    "tire": "#2B2C2E"
+  },
+  "parts": [
+    {
+      "type": "loft",
+      "group": "body",
+      "sides": 8,
+      "stations": [
+        {
+          "x": 11.6,
+          "y": 0.2,
+          "w": 0,
+          "h": 0
+        },
+        {
+          "x": 10.2,
+          "y": 0.2,
+          "w": 0.45,
+          "h": 0.45
+        },
+        {
+          "x": 8.2,
+          "y": 0.3,
+          "w": 0.7,
+          "h": 0.72
+        },
+        {
+          "x": 6.4,
+          "y": 0.45,
+          "w": 0.8,
+          "h": 0.85
+        },
+        {
+          "x": 2.0,
+          "y": 0.4,
+          "w": 1.0,
+          "h": 0.75,
+          "square": 0.5
+        },
+        {
+          "x": -6.0,
+          "y": 0.35,
+          "w": 0.95,
+          "h": 0.6,
+          "square": 0.5
+        },
+        {
+          "x": -9.0,
+          "y": 0.35,
+          "w": 0.5,
+          "h": 0.4
+        }
+      ]
+    },
+    {
+      "type": "blob",
+      "group": "canopy",
+      "center": [6.5, 1.25, 0],
+      "radius": [1.4, 0.45, 0.48],
+      "detail": 1,
+      "half": true
+    },
+    {
+      "type": "box",
+      "group": "body",
+      "center": [1.4, 0.1, 1.35],
+      "size": [8.4, 1.6, 1.25],
+      "bevel": 0.12,
+      "mirror": true
+    },
+    {
+      "type": "box",
+      "group": "intake",
+      "center": [5.62, 0.15, 1.35],
+      "size": [0.05, 1.4, 1.05],
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "body",
+      "to": [-9.4, 0.25, 0.9],
+      "radius": 0.82,
+      "sides": 8,
+      "from": [-2.8, 0.15, 0.9],
+      "radius2": 0.7,
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "nozzle",
+      "to": [-10.3, 0.25, 0.9],
+      "radius": 0.7,
+      "sides": 8,
+      "from": [-9.4, 0.25, 0.9],
+      "radius2": 0.62,
+      "mirror": true
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [-0.6, 0.85, 1.9],
+      "rootChord": 6.0,
+      "tipChord": 1.6,
+      "span": 5.1,
+      "sweep": 40,
+      "thickness": 0.04,
+      "dihedral": -5,
+      "mirror": true
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [-6.4, 0.6, 1.5],
+      "rootChord": 3.4,
+      "tipChord": 1.3,
+      "span": 2.9,
+      "sweep": 50,
+      "thickness": 0.05,
+      "mirror": true
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [-5.8, 1.0, 1.6],
+      "rootChord": 3.8,
+      "tipChord": 1.4,
+      "span": 3.6,
+      "sweep": 50,
+      "thickness": 0.05,
+      "dihedral": -8,
+      "mirror": true,
+      "vertical": true
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [-7.6, -0.6, 1.2],
+      "rootChord": 1.8,
+      "tipChord": 1.0,
+      "span": 1.0,
+      "sweep": 40,
+      "thickness": 0.05,
+      "dihedral": 170,
+      "mirror": true,
+      "vertical": true
+    },
+    {
+      "type": "cylinder",
+      "group": "gear",
+      "to": [7.4, -2.0, 0],
+      "radius": 0.12,
+      "sides": 6,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [7.4, -0.3, -0.4],
+          [7.4, -0.3, 0.4]
+        ],
+        "angle": -100
+      },
+      "from": [7.4, -0.3, 0]
+    },
+    {
+      "type": "cylinder",
+      "group": "tire",
+      "to": [7.4, -2.0, 0.125],
+      "radius": 0.34,
+      "sides": 8,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [7.4, -0.3, -0.4],
+          [7.4, -0.3, 0.4]
+        ],
+        "angle": -100
+      },
+      "from": [7.4, -2.0, -0.125]
+    },
+    {
+      "type": "cylinder",
+      "group": "gear",
+      "to": [-1.4, -1.95, 2.1],
+      "radius": 0.12,
+      "sides": 6,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [-1.4, -0.2, 1.7000000000000002],
+          [-1.4, -0.2, 2.5]
+        ],
+        "angle": 100
+      },
+      "from": [-1.4, -0.2, 2.1],
+      "mirror": true
+    },
+    {
+      "type": "cylinder",
+      "group": "tire",
+      "to": [-1.4, -1.95, 2.2600000000000002],
+      "radius": 0.45,
+      "sides": 8,
+      "anim": {
+        "channel": "gear",
+        "hinge": [
+          [-1.4, -0.2, 1.7000000000000002],
+          [-1.4, -0.2, 2.5]
+        ],
+        "angle": 100
+      },
+      "from": [-1.4, -1.95, 1.9400000000000002],
+      "mirror": true
+    }
+  ],
+  "emissives": [
+    {
+      "kind": "afterburner",
+      "at": [-10.35, 0.25, 0.9],
+      "mirror": true
+    },
+    {
+      "kind": "nav-red",
+      "at": [-5.2, 0.4, -6.9]
+    },
+    {
+      "kind": "nav-green",
+      "at": [-5.2, 0.4, 6.9]
+    },
+    {
+      "kind": "nav-white",
+      "at": [-10.0, 4.2, 2.1]
+    },
+    {
+      "kind": "beacon",
+      "at": [-1, 1.2, 0]
+    }
+  ],
+  "rig": {
+    "kind": "fast-jet",
+    "distance": 25,
+    "height": 5,
+    "groundDistance": 18.8,
+    "groundHeight": 3.2,
+    "rotation": 3.0,
+    "stretch": 2,
+    "stretchPerAccel": 0.25,
+    "fovDeg": 50
+  },
   "airWar": {
     "id": "ar45r",
     "order": 29,

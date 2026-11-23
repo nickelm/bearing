@@ -30,7 +30,7 @@ import type { HudFrame } from '../ui/flight/hud';
 import { Vec3d } from '../core/vec3d';
 import type { Reference } from '../sim/flight/aiPilot';
 
-/** The bundle whose geometry stands in for a type without one, by class and side (until R2.7). */
+/** The bundle whose geometry stands in for a type without one, by class and side (types outside the demo's orders; decision 316). */
 export const STAND_INS: Readonly<Record<string, { alliance: string; pact: string }>> = {
   fighter: { alliance: 'alliance-fighter', pact: 'pact-fighter' },
   strike: { alliance: 'alliance-strike', pact: 'pact-strike' },

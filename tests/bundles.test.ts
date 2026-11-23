@@ -7,6 +7,13 @@ import { profileProblems } from '../src/sim/avionics/profiles';
 
 const bundles = Object.values(AIRCRAFT_BUNDLES);
 
+/** The aircraft types of a day of war's orders on the demo seeds, and the demo's helicopters. */
+const DEMO_ORDER_TYPES = [
+  ...['f21', 'f25', 'f28', 'f124', 'a15', 'rf34', 'f34g', 'b40', 'e5', 'kc40', 'c150'],
+  ...['vo31', 'vo33', 'vo35', 'vo37', 'vo37p', 'ar23', 'ar45r', 'ra44', 'ra60', 'ra78'],
+  ...['ra84', 'ra90', 'uh68', 've18', 've28'],
+];
+
 describe('aircraft bundles', () => {
   it('have unique ids, a dense air-war order and consistent sides', () => {
     const typeIds = bundles.filter((b) => b.airWar).map((b) => b.airWar!.id);
@@ -61,10 +68,11 @@ describe('aircraft bundles', () => {
     expect(gaps('ve18')).toBe('flight, pylons, calibration');
     expect(gaps('vo31')).toBe('calibration');
     expect(gaps('vo35')).toBe('calibration');
-    expect(gaps('a15')).toBe('geometry, flight, rig, pylons, calibration');
+    expect(gaps('a15')).toBe('flight, pylons, calibration');
     expect(gaps('c150')).toBe('flight, pylons, calibration');
-    // The AI-only types of the demo's orders have their models and rigs (R2.7).
-    for (const id of ['f25', 'e5', 'kc40', 'vo37', 'ra44', 'ra60', 've28']) {
+    // Every type the demo's orders fly has its model and rig (R2.7's exit): the types a day
+    // of war flew on the demo seeds 4, 10 and 7 (2026-11-23), and the helicopters R2.9 adds.
+    for (const id of DEMO_ORDER_TYPES) {
       expect(gaps(id), id).not.toContain('geometry');
       expect(gaps(id), id).not.toContain('rig');
     }
