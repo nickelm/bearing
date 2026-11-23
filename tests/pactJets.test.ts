@@ -112,7 +112,7 @@ describe('the jets’ wingtip vortices (decision 319)', () => {
     expect(v[1]).toBeCloseTo(5.7, 6);
     expect(v[0]).toBeLessThan(-2.8);
     expect(v[0]).toBeGreaterThan(-3.6);
-    // The A-15's main wing, not its drooped tip pieces.
-    expect(tipOf('a15')[1]).toBeCloseTo(8.75, 2);
+    // The A-15's drooped tips, which carry its span to 17.5 m.
+    expect(tipOf('a15')[1]).toBeCloseTo(8.0 + 0.85 * Math.cos((25 * Math.PI) / 180), 6);
   });
 });
