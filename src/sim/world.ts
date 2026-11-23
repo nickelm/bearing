@@ -155,6 +155,15 @@ export function applyInput(world: SimWorld, input: CampaignInputEvent): void {
     case 'target-hit':
       world.resolution?.fullFidelityHit(input.target, input.id, input.amount, input.by);
       break;
+    case 'vehicle-destroyed':
+      world.ground?.destroyVehicle(
+        input.battalion,
+        input.vehicle,
+        input.point,
+        input.heading,
+        world.sim.time,
+      );
+      break;
     case 'hand-back': {
       const m = world.air?.missions.get(input.mission);
       if (m) world.air!.release(m, input.fix, input.lost, world.sim, input.stores);

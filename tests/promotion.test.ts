@@ -1,242 +1,311 @@
+/** Minimal entity promotion (roadmap R2.8, decisions 333–334). */
 import { describe, expect, it } from 'vitest';
-import { KNOT } from '../src/core/units';
+import { CubeGrid } from '../src/core/cubeGrid';
+import { arcDistance, destination, slerp } from '../src/core/greatCircle';
+import type { Dir } from '../src/core/greatCircle';
+import { HOUR } from '../src/core/units';
 import { Vec3d } from '../src/core/vec3d';
-import { FlightDirector } from '../src/sim/flight/flightDirector';
-import { REJOIN_LEVER } from '../src/sim/flight/aiPilot';
-import { MIL_DETENT } from '../src/sim/flight/controlLaws';
-import { analyticPose } from '../src/sim/air/analyticPose';
-import { formationAt, slotPose } from '../src/sim/air/formation';
-import { routeState } from '../src/sim/air/route';
-import { missionPlugin } from '../src/sim/command/missions/registry';
+import { bundleOfType } from '../src/sim/air/bundles';
+import { initialAvionics } from '../src/sim/avionics/avionics';
+import { campaignInput } from '../src/sim/command/campaignInput';
 import type { FlightModel } from '../src/sim/flight/flightModel';
-import { flightFuel, routeFuelOf } from '../src/sim/flight/promotion';
-import { aircraftType } from '../src/sim/air/aircraft';
-import { MISSION_PROFILES } from '../src/sim/air/mission';
-import { rejoinRoute } from '../src/sim/air/missionRoute';
+import { flyProjectile } from '../src/sim/flight/ordnance';
+import { StoresRack } from '../src/sim/flight/storesRack';
+import type { GroundTarget } from '../src/sim/flight/storesRack';
+import type { BattalionKind } from '../src/sim/ground/orbat';
 import {
-  capMission,
-  dir,
-  phaseStart,
-  promote,
-  R,
-  routeReference,
-  seaLevel,
-  SPAN,
-} from './helpers/promoted';
+  aliveCount,
+  aliveVehicles,
+  parseVehicleKey,
+  PROMOTED,
+  promoteBattalion,
+  ROSTERS,
+  rosterOrder,
+  rosterSize,
+  strengthAfterKill,
+  VEHICLE_TARGETS,
+  VehicleDamage,
+  vehicleKey,
+} from '../src/sim/ground/promotion';
+import type { PromotableBattalion } from '../src/sim/ground/promotion';
+import { SimHost } from '../src/sim/host';
+import { applyInput, createSimWorld } from '../src/sim/world';
+import type { SimWorld } from '../src/sim/world';
+import { generateCampaignWorld } from '../src/worldgen/campaignWorld';
+import { DEFAULT_PLANET_PARAMS } from '../src/worldgen/params';
+import { kestrelSpec } from './helpers/flight';
+import { capMission, phaseStart, promote, seaLevel } from './helpers/promoted';
+import { syntheticConfig } from './helpers/weatherWorld';
 
-const m = capMission();
-const formations = missionPlugin('cap').formations;
-const lead = (a: { flown: { airframe: unknown } }) => a.flown.airframe as FlightModel;
+const R = DEFAULT_PLANET_PARAMS.radius;
+const KINDS: BattalionKind[] = ['tank', 'mechanized', 'air-defense', 'artillery', 'logistics'];
+const ANCHOR: Dir = [0, 0, 1];
 
-describe('promotion', () => {
-  it('places each aircraft at its drawn pose with the route’s share of fuel, gear up and power on', () => {
-    const t = phaseStart(m, 'on-target') + 200;
-    const f = promote(m, t);
-    expect(f.aircraft).toHaveLength(4);
-    const p = analyticPose(m.route, t, R);
-    const fs = formationAt(m.timeline, formations, t);
-    const share = routeState(m.route, t, R).fuel / m.route.fuel;
-    f.aircraft.forEach((a, k) => {
-      const s = slotPose(p, k, fs, SPAN);
-      const model = lead(a);
-      expect(model.pos.distanceTo(new Vec3d(...s.pos))).toBeLessThan(1e-6);
-      expect(model.vel.distanceTo(new Vec3d(...s.velocity))).toBeLessThan(1e-6);
-      expect(model.gear).toBe(0);
-      expect(a.flown.controls.gearDown).toBe(false);
-      expect(model.power).toBeGreaterThan(0);
-      // The loadout's capacity is internal plus its two tanks (decision 287), which feed first.
-      expect(a.rack.capacity).toBe(3200 + 2 * 1120);
-      expect(model.fuel / a.rack.capacity).toBeCloseTo(share, 9);
-      expect(model.tankFuel).toBeCloseTo(model.fuel - model.spec.mass.fuel, 9);
-      // Beyond the four short-range missiles in the flight data: two medium-range missiles and two tanks.
-      expect(model.storesMass).toBeCloseTo(2 * 231 + 2 * (1260 - 1120), 9);
-      expect(model.storesDragArea).toBeCloseTo(2 * 0.025 + 2 * 0.045, 9);
-      expect(a.stores).toEqual({ loadout: 'air-to-air', expended: {} });
-    });
+const battalion = (over: Partial<PromotableBattalion> = {}): PromotableBattalion => ({
+  id: 5,
+  side: 'pact',
+  kind: 'tank',
+  seed: 12345,
+  strength: 1,
+  killed: [],
+  ...over,
+});
+
+describe('rosters (R2.8)', () => {
+  it('order each kind’s vehicles so the first few show every type it has', () => {
+    for (const k of KINDS) {
+      const order = rosterOrder(k);
+      expect(order.length).toBe(rosterSize(k));
+      for (const [t, n] of Object.entries(ROSTERS[k])) {
+        expect(order.filter((x) => x === t).length).toBe(n);
+        expect(order.slice(0, PROMOTED[k])).toContain(t);
+      }
+    }
+    // A tank battalion shows mostly tanks.
+    const head = rosterOrder('tank').slice(0, PROMOTED.tank);
+    expect(head.filter((t) => t === 'tank').length).toBeGreaterThanOrEqual(5);
   });
 
-  it('folds back to the route’s state: where the lead is, its track, speed and fuel', () => {
-    const t = phaseStart(m, 'on-target') + 200;
-    const f = promote(m, t);
-    const d = f.demote()!;
-    const s = routeState(m.route, t, R);
-    expect(d.aircraft).toBe(4);
-    expect(d.lost).toEqual([]);
-    expect(d.slot).toBe(0);
-    const at = new Vec3d(...d.point).distanceTo(new Vec3d(...s.point)) * R;
-    expect(at).toBeLessThan(1);
-    expect(d.altitude).toBeCloseTo(s.altitude, 3);
-    expect(
-      Math.abs(Math.atan2(Math.sin(d.heading - s.heading), Math.cos(d.heading - s.heading))),
-    ).toBeLessThan(0.02);
-    expect(d.fuel).toBeCloseTo(s.fuel, 6);
-    expect(d.airborne).toBe(true);
-  });
-
-  it('counts a crashed aircraft as lost and leads from the next', () => {
-    const f = promote(m, phaseStart(m, 'fence-in') + 30);
-    lead(f.aircraft[0]!).crash('test');
-    const d = f.demote()!;
-    expect(d.aircraft).toBe(3);
-    expect(d.lost.map((l) => [l.slot, l.cause])).toEqual([[0, 'test']]);
-    expect(d.slot).toBe(1);
-  });
-
-  it('maps fuel by share both ways', () => {
-    expect(flightFuel(2900, 5800, 3200)).toBe(1600);
-    expect(routeFuelOf(1600, 3200, 5800)).toBe(2900);
-    expect(flightFuel(9000, 5800, 3200)).toBe(3200);
+  it('count one vehicle less per kill, and the aggregate’s losses off the end', () => {
+    for (const k of KINDS) {
+      let s = 0.83;
+      const before = aliveCount(k, s);
+      s = strengthAfterKill(k, s);
+      expect(aliveCount(k, s)).toBe(before - 1);
+    }
+    // Killed vehicles stay out; the anonymous losses come off the end of the order.
+    const alive = aliveVehicles('tank', 30 / 38, [0, 2]);
+    expect(alive.length).toBe(30);
+    expect(alive).not.toContain(0);
+    expect(alive).not.toContain(2);
+    expect(alive[0]).toBe(1);
   });
 });
 
-describe('the AI pilots of a promoted CAP flight', () => {
-  it('fly the route from the climb-out to the approach: the lead on its route, the wingmen on their slots', () => {
-    // Two aircraft keep the test short; slots 2 and 3 fly the same law.
-    const pair = { ...m, aircraft: 2 };
-    const t0 = phaseStart(pair, 'climb-out') + 30;
-    const t1 = phaseStart(pair, 'approach');
-    const station = phaseStart(pair, 'on-target');
-    const f = promote(pair, t0);
-    const fuel0 = lead(f.aircraft[0]!).fuel;
-    let worst = 0;
-    let worstOnStation = 0;
-    let worstWing = 0;
-    // The most lever each aircraft took, and the share of the flight in afterburner.
-    const levers = [0, 0];
-    let samples = 0;
-    let burning = 0;
-    for (let t = t0; t < t1; t += 1 / 30) {
-      f.advanceTo(t, seaLevel);
-      if (f.steps === 0) continue;
-      samples++;
-      f.aircraft.forEach((a, k) => {
-        const lever = (a.flown.controls as { throttle: number }).throttle;
-        levers[k] = Math.max(levers[k]!, lever);
-        if (lever > MIL_DETENT + 0.005) burning++;
-      });
-      const e = lead(f.aircraft[0]!).pos.distanceTo(
-        new Vec3d(...analyticPose(pair.route, f.time, R).pos),
-      );
-      worst = Math.max(worst, e);
-      // After the first straight leg of the racetrack, the station is held closely.
-      if (f.time > station + 300 && f.time < phaseStart(pair, 'egress')) {
-        worstOnStation = Math.max(worstOnStation, e);
-        const w = f.pilots[1]!.state;
-        worstWing = Math.max(worstWing, Math.hypot(w.behind, w.aside, w.below));
-      }
-    }
-    expect(f.aircraft.map((a) => a.flown.crashed)).toEqual([null, null]);
-    // The gear stays up the whole way, its doors whole.
-    for (const a of f.aircraft) {
-      expect(lead(a).gear).toBe(0);
-      expect(lead(a).gearDamaged).toBe(false);
-    }
-    // The route climbs at the F-21's 50 m/s, a little more than its military power sustains
-    // near the top (decision 283), and the lead keeps to 90% of military power outside combat
-    // (decisions 310, 311): it falls up to about 4 km behind its point and closes again.
-    expect(worst).toBeLessThan(4500);
-    expect(worstOnStation).toBeLessThan(400);
-    // At a mile in the racetrack's turns, rejoining at the second stage at most: under 1 km.
-    expect(worstWing).toBeLessThan(1000);
-    // A CAP outside combat: the lead at 90% of military power at most, the wingman at military
-    // power but for a rejoin's second stage, short of a twentieth of the flight (decisions 310,
-    // 311; the climb was half afterburner before).
-    expect(levers[0]).toBeLessThanOrEqual(0.9 * MIL_DETENT + 1e-9);
-    for (const l of levers) expect(l).toBeLessThanOrEqual(REJOIN_LEVER + 1e-9);
-    expect(burning / (2 * samples)).toBeLessThan(0.05);
-    expect(lead(f.aircraft[0]!).fuel).toBeLessThan(fuel0);
-  }, 120_000);
-
-  it('keep formation on the player’s lead, and the lead flies its route again after the handback', () => {
-    const t0 = phaseStart(m, 'on-target') + 400;
-    const f = promote({ ...m, aircraft: 2 }, t0);
-    expect(f.takeOver(0)).toBe(true);
-    expect(f.playerSlot).toBe(0);
-    // The player turns 60° off the route at 300 kt through its own input source (as mouse aim would).
-    const player = lead(f.aircraft[0]!);
-    const director = new FlightDirector();
-    const course = analyticPose(m.route, t0, R).heading + Math.PI / 3;
-    f.aircraft[0]!.flown.pilot = (_a, ctl, dt) =>
-      director.fly(player, { course, gamma: 0, speed: 300 * KNOT, maxBank: Math.PI / 6 }, ctl, dt);
-    // Heavier with its tanks and their fuel (decision 287), the wingman takes two minutes to
-    // close up after the player's turn at 300 kt (90 s before the stores).
-    let t = t0;
-    // Outside combat it rejoins at the afterburner's second stage at most (decision 310):
-    // about 1.3 km off its slot after two minutes and closing (500 m at full afterburner).
-    let lever = 0;
-    for (; t < t0 + 120; t += 1 / 30) {
-      f.advanceTo(t, seaLevel);
-      lever = Math.max(lever, (f.aircraft[1]!.flown.controls as { throttle: number }).throttle);
-    }
-    const w = f.pilots[1]!.state;
-    expect(Math.hypot(w.behind, w.aside, w.below)).toBeLessThan(1500);
-    expect(lever).toBeLessThanOrEqual(REJOIN_LEVER);
-    // A straight course leaves the racetrack: the player is kilometers off the route.
-    const off = player.pos.distanceTo(new Vec3d(...analyticPose(m.route, f.time, R).pos));
-    expect(off).toBeGreaterThan(5000);
-    // The worker rebuilds the mission from where the flight is (the handback's demotion).
-    const d = f.demote()!;
-    const route = rejoinRoute({
-      type: aircraftType('f21'),
-      loadout: aircraftType('f21').loadouts[0]!,
-      profile: MISSION_PROFILES.cap,
-      radius: R,
-      rangeFactor: 1,
-      basePoint: () => dir(40, 10),
-      carrierBased: false,
-      target: m.target.point,
-      route: m.route,
-      fix: d,
-    });
-    f.handBack(routeReference(route));
-    expect(f.playerSlot).toBeNull();
-    let worstAfter = 0;
-    let lastAfter = 0;
-    let leadLever = 0;
-    for (; t < t0 + 330; t += 1 / 30) {
-      f.advanceTo(t, seaLevel);
-      const p = analyticPose(route, f.time, R).pos;
-      worstAfter = Math.max(worstAfter, lead(f.aircraft[0]!).pos.distanceTo(new Vec3d(...p)));
-      lastAfter = lead(f.aircraft[0]!).pos.distanceTo(new Vec3d(...p));
-      leadLever = Math.max(
-        leadLever,
-        (f.aircraft[0]!.flown.controls as { throttle: number }).throttle,
-      );
-    }
-    // On its new route from the first second, through the turn back to the station (1.2 km off
-    // it at full afterburner before decision 310; 800 m before the stores, decision 287).
-    // Handed back slow (the player flew 300 kt) on a route that asks for cruise speed, the
-    // lead never takes the afterburner outside combat and holds 90% of military power
-    // (decision 311): it falls up to about 10 km behind its new route at 9 km, then closes.
-    expect(leadLever).toBeLessThanOrEqual(0.9 * MIL_DETENT + 1e-9);
-    expect(worstAfter).toBeLessThan(12_000);
-    expect(lastAfter).toBeLessThan(worstAfter - 3000);
-  }, 60_000);
-
-  it('drops the highest slots the player does not fly when the campaign loses aircraft', () => {
-    const f = promote(m, phaseStart(m, 'fence-in') + 10);
-    f.takeOver(3);
-    expect(f.remove(2)).toBe(2);
-    expect(f.aircraft.map((a) => a.slot)).toEqual([0, 3]);
+describe('promotion (R2.8)', () => {
+  it('is the same from the same seed, strength and kills', () => {
+    const a = promoteBattalion(battalion(), ANCHOR, 0.3, R);
+    const b = promoteBattalion(battalion(), ANCHOR, 0.3, R);
+    expect(b).toEqual(a);
+    expect(a.length).toBe(PROMOTED.tank);
+    // Another seed, another layout.
+    const c = promoteBattalion(battalion({ seed: 999 }), ANCHOR, 0.3, R);
+    expect(c[0]!.point).not.toEqual(a[0]!.point);
   });
 
-  it('reports each aircraft crashed in a take-over once, over several hand-backs (decision 311)', () => {
-    // The owner crashed three of four in turn: each hand-back lost every crashed aircraft
-    // again, the campaign's count fell below the flight's, and the last one was dropped.
-    const f = promote(m, phaseStart(m, 'fence-in') + 10);
-    const counts: number[] = [];
-    for (const slot of [0, 1, 2]) {
-      expect(f.takeOver(slot)).toBe(true);
-      lead(f.bySlot(slot)!).crashed = 'terrain';
-      const h = f.handback();
-      counts.push(h.lost.length);
-      expect(h.lost.map((l) => l.slot)).toEqual([slot]);
-      expect(h.fix.aircraft).toBe(3 - slot);
-      f.handBack();
+  it('keeps each vehicle where it stood when another is killed, and leaves the killed out', () => {
+    const a = promoteBattalion(battalion(), ANCHOR, 0.3, R);
+    const victim = a[2]!;
+    const b = promoteBattalion(
+      battalion({ strength: strengthAfterKill('tank', 1), killed: [victim.index] }),
+      ANCHOR,
+      0.3,
+      R,
+    );
+    expect(b.some((v) => v.index === victim.index)).toBe(false);
+    for (const v of b) {
+      const same = a.find((x) => x.index === v.index);
+      if (same) expect(v.point).toEqual(same.point);
     }
-    expect(counts).toEqual([1, 1, 1]);
-    // The fourth flies on and can be taken over.
-    expect(f.alive.map((a) => a.slot)).toEqual([3]);
-    expect(f.takeOver(3)).toBe(true);
+  });
+
+  it('lays the vehicles out within a kilometer or so of the anchor, trucks behind', () => {
+    for (const k of KINDS) {
+      const vs = promoteBattalion(battalion({ kind: k }), ANCHOR, 0, R);
+      for (const v of vs) expect(arcDistance(v.point, ANCHOR, R)).toBeLessThan(1000);
+    }
+    // Heading 0 is north: trucks lie south of the fighting vehicles.
+    const vs = promoteBattalion(battalion({ kind: 'mechanized' }), ANCHOR, 0, R);
+    const north = (p: Dir) => p[1];
+    const trucks = vs.filter((v) => v.type === 'truck');
+    const fighting = vs.filter((v) => v.type === 'ifv');
+    expect(trucks.length).toBeGreaterThan(0);
+    expect(Math.max(...trucks.map((v) => north(v.point)))).toBeLessThan(
+      Math.min(...fighting.map((v) => north(v.point))),
+    );
+  });
+
+  it('shows none of a battalion that has lost everything', () => {
+    expect(promoteBattalion(battalion({ strength: 0 }), ANCHOR, 0, R)).toEqual([]);
+  });
+
+  it('names vehicles by battalion and index, and destroys one once at a damage of 1', () => {
+    const key = vehicleKey(7, 3);
+    expect(parseVehicleKey(key)).toEqual({ battalion: 7, index: 3 });
+    expect(parseVehicleKey('site:4')).toBeNull();
+    const d = new VehicleDamage();
+    expect(d.hit(key, 0.6)).toBe(false);
+    expect(d.hit(key, 0.5)).toBe(true);
+    expect(d.hit(key, 0.5)).toBe(false);
+    expect(d.destroyed(key)).toBe(true);
+  });
+});
+
+describe('promoted vehicles in the ground war (R2.8)', () => {
+  const world = generateCampaignWorld(
+    { ...DEFAULT_PLANET_PARAMS, seed: 7 },
+    { grid: new CubeGrid(64) },
+  );
+  const input = campaignInput(world.graph, world.campaign.cast, world.infrastructure);
+  const make = (): SimWorld =>
+    createSimWorld({ ...syntheticConfig(7), radius: R, campaign: input });
+
+  it('anchors battalions behind their own side of the line, facing it', () => {
+    const w = make();
+    const g = w.ground!;
+    const pic = g.picture();
+    expect(pic.battalions.length).toBe(g.orbat.battalions.length);
+    const front = input.fronts[0]!;
+    const line = g.frontLine(front.theater);
+    // The line densified (its vertices lie kilometers apart).
+    const dense: Dir[] = [];
+    for (let i = 0; i + 3 < line.length; i += 3) {
+      const a: Dir = [line[i]!, line[i + 1]!, line[i + 2]!];
+      const c: Dir = [line[i + 3]!, line[i + 4]!, line[i + 5]!];
+      for (let k = 0; k < 20; k++) dense.push(slerp(a, c, k / 20));
+    }
+    const nearLine = (p: Dir) => Math.min(...dense.map((q) => arcDistance(p, q, R)));
+    let facing = 0;
+    const mine = pic.battalions.filter((x) => g.orbat.battalions[x.id]!.theater === front.theater);
+    for (const b of mine) {
+      const d = nearLine(b.point);
+      if (b.kind === 'tank' || b.kind === 'mechanized') expect(d).toBeLessThan(5e3);
+      expect(d).toBeLessThan(25e3);
+      // Facing the line: a step along its heading comes nearer to it than a step back
+      // (the line's nearest vertex, so a bend may fool it for a few).
+      if (
+        nearLine(destination(b.point, b.heading, 2000, R)) <
+        nearLine(destination(b.point, b.heading + Math.PI, 2000, R))
+      )
+        facing++;
+    }
+    expect(facing / mine.length).toBeGreaterThan(0.9);
+  }, 120_000);
+
+  it('folds a destroyed vehicle into its battalion’s strength, once, and keeps it dead through a save', () => {
+    const host = new SimHost(make, applyInput);
+    host.seek(HOUR);
+    const g = host.world.ground!;
+    const b = g.orbat.battalions.find((x) => x.kind === 'tank' && x.strength > 0.5)!;
+    const anchor = g.battalionAnchor(b.id)!;
+    const shown = promoteBattalion(
+      { ...b, killed: [...g.killedOf(b.id)] },
+      anchor.point,
+      anchor.heading,
+      R,
+    );
+    const before = aliveCount(b.kind, b.strength);
+    const s0 = b.strength;
+    const kill = (i: number) =>
+      host.input({
+        kind: 'vehicle-destroyed',
+        battalion: b.id,
+        vehicle: shown[i]!.index,
+        point: shown[i]!.point,
+        heading: shown[i]!.heading,
+        by: null,
+      });
+    kill(0);
+    kill(1);
+    kill(1);
+    expect(b.strength).toBeCloseTo(s0 - 2 / rosterSize('tank'), 12);
+    expect(aliveCount(b.kind, b.strength)).toBe(before - 2);
+    expect(g.killedOf(b.id)).toEqual([shown[0]!.index, shown[1]!.index].sort((x, y) => x - y));
+    const pic = g.picture();
+    expect(pic.wrecks.length).toBe(2);
+    expect(pic.battalions.find((x) => x.id === b.id)!.killed.length).toBe(2);
+    // Promoted again, the dead stay dead.
+    const again = promoteBattalion(
+      pic.battalions.find((x) => x.id === b.id)!,
+      anchor.point,
+      anchor.heading,
+      R,
+    );
+    expect(again.some((v) => v.index === shown[0]!.index || v.index === shown[1]!.index)).toBe(
+      false,
+    );
+    // Saved and loaded, the kills and wrecks come along.
+    const saved = g.save();
+    const other = make().ground!;
+    other.load(saved);
+    expect(other.killedOf(b.id)).toEqual(g.killedOf(b.id));
+    expect(other.picture().wrecks).toEqual(pic.wrecks);
+    expect(host.world.sim.log.entries.some((e) => e.kind === 'vehicle-destroyed')).toBe(true);
+  }, 120_000);
+});
+
+describe('CAS destroys promoted vehicles (the exit of R2.8)', () => {
+  const m = capMission();
+  const t0 = phaseStart(m, 'on-target') + 100;
+  const f21 = bundleOfType('f21');
+
+  it('a bomb and a gun pass destroy vehicles, and the battalion loses the same count', () => {
+    const f = promote({ ...m, aircraft: 1 }, t0);
+    const model = f.aircraft[0]!.flown.airframe as unknown as FlightModel;
+    const cas = f21.airWar!.loadouts.find((l) => l.id === 'cas')!;
+    const rack = new StoresRack(
+      kestrelSpec(),
+      f21.pylons,
+      cas.stations,
+      { loadout: 'cas', expended: {} },
+      f21.gun ?? null,
+    );
+    const av = { ...initialAvionics(false), masterArm: true, weapon: 'bomb-230' };
+    const bomb = rack.dropBomb(model, av)!;
+    const probe = { ...bomb, pos: bomb.pos.clone(), vel: bomb.vel.clone() };
+    let landing: Vec3d | null = null;
+    for (let t = 0; !landing && t < 120; t += 1 / 120)
+      landing = flyProjectile(probe, 1 / 120, model.radius, () => 0, t)?.at ?? null;
+    // A promoted battalion laid out round the bomb's landing point.
+    const up = landing!.clone().normalize();
+    const b = battalion({ kind: 'mechanized', id: 3 });
+    const shown = promoteBattalion(b, [up.x, up.y, up.z], 0, model.radius);
+    // The pilot aims at the first vehicle: the layout shifted so it stands where the bomb lands.
+    const at = (v: (typeof shown)[number]) =>
+      new Vec3d(v.point[0], v.point[1], v.point[2]).scale(model.radius + 1.2);
+    const shift = landing!.clone().sub(at(shown[0]!));
+    const targets: GroundTarget[] = shown.map((v) => ({
+      id: vehicleKey(v.battalion, v.index),
+      pos: at(v).add(shift),
+      kind: VEHICLE_TARGETS[v.type],
+    }));
+    rack.groundTargets = targets;
+    for (let i = 0; i < 120 * 120 && rack.ordnance.length > 0; i++)
+      rack.stepWeapons(model, av, 1 / 120, t0 + i / 120, seaLevel);
+    const damage = new VehicleDamage();
+    let strength = b.strength;
+    const killed: number[] = [];
+    const apply = () => {
+      for (const h of rack.hits.splice(0)) {
+        const v = parseVehicleKey(h.target);
+        if (v && damage.hit(h.target, h.amount)) {
+          killed.push(v.index);
+          strength = strengthAfterKill(b.kind, strength);
+        }
+      }
+    };
+    apply();
+    const byBomb = killed.length;
+    expect(byBomb).toBeGreaterThan(0);
+    // The gun on a truck: rounds aimed through it kill it.
+    const truck = shown.find((v) => v.type === 'truck' && !killed.includes(v.index))!;
+    const tp = targets.find((x) => x.id === vehicleKey(truck.battalion, truck.index))!;
+    rack.groundTargets = [tp];
+    const gun = rack.gun!;
+    for (let k = 0; k < 20; k++)
+      gun.live.push({
+        pos: tp.pos.clone().add(new Vec3d(0, 0, 400)),
+        vel: new Vec3d(0, 0, -1000),
+        age: 0,
+        tracer: false,
+      });
+    const gav = { ...initialAvionics(false), masterArm: true, weapon: 'gun' };
+    for (let i = 0; i < 120; i++) rack.stepGun(model, gav, 1 / 120, t0 + i / 120);
+    apply();
+    expect(killed).toContain(truck.index);
+    // The battalion's vehicles drop by the same count as were destroyed.
+    expect(aliveCount(b.kind, strength)).toBe(rosterSize(b.kind) - killed.length);
+    const after = promoteBattalion({ ...b, strength, killed }, [up.x, up.y, up.z], 0, model.radius);
+    for (const i of killed) expect(after.some((v) => v.index === i)).toBe(false);
   });
 });

@@ -29,11 +29,17 @@
  * - **Air support.** Each attack on troops the air war records (R2.2's CAS)
  *   kills CAS_KILL battalion equivalents per unit on the nearest segment of the
  *   enemy; interdiction acts through supply.
+ * - **Promotion** (R2.8, decision 333). Each battalion has an anchor: spread along its
+ *   segment among the side's battalions there, BATTALION_DEPTH[kind] behind the line,
+ *   facing the enemy. The main thread promotes the battalions near the player into
+ *   vehicles (promotion.ts); a vehicle full fidelity destroys comes back as the
+ *   `vehicle-destroyed` input, which lowers its battalion's strength by one vehicle
+ *   and keeps it dead and its wreck where it burned.
  *
  * The constants are priors for the demo; R5.6 tunes the campaign.
  */
 import type { Side } from '../../campaign/cast';
-import { arcDistance, polylineStations, toward } from '../../core/greatCircle';
+import { arcDistance, initialHeading, polylineStations, toward } from '../../core/greatCircle';
 import type { Dir } from '../../core/greatCircle';
 import type { WorldSeed } from '../../core/rng';
 import { DAY, MINUTE } from '../../core/units';
@@ -48,7 +54,9 @@ import type { StateHasher } from '../stateHash';
 import type { DamageState } from './damage';
 import type { NetworkGraph } from './network';
 import { BATTALION_VALUE, buildGroundOrbat } from './orbat';
-import type { Battalion, GroundOrbat } from './orbat';
+import type { Battalion, BattalionKind, GroundOrbat } from './orbat';
+import { rosterOrder, rosterSize, strengthAfterKill } from './promotion';
+import type { VehicleType } from './promotion';
 
 export const K_ATTRITION = 0.08 / DAY;
 export const QUIET = 0.15;
@@ -65,6 +73,17 @@ export const LOCAL_SUPPLY = 0.25;
 /** The map's unit grid behind a segment: first row's depth and the spacing of columns and rows (m). */
 export const UNIT_DEPTH = 10e3;
 export const UNIT_SPACING = 14e3;
+/** A battalion's anchor behind the line by kind (m), plus up to BATTALION_JITTER from its seed (R2.8). */
+export const BATTALION_DEPTH: Record<BattalionKind, number> = {
+  tank: 2.5e3,
+  mechanized: 2e3,
+  'air-defense': 5e3,
+  artillery: 9e3,
+  logistics: 16e3,
+};
+export const BATTALION_JITTER = 1.5e3;
+/** Wrecks the picture carries at most, the latest kept. */
+export const MAX_WRECKS = 400;
 
 const other = (s: Side): Side => (s === 'alliance' ? 'pact' : 'alliance');
 
@@ -87,6 +106,34 @@ export interface GroundState {
   activity: number[][];
   attacksSeen: number;
   revision: number;
+  /** Vehicles full fidelity destroyed, by battalion (R2.8; absent before decision 333). */
+  killed?: [number, number[]][];
+  wrecks?: VehicleWreck[];
+}
+
+/** A vehicle full fidelity destroyed (R2.8): where its wreck burns. */
+export interface VehicleWreck {
+  battalion: number;
+  /** Its index in the battalion's roster order. */
+  vehicle: number;
+  type: VehicleType;
+  side: Side;
+  point: Dir;
+  heading: number;
+  time: number;
+}
+
+/** A battalion as the main thread promotes it (R2.8). */
+export interface BattalionPicture {
+  id: number;
+  side: Side;
+  kind: BattalionKind;
+  seed: number;
+  strength: number;
+  killed: number[];
+  /** Its anchor and the heading toward the enemy (rad from north). */
+  point: Dir;
+  heading: number;
 }
 
 /** What the map draws of the ground war (the worker's snapshot, R2.3). */
@@ -96,6 +143,10 @@ export interface GroundPicture {
   fronts: { theater: number; attacker: Side; points: number[] }[];
   /** Brigades and regiments with their strength, behind the line. */
   units: { side: Side; kind: 'tank' | 'mechanized'; name: string; point: Dir; strength: number }[];
+  /** Every battalion with its anchor, for promotion near the player (R2.8). */
+  battalions: BattalionPicture[];
+  /** The latest wrecks of vehicles full fidelity destroyed (R2.8). */
+  wrecks: VehicleWreck[];
 }
 
 export class GroundWar implements TickProcess {
@@ -109,6 +160,9 @@ export class GroundWar implements TickProcess {
   private start: number[][];
   private activity: number[][];
   private attacksSeen = 0;
+  /** Vehicles full fidelity destroyed, by battalion, and their wrecks (R2.8). */
+  private killed = new Map<number, number[]>();
+  private wrecks: VehicleWreck[] = [];
   /** Bumped every game hour the front moved, and when units change much (snapshots resend the picture). */
   revision = 0;
 
@@ -401,6 +455,76 @@ export class GroundWar implements TickProcess {
     }
   }
 
+  // ---- Promotion (R2.8) ----
+
+  /**
+   * Battalion b's anchor now: spread along its segment among its side's battalions there,
+   * BATTALION_DEPTH behind the moved line plus a jitter from its seed, and the heading
+   * toward the enemy (the line's point at the same fraction).
+   */
+  battalionAnchor(id: number): { point: Dir; heading: number } | null {
+    const b = this.orbat.battalions[id];
+    const fr = b ? this.front(b.theater) : null;
+    if (!b || !fr) return null;
+    const seg = fr.state.segments[b.segment]!;
+    const members = fr.state.members[b.side][b.segment]!;
+    const j = Math.max(0, members.indexOf(id));
+    const n = Math.max(1, members.length);
+    const frac = seg.from + ((j + 0.5) / n) * (seg.to - seg.from);
+    const depth = BATTALION_DEPTH[b.kind] + ((b.seed % 1009) / 1009) * BATTALION_JITTER;
+    const at = this.frontPoint(b.theater, frac, b.side, depth);
+    const line = this.frontPoint(b.theater, frac, b.side, 0);
+    if (!at || !line) return null;
+    const far = arcDistance(at.point, line.point, this.input.radius) > 1;
+    return {
+      point: at.point,
+      heading: far
+        ? initialHeading(at.point, line.point)
+        : at.heading + (b.side === fr.state.input.attacker ? Math.PI / 2 : -Math.PI / 2),
+    };
+  }
+
+  /** Vehicles full fidelity destroyed in battalion `id`, by roster index. */
+  killedOf(id: number): readonly number[] {
+    return this.killed.get(id) ?? [];
+  }
+
+  /**
+   * Full fidelity destroyed vehicle `vehicle` of battalion `id` at `point` (the
+   * `vehicle-destroyed` input): its battalion loses exactly one vehicle of strength, the
+   * vehicle stays dead, and its wreck burns there. False if it was dead already.
+   */
+  destroyVehicle(
+    id: number,
+    vehicle: number,
+    point: Readonly<Dir>,
+    heading: number,
+    time: number,
+  ): boolean {
+    const b = this.orbat.battalions[id];
+    if (!b || !Number.isInteger(vehicle) || vehicle < 0 || vehicle >= rosterSize(b.kind))
+      return false;
+    const dead = this.killed.get(id) ?? [];
+    if (dead.includes(vehicle)) return false;
+    this.killed.set(
+      id,
+      [...dead, vehicle].sort((a, c) => a - c),
+    );
+    b.strength = strengthAfterKill(b.kind, b.strength);
+    this.wrecks.push({
+      battalion: id,
+      vehicle,
+      type: rosterOrder(b.kind)[vehicle]!,
+      side: b.side,
+      point: [point[0], point[1], point[2]],
+      heading,
+      time,
+    });
+    if (this.wrecks.length > MAX_WRECKS) this.wrecks.splice(0, this.wrecks.length - MAX_WRECKS);
+    this.revision++;
+    return true;
+  }
+
   // ---- The map's picture ----
 
   picture(): GroundPicture {
@@ -435,8 +559,25 @@ export class GroundWar implements TickProcess {
         });
       }
     }
+    const battalions: BattalionPicture[] = [];
+    for (const b of this.orbat.battalions) {
+      const a = this.battalionAnchor(b.id);
+      if (!a) continue;
+      battalions.push({
+        id: b.id,
+        side: b.side,
+        kind: b.kind,
+        seed: b.seed,
+        strength: b.strength,
+        killed: [...this.killedOf(b.id)],
+        point: a.point,
+        heading: a.heading,
+      });
+    }
     return {
       revision: this.revision,
+      battalions,
+      wrecks: this.wrecks.map((w) => ({ ...w, point: [...w.point] as Dir })),
       fronts: this.fronts.map((f) => ({
         theater: f.input.theater,
         attacker: f.input.attacker,
@@ -458,6 +599,8 @@ export class GroundWar implements TickProcess {
       activity: this.activity,
       attacksSeen: this.attacksSeen,
       revision: this.revision,
+      killed: [...this.killed].sort((a, b) => a[0] - b[0]),
+      wrecks: this.wrecks,
     });
   }
 
@@ -474,6 +617,8 @@ export class GroundWar implements TickProcess {
     this.activity = s.activity;
     this.attacksSeen = s.attacksSeen;
     this.revision = s.revision;
+    this.killed = new Map(s.killed ?? []);
+    this.wrecks = s.wrecks ?? [];
   }
 
   hash(h: StateHasher): void {
@@ -481,6 +626,10 @@ export class GroundWar implements TickProcess {
     for (const o of this.offsets) for (const v of o) h.number(v);
     for (const o of this.offensive) for (const v of o) h.number(v ? 1 : 0);
     h.number(this.attacksSeen);
+    for (const [id, dead] of [...this.killed].sort((a, b) => a[0] - b[0])) {
+      h.number(id).number(dead.length);
+      for (const v of dead) h.number(v);
+    }
   }
 
   /** Total strength in battalion equivalents of a side on a front (for tools and tests). */

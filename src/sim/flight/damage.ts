@@ -8,6 +8,8 @@
  * - **Aircraft** take damage 0..1, summed: a 20 mm round 0.07 (about fourteen kill a
  *   fighter), a warhead its blast. At 1 an aircraft is destroyed; from DAMAGED it is
  *   damaged (it smokes, and turns home in R3).
+ * - **Vehicles** (R2.8) take blast × explosive / hardness, at most 1, and 20 mm rounds
+ *   by their type, summed per vehicle as for aircraft; at 1 a vehicle is destroyed.
  * - **Ground targets** (the campaign's sites and road edges) take a hit's amount
  *   `blast × explosive / (explosive + hardness)`, measured from the target's edge
  *   (`size` m from its point), which `DamageState` combines as independent chances.
@@ -37,6 +39,12 @@ export interface GroundTargetKind {
   size: number;
   /** kg of explosive that does half its damage within the lethal radius. */
   hardness: number;
+  /**
+   * Vehicles (R2.8, decision 334): damage summed per vehicle, a blast doing
+   * explosive / hardness of it, at most 1, so a bomb kills outright within a radius;
+   * and the damage a 20 mm round passing within `size` does. Sites and roads have neither.
+   */
+  vehicle?: { round: number };
 }
 
 /** Ground targets by the kind of site they are (the campaign's `TargetSite.kind` or a road). */
@@ -58,5 +66,7 @@ export function groundDamage(
   d: number,
   target: Readonly<GroundTargetKind>,
 ): number {
-  return blast(w, Math.max(0, d - target.size)) * (w.explosive / (w.explosive + target.hardness));
+  const b = blast(w, Math.max(0, d - target.size));
+  if (target.vehicle) return Math.min(1, (b * w.explosive) / target.hardness);
+  return b * (w.explosive / (w.explosive + target.hardness));
 }

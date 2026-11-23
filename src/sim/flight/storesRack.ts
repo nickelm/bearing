@@ -219,6 +219,28 @@ export class StoresRack {
         }
       }
     }
+    // Rounds that pass within a vehicle's size hit it (R2.8, decision 334): vehicles only,
+    // so sites and roads stay the bombs' and rockets'.
+    const vehicles = this.groundTargets.filter((x) => (x.kind.vehicle?.round ?? 0) > 0);
+    if (vehicles.length > 0) {
+      for (let i = g.live.length - 1; i >= 0; i--) {
+        const r = g.live[i]!;
+        for (const v of vehicles) {
+          if (segmentDistance(r.pos, r.vel, dt, v.pos) <= v.kind.size) {
+            this.hits.push({
+              target: v.id,
+              air: false,
+              amount: v.kind.vehicle!.round,
+              cause: 'gun',
+              at: r.pos.clone(),
+              time: t + dt,
+            });
+            g.live.splice(i, 1);
+            break;
+          }
+        }
+      }
+    }
     return n;
   }
 
@@ -424,7 +446,7 @@ export function rocketCounts(
 
 /** A ground target the bombs and rockets can damage (decision 301). */
 export interface GroundTarget {
-  /** `site:<id>` for a target site, `road:<edge>` for a road edge. */
+  /** `site:<id>` for a target site, `road:<edge>` for a road edge, `vehicle:<battalion>:<index>` for a vehicle. */
   id: string;
   /** Where it is drawn (world, m). */
   pos: Vec3d;

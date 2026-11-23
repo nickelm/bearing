@@ -44,6 +44,19 @@ export type CampaignInputEvent =
   /** Full fidelity hit a target site or a road edge (decision 301): the hit's amount (0..1). */
   | { kind: 'target-hit'; target: 'site' | 'road'; id: number; amount: number; by: number | null }
   /**
+   * Full fidelity destroyed a promoted vehicle (R2.8, decision 333): its battalion, its
+   * index in the battalion's roster order, where its wreck lies and which way it faced,
+   * and the flight that destroyed it, if any. The battalion loses one vehicle of strength.
+   */
+  | {
+      kind: 'vehicle-destroyed';
+      battalion: number;
+      vehicle: number;
+      point: Dir;
+      heading: number;
+      by: number | null;
+    }
+  /**
    * The player hands a flight back (R2.5): where it is and what full fidelity lost.
    * The worker rebuilds its route from the fix and logs the losses (owner decision 1).
    */

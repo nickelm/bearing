@@ -328,10 +328,10 @@ Started 2026-11-23, in parallel with R2.8 in a second session (decisions 314–3
 ### R2.8 Minimal entity promotion
 
 - [x] Vehicle model specs: tank, infantry fighting vehicle, truck, short-range air defense vehicle (classes `tank` and `truck`, 150–400 and 80–200 triangles; the sides' schemes); silhouettes and counts in `tools/models.preview.ts` (check 6): tank 256, IFV 204, SHORAD 224, truck 124 triangles; a `burnt` scheme for wrecks
-- [ ] Rosters: each battalion kind's vehicles (counts by type, a representative order so the first few show the mix), the vehicle count N that strength stands for (`sim/ground/promotion.ts`)
-- [ ] Promotion, pure: a battalion's promoted vehicles from its seed, strength and killed list, laid out round an anchor (company clusters facing the enemy); deterministic; tests
-- [ ] Battalions placed in the ground war (along their segment, depth by kind) and sent in the ground picture with seed, strength and killed vehicles
-- [ ] The `vehicle-destroyed` input: the worker marks the vehicle killed, lowers the battalion's strength by 1/N and keeps its wreck's point; saved state and hash; tests
+- [x] Rosters: each battalion kind's vehicles (counts by type, a representative order so the first few show the mix), the vehicle count N that strength stands for (`sim/ground/promotion.ts`)
+- [x] Promotion, pure: a battalion's promoted vehicles from its seed, strength and killed list, laid out round an anchor (company clusters facing the enemy); deterministic; tests
+- [x] Battalions placed in the ground war (along their segment, depth by kind) and sent in the ground picture with seed, strength and killed vehicles
+- [x] The `vehicle-destroyed` input: the worker marks the vehicle killed, lowers the battalion's strength by 1/N and keeps its wreck's point; saved state and hash; tests
 - [ ] Main thread (`follow/groundUnits.ts`): battalions within the bubble of the camera promoted, anchors held while promoted, vehicles on the drawn ground, trucks on aligned roads; instanced draw; wrecks in a burnt scheme with a burning column; the bubble off above 16× and above 20 km
 - [ ] Vehicles as targets: bombs' and rockets' splash and gun rounds (hardness and size by type); damage adds up per vehicle; destroyed at 1: explosion, wreck, the input, a HUD message
 - [ ] Bombs and rockets on any target site near the impact, not the flight's own alone (the R2.6 follow-up)
