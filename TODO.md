@@ -317,11 +317,17 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 
 ### R2.8 Minimal entity promotion
 
-- [ ] Vehicle model specs: tank, infantry fighting vehicle, truck, short-range air defense vehicle
-- [ ] Promotion: a battalion near the player spawns representative vehicles from its seed and strength, on the ground or aligned roads
-- [ ] Vehicles as targets for guns, rockets and bombs
-- [ ] Demotion folds losses back into the battalion's strength; nothing destroyed comes back
-- [ ] Test: CAS destroys promoted vehicles and the battalion's strength drops by the same count
+- [ ] Vehicle model specs: tank, infantry fighting vehicle, truck, short-range air defense vehicle (classes `tank` and `truck`, 150–400 and 80–200 triangles; the sides' schemes); silhouettes and counts in `tools/models.preview.ts` (check 6)
+- [ ] Rosters: each battalion kind's vehicles (counts by type, a representative order so the first few show the mix), the vehicle count N that strength stands for (`sim/ground/promotion.ts`)
+- [ ] Promotion, pure: a battalion's promoted vehicles from its seed, strength and killed list, laid out round an anchor (company clusters facing the enemy); deterministic; tests
+- [ ] Battalions placed in the ground war (along their segment, depth by kind) and sent in the ground picture with seed, strength and killed vehicles
+- [ ] The `vehicle-destroyed` input: the worker marks the vehicle killed, lowers the battalion's strength by 1/N and keeps its wreck's point; saved state and hash; tests
+- [ ] Main thread (`follow/groundUnits.ts`): battalions within the bubble of the camera promoted, anchors held while promoted, vehicles on the drawn ground, trucks on aligned roads; instanced draw; wrecks in a burnt scheme with a burning column; the bubble off above 16× and above 20 km
+- [ ] Vehicles as targets: bombs' and rockets' splash and gun rounds (hardness and size by type); damage adds up per vehicle; destroyed at 1: explosion, wreck, the input, a HUD message
+- [ ] Bombs and rockets on any target site near the impact, not the flight's own alone (the R2.6 follow-up)
+- [ ] Test: CAS destroys promoted vehicles and the battalion's strength drops by the same count (`tests/promotion.test.ts`)
+- [ ] Docs: decisions 333 on, design §Entities, visual-style Part I vehicles, roadmap state, CLAUDE.md's directory map
+- [ ] Owner on the GPU: vehicles in a followed CAS flight on seed 4, a take-over that destroys some, the battalion's strength after
 - [ ] Reduced infantry (if time allows; decision 331): a few squads per battalion near the player with the blocky figures, as targets, the dead turning gray and vanishing in a toon puff
 
 ### R2.9 Survivors and CSAR
