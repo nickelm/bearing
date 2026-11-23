@@ -302,7 +302,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] ATC and the pattern (owner, later; R4.5 Crews and radio): ground, departure, tower and approach, the reverse when landing, for a player who wants the administrative part
 - [x] Owner's notes (2026-11-23; decision 312): no NaN for a flight whose rebuilt route has no time on target; the F-21's retracted gear hidden; a bomb or rocket that misses says how far from the target
 - [ ] Bombs on any bridge or site near the impact, not the flight's own target alone (the owner bombed a bridge with no effect; with R2.8's vehicles and towns' sites)
-- [ ] Tactical airlift (owner, 2026-11-23): low-level runs into forward fields near the front, terrain masking through valleys and canyons, a short-field landing; with the C-150 flyable (R2.7 if time allows, else R4)
+- [ ] Tactical airlift (owner, 2026-11-23): low-level runs into forward fields near the front, terrain masking through valleys and canyons, a short-field landing; with the C-150 flyable: R4.4 (owner, decision 318)
 - [x] Owner, on the GPU (signed off 2026-11-23; decision 313): a CAP kill and a bridge hit, both visible in the campaign state; R2.6 closed
 
 ### R2.7 The demo roster
@@ -327,7 +327,7 @@ Started 2026-11-23, in parallel with R2.8 in a second session (decisions 314–3
 - [x] Silhouette check (Part I check 6) for every new model: `tools/models.preview.ts`, compared on contact sheets by class (decision 316)
 - [x] A-15 (A-10 analogue): model spec, flight data, laws, pylons and the GAU-8 analogue; Free Flight's `aircraft=a15` (decision 317)
 - [ ] The A-15's Mavericks and cluster bombs with the owner's future weapons; the A-10's eleven stations (four a wing and three under the fuselage today drawn as four a wing)
-- [ ] C-150 (C-130 analogue): flight data, laws, transport rig: AI-flown for the demo; with R4's tactical airlift (the test pilot's circuit flies fighter speeds, and the airlift's landing at a forward field needs the AI's full-fidelity landing)
+- [x] C-150 (C-130 analogue): AI-flown for the demo; its flight data, laws and transport rig move to R4.4 with tactical airlift (owner, decision 318; the test pilot's circuit flies fighter speeds, and the airlift's landing at a forward field needs the AI's full-fidelity landing)
 - [x] `tools/freeflight.session.mjs` starts the A-15, Vo-31 and Vo-35 from the start screen: their own flight data and names, the brake off and the throttle forward, no afterburner on the Vo-35, the Pact's side for the Vo-31 and Vo-35
 - [ ] Owner, on the GPU: fly the Vo-31, Vo-35 and A-15 in Free Flight; follow and take over a Pact flight and an A-15; the new models in the campaign
 

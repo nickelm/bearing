@@ -5062,6 +5062,13 @@ The first run missed by 4.0 m at 610 m and 9.6 m at 900 m, growing with the squa
 
 **Reason:** R2.7 lists the A-15 as flyable if time allows (owner decision 5); it flies the Alliance's close air support on the demo seeds, where R2.8's promoted vehicles are its targets.
 
+### 318. The C-150 is flown in R4.4, with tactical airlift
+
+**Date:** 2026-11-23
+**Decision:** The C-150 stays AI-flown through R2. Its flight data, control laws and transport rig move to R4.4 (transport operations), together with the tactical airlift the owner asked for: low-level runs into forward fields near the front, terrain masking through valleys and canyons, and short-field landings. R2.7 listed it as flyable if time allowed.
+
+**Reason:** a flyable transport needs more than its flight data. The test pilot's circuit flies fighter speeds, and an airlift sortie ends in a landing at a forward field, which needs the AI's landing at full fidelity. Both belong with the airlift work (owner, 2026-11-23).
+
 ### 320. Stylized effects: toon-shaded sphere-impostor puffs, dithered, with depth
 
 **Date:** 2026-11-22
