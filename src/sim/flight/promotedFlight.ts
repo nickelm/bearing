@@ -63,6 +63,8 @@ export interface PromotedFlightOptions {
   enemyDistance?: (pos: Readonly<Vec3d>, t: GameTime) => number;
 }
 
+/** Seconds of a strike's egress that still count as the attack: the run out of the target area. */
+export const EGRESS_FIGHT = 90;
 /** An enemy flight this close makes the AI pilots drop their tanks before the fight (m). */
 export const FIGHT_RANGE = 40_000;
 /** Game seconds between the AI's looks for an enemy within FIGHT_RANGE. */
@@ -86,6 +88,8 @@ export class PromotedFlight {
   /** When the AI last looked for an enemy within FIGHT_RANGE, and whether one was. */
   private foughtAt = -Infinity;
   private enemyNear = false;
+  /** Slots whose loss a hand-back has reported to the campaign. */
+  private readonly reported = new Set<number>();
 
   constructor(
     readonly mission: Readonly<PromotedMission>,
@@ -185,11 +189,18 @@ export class PromotedFlight {
 
   /**
    * Whether the flight fights now (decision 310): on the route's attack pass (its combat
-   * regime) or with an enemy flight within FIGHT_RANGE of the lead (as last looked).
+   * regime) and the first EGRESS_FIGHT seconds of the egress after it (decision 311), or with
+   * an enemy flight within FIGHT_RANGE of the lead (as last looked).
    */
   private inCombat(): boolean {
+    const segs = this.mission.route.segments;
     const s = routeState(this.mission.route, this.time, this.radius);
-    if (s.segment >= 0 && this.mission.route.segments[s.segment]!.regime === 'combat') return true;
+    if (s.segment >= 0 && segs[s.segment]!.regime === 'combat') return true;
+    // Getting out of the target area after an attack is part of it (decision 311).
+    if (s.phase === 'egress' && segs.some((x) => x.regime === 'combat')) {
+      const from = segs.find((x) => x.phase === 'egress')?.t0 ?? Infinity;
+      if (this.time - from < EGRESS_FIGHT) return true;
+    }
     return this.enemyNear;
   }
 
@@ -249,14 +260,16 @@ export class PromotedFlight {
       const { time, point, altitude, heading, fuel, aircraft, airborne } = d;
       return {
         fix: { time, point, altitude, heading, fuel, aircraft, airborne },
-        lost: d.lost,
+        lost: this.unreported(d.lost),
         stores: d.stores.map((x) => ({ slot: x.slot, expended: { ...x.stores.expended } })),
       };
     }
-    const lost = this.aircraft.map((a) => {
-      const u = a.flown.airframe.pos.clone().normalize();
-      return { slot: a.slot, point: [u.x, u.y, u.z] as Dir, cause: a.flown.crashed ?? 'damage' };
-    });
+    const lost = this.unreported(
+      this.aircraft.map((a) => {
+        const u = a.flown.airframe.pos.clone().normalize();
+        return { slot: a.slot, point: [u.x, u.y, u.z] as Dir, cause: a.flown.crashed ?? 'damage' };
+      }),
+    );
     const point: Dir = lost[lost.length - 1]?.point ?? [0, 1, 0];
     return {
       fix: {
@@ -271,6 +284,17 @@ export class PromotedFlight {
       lost,
       stores: [],
     };
+  }
+
+  /**
+   * The losses no earlier hand-back reported (decision 311): a crashed aircraft stays in the
+   * flight, and the worker takes each loss it hears, so a second take-over's hand-back must
+   * not lose the first one's aircraft again.
+   */
+  private unreported(lost: readonly HandbackLoss[]): HandbackLoss[] {
+    const out = lost.filter((l) => !this.reported.has(l.slot));
+    for (const l of out) this.reported.add(l.slot);
+    return out;
   }
 
   private stepOnce(ground: GroundQuery): void {

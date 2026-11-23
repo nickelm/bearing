@@ -84,6 +84,26 @@
   background: #2f3236;
   cursor: default;
 }
+/* A press a spectator's display refuses (arm, radar power, a strip control): three red
+   flashes on the button or strip item (decision 311). */
+.dsp-refused {
+  animation: dsp-refused 0.75s steps(1, end);
+}
+@keyframes dsp-refused {
+  0%,
+  33%,
+  66% {
+    background: var(--red);
+    outline: 2px solid var(--red);
+  }
+  16%,
+  50%,
+  83%,
+  100% {
+    background: #3a3e42;
+    outline: none;
+  }
+}
 /* The frame's pin and minimize icons in the bezel's top corners (decision 222). */
 .dsp-icon {
   position: absolute;

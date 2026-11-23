@@ -108,7 +108,9 @@ export class FlightDirector implements Director<FlightModel, FlightControls> {
     // Speed: PI on calibrated airspeed.
     if (target.speed !== null) {
       const e = target.speed - t.cas;
-      const max = target.afterburner ? (target.maxLever ?? 1) : MIL_DETENT;
+      const max = target.afterburner
+        ? (target.maxLever ?? 1)
+        : Math.min(MIL_DETENT, target.maxLever ?? MIL_DETENT);
       const base = 0.35;
       let lever = base + this.throttleGain * e + this.throttleI;
       if ((lever < max || e < 0) && (lever > 0 || e > 0))

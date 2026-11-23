@@ -44,7 +44,8 @@ interface SlotEls {
 export class DisplaysView {
   readonly root = document.createElement('div');
   /** Clicks on buttons, tabs and strip items. */
-  onCommand: ((c: DisplayCommand) => void) | null = null;
+  /** Hears the view's commands; false means refused (a spectator's display), and the control flashes. */
+  onCommand: ((c: DisplayCommand) => boolean | void) | null = null;
   private readonly slots = new Map<SlotId, SlotEls>();
   private readonly strip = document.createElement('div');
   private stripDrawn = '';
@@ -143,7 +144,7 @@ export class DisplaysView {
       const el = (e.target as HTMLElement).closest('[data-cmd]');
       const key = el?.getAttribute('data-cmd');
       const c = key ? this.commands.get(key) : undefined;
-      if (c) this.send(c);
+      if (c && !this.send(c)) this.refuse(el);
     });
     parent.append(this.root);
   }
@@ -193,8 +194,19 @@ export class DisplaysView {
     return this.lay;
   }
 
-  private send(c: DisplayCommand): void {
-    this.onCommand?.(c);
+  /** Sends a command; false when it was refused. */
+  private send(c: DisplayCommand): boolean {
+    return this.onCommand?.(c) !== false;
+  }
+
+  /** Flashes a control red: what it does is refused (decision 311). */
+  private refuse(el: Element | null | undefined): void {
+    if (!el) return;
+    el.classList.remove('dsp-refused');
+    // Restarts the animation when pressed again while it runs.
+    void (el as HTMLElement).offsetWidth;
+    el.classList.add('dsp-refused');
+    setTimeout(() => el.classList.remove('dsp-refused'), 800);
   }
 
   /** Draws the models for a viewport of `width` × `height` CSS px. */
@@ -245,7 +257,11 @@ export class DisplaysView {
       const btn = el.buttons[i]!;
       btn.disabled = b === null || b.command === null;
       btn.title = b?.label ?? '';
-      btn.onclick = b?.command ? () => this.send(b.command!) : null;
+      btn.onclick = b?.command
+        ? () => {
+            if (!this.send(b.command!)) this.refuse(btn);
+          }
+        : null;
     });
     const key = JSON.stringify([
       m.title,

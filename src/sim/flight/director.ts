@@ -48,7 +48,11 @@ export interface DirectorTarget {
   maxLoadDelta?: number;
   /** Whether the throttle may enter the afterburner. */
   afterburner?: boolean;
-  /** The most throttle lever it may take with the afterburner allowed (1 if absent): a rejoin's stage (decision 310). */
+  /**
+   * The most throttle lever it may take (1 with the afterburner allowed, military power
+   * without, if absent): a rejoin's afterburner stage (decision 310), a lead's margin below
+   * military power (decision 311).
+   */
   maxLever?: number;
 
   // ---- Rotary-wing (Proposal 0004); a fixed-wing director ignores these. ----

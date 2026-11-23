@@ -175,11 +175,15 @@ export class DisplaySystem {
   }
 
   /** Applies a command from a click, a key or (later) the crew. */
-  command(c: DisplayCommand): void {
-    if (this.readOnly && (c.to === 'controls' || c.to === 'avionics')) return;
+  /**
+   * Applies a command; false when it is refused: a spectator's displays take no avionics
+   * or controls commands (decision 294), and the view flashes the control (decision 311).
+   */
+  command(c: DisplayCommand): boolean {
+    if (this.readOnly && (c.to === 'controls' || c.to === 'avionics')) return false;
     if (c.to === 'controls') {
       this.onControls?.(c.action);
-      return;
+      return true;
     }
     if (c.to === 'avionics') {
       const before = this.avionics.masterMode;
@@ -200,7 +204,7 @@ export class DisplaySystem {
         this.display = d;
       }
       this.redraw();
-      return;
+      return true;
     }
     if (this.display && this.last) {
       this.display = applyUi(this.display, this.last, c.command);
@@ -216,6 +220,7 @@ export class DisplaySystem {
       }
     }
     this.redraw();
+    return true;
   }
 
   private redraw(): void {
@@ -225,30 +230,40 @@ export class DisplaySystem {
   /** A hot key's action. */
   hot(a: DisplayHotAction): void {
     const slot = SLOT_KEYS[a];
-    if (slot) return this.command({ to: 'ui', command: { type: 'toggle-slot', slot } });
-    if (a === 'dogfight') return this.command({ to: 'avionics', command: { type: 'dogfight' } });
+    if (slot) {
+      this.command({ to: 'ui', command: { type: 'toggle-slot', slot } });
+      return;
+    }
+    if (a === 'dogfight') {
+      this.command({ to: 'avionics', command: { type: 'dogfight' } });
+      return;
+    }
     if (a === 'radarLock' || a === 'radarBreak') {
       if (!this.last) return;
       const id =
         a === 'radarLock' ? lockCandidate({ ...this.last, avionics: this.avionics }) : null;
       if (a === 'radarLock' && !id) return;
-      return this.command({ to: 'avionics', command: { type: 'radar-lock', id } });
+      this.command({ to: 'avionics', command: { type: 'radar-lock', id } });
+      return;
     }
     if (a === 'steerpointNext' || a === 'steerpointPrevious') {
       const r = this.last?.route;
       if (!r || r.waypoints.length === 0) return;
       const index = steerpointStep(r, a === 'steerpointNext' ? 1 : -1);
-      return this.command({ to: 'avionics', command: { type: 'steerpoint', index } });
+      this.command({ to: 'avionics', command: { type: 'steerpoint', index } });
+      return;
     }
     if (a === 'masterCaution') {
       if (!this.last) return;
       const ids = cautionIds(stripModel({ ...this.last, avionics: this.avionics }));
-      return this.command({ to: 'avionics', command: { type: 'acknowledge', ids } });
+      this.command({ to: 'avionics', command: { type: 'acknowledge', ids } });
+      return;
     }
     // M: the next mode by hand, and after the last back to the triggers.
     const list = MANUAL_MODES[this.last?.kind ?? 'jet'];
     if (!this.avionics.manual) {
-      return this.command({ to: 'avionics', command: { type: 'master-mode', mode: list[0]! } });
+      this.command({ to: 'avionics', command: { type: 'master-mode', mode: list[0]! } });
+      return;
     }
     const i = list.indexOf(this.avionics.masterMode);
     if (i < 0 || i === list.length - 1)

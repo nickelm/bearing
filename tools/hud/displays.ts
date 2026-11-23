@@ -186,6 +186,8 @@ export async function drawDisplays(q: URLSearchParams): Promise<void> {
     });
   }
   sys.update(snap);
+  // `&readonly=1`: a spectator's displays; avionics and controls presses flash red (decision 311).
+  if (q.get('readonly') === '1') sys.readOnly = true;
   // `&dep=1`: the own ship low on the map (decision 310).
   if (q.get('dep') === '1')
     sys.command({ to: 'ui', command: { type: 'map-depress', slot: 'leftMfd' } });

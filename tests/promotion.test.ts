@@ -132,14 +132,16 @@ describe('the AI pilots of a promoted CAP flight', () => {
       expect(lead(a).gearDamaged).toBe(false);
     }
     // The route climbs at the F-21's 50 m/s, a little more than its military power sustains
-    // near the top (decision 283), and the lead keeps to military power outside combat
-    // (decision 310): it falls up to about 3.5 km behind its point and closes again.
-    expect(worst).toBeLessThan(4000);
+    // near the top (decision 283), and the lead keeps to 90% of military power outside combat
+    // (decisions 310, 311): it falls up to about 4 km behind its point and closes again.
+    expect(worst).toBeLessThan(4500);
     expect(worstOnStation).toBeLessThan(400);
     // At a mile in the racetrack's turns, rejoining at the second stage at most: under 1 km.
     expect(worstWing).toBeLessThan(1000);
-    // A CAP outside combat: military power at most, but for a rejoin's second stage now and
-    // then, short of a twentieth of the flight (decision 310; the climb was half afterburner).
+    // A CAP outside combat: the lead at 90% of military power at most, the wingman at military
+    // power but for a rejoin's second stage, short of a twentieth of the flight (decisions 310,
+    // 311; the climb was half afterburner before).
+    expect(levers[0]).toBeLessThanOrEqual(0.9 * MIL_DETENT + 1e-9);
     for (const l of levers) expect(l).toBeLessThanOrEqual(REJOIN_LEVER + 1e-9);
     expect(burning / (2 * samples)).toBeLessThan(0.05);
     expect(lead(f.aircraft[0]!).fuel).toBeLessThan(fuel0);
@@ -189,15 +191,26 @@ describe('the AI pilots of a promoted CAP flight', () => {
     f.handBack(routeReference(route));
     expect(f.playerSlot).toBeNull();
     let worstAfter = 0;
+    let lastAfter = 0;
+    let leadLever = 0;
     for (; t < t0 + 330; t += 1 / 30) {
       f.advanceTo(t, seaLevel);
       const p = analyticPose(route, f.time, R).pos;
       worstAfter = Math.max(worstAfter, lead(f.aircraft[0]!).pos.distanceTo(new Vec3d(...p)));
+      lastAfter = lead(f.aircraft[0]!).pos.distanceTo(new Vec3d(...p));
+      leadLever = Math.max(
+        leadLever,
+        (f.aircraft[0]!.flown.controls as { throttle: number }).throttle,
+      );
     }
-    // On its new route from the first second, through the turn back to the station: within
-    // 3 km with the tanks and their fuel at 9 km, rejoining at the afterburner's second stage
-    // at most (1.2 km at full afterburner, decision 310; 800 m before the stores, decision 287).
-    expect(worstAfter).toBeLessThan(3000);
+    // On its new route from the first second, through the turn back to the station (1.2 km off
+    // it at full afterburner before decision 310; 800 m before the stores, decision 287).
+    // Handed back slow (the player flew 300 kt) on a route that asks for cruise speed, the
+    // lead never takes the afterburner outside combat and holds 90% of military power
+    // (decision 311): it falls up to about 10 km behind its new route at 9 km, then closes.
+    expect(leadLever).toBeLessThanOrEqual(0.9 * MIL_DETENT + 1e-9);
+    expect(worstAfter).toBeLessThan(12_000);
+    expect(lastAfter).toBeLessThan(worstAfter - 3000);
   }, 60_000);
 
   it('drops the highest slots the player does not fly when the campaign loses aircraft', () => {
@@ -205,5 +218,25 @@ describe('the AI pilots of a promoted CAP flight', () => {
     f.takeOver(3);
     expect(f.remove(2)).toBe(2);
     expect(f.aircraft.map((a) => a.slot)).toEqual([0, 3]);
+  });
+
+  it('reports each aircraft crashed in a take-over once, over several hand-backs (decision 311)', () => {
+    // The owner crashed three of four in turn: each hand-back lost every crashed aircraft
+    // again, the campaign's count fell below the flight's, and the last one was dropped.
+    const f = promote(m, phaseStart(m, 'fence-in') + 10);
+    const counts: number[] = [];
+    for (const slot of [0, 1, 2]) {
+      expect(f.takeOver(slot)).toBe(true);
+      lead(f.bySlot(slot)!).crashed = 'terrain';
+      const h = f.handback();
+      counts.push(h.lost.length);
+      expect(h.lost.map((l) => l.slot)).toEqual([slot]);
+      expect(h.fix.aircraft).toBe(3 - slot);
+      f.handBack();
+    }
+    expect(counts).toEqual([1, 1, 1]);
+    // The fourth flies on and can be taken over.
+    expect(f.alive.map((a) => a.slot)).toEqual([3]);
+    expect(f.takeOver(3)).toBe(true);
   });
 });

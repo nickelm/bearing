@@ -1580,13 +1580,13 @@ export class Follow {
       if (!showsLandingAid(ui, this.displays.avionics.masterMode)) frame.aid = null;
       frame.marks = this.hudMarks(m, ui, p);
     }
-    // The flight plan: the next waypoint, and steering to it under the phase's cue (decision 305).
-    // The target's and station's cues steer too, so the distance to the target shows and a
-    // re-attack keeps it (decision 310); a steerpoint chosen by hand always steers.
+    // The flight plan: the next waypoint, and steering to it (decision 305) whenever there is
+    // a steerpoint and the aircraft is off the ground, whatever the phase's cue list says
+    // (decision 311); where the phase marks the target or the station, its diamond is the
+    // mark's (decision 310).
     const nav = this.navigation(m, p, t);
     const marked = !!ui && (ui.hud.includes('target') || ui.hud.includes('station'));
-    const steer = !!ui && (ui.hud.includes('steering') || marked);
-    frame.steering = steer || nav.manual ? this.steeringCue(m, nav, p, marked) : null;
+    frame.steering = nav.next >= 0 && !p.onGround ? this.steeringCue(m, nav, p, marked) : null;
     // The own flight by the intraflight datalink: rings on the HUD (decision 308).
     const mates = this.flightMates();
     const eye = this.deps.globe.chase.eye;

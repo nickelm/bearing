@@ -665,9 +665,11 @@ body.ff-flying.ff-no-fps .frame-overlay {
   padding: 0 5px;
 }
 
-/* With the search open, the selected flight's panel sits beside it. */
+/* With the search open, the selected flight's panel sits beside it: the search's width,
+   its 40 px of padding and 3 px border, its 8 px from the edge, and a gap (decision 311). */
 body.search-open .air-panel {
-  left: calc(min(30rem, 45vw) + 24px);
+  left: calc(min(30rem, 45vw) + 51px + 10px);
+  max-width: min(26rem, calc(100vw - min(30rem, 45vw) - 85px));
 }
 
 /* Side selection at campaign start (R1.4). */

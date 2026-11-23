@@ -4964,6 +4964,22 @@ The first run missed by 4.0 m at 610 m and 9.6 m at 900 m, growing with the squa
 
 **Reason:** the owner's review of R2.6 in a take-over on seed 4.
 
+### 311. The owner's second review of R2.6: the lead's power margin, losses reported once, steering whenever airborne, refused presses flash
+
+**Date:** 2026-11-23
+**Decision:** The owner's second take-over on seed 4 reported a wingman and then the lead in afterburner 2 during the climb, the lead far ahead of its three wingmen in cruise, no steerpoint range on the HUD in navigation, a fourth aircraft invisible and not to be taken over after crashing three, read-only buttons that gave no sign, and the selected flight's panel overlapping mission search. What changed:
+
+- **The lead's power margin.** Decision 310 let the lead rejoin its route's schedule at the afterburner's second stage, and in the climb it fell behind its point (the route climbs at 50 m/s, more than military power sustains near the top), so it lit the burner and ran from its wingmen, who had no more thrust to follow. Now the lead never takes the afterburner outside combat and holds 90% of military power at most (`TrackerGains.cruiseLever`, `DirectorTarget.maxLever` without the afterburner), so its wingmen keep station at military power; behind its schedule it falls back and closes at that power. A wingman more than 1.5 km off its slot may rejoin at the second stage. Combat now also covers the first 90 s of a strike's egress (`EGRESS_FIGHT`), the run out of the target area. Measured headless over two minutes per phase: no afterburner in the climb-out, ingress, fence-in or on station, the wingmen within 400 m in the climb and 950 m at the fence-in; on the attack and its egress the formation still spreads (the route's 2-g turn off the target at 9 km is more than a loaded F-21 sustains; a TODO). The promotion tests: the lead up to 4.5 km behind its point in the climb; handed back slow, it falls up to 10 km behind its new route at 9 km and closes; the wingman under 1.5 km two minutes after the player's turn.
+- **Losses reported once.** Every hand-back listed all the flight's crashed aircraft, and the worker loses each one it hears (`AirOps.release`): after the second crash in a session the campaign counted three losses for two, the follow dropped a live aircraft to match (the highest slot not flown, the fourth), and it vanished and could not be taken over. `PromotedFlight.handback` now reports only losses no earlier hand-back reported.
+- **Steering whenever airborne.** The HUD's steering showed only in phases whose plug-in lists the steering cue (or marks the target or station), so a type whose interface defaults are pending showed none. It now shows whenever the aircraft is off the ground and has a steerpoint; where the phase marks the target or the station, the mark draws its diamond.
+- **Refused presses.** A spectator's displays take no avionics or controls commands (decision 294); `DisplaySystem.command` now says so, and the view flashes the pressed button or strip item red three times (`.dsp-refused`).
+- **Panels.** With mission search open the selected flight's panel sat 27 px over it (the offset left out the search panel's padding and border); it now sits beside it.
+- **Answered, not changed:** a CAP planned near its base lands with half its fuel because the profile ends the station at 90 minutes when fuel would allow more. Holding the station to joker (bingo plus three minutes of combat, three hours at most) was tried and measured on seed 4 over a day: Alliance CAP sorties 33 to 19, interdiction 19 to 23, the Alliance's successful missions 43 to 27, eight CAP sorties a side unfilled for want of a route (far stations cannot hold 20 minutes with a fight in hand), one front segment 15 km. That is the owner's call, so it waits in the TODO. Carrier departures as cyclic operations from four catapults, and ATC with ground, departure, tower and approach, go to the TODO for later, as the owner asked.
+
+**How it was checked.** `tests/promotion.test.ts`: the lead's lever at 90% of military power at most and under 5% of the flight in afterburner on a CAP outside combat; the new bounds; three aircraft crashed in three take-overs, each hand-back reporting one loss, the fourth flying on and taken over. The unit suite, the type check and lint pass.
+
+**Reason:** the owner's second review of R2.6.
+
 ### 320. Stylized effects: toon-shaded sphere-impostor puffs, dithered, with depth
 
 **Date:** 2026-11-22
