@@ -329,8 +329,9 @@ Started 2026-11-23, in parallel with R2.8 in a second session (decisions 314–3
 - [ ] The A-15's Mavericks and cluster bombs with the owner's future weapons; the A-10's eleven stations (four a wing and three under the fuselage today drawn as four a wing)
 - [x] C-150 (C-130 analogue): AI-flown for the demo; its flight data, laws and transport rig move to R4.4 with tactical airlift (owner, decision 318; the test pilot's circuit flies fighter speeds, and the airlift's landing at a forward field needs the AI's full-fidelity landing)
 - [x] `tools/freeflight.session.mjs` starts the A-15, Vo-31 and Vo-35 from the start screen: their own flight data and names, the brake off and the throttle forward, no afterburner on the Vo-35, the Pact's side for the Vo-31 and Vo-35
-- [ ] Owner, on the GPU: fly the Vo-31, Vo-35 and A-15 in Free Flight; follow and take over a Pact flight and an A-15; the new models in the campaign
+- [x] Owner, on the GPU (2026-11-23): flew the Vo-35 and A-15 and followed the Vo-31; fixes in decision 319 (the Vo-35's wing root, the Vo-31's second flame and its vortices, no afterburner mentioned without one, explosions twice the size)
 - [ ] Owner (2026-11-23, noted by the R2.8 session): the A-15 Buzzard's canopy sits too high on the fuselage and its sides jut out; the control surfaces on its wings are attached at an odd angle
+- [ ] Owner: a look at decision 319's fixes on the GPU, then R2.7 closes
 
 ### R2.8 Minimal entity promotion
 

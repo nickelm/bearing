@@ -57,7 +57,7 @@ import { Hud, matrixProjector } from '../ui/flight/hud';
 import type { HudFrame } from '../ui/flight/hud';
 import { buildHudFrame, ccipHud, gunHud, landingAid, seekerHud } from '../ui/flight/hudFrame';
 import { Explosions } from '../render/sim/aircraft/explosions';
-import { airframePose } from '../render/sim/effects/aircraftPose';
+import { airframePose, wingtipOf } from '../render/sim/effects/aircraftPose';
 import { Wrecks } from '../render/sim/aircraft/wrecks';
 import { isPending } from '../sim/command/missions/plugin';
 import type { PhaseInterface } from '../sim/command/missions/plugin';
@@ -249,6 +249,8 @@ export class Follow {
   private runways: Runway[] = [];
   /** The followed type's fixed-wing flight data, or null: it flies analytically. */
   private flightSpec: FlightSpec | null = null;
+  /** Where the followed type's wingtip vortices shed (decision 319). */
+  private wingtip: readonly [number, number] | null = null;
   /** The followed flight at full fidelity, or null. */
   private full: FullFidelity | null = null;
   /** After a demotion: each slot's offset from its route (m, world), easing out, and its age (s). */
@@ -703,6 +705,7 @@ export class Follow {
     this.bundle = b;
     this.spec = spec;
     this.flightSpec = flightSpecOfType(m!.aircraftType, (id) => modelSpec(id).flight);
+    this.wingtip = this.flightSpec ? wingtipOf(spec, this.flightSpec.cg) : null;
     this.lastTime = NaN;
     const g = this.deps.globe;
     g.chase.rig = this.rig(look, spec);
@@ -1164,6 +1167,9 @@ export class Follow {
       gearDown: down,
       afterburner: 0,
     });
+    // A type with flight data says whether it has an afterburner (decision 319).
+    if (this.flightSpec)
+      frame.afterburnerFitted = this.flightSpec.engine.thrust.afterburner !== null;
     this.updateDisplays(
       m,
       {
@@ -1502,7 +1508,10 @@ export class Follow {
       d.view.radPerPixel = rpp;
       d.view.update(pose, eye);
       // Contrails, wingtip vortices and a damaged aircraft's smoke (decision 329).
-      g.effects.aircraft(`slot:${a.slot}`, airframePose(m, this.flightSpec!.wing.span, a.damage));
+      g.effects.aircraft(
+        `slot:${a.slot}`,
+        airframePose(m, this.flightSpec!.wing.span, a.damage, 16, this.wingtip),
+      );
     }
   }
 

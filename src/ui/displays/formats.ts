@@ -306,7 +306,8 @@ function enginesFormat(s: AircraftSnapshot): ScreenItem[] {
     },
     text(0.62, 0.69, `${Math.round(e.power * 100)}%`, 'normal'),
   );
-  if (s.kind === 'jet')
+  // An engine without an afterburner has no line for it (decision 319).
+  if (s.kind === 'jet' && e.afterburnerFitted !== false)
     items.push(
       text(
         0.08,

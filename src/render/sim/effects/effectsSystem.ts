@@ -103,6 +103,8 @@ export interface AircraftPose {
   /** Wingspan and length (m). */
   span: number;
   length: number;
+  /** The right wingtip from the center: forward (m, negative aft) and out (m); see `wingtipOf`. */
+  tip?: readonly [number, number];
   /** Damage 0..1 (decision 301): smoke from 0.05, on fire from 0.5; none when it is shot down. */
   damage?: number;
   /** Engines side by side at the tail (1 or 2). */
@@ -290,8 +292,12 @@ export class EffectsSystem implements EffectSink {
       this.ribbons.trail(`${key}:c${i}`, 'contrail', p, contrail, now, humidity);
     }
     const vortex = vortexForms(a.load, humidity) && a.vel.length() > 60;
+    const [ahead, out] = a.tip ?? [0, a.span / 2];
     for (const side of [-1, 1]) {
-      const p = a.pos.clone().addScaled(a.right, (side * a.span) / 2);
+      const p = a.pos
+        .clone()
+        .addScaled(a.forward, ahead)
+        .addScaled(a.right, side * out);
       this.ribbons.trail(`${key}:v${side}`, 'vortex', p, vortex, now);
     }
     const d = a.damage ?? 0;

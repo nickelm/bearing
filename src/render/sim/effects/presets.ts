@@ -715,6 +715,12 @@ export interface ExplosionRecipe {
   fire: PresetId | null;
 }
 
+/**
+ * How much bigger explosions are drawn than the cube-root scale alone gives (owner, decision
+ * 319): twice, in size, spread, scorch, shockwave and light's reach.
+ */
+export const EXPLOSION_SIZE = 2;
+
 /** The cube root of the explosive (kg): explosions scale with it (decision 300's sizing). */
 export function blastScale(explosive: number): number {
   return Math.cbrt(Math.max(0.5, explosive));
@@ -723,13 +729,19 @@ export function blastScale(explosive: number): number {
 /** The layers of an explosion of `explosive` kg of a kind (Proposal 0011, *Explosions*). */
 export function explosionRecipe(kind: ExplosionKind, explosive: number): ExplosionRecipe {
   const k = blastScale(explosive);
+  // Sizes, spreads and reaches at EXPLOSION_SIZE times the cube-root scale; counts on the
+  // cube root alone, so the puff budget holds (decision 319).
+  const E = EXPLOSION_SIZE;
+  const g = E * k;
+  // Debris flies ballistic: its reach grows with the speed squared, so √E reaches E.
+  const b = Math.sqrt(E) * k;
   const n = (a: number, b: number, max: number) => Math.min(max, Math.round(a + b * k));
   const ground = kind === 'ground' || kind === 'fuel';
   const bursts: Burst[] = [
     {
       look: 'flash',
       count: 1,
-      size: [3.2 * k, 3.2 * k],
+      size: [3.2 * g, 3.2 * g],
       speed: [0, 0],
       up: 0,
       delay: 0,
@@ -738,9 +750,9 @@ export function explosionRecipe(kind: ExplosionKind, explosive: number): Explosi
     {
       look: 'fireball',
       count: n(5, 3, 36),
-      size: [1.3 * k, 2.1 * k],
-      speed: [2.5 * k, 6 * k],
-      up: ground ? 2 * k : 0,
+      size: [1.3 * g, 2.1 * g],
+      speed: [2.5 * g, 6 * g],
+      up: ground ? 2 * g : 0,
       delay: 0,
       upward: ground ? 0.5 : 0,
     },
@@ -749,8 +761,8 @@ export function explosionRecipe(kind: ExplosionKind, explosive: number): Explosi
     bursts.push({
       look: 'burst-smoke',
       count: n(6, 3, 30),
-      size: [1.5 * k, 2.2 * k],
-      speed: [1.5 * k, 3.5 * k],
+      size: [1.5 * g, 2.2 * g],
+      speed: [1.5 * g, 3.5 * g],
       up: 0,
       delay: 0.25,
       upward: 0,
@@ -760,18 +772,18 @@ export function explosionRecipe(kind: ExplosionKind, explosive: number): Explosi
       {
         look: 'spray',
         count: n(10, 4, 40),
-        size: [0.8 * k, 1.3 * k],
-        speed: [2, 3 * k],
-        up: 9 * k,
+        size: [0.8 * g, 1.3 * g],
+        speed: [2 * E, 3 * g],
+        up: 9 * g,
         delay: 0,
         upward: 0.85,
       },
       {
         look: 'black-smoke',
         count: n(4, 2, 20),
-        size: [1.2 * k, 1.8 * k],
-        speed: [0.5, 1.5 * k],
-        up: 1,
+        size: [1.2 * g, 1.8 * g],
+        speed: [0.5 * E, 1.5 * g],
+        up: E,
         delay: 0.6,
         upward: 0.6,
       },
@@ -781,18 +793,18 @@ export function explosionRecipe(kind: ExplosionKind, explosive: number): Explosi
       {
         look: 'dirt',
         count: n(8, 4, 44),
-        size: [1.4 * k, 2.2 * k],
-        speed: [2 * k, 5 * k],
-        up: 4 * k,
+        size: [1.4 * g, 2.2 * g],
+        speed: [2 * g, 5 * g],
+        up: 4 * g,
         delay: 0.05,
         upward: 0.7,
       },
       {
         look: kind === 'fuel' ? 'column-black' : 'burst-smoke',
         count: n(4, 2, 24),
-        size: [1.6 * k, 2.4 * k],
-        speed: [0.5 * k, 1.5 * k],
-        up: 2.5 * k,
+        size: [1.6 * g, 2.4 * g],
+        speed: [0.5 * g, 1.5 * g],
+        up: 2.5 * g,
         delay: 0.4,
         upward: 0.8,
       },
@@ -803,9 +815,9 @@ export function explosionRecipe(kind: ExplosionKind, explosive: number): Explosi
     bursts.push({
       look: 'fireball',
       count: n(8, 2, 30),
-      size: [1.4 * k, 2 * k],
-      speed: [0.8 * k, 2 * k],
-      up: 3 * k,
+      size: [1.4 * g, 2 * g],
+      speed: [0.8 * g, 2 * g],
+      up: 3 * g,
       delay: 0.3,
       upward: 0.9,
     });
@@ -813,11 +825,11 @@ export function explosionRecipe(kind: ExplosionKind, explosive: number): Explosi
   return {
     bursts,
     debris: ground
-      ? { count: n(3, 1.6, 24), speed: [3 * k, 7 * k], size: 0.22 * k, smoking: n(0, 0.4, 6) }
-      : { count: n(1, 1, 12), speed: [5 * k, 10 * k], size: 0.12 * k, smoking: 0 },
-    ring: ground && explosive >= 40 ? 9 * k : 0,
-    scorch: ground ? 1.5 * k : 0,
-    light: { intensity: 0.5 * k, reach: 10 * k },
+      ? { count: n(3, 1.6, 24), speed: [3 * b, 7 * b], size: 0.22 * k, smoking: n(0, 0.4, 6) }
+      : { count: n(1, 1, 12), speed: [5 * b, 10 * b], size: 0.12 * k, smoking: 0 },
+    ring: ground && explosive >= 40 ? 9 * g : 0,
+    scorch: ground ? 1.5 * g : 0,
+    light: { intensity: 0.5 * k, reach: 10 * g },
     fire: kind === 'fuel' ? 'fuel-fire' : null,
   };
 }

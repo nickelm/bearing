@@ -202,6 +202,7 @@ export function buildHudFrame(
     load: tel.load,
     // Without an afterburner the lever's travel past military is no stage of it.
     throttle: m.spec.engine.thrust.afterburner ? c.throttle : Math.min(c.throttle, MIL_DETENT),
+    afterburnerFitted: m.spec.engine.thrust.afterburner !== null,
     power: m.power,
     afterburner: m.afterburner,
     fuel: m.fuel,

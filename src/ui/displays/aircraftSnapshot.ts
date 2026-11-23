@@ -223,6 +223,7 @@ export function snapshotFromHud(f: HudFrame, x: SnapshotExtras): AircraftSnapsho
       lever: hv ? Math.min(1, hv.torque) : f.throttle,
       power: hv ? Math.min(1.2, hv.torque) : f.power,
       afterburner: hv ? 0 : afterburnerStage(f),
+      afterburnerFitted: hv ? false : f.afterburnerFitted,
     },
     gear: {
       position: f.gear,

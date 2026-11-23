@@ -129,6 +129,8 @@ export const SEVERE_HAZARDS: ReadonlySet<string> = new Set([
 export interface HudFrame {
   /** The readouts' units: the skin's (absent: the Alliance's imperial units). */
   units?: HudUnits;
+  /** False for an engine without an afterburner (decision 319); absent: one is fitted. */
+  afterburnerFitted?: boolean;
   cas: number;
   mach: number;
   altitude: number;

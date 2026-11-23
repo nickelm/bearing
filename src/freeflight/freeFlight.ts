@@ -14,7 +14,8 @@
  */
 import type { PerspectiveCamera } from 'three/webgpu';
 import type { CampaignCalendar, OrbitParams } from '../core/calendar';
-import { DEG, NAUTICAL_MILE } from '../core/units';
+import { DEG, KNOT, NAUTICAL_MILE } from '../core/units';
+import { approachSpeed } from '../sim/flight/energy';
 import { Quatd } from '../core/quat';
 import { Vec3d } from '../core/vec3d';
 import type { GlobeScene } from '../render/sim/globeScene';
@@ -64,6 +65,7 @@ import {
   SummaryCard,
   sinkText,
   touchdownLines,
+  KESTREL_HELP,
 } from '../ui/flight/flightCards';
 import type { SoundSettings } from '../ui/flight/flightCards';
 import { FlightInput, STICK_DEADZONE, STICK_FULL } from '../ui/flight/flightInput';
@@ -113,7 +115,7 @@ import type { FreeFlightUrl } from './url';
 import { FlightWeather } from './flightWeather';
 import { buildHudFrame, ccipHud, gunHud, landingAid, seekerHud } from '../ui/flight/hudFrame';
 import { Explosions } from '../render/sim/aircraft/explosions';
-import { airframePose } from '../render/sim/effects/aircraftPose';
+import { airframePose, wingtipOf } from '../render/sim/effects/aircraftPose';
 import { Wrecks } from '../render/sim/aircraft/wrecks';
 import { gunSelected, rocketCounts } from '../sim/flight/storesRack';
 import { flyingOf, MissileViews } from '../render/sim/aircraft/missileViews';
@@ -278,6 +280,8 @@ export class FreeFlight {
   private flightSpec = parseFlightSpec(this.spec.flight, this.jet);
   /** The side the player flies for: the jet's or the helicopter's. */
   private side: Side = 'alliance';
+  /** Where the jet's wingtip vortices shed (decision 319). */
+  private wingtip = wingtipOf(this.spec, this.flightSpec.cg);
   private readonly pose: AircraftPose;
   /** The mode's weather: the world's model, shown as the chosen preset. */
   private readonly weather: FlightWeather;
@@ -407,7 +411,10 @@ export class FreeFlight {
         this.view.update(this.pose, eye);
         // Contrails and wingtip vortices (decision 329).
         if (this.model && !this.helo && !this.model.crashed)
-          deps.globe.effects.aircraft('flown', airframePose(this.model, this.flightSpec.wing.span));
+          deps.globe.effects.aircraft(
+            'flown',
+            airframePose(this.model, this.flightSpec.wing.span, 0, 16, this.wingtip),
+          );
       }
       this.poseTraffic(eye);
       // The gun's tracers (decision 295).
@@ -620,16 +627,28 @@ export class FreeFlight {
       this.jet = JET_BUNDLES[choice];
       this.spec = modelSpec(this.jet);
       this.flightSpec = parseFlightSpec(this.spec.flight, this.jet);
+      this.wingtip = wingtipOf(this.spec, this.flightSpec.cg);
     }
     const AIRCRAFT = this.jet;
     this.side = AIRCRAFT_BUNDLES[AIRCRAFT]!.airWar?.side ?? 'alliance';
     this.helo = null;
     this.heloInput.enabled = false;
     this.capture.release();
-    this.help.refresh();
     const R = this.deps.radius;
     const m = new FlightModel(this.flightSpec, R);
     m.unlimitedFuel = this.options.unlimitedFuel;
+    // The help card in this jet's figures: the Kestrel's as written, another's from its data.
+    const fs = this.flightSpec;
+    this.help.refresh(
+      AIRCRAFT === JET_BUNDLES.kestrel
+        ? KESTREL_HELP
+        : {
+            afterburner: fs.engine.thrust.afterburner !== null,
+            rotateKt: Math.round((0.91 * approachSpeed(fs, m.mass)) / KNOT / 5) * 5,
+            approachDeg: Math.round(fs.controls.approachAlpha / DEG),
+            gearKt: Math.round(fs.gear.maxSpeed / KNOT / 10) * 10,
+          },
+    );
     const end = runwayEnds(r)[0];
     if (spawn === 'air') spawnInAir(m, r, end);
     else spawnOnRunway(m, r, end);

@@ -124,6 +124,8 @@ export interface AircraftSnapshot {
     lever: number;
     power: number;
     afterburner: number;
+    /** False for an engine without an afterburner (decision 319); absent: one is fitted. */
+    afterburnerFitted?: boolean;
   };
   /** `fixed`: gear that does not retract (skids, a helicopter's wheels). */
   /** `damaged`: the doors failed in an overspeed, the gear stuck down (decision 207). */

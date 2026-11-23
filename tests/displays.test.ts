@@ -262,6 +262,20 @@ describe('the status strip', () => {
 });
 
 describe('display models', () => {
+  it('leave the afterburner out of the engines format for an engine without one (decision 319)', () => {
+    const text = (fitted?: boolean) => {
+      const s = snap({
+        engine: { lever: 0.8, power: 1, afterburner: 0, afterburnerFitted: fitted },
+      });
+      const d = initialDisplayState(s);
+      d.slots.leftMfd.format = 'engines';
+      return JSON.stringify(displayModel(s, d, 'leftMfd')!.items);
+    };
+    expect(text()).toContain('AFTERBURNER OFF');
+    expect(text(true)).toContain('AFTERBURNER OFF');
+    expect(text(false)).not.toContain('AFTERBURNER');
+  });
+
   it('are plain data with one bezel layout per slot size', () => {
     const s = snap();
     const d = initialDisplayState(s);

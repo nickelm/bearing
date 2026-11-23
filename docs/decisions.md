@@ -5069,6 +5069,19 @@ The first run missed by 4.0 m at 610 m and 9.6 m at 900 m, growing with the squa
 
 **Reason:** a flyable transport needs more than its flight data. The test pilot's circuit flies fighter speeds, and an airlift sortie ends in a landing at a forward field, which needs the AI's landing at full fidelity. Both belong with the airlift work (owner, 2026-11-23).
 
+### 319. The owner's look at R2.7: the Vo-35's wing root, twin afterburner flames, vortices at the wingtips, no afterburner where there is none, explosions twice the size
+
+**Date:** 2026-11-23
+**Decision:**
+
+- **The Vo-35's wing root.** The wing's root stood 0.8 m out, 0.2 m outboard of the fuselage's side at the wing's height, so a slot showed between fuselage, nacelle and wing. The root now starts 0.45 m out, inside the fuselage, with its chord and height carried along the same leading edge and dihedral: the outboard wing, the tip and the pylons are where they were.
+- **Twin afterburners.** The aircraft view drew one flame, at the first afterburner emissive, so the Vo-31's mirrored second nozzle never lit. It now draws a flame at every afterburner emissive, mirrored ones included. This also covers the F-25, F-28, Vo-33, Ar-45R, Ra-84 and the Vo-37's family when they are flown.
+- **Wingtip vortices at the wingtips.** The vortices started abreast the center of gravity, at half the span. On the Vo-31 that put them about 3 m ahead of its swept tips. `wingtipOf` now finds the model's tip, the outermost mirrored horizontal wing three quarters back along its tip chord, and Free Flight and the follow pass it with the airframe's pose. The Kestrel's vortices move 2.2 m aft to its tips too. The Vo-31's navigation lights move onto its tips.
+- **No afterburner where there is none.** The engines format drops its afterburner line for an engine without one (`afterburnerFitted` in the HUD frame and the snapshot). Free Flight's help card says the throttle stops at military power, and it gives each jet's own rotation speed, on-speed angle of attack and gear limit instead of the Kestrel's. A followed type with flight data says the same in its read-only displays.
+- **Explosions twice the size** (owner): `EXPLOSION_SIZE = 2` scales every explosion's puff sizes, spread, rise, shockwave ring, scorch and light's reach. Debris speed scales by √2, so its ballistic reach doubles. Puff counts stay those of the cube-root scale, so the puff budget holds; the puffs' larger area costs more fill.
+
+**Reason:** the owner's look at R2.7 on the GPU (2026-11-23): the Vo-35 flies fine but showed the gap, the Vo-31's second flame and its vortices were off, the A-15 flew. Explosions are wanted bigger for spectacle. The R2.8 session's two small edits in R2.7's area (an optional field in `sim/flight/damage.ts`, vehicle hits by rounds in `storesRack.ts`) were acknowledged; they change no flight.
+
 ### 320. Stylized effects: toon-shaded sphere-impostor puffs, dithered, with depth
 
 **Date:** 2026-11-22
