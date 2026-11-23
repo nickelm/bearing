@@ -229,7 +229,7 @@ _Depends on R1.7; the flight data waits for R1.5's per-type laws._
 
 **Exit:** every type on the demo's orders has a model, and every flyable type passes the silhouette check and checks 12–13.
 
-**State (2026-11-23):** built (decisions 314–317), the owner's look on the GPU remains: the Vo-31, Vo-35 and A-15 fly in Free Flight and at full fidelity in the campaign (the A-15 if time allowed, and it did); every type a day of war's orders fly on the demo seeds has its own model (twenty new ones); the silhouettes pass check 6, and the Vo-35 and Vo-31 pass checks 12–13 in the Pact's skin, whose units the HUD now takes. The C-150 stays AI-flown; its flight data come with R4's tactical airlift (owner, 2026-11-23).
+**State (2026-11-23):** built (decisions 314–317), the owner's look on the GPU remains: the Vo-31, Vo-35 and A-15 fly in Free Flight and at full fidelity in the campaign (the A-15 if time allowed, and it did); every type a day of war's orders fly on the demo seeds has its own model (twenty new ones); the silhouettes pass check 6, and the Vo-35 and Vo-31 pass checks 12–13 in the Pact's skin, whose units the HUD now takes. The C-150 stays AI-flown for now, as the milestone allows; its flight data are proposed to come with the tactical airlift the owner asked for (R4), pending the owner's call.
 
 ### R2.8 Minimal Entity Promotion — medium
 
