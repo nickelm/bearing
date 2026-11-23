@@ -11,6 +11,10 @@ import { bindingName, codeKind, padFamily, parseBinding } from '../src/ui/input/
 import { GamepadSource } from '../src/ui/input/gamepad';
 import type { PadEvent, PadLike } from '../src/ui/input/gamepad';
 import { InputLayer } from '../src/ui/input/layer';
+import { nextInDirection } from '../src/ui/input/menuNav';
+import { padlockAngles } from '../src/ui/input/padlock';
+import { buffetFromAlpha } from '../src/ui/input/rumble';
+import { Vec3d } from '../src/core/vec3d';
 import { defaultGamepad, ProfileStore, parseStored } from '../src/ui/input/profiles';
 import { AB_HOLD, RATE, throttleRate, throttleRateState } from '../src/ui/input/throttleRate';
 import { AB_GATE, MIL_DETENT } from '../src/sim/flight/controlLaws';
@@ -380,7 +384,9 @@ describe('the jet and the helicopter on a synthetic gamepad', () => {
     pad.set(4, 0);
     pad.axes[2] = 0;
     frames(input, 1);
-    expect(actions).toEqual([]);
+    // Letting go of the look modifier recenters the view; the chord was the displays'.
+    expect(actions).toEqual(['recenterView']);
+    actions.length = 0;
     input.enabled = false;
     pad.set(0, 1);
     pad.set(9, 1);
@@ -417,5 +423,55 @@ describe('the jet and the helicopter on a synthetic gamepad', () => {
     expect(actions).toEqual(['hoverHold']);
     expect(helo.command.toggleHover).toBe(true);
     helo.dispose();
+  });
+});
+
+describe('menus, padlock and buffet', () => {
+  const rect = (x: number, y: number) =>
+    ({ left: x, top: y, width: 10, height: 10, right: x + 10, bottom: y + 10 }) as DOMRect;
+
+  it('moves the focus to the nearest control in the pressed direction', () => {
+    // A column of three buttons and one to the right of the middle one.
+    const list = [rect(0, 0), rect(0, 40), rect(0, 80), rect(60, 44)].map((r) => ({ rect: r }));
+    expect(nextInDirection(rect(0, 40), list, 'down')).toBe(2);
+    expect(nextInDirection(rect(0, 40), list, 'up')).toBe(0);
+    expect(nextInDirection(rect(0, 40), list, 'right')).toBe(3);
+    expect(nextInDirection(rect(0, 40), list, 'left')).toBe(-1);
+    expect(nextInDirection(null, list, 'down')).toBe(0);
+  });
+
+  it('starts no action from a press a menu consumed, and ends none on its release', () => {
+    const pad = new FakePad();
+    const src = new GamepadSource(() => [pad]);
+    const layer = new InputLayer(src, new ProfileStore(null));
+    const seen: string[] = [];
+    layer.onAction((a, down) => seen.push(`${a}:${down}`));
+    let menu = true;
+    layer.onRaw((e) => menu && e.type === 'press' && e.code === 'Pad0');
+    pad.set(0, 1);
+    src.poll();
+    menu = false;
+    pad.set(0, 0);
+    src.poll();
+    expect(seen).toEqual([]);
+    pad.set(0, 1);
+    src.poll();
+    expect(seen).toEqual(['gear:true']);
+  });
+
+  it('points the padlocked view at the target', () => {
+    const f = new Vec3d(1, 0, 0);
+    const u = new Vec3d(0, 1, 0);
+    expect(padlockAngles(f, u, new Vec3d(1, 0, 0))).toEqual({ yaw: 0, pitch: -0 });
+    // Right is f × u = +z: a target to the right turns the look a quarter round.
+    expect(padlockAngles(f, u, new Vec3d(0, 0, 1)).yaw).toBeCloseTo(Math.PI / 2);
+    // A target above lowers the eye (negative look pitch).
+    expect(padlockAngles(f, u, new Vec3d(1, 1, 0).normalize()).pitch).toBeCloseTo(-Math.PI / 4);
+  });
+
+  it('buffets from the onset angle of attack to full', () => {
+    expect(buffetFromAlpha(0.1, 0.3, 0.5)).toBe(0);
+    expect(buffetFromAlpha(0.4, 0.3, 0.5)).toBeCloseTo(0.5);
+    expect(buffetFromAlpha(0.9, 0.3, 0.5)).toBe(1);
   });
 });

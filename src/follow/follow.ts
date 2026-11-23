@@ -84,6 +84,9 @@ import { analyticPose } from '../sim/air/analyticPose';
 import { flyingOf, MissileViews } from '../render/sim/aircraft/missileViews';
 import type { ControlCursor } from '../ui/flight/controlCursor';
 import { FlightInput, STICK_DEADZONE, STICK_FULL } from '../ui/flight/flightInput';
+import { inputLayer } from '../ui/input/layer';
+import { menuActive } from '../ui/input/menuNav';
+import { installGamepadUi } from '../ui/input/prompt';
 import type { FlightAction } from '../ui/flight/flightInput';
 import { MouseCapture } from '../ui/flight/mouseCapture';
 import { aimDirection, flyMouseAim } from '../ui/flight/mouseAim';
@@ -340,6 +343,21 @@ export class Follow {
     this.input = new FlightInput(canvas, this.capture);
     this.input.mode = 'mouse-aim';
     this.input.onAction = (a) => this.action(a);
+    this.input.onMessage = (t) => this.hud.message(t, 2);
+    // A gamepad (Proposal 0014): ✕ / A takes control, L1 + Options hands back; spectating,
+    // ○ / B or Options goes back to the map, the D-pad's right and left step the aircraft
+    // and the displays, R3 recenters.
+    installGamepadUi();
+    const unPad = inputLayer().onGlobal((a, down) => {
+      if (!down || this.missionId === null || menuActive()) return;
+      if (a === 'handBack' && this.flying) this.toggleControl();
+      if (this.flying) return;
+      if (a === 'takeControl') this.toggleControl();
+      else if (a === 'backToMap') this.stop(null);
+      else if (a === 'nextAircraft') this.nextAircraft();
+      else if (a === 'nextPanels') this.nextPanels();
+      else if (a === 'recenterView') deps.globe.chase.recenter();
+    });
     // The strip's and the formats' buttons for the controls, as the keys (decision 287's jettison).
     this.displays.onControls = (a) => {
       if (a === 'jettisonTanks') this.action('jettison');
@@ -392,6 +410,7 @@ export class Follow {
     window.addEventListener('pointerup', up);
     canvas.addEventListener('wheel', wheel, { passive: false });
     this.detach = () => {
+      unPad();
       window.removeEventListener('keydown', key);
       canvas.removeEventListener('pointerdown', down);
       window.removeEventListener('pointermove', move);

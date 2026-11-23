@@ -4,6 +4,9 @@
  * model and turns clicks into callbacks; what changes the campaign (a
  * subscription) goes out as a campaign input through `onInput`. Toggled with M.
  */
+import { inputLayer } from '../input/layer';
+import { registerNavRoot } from '../input/menuNav';
+import { installGamepadUi } from '../input/prompt';
 import type { Side } from '../../campaign/cast';
 import { SIDE_LABELS } from '../../campaign/cast';
 import { HOUR, MINUTE } from '../../core/units';
@@ -85,6 +88,12 @@ export class MissionSearchPanel {
       if (!this.isActive) return;
       if (e.code === 'KeyM' && !e.ctrlKey && !e.metaKey && !e.altKey) this.visible = !this.visible;
     });
+    // A gamepad (Proposal 0014): Select opens and closes it over the map; the D-pad walks it.
+    installGamepadUi();
+    inputLayer().onGlobal((a, down) => {
+      if (down && a === 'missionSearch' && this.isActive) this.visible = !this.visible;
+    });
+    registerNavRoot(this.el, { priority: 25, back: () => (this.visible = false) });
   }
 
   get visible(): boolean {

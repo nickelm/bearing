@@ -36,6 +36,7 @@ import { slotFormats } from './formats';
 import { inputLayer } from '../input/layer';
 import type { InputLayer } from '../input/layer';
 import { profiles } from '../input/profiles';
+import { menuActive, registerNavRoot } from '../input/menuNav';
 
 const SLOT_KEYS: Partial<Record<DisplayHotAction, SlotId>> = {
   slotLeft: 'leftMfd',
@@ -78,6 +79,8 @@ export class DisplaySystem {
 
   /** Display focus (decision 367): the gamepad's D-pad walks the displays' buttons. */
   onFocusMode: ((on: boolean) => void) | null = null;
+  /** Ends the display focus, while it is on. */
+  private focusOff: (() => void) | null = null;
 
   constructor(parent?: HTMLElement, layer: InputLayer | null = inputLayer()) {
     this.holder = { avionics: initialAvionics(true) };
@@ -102,6 +105,8 @@ export class DisplaySystem {
     const unPad =
       layer?.onAction((a, down) => {
         if (!down || !this.enabled || !(a in DISPLAY_BINDINGS)) return;
+        // A menu has the pad; the display focus's own chord still turns it off.
+        if (menuActive() && !(a === 'displayFocus' && this.focusOff)) return;
         this.hot(a as DisplayHotAction);
       }) ?? (() => {});
     window.addEventListener('keydown', kd);
@@ -254,7 +259,7 @@ export class DisplaySystem {
   /** A hot key's action. */
   hot(a: DisplayHotAction): void {
     if (a === 'displayFocus') {
-      this.onFocusMode?.(true);
+      this.focus(!this.focusOff);
       return;
     }
     if (a === 'pageLeft' || a === 'pageRight') {
@@ -318,6 +323,33 @@ export class DisplaySystem {
     else this.command({ to: 'avionics', command: { type: 'master-mode', mode: list[i + 1]! } });
   }
 
+  /**
+   * Display focus on or off: the displays become a menu for the gamepad (the D-pad moves over
+   * their buttons, ✕ / A presses, ○ / B or the chord again leaves), while the sticks still fly.
+   */
+  focus(on: boolean): void {
+    if (on === (this.focusOff !== null)) return;
+    if (on) {
+      const unregister = registerNavRoot(this.view.root, {
+        priority: 20,
+        back: () => this.focus(false),
+      });
+      this.focusOff = () => {
+        unregister();
+        this.view.root.classList.remove('dsp-pad-focus');
+        (document.activeElement as HTMLElement | null)?.blur?.();
+      };
+      this.view.root.classList.add('dsp-pad-focus');
+      const first = this.view.root.querySelector<HTMLButtonElement>('button:not([disabled])');
+      first?.focus({ preventScroll: true });
+      first?.classList.add('pad-focus');
+    } else {
+      this.focusOff?.();
+      this.focusOff = null;
+    }
+    this.onFocusMode?.(on);
+  }
+
   /** A display's next format, expanded (a gamepad's D-pad pages through them). */
   private page(slot: SlotId): void {
     if (!this.last || !this.display) return;
@@ -332,6 +364,7 @@ export class DisplaySystem {
 
   set visible(v: boolean) {
     this.view.visible = v;
+    if (!v) this.focus(false);
   }
 
   dispose(): void {

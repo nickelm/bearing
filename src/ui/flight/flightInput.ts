@@ -29,6 +29,7 @@ import type { MouseCapture } from './mouseCapture';
 import { inputLayer } from '../input/layer';
 import type { InputLayer } from '../input/layer';
 import { profiles } from '../input/profiles';
+import { menuActive } from '../input/menuNav';
 import { throttleRate, throttleRateState } from '../input/throttleRate';
 import type { ThrottleEvent } from '../input/throttleRate';
 
@@ -282,9 +283,18 @@ export class FlightInput {
     // The gamepad's actions, as the keys': a press of a toggle acts, a held one is read in update().
     const unPad =
       this.layer?.onAction((a, isDown) => {
-        if (!isDown || this.layer?.aircraftClass !== 'fixed' || !(a in FLIGHT_BINDINGS)) return;
+        if (this.layer?.aircraftClass !== 'fixed' || !(a in FLIGHT_BINDINGS)) return;
         const fa = a as FlightAction;
+        // The pad's look modifier springs the view back when let go (Proposal 0014), where the
+        // mouse's look stays where it is left (decision 198).
+        if (!isDown) {
+          if (fa === 'freeLook' && this.enabled && !this.keyHeld('freeLook') && !this.rightDown)
+            this.onAction?.('recenterView');
+          return;
+        }
         if (!this.enabled && fa !== 'pause') return;
+        // An open menu or the display focus has the pad's buttons; the pause button still pauses.
+        if (fa !== 'pause' && menuActive()) return;
         if (PRESS_ACTIONS.has(fa)) this.onAction?.(fa);
       }) ?? (() => {});
     // A key's (or a mouse side button's) press or release; false if it is bound to nothing.

@@ -28,7 +28,8 @@ export class InputLayer {
   private readonly global = new Map<DeviceKind, ActionResolver>();
   private readonly listeners = new Set<ActionListener>();
   private readonly globalListeners = new Set<ActionListener>();
-  private readonly rawListeners = new Set<(e: PadEvent) => void>();
+  /** Raw listeners return true when they consumed a press (a menu acted on it). */
+  private readonly rawListeners = new Set<(e: PadEvent) => boolean | void>();
   /** While set, every device event goes to it alone (press-to-bind). */
   capture: ((e: PadEvent) => void) | null = null;
 
@@ -71,8 +72,12 @@ export class InputLayer {
     return () => this.globalListeners.delete(fn);
   }
 
-  /** Subscribes to the devices' raw events (menu navigation, the input monitor). */
-  onRaw(fn: (e: PadEvent) => void): () => void {
+  /**
+   * Subscribes to the devices' raw events (menu navigation, the input monitor). A listener
+   * that returns true consumes a press: no action starts from it, so the ✕ that flies from
+   * the start screen does not also raise the gear, and its release ends nothing.
+   */
+  onRaw(fn: (e: PadEvent) => boolean | void): () => void {
     this.rawListeners.add(fn);
     return () => this.rawListeners.delete(fn);
   }
@@ -167,8 +172,10 @@ export class InputLayer {
       this.capture(e);
       return;
     }
-    for (const fn of [...this.rawListeners]) fn(e);
+    let consumed = false;
+    for (const fn of [...this.rawListeners]) if (fn(e) === true) consumed = true;
     if (e.type !== 'press' && e.type !== 'release') return;
+    if (consumed && e.type === 'press') return;
     const down = e.type === 'press';
     const air = this.aircraft.get(e.kind)!;
     const glob = this.global.get(e.kind)!;

@@ -24,6 +24,7 @@ import type { MouseCapture } from './mouseCapture';
 import { inputLayer } from '../input/layer';
 import type { InputLayer } from '../input/layer';
 import { profiles } from '../input/profiles';
+import { menuActive } from '../input/menuNav';
 import { DEG } from '../../core/units';
 
 export type HeloAction =
@@ -153,6 +154,7 @@ export class HeloInput {
         if (!isDown || this.layer?.aircraftClass !== 'rotary' || !(a in HELO_BINDINGS)) return;
         const ha = a as HeloAction;
         if (!this.enabled && ha !== 'pause') return;
+        if (ha !== 'pause' && menuActive()) return;
         if (ha === 'hoverHold') this.hoverToggle = true;
         if (ha === 'parkingBrake') this.command.parkingBrake = !this.command.parkingBrake;
         if (PRESS_ACTIONS.has(ha)) this.onAction?.(ha);

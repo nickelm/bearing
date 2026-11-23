@@ -4,6 +4,9 @@
  * column over the strategic map. Clicking a base on the map selects it too
  * (the app calls `select`). The menu only reports choices; the app acts.
  */
+import { openBindings } from '../input/bindingsScreen';
+import { registerNavRoot } from '../input/menuNav';
+import { padStatusLine } from '../input/prompt';
 import './flight.css';
 import { FOOT } from '../../core/units';
 import { presetDescription, presetName, WEATHER_PRESETS } from '../../sim/weather/presets';
@@ -312,7 +315,8 @@ export class FreeFlightMenu {
       <div class="ff-row">
         <button class="ff-primary ff-fly" disabled>Fly</button>
         <div class="ff-chosen ff-note"></div>
-      </div>`;
+      </div>
+      <div class="ff-row ff-pad-row"><button class="ff-controls">Controls and gamepad…</button></div>`;
     const q = <T extends Element>(s: string) => el.querySelector(s) as T;
     this.seedInput = q<HTMLInputElement>('.ff-seed');
     this.status = q<HTMLDivElement>('.ff-status');
@@ -398,6 +402,10 @@ export class FreeFlightMenu {
     this.flyButton.addEventListener('click', () => {
       if (this.selected !== null && this.ready) this.events.fly(this.selected, { ...this.options });
     });
+    // A gamepad (Proposal 0014): its status, the bindings screen, the menu by D-pad.
+    q<HTMLDivElement>('.ff-pad-row').append(padStatusLine());
+    q<HTMLButtonElement>('.ff-controls').addEventListener('click', () => openBindings());
+    registerNavRoot(el, { priority: 10 });
     document.body.appendChild(el);
   }
 
@@ -448,6 +456,8 @@ export class FreeFlightMenu {
       ...bases.map((b) => {
         const tr = document.createElement('tr');
         tr.dataset.id = String(b.id);
+        // Reachable by the gamepad's D-pad and the Tab key (Proposal 0014).
+        tr.tabIndex = 0;
         const ft = Math.round(b.runwayLength / FOOT / 100) * 100;
         tr.innerHTML = `<td></td><td class="${b.side}">${SIDE_LABEL[b.side]}</td><td></td><td>${b.designators}</td><td>${b.runwayLength.toLocaleString('en-US')} m</td>`;
         tr.title = `${b.name} (id ${b.id}): ${b.kind} base, runway ${b.designators}, ${b.runwayLength.toLocaleString('en-US')} m (${ft.toLocaleString('en-US')} ft)`;

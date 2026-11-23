@@ -8,6 +8,9 @@ import { FOOT, KNOT } from '../../core/units';
 import type { Touchdown } from '../../sim/flight/outcomes';
 import { ACTION_LABELS, FLIGHT_BINDINGS } from './flightInput';
 import { axisName, bindingName } from '../input/codes';
+import { openBindings } from '../input/bindingsScreen';
+import { registerNavRoot } from '../input/menuNav';
+import { padStatusLine } from '../input/prompt';
 import { gamepads } from '../input/gamepad';
 import { AXIS_LABELS, profiles } from '../input/profiles';
 import type { AircraftClass, AxisId } from '../input/profiles';
@@ -66,7 +69,10 @@ export class PauseMenu {
       button('Air start (3,000 m, 300 kt)', () => events.restart('air')),
       button('Change airbase', () => events.changeBase()),
       button('Return to the start screen', () => events.exit()),
+      button('Controls and gamepad…', () => openBindings()),
     );
+    // A gamepad (Proposal 0014): the menu's buttons by D-pad.
+    registerNavRoot(this.el, { priority: 30 });
     const opts = document.createElement('div');
     opts.innerHTML = `<h2>Options</h2>
       <label><input type="checkbox" class="ff-fuel"> Unlimited fuel</label><br>
@@ -164,7 +170,7 @@ export class PauseMenu {
       sync();
       events.optionsChanged(this.options);
     });
-    this.el.append(h, buttons, opts);
+    this.el.append(h, buttons, padStatusLine(), opts);
     sync();
   }
 
@@ -219,7 +225,9 @@ export class SummaryCard {
   readonly el = card();
   private baseId: number | null = null;
 
-  constructor(private readonly events: SummaryEvents) {}
+  constructor(private readonly events: SummaryEvents) {
+    registerNavRoot(this.el, { priority: 30 });
+  }
 
   get visible(): boolean {
     return !this.el.hidden;
@@ -348,6 +356,7 @@ export class HelpOverlay {
 
   constructor() {
     this.refresh();
+    registerNavRoot(this.el, { priority: 35 });
   }
 
   /** What the card shows when it opens: the jet's table, or the last aircraft's given. */

@@ -68,6 +68,7 @@ import {
 import type { SoundSettings } from '../ui/flight/flightCards';
 import { FlightInput, STICK_DEADZONE, STICK_FULL } from '../ui/flight/flightInput';
 import { padlockAngles } from '../ui/input/padlock';
+import { installGamepadUi } from '../ui/input/prompt';
 import { Rumble, buffetFromAlpha } from '../ui/input/rumble';
 import type { ControlCursor } from '../ui/flight/controlCursor';
 import type { ControlMode, FlightAction } from '../ui/flight/flightInput';
@@ -356,6 +357,13 @@ export class FreeFlight {
     });
     this.displays = new DisplaySystem();
     this.displays.onControls = (a) => this.displayControl(a);
+    // A gamepad (Proposal 0014): connect toasts, menus by D-pad, the display focus's hint.
+    installGamepadUi();
+    this.displays.onFocusMode = (on) =>
+      this.hud.message(
+        on ? 'Display focus: D-pad moves, ✕ / A presses, ○ / B leaves' : 'Display focus off',
+        2.5,
+      );
     this.capture = new MouseCapture(deps.canvas);
     // Escape or a lost focus took the mouse: pause, as Escape does.
     this.capture.onLost = () => {
