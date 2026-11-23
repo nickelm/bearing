@@ -5155,3 +5155,51 @@ The per-vertex coverage, albedo and side (±1) go to the GPU as one vec3 attribu
 
 **Reason:** the owner's report from Free Flight.
 
+
+### 333. Minimal entity promotion: rosters, anchors, and kills that fold back into a battalion
+
+**Date:** 2026-11-23
+**Decision:** R2.8. A battalion near the player expands into a few representative vehicles, deterministically from its seed, its strength and the vehicles full fidelity has destroyed (`src/sim/ground/promotion.ts`).
+
+- **Rosters.** Each battalion kind stands for a roster of vehicles: tank battalions 31 tanks, 6 trucks and an attached short-range air defense vehicle (38); mechanized 30 infantry fighting vehicles, 6 trucks and one air defense vehicle (37); air defense 12 air defense vehicles and 8 trucks; artillery 24 trucks; logistics 40 trucks. Artillery has no gun model yet, so its trucks stand for its tractors. The roster's order interleaves the types by smooth weighted round robin, the rarer types weighted up to N / PROMOTED, so the first few vehicles show the mix. A vehicle's index in that order is its identity.
+- **Strength as vehicles.** A battalion's strength is the share of its roster alive: round(strength · N) vehicles. The vehicles full fidelity destroyed are kept by index (`killed`); the aggregate war's anonymous losses come off the end of the order. The alive vehicles are the first round(strength · N) of the order without the killed.
+- **Promotion** shows the first PROMOTED alive vehicles (8 of a tank or mechanized battalion, 4 of air defense, 5 of artillery, 6 of logistics), laid out round the battalion's anchor: three company clusters 450 m apart along the front for the fighting vehicles, the air defense vehicle 200 m behind the middle and the trucks 350 m behind, each vehicle's offset and heading from rng(seed, "promotion") forked by its index, so a vehicle stands where it stood at every promotion.
+- **Anchors.** The ground war places each battalion along its segment among its side's battalions there, BATTALION_DEPTH behind the moved line (tank 2.5 km, mechanized 2 km, air defense 5 km, artillery 9 km, logistics 16 km) plus up to 1.5 km from its seed, facing the line at the same fraction (`GroundWar.battalionAnchor`). The ground picture carries every battalion with its anchor, seed, strength and killed vehicles, and the latest 400 wrecks.
+- **Demotion and kills.** A destroyed vehicle comes back as the logged input `vehicle-destroyed` (battalion, roster index, where its wreck lies, its heading, and the flight that destroyed it; rule 19). The worker adds it to the battalion's killed list, lowers its strength by exactly 1/N (`strengthAfterKill`) and keeps the wreck. So the battalion's vehicle count drops by the same count as were destroyed, and nothing destroyed comes back. Damage short of a kill is not folded: a vehicle is whole or destroyed until R3 adds damaged ones.
+- **Where the entities live.** Promoted vehicles have no behavior in R2.8, so all their state is the battalion's seed, strength and killed list, which the worker owns and saves (`GroundState.killed` and `wrecks`, optional, so older saves load). The expansion is a pure function the main thread runs on the picture (decision 335). When R3.6 gives the vehicles movement and fire, the expansion and their state move into the worker, as decision 331 has it for infantry.
+- `SIM_STATE_FORMAT` stays 3; the hash covers the killed lists, and adds nothing while they are empty, so existing hashes hold.
+
+**How it was checked.** `tests/promotion.test.ts`: every kind's order shows each of its types among its promoted vehicles; one kill lowers the alive count by exactly one; promotion is the same from the same seed, strength and kills, keeps each vehicle where it stood when another is killed, and leaves the killed out; the layout stays within a kilometer of the anchor, trucks behind; the anchors lie within 5 km of the line for manoeuvre battalions and face it; in the worker, two kills (and a repeated one) lower the strength by two vehicles, the picture carries the kills and wrecks, re-promotion leaves the dead out, and a save and load keep them.
+
+**Reason:** roadmap R2.8 and the design's fidelity levels: promotion expands a unit deterministically from its seed and current strength, and demotion folds entity losses back into aggregate strength.
+
+### 334. Vehicles as targets: blast over hardness, rounds within reach, damage summed
+
+**Date:** 2026-11-23
+**Decision:** R2.8. Promoted vehicles are ground targets for the flown aircraft's bombs, rockets and gun (`VEHICLE_TARGETS` in `sim/ground/promotion.ts`; `sim/flight/damage.ts`, `storesRack.ts`).
+
+- **Blast.** A warhead does blast × explosive / hardness to a vehicle, at most 1, with decision 301's blast measured from the vehicle's edge. The site formula of decision 301, explosive / (explosive + hardness), never reaches 1, so a direct hit could not kill. Hardness: tank 50 kg, infantry fighting vehicle 20, air defense vehicle 12, truck 4. A 230 kg bomb (87 kg) kills a tank within about 40 m of its edge, an infantry fighting vehicle within 60 m and a truck anywhere in its 90 m reach; a rocket (1.5 kg) within 7 m does 0.03 to a tank, 0.08 to an infantry fighting vehicle and 0.38 to a truck.
+- **Gun.** A 20 mm round that passes within a vehicle's size (3.2–3.5 m) hits it: 0.005 to a tank (it shrugs off the gun), 0.06 to an infantry fighting vehicle, 0.08 to an air defense vehicle, 0.15 to a truck. Only vehicles take rounds; sites and roads stay the bombs' and rockets'.
+- **Damage** adds up per vehicle as for aircraft (decision 301), and at 1 the vehicle is destroyed (`VehicleDamage`). The target id is `vehicle:<battalion>:<index>`.
+- **Any site near the impact.** The rack's ground targets are now the flight's own target, every other target site within 12 km of the aircraft (bridges at their aim points), and the promoted vehicles within 8 km. A bomb that lands by a bridge or depot that is not the flight's target damages it (the owner bombed a bridge with no effect, R2.6).
+
+**How it was checked.** `tests/promotion.test.ts`, the exit of R2.8: an F-21 with the CAS loadout drops a 230 kg bomb on a promoted mechanized battalion and destroys the vehicle it lands on; twenty rounds through a truck destroy it; the battalion's alive count is its roster less the destroyed, and re-promotion leaves them out. `tests/hits.test.ts` passes unchanged, and so does the Kestrel's lockstep test.
+
+**Reason:** R2.8: vehicles are targets for guns, rockets and bombs. The values are priors; R2.10 calibrates CAS against a SHORAD vehicle (rule 18).
+
+### 335. Promoted vehicles in the simulation view: the bubble, the ground, wrecks
+
+**Date:** 2026-11-23
+**Decision:** R2.8. `GroundUnits` (`src/follow/groundUnits.ts`) is the main thread's side of promotion, and four vehicle model specs draw it.
+
+- **The bubble.** Battalions whose anchor lies within 15 km of the camera's ground point are promoted, and demoted beyond 18 km. The bubble collapses above 16× (design §Time) and above the simulation view's 20 km. A promoted battalion keeps its anchor and its vehicles until it is demoted, so the front's hourly moves do not shift what the player sees; vehicles the worker reports killed leave it.
+- **On the ground.** Each vehicle stands on the drawn ground (`displaySurfaceAt`, sampled again every 2 s as tiles refine), its hull tilted to the slope from four samples 1.5–3 m out. A truck within 400 m of an aligned road (decision 184) stands on its nearest point, along it; trucks that land on one point spread 15 m apart along the road.
+- **Kills.** A destroyed vehicle cooks off (the effects system's fuel explosion, 20–60 kg), turns into its wreck at once and posts `vehicle-destroyed` with the flight's id; the HUD says "Tank destroyed", "IFV destroyed", "SAM vehicle destroyed" or "Truck destroyed".
+- **Wrecks** (the worker's, and those destroyed here before the worker has them) stand where they died in the `burnt` scheme (charred browns and black over every camouflaged face) and burn as the effects' columns (decision 329) for two game hours, fading from 0.5 to 0.15 intensity; the columns are refreshed every 5 s.
+- **Drawing.** Instanced by model and scheme through campaign traffic's `TrafficLayer`, without ink outlines or contact shadows for now (a TODO item).
+- **Models.** `vehicle-tank` (256 triangles: a low hull with a sloped glacis, a flat six-sided turret, a long gun with a bore evacuator), `vehicle-ifv` (204: a tall box hull, a small offset turret with a short cannon and a launcher box, a rear door), `vehicle-shorad` (224: a turret with a search radar plate on a mast, turned 50°, missile pods on both sides and a tracking lens) and `vehicle-truck` (124: a cab, a canvas-covered bed and three axles of chunky wheels). Classes `tank` (150–400) and `truck` (80–200). Each side's vehicles take its scheme (Alliance woodland, Pact tactical); the shapes are shared for now.
+- `window.bearing.groundUnits.stats` counts the promoted battalions, vehicles and wrecks drawn; the browser smoke test's follow part logs them.
+
+**How it was checked.** `tests/groundUnits.test.ts` on a stand-in scene: battalions within range are promoted and stand on the ground; a promoted battalion keeps its vehicles when the front moves; far away or above 16× the bubble empties; a vehicle destroyed at a damage of 1 is posted once with its flight, cooks off once, leaves a wreck and a column, and stays dead when promoted again from the worker's picture. Part I check 6 in `tools/models.preview.ts`: the four silhouettes tell apart from the side, front and three-quarter views (a long gun; a tall hull with a small turret; a radar plate and pods; a cab and a bed on wheels). The render preview's `vehicles` view draws a Pact mechanized battalion and a wreck over open grassland with an Alliance tank battalion beyond.
+
+**Reason:** R2.8: near the player, vehicles on the ground or aligned roads, from the kit, that are targets and fold their losses back.

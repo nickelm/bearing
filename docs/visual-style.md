@@ -197,7 +197,7 @@ Helicopters are flown to the ground and hovered close to it (decision 149, propo
 
 ### Ground Vehicles and People
 
-- **Vehicles.** Boxy hulls, simple turrets, and chunky wheels or track blocks. Faction camouflage in two or three flat colors.
+- **Vehicles.** Boxy hulls, simple turrets, and chunky wheels or track blocks. Faction camouflage in two or three flat colors. The kit (decision 335): a tank (a low hull with a sloped glacis, a flat six-sided turret and a long gun), an infantry fighting vehicle (a tall box hull with a small offset turret, a short cannon and a launcher box), a short-range air defense vehicle (a turret with a search radar plate on a mast and missile pods on both sides) and a truck (a cab, a canvas-covered bed, three axles of chunky wheels), 124–256 triangles, each side's in its scheme. Destroyed vehicles stay where they died as wrecks in a burnt scheme (`#2E2A26`, `#3B342D`, `#211F1C` over every camouflaged face) and burn for two game hours.
 - **People.** Toy-like figures (reference 3): box torso, block head with a few painted face details, helmets and flight suits as simple shapes. Deck crews wear color-coded jerseys. Crews appear at close range: on airbases, carrier decks, and in cinematic views. Soldiers appear in numbers wherever infantry is promoted. Every person is military; there are never civilians (decision 331).
 
 ### Infantry

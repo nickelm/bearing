@@ -158,6 +158,8 @@ import { ROAD_TILE_LEVEL } from '../src/render/sim/infra/infraScene';
 import { habitabilityAt } from '../src/render/common/habitabilityTexture';
 import { earthElevation, LAPSE_RATE } from '../src/worldgen/climate';
 import { findSpots, SPOT_KINDS } from './landscapeSpots';
+import { GroundUnits } from '../src/follow/groundUnits';
+import { strengthAfterKill } from '../src/sim/ground/promotion';
 import type { LandscapeSpot } from './landscapeSpots';
 
 export interface PreviewView {
@@ -507,6 +509,24 @@ export const PREVIEW_VIEWS: PreviewView[] = [
     observerBack: 500,
     eyeHeight: 60,
     pitch: -12 * DEG,
+    detail: true,
+  },
+  {
+    // Promoted vehicles (R2.8, decision 335): a Pact mechanized battalion facing the camera
+    // over open grassland, an Alliance tank battalion beyond it, and a burnt wreck.
+    name: 'vehicles',
+    weather: 'clear',
+    dLat: 0,
+    dLon: 0,
+    altitude: 0,
+    tilt: 0,
+    heading: 0,
+    localTime: 10,
+    target: 'meadow',
+    sunHeading: 120 * DEG,
+    observerBack: 380,
+    eyeHeight: 45,
+    pitch: -9 * DEG,
     detail: true,
   },
   {
@@ -935,9 +955,9 @@ function cityTargets(
   Vec3d | null
 > {
   type Out = Record<
-  'hilltown' | 'westcity' | 'eastcity' | 'village' | 'industry' | 'uscity' | 'asiacity',
-  Vec3d | null
->;
+    'hilltown' | 'westcity' | 'eastcity' | 'village' | 'industry' | 'uscity' | 'asiacity',
+    Vec3d | null
+  >;
   const none: Out = {
     hilltown: null,
     westcity: null,
@@ -1877,6 +1897,53 @@ it('renders preview views', async () => {
       // The clock and the sun follow the observer's spot.
       o.lat = scene.observer.lat;
       o.lon = scene.observer.lon;
+    }
+    // Promoted vehicles at the target (R2.8): two battalions and a wreck, drawn as the app does.
+    scene.beforeDraw = null;
+    if (v.name === 'vehicles' && target) {
+      const units = new GroundUnits(scene, params.radius, () => {});
+      const t = target.clone().normalize();
+      const at: [number, number, number] = [t.x, t.y, t.z];
+      const beyond = offsetPoint(target, v.heading, 700, 0, params.radius).normalize();
+      units.setPicture({
+        revision: 1,
+        fronts: [],
+        units: [],
+        battalions: [
+          {
+            id: 1,
+            side: 'pact',
+            kind: 'mechanized',
+            seed: 7001,
+            strength: strengthAfterKill('mechanized', 1),
+            killed: [1],
+            point: at,
+            heading: v.heading + Math.PI,
+          },
+          {
+            id: 2,
+            side: 'alliance',
+            kind: 'tank',
+            seed: 7002,
+            strength: 1,
+            killed: [],
+            point: [beyond.x, beyond.y, beyond.z],
+            heading: v.heading,
+          },
+        ],
+        wrecks: [
+          {
+            battalion: 1,
+            vehicle: 1,
+            type: 'ifv',
+            side: 'pact',
+            point: at,
+            heading: v.heading + 2,
+            time: 0,
+          },
+        ],
+      });
+      scene.beforeDraw = (eye) => units.place(eye);
     }
     scene.cameraMode = station ? 'observer' : 'free';
     const localAt = (day: number) =>
