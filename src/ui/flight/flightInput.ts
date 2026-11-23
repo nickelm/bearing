@@ -1,7 +1,11 @@
 /**
- * Free Flight input (decision 134): keyboard, mouse and (basic) gamepad into
- * the flight model's `FlightControls`. Every key is in one remappable table,
- * `FLIGHT_BINDINGS`; the help overlay lists it.
+ * Free Flight input (decision 134): keyboard, mouse and gamepad into the flight
+ * model's `FlightControls`. Every key is in one remappable table,
+ * `FLIGHT_BINDINGS`, registered with the input layer's profiles (Proposal 0014,
+ * decision 361) so saved bindings land in it; the help overlay lists it. Gamepads
+ * and joysticks come through the input layer as actions and tuned axes
+ * (`src/ui/input/`): the right stick is the stick, the left stick the rudder and
+ * the throttle as a rate (decisions 363, 366).
  *
  * - **Stick.** W/S and A/D move the stick toward full deflection while held and
  *   let it return to center when released; Q/E are the pedals. With
@@ -22,6 +26,11 @@
 import { AB_GATE, MIL_DETENT, neutralControls } from '../../sim/flight/controlLaws';
 import type { FlightControls } from '../../sim/flight/controlLaws';
 import type { MouseCapture } from './mouseCapture';
+import { inputLayer } from '../input/layer';
+import type { InputLayer } from '../input/layer';
+import { profiles } from '../input/profiles';
+import { throttleRate, throttleRateState } from '../input/throttleRate';
+import type { ThrottleEvent } from '../input/throttleRate';
 
 export type FlightAction =
   | 'pitchDown'
@@ -46,7 +55,11 @@ export type FlightAction =
   | 'invertMouse'
   | 'help'
   | 'debug'
-  | 'pause';
+  | 'pause'
+  /** Gamepad actions (Proposal 0014); no key by default. */
+  | 'secondary'
+  | 'countermeasures'
+  | 'padlock';
 
 /** Key codes (KeyboardEvent.code) per action. Remap here or with `rebind`. */
 export const FLIGHT_BINDINGS: Record<FlightAction, string[]> = {
@@ -73,6 +86,9 @@ export const FLIGHT_BINDINGS: Record<FlightAction, string[]> = {
   help: ['KeyH'],
   debug: ['F3'],
   pause: ['Escape'],
+  secondary: [],
+  countermeasures: [],
+  padlock: [],
 };
 
 /** What each action does, for the help overlay. */
@@ -101,6 +117,9 @@ export const ACTION_LABELS: Record<FlightAction, string> = {
   help: 'This help',
   debug: 'Flight-model debug panel',
   pause: 'Pause menu',
+  secondary: 'Release or launch the secondary weapon (hold; reserved until stations split, R3)',
+  countermeasures: 'Countermeasures (reserved until R3 adds chaff and flares)',
+  padlock: 'Padlock the locked target: the view follows it; again to release',
 };
 
 /** Which actions toggle on a press rather than act while held. */
@@ -117,6 +136,8 @@ const PRESS_ACTIONS = new Set<FlightAction>([
   'help',
   'debug',
   'pause',
+  'countermeasures',
+  'padlock',
 ]);
 
 /**
@@ -165,6 +186,12 @@ export function throttleStep(
 
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
 
+const THROTTLE_MESSAGES: Record<Exclude<ThrottleEvent, null>, string> = {
+  'snap-mil': 'Throttle: military',
+  'snap-idle': 'Throttle: idle',
+  afterburner: 'Afterburner',
+};
+
 /** Stick rates (per second): toward a held key's side, and back to center. */
 const STICK_RATE = 2.5;
 const CENTER_RATE = 4;
@@ -172,6 +199,12 @@ const THROTTLE_RATE = 0.45;
 /** Mouse aim: seconds over which a released stick key hands its axis back to the director (decision 219). */
 const KEY_HANDBACK = 0.3;
 const WHEEL_STEP = 0.04;
+/** A gamepad's free look at full deflection, in mouse pixels per second (the chase camera's unit). */
+export const PAD_LOOK_RATE = 1500;
+/** Yaw on the bumpers ramps to full over this many seconds (decision 366). */
+const BUMPER_YAW_RATE = 1;
+/** The throttle stick pulled back past this at idle brakes the wheels (decision 366). */
+const PAD_BRAKE_FROM = 0.3;
 /** Throttle stops (lever positions). */
 const DETENTS = [0, MIL_DETENT, AB_GATE];
 
@@ -198,7 +231,19 @@ export class FlightInput {
   invertStick = false;
   /** Called on a press of a toggle action (gear, help, pause...). */
   onAction: ((a: FlightAction) => void) | null = null;
-  enabled = false;
+  /** A line for the HUD from the gamepad's throttle (snaps, afterburner, parking brake). */
+  onMessage: ((text: string) => void) | null = null;
+  private on = false;
+
+  /** Whether the keys, mouse and gamepad fly; enabling makes the layer resolve the jet's profile. */
+  get enabled(): boolean {
+    return this.on;
+  }
+
+  set enabled(v: boolean) {
+    this.on = v;
+    if (v && this.layer) this.layer.aircraftClass = 'fixed';
+  }
   /**
    * On the wheels with mouse aim engaged and the mouse captured, the ring's height above the
    * screen's center pulls the stick (decision 217): raising the ring rotates the jet, and in
@@ -222,29 +267,50 @@ export class FlightInput {
   private leftDown = false;
   private readonly detach: () => void;
 
+  /** The gamepad's throttle state machine (decision 363). */
+  private readonly padThrottle = throttleRateState();
+
   constructor(
     el: HTMLElement,
     private readonly capture: MouseCapture | null = null,
+    private readonly layer: InputLayer | null = inputLayer(),
   ) {
+    const store = this.layer?.store ?? profiles();
+    store.registerKeys('fixed', FLIGHT_BINDINGS);
     this.rebuild();
-    const onKey = (e: KeyboardEvent, down: boolean) => {
-      const a = this.keyAction.get(e.code);
-      if (!a) return;
-      // The browser's own shortcuts (Ctrl+W closes the tab) cannot all be blocked;
-      // the page asks before unloading while flying.
-      if (this.enabled) e.preventDefault();
+    const unStore = store.onChange(() => this.rebuild());
+    // The gamepad's actions, as the keys': a press of a toggle acts, a held one is read in update().
+    const unPad =
+      this.layer?.onAction((a, isDown) => {
+        if (!isDown || this.layer?.aircraftClass !== 'fixed' || !(a in FLIGHT_BINDINGS)) return;
+        const fa = a as FlightAction;
+        if (!this.enabled && fa !== 'pause') return;
+        if (PRESS_ACTIONS.has(fa)) this.onAction?.(fa);
+      }) ?? (() => {});
+    // A key's (or a mouse side button's) press or release; false if it is bound to nothing.
+    const onCode = (code: string, down: boolean): boolean => {
+      const a = this.keyAction.get(code);
+      if (!a) return false;
       if (!down) {
         // A release counts even while a menu has the controls: the key that opened the pause
         // menu is let go while it shows, and would otherwise stay held and swallow its next press.
-        this.held.delete(e.code);
-        return;
+        this.held.delete(code);
+        return true;
       }
       // While a menu or a card has the controls, only the pause key acts: it closes the menu
       // it opened.
-      if (!this.enabled && a !== 'pause') return;
-      if (this.held.has(e.code)) return;
-      this.held.add(e.code);
+      if (!this.enabled && a !== 'pause') return true;
+      if (this.held.has(code)) return true;
+      this.held.add(code);
       if (PRESS_ACTIONS.has(a)) this.onAction?.(a);
+      return true;
+    };
+    const onKey = (e: KeyboardEvent, down: boolean) => {
+      if (!this.keyAction.has(e.code)) return;
+      // The browser's own shortcuts (Ctrl+W closes the tab) cannot all be blocked;
+      // the page asks before unloading while flying.
+      if (this.enabled) e.preventDefault();
+      onCode(e.code, down);
     };
     const kd = (e: KeyboardEvent) => onKey(e, true);
     const ku = (e: KeyboardEvent) => onKey(e, false);
@@ -289,11 +355,15 @@ export class FlightInput {
       } else if (e.button === 0) {
         // With the mouse captured, the left button is the trigger (decision 295).
         this.leftDown = true;
+      } else if (e.button >= 3 && onCode(`Mouse${e.button}`, true)) {
+        // The side buttons bind as keys do (decision 361); the browser's back is kept from them.
+        e.preventDefault();
       }
     };
     const up = (e: PointerEvent) => {
       if (e.button === 2) this.rightDown = false;
       if (e.button === 0) this.leftDown = false;
+      if (e.button >= 3) onCode(`Mouse${e.button}`, false);
     };
     const wheel = (e: WheelEvent) => {
       if (!this.enabled) return;
@@ -317,6 +387,8 @@ export class FlightInput {
     el.addEventListener('wheel', wheel, { passive: false });
     el.addEventListener('contextmenu', menu);
     this.detach = () => {
+      unStore();
+      unPad();
       window.removeEventListener('keydown', kd);
       window.removeEventListener('keyup', ku);
       window.removeEventListener('blur', blur);
@@ -348,7 +420,8 @@ export class FlightInput {
 
   /** Rebinds `action` to `codes`, e.g. from a settings page. */
   rebind(action: FlightAction, codes: string[]): void {
-    FLIGHT_BINDINGS[action] = codes;
+    const store = this.layer?.store ?? profiles();
+    store.setKeys('fixed', action, codes);
     this.rebuild();
   }
 
@@ -364,8 +437,22 @@ export class FlightInput {
   }
 
   private isHeld(a: FlightAction): boolean {
+    return this.keyHeld(a) || this.padHeld(a);
+  }
+
+  private keyHeld(a: FlightAction): boolean {
     for (const c of FLIGHT_BINDINGS[a]) if (this.held.has(c)) return true;
     return false;
+  }
+
+  /** Held on a gamepad or joystick, while the layer resolves the jet's profile. */
+  private padHeld(a: FlightAction): boolean {
+    return this.layer?.aircraftClass === 'fixed' && this.layer.held(a);
+  }
+
+  /** The secondary release (the left trigger), held while flying; reserved until R3 (decision 366). */
+  get secondary(): boolean {
+    return this.enabled && this.isHeld('secondary');
   }
 
   /** Moves the throttle one wheel step; each step stops at a detent it reaches. */
@@ -449,7 +536,16 @@ export class FlightInput {
       k.pitchWeight = keysPitch ? 1 : Math.max(0, k.pitchWeight - dt / KEY_HANDBACK);
       k.rollWeight = keysRoll ? 1 : Math.max(0, k.rollWeight - dt / KEY_HANDBACK);
     }
-    c.yaw = axis(c.yaw, 'yawLeft', 'yawRight');
+    // Yaw on the bumpers ramps more slowly than the keys (decision 366).
+    const bumperYaw =
+      (this.padHeld('yawLeft') || this.padHeld('yawRight')) &&
+      !this.keyHeld('yawLeft') &&
+      !this.keyHeld('yawRight');
+    if (bumperYaw) {
+      const target = (this.isHeld('yawRight') ? 1 : 0) - (this.isHeld('yawLeft') ? 1 : 0);
+      const rate = target === 0 ? CENTER_RATE : BUMPER_YAW_RATE;
+      c.yaw += clamp(target - c.yaw, -rate * dt, rate * dt);
+    } else c.yaw = axis(c.yaw, 'yawLeft', 'yawRight');
     // Throttle with detents: a press stops at the next detent; a new press passes it.
     const up = this.isHeld('throttleUp');
     const down = this.isHeld('throttleDown');
@@ -458,7 +554,7 @@ export class FlightInput {
     const brake = this.isHeld('brakes') ? 1 : 0;
     c.brakeLeft = brake;
     c.brakeRight = brake;
-    this.gamepad(dt);
+    this.gamepad(dt, up !== down);
   }
 
   /**
@@ -471,36 +567,64 @@ export class FlightInput {
     if (k.rollWeight > 0) ctl.roll += (k.roll - ctl.roll) * k.rollWeight;
   }
 
-  /** Basic gamepad or flight stick: axes 0/1 stick, 2 or 5 pedals or twist, 3 throttle (stretch goal). */
-  private gamepad(_dt: number): void {
-    const pads = typeof navigator !== 'undefined' && navigator.getGamepads?.();
-    if (!pads) return;
-    const pad = [...pads].find((p) => p && p.connected);
-    if (!pad || pad.axes.length < 2) return;
-    const dz = (v: number | undefined) => (v === undefined || Math.abs(v) < 0.08 ? 0 : v);
-    const x = dz(pad.axes[0]);
-    const y = dz(pad.axes[1]);
-    this.padStick = x !== 0 || y !== 0;
-    if (this.padStick) {
-      this.controls.roll = clamp(x, -1, 1);
-      this.controls.pitch = clamp(y, -1, 1);
+  /**
+   * Gamepads and joysticks through the input layer (Proposal 0014): the stick, the rudder,
+   * the throttle as a rate (or a joystick's lever), wheel brakes from the throttle stick at
+   * idle, and free look with the look modifier. A deflected axis wins over the keys and the
+   * mouse on its control; in mouse aim the stick takes its axis from the director as a held
+   * key does (decision 219).
+   */
+  private gamepad(dt: number, keysOnThrottle: boolean): void {
+    const L = this.layer;
+    this.padStick = false;
+    if (!L || L.aircraftClass !== 'fixed' || !L.connected || !this.enabled) return;
+    const c = this.controls;
+    if (this.lookHeld) {
+      // The look modifier: the right stick looks around and the stick is let go.
+      this.lookDelta.x += L.axis('lookX') * PAD_LOOK_RATE * dt;
+      this.lookDelta.y += L.axis('lookY') * PAD_LOOK_RATE * dt;
+    } else {
+      const pitch = L.axis('pitch');
+      const roll = L.axis('roll');
+      this.padStick = pitch !== 0 || roll !== 0;
+      if (this.mode === 'direct' || this.directOnGround) {
+        if (pitch !== 0) c.pitch = pitch;
+        if (roll !== 0) c.roll = roll;
+      } else {
+        const k = this.keyStick;
+        if (pitch !== 0) {
+          k.pitch = pitch;
+          k.pitchWeight = 1;
+        }
+        if (roll !== 0) {
+          k.roll = roll;
+          k.rollWeight = 1;
+        }
+      }
     }
-    const twist = dz(pad.axes[2]);
-    if (twist !== 0) this.controls.yaw = clamp(twist, -1, 1);
-    // A throttle axis (3 on most sticks) runs from +1 (back) to −1 (forward).
-    const t = pad.axes[3];
-    if (
-      t !== undefined &&
-      pad.axes.length >= 4 &&
-      Math.abs(t) > 0.001 &&
-      pad.mapping !== 'standard'
-    )
-      this.controls.throttle = clamp((1 - t) / 2, 0, this.maxLever);
-    // Standard gamepads: right trigger (7) brakes.
-    const rt = pad.buttons[7];
-    if (rt && rt.value > 0.1) {
-      this.controls.brakeLeft = rt.value;
-      this.controls.brakeRight = rt.value;
+    const yaw = L.axis('yaw');
+    if (yaw !== 0) c.yaw = yaw;
+    if (!L.hasAxis('throttle') || keysOnThrottle) return;
+    const t = L.axis('throttle');
+    if (L.axisMode('throttle') === 'absolute') {
+      // A lever: its position is the throttle's (forward is up).
+      if (t !== 0) c.throttle = clamp((1 + t) / 2, 0, this.maxLever);
+      return;
+    }
+    const before = c.throttle;
+    const r = throttleRate(this.padThrottle, c.throttle, t, dt, this.maxLever);
+    c.throttle = r.lever;
+    if (r.event) this.onMessage?.(THROTTLE_MESSAGES[r.event]);
+    // Pushing the throttle up from the parking brake releases it.
+    if (c.parkingBrake && c.throttle > before && t > 0) {
+      c.parkingBrake = false;
+      this.onMessage?.('Parking brake released');
+    }
+    // The throttle stick held back at idle is the wheel brakes.
+    if (c.throttle <= 0 && t < -PAD_BRAKE_FROM) {
+      const b = Math.min(1, (-t - PAD_BRAKE_FROM) / (1 - PAD_BRAKE_FROM));
+      c.brakeLeft = Math.max(c.brakeLeft, b);
+      c.brakeRight = Math.max(c.brakeRight, b);
     }
   }
 

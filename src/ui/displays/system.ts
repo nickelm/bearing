@@ -32,6 +32,10 @@ import type { AircraftSnapshot } from './snapshot';
 import { cautionIds, stripModel } from './strip';
 import { DISPLAY_BINDINGS } from './bindings';
 import type { DisplayHotAction } from './bindings';
+import { slotFormats } from './formats';
+import { inputLayer } from '../input/layer';
+import type { InputLayer } from '../input/layer';
+import { profiles } from '../input/profiles';
 
 const SLOT_KEYS: Partial<Record<DisplayHotAction, SlotId>> = {
   slotLeft: 'leftMfd',
@@ -72,20 +76,40 @@ export class DisplaySystem {
   private readonly keyAction = new Map<string, DisplayHotAction>();
   private readonly detach: () => void;
 
-  constructor(parent?: HTMLElement) {
+  /** Display focus (decision 367): the gamepad's D-pad walks the displays' buttons. */
+  onFocusMode: ((on: boolean) => void) | null = null;
+
+  constructor(parent?: HTMLElement, layer: InputLayer | null = inputLayer()) {
     this.holder = { avionics: initialAvionics(true) };
     this.view = new DisplaysView(parent);
     this.view.onCommand = (c) => this.command(c);
-    for (const [a, codes] of Object.entries(DISPLAY_BINDINGS) as [DisplayHotAction, string[]][])
-      for (const c of codes) this.keyAction.set(c, a);
+    const store = layer?.store ?? profiles();
+    store.registerKeys('displays', DISPLAY_BINDINGS);
+    const rebuild = () => {
+      this.keyAction.clear();
+      for (const [a, codes] of Object.entries(DISPLAY_BINDINGS) as [DisplayHotAction, string[]][])
+        for (const c of codes) this.keyAction.set(c, a);
+    };
+    rebuild();
+    const unStore = store.onChange(rebuild);
     const kd = (e: KeyboardEvent) => {
       const a = this.keyAction.get(e.code);
       if (!a || !this.enabled || e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;
       e.preventDefault();
       this.hot(a);
     };
+    // The gamepad's display actions (Proposal 0014): the same hot actions as the keys.
+    const unPad =
+      layer?.onAction((a, down) => {
+        if (!down || !this.enabled || !(a in DISPLAY_BINDINGS)) return;
+        this.hot(a as DisplayHotAction);
+      }) ?? (() => {});
     window.addEventListener('keydown', kd);
-    this.detach = () => window.removeEventListener('keydown', kd);
+    this.detach = () => {
+      unStore();
+      unPad();
+      window.removeEventListener('keydown', kd);
+    };
   }
 
   /** The attached aircraft's avionics state; avionics commands change it. */
@@ -229,6 +253,29 @@ export class DisplaySystem {
 
   /** A hot key's action. */
   hot(a: DisplayHotAction): void {
+    if (a === 'displayFocus') {
+      this.onFocusMode?.(true);
+      return;
+    }
+    if (a === 'pageLeft' || a === 'pageRight') {
+      this.page(a === 'pageLeft' ? 'leftMfd' : 'rightMfd');
+      return;
+    }
+    if (a === 'masterArm') {
+      this.command({
+        to: 'avionics',
+        command: { type: 'master-arm', on: !this.avionics.masterArm },
+      });
+      return;
+    }
+    if (a === 'weaponNext') {
+      const list = (this.last?.stores?.weapons ?? []).filter((w) => w.count > 0);
+      if (list.length === 0) return;
+      const i = list.findIndex((w) => w.id === this.avionics.weapon);
+      const next = list[(i + 1) % list.length]!;
+      this.command({ to: 'avionics', command: { type: 'select-weapon', weapon: next.id } });
+      return;
+    }
     const slot = SLOT_KEYS[a];
     if (slot) {
       this.command({ to: 'ui', command: { type: 'toggle-slot', slot } });
@@ -269,6 +316,18 @@ export class DisplaySystem {
     if (i < 0 || i === list.length - 1)
       this.command({ to: 'avionics', command: { type: 'auto-mode' } });
     else this.command({ to: 'avionics', command: { type: 'master-mode', mode: list[i + 1]! } });
+  }
+
+  /** A display's next format, expanded (a gamepad's D-pad pages through them). */
+  private page(slot: SlotId): void {
+    if (!this.last || !this.display) return;
+    const list = slotFormats({ ...this.last, avionics: this.avionics }, slot);
+    if (list.length === 0) return;
+    const cur = this.display.slots[slot];
+    const i = cur.format ? list.indexOf(cur.format) : -1;
+    // A collapsed display opens on its format first; an open one turns to the next.
+    const format = cur.state !== 'expanded' && i >= 0 ? list[i]! : list[(i + 1) % list.length]!;
+    this.command({ to: 'ui', command: { type: 'select-format', slot, format } });
   }
 
   set visible(v: boolean) {

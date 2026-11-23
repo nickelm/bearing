@@ -15,7 +15,13 @@ export type DisplayHotAction =
   | 'radarLock'
   | 'radarBreak'
   | 'steerpointNext'
-  | 'steerpointPrevious';
+  | 'steerpointPrevious'
+  /** Gamepad actions (Proposal 0014, decision 366); no key by default. */
+  | 'pageLeft'
+  | 'pageRight'
+  | 'weaponNext'
+  | 'masterArm'
+  | 'displayFocus';
 
 /** Key codes per hot action (KeyboardEvent.code). */
 export const DISPLAY_BINDINGS: Record<DisplayHotAction, string[]> = {
@@ -30,6 +36,11 @@ export const DISPLAY_BINDINGS: Record<DisplayHotAction, string[]> = {
   radarBreak: ['KeyU'],
   steerpointNext: ['BracketRight'],
   steerpointPrevious: ['BracketLeft'],
+  pageLeft: [],
+  pageRight: [],
+  weaponNext: [],
+  masterArm: [],
+  displayFocus: [],
 };
 
 export const DISPLAY_LABELS: Record<DisplayHotAction, string> = {
@@ -44,4 +55,10 @@ export const DISPLAY_LABELS: Record<DisplayHotAction, string> = {
   radarBreak: 'Radar: break the lock',
   steerpointNext: "Steerpoint: the next waypoint, by hand (the map's AUTO goes back; decision 310)",
   steerpointPrevious: 'Steerpoint: the previous waypoint, by hand',
+  pageLeft: 'Left display: its next format (page)',
+  pageRight: 'Right display: its next format (page)',
+  weaponNext: 'Select the next weapon aboard (the gun, then the stores)',
+  masterArm: 'Master arm on / off',
+  displayFocus:
+    "Display focus: the D-pad moves over the displays' buttons, ✕ / A presses, ○ / B leaves",
 };

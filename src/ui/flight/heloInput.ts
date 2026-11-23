@@ -13,10 +13,18 @@
  * - **Free look.** Hold the right mouse button (or C) and move the mouse; the
  *   view stays where it is left. V or a middle click recenters it, and the
  *   mouse wheel moves the camera closer or farther (decision 160).
+ * - **Gamepad** (Proposal 0014, decision 366), through the input layer: the right
+ *   stick is the cyclic (fore and aft an attitude command that springs back with
+ *   the stick, left and right as A/D), the left stick the collective's climb rate
+ *   (centered holds the altitude) and the pedals (centered holds the heading).
  */
 import { neutralCommand } from '../../sim/flight/rotor/heloLaws';
 import type { HeloCommand } from '../../sim/flight/rotor/heloLaws';
 import type { MouseCapture } from './mouseCapture';
+import { inputLayer } from '../input/layer';
+import type { InputLayer } from '../input/layer';
+import { profiles } from '../input/profiles';
+import { DEG } from '../../core/units';
 
 export type HeloAction =
   | 'collectiveUp'
@@ -88,6 +96,10 @@ const PRESS_ACTIONS = new Set<HeloAction>([
 
 /** Mouse sensitivity (rad of command per pixel). */
 export const MOUSE_RATE = 0.0018;
+/** A gamepad's cyclic at full deflection fore or aft: this pitch attitude from trim (decision 366). */
+export const PAD_CYCLIC_PITCH = 18 * DEG;
+/** A gamepad's free look at full deflection, in mouse pixels per second. */
+const PAD_LOOK_RATE = 1500;
 
 export class HeloInput {
   readonly command: HeloCommand = neutralCommand();
@@ -97,7 +109,17 @@ export class HeloInput {
   /** Mouse wheel notches since the last frame (positive: farther). */
   zoomSteps = 0;
   onAction: ((a: HeloAction) => void) | null = null;
-  enabled = false;
+  private on = false;
+
+  /** Whether the keys, mouse and gamepad fly; enabling makes the layer resolve the rotary profile. */
+  get enabled(): boolean {
+    return this.on;
+  }
+
+  set enabled(v: boolean) {
+    this.on = v;
+    if (v && this.layer) this.layer.aircraftClass = 'rotary';
+  }
   /** Mouse forward pitches the nose up instead of down. */
   invertPitch = false;
   sensitivity = MOUSE_RATE;
@@ -107,15 +129,34 @@ export class HeloInput {
   private rightDown = false;
   private readonly mouse = { x: 0, y: 0 };
   private hoverToggle = false;
+  /** The pitch attitude the gamepad's cyclic commanded last frame (rad), so it springs back. */
+  private padPitch = 0;
   private readonly detach: () => void;
 
   constructor(
     el: HTMLElement,
     private readonly capture: MouseCapture | null = null,
+    private readonly layer: InputLayer | null = inputLayer(),
   ) {
     this.el = el;
-    for (const [a, codes] of Object.entries(HELO_BINDINGS) as [HeloAction, string[]][])
-      for (const c of codes) this.keyAction.set(c, a);
+    const store = this.layer?.store ?? profiles();
+    store.registerKeys('rotary', HELO_BINDINGS);
+    const rebuild = () => {
+      this.keyAction.clear();
+      for (const [a, codes] of Object.entries(HELO_BINDINGS) as [HeloAction, string[]][])
+        for (const c of codes) this.keyAction.set(c, a);
+    };
+    rebuild();
+    const unStore = store.onChange(rebuild);
+    const unPad =
+      this.layer?.onAction((a, isDown) => {
+        if (!isDown || this.layer?.aircraftClass !== 'rotary' || !(a in HELO_BINDINGS)) return;
+        const ha = a as HeloAction;
+        if (!this.enabled && ha !== 'pause') return;
+        if (ha === 'hoverHold') this.hoverToggle = true;
+        if (ha === 'parkingBrake') this.command.parkingBrake = !this.command.parkingBrake;
+        if (PRESS_ACTIONS.has(ha)) this.onAction?.(ha);
+      }) ?? (() => {});
     const onKey = (e: KeyboardEvent, down: boolean) => {
       const a = this.keyAction.get(e.code);
       if (!a) return;
@@ -178,6 +219,8 @@ export class HeloInput {
     el.addEventListener('contextmenu', menu);
     el.addEventListener('wheel', wheel, { passive: false });
     this.detach = () => {
+      unStore();
+      unPad();
       window.removeEventListener('keydown', kd);
       window.removeEventListener('keyup', ku);
       window.removeEventListener('blur', blur);
@@ -191,7 +234,7 @@ export class HeloInput {
 
   private isHeld(a: HeloAction): boolean {
     for (const c of HELO_BINDINGS[a]) if (this.held.has(c)) return true;
-    return false;
+    return this.layer?.aircraftClass === 'rotary' && this.layer.held(a);
   }
 
   /** Starts a sortie: neutral command, parking brake as given. */
@@ -219,8 +262,11 @@ export class HeloInput {
     this.capture?.release();
   }
 
-  /** The command for the next step, from the keys held and the mouse since the last call. */
-  update(): void {
+  /**
+   * The command for the next step, from the keys held, the mouse since the last call and the
+   * gamepad; `dt` (real seconds since the last call) paces the gamepad's free look.
+   */
+  update(dt = 1 / 60): void {
     const c = this.command;
     this.lookHeld = this.enabled && (this.rightDown || this.isHeld('freeLook'));
     if (!this.lookHeld) {
@@ -244,6 +290,38 @@ export class HeloInput {
     }
     this.mouse.x = this.mouse.y = 0;
     this.hoverToggle = false;
+    this.gamepad(dt);
+  }
+
+  /**
+   * The gamepad's sticks (decision 366): a deflected axis wins over its keys. Fore and aft
+   * the cyclic commands a pitch attitude from trim, sent as the change since the last frame,
+   * so letting go brings the nose back where it was; with the look modifier held the right
+   * stick looks around instead.
+   */
+  private gamepad(dt: number): void {
+    const L = this.layer;
+    const c = this.command;
+    if (!L || L.aircraftClass !== 'rotary' || !L.connected || !this.enabled) {
+      this.padPitch = 0;
+      return;
+    }
+    let pitch = 0;
+    if (this.lookHeld) {
+      this.lookDelta.x += L.axis('lookX') * PAD_LOOK_RATE * dt;
+      this.lookDelta.y += L.axis('lookY') * PAD_LOOK_RATE * dt;
+    } else {
+      // Stick back (+) raises the nose (+ in the command), as the mouse drawn back does.
+      pitch = L.axis('cyclicPitch') * PAD_CYCLIC_PITCH * (this.invertPitch ? -1 : 1);
+      const roll = L.axis('cyclicRoll');
+      if (roll !== 0) c.lateral = roll;
+    }
+    c.mousePitch += pitch - this.padPitch;
+    this.padPitch = pitch;
+    const pedals = L.axis('pedals');
+    if (pedals !== 0) c.pedals = pedals;
+    const coll = L.axis('collective');
+    if (coll !== 0) c.collective = coll;
   }
 
   /** After the first step of a frame: the mouse and the toggle count once. */

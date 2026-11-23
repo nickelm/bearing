@@ -67,6 +67,8 @@ import {
 } from '../ui/flight/flightCards';
 import type { SoundSettings } from '../ui/flight/flightCards';
 import { FlightInput, STICK_DEADZONE, STICK_FULL } from '../ui/flight/flightInput';
+import { padlockAngles } from '../ui/input/padlock';
+import { Rumble, buffetFromAlpha } from '../ui/input/rumble';
 import type { ControlCursor } from '../ui/flight/controlCursor';
 import type { ControlMode, FlightAction } from '../ui/flight/flightInput';
 import { MouseCapture } from '../ui/flight/mouseCapture';
@@ -224,6 +226,10 @@ export class FreeFlight {
   /** When the eject key was first pressed (s): a second press within 2 s ejects. */
   private ejectArmed = -Infinity;
   private triggerWas = false;
+  /** Padlock (Proposal 0014): the view follows the radar lock until pressed again or lost. */
+  private padlocked = false;
+  /** The gamepad's rumble (decision 367). */
+  private readonly rumble = new Rumble();
   /** The Kestrel's stores: its flight data's standard load (decision 289); null in a helicopter. */
   private rack: StoresRack | null = null;
   /** The gear doors' failure has been announced this sortie. */
@@ -368,6 +374,8 @@ export class FreeFlight {
     };
     this.input = new FlightInput(deps.canvas, this.capture);
     this.input.onAction = (a) => this.action(a);
+    // The gamepad's throttle snaps, afterburner and parking brake (Proposal 0014).
+    this.input.onMessage = (t) => this.hud.message(t, 2);
     this.heloInput = new HeloInput(deps.canvas, this.capture);
     this.heloInput.onAction = (a) => this.heloAction(a);
     this.pose = {
@@ -858,7 +866,7 @@ export class FreeFlight {
     const m = this.helo!;
     const chase = this.deps.globe.chase;
     const inp = this.heloInput;
-    inp.update();
+    inp.update(dt);
     chase.lookHeld = inp.lookHeld;
     if (inp.lookHeld) {
       const cam = this.deps.globe.camera;
@@ -1036,7 +1044,16 @@ export class FreeFlight {
         this.hud.message(MOUSE_MODE_MESSAGE[this.input.mode], 3);
         break;
       case 'recenterView':
+        this.padlocked = false;
         this.deps.globe.chase.recenter();
+        break;
+      case 'padlock':
+        this.padlocked =
+          !this.padlocked && this.model !== null && this.lockDirection(this.model) !== null;
+        this.hud.message(this.padlocked ? 'Padlock' : 'Padlock off', 1.5);
+        break;
+      case 'countermeasures':
+        this.hud.message('No countermeasures yet (R3)', 1.5);
         break;
       case 'help':
         this.help.visible = !this.help.visible;
@@ -1131,10 +1148,23 @@ export class FreeFlight {
     this.input.update(this.state === 'flying' ? dt : 0);
     chase.lookHeld = this.input.lookHeld;
     if (this.input.lookHeld) {
+      this.padlocked = false;
       const cam = this.deps.globe.camera;
       const rpp = (cam.fov * DEG) / Math.max(1, window.innerHeight);
       chase.look(this.input.lookDelta.x, this.input.lookDelta.y, rpp);
       this.input.lookDelta.x = this.input.lookDelta.y = 0;
+    } else if (this.padlocked) {
+      // Padlock: the view follows the lock; a lost lock ends it.
+      const d = this.lockDirection(m);
+      if (d) {
+        const a = padlockAngles(chase.restForward, chase.restUp, d);
+        chase.lookYaw = a.yaw;
+        chase.lookPitch = a.pitch;
+        chase.lookHeld = true;
+      } else {
+        this.padlocked = false;
+        this.hud.message('Padlock lost', 1.5);
+      }
     }
     if (this.input.zoomSteps !== 0) {
       chase.zoomBy(this.input.zoomSteps);
@@ -1216,6 +1246,9 @@ export class FreeFlight {
           td.grade
         ];
         this.hud.message([`TOUCHDOWN: ${grade}`, ...touchdownLines(td)], 8, td.grade === 'hard');
+        this.rumble.pulse(
+          td.grade === 'hard' || td.grade === 'firm' ? 'hard-touchdown' : 'touchdown',
+        );
         break;
       }
       case 'stopped':
@@ -1355,6 +1388,7 @@ export class FreeFlight {
         const st = trafficState(a, h.time, this.deps.radius);
         this.wrecks.add(a.model, st.pos, st.vel, this.downed.size);
         this.hud.message('Splash', 4);
+        this.rumble.pulse('splash');
       }
       this.rack.updateSeeker(m, av, this.gameTime, this.lockDirection(m));
       // Bombs one per press, rockets while held (decision 300).
@@ -1369,6 +1403,11 @@ export class FreeFlight {
         this.hud.message(x.state === 'hit' ? 'Missile hit' : 'Missile missed', 3);
     }
     this.triggerWas = trigger;
+    // Rumble: the gun while it fires, the buffet near the stall (decision 367).
+    this.rumble.frame(
+      trigger && gunSelected(av) && (this.rack?.gun?.rounds ?? 0) > 0 && av.masterArm,
+      m.onGround ? 0 : buffetFromAlpha(frame.alpha, 20 * DEG, 28 * DEG),
+    );
     frame.seeker = seekerHud(m, this.rack, av, this.deps.globe.chase.eye, this.gameTime);
     const ground = this.ground;
     frame.ccip = ground

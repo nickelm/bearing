@@ -33,6 +33,7 @@ import { DEG, FOOT, KM, KMH, KNOT, NAUTICAL_MILE } from '../../core/units';
 import type { Vec3d } from '../../core/vec3d';
 import type { FlightWarning } from '../../sim/flight/outcomes';
 import { drawControlCursor } from './controlCursor';
+import { gamepads } from '../input/gamepad';
 import type { ControlCursor } from './controlCursor';
 
 /** HUD green and its halo. */
@@ -1141,6 +1142,8 @@ export class Hud {
             ? 'IDLE'
             : `${Math.round(60 + 40 * (lever / 0.8))}%`;
     lines.push([`THR ${thr}`]);
+    // A gamepad stores the throttle (Proposal 0014): its lever as a bar beside the readout.
+    if (gamepads().anyConnected) this.throttleBar(lever, x - 40 * s, y, s);
     if (f.panels) {
       this.text(lines[0]![0], x - 28 * s, y, 'left');
       return;
@@ -1155,6 +1158,24 @@ export class Hud {
     else if (f.brakes) lines.push(['BRAKES']);
     lines.push([f.mode.toUpperCase()]);
     lines.forEach(([t, color], i) => this.text(t, x - 28 * s, y + i * 18 * s, 'left', color));
+  }
+
+  /** The stored throttle as a bar (bottom idle, top full afterburner) with a military tick. */
+  private throttleBar(lever: number, x: number, y: number, s: number): void {
+    const c = this.ctx;
+    const h = 64 * s;
+    const w = 6 * s;
+    const top = y - 12 * s;
+    const fill = Math.max(0, Math.min(1, lever)) * h;
+    this.stroke(() => {
+      c.beginPath();
+      c.rect(x - w, top, w, h);
+      // The military detent.
+      c.moveTo(x - w - 3 * s, top + h * 0.2);
+      c.lineTo(x + 3 * s, top + h * 0.2);
+    });
+    c.fillStyle = HUD_COLOR;
+    c.fillRect(x - w, top + h - fill, w, fill);
   }
 
   private landingAid(f: HudFrame, x: number, y: number, s: number): void {

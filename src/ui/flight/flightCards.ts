@@ -7,10 +7,12 @@ import './flight.css';
 import { FOOT, KNOT } from '../../core/units';
 import type { Touchdown } from '../../sim/flight/outcomes';
 import { ACTION_LABELS, FLIGHT_BINDINGS } from './flightInput';
-import type { FlightAction } from './flightInput';
+import { axisName, bindingName } from '../input/codes';
+import { gamepads } from '../input/gamepad';
+import { AXIS_LABELS, profiles } from '../input/profiles';
+import type { AircraftClass, AxisId } from '../input/profiles';
 import { mouseRow, weatherSelect } from './freeFlightMenu';
 import { DISPLAY_BINDINGS, DISPLAY_LABELS } from '../displays/bindings';
-import type { DisplayHotAction } from '../displays/bindings';
 import type { FreeFlightOptions, SpawnKind } from './freeFlightMenu';
 
 function card(className = ''): HTMLDivElement {
@@ -292,28 +294,54 @@ export class SummaryCard {
   }
 }
 
-/** Key names for the help overlay. */
-function keyName(code: string): string {
-  const named: Record<string, string> = {
-    ShiftLeft: 'Shift',
-    ShiftRight: 'Shift',
-    ControlLeft: 'Ctrl',
-    ControlRight: 'Ctrl',
-    Space: 'Space',
-    Escape: 'Esc',
-    Equal: '=',
-    Minus: '−',
-    NumpadAdd: 'Num +',
-    NumpadSubtract: 'Num −',
-    ArrowUp: '↑',
-    ArrowDown: '↓',
-    ArrowLeft: '←',
-    ArrowRight: '→',
-  };
-  if (named[code]) return named[code];
-  if (code.startsWith('Key')) return code.slice(3);
-  return code;
+/** Key and mouse button names for the help overlay (the input layer's, decision 361). */
+const keyName = (code: string): string => bindingName(code);
+
+/** A help row per action that has a binding; actions without one (gamepad-only) are left out. */
+function bindingRows<A extends string>(
+  bindings: Record<A, readonly string[]>,
+  labels: Record<A, string>,
+): string[] {
+  return (Object.keys(bindings) as A[])
+    .filter((a) => bindings[a].length > 0)
+    .map((a) => {
+      const keys = [...new Set(bindings[a].map(keyName))].join(' / ');
+      return `<tr><td>${keys}</td><td>${labels[a]}</td></tr>`;
+    });
 }
+
+/** The connected gamepad's layout for the help card (Proposal 0014), or nothing without one. */
+function gamepadRows(cls: AircraftClass, labels: Record<string, string>): string {
+  const pads = gamepads();
+  if (!pads.has('gamepad')) return '';
+  const family = pads.family;
+  const p = profiles().pad('gamepad', cls);
+  const rows = Object.entries(p.buttons)
+    .filter(([, l]) => l.length > 0)
+    .map(
+      ([a, l]) =>
+        `<tr><td>${l.map((b) => bindingName(b, family)).join(' / ')}</td><td>${labels[a] ?? PAD_ONLY_LABELS[a] ?? a}</td></tr>`,
+    );
+  const axes = Object.entries(p.axes)
+    .filter(([, s]) => s && s.axis >= 0)
+    .map(
+      ([id, s]) =>
+        `<tr><td>${axisName(s!.axis)}</td><td>${AXIS_LABELS[id as AxisId]}${s!.mode === 'rate' ? ' (as a rate: push to move it, let go to hold)' : ''}</td></tr>`,
+    );
+  return `<h2>Gamepad</h2><table>${[...axes, ...rows].join('')}</table>
+    <div class="ff-note">Double-tap the left stick up for military power, down for idle; hold it up at military for the afterburner. Hold it back at idle to brake; push the throttle up to release the parking brake. Hold ${bindingName(p.buttons.freeLook?.[0] ?? '', family)} to look around with the right stick. The bindings screen (pause menu → Controls) remaps everything.</div>`;
+}
+
+const PAD_ONLY_LABELS: Record<string, string> = {
+  hook: 'Cargo hook (reserved until R4 adds sling loads)',
+  fire: 'Fire the selected weapon',
+  secondary: 'Release or launch the secondary weapon (reserved until R3)',
+  countermeasures: 'Countermeasures (reserved until R3)',
+  padlock: 'Padlock the locked target; again to release',
+  pedalLeft: 'Pedal left',
+  pedalRight: 'Pedal right',
+  ...DISPLAY_LABELS,
+};
 
 export class HelpOverlay {
   readonly el = card('ff-help');
@@ -322,12 +350,13 @@ export class HelpOverlay {
     this.refresh();
   }
 
+  /** What the card shows when it opens: the jet's table, or the last aircraft's given. */
+  private render: () => void = () => this.refresh();
+
   /** Rebuilds the table from the bindings (after a remap). */
   refresh(): void {
-    const rows = (Object.keys(FLIGHT_BINDINGS) as FlightAction[]).map((a) => {
-      const keys = [...new Set(FLIGHT_BINDINGS[a].map(keyName))].join(' / ');
-      return `<tr><td>${keys}</td><td>${ACTION_LABELS[a]}</td></tr>`;
-    });
+    this.render = () => this.refresh();
+    const rows = bindingRows(FLIGHT_BINDINGS, ACTION_LABELS);
     rows.push(
       '<tr><td>Mouse wheel</td><td>Throttle, stopping at idle, military and the afterburner gate; zoom while looking around</td></tr>',
     );
@@ -337,7 +366,7 @@ export class HelpOverlay {
     rows.push(...displayRows());
     this.el.innerHTML = `<h1>Controls</h1><table>${rows.join('')}</table>
       <div class="ff-note">Ctrl+W closes the browser tab; the page asks first while you fly. The throttle also moves with = and −.</div>
-      <div class="ff-note">Takeoff: release the parking brake (P), full throttle; at about 150 kt hold the stick back until about 9° of pitch and let go: with the gear down the stick commands pitch rate (5°/s) and the attitude holds. Gear up (G) once climbing; the stick then commands g. Landing: gear down below 300 kt, fly the approach at 13° angle of attack, 3° glide path, brake (Space) after the nosewheel is down.</div>`;
+      <div class="ff-note">Takeoff: release the parking brake (P), full throttle; at about 150 kt hold the stick back until about 9° of pitch and let go: with the gear down the stick commands pitch rate (5°/s) and the attitude holds. Gear up (G) once climbing; the stick then commands g. Landing: gear down below 300 kt, fly the approach at 13° angle of attack, 3° glide path, brake (Space) after the nosewheel is down.</div>${gamepadRows('fixed', { ...ACTION_LABELS, ...DISPLAY_LABELS })}`;
   }
 
   /** Shows another aircraft's bindings (the helicopters'), with notes under the table. */
@@ -346,10 +375,8 @@ export class HelpOverlay {
     labels: Record<A, string>,
     notes: readonly string[],
   ): void {
-    const rows = (Object.keys(bindings) as A[]).map((a) => {
-      const keys = [...new Set(bindings[a].map(keyName))].join(' / ');
-      return `<tr><td>${keys}</td><td>${labels[a]}</td></tr>`;
-    });
+    this.render = () => this.showBindings(bindings, labels, notes);
+    const rows = bindingRows(bindings, labels);
     rows.push(
       '<tr><td>Mouse</td><td>Forward: nose down; back: nose up; left and right: turn</td></tr>',
     );
@@ -360,7 +387,9 @@ export class HelpOverlay {
     rows.push(...displayRows());
     this.el.innerHTML = `<h1>Controls</h1><table>${rows.join('')}</table>${notes
       .map((n) => `<div class="ff-note">${n}</div>`)
-      .join('')}`;
+      .join(
+        '',
+      )}${gamepadRows('rotary', { ...(labels as Record<string, string>), ...DISPLAY_LABELS })}`;
   }
 
   get visible(): boolean {
@@ -368,14 +397,13 @@ export class HelpOverlay {
   }
 
   set visible(v: boolean) {
+    // Opened afresh: the bindings may have changed, and a gamepad may have connected.
+    if (v && this.el.hidden) this.render();
     this.el.hidden = !v;
   }
 }
 
 /** The displays' hot keys for the help card (decision 199). */
 function displayRows(): string[] {
-  return (Object.keys(DISPLAY_BINDINGS) as DisplayHotAction[]).map((a) => {
-    const keys = [...new Set(DISPLAY_BINDINGS[a].map(keyName))].join(' / ');
-    return `<tr><td>${keys}</td><td>${DISPLAY_LABELS[a]}</td></tr>`;
-  });
+  return bindingRows(DISPLAY_BINDINGS, DISPLAY_LABELS);
 }
