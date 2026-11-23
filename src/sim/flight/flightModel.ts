@@ -347,8 +347,12 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
     const lever = clamp(ctl.throttle, 0, 1);
     const hasFuel = this.fuel > 0 || this.unlimitedFuel;
     const dryCmd = hasFuel ? Math.min(1, lever / MIL_DETENT) : 0;
-    const abCmd = hasFuel && lever >= AB_GATE ? 0.2 + (0.8 * (lever - AB_GATE)) / (1 - AB_GATE) : 0;
     const eng = spec.engine;
+    // An engine without an afterburner (the Vo-35's) stops at military power.
+    const abCmd =
+      hasFuel && lever >= AB_GATE && eng.thrust.afterburner
+        ? 0.2 + (0.8 * (lever - AB_GATE)) / (1 - AB_GATE)
+        : 0;
     const tau = dryCmd > this.power ? eng.spoolUp : eng.spoolDown;
     this.power += (dryCmd - this.power) * Math.min(1, dt / tau);
     const abTarget = this.power > 0.95 ? abCmd : 0;
@@ -430,7 +434,7 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
     const th = eng.thrust;
     const idle = lookup2(th.altitude, th.mach, th.idle, altitude, mach);
     const mil = lookup2(th.altitude, th.mach, th.military, altitude, mach);
-    const wet = lookup2(th.altitude, th.mach, th.afterburner, altitude, mach);
+    const wet = th.afterburner ? lookup2(th.altitude, th.mach, th.afterburner, altitude, mach) : mil;
     const thrust = hasFuel ? idle + (mil - idle) * this.power + (wet - mil) * this.afterburner : 0;
     fb.x += thrust;
     const wetShare = Math.min(1, this.afterburner * 5);

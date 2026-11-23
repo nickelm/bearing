@@ -307,13 +307,23 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 
 ### R2.7 The demo roster
 
-- [ ] Vo-31 (MiG-29 analogue): flight data and control laws; performance against the air-war table
-- [ ] Vo-35 (Su-25 analogue): flight data and control laws
+Started 2026-11-23, in parallel with R2.8 in a second session (decisions 314–319, then 350 on; R2.8 takes 333–349).
+
+- [x] Pact stores in the catalog with their model specs (decision 314): R-27 (`mrm-p`), the MiG-29's 1,500 l centerline tank, the Su-25's 800 l tanks, the B-8 pod of 20 × 80 mm rockets and the 250 kg bomb
+- [x] Vo-31 (MiG-29 analogue): its stores out of the body; pylons and stations (inner, middle, outer, centerline) and loadouts by station; its gun (GSh-30-1)
+- [x] Vo-31: flight data from public MiG-29 figures (two RD-33s), its gear and contact points from the model, its control laws' parameters; performance against the air-war table (decision 314; the tail raised for 14.6° of clearance)
+- [x] Plausibility per flyable type: `tests/flightModel.test.ts`'s plausibility checks run for every bundle with flight data, with targets per type (takeoff, stall, top speed at sea level, level flight at 300 kt, cruise at military power, climb); `tools/flight.preview.ts` with `TYPE`
+- [x] Engines without an afterburner in the flight model (the Su-25's; decision 314); the Kestrel's lockstep unchanged
+- [ ] The throttle's detent and the HUD's and strip's afterburner readouts for an engine without one
+- [ ] Vo-35 (Su-25 analogue): stores out of the body, ten pylons and loadouts by station, its gun (GSh-30-2), flight data and control laws
+- [ ] Flying them: Free Flight's `aircraft=vo31|vo35` and the start screen's choice; following and taking over Pact flights at full fidelity; the route's climb rate from the type's military-power climb where the table asks for more
+- [ ] The Pact skin in the HUD: km/h, meters and kilometers (the displays have their units already)
+- [ ] Checks 12–13 for an attack aircraft (the Vo-35) in `tools/displays.screens.mjs`
+- [ ] AI-only models: E-5 first (the owner asked for a proper AWACS; the C-150 stands in for it until then), then F-25, KC-40, Vo-37, Ra-44, Ra-60, Ve-28 and the Pact utility helicopter Ve-18 (the Alliance's UH-68 exists)
+- [ ] Silhouette check (Part I check 6) for every new model
 - [ ] A-15 (A-10 analogue): model spec, flight data, laws (if time allows; owner decision 5)
-- [ ] C-150 (C-130 analogue): model spec, flight data, laws, transport rig (if time allows)
-- [ ] AI-only models: F-25, E-5, KC-40, Vo-37, Ra-44, Ra-60, Ve-28 and the two utility helicopters (the E-5 first: the owner asked for a proper AWACS model; the C-150 stands in for it until then)
-- [ ] Pact skin in a flown Vo-31 and Vo-35
-- [ ] Silhouette check (Part I check 6) for every new model; checks 12–13 for an attack aircraft
+- [ ] C-150 (C-130 analogue): flight data, laws, transport rig (if time allows)
+- [ ] Owner, on the GPU: fly the Vo-31 and the Vo-35 in Free Flight; follow and take over a Pact flight; the new models in the campaign
 
 ### R2.8 Minimal entity promotion
 

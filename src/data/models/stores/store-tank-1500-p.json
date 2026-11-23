@@ -1,0 +1,48 @@
+{
+  "name": "Centerline drop tank (Pact)",
+  "class": "store",
+  "groups": {
+    "body": "steel"
+  },
+  "parts": [
+    {
+      "type": "loft",
+      "group": "body",
+      "sides": 8,
+      "stations": [
+        {
+          "x": 2.55,
+          "w": 0,
+          "h": 0
+        },
+        {
+          "x": 1.1475,
+          "w": 0.35,
+          "h": 0.35
+        },
+        {
+          "x": -1.1475,
+          "w": 0.35,
+          "h": 0.35
+        },
+        {
+          "x": -2.55,
+          "w": 0,
+          "h": 0
+        }
+      ]
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [-1.5299999999999998, -0.27999999999999997, 0],
+      "rootChord": 0.6,
+      "tipChord": 0.35,
+      "span": 0.25,
+      "sweep": 35,
+      "thickness": 0.04,
+      "vertical": true,
+      "dihedral": 180
+    }
+  ]
+}

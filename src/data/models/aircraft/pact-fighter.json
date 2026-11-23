@@ -82,7 +82,7 @@
       "group": "body",
       "mirror": true,
       "from": [1.4, -0.2, 1.05],
-      "to": [-7.4, -0.15, 1.05],
+      "to": [-7.4, 0.15, 1.05],
       "radius": 0.62,
       "radius2": 0.52,
       "sides": 8
@@ -106,8 +106,8 @@
       "type": "cylinder",
       "group": "nozzle",
       "mirror": true,
-      "from": [-7.4, -0.15, 1.05],
-      "to": [-8.2, -0.15, 1.05],
+      "from": [-7.4, 0.15, 1.05],
+      "to": [-8.2, 0.22, 1.05],
       "radius": 0.5,
       "radius2": 0.42,
       "sides": 8
@@ -168,27 +168,9 @@
     },
     {
       "type": "cylinder",
-      "group": "store",
-      "mirror": true,
-      "from": [-2.9, -0.3, 3],
-      "to": [-0.5, -0.3, 3],
-      "radius": 0.1,
-      "sides": 4
-    },
-    {
-      "type": "cylinder",
-      "group": "store",
-      "mirror": true,
-      "from": [-3.5, -0.25, 4.2],
-      "to": [-1.3, -0.25, 4.2],
-      "radius": 0.09,
-      "sides": 4
-    },
-    {
-      "type": "cylinder",
       "group": "gear",
       "from": [5.0, -0.2, 0],
-      "to": [5.0, -1.47, 0],
+      "to": [5.0, -1.72, 0],
       "radius": 0.07,
       "sides": 6,
       "anim": {
@@ -203,8 +185,8 @@
     {
       "type": "cylinder",
       "group": "tire",
-      "from": [5.0, -1.47, -0.1],
-      "to": [5.0, -1.47, 0.1],
+      "from": [5.0, -1.72, -0.1],
+      "to": [5.0, -1.72, 0.1],
       "radius": 0.28,
       "sides": 8,
       "anim": {
@@ -219,15 +201,15 @@
     {
       "type": "cylinder",
       "group": "gear",
-      "from": [-1.0, -0.05, 0.8],
-      "to": [-1.0, -1.37, 0.8],
+      "from": [-1.3, -0.55, 1.45],
+      "to": [-1.3, -1.67, 1.45],
       "radius": 0.07,
       "sides": 6,
       "anim": {
         "channel": "gear",
         "hinge": [
-          [-0.9, -0.05, 0.5],
-          [-0.9, -0.05, 1.1]
+          [-1.2, -0.55, 1.15],
+          [-1.2, -0.55, 1.75]
         ],
         "angle": 110
       },
@@ -236,19 +218,26 @@
     {
       "type": "cylinder",
       "group": "tire",
-      "from": [-1.0, -1.37, 0.68],
-      "to": [-1.0, -1.37, 0.92],
+      "from": [-1.3, -1.67, 1.33],
+      "to": [-1.3, -1.67, 1.57],
       "radius": 0.32,
       "sides": 8,
       "anim": {
         "channel": "gear",
         "hinge": [
-          [-0.9, -0.05, 0.5],
-          [-0.9, -0.05, 1.1]
+          [-1.2, -0.55, 1.15],
+          [-1.2, -0.55, 1.75]
         ],
         "angle": 110
       },
       "mirror": true
+    },
+    {
+      "type": "box",
+      "group": "store",
+      "mirror": true,
+      "center": [-1.3, 0.0, 2.25],
+      "size": [1.4, 0.45, 0.07]
     },
     {
       "type": "box",
@@ -268,7 +257,7 @@
   "emissives": [
     {
       "kind": "afterburner",
-      "at": [-8.25, -0.15, 1.05],
+      "at": [-8.25, 0.22, 1.05],
       "mirror": true
     },
     {
@@ -289,6 +278,185 @@
       "at": [0, 0.8, 0]
     }
   ],
+  "flight": {
+    "notes": "Tuning values from approximate public MiG-29 figures (9.12 airframe, 9.13 internal fuel): two RD-33s, 49.4 kN dry and 81.4 kN in afterburner each, less installation losses (about 5% military, 15% afterburner) and lapsing with altitude and Mach as the F-21's F110; wing 38 m2, span 11.36 m; inertias scaled from the F-16's by mass and size. The standard load is two medium-range and four short-range missiles, their pylons, 150 rounds and the pilot. Drag as the F-21's (decision 207); k for aspect ratio 3.4 and Oswald efficiency 0.8; the leading-edge root extensions keep the lift to 30 deg. Angles in degrees, everything else SI.",
+    "mass": {
+      "empty": 10900,
+      "fuel": 3800,
+      "payload": 1050
+    },
+    "standardStores": {
+      "mrm-p": 2,
+      "srm-p": 4
+    },
+    "inertia": [28000, 160000, 185000],
+    "cg": [-0.4, 0, 0],
+    "wing": {
+      "area": 38,
+      "span": 11.36,
+      "chord": 3.9
+    },
+    "aero": {
+      "cl": {
+        "x": [
+          -90, -60, -40, -30, -20, -15, -10, -5, 0, 5, 10, 13, 15, 20, 25, 30, 35, 40, 50, 60, 75,
+          90
+        ],
+        "y": [
+          0, -0.8, -1, -0.95, -0.95, -0.88, -0.66, -0.32, 0.05, 0.42, 0.78, 0.99, 1.1, 1.3, 1.45,
+          1.55, 1.5, 1.38, 1.1, 0.88, 0.45, 0
+        ]
+      },
+      "flapCl": 0.15,
+      "flapFadeAlpha": 30,
+      "cd0": {
+        "x": [0, 0.8, 0.9, 0.95, 1, 1.05, 1.1, 1.2, 1.5, 2],
+        "y": [0.0175, 0.0175, 0.0215, 0.031, 0.042, 0.049, 0.051, 0.051, 0.043, 0.034]
+      },
+      "induced": 0.117,
+      "cdSeparated": {
+        "x": [0, 15, 18, 22, 27, 32, 40, 60, 90],
+        "y": [0, 0, 0.01, 0.07, 0.18, 0.32, 0.6, 1.05, 1.25]
+      },
+      "cdGear": 0.013,
+      "cdFlaps": 0.003,
+      "cdSpeedbrake": 0.035,
+      "cdStores": 0,
+      "cdGearDamage": 0.01,
+      "cmSpeedbrake": 0.004,
+      "cyBeta": -1,
+      "cnBeta": 0.12,
+      "clp": -0.4,
+      "cmq": -5,
+      "cnr": -0.4,
+      "groundEffectLift": 0.15,
+      "groundEffectDrag": 0.4
+    },
+    "engine": {
+      "thrust": {
+        "altitude": [0, 3000, 6000, 9000, 12000, 15000],
+        "mach": [0, 0.4, 0.8, 1, 1.2, 1.6, 2],
+        "idle": [
+          [5850.0, 3380.0, -650.0, -1040.0, -1300.0, -1560.0, -1820.0],
+          [4600.0, 2660.0, -510.0, -820.0, -1030.0, -1220.0, -1430.0],
+          [3560.0, 2050.0, -390.0, -640.0, -790.0, -950.0, -1100.0],
+          [2700.0, 1560.0, -300.0, -480.0, -600.0, -720.0, -840.0],
+          [1950.0, 1130.0, -220.0, -350.0, -430.0, -520.0, -610.0],
+          [1340.0, 780.0, -140.0, -230.0, -300.0, -350.0, -420.0]
+        ],
+        "military": [
+          [93860.0, 91040.0, 93860.0, 97600.0, 99490.0, 89170.0, 65700.0],
+          [72850.0, 70660.0, 72850.0, 75750.0, 77210.0, 69210.0, 50990.0],
+          [55470.0, 53790.0, 55470.0, 57680.0, 58780.0, 52690.0, 38820.0],
+          [41290.0, 40060.0, 41290.0, 42950.0, 43780.0, 39250.0, 28910.0],
+          [29250.0, 28380.0, 29250.0, 30410.0, 31010.0, 27790.0, 20480.0],
+          [19560.0, 18980.0, 19560.0, 20340.0, 20740.0, 18580.0, 13700.0]
+        ],
+        "afterburner": [
+          [138210.0, 142350.0, 161700.0, 176910.0, 190730.0, 221140.0, 246020.0],
+          [108880.0, 112130.0, 127390.0, 139340.0, 150250.0, 174200.0, 193780.0],
+          [84240.0, 86760.0, 98550.0, 107830.0, 116240.0, 134780.0, 149950.0],
+          [63820.0, 65740.0, 74680.0, 81700.0, 88080.0, 102130.0, 113620.0],
+          [46130.0, 47520.0, 53970.0, 59050.0, 63670.0, 73820.0, 82130.0],
+          [31590.0, 32550.0, 36970.0, 40450.0, 43610.0, 50560.0, 56240.0]
+        ]
+      },
+      "spoolUp": 1.8,
+      "spoolDown": 1.1,
+      "afterburner": 1,
+      "tsfcDry": 2.14e-5,
+      "tsfcWet": 5.7e-5
+    },
+    "controls": {
+      "rollAuthority": 0.05,
+      "pitchAuthority": 0.25,
+      "yawAuthority": 0.04,
+      "maxRollRate": 200,
+      "maxPitchRate": 12,
+      "maxLoad": 9,
+      "minLoad": -3,
+      "maxAlpha": 26,
+      "minAlpha": -10,
+      "maxSideslip": 8,
+      "blendLow": 75,
+      "blendHigh": 110,
+      "loadGain": 0.5,
+      "rateGain": [8, 15, 4],
+      "sideslipGain": 2,
+      "alphaGain": 4,
+      "rateIntegral": 4,
+      "groundPitchRate": 5,
+      "groundGain": 5,
+      "derotationRate": 2.5,
+      "holdGain": 0.12,
+      "approachAlpha": 13
+    },
+    "gear": {
+      "wheels": [
+        {
+          "name": "nose",
+          "at": [5.0, -2.0, 0],
+          "stiffness": 400000,
+          "damping": 52000,
+          "travel": 0.3,
+          "steerable": true,
+          "braked": false
+        },
+        {
+          "name": "left",
+          "at": [-1.3, -2.0, -1.45],
+          "stiffness": 780000,
+          "damping": 108000,
+          "travel": 0.3,
+          "steerable": false,
+          "braked": true
+        },
+        {
+          "name": "right",
+          "at": [-1.3, -2.0, 1.45],
+          "stiffness": 780000,
+          "damping": 108000,
+          "travel": 0.3,
+          "steerable": false,
+          "braked": true
+        }
+      ],
+      "transit": 4,
+      "maxSpeed": 139,
+      "retractSpeed": 139,
+      "damageMargin": 10.3,
+      "damageTime": 3,
+      "rolling": 0.025,
+      "braking": 0.5,
+      "lateral": 0.55,
+      "gripStiffness": 400000,
+      "gripDamping": 40000,
+      "steerLow": 32,
+      "steerHigh": 3,
+      "steerFade": 12,
+      "steerOff": 35,
+      "cornering": 6
+    },
+    "speedbrake": {
+      "transit": 1.5,
+      "maxDeflection": 60,
+      "gearDownDeflection": 60
+    },
+    "contacts": [
+      [8.6, 0.25, 0],
+      [4.4, 1.42, 0],
+      [3.2, -0.78, 1.05],
+      [3.2, -0.78, -1.05],
+      [-3.4, 0.25, 5.7],
+      [-3.4, 0.25, -5.7],
+      [-7.1, 3.22, 1.57],
+      [-7.1, 3.22, -1.57],
+      [-7.9, 0.15, 3.9],
+      [-7.9, 0.15, -3.9],
+      [-8.2, -0.2, 1.05],
+      [-8.2, -0.2, -1.05]
+    ]
+  },
   "airWar": {
     "id": "vo31",
     "order": 18,
@@ -309,7 +477,13 @@
       {
         "id": "air-to-air",
         "stores": "2 medium-range and 4 short-range missiles, centerline tank",
-        "radiusFactor": 1
+        "radiusFactor": 1,
+        "stations": {
+          "inner": "mrm-p",
+          "middle": "srm-p",
+          "outer": "srm-p",
+          "centerline": "tank-1500-p"
+        }
       }
     ]
   },
@@ -343,5 +517,41 @@
     "stretch": 2,
     "stretchPerAccel": 0.25,
     "fovDeg": 50
+  },
+  "pylons": [
+    {
+      "id": "inner",
+      "mirror": true,
+      "at": [-1.4, -0.36, 2.25],
+      "carries": ["mrm-p", "srm-p", "bomb-250-p", "rockets-20-p"]
+    },
+    {
+      "id": "middle",
+      "mirror": true,
+      "at": [-1.7, -0.37, 3.0],
+      "carries": ["mrm-p", "srm-p", "bomb-250-p", "rockets-20-p"]
+    },
+    {
+      "id": "outer",
+      "mirror": true,
+      "at": [-2.4, -0.31, 4.2],
+      "carries": ["srm-p"]
+    },
+    {
+      "id": "centerline",
+      "at": [-1.6, -0.62, 0],
+      "carries": ["tank-1500-p"]
+    }
+  ],
+  "gun": {
+    "name": "30 mm cannon",
+    "reference": "GSh-30-1",
+    "rounds": 150,
+    "rate": 27.5,
+    "muzzleVelocity": 860,
+    "at": [3.0, 0.3, -0.9],
+    "roundMass": 0.39,
+    "roundDragArea": 0.00021,
+    "tracerEvery": 5
   }
 }

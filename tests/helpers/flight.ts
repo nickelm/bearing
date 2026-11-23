@@ -44,3 +44,26 @@ export function flatGround(r: Runway): GroundQuery {
 export function kestrel(): FlightModel {
   return new FlightModel(kestrelSpec(), RADIUS);
 }
+
+const bundles = import.meta.glob<{ flight?: unknown }>('../../src/data/models/aircraft/*.json', {
+  eager: true,
+  import: 'default',
+});
+
+/** The bundles with fixed-wing flight data (the flyable jets), by id. */
+export const FLYABLE_JETS: readonly string[] = Object.entries(bundles)
+  .filter(([, b]) => b.flight && !(b as { rotors?: unknown }).rotors)
+  .map(([path]) => path.replace(/^.*\/|\.json$/g, ''))
+  .sort();
+
+/** Bundle `id`'s flight spec. */
+export function flightSpecOf(id: string): FlightSpec {
+  const b = bundles[`../../src/data/models/aircraft/${id}.json`];
+  if (!b?.flight) throw new Error(`${id}: no flight data`);
+  return parseFlightSpec(b.flight, id);
+}
+
+/** A flight model of bundle `id` on the test planet. */
+export function flightModelOf(id: string): FlightModel {
+  return new FlightModel(flightSpecOf(id), RADIUS);
+}

@@ -161,6 +161,84 @@
       "length": 4.4,
       "diameter": 0.6,
       "dragArea": 0.04
+    },
+    "mrm-p": {
+      "smoke": "solid",
+      "name": "medium-range missile (Pact)",
+      "short": "MRM",
+      "reference": "R-27R",
+      "kind": "radar-missile",
+      "mass": 253,
+      "length": 4.08,
+      "diameter": 0.23,
+      "dragArea": 0.03,
+      "warhead": {
+        "explosive": 39,
+        "lethal": 13,
+        "reach": 28
+      }
+    },
+    "bomb-250-p": {
+      "name": "250 kg bomb (Pact)",
+      "short": "B250",
+      "reference": "FAB-250 M-62",
+      "kind": "bomb",
+      "mass": 250,
+      "length": 2.13,
+      "diameter": 0.325,
+      "dragArea": 0.018,
+      "warhead": {
+        "explosive": 100,
+        "lethal": 32,
+        "reach": 95
+      }
+    },
+    "rockets-20-p": {
+      "smoke": "solid",
+      "name": "rocket pod, 20 rockets (Pact)",
+      "short": "RKT",
+      "reference": "B-8M1, S-8 rockets",
+      "kind": "rockets",
+      "mass": 386,
+      "length": 2.75,
+      "diameter": 0.52,
+      "dragArea": 0.055,
+      "rocket": {
+        "count": 20,
+        "mass": 11.3,
+        "dragArea": 0.003,
+        "thrust": 7800,
+        "burn": 0.69,
+        "propellant": 3.6,
+        "ripple": 10
+      },
+      "warhead": {
+        "explosive": 1.8,
+        "lethal": 8,
+        "reach": 20
+      }
+    },
+    "tank-1500-p": {
+      "name": "1,500 l centerline tank (Pact)",
+      "short": "TANK",
+      "reference": "PTB-1500",
+      "kind": "tank",
+      "mass": 1350,
+      "fuel": 1200,
+      "length": 5.1,
+      "diameter": 0.7,
+      "dragArea": 0.045
+    },
+    "tank-800-p": {
+      "name": "800 l drop tank (Pact)",
+      "short": "TANK",
+      "reference": "PTB-800",
+      "kind": "tank",
+      "mass": 740,
+      "fuel": 640,
+      "length": 4.2,
+      "diameter": 0.56,
+      "dragArea": 0.032
     }
   }
 }

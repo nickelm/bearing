@@ -26,7 +26,8 @@ export interface ThrustTable {
   /** Newtons, [altitude][mach]. */
   idle: number[][];
   military: number[][];
-  afterburner: number[][];
+  /** Null for an engine without one (the Vo-35's): the lever stops at military power. */
+  afterburner: number[][] | null;
 }
 
 export interface WheelSpec {
@@ -318,8 +319,15 @@ export function parseFlightSpec(raw: unknown, id = '?'): FlightSpec {
   const th = engine.thrust as unknown as ThrustTable | undefined;
   if (!th || !Array.isArray(th.altitude) || !Array.isArray(th.mach))
     fail('engine.thrust', 'needs altitude and mach');
+  if (th!.afterburner === undefined) th!.afterburner = null;
   for (const k of ['idle', 'military', 'afterburner'] as const) {
-    const rows = th![k];
+    if (k === 'afterburner' && th![k] === null) {
+      // Without an afterburner its time constant and fuel flow are the dry engine's.
+      engine.afterburner ??= 1;
+      engine.tsfcWet ??= engine.tsfcDry;
+      continue;
+    }
+    const rows = th![k] as number[][];
     if (!Array.isArray(rows) || rows.length !== th!.altitude.length)
       fail(`engine.thrust.${k}`, 'needs one row per altitude');
     rows.forEach((r, i) => {

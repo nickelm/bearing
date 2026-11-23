@@ -115,7 +115,8 @@ describe('flight spec and tables', () => {
 
   it('has thrust that lapses with altitude, afterburner above military above idle', () => {
     const th = spec.engine.thrust;
-    const T = (rows: number[][], h: number, m: number) => lookup2(th.altitude, th.mach, rows, h, m);
+    const T = (rows: number[][] | null, h: number, m: number) =>
+      lookup2(th.altitude, th.mach, rows!, h, m);
     // Sea-level static: about 100–125 kN in afterburner, 70–76 kN military (installed).
     expect(T(th.afterburner, 0, 0)).toBeGreaterThan(100_000);
     expect(T(th.afterburner, 0, 0)).toBeLessThan(125_000);

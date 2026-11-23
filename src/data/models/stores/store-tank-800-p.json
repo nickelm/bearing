@@ -1,0 +1,59 @@
+{
+  "name": "Drop tank (Pact)",
+  "class": "store",
+  "groups": {
+    "body": "steel"
+  },
+  "parts": [
+    {
+      "type": "loft",
+      "group": "body",
+      "sides": 8,
+      "stations": [
+        {
+          "x": 2.1,
+          "w": 0,
+          "h": 0
+        },
+        {
+          "x": 0.9450000000000001,
+          "w": 0.28,
+          "h": 0.28
+        },
+        {
+          "x": -0.9450000000000001,
+          "w": 0.28,
+          "h": 0.28
+        },
+        {
+          "x": -2.1,
+          "w": 0,
+          "h": 0
+        }
+      ]
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "mirror": true,
+      "root": [-1.302, 0, 0],
+      "rootChord": 0.5,
+      "tipChord": 0.3,
+      "span": 0.3,
+      "sweep": 30,
+      "thickness": 0.04,
+      "dihedral": -30
+    },
+    {
+      "type": "wing",
+      "group": "body",
+      "root": [-1.302, 0.168, 0],
+      "rootChord": 0.5,
+      "tipChord": 0.3,
+      "span": 0.25,
+      "sweep": 30,
+      "thickness": 0.04,
+      "vertical": true
+    }
+  ]
+}

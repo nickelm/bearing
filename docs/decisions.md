@@ -5007,6 +5007,22 @@ The first run missed by 4.0 m at 610 m and 9.6 m at 900 m, growing with the squa
 
 **Reason:** the owner's sign-off of R2.6 on 2026-11-23.
 
+### 314. The Vo-31 gets flight data, pylons and a gun; the Pact's stores; plausibility per flyable type
+
+**Date:** 2026-11-23
+**Decision:**
+
+- **Pact stores.** The catalog gains the Pact's own stores, each with its model spec: the medium-range missile `mrm-p` (R-27R), the 250 kg bomb `bomb-250-p` (FAB-250), the pod of 20 rockets `rockets-20-p` (B-8M1 with S-8s), the 1,500 l centerline tank `tank-1500-p` (PTB-1500) and the 800 l tank `tank-800-p` (PTB-800). Their short labels stay the Alliance's (MRM, B250, RKT, TANK) until the skins' label work.
+- **The Vo-31's stores leave its body.** The model drew its missiles as part of the airframe. They go, and the pylons stay drawn, with a third one inboard: inner, middle and outer pylons on each wing and a centerline station between the engines. The air-war loadout hangs two `mrm-p` inboard, four `srm-p` on the middle and outer pylons, and the centerline tank. Its gun is a GSh-30-1 analogue: 150 rounds of 30 mm at 27.5 a second, 860 m/s, in the left wing root.
+- **The Vo-31's flight data** come from approximate public MiG-29 figures: the 9.12 airframe with the 9.13's 3,800 kg of internal fuel, so internal fuel and the centerline tank's 1,200 kg make the air-war entry's 5,000 kg. Two RD-33s give 93.9 kN at military power and 138 kN in afterburner, installed, lapsing as the F-21's F110 does. The wing is 38 m² with a span of 11.36 m. Inertias are the F-16's scaled by mass and size. The standard load is two medium-range and four short-range missiles. The lift curve holds to 30° on the root extensions, and the transonic drag rise keeps it near Mach 1.2 at sea level. The control laws keep the F-21's gains, with a 200°/s roll rate and a 26° angle-of-attack limit.
+- **Gear and tail.** The model's main gear stood 1.6 m apart under the engines. It now stands 2.9 m apart (the real track is 3.1 m), and the gear is a little longer. The nacelles rise toward the nozzles, so the tail clears 14.6° of pitch on the main wheels instead of 10.5°: the test pilot's flare reached 12°, and the shared tail-strike warning at 12.8° assumes a tail that touches near 13.5°.
+- **Plausibility per type.** `tests/flightTypes.test.ts` runs every flyable jet but the Kestrel through its targets: rest on the runway, takeoff, stall in the landing configuration, top speed at sea level, the control laws' limits, hands-off level flight, the tail's clearance, the test pilot's circuit and landing, and cruise at its air-war speed and altitude below military power. Each type names its targets there; a new type without them fails. `tools/flight.preview.ts` prints the figures for any type (`TYPE`), with top speeds at 300 m and 11 km, military power at 9 km, the climb at military power by altitude and speed, the roll rate and the load at full aft stick. A test checks that each flyable type's air-war fuel is its internal fuel plus its first loadout's tanks.
+- **Engines without an afterburner.** A flight spec may leave out the afterburner's thrust table, for the Vo-35's engines. The lever then stops at military power: the afterburner never lights, and its time constant and fuel flow default to the dry engine's. The Kestrel's arithmetic is unchanged, and its lockstep test passes.
+
+**The figures** (`TYPE=pact-fighter`): 15.75 t at takeoff, rotation at 140 KCAS and liftoff after about 480 m in afterburner, an approach speed of 148 KCAS at 13° at that mass, a landing-configuration stall at 110 KCAS, Mach 1.18 at 300 m and Mach 2.1 at 11 km in afterburner, a roll rate near 190°/s.
+
+**Reason:** R2.7 makes the Vo-31 flyable (owner decision 5), and the F-21 needed a CAP adversary that flies the same flight model.
+
 ### 320. Stylized effects: toon-shaded sphere-impostor puffs, dithered, with depth
 
 **Date:** 2026-11-22
