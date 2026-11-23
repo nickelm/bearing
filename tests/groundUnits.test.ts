@@ -128,3 +128,27 @@ describe('promoted vehicles near the player (R2.8)', () => {
     expect(rosterSize('mechanized')).toBeGreaterThan(PROMOTED.mechanized);
   });
 });
+
+describe('vehicles out of the woods (decision 336)', () => {
+  it('moves vehicles in forest or water to open ground near them, and draws none before', () => {
+    const { globe } = scene();
+    // Forest everywhere north of the anchor's latitude band, open south of it.
+    const edge = destination(HOME, Math.PI, 150, R);
+    let resident = false;
+    (globe.terrain as unknown as { groundAt: unknown }).groundAt = (d: Vec3d) =>
+      resident ? { forest: d.y > edge[1] ? 1 : 0, water: false } : null;
+    const u = new GroundUnits(globe, R, () => {});
+    u.setPicture(picture([bn(1, HOME)]));
+    u.place(eyeOver(HOME));
+    // Until the terrain's data is there, nothing is drawn or targeted.
+    expect(u.stats.vehicles).toBe(0);
+    expect(u.targets(eyeOver(HOME))).toEqual([]);
+    resident = true;
+    // Demote and promote again, so the vehicles settle with the data resident.
+    u.place(eyeOver(destination(HOME, 3, 40_000, R)));
+    u.place(eyeOver(HOME));
+    const ts = u.targets(eyeOver(HOME));
+    expect(ts.length).toBe(PROMOTED.mechanized);
+    for (const t of ts) expect(t.pos.clone().normalize().y).toBeLessThanOrEqual(edge[1]);
+  });
+});

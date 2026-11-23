@@ -124,6 +124,7 @@ import {
   buildTileMesh,
   dataTileFor,
   lakeSampler,
+  mapSample,
   surfaceSampler,
   TILE_VERTEX_COUNT,
 } from '../../common/terrain/tileMesh';
@@ -1087,6 +1088,36 @@ export class TerrainRenderer {
     const h = surfaceSampler(t, t.level, data, opts)(sx, sy, dir);
     const lake = lakeSampler(t, data)(sx, sy);
     return Math.max(0, h, lake) * this.exaggeration;
+  }
+
+  /**
+   * What stands on the ground under a direction (R2.8): the forest density (0..1, the
+   * data tile's, as the forest layer reads it) and whether it is water (sea or lake), or
+   * null until the data tile is resident (it is asked for).
+   */
+  groundAt(dir: Readonly<Vec3d>): { forest: number; water: boolean } | null {
+    const opts = this.meshOptions();
+    if (!opts) return null;
+    const t = tileForDirection(dir, MAX_TILE_LEVEL);
+    const key = dataTileFor(t);
+    const data = this.data.get(key);
+    if (!data) {
+      this.requestDataTile(key, 1e6);
+      return null;
+    }
+    const uv: CubeFaceUv = { face: 0, u: 0, v: 0 };
+    directionToCubeFace(dir, uv);
+    const size = TILE_TEXELS * (1 << t.level);
+    const sx = uv.u * size - t.x * TILE_TEXELS;
+    const sy = uv.v * size - t.y * TILE_TEXELS;
+    const h = surfaceSampler(t, t.level, data, opts)(sx, sy, dir);
+    const lake = lakeSampler(t, data)(sx, sy);
+    const [fx, fy] = mapSample(t, data.key, sx, sy);
+    const lim = TILE_TEXELS + TILE_BORDER - 1;
+    const x = Math.min(lim, Math.max(-TILE_BORDER, Math.round(fx)));
+    const y = Math.min(lim, Math.max(-TILE_BORDER, Math.round(fy)));
+    const m = data.material[(y + TILE_BORDER) * TILE_STRIDE + x + TILE_BORDER]!;
+    return { forest: (m >>> 24) / 255, water: h <= 0 || lake > h };
   }
 
   /** Displayed height (m, exaggerated, sea flat at 0) under a direction, or null. */

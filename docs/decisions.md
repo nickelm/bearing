@@ -5249,3 +5249,18 @@ The per-vertex coverage, albedo and side (±1) go to the GPU as one vec3 attribu
 **How it was checked.** `tests/groundUnits.test.ts` on a stand-in scene: battalions within range are promoted and stand on the ground; a promoted battalion keeps its vehicles when the front moves; far away or above 16× the bubble empties; a vehicle destroyed at a damage of 1 is posted once with its flight, cooks off once, leaves a wreck and a column, and stays dead when promoted again from the worker's picture. Part I check 6 in `tools/models.preview.ts`: the four silhouettes tell apart from the side, front and three-quarter views (a long gun; a tall hull with a small turret; a radar plate and pods; a cab and a bed on wheels). The render preview's `vehicles` view draws a Pact mechanized battalion and a wreck over open grassland with an Alliance tank battalion beyond.
 
 **Reason:** R2.8: near the player, vehicles on the ground or aligned roads, from the kit, that are targets and fold their losses back.
+
+### 336. The owner's review of R2.8: messages off the HUD, a filter that resets, vehicles larger and out of the woods
+
+**Date:** 2026-11-23
+**Decision:** From the owner's first look at R2.8 on the GPU:
+
+- **Status messages leave the HUD.** Hits, kills, misses and refused actions ("Tank destroyed", "Bomb missed: 1,200 ft from TGT") no longer draw on the HUD in any view. They go to the messages display's log (the follow now feeds it, as Free Flight did), and while that display is not up, each pops up as a small dark panel at the messages slot's corner, upper left: white text, amber for a warning, at most four stacked, fading after its time. The owner asked for a popup at the screen's edge as DCS has; the messages slot's corner keeps it out of the central area and is where the log lives when the displays are up (`docs/visual-style.md`, *Slots*). The HUD's own warnings (STALL, PULL UP) stay on the HUD.
+- **Mission search's filters.** A filter set on a choice no live mission has any more (an aircraft type gone from the orders) showed "all" while it still filtered, and could not be reset. Such a choice now stays listed and selected as "<name> (none now)", so the filter shows what it holds and can be set back to all.
+- **Vehicles at 1.5 times life size,** for drawing and for hits (their sizes in `VEHICLE_TARGETS`, the height of their center), as soldiers are at 1.4 (decision 331). Beyond 1.5 km a vehicle is drawn larger with distance, up to 2.5 times more at 3.75 km and beyond, so it keeps its size on screen; hits keep the 1.5 times. The owner could not find a tank.
+- **Out of the woods and the water.** A promoted vehicle in forest denser than 0.3 (the data tile's density, below the canopy's 0.42) or on water moves to the nearest open ground within 600 m, on rings 50 m apart; trucks on a road stay on it. A vehicle is drawn and targeted only once sited, which waits for the terrain's data there (`TerrainRenderer.groundAt`).
+- The A-15's canopy and wing surfaces, which the owner also noted, are R2.7's and are in its TODO.
+
+**How it was checked.** `tests/groundUnits.test.ts`: with forest over half the ground, every vehicle of a promoted battalion stands on the open half, and none is drawn or targeted before the terrain's data is there. `tests/promotion.test.ts` passes with the larger sizes. The unit suite, the type check and lint pass.
+
+**Reason:** the owner's review.

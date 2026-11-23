@@ -330,6 +330,7 @@ Started 2026-11-23, in parallel with R2.8 in a second session (decisions 314–3
 - [x] C-150 (C-130 analogue): AI-flown for the demo; its flight data, laws and transport rig move to R4.4 with tactical airlift (owner, decision 318; the test pilot's circuit flies fighter speeds, and the airlift's landing at a forward field needs the AI's full-fidelity landing)
 - [x] `tools/freeflight.session.mjs` starts the A-15, Vo-31 and Vo-35 from the start screen: their own flight data and names, the brake off and the throttle forward, no afterburner on the Vo-35, the Pact's side for the Vo-31 and Vo-35
 - [ ] Owner, on the GPU: fly the Vo-31, Vo-35 and A-15 in Free Flight; follow and take over a Pact flight and an A-15; the new models in the campaign
+- [ ] Owner (2026-11-23, noted by the R2.8 session): the A-15 Buzzard's canopy sits too high on the fuselage and its sides jut out; the control surfaces on its wings are attached at an odd angle
 
 ### R2.8 Minimal entity promotion
 
@@ -345,6 +346,8 @@ Started 2026-11-23, in parallel with R2.8 in a second session (decisions 314–3
 - [ ] Ink outlines and contact shadows for the vehicles (instanced without either today, as campaign traffic)
 - [ ] Rounds that reach the ground: impacts and dust where they land (they pass through it today)
 - [ ] Damaged vehicles (smoke, R3) and damage kept past demotion; vehicles that move, scatter and return fire (R3.6)
+- [x] Owner's review (2026-11-23; decision 336): status messages off the HUD, into the messages log and a popup at the messages slot's corner; mission search's filter on a type gone from the orders shows and resets; vehicles at 1.5 times life size and larger with distance; vehicles out of woods and water
+- [ ] Finding targets on CAS: a talk-on or a mark from the ground (the owner could not find a tank); proposed for the owner's decision
 - [x] Docs: decisions 333 on, design §Entities, visual-style Part I vehicles, roadmap state, CLAUDE.md's directory map
 - [ ] Owner on the GPU: vehicles in a followed CAS flight on seed 4, a take-over that destroys some, the battalion's strength after
 - [ ] Reduced infantry (if time allows; decision 331): a few squads per battalion near the player with the blocky figures, as targets, the dead turning gray and vanishing in a toon puff

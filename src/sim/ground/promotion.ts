@@ -71,6 +71,12 @@ export const VEHICLE_SCHEMES: Readonly<Record<Side, string>> = {
 };
 
 /**
+ * Vehicles are drawn and hit at 1.5 times life size (decision 336), as soldiers are at 1.4
+ * (decision 331): a 7.4 m tank is 11 m long on screen and to a round.
+ */
+export const VEHICLE_SCALE = 1.5;
+
+/**
  * Hits on vehicles by type (decision 334): a blast does explosive / hardness of a kill
  * within its lethal radius (falling off as decision 301's blast beyond), summed per
  * vehicle. A 230 kg bomb (87 kg) kills a tank within about 40 m of its edge, an infantry
@@ -81,10 +87,10 @@ export const VEHICLE_SCHEMES: Readonly<Record<Side, string>> = {
  * truck 7.
  */
 export const VEHICLE_TARGETS: Readonly<Record<VehicleType, GroundTargetKind>> = {
-  tank: { size: 3.5, hardness: 50, vehicle: { round: 0.005 } },
-  ifv: { size: 3.2, hardness: 20, vehicle: { round: 0.06 } },
-  shorad: { size: 3.2, hardness: 12, vehicle: { round: 0.08 } },
-  truck: { size: 3.5, hardness: 4, vehicle: { round: 0.15 } },
+  tank: { size: 3.5 * VEHICLE_SCALE, hardness: 50, vehicle: { round: 0.005 } },
+  ifv: { size: 3.2 * VEHICLE_SCALE, hardness: 20, vehicle: { round: 0.06 } },
+  shorad: { size: 3.2 * VEHICLE_SCALE, hardness: 12, vehicle: { round: 0.08 } },
+  truck: { size: 3.5 * VEHICLE_SCALE, hardness: 4, vehicle: { round: 0.15 } },
 };
 
 /** Vehicles in a battalion of `kind` at full strength. */

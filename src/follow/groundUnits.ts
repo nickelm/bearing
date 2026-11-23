@@ -30,6 +30,7 @@ import type { ModelSpec } from '../render/common/models/spec';
 import { TrafficLayer } from '../render/sim/aircraft/trafficLayer';
 import type { TrafficAircraft } from '../render/sim/aircraft/trafficLayer';
 import type { GlobeScene } from '../render/sim/globeScene';
+import type { TerrainRenderer } from '../render/sim/terrain/terrainRenderer';
 import type { FireColumn } from '../sim/effects/events';
 import type { CampaignInputEvent } from '../sim/eventLog';
 import type { GroundTarget, Hit } from '../sim/flight/storesRack';
@@ -37,6 +38,7 @@ import {
   parseVehicleKey,
   promoteBattalion,
   VEHICLE_MODELS,
+  VEHICLE_SCALE,
   VEHICLE_SCHEMES,
   VEHICLE_TARGETS,
   VehicleDamage,
@@ -63,9 +65,16 @@ export const WRECK_BURN = 2 * HOUR;
 /** A truck within this distance of an aligned road stands on it (m). */
 export const ROAD_SNAP: Meters = 400;
 /** The height of a vehicle's center over the ground, where rounds and blasts measure from (m). */
-export const VEHICLE_CENTER = 1.2;
+export const VEHICLE_CENTER = 1.2 * VEHICLE_SCALE;
 /** The explosive a destroyed vehicle's cook-off is drawn with (kg). */
 const COOK_OFF: Record<VehicleType, number> = { tank: 60, ifv: 40, shorad: 40, truck: 20 };
+/** Vehicles keep out of forest denser than this and of water, moved up to SITE_REACH on rings SITE_STEP apart (m). */
+export const OPEN_FOREST = 0.3;
+export const SITE_REACH: Meters = 600;
+export const SITE_STEP: Meters = 50;
+/** Beyond this distance a vehicle is drawn larger with distance, up to READABLE_MAX times (decision 336). */
+export const READABLE_FROM: Meters = 1500;
+export const READABLE_MAX = 2.5;
 /** How often the heights under the vehicles are sampled again as tiles refine (ms). */
 const HEIGHT_REFRESH = 2000;
 
@@ -80,6 +89,11 @@ export interface PlacedVehicle {
   heading: number;
   /** Ground height under it (m), or null until the terrain answers. */
   ground: number | null;
+  /**
+   * Whether it has been sited out of woods and water (decision 336): drawn and a
+   * target only once sited. Trucks on a road and wrecks are sited as they are.
+   */
+  sited: boolean;
   /** Its center (world, m) and its axes, from the ground. */
   pos: Vec3d;
   forward: [number, number, number];
@@ -239,8 +253,8 @@ export class GroundUnits {
     let vehicles = 0;
     for (const pr of this.promoted.values())
       for (const v of pr.vehicles) {
-        if (v.ground === null) continue;
-        list.push(this.drawn(v, VEHICLE_SCHEMES[v.side]));
+        if (v.ground === null || !v.sited) continue;
+        list.push(this.drawn(v, VEHICLE_SCHEMES[v.side], eye));
         vehicles++;
       }
     let wrecks = 0;
@@ -249,7 +263,7 @@ export class GroundUnits {
         if (this.arc(w.point, c) > WRECK_RANGE) continue;
         const v = this.wreckVehicle(w);
         if (v.ground === null) continue;
-        list.push(this.drawn(v, 'burnt'));
+        list.push(this.drawn(v, 'burnt', eye));
         wrecks++;
       }
     this.layer.update(list, eye);
@@ -278,6 +292,7 @@ export class GroundUnits {
         if (road) {
           v.dir.copy(road.dir);
           v.heading = road.heading + ((s.index & 1) === 0 ? 0 : Math.PI);
+          v.sited = true;
         }
       }
       return v;
@@ -325,6 +340,7 @@ export class GroundUnits {
       dir: new Vec3d(point[0], point[1], point[2]),
       heading,
       ground: null,
+      sited: false,
       pos: new Vec3d(),
       forward: [1, 0, 0],
       up: [0, 1, 0],
@@ -333,6 +349,7 @@ export class GroundUnits {
 
   /** Samples the drawn ground under v and round it: its height, its center and its hull's axes on the slope. */
   private settle(v: PlacedVehicle): void {
+    if (!v.sited && !this.site(v)) return;
     const h = this.heightAt(v.dir);
     if (h === null) return;
     v.ground = h;
@@ -364,13 +381,58 @@ export class GroundUnits {
     v.pos.copy(base);
   }
 
+  /**
+   * Moves v out of woods and water (decision 336): where the forest is denser than
+   * OPEN_FOREST or the ground is water, to the nearest open ground within SITE_REACH, on
+   * rings SITE_STEP apart; it stays put if there is none. False while the terrain's
+   * data there is not resident yet (asked for), so the vehicle waits to be drawn.
+   */
+  private site(v: PlacedVehicle): boolean {
+    const terrain = this.globe.terrain as { groundAt?: TerrainRenderer['groundAt'] };
+    if (!terrain.groundAt) {
+      v.sited = true;
+      return true;
+    }
+    const open = (d: Readonly<Vec3d>): boolean | null => {
+      const g = terrain.groundAt!(d);
+      return g === null ? null : g.forest < OPEN_FOREST && !g.water;
+    };
+    const here = open(v.dir);
+    if (here === null) return false;
+    if (!here) {
+      const p: Dir = [v.dir.x, v.dir.y, v.dir.z];
+      search: for (let r = SITE_STEP; r <= SITE_REACH; r += SITE_STEP) {
+        const n = Math.max(8, Math.round((2 * Math.PI * r) / SITE_STEP));
+        for (let k = 0; k < n; k++) {
+          const q = destination(p, v.heading + (2 * Math.PI * k) / n, r, this.radius);
+          const d = new Vec3d(q[0], q[1], q[2]);
+          const ok = open(d);
+          if (ok === null) return false;
+          if (ok) {
+            v.dir.copy(d);
+            break search;
+          }
+        }
+      }
+    }
+    v.sited = true;
+    return true;
+  }
+
   private heightAt(d: Readonly<Vec3d>): number | null {
     const g = this.globe;
     if (!g.terrainReady) return null;
     return g.useTiles ? g.terrain.displaySurfaceAt(d) : g.terrain.displayHeightAt(d);
   }
 
-  private drawn(v: PlacedVehicle, scheme: string): TrafficAircraft {
+  /**
+   * The instance of v for the frame from `eye`: at VEHICLE_SCALE, and beyond READABLE_FROM
+   * grown with distance up to READABLE_MAX times more, so a vehicle keeps its size on
+   * screen out to a few kilometers (decision 336; hits keep VEHICLE_SCALE).
+   */
+  private drawn(v: PlacedVehicle, scheme: string, eye: Readonly<Vec3d>): TrafficAircraft {
+    const d = v.pos.distanceTo(eye);
+    const grow = Math.min(READABLE_MAX, Math.max(1, d / READABLE_FROM));
     return {
       spec: vehicleSpec(v.type),
       scheme,
@@ -378,6 +440,7 @@ export class GroundUnits {
       pos: [v.pos.x, v.pos.y, v.pos.z],
       forward: v.forward,
       up: v.up,
+      scale: VEHICLE_SCALE * grow,
     };
   }
 
@@ -394,6 +457,7 @@ export class GroundUnits {
     let v = this.wreckViews.get(key);
     if (!v) {
       v = this.placed(w.battalion, w.vehicle, w.type, w.side, w.point, w.heading);
+      v.sited = true;
       this.wreckViews.set(key, v);
     }
     if (v.ground === null) this.settle(v);
@@ -425,7 +489,7 @@ export class GroundUnits {
     const out: GroundTarget[] = [];
     for (const pr of this.promoted.values())
       for (const v of pr.vehicles) {
-        if (v.ground === null || this.damage.destroyed(v.key)) continue;
+        if (v.ground === null || !v.sited || this.damage.destroyed(v.key)) continue;
         const pos = v.pos.clone().addScaled(v.dir, VEHICLE_CENTER);
         if (pos.distanceTo(at) > TARGET_RANGE) continue;
         out.push({ id: v.key, pos, kind: VEHICLE_TARGETS[v.type] });

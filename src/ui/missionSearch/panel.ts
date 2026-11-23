@@ -139,7 +139,15 @@ export class MissionSearchPanel {
       options: readonly [string, T][],
       current: T | undefined,
       set: (v: T | undefined) => void,
+      labelOf?: (v: T) => string,
     ) => {
+      // A filter set on a choice no live mission has any more (an aircraft type gone from
+      // the orders) stays listed and selected, so it shows and can be set back to all.
+      if (current !== undefined && !options.some(([, v]) => v === current))
+        options = [
+          ...options,
+          [`${labelOf ? labelOf(current) : String(current)} (none now)`, current],
+        ];
       const s = document.createElement('select');
       s.title = name;
       const all = document.createElement('option');
@@ -166,18 +174,21 @@ export class MissionSearchPanel {
       c.types.map((x) => [MISSION_LABELS[x], x]),
       f.types[0],
       (v) => (f.types = v ? [v] : []),
+      (v) => MISSION_LABELS[v],
     );
     add<string>(
       'Aircraft',
       c.aircraft.map((x) => [aircraftType(x).name, x]),
       f.aircraft[0],
       (v) => (f.aircraft = v ? [v] : []),
+      (v) => aircraftType(v).name,
     );
     add<number>(
       'Theater',
       c.theaters.map((x) => [this.theaterNames[x] ?? 'strategic', x]),
       f.theaters[0],
       (v) => (f.theaters = v !== undefined ? [v] : []),
+      (v) => this.theaterNames[v] ?? 'strategic',
     );
     add<PhaseFilter>(
       'Phase',

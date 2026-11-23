@@ -221,6 +221,8 @@ export class Follow {
   readonly displays = new DisplaySystem();
   /** What shows besides the scene (V). */
   panels: FollowPanels = 'hud';
+  /** When the follow began (ms, `performance.now()`): the messages display's clock. */
+  private followedAt = 0;
   private readonly bar: HTMLDivElement;
   private readonly panelsButton: HTMLButtonElement;
   private readonly takeButton: HTMLButtonElement;
@@ -687,6 +689,7 @@ export class Follow {
     const m = this.deps.missions().find((x) => x.id === id);
     if (!Follow.followable(m, t)) return false;
     this.clear();
+    this.followedAt = performance.now();
     const b = bundleOfType(m!.aircraftType);
     const look = followedLook(b, AIRCRAFT_BUNDLES);
     const drawn = drawnType(m!.aircraftType);
@@ -1704,7 +1707,10 @@ export class Follow {
       fixedGear: helicopter,
       control: this.flying ? (this.input.mode === 'mouse-aim' ? 'mouse aim' : 'direct') : 'AI',
       mouseFree: this.flying && !this.capture.captured,
-      messages: [],
+      // The messages display carries the log since the follow began (decision 336).
+      messages: this.hud.log
+        .filter((l) => l.at >= this.followedAt)
+        .map((l) => ({ at: (l.at - this.followedAt) / 1000, text: l.text, warn: l.warn })),
       sensors: this.sensorSnap,
       stores: this.storesOf(m, t),
       ...this.fuelFigures(m, nav.wps, p),

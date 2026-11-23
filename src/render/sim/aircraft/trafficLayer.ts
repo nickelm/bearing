@@ -36,6 +36,8 @@ export interface TrafficAircraft {
   pos: readonly [number, number, number];
   forward: readonly [number, number, number];
   up: readonly [number, number, number];
+  /** Drawn size over the model's (default 1): promoted vehicles' exaggeration (decision 336). */
+  scale?: number;
 }
 
 interface Batch {
@@ -62,6 +64,7 @@ export class TrafficLayer {
   private readonly basis = new Matrix4();
   private readonly v = new Vector3();
   private readonly one = new Vector3(1, 1, 1);
+  private readonly scaled = new Vector3(1, 1, 1);
   /** Aircraft drawn last frame and draw calls. */
   readonly stats = { aircraft: 0, draws: 0 };
 
@@ -88,7 +91,8 @@ export class TrafficLayer {
       this.basis.set(f[0], r[0], -u[0], 0, f[1], r[1], -u[1], 0, f[2], r[2], -u[2], 0, 0, 0, 0, 1);
       this.q.setFromRotationMatrix(this.basis).multiply(MODEL_TO_BODY);
       this.v.set(a.pos[0] - eye.x, a.pos[1] - eye.y, a.pos[2] - eye.z);
-      this.m.compose(this.v, this.q, this.one);
+      const k = a.scale ?? 1;
+      this.m.compose(this.v, this.q, k === 1 ? this.one : this.scaled.set(k, k, k));
       b.mesh.setMatrixAt(b.used++, this.m);
     }
     let aircraft = 0;

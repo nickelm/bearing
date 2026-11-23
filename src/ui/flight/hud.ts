@@ -297,12 +297,6 @@ export function matrixProjector(
   };
 }
 
-interface Message {
-  text: string[];
-  until: number;
-  warn: boolean;
-}
-
 /** Time to the ground (s) at the current sink below which `sinkWarning` warns. */
 export const SINK_WARNING_TIME = 1.6;
 
@@ -411,7 +405,11 @@ const WARNING_TEXT: Record<FlightWarning, string> = {
 export class Hud {
   readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
-  private messages: Message[] = [];
+  /**
+   * Status messages pop up at the messages slot's corner (upper left) while the
+   * messages display is not up, and fade (decision 336); the HUD itself draws none.
+   */
+  private readonly toasts: HTMLDivElement;
   private w = 1;
   private h = 1;
   private dpr = 1;
@@ -423,10 +421,15 @@ export class Hud {
     document.body.appendChild(this.canvas);
     this.ctx = this.canvas.getContext('2d')!;
     this.canvas.hidden = true;
+    this.toasts = document.createElement('div');
+    this.toasts.className = 'ff-toasts';
+    this.toasts.hidden = true;
+    document.body.appendChild(this.toasts);
   }
 
   show(on: boolean): void {
     this.canvas.hidden = !on;
+    this.toasts.hidden = !on;
     if (!on) this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
   }
 
@@ -443,13 +446,25 @@ export class Hud {
     if (!last || last.text.join() !== lines.join() || performance.now() - last.at > 1500)
       this.log.push({ at: performance.now(), text: lines, warn });
     if (this.log.length > 40) this.log.splice(0, this.log.length - 40);
-    this.messages = this.messages.filter((m) => m.text.join() !== lines.join());
-    this.messages.push({ text: lines, until: performance.now() + seconds * 1000, warn });
-    if (this.messages.length > 4) this.messages.shift();
+    // The popup: the same text replaces its older copy; four at most.
+    for (const el of [...this.toasts.children] as HTMLElement[])
+      if (el.dataset.text === lines.join('\n')) el.remove();
+    const el = document.createElement('div');
+    el.className = warn ? 'ff-toast ff-toast-warn' : 'ff-toast';
+    el.dataset.text = lines.join('\n');
+    for (const line of lines) {
+      const d = document.createElement('div');
+      d.textContent = line;
+      el.appendChild(d);
+    }
+    this.toasts.appendChild(el);
+    while (this.toasts.children.length > 4) this.toasts.firstElementChild!.remove();
+    setTimeout(() => el.classList.add('ff-toast-out'), seconds * 1000);
+    setTimeout(() => el.remove(), seconds * 1000 + 400);
   }
 
   clearMessages(): void {
-    this.messages = [];
+    this.toasts.replaceChildren();
     this.log.length = 0;
   }
 
@@ -1238,7 +1253,8 @@ export class Hud {
 
   private messagesAndWarnings(f: HudFrame, x: number, y: number, s: number): void {
     const now = performance.now();
-    this.messages = this.messages.filter((m) => m.until > now);
+    // While the displays are up, the messages display carries the log and the popups stand down.
+    this.toasts.classList.toggle('ff-toasts-off', f.panels === true);
     let row = 0;
     const blink = Math.floor(now / 350) % 2 === 0;
     if (f.hover && f.hover.hazards.length > 0) {
@@ -1254,12 +1270,6 @@ export class Hud {
       }
       this.text(WARNING_TEXT[w], x, y + row * 20 * s, 'center', WARN_COLOR);
       row++;
-    }
-    for (const m of f.panels ? [] : this.messages) {
-      for (const line of m.text) {
-        this.text(line, x, y + row * 20 * s, 'center', m.warn ? WARN_COLOR : HUD_COLOR);
-        row++;
-      }
     }
   }
 
