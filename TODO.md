@@ -489,3 +489,15 @@ Later, with the systems they wait for, or as polish (not part of the track):
 - [x] Night: a burning column's lower third takes its fire's light on its underside (embers, decision 330)
 - [x] A saturated flame held under a peak brightness, so fire reads orange at night, not white (decision 330)
 - [x] The old fallback meshes in `aircraft/explosions.ts` and `missileViews.ts` removed (decision 330)
+
+## Out of sync: Proposal 0014, input layer and gamepad
+
+Plan: [docs/plans/input-layer.md](docs/plans/input-layer.md); branch `feature/input-layer`; decisions 360–367.
+
+- [x] Phase 1: survey, proposal 0014 saved, plan
+- [ ] Phase 2: input layer (codes, axis tuning, chords, profiles, persistence); keyboard and mouse on its tables
+- [ ] Phase 3: gamepad source and the Mode 2 layout for jets and helicopters
+- [ ] Phase 4: menus by gamepad (pause menu, start screen, mission search, displays)
+- [ ] Phase 5: bindings screen (press-to-bind, axis tuning with a live monitor, export and import)
+- [ ] Phase 6: rumble
+- [ ] Phase 7: tests, a scripted takeoff and landing from synthetic gamepad input, README, report
