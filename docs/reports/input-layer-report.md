@@ -4,7 +4,7 @@ _Branch `feature/input-layer`, 2026-11-23. Decisions 360–367; plan `docs/plans
 
 ## Summary
 
-Every input now goes through an input layer in `src/ui/input/` that turns the keyboard, the mouse, gamepads and joysticks into named actions and tuned axes. A DualShock 4 (or any pad Chrome reports with the standard mapping) flies the jet and both helicopters with the Mode 2 layout of Proposal 0014, drives every menu, and is rebindable on a new bindings screen. Keyboard and mouse behave exactly as before: their tests pass unchanged.
+Every input now goes through an input layer in `src/ui/input/` that turns the keyboard, the mouse, gamepads and joysticks into named actions and tuned axes. A DualShock 4 (or any pad Chrome reports with the standard mapping) flies the jet and both helicopters with the Mode 2 layout of Proposal 0014, drives every menu, and is rebindable on a new bindings screen. Keyboard and mouse behave exactly as before: their tests pass unchanged. A standard gamepad does change: its left stick used to be the jet's stick and its right trigger the brakes (decision 134's basic support); now the Mode 2 layout applies. Flight sticks keep their earlier axes.
 
 What you get:
 
