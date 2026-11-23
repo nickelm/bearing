@@ -5249,3 +5249,81 @@ The per-vertex coverage, albedo and side (±1) go to the GPU as one vec3 attribu
 **How it was checked.** `tests/groundUnits.test.ts` on a stand-in scene: battalions within range are promoted and stand on the ground; a promoted battalion keeps its vehicles when the front moves; far away or above 16× the bubble empties; a vehicle destroyed at a damage of 1 is posted once with its flight, cooks off once, leaves a wreck and a column, and stays dead when promoted again from the worker's picture. Part I check 6 in `tools/models.preview.ts`: the four silhouettes tell apart from the side, front and three-quarter views (a long gun; a tall hull with a small turret; a radar plate and pods; a cab and a bed on wheels). The render preview's `vehicles` view draws a Pact mechanized battalion and a wreck over open grassland with an Alliance tank battalion beyond.
 
 **Reason:** R2.8: near the player, vehicles on the ground or aligned roads, from the kit, that are targets and fold their losses back.
+
+### 360. Proposal 0014 accepted: an input layer and a Mode 2 gamepad layout, out of sync
+
+**Date:** 2026-11-23
+**Decision:** Proposal 0014 (`docs/proposals/0014-input-layer-and-gamepad.md`) is accepted and runs out of sync with the roadmap, beside R2, on branch `feature/input-layer` with a pull request for the owner; plan in `docs/plans/input-layer.md`. It takes R6.5's key remapping and gamepad buttons; R6.5 keeps stick presets and WebHID. Its decisions are numbered from 360 so the session working on R2 in parallel can keep numbering from 336 without collisions.
+
+**Reason:** the owner wants to fly with a DualShock 4 now, and every later input (crew menus, HOTAS, the event log's replays) needs one layer between devices and the game.
+
+### 361. The input layer: one code vocabulary, actions out, keys still heard by their owners
+
+**Date:** 2026-11-23
+**Decision:** `src/ui/input/` turns devices into actions and tuned axes.
+
+- **Codes.** Every input is a string: `KeyboardEvent.code` for keys, `Mouse3`/`Mouse4` for the mouse's side buttons, `Pad0`–`Pad17` for buttons of the W3C standard mapping, `Axis2+`/`Axis2-` for half axes used as buttons, and `Pad4&Pad12` for a chord (hold the first, press the second). So every binding table is `Record<Action, string[]>`, whatever the device.
+- **Chords** win over the plain binding of the same button while their modifier is held, and a release ends exactly the actions its press started (`ActionResolver`).
+- **Keys stay with their owners.** `FlightInput`, `HeloInput` and `DisplaySystem` keep their own keyboard listeners, because each gates keys differently (enabled, the pause key under a menu, `preventDefault` only while flying) and tests pin that; their tables (`FLIGHT_BINDINGS`, `HELO_BINDINGS`, `DISPLAY_BINDINGS`) register with the profile store, which writes saved bindings into them, so the help card and every reader see the rebinding. The mouse's left, middle and right buttons and the wheel keep their roles; the side buttons bind as keys.
+- **Gamepads and joysticks** come through `InputLayer`: the active aircraft class's table and a global table (menus, the campaign) resolve their code events into action events, and `axis(id)` gives each analog control tuned and merged over devices. Whichever flight input is enabled sets the class (`fixed` or `rotary`).
+- **The event log** (rule 19) sees no device: player flight inputs reach the sim only as controls and avionics commands, as before.
+
+**Reason:** one vocabulary keeps rebinding, chords and import uniform; leaving the keyboard's listeners in place keeps keyboard and mouse behavior exactly as it was, which the owner required, and the existing tests pass unchanged.
+
+### 362. Axis tuning and the left stick's cross-talk guard
+
+**Date:** 2026-11-23
+**Decision:** An axis is inverted, then given a scaled deadzone (0 inside, linear from 0 outside), an expo curve `(1 − e)·v + e·v³`, and a sensitivity, clamped to ±1 (`src/ui/input/axis.ts`). The left stick's two axes (rudder and throttle, pedals and collective) guard each other: each axis's deadzone grows to `guard × |other axis|` when that is larger (default guard 0.4), so a 0.3 sideways wobble during a full push up never yaws, and a deliberate diagonal still moves both. Defaults: right stick deadzone 0.08 and expo 0.35; left stick deadzone 0.15, linear; look axes 0.1. The guard applies only between two rate axes, not to a joystick's absolute throttle.
+
+**Reason:** Proposal 0014's axial deadzones; a fixed axial deadzone large enough to stop the wobble would make small rudder inputs impossible.
+
+### 363. The throttle as a rate, its detent, the afterburner hold and the snaps
+
+**Date:** 2026-11-23
+**Decision:** On a gamepad the left stick moves the stored lever while pushed and leaves it when let go (`src/ui/input/throttleRate.ts`). Full deflection moves it 0.4 per second (idle to military in 2 s). Going up the lever stops at military; holding the stick past 0.8 there for 0.5 s passes the gate into afterburner. Going down from afterburner it stops at military again until the stick is let go. Two taps up (each past 0.7 and back inside 0.3 within 0.3 s, the second within 0.45 s of the first) snap to military; two down to idle. The HUD says "Afterburner", "Throttle: military", "Throttle: idle". Two more uses of the same stick, since a pad has no spare axes: pushing it up from the parking brake releases the brake ("Parking brake released"), and holding it back past 0.3 at idle is the wheel brakes, proportional. While a gamepad is connected the HUD shows the stored lever as a bar beside the THR readout, with a tick at military (`docs/visual-style.md` Part I updated). A joystick's throttle axis stays an absolute lever, as Free Flight read it before.
+
+**Reason:** a centering stick cannot hold a throttle position; the rate form with a detent and snaps is the convention of console flight games, and the hold before afterburner prevents passing it by accident.
+
+### 364. Gamepads through the Gamepad API: polled once per frame, merged, announced
+
+**Date:** 2026-11-23
+**Decision:** `GamepadSource` (`src/ui/input/gamepad.ts`) reads `navigator.getGamepads()` once per animation frame on its own `requestAnimationFrame` loop (tools and tests call `poll()`), and sends press and release events for buttons (pressed past 0.5, released below 0.3) and half axes (past 0.5, released below 0.35). Pads with the standard mapping are `gamepad`s; any other mapping (flight sticks, throttles, pedals) is a `joystick` with its own profile, whose defaults keep Free Flight's earlier reading (stick on axes 0 and 1, twist on 2, an absolute throttle on 3). Several devices merge: a code is down while any holds it, an axis reads the device deflected farthest. A disconnect releases everything that pad held. Because browsers hide a gamepad until a button is pressed, the start screen, the pause menu and the bindings screen show a status line that asks for a press until one is seen and then names the pad and its layout; a toast reports every connect and disconnect. Button names follow the pad's family (PlayStation ✕ ○ □ △ L1 R1, Xbox A B X Y LB RB) from its id. The standard gamepad's right trigger, which braked before, now fires (the brakes moved to the throttle stick, decision 363).
+
+**Reason:** Proposal 0014's device source; its own loop keeps the polling out of the game loop another session is changing, at a cost of at most one frame's latency.
+
+### 365. Profiles per device and class, saved and exchanged as JSON
+
+**Date:** 2026-11-23
+**Decision:** `ProfileStore` (`src/ui/input/profiles.ts`) keeps, under `localStorage` key `bearing.input.v1`: the key tables' bindings by table name; a gamepad and a joystick profile for each aircraft class (button bindings, axis settings with device axis, inversion, deadzone, curve, sensitivity and, for the throttle and collective, rate or lever, and options: the cross-talk guard, yaw on the bumpers, rumble); and global gamepad bindings. Stored and imported sets merge over the defaults, so an action added later gets its default. Export writes `bearing-controls.json` and shows the JSON; import takes a file or pasted text and refuses anything that is not version 1, changing nothing. Storage that is blocked or empty leaves the defaults.
+
+**Reason:** Proposal 0014's per-device, per-class profiles with export and import; merging keeps old files working as actions are added.
+
+### 366. The default Mode 2 layout in full
+
+**Date:** 2026-11-23
+**Decision:** Proposal 0014's table, completed where it left choices open (`defaultGamepad` in `src/ui/input/profiles.ts`). PlayStation names; Xbox in brackets.
+
+- **Both classes.** R2 [RT] fire, L2 [LT] secondary, R1 [RB] countermeasures, hold L1 [LB] free look with the right stick, R3 [RS] padlock, L1 + R3 recenter, Options [Menu] pause, Share [View] help (mission search on the campaign map), L3 [LS] parking brake. D-pad: ↑ master mode by hand, ↓ dogfight, ← and → page the left and right display through its formats. With L1 held: ↑ acknowledges the master caution, ↓ next steerpoint, ← and → expand or collapse the left and right display, △ breaks the radar lock, R2 master arm, Share display focus (decision 367).
+- **Jets.** ✕ [A] gear, ○ [B] speedbrake, □ [X] next weapon, △ [Y] radar lock (again for the next contact: the target cycle), L1 + □ jettison the drop tanks, L1 + ○ eject (twice, as the key).
+- **Helicopters.** ✕ hover hold, ○ cargo hook (reserved until R4), □ next weapon, △ radar lock, L1 + ○ wheel brakes. The right stick is the cyclic: fore and aft an attitude command (full deflection 18° of pitch from trim, sent to the control layer as the change since the last frame, so the nose comes back when the stick does), left and right the same lateral command as A/D. The left stick is the collective's climb rate (centered holds the altitude) and the pedals (centered, the pedal trim holds the heading), as in the Assisted preset.
+- **Free look.** The jet's view springs back when L1 is let go; the mouse's look still stays where it is left (decision 198), and the helicopter's pad look stays too, as its mouse look does.
+- **Padlock** turns the chase view's free look so the view runs from behind the aircraft toward the radar lock, and ends on a second press, on free look, on recenter or when the lock is lost (Free Flight; the campaign's taken-over jet in a later pass).
+- **Reserved.** Secondary release, countermeasures and the cargo hook have no system behind them yet (R3, R4): the buttons are bound and say so.
+- **Yaw on the bumpers** (option): L1 and R1 yaw, ramping to full over 1 s while held; free look and every chord move from L1 to L3, the parking brake to L3 + ✕, and countermeasures lose their button. Switching the option resets the gamepad's button layout to that variant.
+- **Following a campaign flight** (global table): ✕ takes control, L1 + Options hands back, ○ or Options goes back to the map, D-pad → the next aircraft, ← the displays, R3 recenters.
+
+**Reason:** what a pilot needs most sits on single buttons, and less frequent actions on L1 chords, the convention of console flight games; the brakes and parking brake on the throttle stick leave no takeoff or landing step without a pad input (`tests/gamepadFlight.test.ts` flies the whole circuit on the pad).
+
+### 367. Menus and displays by gamepad, the bindings screen, rumble
+
+**Date:** 2026-11-23
+**Decision:**
+
+- **Menus.** A menu registers its root element with a priority (`registerNavRoot`, `src/ui/input/menuNav.ts`); the highest visible root has the gamepad. The D-pad or the left stick moves the browser's focus spatially (nearest control in the direction, sideways offset weighted twice, repeating while held), with an amber ring; ✕ clicks (a second ✕ on a selected airbase row double-clicks it and flies), ← and → step a select or a slider in place, ○ calls the root's back or sends Escape, L1 and R1 switch tabs or page. A press a menu used starts no action, so the ✕ that flies from the start screen does not also raise the gear. While a menu has the pad, the flight inputs and the displays leave its buttons alone; Options still pauses and resumes. Roots: the start screen (airbase rows are focusable), the pause menu, the help and summary cards, mission search, the bindings screen, and the displays in display focus.
+- **Display focus.** L1 + Share makes the displays a menu: the D-pad walks the bezel buttons, the frame icons and the slot tabs, ✕ presses, ○ leaves, while the sticks still fly. Crew menus (R4.5) register the same way.
+- **The bindings screen** (`bindingsScreen.ts`), from the pause menu and the start screen: tabs for keyboard and mouse, gamepad and joystick and for jets and helicopters; each action's bindings as removable chips, warnings where two actions share one, Bind waiting up to 8 s for the next key, side button, pad button, half axis or chord; the axes with device axis (or Detect), inversion, deadzone, curve, sensitivity, rate or lever, and live meters of the raw and tuned value; the cross-talk guard, yaw on the bumpers, rumble with a test; reset, export and import. Escape and ○ close it and leave the pause menu open.
+- **Rumble** (`rumble.ts`) where the pad and the browser offer `vibrationActuator.playEffect('dual-rumble')` (Chrome does for many pads; whether a given DualShock 4 connection does is for the bindings screen's test button to show): the gun while it fires, the buffet from 20° to 28° angle of attack, pulses at touchdown (stronger when firm or hard) and when a target is shot down. Off in the profile's options.
+
+**Reason:** Proposal 0014's menus by gamepad with visible focus, its press-to-bind screen and optional rumble. Browser focus rather than a separate cursor keeps keyboard Enter and Space working on the same element.
+
+**How it was checked (360–367).** `tests/inputLayer.test.ts`: deadzones, curves, inversion and sensitivity; the cross-talk guard; throttle as a rate, the detent, the afterburner hold, the stop at military on the way down, both snaps and slow pushes that are no taps; codes, names and chords; conflicts and none in the default layouts; the source's connect, press, half-axis hysteresis, disconnect, merging and rumble; profile persistence, reset, export, import and refusal; the jet and the helicopter on a synthetic pad; spatial navigation; a consumed press; padlock angles; buffet. `tests/gamepadFlight.test.ts`: the test pilot's takeoff with afterburner, circuit and landing in the touchdown zone, every control passing through a fake pad and the input layer (parking brake released by the throttle push, gear by ✕). `tools/gamepad.session.mjs`: the real `FreeFlight` class in headless Chromium with a synthetic pad behind `navigator.getGamepads()`, from the hidden pad's prompt through the start screen by D-pad, a takeoff on the sticks, free look, the pause menu and the bindings screen, display focus and a disconnect. The existing unit suite, `tools/freeflight.session.mjs`, the type check and lint pass unchanged.

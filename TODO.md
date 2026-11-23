@@ -495,9 +495,16 @@ Later, with the systems they wait for, or as polish (not part of the track):
 Plan: [docs/plans/input-layer.md](docs/plans/input-layer.md); branch `feature/input-layer`; decisions 360–367.
 
 - [x] Phase 1: survey, proposal 0014 saved, plan
-- [ ] Phase 2: input layer (codes, axis tuning, chords, profiles, persistence); keyboard and mouse on its tables
-- [ ] Phase 3: gamepad source and the Mode 2 layout for jets and helicopters
-- [ ] Phase 4: menus by gamepad (pause menu, start screen, mission search, displays)
-- [ ] Phase 5: bindings screen (press-to-bind, axis tuning with a live monitor, export and import)
-- [ ] Phase 6: rumble
-- [ ] Phase 7: tests, a scripted takeoff and landing from synthetic gamepad input, README, report
+- [x] Phase 2: input layer (codes, axis tuning, chords, profiles, persistence); keyboard and mouse on its tables
+- [x] Phase 3: gamepad source and the Mode 2 layout for jets and helicopters
+- [x] Phase 4: menus by gamepad (pause menu, start screen, mission search, displays)
+- [x] Phase 5: bindings screen (press-to-bind, axis tuning with a live monitor, export and import)
+- [x] Phase 6: rumble
+- [x] Phase 7: tests, a scripted takeoff and landing from synthetic gamepad input, README, report
+- [ ] Owner's test with a DualShock 4 in Chrome (`docs/reports/input-layer-report.md`); tune deadzones, curves and the throttle rate from it
+- [ ] Padlock, countermeasures message and rumble in the campaign's taken-over jet (`src/follow/follow.ts`; Free Flight has them)
+- [ ] The spectator's free look on the right stick while following (the mouse drags it today)
+- [ ] Gamepad navigation for the time controls and the map's camera (`timeControls.ts`, `strategicScene.ts`, `orbitCamera.ts`)
+- [ ] The helicopters on the gamepad in the browser session (`tools/hud/gamepad.ts` flies the jet only; the unit test covers the helicopter's mapping)
+- [ ] R3: wire the secondary release and countermeasures; R4: the cargo hook; R4.5: crew menus as gamepad menu roots
+- [ ] R6.5: presets for common flight sticks and pedals (toe brakes as differential braking), WebHID for devices the Gamepad API reports incompletely

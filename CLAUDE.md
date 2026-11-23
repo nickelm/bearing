@@ -38,6 +38,7 @@ Guidance for Claude Code sessions in this repository. **`docs/roadmap.md` is the
 | Map CPU and GPU timings  | In the app: `?dev&cputime=1` logs the map's CPU per section and the app's frame every 5 s; `?dev&gputime=1` GPU time per view and pass (decisions 242, 245). Headless: `SCENE=strategic PERF=1 MOVE=1` in `tools/render.preview.ts` prints the map's CPU per section, still and panning |
 | Settlement plans         | `npx vitest run --config vitest.tools.config.ts tools/cities.preview.ts --disable-console-intercept` (env: `SEEDS` or `FROM`/`COUNT`, `CITIES`, `TOWNS`, `VILLAGES`, `DRAW`, `REPORT`, `OUT`; add `--testTimeout=7000000` for many seeds) → plan drawings and metrics (Proposal 0009) |
 | Effects sandbox          | `npm run dev`, then `/effects.html` (`?gputime` for GPU times, `?nopost`); headless: `npx vitest run --config vitest.tools.config.ts tools/effects.preview.ts --disable-console-intercept` (env: `SHOTS`, `W`, `H`, `POST=0`, `PERF`, `OUT`) → `tools/out/effects/`; in Chromium: `node tools/effects.screens.mjs` with `npm run preview` up (`MODE`, `SHOTS`, `OUT`) (decision 327) |
+| Gamepad session          | `node tools/gamepad.session.mjs` with `npm run dev` up: the real `FreeFlight` class in headless Chromium with a synthetic pad behind `navigator.getGamepads()`: prompt, start screen by D-pad, takeoff on the sticks, pause menu, bindings screen, display focus, disconnect (decision 367); `tests/gamepadFlight.test.ts` flies a whole circuit through a fake pad |
 | Browser smoke test       | `npm run build && npm run preview`, then `node tools/browser.smoke.mjs` (env: `MODE`, `WORLD`, `ONLY`, `SCENES`, `OUT`) → `tools/out/browser/` (decision 144); `ONLY=follow` follows a flight of each demo type with checks 7 and 10 (`FOLLOW`, `LOW=0`, `LOW_WAIT`, `NIGHT=0`; decisions 252, 253) |
 
 ## Directory map
@@ -54,8 +55,8 @@ docs/proposals/     owner proposals (do not reformat); 0001-two-views.md (decisi
                     (decision 189), 0007-world-diversity.md (decision 204),
                     0008-game-loop-and-campaign.md (decision 228), 0009-settlements-and-cities.md
                     (decisions 259–270), 0011-stylized-effects.md (decisions 320–327) and
-                    0012-gunship-and-sensor-stations.md (decision 302) and 0013-infantry.md (decision 331) are
-                    accepted; 0010-terrain-art-direction.md
+                    0012-gunship-and-sensor-stations.md (decision 302), 0013-infantry.md (decision 331) and
+                    0014-input-layer-and-gamepad.md (decision 360) are accepted; 0010-terrain-art-direction.md
                     was rejected (decision 328) and is kept for the record only
 docs/roadmap.md     phases R0–R6 with milestones, dependencies and exit criteria: what to build next
 docs/status/        audits: audit-2026-11-18.md (status matrix, health, decisions for the owner) and
@@ -187,7 +188,10 @@ src/ui/             displays/ (P2, decisions 195, 199): layout.ts (the slots' re
                     bindings, HUD and the HUD frame built from an airframe, pause menu and cards; decisions 134,
                     135); missionSearch/ (the search model and panel, decision 241); sidePanel.ts; the aircraft
                     snapshot for the displays (displays/aircraftSnapshot.ts, R1.5); audio/ (synthesized thunder,
-                    rain and wind, no files; decision 142)
+                    rain and wind, no files; decision 142); input/ (Proposal 0014, decisions 360–367): the input
+                    layer (codes, axis tuning, chords, profiles in localStorage, the Gamepad API source, the
+                    throttle as a rate), menus by gamepad (menuNav.ts), the bindings screen, the connect prompt,
+                    padlock and rumble; the flight inputs, displays and menus read actions and axes from it
 src/freeflight/     the Free Flight mode's glue on the main thread: world and runways, ground query, clock,
                     session flow (?mode=freeflight; decision 134), its weather (a StandaloneWeather feed and
                     presets), URL options (decision 143) and traffic.ts, scripted traffic and ground radars

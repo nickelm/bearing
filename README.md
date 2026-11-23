@@ -67,7 +67,51 @@ Free Flight is a sandbox: pick a seed and an airbase, take off in the F-21 Kestr
 | F3                               | Flight-model debug panel                                        |
 | Esc                              | Pause menu: resume, restart, air start, change airbase, options |
 
-The bindings live in one table, `FLIGHT_BINDINGS` in `src/ui/flight/flightInput.ts`. A gamepad or flight stick's first axes drive the stick (basic support). Ctrl+W closes a browser tab; the page asks before leaving while you fly.
+The default keys live in one table, `FLIGHT_BINDINGS` in `src/ui/flight/flightInput.ts`; **Controls and gamepad…** in the pause menu or on the start screen rebinds them (see _Gamepad_ below). Ctrl+W closes a browser tab; the page asks before leaving while you fly.
+
+### Gamepad
+
+A gamepad (PlayStation, Xbox or any pad the browser reports with the standard mapping) flies the jet and the helicopters with a Mode 2 layout (Proposal 0014, decisions 360–367). Connect it by USB or Bluetooth and **press any button**: browsers hide a pad until then, and a toast says when it connects. Flight sticks and throttles work as joysticks: stick on their first two axes, twist on the third, throttle on the fourth. Several devices together act as one.
+
+| Control (PlayStation / Xbox) | Jets                                                                                                           | Helicopters                                         |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| Right stick                  | Pitch and roll                                                                                                 | Cyclic (fore and aft: pitch attitude, springs back) |
+| Left stick ↕                 | Throttle as a rate; double-tap ↑ military, ↓ idle; hold ↑ at military for afterburner; hold ↓ at idle to brake | Collective: climb rate, centered holds the altitude |
+| Left stick ↔                 | Rudder, nosewheel steering                                                                                     | Pedals; centered holds the heading                  |
+| R2 / RT                      | Fire the selected weapon                                                                                       | Fire                                                |
+| L2 / LT                      | Secondary release (reserved until R3)                                                                          | Secondary release (reserved)                        |
+| Hold L1 / LB + right stick   | Free look; springs back on release                                                                             | Free look                                           |
+| R3 / RS                      | Padlock the radar lock; again to release                                                                       | Padlock                                             |
+| R1 / RB                      | Countermeasures (reserved until R3)                                                                            | Countermeasures (reserved)                          |
+| D-pad ↑ / ↓                  | Master mode by hand / dogfight                                                                                 | Master mode by hand / dogfight                      |
+| D-pad ← / →                  | Page the left / right display                                                                                  | Page the left / right display                       |
+| ✕ / A                        | Gear                                                                                                           | Hover hold                                          |
+| ○ / B                        | Speedbrake                                                                                                     | Cargo hook (reserved until R4)                      |
+| □ / X                        | Next weapon                                                                                                    | Next weapon                                         |
+| △ / Y                        | Radar lock; again for the next contact                                                                         | Radar lock                                          |
+| L3 / LS                      | Parking brake (pushing the throttle up also releases it)                                                       | Parking brake                                       |
+| Options / Menu               | Pause menu                                                                                                     | Pause menu                                          |
+| Share / View                 | Help (mission search on the campaign map)                                                                      | Help                                                |
+
+With L1 / LB held: D-pad ↑ acknowledges the master caution, ↓ next steerpoint, ← / → expand or collapse the left / right display; △ breaks the lock; R2 master arm; □ jettisons the drop tanks; ○ ejects (twice); R3 recenters; **Share turns on display focus**, in which the D-pad walks the displays' buttons, ✕ presses and ○ leaves while the sticks still fly. In every menu the D-pad (or left stick) moves an amber focus ring, ✕ presses, ○ goes back, L1 / R1 switch tabs; on the start screen, ✕ on an airbase selects it and a second ✕ flies. Following a campaign flight: ✕ takes control, L1 + Options hands back, ○ or Options goes back to the map, D-pad → next aircraft.
+
+The HUD shows the stored throttle as a bar beside THR while a pad is connected. **Controls and gamepad…** (pause menu, start screen) rebinds any action to a key, mouse side button, pad button, stick push or chord (hold one button and press another), tunes each axis (deadzone, curve, inversion, sensitivity, rate or lever) with live meters, sets the left stick's cross-talk guard, moves yaw to the bumpers, tests rumble, and exports or imports the whole set as JSON. Bindings are saved in the browser.
+
+**Testing checklist with a controller** (Chrome, `npm run dev`, `http://localhost:5173/?mode=freeflight&seed=1`):
+
+1. The start screen says "Gamepad: none seen yet"; press ✕: a toast names the pad and the line updates.
+2. D-pad ↓ to an airbase row (amber ring), ✕ selects it, ✕ again flies.
+3. Push the left stick up: "Parking brake released", the THR bar rises and holds when you let go; hold it up at military: "Afterburner".
+4. At about 150 kt pull the right stick back to 9° and let go; ✕ raises the gear. Wobble the left stick sideways while pushing it up: the rudder stays still.
+5. Hold L1 and move the right stick: the view turns; let go: it springs back.
+6. Double-tap the left stick down: "Throttle: idle"; double-tap up: "Throttle: military".
+7. D-pad ↑ steps the master mode; ← and → page the displays; L1 + Share, then the D-pad over the bezel buttons, ✕ presses one, ○ leaves.
+8. Options pauses; the D-pad walks the pause menu; open **Controls and gamepad…**, move the sticks and watch the meters, rebind a button, ○ closes it.
+9. Land: gear down (✕), throttle back, hold the left stick down at idle after touchdown to brake.
+10. Pull the USB cable or switch the pad off: a toast says so and nothing stays held.
+11. Keyboard and mouse still fly exactly as before.
+
+Offline: `tests/inputLayer.test.ts` (the layer's parts) and `tests/gamepadFlight.test.ts` (a whole circuit flown through a synthetic pad); with `npm run dev` up, `node tools/gamepad.session.mjs` drives the real Free Flight with a synthetic pad in headless Chromium.
 
 Offline checks without a browser:
 

@@ -322,10 +322,16 @@ _Depends on all of R2._
 - **R6.2 Briefings and after-action — medium.** Mission briefings from templates with named places (bridges, reaches, routes), after-action views of a sortie and of a day.
 - **R6.3 Audio — medium.** Engines, weapons, voice or synthesized callouts (design open question), radio chatter.
 - **R6.4 Performance — large.** Bundle splitting, tile meshes in a worker, a GPU timing pass over every view, quality tiers for trees, ground cover and props, a cheaper micro-facet form, the strategic map's labels.
-- **R6.5 Accessibility and input — medium.** Key remapping in the UI, gamepad buttons, UI scale, color-vision checks across the HUD and displays, a clean mode for screenshots.
+- **R6.5 Accessibility and input — medium.** UI scale, color-vision checks across the HUD and displays, a clean mode for screenshots. Key remapping in the UI and gamepad buttons came early with Proposal 0014 (out of sync, below); what remains of input here is presets for common flight sticks and WebHID.
 - **R6.6 Cameras and transitions — medium.** The eased dissolve through cloud, flyby and cinematic cameras, the scripted flythrough across both views, flight effects (vapor, contrails, heat shimmer).
 - **R6.7 Companion displays — medium.** Plan P6: a display in a second window, a tablet companion paired by WebRTC.
 - **R6.8 The visual backlog — large.** Everything the earlier tracks left open that no game system needs: the strategic view's leftovers (wetland reeds, broad-range glyphs, ocean names, range ring labels, the wonder glyph, new-biome patterns, generalized rivers, bridge labels and dashed tunnels); the simulation view's (river legibility, town patches and night lights, pixelation, palm, rides and firebreaks, parked aircraft, shadows of trees and buildings); track W's remainder (cirques and arêtes, plateau canyons, gullies, aspect, oases, disturbance, brine and shoreline rings, zone air, four prop kinds, four wonder kinds, router protection, local variety, checks 15–16); track N's remainder (corridor shading, the full bridge kit with tunnel portals, spirals, class order, names, river regimes per reach, distributaries, oxbow silting, braided channels, N8's report, canals); track G's remainder; and Part I and Part II acceptance checks against the reference board.
+
+## Out of Sync: Proposal 0014, Input Layer and Gamepad
+
+**State (2026-11-23):** built on branch `feature/input-layer`, awaiting the owner's test with a controller (`docs/reports/input-layer-report.md`).
+
+Runs beside the phases (`docs/proposals/0014-input-layer-and-gamepad.md`, `docs/plans/input-layer.md`, decisions 360–367): one input layer for the keyboard, the mouse, gamepads and joysticks, bindings and axis tuning per device and aircraft class with a bindings screen, the Mode 2 gamepad layout for jets and helicopters, menus by gamepad, and rumble. It takes R6.5's key remapping and gamepad buttons. R2.11's event log records actions, not devices; R3 wires the reserved secondary release and countermeasures to their systems; R4.5's crew menus register as gamepad menus.
 
 ## Out of Sync: Proposal 0011, Stylized Effects
 
