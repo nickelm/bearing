@@ -5080,7 +5080,7 @@ The first run missed by 4.0 m at 610 m and 9.6 m at 900 m, growing with the squa
 
 **Reason:** the owner's proposal. Close air support, the gunship, attack helicopters and CSAR all work against soldiers on the ground, and rigid boxes animated without skinning spend the budget on numbers, readability and behavior instead of on few, small, static figures.
 
-### 331. Contrails as round tubes that form behind the engines and keep off the lens
+### 332. Contrails as round tubes that form behind the engines and keep off the lens
 
 **Date:** 2026-11-23
 **Decision:** The owner saw the Kestrel's contrails from the chase camera as two huge flat wedges. The newest stretch of trail, between the aircraft and a chase camera sitting on its path, was drawn metres wide a few metres from the lens, and it started at the nozzle. Ribbons (decision 325) now:
