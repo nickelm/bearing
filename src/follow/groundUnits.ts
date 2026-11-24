@@ -146,7 +146,8 @@ export class GroundUnits {
     private readonly radius: Meters,
     private readonly post: (input: CampaignInputEvent) => void,
   ) {
-    this.layer = new TrafficLayer(globe.lighting);
+    // Ink outlines and contact shadows, as the guide asks of models (decision 340).
+    this.layer = new TrafficLayer(globe.lighting, { ink: true, contactShadows: true });
     globe.vehicles.add(this.layer.group);
   }
 
@@ -274,6 +275,9 @@ export class GroundUnits {
         list.push(this.drawn(v, 'burnt', eye));
         wrecks++;
       }
+    const cam = (g as Partial<GlobeScene>).camera;
+    if (cam && typeof window !== 'undefined')
+      this.layer.radPerPixel = (cam.fov * (Math.PI / 180)) / Math.max(1, window.innerHeight);
     this.layer.update(list, eye);
     this.stats.battalions = this.promoted.size;
     this.stats.vehicles = vehicles;

@@ -297,6 +297,70 @@ export class WeatherAudio {
     }
   }
 
+  /** The gun's sound while it fires (decision 340), and its fade after. */
+  private gunVoice: {
+    osc: OscillatorNode;
+    noise: AudioBufferSourceNode;
+    gain: GainNode;
+    rate: number;
+  } | null = null;
+
+  /**
+   * The flown aircraft's gun, each frame (decision 340): while `firing`, a buzz at the gun's
+   * rate (rounds a second: the A-15's 65 Hz BRRRT, a 20 mm gun's 100 Hz) through a low-pass,
+   * over a rumble of noise, louder and lower for a cannon; it fades in 80 ms when it stops.
+   */
+  gun(firing: boolean, rate: number, cannon: boolean): void {
+    const context = this.context;
+    if (!context || !this.master || context.state !== 'running') return;
+    const on = firing && !this.paused;
+    const v = this.gunVoice;
+    if (!on) {
+      if (v) {
+        const t = context.currentTime;
+        v.gain.gain.cancelScheduledValues(t);
+        v.gain.gain.setTargetAtTime(0, t, 0.03);
+        v.osc.stop(t + 0.3);
+        v.noise.stop(t + 0.3);
+        this.gunVoice = null;
+      }
+      return;
+    }
+    if (v && v.rate === rate) return;
+    try {
+      const t = context.currentTime;
+      const osc = context.createOscillator();
+      osc.type = 'sawtooth';
+      osc.frequency.value = rate;
+      const tone = context.createBiquadFilter();
+      tone.type = 'lowpass';
+      tone.frequency.value = cannon ? 900 : 1600;
+      // The rumble: two seconds of white noise, looped, low-passed.
+      const buf = context.createBuffer(1, context.sampleRate * 2, context.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+      const noise = context.createBufferSource();
+      noise.buffer = buf;
+      noise.loop = true;
+      const rumble = context.createBiquadFilter();
+      rumble.type = 'lowpass';
+      rumble.frequency.value = cannon ? 350 : 600;
+      const noiseGain = context.createGain();
+      noiseGain.gain.value = cannon ? 0.5 : 0.3;
+      const gain = context.createGain();
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(cannon ? 0.35 : 0.22, t + 0.03);
+      osc.connect(tone).connect(gain);
+      noise.connect(rumble).connect(noiseGain).connect(gain);
+      gain.connect(this.master);
+      osc.start(t);
+      noise.start(t);
+      this.gunVoice = { osc, noise, gain, rate };
+    } catch (error) {
+      console.warn('The gun could not be heard.', error);
+    }
+  }
+
   /** Schedules the thunder of a strike: it sounds after the sound's travel time. */
   thunder(strike: ThunderStrike): void {
     const context = this.context;

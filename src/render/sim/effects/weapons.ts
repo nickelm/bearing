@@ -46,7 +46,7 @@ export function gunEffects(
   const g = rack.gun;
   const impacts = rack.roundImpacts.splice(0);
   if (!g) return;
-  const cannon = g.spec.rate * g.spec.roundMass * g.spec.muzzleVelocity > CANNON_MOMENTUM;
+  const cannon = isCannon(g.spec);
   if (rack.gunFiring) {
     const pos = model.pos.clone().add(model.q.rotate(modelToBody(g.spec.at, cg)));
     const dir = model.q.rotate(new Vec3d(1, 0, 0));
@@ -61,3 +61,8 @@ export function gunEffects(
 
 /** Rounds' momentum per second (kg·m/s²) above which a gun is a cannon for its smoke (the A-15's 28,000). */
 const CANNON_MOMENTUM = 20_000;
+
+/** Whether a gun is a cannon for its smoke and sound (decisions 339, 340): the A-15's, not a 20 mm gun. */
+export function isCannon(spec: Readonly<GunSpec>): boolean {
+  return spec.rate * spec.roundMass * spec.muzzleVelocity > CANNON_MOMENTUM;
+}

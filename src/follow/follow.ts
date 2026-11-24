@@ -101,7 +101,7 @@ import type { WeatherView } from '../sim/weather/frame';
 import { flightRateCap } from '../sim/clock';
 import type { FlightModel } from '../sim/flight/flightModel';
 import type { FlightSpec } from '../sim/flight/flightSpec';
-import { gunEffects } from '../render/sim/effects/weapons';
+import { gunEffects, isCannon } from '../render/sim/effects/weapons';
 import type { Runway } from '../sim/flight/runway';
 import { flownGround } from '../freeflight/ground';
 import type { AirfieldGround, FlownTerrain } from '../freeflight/ground';
@@ -433,6 +433,15 @@ export class Follow {
   }
 
   /** Whether the player flies one of the followed flight's aircraft. */
+  /** The flown aircraft's gun for the sound (decision 340): firing, its rate, and whether a cannon. */
+  gunSound(): { firing: boolean; rate: number; cannon: boolean } | null {
+    if (!this.flying) return null;
+    const rack = this.full?.followed(this.slot)?.rack;
+    const g = rack?.gun;
+    if (!rack || !g) return null;
+    return { firing: rack.gunFiring, rate: g.spec.rate, cannon: isCannon(g.spec) };
+  }
+
   get flying(): boolean {
     return this.full?.flight.playerSlot != null;
   }

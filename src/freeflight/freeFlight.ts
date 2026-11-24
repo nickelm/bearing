@@ -123,7 +123,7 @@ import {
 } from '../ui/flight/hudFrame';
 import { Explosions } from '../render/sim/aircraft/explosions';
 import { airframePose, wingtipOf } from '../render/sim/effects/aircraftPose';
-import { gunEffects } from '../render/sim/effects/weapons';
+import { gunEffects, isCannon } from '../render/sim/effects/weapons';
 import { Wrecks } from '../render/sim/aircraft/wrecks';
 import { gunSelected, rocketCounts } from '../sim/flight/storesRack';
 import { flyingOf, MissileViews } from '../render/sim/aircraft/missileViews';
@@ -236,6 +236,13 @@ export class FreeFlight {
   private triggerWas = false;
   /** The Kestrel's stores: its flight data's standard load (decision 289); null in a helicopter. */
   private rack: StoresRack | null = null;
+
+  /** The gun for the sound (decision 340): firing, its rate, and whether a cannon. */
+  gunSound(): { firing: boolean; rate: number; cannon: boolean } | null {
+    const g = this.rack?.gun;
+    if (!this.rack || !g || this.state !== 'flying') return null;
+    return { firing: this.rack.gunFiring, rate: g.spec.rate, cannon: isCannon(g.spec) };
+  }
   /** The gear doors' failure has been announced this sortie. */
   private gearDamageTold = false;
   private displaysAt = -Infinity;

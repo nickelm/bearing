@@ -5316,6 +5316,18 @@ The per-vertex coverage, albedo and side (±1) go to the GPU as one vec3 attribu
 **How it was checked.** `tests/gunEffects.test.ts`: the A-15's recoil is 38–46 kN and the F-21's under half of it; a second of fire leaves an F-21 slower than one that held its fire, and its recoil is zero when silent; rounds fired straight down end at the ground as impacts. `tools/effects.preview.ts` (`SHOTS=strafe,strafe-ground`, lavapipe): the cannon's flash leads a lumpy gray trail; the beaten zone rises into a brown cloud over a pale dust skirt. The unit suite (with the Kestrel's lockstep), the type check and lint pass.
 
 **Reason:** the owner's request.
+
+### 340. Vehicles with ink and contact shadows; the gun's sound
+
+**Date:** 2026-11-24
+**Decision:** Two of R2.8's open items.
+
+- **Ink and contact shadows.** `TrafficLayer` takes options for ink outlines and contact shadows, and the promoted vehicles and their wrecks turn both on (campaign traffic keeps neither for now). The ink is the inverted hull of decision 107 on an instanced mesh beside each batch: back faces pushed out along the outline normals by a per-instance amount, the instance's distance times the radians per pixel times 1.6 px over its scale, so the line keeps its width at every distance and with the vehicles' exaggerated sizes (decision 336). The contact shadow is an instanced octagon on the model's ground plane over its footprint, a tenth larger, deep blue-gray (0.03, 0.04, 0.06 linear) at 60% opacity, so a vehicle sits on the ground instead of floating; it ignores the sun, as a contact shadow does. Two more draw calls per vehicle model and scheme.
+- **The gun's sound.** `WeatherAudio.gun` (still the app's one synthesized audio, decision 142): while the flown gun fires, a sawtooth at the gun's rate (65 Hz for the A-15's cannon, the BRRRT; 100 Hz for a 20 mm gun), low-passed, over a low rumble of looped noise, louder and darker for a cannon; it fades in 80 ms when the trigger lets go. The app asks the follow or Free Flight each frame (`gunSound()`).
+
+**How it was checked.** The render preview's `vehicles` view on seed 4 (lavapipe): the vehicles carry their outlines and sit on dark blots, the wreck with them. The unit suite, the type check and lint pass. The sound is for the owner's ears.
+
+**Reason:** Part I asks for ink on every model; vehicles floated without a shadow; the owner asked for the A-15's BRRRT.
 ### 350. R2.7 closed
 
 **Date:** 2026-11-24

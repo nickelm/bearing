@@ -345,14 +345,14 @@ Started 2026-11-23, in parallel with R2.8 in a second session (decisions 314–3
 - [x] Vehicles as targets: bombs' and rockets' splash and gun rounds (hardness and size by type); damage adds up per vehicle; destroyed at 1: explosion, wreck, the input, a HUD message
 - [x] Bombs and rockets on any target site near the impact, not the flight's own alone (the R2.6 follow-up)
 - [x] Test: CAS destroys promoted vehicles and the battalion's strength drops by the same count (`tests/promotion.test.ts`)
-- [ ] Ink outlines and contact shadows for the vehicles (instanced without either today, as campaign traffic)
+- [x] Ink outlines and contact shadows for the vehicles (decision 340); campaign traffic keeps neither for now
 - [x] Rounds that reach the ground: impacts and dust where they land (decision 339)
 - [ ] Damaged vehicles (smoke, R3) and damage kept past demotion; vehicles that move, scatter and return fire (R3.6)
 - [x] Owner's review (2026-11-23; decision 336): status messages off the HUD, into the messages log and a popup at the messages slot's corner; mission search's filter on a type gone from the orders shows and resets; vehicles at 1.5 times life size and larger with distance; vehicles out of woods and water
 - [x] Finding targets on CAS: the ground controller's mark on the nearest enemy company, on the HUD and the moving map, with a message (decision 337); R3.8's talk-on requests replace it
 - [x] Owner (2026-11-24): the A-15's cannon with smoke, flash and recoil, rounds that strike the ground (decision 339); a right click zooms on the pipper (decision 338)
 - [ ] Owner on the GPU: the sight, and the A-15's cannon (smoke, impacts, the speed it costs)
-- [ ] The cannon's sound (synthesized, as the weather's; decision 142)
+- [x] The cannon's sound (synthesized, as the weather's; decision 340)
 - [x] Docs: decisions 333 on, design §Entities, visual-style Part I vehicles, roadmap state, CLAUDE.md's directory map
 - [ ] Owner on the GPU: vehicles in a followed CAS flight on seed 4, a take-over that destroys some, the battalion's strength after
 - [ ] Reduced infantry (if time allows; decision 331): a few squads per battalion near the player with the blocky figures, as targets, the dead turning gray and vanishing in a toon puff
