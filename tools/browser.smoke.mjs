@@ -25,7 +25,8 @@
  *            extension (tools/out/browser/world-1983): it is put into the browser's world
  *            cache before the app loads, which spares a machine without a GPU the global pass
  *   ONLY     comma list of parts to run: flight, takeoff, helicopter, campaign, follow (default
- *            all but follow, which runs the war to each demo type's flights; FOLLOW lists them)
+ *            all but follow, which runs the war to each demo type's flights; FOLLOW lists them,
+ *            e.g. FOLLOW=csar for a rescue at full fidelity, R2.9)
  *   TRAFFIC  1: Free Flight with its traffic and ground radars (decision 218)
  *   GPU_TIMING 1: GPU pass timings per view from timestamp queries (R1.1; a real GPU)
  *   HELO     the helicopter the helicopter part flies: scout (default) or utility
@@ -667,6 +668,8 @@ async function followPart() {
       return {
         active: b.follow?.active ?? false,
         mission: b.follow?.missionId ?? null,
+        // At full fidelity: a jet flight or a helicopter flight such as a rescue (R2.9).
+        full: b.follow?.fullFidelity ?? null,
         view: b.view(),
         camera: g.cameraMode,
         height: Math.round(ch.height * 10) / 10,
@@ -734,7 +737,7 @@ async function followPart() {
     await frames(Math.round(60 / Math.max(1, slow / 4)));
     const s = await followState();
     log(
-      `follow ${type}: ${s.title}; camera ${s.height} m up, ${s.distance} m back, ${s.offAxisDeg}° off axis; ground units ${JSON.stringify(s.units)}`,
+      `follow ${type}: ${s.title}; camera ${s.height} m up, ${s.distance} m back, ${s.offAxisDeg}° off axis; full fidelity ${s.full}; ground units ${JSON.stringify(s.units)}`,
     );
     check(
       s.active && s.view === 'simulation' && s.camera === 'chase',
