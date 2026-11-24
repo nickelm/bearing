@@ -64,5 +64,21 @@ export const airliftBriefing: BriefingTemplate = (b) =>
   `${b.when ? `, landing at ${b.when}` : ''}. Unload, take on wounded and return.`;
 
 /** The provisional types' briefing until their own (R4.2). */
+export const csarBriefing: BriefingTemplate = (b) =>
+  `${opening(b)} Combat search and rescue: ${b.places.target}${near(b)}, ${b.places.theater}` +
+  `${b.when ? `; be over them at ${b.when}` : ''}. Fly in low, find a landing zone clear of trees ` +
+  `and slopes, land, take the crew aboard and bring them home. The escort and the cover hold ` +
+  `over the pickup while you are on the ground.`;
+
+export const rescueEscortBriefing: BriefingTemplate = (b) =>
+  `${opening(b)} Rescue escort: ${b.need}. Fly with the rescue to ${b.places.target}${near(b)} ` +
+  `and circle the pickup low for ${minutes(b.stationTime)}; keep the enemy's heads down ` +
+  `while the helicopter is on the ground.`;
+
+export const rescapBriefing: BriefingTemplate = (b) =>
+  `${opening(b)} Rescue cover: ${b.need}. Hold over ${b.places.target}${near(b)}${at(b)} ` +
+  `for ${minutes(b.stationTime)}, before the helicopters arrive until they leave. Find the ` +
+  `survivor, keep enemy troops away from them and call threats to the rescue.`;
+
 export const plainBriefing: BriefingTemplate = (b) =>
   `${opening(b)} ${capitalize(b.need)}${at(b)}.`;

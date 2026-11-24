@@ -130,6 +130,8 @@ export interface SnapshotExtras {
   /** The mission's flight plan and the fronts near the aircraft (decision 305). */
   route?: SnapshotRoute | null;
   fronts?: SnapshotFront[] | null;
+  /** The ground controller's mark (decision 337). */
+  mark?: AircraftSnapshot['mark'];
 }
 
 /**
@@ -223,6 +225,7 @@ export function snapshotFromHud(f: HudFrame, x: SnapshotExtras): AircraftSnapsho
       lever: hv ? Math.min(1, hv.torque) : f.throttle,
       power: hv ? Math.min(1.2, hv.torque) : f.power,
       afterburner: hv ? 0 : afterburnerStage(f),
+      afterburnerFitted: hv ? false : f.afterburnerFitted,
     },
     gear: {
       position: f.gear,
@@ -245,5 +248,6 @@ export function snapshotFromHud(f: HudFrame, x: SnapshotExtras): AircraftSnapsho
     route: x.route ?? null,
     fronts: x.fronts ?? null,
     flight: x.flight ?? null,
+    mark: x.mark ?? null,
   };
 }

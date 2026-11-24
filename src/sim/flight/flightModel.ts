@@ -135,6 +135,11 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
    */
   storesMass = 0;
   storesDragArea = 0;
+  /**
+   * The gun's recoil (N) along the nose, backward, while it fires (decision 339): the stores
+   * rack sets it from the gun's rate, rounds and muzzle velocity; zero otherwise.
+   */
+  recoil = 0;
   /** Gear 0 (up) .. 1 (down); speedbrake 0 (in) .. 1 (out to `spec.speedbrake.maxDeflection`). */
   gear = 1;
   speedbrake = 0;
@@ -439,6 +444,7 @@ export class FlightModel implements Airframe<FlightControls, FlightTelemetry> {
       : mil;
     const thrust = hasFuel ? idle + (mil - idle) * this.power + (wet - mil) * this.afterburner : 0;
     fb.x += thrust;
+    if (this.recoil > 0) fb.x -= this.recoil;
     const wetShare = Math.min(1, this.afterburner * 5);
     // Net idle thrust goes negative at speed (ram drag): no fuel comes back.
     const fuelFlow = Math.max(0, thrust) * (eng.tsfcDry * (1 - wetShare) + eng.tsfcWet * wetShare);

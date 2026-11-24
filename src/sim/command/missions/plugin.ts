@@ -84,6 +84,10 @@ export interface Need {
   roles?: readonly AircraftRole[];
   /** Only this base's squadrons (a carrier's own CAP). */
   base?: BaseRef;
+  /** The enemy's threat at the target (R2.9: a rescue's capture hazard, per hour), for its package. */
+  threat?: number;
+  /** The survivors a rescue flies for (R2.9), copied onto its missions. */
+  survivors?: number[];
   /** Not from this base (an airlift's destination). */
   notFrom?: BaseRef;
   orbitHeading?: number;
@@ -152,7 +156,8 @@ export type PlannerRule = (ctx: PlanContext) => Need[];
 
 /** One flight of a package. */
 export interface PackageMember {
-  role: 'lead' | 'escort' | 'sead';
+  /** `cover`: a rescue's cover over the survivor (R2.9). */
+  role: 'lead' | 'escort' | 'sead' | 'cover';
   type: MissionType;
   /** Time on target relative to the lead's (s). */
   offset: number;
@@ -172,9 +177,10 @@ export interface SuccessCriteria {
  * How the lead flies a phase at full fidelity (decision 282): `route`, station keeping
  * on the point its analytic route gives for the moment, which flies every leg, climb,
  * racetrack, pass and turn home (decision 256). R3.4's BVR timelines and R2.6's attack
- * runs add their own laws.
+ * runs add their own laws. `land` (R2.9): a helicopter's approach to a landing zone at
+ * the route's point, the landing and the wait on the ground through the phase.
  */
-export type LeadLaw = 'route';
+export type LeadLaw = 'route' | 'land';
 /** How the wingmen fly: `slots`, their formation's slots beside the flown lead (formation.ts). */
 export type WingLaw = 'slots';
 /** Which weapons the AI pilots may use in the phase (R2.6 reads it): none, or the work's kind. */
@@ -225,9 +231,19 @@ export interface BriefingInput {
 
 export type BriefingTemplate = (b: BriefingInput) => string;
 
-/** HUD cues a phase shows (R2.6 draws them). */
+/**
+ * HUD cues a phase shows (R2.6 draws them). 'ground-mark': the ground controller's mark on
+ * the nearest enemy company, on the HUD and the moving map (decision 337).
+ */
 export type HudCue =
-  'steering' | 'station' | 'target' | 'ccip' | 'aa-reticle' | 'glidepath' | 'landing-zone';
+  | 'steering'
+  | 'station'
+  | 'target'
+  | 'ccip'
+  | 'aa-reticle'
+  | 'glidepath'
+  | 'landing-zone'
+  | 'ground-mark';
 
 export interface PhaseInterface {
   masterMode: MasterMode;
@@ -241,7 +257,7 @@ export type InterfaceDefaults = Partial<Record<MissionPhase, PhaseInterface>>;
 
 export interface MissionPlugin {
   type: MissionType;
-  /** One of the tech demo's four types, or a type the interim tasker flew, ported until R4.2. */
+  /** Complete with all eight parts (the demo's four, the rescue package), or a type the interim tasker flew, ported until R4.2. */
   status: 'demo' | 'provisional';
   planner: Part<PlannerRule>;
   package: Part<PackageTemplate>;
@@ -251,6 +267,11 @@ export interface MissionPlugin {
   success: Part<SuccessCriteria>;
   briefing: Part<BriefingTemplate>;
   interface: Part<InterfaceDefaults>;
+  /**
+   * Planned at every tick of the order, not only at revisions, and never refused for the
+   * airborne cap or the apportionment (R2.9: a rescue cannot wait hours).
+   */
+  urgent?: boolean;
   /** Weather and daylight the type needs (design, "Air Tasking"). */
   minimums: Minimums;
   /** The apportionment category its flights count in (doctrine.ts). */

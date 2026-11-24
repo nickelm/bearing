@@ -16,7 +16,7 @@ import type { WeatherClimate } from '../sim/weather/climate';
 import { WeatherView } from '../sim/weather/frame';
 import { WeatherGrid } from '../sim/weather/grid';
 import { PING_STREAM, SnapshotField } from './protocol';
-import type { FromSimWorker, SnapshotMessage, ToSimWorker } from './protocol';
+import type { FromSimWorker, SnapshotMessage, SurvivorPicture, ToSimWorker } from './protocol';
 import { rng } from '../core/rng';
 
 /** How far the display clock may run ahead of the last snapshot (real seconds). */
@@ -56,6 +56,8 @@ export class SimClient {
   started = false;
   /** Live missions of both sides from the last update (decision 48: the view filters by side). */
   missions: Mission[] = [];
+  /** Survivors down or aboard a rescue (R2.9), from the last update that carried missions. */
+  survivors: SurvivorPicture[] = [];
   /** The ground war's front lines and units from the last update that carried them (R2.3). */
   ground: GroundPicture | null = null;
   onGround?: () => void;
@@ -258,6 +260,7 @@ export class SimClient {
       this.onSeeked?.();
     }
     if (msg.flagged.length > 0) this.onFlagged?.({ events: msg.flagged, slowed: msg.slowed });
+    if (msg.survivors) this.survivors = msg.survivors;
     if (msg.missions) {
       this.missions = msg.missions;
       this.onMissions?.();

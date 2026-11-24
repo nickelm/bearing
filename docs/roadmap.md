@@ -15,7 +15,7 @@ _Adopted 2026-11-18 with Proposal 0008 (`docs/proposals/0008-game-loop-and-campa
 | ----------------------- | ---------------------------------------------------------------------------- | ---------- | ----------------- |
 | R0. Audit and reconcile | Know what exists; documents match the code                                   | —          | done (this audit) |
 | R1. Consolidation       | What the demo needs from earlier tracks, and nothing more                    | R1.1–R1.8  | done              |
-| R2. One day of war      | The thin, complete loop: the tech demo                                       | R2.1–R2.12 | R2.1–R2.4 and R2.6 done, R2.5 done in code, R2.7 built |
+| R2. One day of war      | The thin, complete loop: the tech demo                                       | R2.1–R2.12 | R2.1–R2.4, R2.6 and R2.7 done, R2.5 done in code |
 | R3. Combat depth        | Sensors, weapons, air combat, air defense, ground entities, infantry         | R3.1–R3.8  |                   |
 | R4. Breadth             | Roster, mission catalog, helicopters, transport, crews, naval war, gunship   | R4.1–R4.10 |                   |
 | R5. Dynamic campaign    | Logistics, morale, weeks of war, saves, consequences                         | R5.1–R5.6  |                   |
@@ -229,7 +229,7 @@ _Depends on R1.7; the flight data waits for R1.5's per-type laws._
 
 **Exit:** every type on the demo's orders has a model, and every flyable type passes the silhouette check and checks 12–13.
 
-**State (2026-11-23):** built (decisions 314–317), the owner's look on the GPU remains: the Vo-31, Vo-35 and A-15 fly in Free Flight and at full fidelity in the campaign (the A-15 if time allowed, and it did); every type a day of war's orders fly on the demo seeds has its own model (twenty new ones); the silhouettes pass check 6, and the Vo-35 and Vo-31 pass checks 12–13 in the Pact's skin, whose units the HUD now takes. The C-150 stays AI-flown; its flight data move to R4.4 with tactical airlift (owner, decision 318).
+**State (2026-11-24):** done (decisions 314–319, 350): the owner flew the Vo-35 and A-15 and followed the Vo-31 on the GPU, and checked the fixes of decision 319. The Vo-31, Vo-35 and A-15 fly in Free Flight and at full fidelity in the campaign (the A-15 if time allowed, and it did); every type a day of war's orders fly on the demo seeds has its own model (twenty new ones); the silhouettes pass check 6, and the Vo-35 and Vo-31 pass checks 12–13 in the Pact's skin, whose units the HUD now takes. The C-150 stays AI-flown; its flight data move to R4.4 with tactical airlift (owner, decision 318).
 
 ### R2.8 Minimal Entity Promotion — medium
 
@@ -241,7 +241,7 @@ _Depends on R1.6, R2.3._
 
 **Exit:** CAS destroys promoted vehicles and the battalion's strength drops by the same count.
 
-**State (2026-11-23):** built and tested headless (decisions 333–335): rosters and promotion from a battalion's seed, strength and destroyed vehicles; the bubble round the camera with vehicles on the drawn ground and trucks on aligned roads; vehicles as targets for bombs, rockets and the gun; the `vehicle-destroyed` input that lowers the battalion's strength by one vehicle; burning wrecks; bombs on any site near the impact. The exit holds in `tests/promotion.test.ts`. Waiting for the owner's look on the GPU; the reduced infantry is not started.
+**State (2026-11-24):** done (decisions 333–341): the owner signed off on the GPU: the ground controller's mark found the enemy, CAS destroyed promoted vehicles and the kills reached the battalion's strength. The owner's reviews added messages off the HUD, larger vehicles out of the woods, the controller's mark, the sight, and the A-15's cannon; the vehicles carry ink and contact shadows. The reduced infantry is left to R3.8 (decision 341). Follow-ups are in `TODO.md`.
 
 ### R2.9 Survivors and CSAR — large
 
@@ -253,6 +253,8 @@ _Depends on R1.7, R2.2, R2.5._
 - Outcomes: rescued pilots return to their squadron's pool, which limits sorties.
 
 **Exit:** every ejection in a 24 h run produces a survivor and a CSAR mission; a followed CSAR helicopter lands at the survivor at full fidelity.
+
+**State (2026-11-24):** done in code (decisions 351–357): survivors with their injury, timer and capture risk; the CSAR plug-in with its escort and cover, planned the moment a survivor comes down; crews that rest; the rotary director, the AI helicopter pilot with landing zones and the surface-layer wind; a followed rescue at full fidelity with the downed pilot and its signal smoke. Both halves of the exit pass headless (`tests/demoSeeds.test.ts`, `tests/heloFidelity.test.ts`). Open for the owner: following a rescue on the GPU (checks 7 and 10).
 
 ### R2.10 Calibration — medium
 
@@ -329,7 +331,7 @@ _Depends on all of R2._
 
 ## Out of Sync: Proposal 0014, Input Layer and Gamepad
 
-**State (2026-11-23):** built on branch `feature/input-layer`, awaiting the owner's test with a controller (`docs/reports/input-layer-report.md`).
+**State (2026-11-24):** done and merged to `main` (decisions 360–368; `docs/reports/input-layer-report.md`). The owner flew it with a DualShock 4; the mouse no longer fights the pad (decision 368). Tuning waits for the low-level frame rate (TODO, Known issues).
 
 Runs beside the phases (`docs/proposals/0014-input-layer-and-gamepad.md`, `docs/plans/input-layer.md`, decisions 360–368): one input layer for the keyboard, the mouse, gamepads and joysticks, bindings and axis tuning per device and aircraft class with a bindings screen, the Mode 2 gamepad layout for jets and helicopters, menus by gamepad, and rumble. It takes R6.5's key remapping and gamepad buttons. R2.11's event log records actions, not devices; R3 wires the reserved secondary release and countermeasures to their systems; R4.5's crew menus register as gamepad menus.
 

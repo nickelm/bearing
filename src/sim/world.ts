@@ -7,10 +7,10 @@
  */
 import type { GameTime } from '../core/units';
 import type { CampaignInputEvent } from './eventLog';
-import { AirOps } from './air/airOps';
+import { AirOps, SURVIVOR_EVENT } from './air/airOps';
 import type { GroundSource } from './air/terrainFloor';
 import { Vec3d } from '../core/vec3d';
-import { globalMaxSampler } from '../worldgen/edits/airfields';
+import { globalMapSampler, globalMaxSampler } from '../worldgen/edits/airfields';
 import type { HeightService } from '../worldgen/edits/heightService';
 import { DamageState } from './ground/damage';
 import { NetworkGraph } from './ground/network';
@@ -19,8 +19,11 @@ import { AirTaskingOrders } from './command/ato';
 import { isPending } from './command/missions/plugin';
 import { missionPlugin } from './command/missions/registry';
 import { MissionResolution } from './air/resolution';
+import { SurvivorWatch } from './air/survivors';
+import type { BattalionSource } from './air/survivors';
 import { GroundWar } from './ground/war';
 import type { Side } from '../campaign/cast';
+import type { Dir } from '../core/greatCircle';
 import { Simulation } from './simulation';
 import { WeatherModel } from './weather/model';
 import type { WeatherConfig } from './weather/model';
@@ -54,6 +57,8 @@ export interface SimWorld {
   readonly resolution: MissionResolution | null;
   /** The ground war in aggregate (R2.3); null without a campaign. */
   readonly ground: GroundWar | null;
+  /** Survivors' capture and death (R2.9); null without a campaign. */
+  readonly survivors: SurvivorWatch | null;
   /** The road and rail graphs (R1.8); null without a campaign. */
   readonly networks: { road: NetworkGraph; rail: NetworkGraph } | null;
   /** Damage to target sites and bridges (R1.8); null without a campaign. */
@@ -76,11 +81,13 @@ export function createSimWorld(config: SimConfig): SimWorld {
   let ato: AirTaskingOrders | null = null;
   let resolution: MissionResolution | null = null;
   let ground: GroundWar | null = null;
+  let survivors: SurvivorWatch | null = null;
   if (config.campaign) {
     air = new AirOps(
       config.campaign,
       config.seed,
       config.ground ? groundSource(config.ground) : null,
+      config.ground ? waterSource(config.ground) : null,
     );
     air.register(sim);
     networks = {
@@ -91,6 +98,11 @@ export function createSimWorld(config: SimConfig): SimWorld {
     sim.addState('damage', damage);
     ground = new GroundWar(config.campaign, config.seed, networks, damage);
     sim.addProcess(ground);
+    // Survivors (R2.9): checked against the battalions' anchors, computed once per game time.
+    survivors = new SurvivorWatch(air, config.campaign, config.seed, battalionSource(ground, sim));
+    sim.addProcess(survivors);
+    const watch = survivors;
+    air.survivorThreat = (side, p) => watch.hazardAt(side, p);
     ato = new AirTaskingOrders({
       ground,
       suppressAirSupport: config.suppressAirSupport ?? null,
@@ -104,6 +116,8 @@ export function createSimWorld(config: SimConfig): SimWorld {
       damage,
     });
     sim.addProcess(ato);
+    const order = ato;
+    sim.on(SURVIVOR_EVENT, (e, s) => order.survivorDown((e.data as { side: Side }).side, s));
     // Engagements and outcomes at phase events (R2.2), from each type's plug-in.
     resolution = new MissionResolution(air, damage, config.campaign, config.seed, (type) => {
       const p = missionPlugin(type);
@@ -119,7 +133,18 @@ export function createSimWorld(config: SimConfig): SimWorld {
     air.resolution = resolution;
     sim.addState('resolution', resolution);
   }
-  return { sim, weather, air, ato, resolution, ground, networks, damage, terrain: null };
+  return {
+    sim,
+    weather,
+    air,
+    ato,
+    resolution,
+    ground,
+    survivors,
+    networks,
+    damage,
+    terrain: null,
+  };
 }
 
 /** Schedules a player alarm (flagged, so it triggers auto-slowdown). */
@@ -170,6 +195,35 @@ export function applyInput(world: SimWorld, input: CampaignInputEvent): void {
       break;
     }
   }
+}
+
+/** Water from a coarse height map: below the sea (R2.9: a survivor in a dinghy). */
+export function waterSource(g: { height: Float32Array; n: number }): (d: Readonly<Dir>) => boolean {
+  const sample = globalMapSampler(g.height, g.n);
+  const v = new Vec3d();
+  return (d) => sample(v.set(d[0], d[1], d[2])) < 0;
+}
+
+/** The battalions with strength left and their anchors, for the survivors; cached per game time. */
+function battalionSource(ground: GroundWar, sim: Simulation): BattalionSource {
+  let at = NaN;
+  let rev = -1;
+  let list: { side: Side; point: Dir }[] = [];
+  return {
+    battalions() {
+      if (at !== sim.time || rev !== ground.revision) {
+        at = sim.time;
+        rev = ground.revision;
+        list = [];
+        for (const b of ground.orbat.battalions) {
+          if (!(b.strength > 0)) continue;
+          const a = ground.battalionAnchor(b.id);
+          if (a) list.push({ side: b.side, point: a.point });
+        }
+      }
+      return list;
+    },
+  };
 }
 
 /** A route ground from a coarse height map: the highest cell around each point, never below the sea. */

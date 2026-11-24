@@ -5069,6 +5069,20 @@ The first run missed by 4.0 m at 610 m and 9.6 m at 900 m, growing with the squa
 
 **Reason:** a flyable transport needs more than its flight data. The test pilot's circuit flies fighter speeds, and an airlift sortie ends in a landing at a forward field, which needs the AI's landing at full fidelity. Both belong with the airlift work (owner, 2026-11-23).
 
+### 319. The owner's look at R2.7: the Vo-35's wing root, twin afterburner flames, vortices at the wingtips, no afterburner where there is none, explosions twice the size
+
+**Date:** 2026-11-23
+**Decision:**
+
+- **The Vo-35's wing root.** The wing's root stood 0.8 m out, 0.2 m outboard of the fuselage's side at the wing's height, so a slot showed between fuselage, nacelle and wing. The root now starts 0.45 m out, inside the fuselage, with its chord and height carried along the same leading edge and dihedral: the outboard wing, the tip and the pylons are where they were.
+- **Twin afterburners.** The aircraft view drew one flame, at the first afterburner emissive, so the Vo-31's mirrored second nozzle never lit. It now draws a flame at every afterburner emissive, mirrored ones included. This also covers the F-25, F-28, Vo-33, Ar-45R, Ra-84 and the Vo-37's family when they are flown.
+- **Wingtip vortices at the wingtips.** The vortices started abreast the center of gravity, at half the span. On the Vo-31 that put them about 3 m ahead of its swept tips. `wingtipOf` now finds the model's tip, the outermost mirrored horizontal wing three quarters back along its tip chord, and Free Flight and the follow pass it with the airframe's pose. The Kestrel's vortices move 2.2 m aft to its tips too. The Vo-31's navigation lights move onto its tips.
+- **No afterburner where there is none.** The engines format drops its afterburner line for an engine without one (`afterburnerFitted` in the HUD frame and the snapshot). Free Flight's help card says the throttle stops at military power, and it gives each jet's own rotation speed, on-speed angle of attack and gear limit instead of the Kestrel's. A followed type with flight data says the same in its read-only displays.
+- **The A-15's canopy and wingtips** (the owner's note, taken down by the R2.8 session): the canopy sat on top of the fuselage, wider than its top, so its sides jutted out; it now sits 0.2 m lower and narrower, inside the fuselage's line. The drooped wingtips started 1.75 m inboard of the wing's tip and hung under it like a control surface at an angle; they now start at the end of a main wing shortened to 8.0 m from the centerline, so the span stays the A-10's 17.5 m. Its contact points follow.
+- **Explosions twice the size** (owner): `EXPLOSION_SIZE = 2` scales every explosion's puff sizes, spread, rise, shockwave ring, scorch and light's reach. Debris speed scales by √2, so its ballistic reach doubles. Puff counts stay those of the cube-root scale, so the puff budget holds; the puffs' larger area costs more fill.
+
+**Reason:** the owner's look at R2.7 on the GPU (2026-11-23): the Vo-35 flies fine but showed the gap, the Vo-31's second flame and its vortices were off, the A-15 flew. Explosions are wanted bigger for spectacle. The R2.8 session's two small edits in R2.7's area (an optional field in `sim/flight/damage.ts`, vehicle hits by rounds in `storesRack.ts`) were acknowledged; they change no flight.
+
 ### 320. Stylized effects: toon-shaded sphere-impostor puffs, dithered, with depth
 
 **Date:** 2026-11-22
@@ -5249,6 +5263,182 @@ The per-vertex coverage, albedo and side (±1) go to the GPU as one vec3 attribu
 **How it was checked.** `tests/groundUnits.test.ts` on a stand-in scene: battalions within range are promoted and stand on the ground; a promoted battalion keeps its vehicles when the front moves; far away or above 16× the bubble empties; a vehicle destroyed at a damage of 1 is posted once with its flight, cooks off once, leaves a wreck and a column, and stays dead when promoted again from the worker's picture. Part I check 6 in `tools/models.preview.ts`: the four silhouettes tell apart from the side, front and three-quarter views (a long gun; a tall hull with a small turret; a radar plate and pods; a cab and a bed on wheels). The render preview's `vehicles` view draws a Pact mechanized battalion and a wreck over open grassland with an Alliance tank battalion beyond.
 
 **Reason:** R2.8: near the player, vehicles on the ground or aligned roads, from the kit, that are targets and fold their losses back.
+
+### 336. The owner's review of R2.8: messages off the HUD, a filter that resets, vehicles larger and out of the woods
+
+**Date:** 2026-11-23
+**Decision:** From the owner's first look at R2.8 on the GPU:
+
+- **Status messages leave the HUD.** Hits, kills, misses and refused actions ("Tank destroyed", "Bomb missed: 1,200 ft from TGT") no longer draw on the HUD in any view. They go to the messages display's log (the follow now feeds it, as Free Flight did), and while that display is not up, each pops up as a small dark panel at the messages slot's corner, upper left: white text, amber for a warning, at most four stacked, fading after its time. The owner asked for a popup at the screen's edge as DCS has; the messages slot's corner keeps it out of the central area and is where the log lives when the displays are up (`docs/visual-style.md`, *Slots*). The HUD's own warnings (STALL, PULL UP) stay on the HUD.
+- **Mission search's filters.** A filter set on a choice no live mission has any more (an aircraft type gone from the orders) showed "all" while it still filtered, and could not be reset. Such a choice now stays listed and selected as "<name> (none now)", so the filter shows what it holds and can be set back to all.
+- **Vehicles at 1.5 times life size,** for drawing and for hits (their sizes in `VEHICLE_TARGETS`, the height of their center), as soldiers are at 1.4 (decision 331). Beyond 1.5 km a vehicle is drawn larger with distance, up to 2.5 times more at 3.75 km and beyond, so it keeps its size on screen; hits keep the 1.5 times. The owner could not find a tank.
+- **Out of the woods and the water.** A promoted vehicle in forest denser than 0.3 (the data tile's density, below the canopy's 0.42) or on water moves to the nearest open ground within 600 m, on rings 50 m apart; trucks on a road stay on it. A vehicle is drawn and targeted only once sited, which waits for the terrain's data there (`TerrainRenderer.groundAt`).
+- The A-15's canopy and wing surfaces, which the owner also noted, are R2.7's and are in its TODO.
+
+**How it was checked.** `tests/groundUnits.test.ts`: with forest over half the ground, every vehicle of a promoted battalion stands on the open half, and none is drawn or targeted before the terrain's data is there. `tests/promotion.test.ts` passes with the larger sizes. The unit suite, the type check and lint pass.
+
+**Reason:** the owner's review.
+
+### 337. The ground controller's mark on CAS
+
+**Date:** 2026-11-23
+**Decision:** The owner could not find a tank on a CAS sortie and asked for a ground controller's mark. Until R3.8's forward observers and talk-on requests (decisions 302, 331), a controller on the ground marks the enemy for a CAS flight on station.
+
+- **A HUD cue.** `HudCue` gains `'ground-mark'`; the CAS plug-in's on-target phase shows it (rule 16: the plug-in names the cue, the follow draws whatever cue a phase lists).
+- **What is marked** (`GroundUnits.controllerMark`): the nearest enemy fighting battalion (tank, mechanized or air defense) whose anchor lies within 15 km of the aircraft, held while it has vehicles left. While it is promoted, the mark is the middle of one of its companies' alive vehicles (the one nearest the aircraft when first marked, held while it has one left, then the next); otherwise its anchor. When it is gone, the next nearest is marked.
+- **How it shows.** On the HUD a diamond with the kind and range in nautical miles (`ARMOR 3.2`, `MECH`, `SAM`); on the moving map an amber X in a square with the same label, or a caret at the edge with its distance beyond the range; and when a battalion is newly marked, a message: "Ground: enemy armor marked / 2 o'clock, 4.1 nm".
+- **Its source.** The mark comes from the side's own ground forces, which know where the enemy in front of them is; it is the battalion's anchor or its promoted vehicles, not the aircraft's sensors. Rule 12 limits the displays to the sensor picture for contacts the aircraft senses; a controller's report reaches it by radio, as the messages do. R3.8 replaces it with talk-on requests from the forward observers.
+
+**How it was checked.** `tests/groundUnits.test.ts`: the nearest enemy fighting battalion in range is marked (not one's own side's, not logistics), held when the aircraft is nearer another, marked at a company's middle once promoted, and the next one is marked when it is gone; a side with no enemy near gets none. The unit suite, the type check and lint pass.
+
+**Reason:** the owner's request; CAS needs a way to find the enemy before R3.8.
+
+
+### 338. The sight: a right click zooms on the pipper
+
+**Date:** 2026-11-24
+**Decision:** The owner asked for a right click that zooms in around the boresight or the gun pipper. A right click (press and release within 300 ms and 6 px) or Z toggles the **sight** while the player flies a jet, in Free Flight and in a take-over: the chase camera turns its view toward the sight point and narrows its field of view to a third (50° to 17°), easing in and out over 0.25 s (`ChaseCamera.sightOn`, `sightPoint`). The sight point is the bombs' or rockets' CCIP pipper while one is selected, else the gun's pipper, else the boresight 1,500 m out along the nose (`sightPoint` in `ui/flight/hudFrame.ts`). The HUD's world-anchored symbols follow the narrower view, so the pipper, the target diamonds and the vehicles grow with it. A right drag still looks around, as before. A new sortie and a hand-back turn the sight off.
+
+**How it was checked.** `tests/gunEffects.test.ts`: the sight point is the bombs' pipper, else the gun's, else the boresight. The unit suite, the type check and lint pass. The owner's look on the GPU is open.
+
+**Reason:** the owner's request: targets on the ground are small from the chase camera.
+
+### 339. The gun's recoil, smoke and rounds on the ground
+
+**Date:** 2026-11-24
+**Decision:** The owner asked for the A-15's cannon to look and feel like one: smoke and flash when it fires, and recoil that costs speed.
+
+- **Recoil.** While the gun fires, the flight model takes a force back along the nose (`FlightModel.recoil`, set by the stores rack): the rounds' momentum per second times 1.5 for the propellant gas (`gunRecoil`). The A-15's cannon (65 rounds a second of 0.425 kg at 1,010 m/s) pushes back with about 42 kN, half its engines' thrust; the F-21's 20 mm gun with under half of that. Every gun takes it from its own figures, so no type needs a new field. With the gun silent the force is zero and the model unchanged: the Kestrel's lockstep test passes as it was. This touches `sim/flight/` (R2.7's) at the one line where thrust adds to the body force.
+- **Smoke and flash.** Two emitter presets: `gun-smoke` (light gray puffs and a small flickering flash) and `cannon-smoke` (large gray puffs, a slower billowing layer and a bigger flash), chosen by the rounds' momentum per second (above 20,000 kg·m/s², the A-15's 28,000). The emitter sits at the gun's muzzle while it fires; the puffs keep a sixth to a quarter of the aircraft's speed, so it leaves them behind as a trail (`gunEffects` in `render/sim/effects/weapons.ts`).
+- **Rounds on the ground.** Rounds that reach the ground end there (they passed through it before) and come back as impacts (`StoresRack.roundImpacts`); the ground under each round is sampled again at half its time to fall to it, at most every 0.1 s. Each impact kicks up a spark, two puffs of dirt and one of dust (`EffectsSystem.roundImpact`), 1.6 times larger for 30 mm, far lighter than an explosion, so a burst of a hundred rounds stays within the puff budget.
+- The effects sandbox has a strafing run (`strafe`, `strafe-ground` in `tools/effects.preview.ts`).
+
+**How it was checked.** `tests/gunEffects.test.ts`: the A-15's recoil is 38–46 kN and the F-21's under half of it; a second of fire leaves an F-21 slower than one that held its fire, and its recoil is zero when silent; rounds fired straight down end at the ground as impacts. `tools/effects.preview.ts` (`SHOTS=strafe,strafe-ground`, lavapipe): the cannon's flash leads a lumpy gray trail; the beaten zone rises into a brown cloud over a pale dust skirt. The unit suite (with the Kestrel's lockstep), the type check and lint pass.
+
+**Reason:** the owner's request.
+
+### 340. Vehicles with ink and contact shadows; the gun's sound
+
+**Date:** 2026-11-24
+**Decision:** Two of R2.8's open items.
+
+- **Ink and contact shadows.** `TrafficLayer` takes options for ink outlines and contact shadows, and the promoted vehicles and their wrecks turn both on (campaign traffic keeps neither for now). The ink is the inverted hull of decision 107 on an instanced mesh beside each batch: back faces pushed out along the outline normals by a per-instance amount, the instance's distance times the radians per pixel times 1.6 px over its scale, so the line keeps its width at every distance and with the vehicles' exaggerated sizes (decision 336). The contact shadow is an instanced octagon on the model's ground plane over its footprint, a tenth larger, deep blue-gray (0.03, 0.04, 0.06 linear) at 60% opacity, so a vehicle sits on the ground instead of floating; it ignores the sun, as a contact shadow does. Two more draw calls per vehicle model and scheme.
+- **The gun's sound.** `WeatherAudio.gun` (still the app's one synthesized audio, decision 142): while the flown gun fires, a sawtooth at the gun's rate (65 Hz for the A-15's cannon, the BRRRT; 100 Hz for a 20 mm gun), low-passed, over a low rumble of looped noise, louder and darker for a cannon; it fades in 80 ms when the trigger lets go. The app asks the follow or Free Flight each frame (`gunSound()`).
+
+**How it was checked.** The render preview's `vehicles` view on seed 4 (lavapipe): the vehicles carry their outlines and sit on dark blots, the wreck with them. The unit suite, the type check and lint pass. The sound is for the owner's ears.
+
+**Reason:** Part I asks for ink on every model; vehicles floated without a shadow; the owner asked for the A-15's BRRRT.
+### 341. R2.8 closed; the reduced infantry goes to R3.8
+
+**Date:** 2026-11-24
+**Decision:** The owner signed off R2.8 on the GPU: the ground controller's mark (decision 337) led to the enemy, CAS destroyed promoted vehicles (a truck, among others), the HUD stayed clear of status messages, and the larger vehicles (decision 336) were found. The exit holds: CAS destroys promoted vehicles and the battalion's strength drops by the same count (`tests/promotion.test.ts`, and in the app). Part I check 6 passed for the four vehicle models (decision 335). The owner's look at the sight and the A-15's cannon (decisions 338–340), which came in the milestone's last review, is a follow-up in `TODO.md`, not a condition of closing.
+
+The reduced infantry of Proposal 0013, in R2.8 only if time allowed, is left to R3.8, which builds infantry in full (the owner's choice): squads and soldiers as worker state, the figure kit and its animation, splash profiles and the death without gore. R2.8's rosters, promotion and the `vehicle-destroyed` fold are what R3.8's companies extend.
+
+**Reason:** the owner's sign-off, so R2.9 can start.
+
+### 350. R2.7 closed
+
+**Date:** 2026-11-24
+**Decision:** R2.7 (the demo roster) is done. The exit holds: every type a day of war's orders fly on the demo seeds has its own model (decision 316), and every flyable type passes the silhouette check and checks 12–13: the Vo-31, Vo-35 and A-15 beside the Kestrel (decisions 314, 315, 317). The owner flew the Vo-35 and A-15 and followed the Vo-31 on the GPU, and checked the fixes their look asked for (decision 319). The C-150 is flown in R4.4 (decision 318). The follow-ups stay in `TODO.md`: the Vo-31's route climb against its military-power climb, models for the types outside the demo's orders, the Pact's own markings, and the A-15's Mavericks, cluster bombs and eleven stations.
+
+**At the close** the owner asked that Backspace also recenter the view: it does, beside V in the jet's and the helicopter's bindings and beside C while spectating a followed flight, and it is bound to nothing else (`tests/flightInput.test.ts`).
+
+**Reason:** the owner's sign-off, 2026-11-24.
+
+### 351. Survivors: records, injury, a survival timer and a capture risk near the enemy
+
+**Date:** 2026-11-24
+**Decision:** R2.9. A survivor (`sim/air/survivors.ts`) is aircrew down after an ejection, from an aggregate loss (decision 250's chances) or from full fidelity (decision 301), until it is rescued, captured or dies.
+
+- **The record.** Where the survivor came down: the loss's point plus a parachute's drift of 150–1,500 m in a seeded direction; on land or in the water (the coarse world's height below the sea, through a water source the world builds); an injury, none 55%, light 33%, serious 12%; a survival timer, the game time it dies unrescued: on land 72, 36 and 10 hours by injury, in the water 18, 10 and 4; and a state, `down`, `aboard` a rescue, `rescued`, `captured` or `died`. It keeps the theater its mission served and the rescues launched for it (`attempts`). AirOps holds the records in its saved state; survivors saved before this decision load as down, unhurt, on land, with three days.
+- **Capture risk** grows near the enemy's forces: a hazard per hour of 0.6 · exp(−d / 6 km), d the distance to the nearest enemy battalion's anchor (the ground war's battalions with strength left, decision 333), plus 0.03 in the enemy's territory (the side holding the nearest named place or airbase within 250 km), times 1, 1.4 or 2.5 by injury; none in the water. `SurvivorWatch`, a process every 10 minutes, captures each survivor down with the chance 1 − exp(−λ·Δt) over the period, and past its timer the survivor dies. Both are logged (`survivor-lost`). A rescue on its way whose survivors are all gone before it lands turns home with its package.
+- **Draws** come from rng(seed, "survivors"), forked by survivor for its drift and injury and by survivor and tick for its checks, so a survivor's fate is the same at any time acceleration and moves no other stream. The losses stream draws as before.
+- **The pilot** leaves the roster on ejection, as before, and is back on it when a rescue brings the survivor home (decision 353). A rescue lost with survivors aboard puts them down again where it went down.
+
+**How it was checked.** `tests/survivors.test.ts`: the drift within its range, the injuries near their shares, the timers by injury and surface, each record the same from its fork; the hazard falls with distance from an enemy battalion, rises with injury, is none in the water and none from one's own side; territory by the nearest held place; the watch lets a survivor die past its timer and captures one beside the enemy; a day of war gives the same fates stepped every ten minutes and in one jump. `tests/resolution.test.ts`: survivors equal the ejections logged; those not rescued are off their rosters and the rescued ones back on.
+
+**Reason:** roadmap R2.9 and the design's *Ejection and CSAR*: every ejection makes a survivor whose fate the war decides, not a number.
+
+### 352. The CSAR plug-in: a rescue for every survivor, at once, with its escort and cover
+
+**Date:** 2026-11-24
+**Decision:** Three mission types join the registry with all eight parts each (rule 16; `sim/command/missions/csar.ts`).
+
+- **CSAR** (`csar`): a pair of utility helicopters (the UH-68, the Ve-18) flies in low, lands at the survivor for 3–5 minutes and brings the crew home (the `land` station, a profile flight size of two). **Planner rule:** one need per group of survivors down within 10 km of each other and on no live rescue's list, named by its lowest survivor and its attempt, so a rescue after a failed one is a new need. It is **urgent**, a new plug-in field: the order plans urgent needs at every hourly tick and at once when a survivor comes down (AirOps' `air:survivor` event), not only at its revisions, logs them as `ato-urgent`, and neither the airborne cap nor the apportionment refuses them. **Rescue alert:** a rescue flies from its side's airbase or carrier nearest the survivor (the profile's `staging`), where the squadron keeps crews on alert, as CSAR forces did at forward locations; its fuel and the way home are that base's. **Loadouts:** the rescue loadout carries two external tanks (UH-68: radius × 1.8, 2.5 t of fuel) or the cabin's tank (Ve-18: × 1.4); for a survivor deep behind the lines the UH-68 takes the refueling probe and meets a tanker on the way in and out (× 6, about 1,300 km, the depth of a B-40 crew lost 1,126 km inside enemy territory on seed 10) and the Ve-18 two cabin tanks (× 2.2); a bundle's loadout may now give its own fuel. **Package:** the escort where the capture hazard there is above 0.05 per hour, the cover above 0.02. **Resolver:** a rescue that was on the ground at the survivor for a minute picks up its survivors still down (and any down near them) unless the enemy drives it off: a chance of 1 − exp(−λ · 1 h), at most 0.8, halved with its escort over the pickup. Ground fire at the pickup is the target's air defense, the capture hazard per hour up to 0.6 (resolution.ts). **Success:** at least one survivor picked up; its consequence puts them aboard. **Behavior:** the route everywhere but the fence-in and the pickup, where the lead's law is `land` (a new `LeadLaw`): the approach, the landing and the wait. **Jump-in:** departure to complete (decision 149). **Interface:** hover mode on the ground, the moving map, and the `landing-zone` cue from the fence-in through the pickup. Minimums: any light and weather the helicopters' base minimums allow.
+- **Rescue escort** (`csar-escort`): a pair of attack helicopters circles the pickup low for 10–20 minutes from two minutes before the landing; engagement `escort`, CAS's resolver for its fire.
+- **Rescue cover** (`rescap`): a pair of attack aircraft (CAS or multirole, the CAS loadout) holds over the survivor at CAS altitude for 20–45 minutes from ten minutes before the landing; engagement `escort`, so it fights for the rescue when enemy fighters come for it.
+- Briefings for all three; the mission search's threat column lists them.
+
+**Rescue helicopters at low level.** A CAP intercepted the rescues as it did a strike, and every helicopter it shot down made new survivors and a new rescue (seven Pact rescue helicopters lost air-to-air in a day on seed 10). A CAP now finds a helicopter low in the terrain with 0.4 of the interception chance (resolution.ts, for every helicopter type), and the rescue cover fights as the package's escort (engagement `escort`), not as a free CAP; rescue losses fell to about three a day per seed.
+
+**How it was checked.** `tests/missions.test.ts`: all eight parts for the three types. `tests/csar.test.ts`: a crew downed near its own base gets a rescue at once, a pair from the nearest base, alone; one downed beside an enemy tank battalion gets its cover (and its escort where the side has attack helicopters); the rescue picks up, lands home and the pilots are back on their rosters, with the pickups and rescues logged; a rescue called off is followed by a new attempt within the hour, and survivors all captured turn the package home. `tests/demoSeeds.test.ts` (R2.9's exit): on seeds 4, 10 and 7 every ejection in 24 hours made a survivor, every survivor down before the day's end had a CSAR mission, and each seed rescued someone. `tools/war.preview.ts` with the real climate (`e0958395e0a63ee4`, `4a7bc83baa532c13`, `6711bb415613e172`; stepped and in one jump the same): missions launched 199, 153 and 154 (151, 135 and 152 before), of them rescue packages' 51, 23 and 4; aircraft lost (A/P) 22/15, 14/15, 3/3 (18/12, 11/15, 2/2 before); over 26 hours on seed 4, 37 survivors, 33 rescued and 4 captured.
+
+**Reason:** roadmap R2.9: the owning side always tasks a rescue (rescue helicopter, escort, cover), and its exit asks for a CSAR mission for every ejection in a day, which a rescue waiting for the next revision (two to four hours) or the helicopters' 220 km radius from their own squadron's base did not give.
+
+### 353. Crews limit sorties: a crew rests six hours after it lands
+
+**Date:** 2026-11-24
+**Decision:** R2.9's *rescued pilots return to their squadron's pool, which limits sorties*. Without a limit on crews the pool could not limit anything: each lost aircraft took its crew with it, so a squadron always had its 1.25 crews per aircraft. Crews now rest CREW_REST = 6 hours after they land (crew duty in a surge: two or three sorties a day per crew), so a busy squadron runs out of rested crews before it runs out of aircraft.
+
+- **AirOps** keeps the crews resting (squadron, until, seats; saved, hashed). `crews(sq)` is the roster in whole aircraft's worth; `crewsFree(sq, t)` takes away the crews on its live missions and those resting. A launch needs free crews.
+- **The order** holds crews in its ledger beside the aircraft, from departure to the end of the rest, with the roster as the capacity; a flight needs both (the new refusal `crews`), and so does the commitment.
+- **Rescued pilots** are back on the roster when the rescue lands home, and rest like any crew. Captured and dead ones stay off it.
+
+A day of war on the demo seeds does not reach the limit: no flight was refused for crews in `tools/war.preview.ts`. It binds as losses mount over the following days, and for a squadron flown hard; R5's weeks of war will show by how much, and R5.6 tunes the rest with the rest of the campaign.
+
+**How it was checked.** `tests/csar.test.ts`: over 26 hours on seed 7, at every ten minutes and for every squadron, the crews in the air and resting never exceed its roster, and some rest; a rescued pilot is back on the roster. `tests/air.test.ts` conserves aircraft as before, with the rescues outside the airborne cap.
+
+**Reason:** the roadmap's outcome for R2.9 and the design's game loop (squadrons lose pilots, rescues bring them back); crew rest is the one place a roster can bind while aircraft and crews are lost together.
+
+### 354. The rotary director: a target layer on the helicopter's laws, sharing their inner loops
+
+**Date:** 2026-11-24
+**Decision:** R2.9's rotary director (decision 149, plan H1 item 5; rule 12). `HeloDirector` (`sim/flight/rotor/heloDirector.ts`) implements the shared `Director<RotorcraftModel, RotorControls>` and reads every field of `DirectorTarget`, the rotary ones included.
+
+- **The laws split in two.** `HeloLaws.update` keeps the pilot's outer part (mouse and keys → pitch and bank commands, yaw rate wanted, climb rate) and calls three shared inner loops: `cyclic` (attitude → angular acceleration → moment → disc tilt), `yaw` (pedals toward a yaw rate with the torque's trim) and `lift` (collective toward a climb rate, the torque limiter, the landing on the gear). The arithmetic is unchanged, so the player's helicopter flies bit for bit as before.
+- **The director's entry,** `HeloLaws.direct(m, directive, assists, dt, out)`, takes a `HeloDirective`: a ground velocity, a heading, a climb rate and whether to land. A horizontal acceleration toward the velocity wanted (0.9 per second, within 2.5 m/s², sideways up to a 30° bank at speed) becomes the attitude: pitch = trim − a_fwd/g, bank = trim + atan(a_right/g), with the hover's small integrators near the hover. The nose holds its heading or the one asked for in the hover's regime, turns toward the way to go when asked for speed without a heading, and turns coordinated at speed. On the torque limit and short of the climb asked for, it asks for no more speed: power goes to the height first (without it, the scout gave 100 m away accelerating after a takeoff). Speed protection, the bank and pitch limits and the bank's rate limit are the pilot's.
+- **The target.** A `hoverPoint` is flown to at the least of the speed limit (60 m/s by default), √(2·0.9 m/s²·d) and 0.4 per second of the distance, and held; else a `groundVelocity`; else `course` at `speed` along `gamma`, where the rotary director reads `speed` as the speed over the ground (helicopters fly low, where calibrated and true airspeed differ by a few percent). A `height` is held by altitude or radar altitude at 0.5 per second within the type's climb rate; a radar height of 0 lands: 1 m/s down, eased by the landing aid to 0.5 m/s near the ground, and on contact the collective goes down as with the S key. A climb lifts it off again.
+
+**How it was checked.** Before the split, a scratch test hashed every state number of the model and the laws over five scripted player flights (both types: takeoff, circuit with turns and sideways input, landing; hover hold, pedal turn, a lateral step, a descent); the hash is the same after the split and after the director's entry (`1877049595317de3`). `tests/heloDirector.test.ts`: a director flight's recorded controls replayed into a fresh model give the same state to the bit, for both types; a hover point is held within a meter for 60 s. `tests/rotorcraft.test.ts` and the Kestrel's lockstep pass unchanged.
+
+**Reason:** rule 12: the AI and the player fly helicopters through one control layer and one flight model; a target layer over the same inner loops keeps the player's feel and gives the AI pilot (decision 355) and later mouse aim one place to meet.
+
+### 355. The AI helicopter pilot and the landing zone
+
+**Date:** 2026-11-24
+**Decision:** R2.9's AI helicopter pilot (`sim/flight/rotor/heloPilot.ts`) and the choice of where it lands (`sim/flight/rotor/landingZone.ts`).
+
+- **Orders.** A reference (the mission's analytic route, as `aiPilot.ts`'s `Reference`) and a landing task: a point on the ground, the heading to land on and the time to lift off again (`land(task)`, `go()`, `cancelLanding()`).
+- **States.** `track`: the reference's ground velocity plus 0.08 per second of the horizontal distance to it, within 80% of the never-exceed speed, at the reference's altitude and at least 30 m over the ground; on its gear with the reference still standing there, it waits, and once the reference moves off it takes off. `approach`: within 2 km of the landing point, the hover point's deceleration profile brings the speed down (from 60 m/s over 2 km) and the height comes down a 7° path to 10 m over the point, not below 15 m over the ground until the last 300 m; inside 150 m the nose turns to the landing heading. `hover` until settled (4 s within 2 m and under 0.7 m/s, 15 s at most), `land`, `wait` on the gear until the task's time or `go()`, `takeoff` straight up to 20 m, then `track` again. The state and the last touchdown (time, sink, miss) are exposed for the HUD and the follow.
+- **The landing zone.** `chooseLandingZone(point, sampler, options)` searches rings 25 m apart out to 600 m, sampled every 25 m from north clockwise, and takes the nearest ring with a clear spot (on it, the flattest): no water, no forest denser than 0.15 and a slope under the least of the type's limit and 8° over the rotor's footprint (its center and eight points on a circle of 1.5 rotor radii). The approach heads into the wind when one is given (1 m/s or more), else along the bearing from where the helicopter comes. The ground comes in through a sampler (height, forest density, water), so the follow passes the drawn terrain and the tests a synthetic one.
+
+**How it was checked.** `tests/heloDirector.test.ts`: both types fly a straight route at 150 m (120 kt for the utility, 70% of the never-exceed speed for the scout, whose 120 kt is its top cruise), approach and land at its end in a crosswind of 10 m/s at the hover's 10 m (the surface layer of decision 356), touching down at 0.30 m/s (utility) and 0.46 m/s (scout) within 2 cm of the point, wait until the route moves on, take off and are back within 50 m of the route's point (6 m and 3 m) by the end; every state is visited. The landing zone lands on a clear point itself, takes the first ring past a forest's edge and its footprint and keeps off a slope, heads into the wind, finds a lake's shore, and returns none over water or a slope everywhere.
+
+**Reason:** roadmap R2.9: an AI helicopter pilot (route, approach, landing at a point) with the Assisted laws, landing clear of trees and slopes, so a followed CSAR helicopter lands at the survivor at full fidelity.
+
+### 356. A surface-layer wind for rotorcraft
+
+**Date:** 2026-11-24
+**Decision:** The jets' runway cap (decision 143: at most 8 m/s on the ground, the whole wind at 150 m) made a helicopter's low hover nearly calm in a gale. `airVelocity` (`sim/flight/wind.ts`) gains a profile argument: `runway`, the default, is the cap as before; `surface` scales the weather's wind by a logarithmic surface layer, u(h) = u(150 m)·ln(h/z0)/ln(150 m/z0), with no cap (`surfaceWindFactor`). The height is floored at 2 m or three roughness lengths, where the log law stops holding. Roughness lengths: open land 0.03 m (the default), forest 0.8 m, open water 0.0002 m; over open land a helicopter feels 0.68 of the wind at 10 m and 0.49 at 2 m. Free Flight's wind uses the surface profile for a helicopter and the runway profile for a jet; gusts are unchanged and scale with the felt wind as before. Jets keep the cap: the owner tuned the Kestrel's crosswind roll on it.
+
+**How it was checked.** `tests/flightWind.test.ts`: the surface profile gives the log law's share of the weather's wind at 10 m in a storm (well above 8 m/s), rises with height to the whole wind at 150 m, is lower over forest and higher over water, and the default is still the runway cap. The Kestrel's lockstep passes unchanged.
+
+**Reason:** proposal 0004 and plan H1 item 6: the 8 m/s cap was a runway accommodation for jets; hovering and landing a helicopter in wind needs the wind it would feel.
+
+### 357. A followed rescue at full fidelity; the downed pilot and the signal smoke
+
+**Date:** 2026-11-24
+**Decision:** R2.9's exit asks that a followed CSAR helicopter land at the survivor at full fidelity. The follow gains a rotary side beside the jets' `FullFidelity` (`src/follow/heloFidelity.ts`), and the simulation view draws the survivors.
+
+- **When.** A followed flight whose drawn type has rotorcraft flight data (the UH-68; `rotorSpecOfType`) is promoted inside its jump-in window, which for helicopters spans the ground phases, in the phases its plug-in's behavior covers, at the flight cap (8×) or slower; on the ground or in the air, since a helicopter's mission ends on the ground. It is demoted when the clock runs faster, when it leaves its window and when its clock falls 5 s behind, and the drawn helicopters ease back onto their routes as the jets do.
+- **Pilots.** Each helicopter is a `RotorcraftModel` flown by the AI helicopter pilot (decision 355) on its own slot's drawn pose, lifted over the drawn ground, in the campaign's weather with the surface layer's wind (decision 356). Where the plug-in's behavior says `land` (the rescue's fence-in and pickup), the lead gets a landing task at the zone `chooseLandingZone` picks near the survivor over the drawn terrain (its height, its forest density and water from the terrain's data tiles, waiting until they are there), into the wind, to wait until the route's egress and at least a minute after its touchdown; the wingman holds over its slot 30 m up. A survivor in the water gets no zone: the lead hovers over the point on its route, as for a hoist.
+- **Drawing and the HUD.** The helicopters are drawn from their airframes (attitude, rotors turning and tilting with the flapping state). The HUD is the helicopter's hover HUD built from the airframe and its laws (mode `FOLLOW · AI`), with the landing zone's marker while the phase's interface lists the `landing-zone` cue (the CSAR plug-in's fence-in and pickup, rule 16); the displays read the same airframe. Taking over a helicopter stays with R4.3.
+- **Survivors in the view.** The worker sends the survivors down or aboard with the missions (`SnapshotMessage.survivors`). Within 4 km of the camera each survivor down on land stands where it came down (`src/follow/survivorFigures.ts`): a waving figure in a flight suit, an oversized flight helmet and a survival vest, one model per side (`figure-pilot-alliance`, `figure-pilot-pact`, 140 triangles, class `person`), at 1.4 times life size with ink and a contact shadow, facing the camera. A followed rescue's survivors wait at the edge of its landing zone, put out orange signal smoke (a new effects preset, `signal-smoke`) while the helicopter is within 3 km, and are gone once it has been down 20 s. A survivor in the water is not drawn yet (a dinghy is a follow-up). No civilians and no gore (rule 21).
+
+**How it was checked.** `tests/heloFidelity.test.ts` (R2.9's exit, headless, on seed 7's coarse ground): a crew downed 18 km from an Alliance base, with a forest over the spot; the rescue's two UH-68s are promoted at its departure, fly from the base, and the lead lands 150 m from the survivor, clear of the forest, 44 s into the pickup's window at 0.31 m/s, 0.1 m from its zone, waits through the pickup, takes off and tracks the way home; neither crashes; promotion is wanted at 8× and not at 16×. `tools/models.preview.ts`: the two figures within the person budget, and their silhouettes read as a waving pilot from every side (check 6). `tests/effects.test.ts` with the new preset. The look on the GPU is for the owner.
+
+**Reason:** roadmap R2.9's exit and the design's *Ejection and CSAR*: the rescue the player follows must fly and land through the flight model, and the survivor must be there to rescue.
 
 ### 360. Proposal 0014 accepted: an input layer and a Mode 2 gamepad layout, out of sync
 

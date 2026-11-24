@@ -25,12 +25,16 @@ import { spawnInAir, spawnOnRunway } from '../src/sim/flight/spawn';
 import { TestPilot } from '../src/sim/flight/testPilot';
 import {
   airVelocity,
+  FOREST_ROUGHNESS,
   GROUND_WIND_LIMIT,
   GUST_CLOUD,
   GUST_PER_WIND,
   GUST_STORM,
   gustStrength,
+  OPEN_ROUGHNESS,
   SHELTER_HEIGHT,
+  surfaceWindFactor,
+  WATER_ROUGHNESS,
 } from '../src/sim/flight/wind';
 import type { WeatherReport } from '../src/sim/weather/frame';
 import { GALE } from '../src/sim/weather/presets';
@@ -612,6 +616,32 @@ describe('the air from the weather', () => {
     expect(airVelocity(fair, at(110), RADIUS, t, 0, new Vec3d(), 0).length()).toBeCloseTo(
       Math.hypot(light.east, light.north),
       9,
+    );
+  });
+
+  it('gives rotorcraft a logarithmic surface layer with no cap (R2.9)', () => {
+    const view = new StandaloneWeather(config, 'storm').view(t);
+    const wind = (h: number) => view.wind(at(100 + h), 100 + h, t);
+    const whole = (h: number) => Math.hypot(wind(h).east, wind(h).north);
+    const speed = (h: number, z0?: number) =>
+      airVelocity(view, at(100 + h), RADIUS, t, h, new Vec3d(), 0, 'surface', z0).length();
+    // A gale is felt in the hover: far above the jets' 8 m/s at 10 m over open land.
+    expect(speed(10)).toBeCloseTo(whole(10) * surfaceWindFactor(10, OPEN_ROUGHNESS), 9);
+    expect(speed(10)).toBeGreaterThan(GROUND_WIND_LIMIT + 3);
+    // Rising with height to the whole wind at the shelter height.
+    expect(speed(2)).toBeLessThan(speed(10));
+    expect(speed(10)).toBeLessThan(speed(50));
+    expect(speed(SHELTER_HEIGHT)).toBeCloseTo(whole(SHELTER_HEIGHT), 9);
+    // Rougher ground holds it down more; open water less.
+    expect(speed(10, FOREST_ROUGHNESS)).toBeLessThan(speed(10));
+    expect(speed(10, WATER_ROUGHNESS)).toBeGreaterThan(speed(10));
+    // The log law over open land: about 0.68 of the wind at 10 m, held below 2 m.
+    expect(surfaceWindFactor(10)).toBeCloseTo(Math.log(10 / 0.03) / Math.log(150 / 0.03), 12);
+    expect(surfaceWindFactor(0)).toBe(surfaceWindFactor(2));
+    // The default is the jets' runway profile, as before.
+    expect(airVelocity(view, at(100), RADIUS, t, 0, new Vec3d(), 0).length()).toBeCloseTo(
+      GROUND_WIND_LIMIT,
+      6,
     );
   });
 

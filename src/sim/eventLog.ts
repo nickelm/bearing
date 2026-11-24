@@ -160,6 +160,14 @@ export type CampaignDecision =
       segments: number;
       end: number;
     }
+  /** Urgent sorties (a rescue, R2.9) added to a side's order between its revisions. */
+  | { kind: 'ato-urgent'; side: string; added: number }
+  /** A survivor captured, or dead past its survival timer (R2.9). */
+  | { kind: 'survivor-lost'; survivor: number; side: string; squadron: number; state: string }
+  /** A rescue flight picked a survivor up (R2.9). */
+  | { kind: 'survivor-picked-up'; survivor: number; side: string; mission: number }
+  /** A rescued survivor home, back on its squadron's roster (R2.9). */
+  | { kind: 'survivor-rescued'; survivor: number; side: string; squadron: number; mission: number }
   /** A planned sortie cancelled when it was due to be committed (R2.1), and why. */
   | { kind: 'sortie-cancelled'; side: string; sortie: string; type: string; reason: string };
 

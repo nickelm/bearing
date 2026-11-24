@@ -301,8 +301,15 @@
       },
       {
         "id": "rescue",
-        "stores": "Rescue hoist, a search team",
-        "radiusFactor": 1
+        "stores": "Rescue hoist, a search team, the cabin's auxiliary tank",
+        "radiusFactor": 1.4,
+        "fuel": 2600
+      },
+      {
+        "id": "rescue/ferry",
+        "stores": "Rescue hoist, a search team, two auxiliary tanks in the cabin",
+        "radiusFactor": 2.2,
+        "fuel": 3300
       },
       {
         "id": "sling",

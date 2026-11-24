@@ -49,6 +49,8 @@ export function buildHeloHudFrame(
     eye: Readonly<Vec3d>;
     locked: boolean;
     timing: { frameMs: number; physicsMs: number; steps: number } | null;
+    /** The landing zone to mark (world, on the ground), or none. */
+    lz?: Readonly<Vec3d> | null;
   },
 ): HudFrame {
   const tel = m.telemetry;
@@ -75,7 +77,7 @@ export function buildHeloHudFrame(
     accel: acc,
     torque: tel.torque,
     rotorRpm: tel.rotorSpeed,
-    lz: null,
+    lz: opts.lz ?? null,
     modes,
     hazards,
   });

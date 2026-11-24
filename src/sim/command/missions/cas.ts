@@ -87,7 +87,8 @@ export const CAS: MissionPlugin = {
     'on-target': {
       masterMode: 'air-to-ground',
       formats: { leftMfd: ['moving-map', 'stores'], rightMfd: ['targeting-pod', 'radar-ag'] },
-      hud: ['station', 'ccip'],
+      // The ground controller marks the nearest enemy company (decision 337).
+      hud: ['station', 'ccip', 'ground-mark'],
     },
   }),
   minimums: { daylight: 'day', target: { ceiling: 600, visibility: 5000 } },

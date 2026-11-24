@@ -124,6 +124,8 @@ export interface AircraftSnapshot {
     lever: number;
     power: number;
     afterburner: number;
+    /** False for an engine without an afterburner (decision 319); absent: one is fitted. */
+    afterburnerFitted?: boolean;
   };
   /** `fixed`: gear that does not retract (skids, a helicopter's wheels). */
   /** `damaged`: the doors failed in an overspeed, the gear stuck down (decision 207). */
@@ -154,6 +156,8 @@ export interface AircraftSnapshot {
   fronts?: SnapshotFront[] | null;
   /** The other aircraft of its own flight by the intraflight datalink (decision 308). */
   flight?: SnapshotFlightMate[] | null;
+  /** The ground controller's mark on an enemy company (decision 337), while the phase shows it. */
+  mark?: { at: MapBearing; label: string } | null;
 }
 
 /**

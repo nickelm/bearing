@@ -32,7 +32,10 @@ export type MissionType =
   | 'support'
   | 'airlift'
   | 'airdrop'
-  | 'sling-load';
+  | 'sling-load'
+  | 'csar'
+  | 'csar-escort'
+  | 'rescap';
 
 export type MissionPhase =
   | 'departure'
@@ -75,6 +78,9 @@ export const MISSION_LABELS: Record<MissionType, string> = {
   airlift: 'Airlift resupply',
   airdrop: 'Combat airdrop',
   'sling-load': 'Sling-load resupply',
+  csar: 'Combat search and rescue',
+  'csar-escort': 'Rescue escort',
+  rescap: 'Rescue cover (RESCAP)',
 };
 
 /**
@@ -136,6 +142,13 @@ export interface MissionProfile {
   stationTime: readonly [number, number];
   /** The jump-in window (R1.4); DEFAULT_JUMP_IN when absent. */
   jumpIn?: JumpInWindow;
+  /** Aircraft in its flight, where fewer than the type's flight size (a rescue's pair, R2.9). */
+  flightSize?: number;
+  /**
+   * Flies from the side's base nearest the target, not its squadron's (R2.9): the squadron
+   * keeps crews on rescue alert at every field, as CSAR forces did at forward locations.
+   */
+  staging?: boolean;
 }
 
 /** Where CAS works the front (m above sea level; the terrain floor lifts it over hills, decision 240). */
@@ -258,6 +271,39 @@ export const MISSION_PROFILES: Record<MissionType, MissionProfile> = {
     low: true,
     stationTime: [15 * MINUTE, 20 * MINUTE],
   },
+  // R2.9: the rescue helicopter lands at the survivor for the pickup, low all the way in.
+  csar: {
+    jumpIn: HELICOPTER_JUMP_IN,
+    roles: ['utility-helicopter'],
+    loadout: 'rescue',
+    // A pair: one picks up, the other covers it and takes over if it is hit.
+    flightSize: 2,
+    staging: true,
+    station: 'land',
+    low: true,
+    stationTime: [3 * MINUTE, 5 * MINUTE],
+  },
+  // Attack helicopters circle the pickup low while the rescue helicopter is down.
+  'csar-escort': {
+    jumpIn: HELICOPTER_JUMP_IN,
+    roles: ['attack-helicopter'],
+    loadout: 'cas',
+    flightSize: 2,
+    staging: true,
+    station: 'orbit',
+    low: true,
+    stationTime: [10 * MINUTE, 20 * MINUTE],
+  },
+  // Attack aircraft hold over the survivor from before the helicopters come until they leave.
+  rescap: {
+    roles: ['cas', 'multirole'],
+    loadout: 'cas',
+    flightSize: 2,
+    station: 'orbit',
+    low: false,
+    stationAltitude: CAS_ALTITUDE,
+    stationTime: [20 * MINUTE, 45 * MINUTE],
+  },
 };
 
 /** A home base: an airbase (Infrastructure.airbases id) or a carrier group (Cast.carriers id). */
@@ -267,7 +313,7 @@ export interface BaseRef {
 }
 
 /** A target site, an airbase, an orbit station, a point on a front, or a road graph edge (R2.1). */
-export type TargetKind = 'site' | 'airbase' | 'station' | 'front' | 'road';
+export type TargetKind = 'site' | 'airbase' | 'station' | 'front' | 'road' | 'survivor';
 
 /** Named places of a mission, for its label, the mission panel and the briefing (R2.1). */
 export interface Places {
@@ -283,7 +329,7 @@ export interface Places {
 
 export interface MissionTarget {
   kind: TargetKind;
-  /** Target site, airbase or road edge id; −1 for stations and front points. */
+  /** Target site, airbase, road edge or survivor id; −1 for stations and front points. */
   id: number;
   name: string;
   point: Dir;
@@ -333,6 +379,8 @@ export interface Mission {
    * (decision 275): promotion starts from them, so a store fired once stays fired.
    */
   expended?: Record<string, number>[];
+  /** The survivors a rescue flies for (R2.9: the CSAR plug-in's group, by survivor id). */
+  survivors?: number[];
   /** Seed for promotion: the flight's aircraft expand from it (uint32). */
   seed: number;
   route: Route;

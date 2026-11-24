@@ -203,7 +203,8 @@ export class AircraftView {
   private readonly model = new Group();
   private readonly pieces: PieceMesh[] = [];
   private readonly rotors: RotorMesh[] = [];
-  private readonly flame: Mesh;
+  /** One afterburner flame per nozzle (each `afterburner` emissive, mirrored ones too). */
+  private readonly flames: Mesh[] = [];
   private readonly flameMaterial: MeshBasicNodeMaterial;
   private readonly inkOffset = uniform(0);
   private readonly shadow: Mesh;
@@ -277,9 +278,8 @@ export class AircraftView {
     }
     this.group.add(this.model);
 
-    // Afterburner flame: an additive cone behind the nozzle.
-    const ab = built.body.emissives.find((e) => e.kind === 'afterburner');
-    const at = ab?.position ?? [-7.6, 0.1, 0];
+    // Afterburner flames: an additive cone behind each nozzle (both of a twin, R2.7).
+    const nozzles = built.body.emissives.filter((e) => e.kind === 'afterburner');
     const cone = new ConeGeometry(0.42, 1, 8, 1, true);
     cone.translate(0, -0.5, 0);
     cone.rotateZ(-Math.PI / 2);
@@ -294,10 +294,13 @@ export class AircraftView {
     const along = positionLocal.x.negate().clamp(0, 1);
     this.flameMaterial.colorNode = vec3(1.0, 0.45, 0.07).mul(float(2.2).sub(along.mul(1.6)));
     this.flameMaterial.opacityNode = float(1).sub(along).mul(0.9);
-    this.flame = new Mesh(cone, this.flameMaterial);
-    this.flame.position.set(at[0], at[1], at[2]);
-    this.flame.frustumCulled = false;
-    this.model.add(this.flame);
+    for (const at of nozzles.length ? nozzles.map((e) => e.position) : [[-7.6, 0.1, 0]]) {
+      const flame = new Mesh(cone, this.flameMaterial);
+      flame.position.set(at[0]!, at[1]!, at[2]!);
+      flame.frustumCulled = false;
+      this.model.add(flame);
+      this.flames.push(flame);
+    }
 
     // Rotors: hub and blades on a spin pivot, inside a tilt pivot at the hub that also
     // holds the disc. The hubs join the body's shadow.
@@ -549,8 +552,10 @@ export class AircraftView {
     this.poseRotors(pose.rotors);
     // Afterburner.
     const ab = pose.afterburner;
-    this.flame.visible = ab > 0.02;
-    this.flame.scale.set(1.5 + 3 * ab, 0.8 + 0.3 * ab, 0.8 + 0.3 * ab);
+    for (const flame of this.flames) {
+      flame.visible = ab > 0.02;
+      flame.scale.set(1.5 + 3 * ab, 0.8 + 0.3 * ab, 0.8 + 0.3 * ab);
+    }
     // Ink width at the aircraft's distance.
     const dist = Math.hypot(this.group.position.x, this.group.position.y, this.group.position.z);
     this.inkOffset.value = dist * this.radPerPixel * this.inkWidth;

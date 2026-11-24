@@ -103,6 +103,8 @@ export interface AircraftPose {
   /** Wingspan and length (m). */
   span: number;
   length: number;
+  /** The right wingtip from the center: forward (m, negative aft) and out (m); see `wingtipOf`. */
+  tip?: readonly [number, number];
   /** Damage 0..1 (decision 301): smoke from 0.05, on fire from 0.5; none when it is shot down. */
   damage?: number;
   /** Engines side by side at the tail (1 or 2). */
@@ -290,8 +292,12 @@ export class EffectsSystem implements EffectSink {
       this.ribbons.trail(`${key}:c${i}`, 'contrail', p, contrail, now, humidity);
     }
     const vortex = vortexForms(a.load, humidity) && a.vel.length() > 60;
+    const [ahead, out] = a.tip ?? [0, a.span / 2];
     for (const side of [-1, 1]) {
-      const p = a.pos.clone().addScaled(a.right, (side * a.span) / 2);
+      const p = a.pos
+        .clone()
+        .addScaled(a.forward, ahead)
+        .addScaled(a.right, side * out);
       this.ribbons.trail(`${key}:v${side}`, 'vortex', p, vortex, now);
     }
     const d = a.damage ?? 0;
@@ -361,6 +367,56 @@ export class EffectsSystem implements EffectSink {
     // A fixed source the sandbox places runs until its preset's duration, or ten minutes.
     e.touched = Infinity;
     this.emitters.set(key, e);
+  }
+
+  // ---- Rounds on the ground (decision 339) ----
+
+  /**
+   * A gun round that struck the ground at `at` (world): a spark of flash and a kick of dirt
+   * and dust, scaled by `k` (1 for a 20 mm round, about 1.6 for a 30 mm one). Far lighter
+   * than an explosion, so a burst of a hundred rounds stays within the puff budget.
+   */
+  roundImpact(at: Readonly<Vec3d>, k = 1): void {
+    const floor = Math.min(at.length(), this.floorAt(at));
+    this.burst(
+      {
+        look: 'flash',
+        count: 1,
+        size: [0.5 * k, 0.8 * k],
+        speed: [0, 0],
+        up: 0,
+        delay: 0,
+        upward: 0,
+      },
+      at,
+      floor,
+    );
+    this.burst(
+      {
+        look: 'dirt',
+        count: 2,
+        size: [0.9 * k, 1.5 * k],
+        speed: [2 * k, 5 * k],
+        up: 5 * k,
+        delay: 0,
+        upward: 0.8,
+      },
+      at,
+      floor,
+    );
+    this.burst(
+      {
+        look: 'dust',
+        count: 1,
+        size: [1.6 * k, 2.4 * k],
+        speed: [1, 2],
+        up: 1.5,
+        delay: 0,
+        upward: 0.6,
+      },
+      at,
+      floor,
+    );
   }
 
   // ---- Explosions ----

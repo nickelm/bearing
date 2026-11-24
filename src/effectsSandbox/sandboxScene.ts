@@ -535,6 +535,50 @@ export class EffectsSandbox {
     });
   }
 
+  /**
+   * A strafing run over the range (decision 339): an aircraft dives at 20° toward the range's
+   * center at 160 m/s and fires `burst` s with a 30 mm cannon (or a 20 mm gun), its rounds
+   * striking round the aim point 1.2 s after they leave.
+   */
+  strafe(cannon = true, burst = 2, seconds = 12): void {
+    let age = 0;
+    let owed = 0;
+    const effects = this.effects;
+    const speed = 160;
+    const dive = 20 * (Math.PI / 180);
+    const aim = this.local(0, 0, 0);
+    const pending: { at: Vec3d; when: number }[] = [];
+    const r = this.rand;
+    this.actors.push({
+      step: (dt) => {
+        age += dt;
+        // From 1,600 m out and 580 m up toward the aim point.
+        const d = 1700 - age * speed * Math.cos(dive);
+        const pos = this.local(0, -d, Math.max(60, d * Math.tan(dive)));
+        const fwd = aim.clone().sub(pos).normalize();
+        if (age < burst) {
+          effects.track('strafe', cannon ? 'cannon-smoke' : 'gun-smoke', {
+            pos: pos.clone().addScaled(fwd, 6),
+            vel: fwd.clone().scale(speed),
+            dir: fwd,
+          });
+          owed += (cannon ? 65 : 100) * dt;
+          for (; owed >= 1; owed--)
+            pending.push({
+              at: this.local((r() - 0.5) * 24, (r() - 0.5) * 30, 0),
+              when: age + 1.2,
+            });
+        }
+        for (let i = pending.length - 1; i >= 0; i--)
+          if (pending[i]!.when <= age) {
+            effects.roundImpact(pending[i]!.at, cannon ? 1.6 : 1);
+            pending.splice(i, 1);
+          }
+        return age < seconds;
+      },
+    });
+  }
+
   /** An aircraft in a hard turn at `g` over the range: vortices from its wingtips. */
   hardTurn(g = 6, seconds = 12): void {
     let age = 0;

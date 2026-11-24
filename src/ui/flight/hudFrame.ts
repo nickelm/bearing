@@ -202,6 +202,7 @@ export function buildHudFrame(
     load: tel.load,
     // Without an afterburner the lever's travel past military is no stage of it.
     throttle: m.spec.engine.thrust.afterburner ? c.throttle : Math.min(c.throttle, MIL_DETENT),
+    afterburnerFitted: m.spec.engine.thrust.afterburner !== null,
     power: m.power,
     afterburner: m.afterburner,
     fuel: m.fuel,
@@ -423,4 +424,19 @@ export function ccipHud(
     label: `${STORES[w]?.short ?? w} ${left}`,
     armed: avionics.masterArm,
   };
+}
+
+/**
+ * Where the sight looks (decision 338): the bombs' or rockets' pipper while one is
+ * selected and on the ground ahead, else the gun's pipper, else the boresight 1,500 m out
+ * along the nose. World coordinates; the frame's points are relative to `eye`.
+ */
+export function sightPoint(
+  frame: Pick<HudFrame, 'ccip' | 'gun'>,
+  model: { pos: Readonly<Vec3d>; q: { rotate(v: Vec3d): Vec3d } },
+  eye: Readonly<Vec3d>,
+): Vec3d {
+  const rel = frame.ccip?.point ?? frame.gun?.point ?? null;
+  if (rel) return new Vec3d(eye.x + rel[0], eye.y + rel[1], eye.z + rel[2]);
+  return model.pos.clone().addScaled(model.q.rotate(new Vec3d(1, 0, 0)), 1500);
 }

@@ -45,6 +45,7 @@ import { aircraftType, loadoutsFor } from '../air/aircraft';
 import type { Loadout } from '../air/aircraft';
 import { stocked } from '../air/orbat';
 import type { AircraftRole } from '../air/aircraft';
+import { CREW_REST } from '../air/airOps';
 import type { AirOps } from '../air/airOps';
 import { MISSION_PROFILES } from '../air/mission';
 import type { BaseRef, Mission, MissionType } from '../air/mission';
@@ -226,8 +227,16 @@ export class AirTaskingOrders implements TickProcess {
           this.revise(side, t, sim);
         }
       }
+      this.urgent(side, t, sim);
       this.commit(side, t, sim);
     }
+  }
+
+  /** A survivor of `side` came down (AirOps' SURVIVOR_EVENT): its rescue is planned and committed now. */
+  survivorDown(side: Side, sim: Simulation): void {
+    if (!this.orders[side]) return;
+    this.urgent(side, sim.time, sim);
+    this.commit(side, sim.time, sim);
   }
 
   // ---- Orders and revisions ----
@@ -251,7 +260,6 @@ export class AirTaskingOrders implements TickProcess {
   private revise(side: Side, now: GameTime, sim: Simulation): void {
     const order = this.orders[side]!;
     const ctx = this.context(side, now, order.day);
-    const air = this.w.air;
     this.stats[side].revisions++;
 
     // 1. Needs from every plug-in.
@@ -266,16 +274,7 @@ export class AirTaskingOrders implements TickProcess {
     for (const n of needs) n.tots?.forEach((_, i) => requests.add(`${n.key}#${i}`));
 
     // 2. What is promised already: committed missions, and the planned sorties that still stand.
-    const ledger = new Ledger();
-    for (const m of air.missions.values()) {
-      if (m.side !== side) continue;
-      const end = m.timeline[m.timeline.length - 1]!.time + aircraftType(m.aircraftType).turnaround;
-      ledger.hold(m.squadron, Math.max(now, m.timeline[0]!.time), end, m.aircraft);
-      ledger.fly(side, m.route, m.aircraft, missionPlugin(m.type).category);
-    }
-    for (const [sq, until, n] of air.ready) {
-      if (air.squadrons[sq]!.side === side && until > now) ledger.hold(sq, now, until, n);
-    }
+    const ledger = this.committedLedger(side, now);
     const kept: Sortie[] = [];
     let cancelled = 0;
     const packages = new Map<string, Sortie[]>();
@@ -367,6 +366,73 @@ export class AirTaskingOrders implements TickProcess {
     });
   }
 
+  /**
+   * What `side` has promised already: its committed missions with their crews' rest,
+   * the aircraft in turnaround, the crews resting; without the order's planned sorties.
+   */
+  private committedLedger(side: Side, now: GameTime): Ledger {
+    const air = this.w.air;
+    const ledger = new Ledger();
+    for (const m of air.missions.values()) {
+      if (m.side !== side) continue;
+      const t = aircraftType(m.aircraftType);
+      const last = m.timeline[m.timeline.length - 1]!.time;
+      const from = Math.max(now, m.timeline[0]!.time);
+      ledger.hold(m.squadron, from, last + t.turnaround, m.aircraft);
+      ledger.hold(crewKey(m.squadron), from, last + CREW_REST, m.aircraft * crewOf(t));
+      ledger.fly(side, m.route, m.aircraft, missionPlugin(m.type).category);
+    }
+    for (const [sq, until, n] of air.ready) {
+      if (air.squadrons[sq]!.side === side && until > now) ledger.hold(sq, now, until, n);
+    }
+    for (const [sq, until, seats] of air.resting) {
+      if (air.squadrons[sq]!.side === side && until > now)
+        ledger.hold(crewKey(sq), now, until, seats);
+    }
+    return ledger;
+  }
+
+  /**
+   * Needs that cannot wait for the next revision (R2.9: a rescue): every tick, the urgent
+   * plug-ins' needs are planned at once, beside what the order already holds, and the
+   * commitment that follows launches them.
+   */
+  private urgent(side: Side, now: GameTime, sim: Simulation): void {
+    const order = this.orders[side];
+    if (!order) return;
+    const urgentPlugins = MISSION_PLUGINS.filter((p) => p.urgent && !isPending(p.planner));
+    if (urgentPlugins.length === 0) return;
+    const ctx = this.context(side, now, order.day);
+    const needs = urgentPlugins.flatMap((p) => (isPending(p.planner) ? [] : p.planner(ctx)));
+    if (needs.length === 0) return;
+    const ledger = this.committedLedger(side, now);
+    for (const s of order.planned) this.hold(ledger, side, s);
+    const added: Sortie[] = [];
+    for (const need of needs.sort(byScore)) {
+      need.tots?.forEach((tot, i) => {
+        const request = `${need.key}#${i}`;
+        if (this.filled.has(`${side}:${request}`)) return;
+        if (order.planned.some((s) => s.request === request)) return;
+        const pkg = this.planPackage(
+          ctx,
+          ledger,
+          need,
+          request,
+          Math.max(tot, now + MIN_LEAD),
+          now,
+        );
+        if (pkg) added.push(...pkg);
+        else this.unfilled(side, need.type);
+      });
+    }
+    if (added.length === 0) return;
+    order.planned = [...order.planned, ...added].sort(
+      (a, b) => a.departure - b.departure || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0),
+    );
+    this.stats[side].planned += added.length;
+    sim.log.decision(now, { kind: 'ato-urgent', side, added: added.length });
+  }
+
   /** Why a planned sortie may not fly now (the forecast at `now`), or null. */
   private refusal(m: Mission, now: GameTime): string | null {
     this.env.now = now;
@@ -387,7 +453,22 @@ export class AirTaskingOrders implements TickProcess {
     const sq = this.w.air.squadrons[m.squadron]!;
     const end = m.timeline[m.timeline.length - 1]!.time + aircraftType(m.aircraftType).turnaround;
     if (!ledger.fits(sq.id, sq.aircraft, s.departure, end, m.aircraft)) return 'aircraft';
+    if (!this.crewFits(ledger, m.squadron, s.departure, m.timeline, m.aircraft)) return 'crews';
     return this.capped(ledger, side, m.route, m.aircraft, m.type);
+  }
+
+  /** Whether squadron `sq`'s roster can crew `n` more aircraft from `from` to the end of `timeline` and its rest. */
+  private crewFits(
+    ledger: Ledger,
+    sq: number,
+    from: GameTime,
+    timeline: readonly { time: GameTime }[],
+    n: number,
+  ): boolean {
+    const s = this.w.air.squadrons[sq]!;
+    const crew = crewOf(aircraftType(s.type));
+    const to = timeline[timeline.length - 1]!.time + CREW_REST;
+    return ledger.fits(crewKey(sq), s.pilots.length, from, to, n * crew);
   }
 
   /** Whether a flight breaks the airborne cap or its category's share: the reason, or null. */
@@ -399,7 +480,10 @@ export class AirTaskingOrders implements TickProcess {
     type: MissionType,
   ): string | null {
     const d = DOCTRINE[side];
-    const category = missionPlugin(type).category;
+    const plugin = missionPlugin(type);
+    // A rescue is never refused for the sky being full (R2.9).
+    if (plugin.urgent) return null;
+    const category = plugin.category;
     const over = ledger.underCap(
       side,
       route,
@@ -415,6 +499,13 @@ export class AirTaskingOrders implements TickProcess {
     const m = s.mission;
     const end = m.timeline[m.timeline.length - 1]!.time + aircraftType(m.aircraftType).turnaround;
     ledger.hold(m.squadron, s.departure, end, m.aircraft);
+    const last = m.timeline[m.timeline.length - 1]!.time;
+    ledger.hold(
+      crewKey(m.squadron),
+      s.departure,
+      last + CREW_REST,
+      m.aircraft * crewOf(aircraftType(m.aircraftType)),
+    );
     ledger.fly(side, m.route, m.aircraft, missionPlugin(m.type).category);
   }
 
@@ -486,7 +577,13 @@ export class AirTaskingOrders implements TickProcess {
     const profile = MISSION_PROFILES[type];
     const roles: readonly AircraftRole[] =
       (member.role === 'lead' ? need.roles : undefined) ?? profile.roles;
-    const candidates: { sq: number; dist: number; rank: number; loadout: Loadout }[] = [];
+    const candidates: {
+      sq: number;
+      dist: number;
+      rank: number;
+      loadout: Loadout;
+      from: BaseRef;
+    }[] = [];
     for (const sq of air.squadrons) {
       if (sq.side !== side) continue;
       if (need.base && (sq.base.kind !== need.base.kind || sq.base.id !== need.base.id)) continue;
@@ -508,25 +605,33 @@ export class AirTaskingOrders implements TickProcess {
       }
       const at = aircraftType(sq.type);
       const order = roles.indexOf(at.role);
-      if (order < 0 || sq.aircraft < at.flightSize) continue;
+      if (
+        order < 0 ||
+        sq.aircraft < flightOf(at, profile) ||
+        air.crews(sq.id) < flightOf(at, profile)
+      )
+        continue;
       // Roles that rank alike leave the choice to distance (decision 254); a defended
       // target still goes to the types that fly it low first.
       const low = profile.lowRoles?.includes(at.role) ?? false;
       const rank = profile.rolesAlike ? (need.defended && !low ? 1 : 0) : order;
       // The heaviest of the profile's loadouts that reaches the target and that the base
       // can hang (its drop tanks; decision 294).
-      const dist = arcDistance(air.basePoint(sq.base, tot), need.target.point, R);
-      const stocks = air.base(sq.base).stocks;
+      // A rescue flies from the side's base nearest the target, where the squadron keeps
+      // crews on alert (R2.9); every other flight from its squadron's base.
+      const from = profile.staging ? this.nearestBase(side, need.target.point, tot) : sq.base;
+      const dist = arcDistance(air.basePoint(from, tot), need.target.point, R);
+      const stocks = air.base(from).stocks;
       const loadout = (profile.loadout ? loadoutsFor(at, profile.loadout) : [at.loadouts[0]!]).find(
         (l) =>
           dist <= at.combatRadius * l.radiusFactor * this.w.input.rangeFactor &&
           stocked(
             stocks,
-            air.draw({ aircraftType: at.id, aircraft: at.flightSize, type, loadout: l.id }),
+            air.draw({ aircraftType: at.id, aircraft: flightOf(at, profile), type, loadout: l.id }),
           ),
       );
       if (!loadout) continue;
-      candidates.push({ sq: sq.id, dist, rank, loadout });
+      candidates.push({ sq: sq.id, dist, rank, loadout, from });
     }
     candidates.sort((a, b) => a.rank - b.rank || a.dist - b.dist || a.sq - b.sq);
     this.failure = candidates.length === 0 ? 'no squadron' : 'route';
@@ -538,6 +643,7 @@ export class AirTaskingOrders implements TickProcess {
       const sq = air.squadrons[c.sq]!;
       const at = aircraftType(sq.type);
       const loadout = c.loadout;
+      const from = c.from;
       const plan = (launch: GameTime): Route | null =>
         planMissionRoute({
           type: at,
@@ -545,8 +651,8 @@ export class AirTaskingOrders implements TickProcess {
           profile,
           radius: R,
           rangeFactor: this.w.input.rangeFactor,
-          basePoint: (time) => air.basePoint(sq.base, time),
-          carrierBased: sq.base.kind === 'carrier',
+          basePoint: (time) => air.basePoint(from, time),
+          carrierBased: from.kind === 'carrier',
           target: need.target.point,
           launch,
           stationTime: need.stationTime,
@@ -567,7 +673,7 @@ export class AirTaskingOrders implements TickProcess {
       const refused = this.env.refusal(
         plugin.minimums,
         at.helicopter,
-        air.basePoint(sq.base, launch),
+        air.basePoint(from, launch),
         need.target.point,
         arrive,
       );
@@ -577,11 +683,15 @@ export class AirTaskingOrders implements TickProcess {
       }
       const timeline = routeTimeline(route);
       const end = timeline[timeline.length - 1]!.time + at.turnaround;
-      if (!ledger.fits(sq.id, sq.aircraft, launch, end, at.flightSize)) {
+      if (!ledger.fits(sq.id, sq.aircraft, launch, end, flightOf(at, profile))) {
         this.failure = 'aircraft';
         continue;
       }
-      const capped = this.capped(ledger, side, route, at.flightSize, type);
+      if (!this.crewFits(ledger, sq.id, launch, timeline, flightOf(at, profile))) {
+        this.failure = 'crews';
+        continue;
+      }
+      const capped = this.capped(ledger, side, route, flightOf(at, profile), type);
       if (capped) {
         this.failure = capped;
         return null;
@@ -597,18 +707,19 @@ export class AirTaskingOrders implements TickProcess {
         squadron: sq.id,
         unit: sq.name,
         aircraftType: at.id,
-        aircraft: at.flightSize,
+        aircraft: flightOf(at, profile),
         loadout: loadout.id,
         callsign: callsign(side, r),
-        base: { ...sq.base },
+        base: { ...from },
         target: need.target,
         need:
           member.role === 'lead'
             ? need.label
-            : `${capitalize(member.role === 'sead' ? 'SEAD' : 'escort')} for ${lead!.mission.callsign}`,
+            : `${capitalize(member.role === 'sead' ? 'SEAD' : member.role)} for ${lead!.mission.callsign}`,
         needKey: need.key,
         score: need.score,
         places: need.places,
+        ...(need.survivors ? { survivors: [...need.survivors] } : {}),
         seed: r.nextUint32(),
         route,
         timeline,
@@ -630,6 +741,31 @@ export class AirTaskingOrders implements TickProcess {
     return null;
   }
 
+  /** The side's airbase or carrier group nearest point p at time t (a rescue's alert detachment). */
+  private nearestBase(side: Side, p: Readonly<Dir>, t: GameTime): BaseRef {
+    const air = this.w.air;
+    const R = this.w.input.radius;
+    let best: BaseRef | null = null;
+    let bestD = Infinity;
+    const refs: BaseRef[] = [
+      ...this.w.input.airbases
+        .filter((a) => a.side === side)
+        .map((a) => ({ kind: 'airbase' as const, id: a.id })),
+      ...air.carriers
+        .map((c, id) => ({ c, id }))
+        .filter((x) => x.c.cast.side === side)
+        .map((x) => ({ kind: 'carrier' as const, id: x.id })),
+    ];
+    for (const ref of refs) {
+      const d = arcDistance(air.basePoint(ref, t), p, R);
+      if (d < bestD) {
+        bestD = d;
+        best = ref;
+      }
+    }
+    return best ?? { kind: 'airbase', id: 0 };
+  }
+
   // ---- Commitment ----
 
   private commit(side: Side, now: GameTime, sim: Simulation): void {
@@ -648,6 +784,7 @@ export class AirTaskingOrders implements TickProcess {
       if (!reason) reason = this.refusal(m, now);
       const sq = air.squadrons[m.squadron]!;
       if (!reason && sq.available < m.aircraft) reason = 'aircraft';
+      if (!reason && air.crewsFree(sq.id, s.departure) < m.aircraft) reason = 'crews';
       if (!reason) {
         const d = air.draw(m);
         const st = air.base(m.base).stocks;
@@ -840,6 +977,14 @@ export class AirTaskingOrders implements TickProcess {
     for (const k of [...this.filled].sort()) h.string(k);
   }
 }
+
+/** A flight's aircraft: the type's flight size, or fewer where the profile asks (R2.9). */
+const flightOf = (t: { flightSize: number }, p: { flightSize?: number }) =>
+  Math.min(t.flightSize, p.flightSize ?? Infinity);
+
+/** The ledger's key for a squadron's crews (aircraft use the squadron's id). */
+const crewKey = (sq: number) => -1 - sq;
+const crewOf = (t: { crew: number }) => Math.max(1, t.crew);
 
 function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);

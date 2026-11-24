@@ -591,11 +591,12 @@ def a15():
     ])
     # The gun's muzzle under the nose, the bubble canopy.
     m.cyl('nozzle', [8.1, 0.05, 0], [8.6, 0.05, 0], 0.09, sides=6)
-    m.blob('canopy', [4.6, 1.4, 0], [1.2, 0.6, 0.6], detail=1, half=True)
+    m.blob('canopy', [4.6, 1.2, 0], [1.1, 0.55, 0.46], detail=1, half=True)
     # Straight wing, the gear's pods under it, two engine pods on the rear fuselage.
-    m.wing('body', [1.8, -0.05, 0.6], 3.0, 1.9, 8.15, 2, thickness=0.12, dihedral=2)
+    m.wing('body', [1.8, -0.05, 0.6], 3.0, 1.9, 7.4, 2, thickness=0.12, dihedral=2)
     m.box('body', [0.7, -0.45, 1.7], [2.6, 0.7, 0.6], bevel=0.2, mirror=True)
-    m.wing('body', [0.0, 0.15, 7.0], 1.9, 1.3, 1.6, 2, thickness=0.06, dihedral=-25)
+    # The drooped wingtips, from the main wing's tip on (the span 17.5 m in all).
+    m.wing('body', [1.54, 0.21, 8.0], 1.9, 1.5, 0.85, 2, thickness=0.1, dihedral=-25)
     m.cyl('body', [-1.6, 1.55, 1.2], [-5.2, 1.5, 1.2], 0.68, 0.55, mirror=True)
     m.cyl('intake', [-1.55, 1.55, 1.2], [-1.6, 1.55, 1.2], 0.6, mirror=True)
     m.cyl('nozzle', [-5.2, 1.5, 1.2], [-5.6, 1.5, 1.2], 0.55, 0.48, mirror=True)
@@ -608,7 +609,7 @@ def a15():
     for z, h_ in A15_PYLONS:
         m.box('store', [0.3, -0.05 + z * T(R(2)) - 0.08 - h_ / 2, z], [1.4, h_, 0.07],
               mirror=True)
-    m.tip_lights(1.0, 0.4, 8.7, [-7.8, 0.85, 0])
+    m.tip_lights(0.8, -0.15, 8.75, [-7.8, 0.85, 0])
     m.light('beacon', [-1.5, 1.4, 0])
     m.leg(6.0, 0.4, -0.4, -1.65, 0.32, width=0.25, back=-1)
     m.leg(0.7, 1.7, -0.6, -1.55, 0.42, width=0.3, mirror=True)

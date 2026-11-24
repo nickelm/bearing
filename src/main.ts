@@ -551,6 +551,7 @@ async function main(): Promise<void> {
         weather: () => sim.weather,
         tone: (kind) => audio.cue(kind),
         groundUnits: () => groundUnits,
+        survivors: () => sim.survivors,
       });
   // The campaign's aircraft near the camera (R2.4); the followed flight is Follow's to draw.
   const traffic = freeFlightMode
@@ -1718,6 +1719,9 @@ async function main(): Promise<void> {
     // The followed flight's pose and the chase camera's target, before the view renders.
     if (follow?.active && activeView !== 'simulation') follow.stop(null);
     follow?.frame(dt, gameTime);
+    // The flown gun's sound (decision 340).
+    const gun = follow?.gunSound() ?? freeFlight?.gunSound() ?? null;
+    audio.gun(gun?.firing ?? false, gun?.rate ?? 0, gun?.cannon ?? false);
     // While the player flies, Space and the digits are the jet's and the displays' keys.
     timeControls.keysEnabled = !follow?.flying;
     // The flight the player flies is drawn where it is, on the map and the moving map (decision 284).

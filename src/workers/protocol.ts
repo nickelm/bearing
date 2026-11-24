@@ -7,6 +7,8 @@
 import type { CampaignCalendar, OrbitParams } from '../core/calendar';
 import type { GameTime } from '../core/units';
 import type { GroundPicture } from '../sim/ground/war';
+import type { Side } from '../campaign/cast';
+import type { Dir } from '../core/greatCircle';
 import type { Mission } from '../sim/air/mission';
 import type { HostState } from '../sim/host';
 import type { CampaignInputEvent } from '../sim/eventLog';
@@ -157,6 +159,18 @@ export interface SnapshotMessage {
    * after init or seek (decision 301): the map marks damaged and destroyed targets.
    */
   damage?: { sites: [number, number][]; roads: [number, number][] };
+  /** Survivors down or aboard a rescue (R2.9), sent with the missions. */
+  survivors?: SurvivorPicture[];
+}
+
+/** A survivor as the main thread draws it (R2.9): where, whose, and whether still down. */
+export interface SurvivorPicture {
+  id: number;
+  side: Side;
+  point: Dir;
+  state: 'down' | 'aboard';
+  injury: 'none' | 'light' | 'serious';
+  water: boolean;
 }
 
 export interface SimErrorMessage {

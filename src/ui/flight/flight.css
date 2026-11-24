@@ -252,3 +252,47 @@
 .ff-hint[hidden] {
   display: none;
 }
+
+/*
+ * Status messages (decision 336): small panels at the messages slot's corner, upper left,
+ * while the messages display is not up; they fade after their time. Never on the HUD.
+ */
+.ff-toasts {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  width: min(22rem, 20vw);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  pointer-events: none;
+  z-index: 19;
+}
+
+.ff-toasts[hidden],
+.ff-toasts.ff-toasts-off {
+  display: none;
+}
+
+.ff-toast {
+  background: rgb(0 0 0 / 0.66);
+  color: #f2f2f2;
+  font:
+    12px/1.4 'JetBrains Mono',
+    'Share Tech Mono',
+    ui-monospace,
+    Consolas,
+    monospace;
+  padding: 5px 9px;
+  border-left: 2px solid #f2f2f2;
+  transition: opacity 0.3s;
+}
+
+.ff-toast-warn {
+  border-left-color: #ffb347;
+  color: #ffb347;
+}
+
+.ff-toast-out {
+  opacity: 0;
+}

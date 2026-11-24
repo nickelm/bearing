@@ -284,7 +284,7 @@ describe('emitters', () => {
 
 describe('presets and explosions', () => {
   it('covers the proposal’s fifteen sources', () => {
-    expect(PRESET_IDS.length).toBe(15);
+    expect(PRESET_IDS.length).toBe(18);
     for (const id of PRESET_IDS) expect(EMITTERS[id] ?? BLAST_PRESETS[id], id).toBeTruthy();
     for (const e of Object.values(EMITTERS))
       for (const s of e!.streams) expect(LOOK_IDS).toContain(s.look);

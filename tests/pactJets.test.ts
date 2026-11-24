@@ -14,6 +14,8 @@ import { FLIGHT_STEP } from '../src/sim/flight/flightModel';
 import { spawnInAir } from '../src/sim/flight/spawn';
 import { throttleStep } from '../src/ui/flight/flightInput';
 import { HUD_UNITS } from '../src/ui/flight/hud';
+import { wingtipOf } from '../src/render/sim/effects/aircraftPose';
+import { modelSpec } from '../src/render/common/models/library';
 import { bracketAlpha, BRACKET_ALPHA } from '../src/ui/flight/hudFrame';
 import { isJet, JET_BUNDLES } from '../src/ui/flight/freeFlightMenu';
 import { neutralControls } from '../src/sim/flight/controlLaws';
@@ -95,5 +97,22 @@ describe('Free Flight’s traffic for a Pact player', () => {
       'pact-fighter',
     ]);
     expect(p.sites.every((x) => x.side === 'alliance')).toBe(true);
+  });
+});
+
+describe('the jets’ wingtip vortices (decision 319)', () => {
+  it('shed at each model’s wingtip, three quarters back along its tip chord', () => {
+    const tipOf = (id: string) => wingtipOf(modelSpec(id), flightModelOf(id).spec.cg)!;
+    // The Kestrel: tip leading edge 1.76 m behind the model's origin, chord 1.1 m, CG at −0.4.
+    const k = tipOf('alliance-fighter');
+    expect(k[1]).toBeCloseTo(4.8, 6);
+    expect(k[0]).toBeCloseTo(1.6 - 4 * Math.tan((40 * Math.PI) / 180) - 0.825 + 0.4, 6);
+    // The Vo-31's tips are 5.7 m out and about 3 m behind its center of gravity.
+    const v = tipOf('pact-fighter');
+    expect(v[1]).toBeCloseTo(5.7, 6);
+    expect(v[0]).toBeLessThan(-2.8);
+    expect(v[0]).toBeGreaterThan(-3.6);
+    // The A-15's drooped tips, which carry its span to 17.5 m.
+    expect(tipOf('a15')[1]).toBeCloseTo(8.0 + 0.85 * Math.cos((25 * Math.PI) / 180), 6);
   });
 });

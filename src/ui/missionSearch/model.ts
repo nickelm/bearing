@@ -46,6 +46,9 @@ export const MISSION_THREAT: Record<MissionType, ThreatLevel> = {
   airlift: 'low',
   airdrop: 'medium',
   'sling-load': 'low',
+  csar: 'high',
+  'csar-escort': 'high',
+  rescap: 'medium',
 };
 
 export type PhaseFilter = MissionPhase | 'planned';

@@ -105,7 +105,8 @@ src/sim/            headless simulation; runs in a worker: event queue + fixed t
   air/              the air war (C2, decision 132): the bundle loader (bundles.ts) and the type table it fills,
                     order of battle, missions,
                     analytic routes (great-circle legs, racetracks, fuel, the turn home) and AirOps (live missions, phase
-                    events, losses, survivors, aborts); resolution.ts (interception, point defenses, outcomes and their
+                    events, losses, survivors, aborts, crews resting); survivors.ts (R2.9: survivors' records, the
+                    capture hazard and the watch; decision 351); resolution.ts (interception, point defenses, outcomes and their
                     consequences), resolvers.ts (the demo types' resolvers), outcome.ts, calibration.ts (combat values:
                     fitted or the prior; decision 250)
   naval/            carrier groups on their patrol tracks (analytic position); convoys, amphibious and surface groups in R4 (docs/roadmap.md)
@@ -124,7 +125,7 @@ src/sim/            headless simulation; runs in a worker: event queue + fixed t
   command/          per-side command layer (graph and cast only): campaign input from the main thread, the air tasking
                     orders (ato.ts; decision 249) with front segments, supply lines, doctrine, the planning environment
                     (weather and daylight) and the squadron ledger; missions/ holds the mission plug-ins and their registry
-                    (rule 16); later the intelligence picture
+                    (rule 16; csar.ts: the rescue, its escort and its cover, decision 352); later the intelligence picture
   effects/          events.ts: the effect events the sim emits for the renderer (decision 326), plain data
   clock.ts          the one clock's rules: flight step, real-step cap, time rates (decision 243)
   flight/           flownAircraft.ts (the flown aircraft: airframe, controls, input source, avionics state,
@@ -136,8 +137,9 @@ src/sim/            headless simulation; runs in a worker: event queue + fixed t
                     airframe.ts (the Airframe interface every flown aircraft implements), rigidBody.ts
                     (gravity, Euler's equations, the integrator, attitude) and contact.ts (ground query,
                     wheels, hard points), shared by the Kestrel and the helicopters (decision 154);
-                    rotor/ holds the helicopters' rotor-disc model, laws, assists and downwash; the rotary
-                    director is planned (track H, decisions 149, 159)
+                    rotor/ holds the helicopters' rotor-disc model, laws, assists and downwash, the rotary
+                    director (heloDirector.ts), the AI helicopter pilot (heloPilot.ts) and landing zones
+                    (landingZone.ts) (track H, decisions 149, 159, 354, 355)
 src/render/         Three.js WebGPU + TSL, split by view (decisions 72–74). Both scenes stay resident;
                     the app renders the active one (GUI → View → View). Until V1, sim/'s GlobeScene
                     still draws orbit to ground.
@@ -200,7 +202,8 @@ src/follow/         following a campaign flight on the main thread (R2.4, decisi
                     models, the drawn altitude over the drawn ground, the read-only HUD frame), follow.ts (the cut,
                     the chase camera on the analytic pose, HUD, spectator displays, the way back to the map),
                     fullFidelity.ts (a followed flight promoted into a PromotedFlight inside its window, its lead on
-                    the drawn route; decision 272), campaignTraffic.ts (other flights near the camera: full views
+                    the drawn route; decision 272), heloFidelity.ts (a followed helicopter flight at full fidelity,
+                    landing at its landing zone; decision 357), survivorFigures.ts (downed pilots and their signal smoke), campaignTraffic.ts (other flights near the camera: full views
                     near, instanced beyond) and groundUnits.ts (R2.8: battalions promoted into vehicles round the
                     camera, their hits, kills and burning wrecks; decision 335)
 src/viewer/         the model viewer page (viewer.html, a second Vite page; decision 106)

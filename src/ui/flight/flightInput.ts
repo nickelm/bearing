@@ -52,6 +52,7 @@ export type FlightAction =
   | 'mouseAim'
   | 'freeLook'
   | 'recenterView'
+  | 'sight'
   | 'mouseCapture'
   | 'invertMouse'
   | 'help'
@@ -81,7 +82,8 @@ export const FLIGHT_BINDINGS: Record<FlightAction, string[]> = {
   jettison: ['KeyJ'],
   mouseAim: ['KeyN'],
   freeLook: ['KeyC'],
-  recenterView: ['KeyV'],
+  recenterView: ['KeyV', 'Backspace'],
+  sight: ['KeyZ'],
   mouseCapture: ['Tab'],
   invertMouse: ['KeyI'],
   help: ['KeyH'],
@@ -113,6 +115,8 @@ export const ACTION_LABELS: Record<FlightAction, string> = {
   freeLook: 'Free look (hold; or hold the right mouse button); the view stays where you leave it',
   recenterView:
     'Recenter the view (or click the middle mouse button); the wheel zooms while you look',
+  sight:
+    'Zoom in on the gun pipper, the bomb pipper or the boresight, and out again (or click the right mouse button)',
   mouseCapture: 'Capture the mouse to fly with it, or free it (or click the view to capture)',
   invertMouse: "Invert the mouse's up and down (also in the pause menu)",
   help: 'This help',
@@ -123,6 +127,10 @@ export const ACTION_LABELS: Record<FlightAction, string> = {
   padlock: 'Padlock the locked target: the view follows it; again to release',
 };
 
+/** A right press released within this time (ms) and movement (px) is a click: the sight (decision 338). */
+const CLICK_MS = 300;
+const CLICK_PX = 6;
+
 /** Which actions toggle on a press rather than act while held. */
 const PRESS_ACTIONS = new Set<FlightAction>([
   'gear',
@@ -132,6 +140,7 @@ const PRESS_ACTIONS = new Set<FlightAction>([
   'eject',
   'mouseAim',
   'recenterView',
+  'sight',
   'mouseCapture',
   'invertMouse',
   'help',
@@ -265,6 +274,9 @@ export class FlightInput {
   /** The detent the lever stopped at during the current throttle press, if any. */
   private stoppedAt: number | null = null;
   private rightDown = false;
+  /** A right click (press and release without a drag) zooms; a drag looks (decision 338). */
+  private rightAt = 0;
+  private rightMoved = 0;
   private leftDown = false;
   private readonly detach: () => void;
 
@@ -334,6 +346,7 @@ export class FlightInput {
     // the motion arrives as `mousemove` with `movementX/Y` in every browser.
     const moveTarget: EventTarget = typeof document === 'undefined' ? el : document;
     const move = (e: MouseEvent) => {
+      if (this.rightDown) this.rightMoved += Math.abs(e.movementX) + Math.abs(e.movementY);
       if (this.lookHeld) {
         this.lookDelta.x += e.movementX;
         this.lookDelta.y += e.movementY;
@@ -351,6 +364,8 @@ export class FlightInput {
       if (!this.enabled) return;
       if (e.button === 2) {
         this.rightDown = true;
+        this.rightAt = performance.now();
+        this.rightMoved = 0;
         // Pointer capture keeps a drag outside the window; under pointer lock it is not
         // allowed (and not needed).
         if (!this.capture?.captured)
@@ -375,7 +390,15 @@ export class FlightInput {
       }
     };
     const up = (e: PointerEvent) => {
-      if (e.button === 2) this.rightDown = false;
+      if (e.button === 2 && this.rightDown) {
+        this.rightDown = false;
+        if (
+          this.enabled &&
+          performance.now() - this.rightAt < CLICK_MS &&
+          this.rightMoved < CLICK_PX
+        )
+          this.onAction?.('sight');
+      }
       if (e.button === 0) this.leftDown = false;
       if (e.button >= 3) onCode(`Mouse${e.button}`, false);
     };

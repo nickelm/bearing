@@ -280,7 +280,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] Each aircraft of a flight as its own contact and target near the aircraft (formation slots), merging into one at range
 - [ ] Surface-to-air sites as entities (R3.5) in place of the defended places' stand-in radars; their launches
 - [x] Interface defaults per mission type and phase: master mode, formats, HUD cues, declutter (the triggers' cruise mode, formats between edits and presets, weapon pre-selection, target and station diamonds, the landing aid on the ground and the approach only; decision 304)
-- [ ] The helicopters' 'landing-zone' cue (R2.9)
+- [x] The helicopters' 'landing-zone' cue (R2.9: the CSAR plug-in's fence-in and pickup; decision 357)
 - [x] Route and waypoints on the moving map; HUD steering to the next waypoint; the front on the map (waypoints from the route's phases, sequenced by phase or within 2 nm; the map's projection for every symbol; the front in the elevation modes; the picture without flights and units; decision 305)
 - [ ] Datalink tracks, threat rings and the bullseye on the moving map (with the intraflight datalink task and R3.2)
 - [ ] Waypoint callouts and a waypoint step key (the crewmate's in R4; a key or bezel button to step the steerpoint by hand)
@@ -329,7 +329,10 @@ Started 2026-11-23, in parallel with R2.8 in a second session (decisions 314–3
 - [ ] The A-15's Mavericks and cluster bombs with the owner's future weapons; the A-10's eleven stations (four a wing and three under the fuselage today drawn as four a wing)
 - [x] C-150 (C-130 analogue): AI-flown for the demo; its flight data, laws and transport rig move to R4.4 with tactical airlift (owner, decision 318; the test pilot's circuit flies fighter speeds, and the airlift's landing at a forward field needs the AI's full-fidelity landing)
 - [x] `tools/freeflight.session.mjs` starts the A-15, Vo-31 and Vo-35 from the start screen: their own flight data and names, the brake off and the throttle forward, no afterburner on the Vo-35, the Pact's side for the Vo-31 and Vo-35
-- [ ] Owner, on the GPU: fly the Vo-31, Vo-35 and A-15 in Free Flight; follow and take over a Pact flight and an A-15; the new models in the campaign
+- [x] Owner, on the GPU (2026-11-23): flew the Vo-35 and A-15 and followed the Vo-31; fixes in decision 319 (the Vo-35's wing root, the Vo-31's second flame and its vortices, no afterburner mentioned without one, explosions twice the size)
+- [x] Owner (2026-11-23, noted by the R2.8 session): the A-15 Buzzard's canopy sits too high on the fuselage and its sides jut out; the control surfaces on its wings are attached at an odd angle (decision 319: the canopy lowered and narrowed, the drooped tips at the wing's end)
+- [x] Owner: a look at decision 319's fixes on the GPU (2026-11-24: all fixed); R2.7 closed (decision 350). The open items above are follow-ups
+- [x] Backspace recenters the view as V does (C while spectating), owner at the close (decision 350)
 
 ### R2.8 Minimal entity promotion
 
@@ -342,23 +345,45 @@ Started 2026-11-23, in parallel with R2.8 in a second session (decisions 314–3
 - [x] Vehicles as targets: bombs' and rockets' splash and gun rounds (hardness and size by type); damage adds up per vehicle; destroyed at 1: explosion, wreck, the input, a HUD message
 - [x] Bombs and rockets on any target site near the impact, not the flight's own alone (the R2.6 follow-up)
 - [x] Test: CAS destroys promoted vehicles and the battalion's strength drops by the same count (`tests/promotion.test.ts`)
-- [ ] Ink outlines and contact shadows for the vehicles (instanced without either today, as campaign traffic)
-- [ ] Rounds that reach the ground: impacts and dust where they land (they pass through it today)
+- [x] Ink outlines and contact shadows for the vehicles (decision 340); campaign traffic keeps neither for now
+- [x] Rounds that reach the ground: impacts and dust where they land (decision 339)
 - [ ] Damaged vehicles (smoke, R3) and damage kept past demotion; vehicles that move, scatter and return fire (R3.6)
+- [x] Owner's review (2026-11-23; decision 336): status messages off the HUD, into the messages log and a popup at the messages slot's corner; mission search's filter on a type gone from the orders shows and resets; vehicles at 1.5 times life size and larger with distance; vehicles out of woods and water
+- [x] Finding targets on CAS: the ground controller's mark on the nearest enemy company, on the HUD and the moving map, with a message (decision 337); R3.8's talk-on requests replace it
+- [x] Owner (2026-11-24): the A-15's cannon with smoke, flash and recoil, rounds that strike the ground (decision 339); a right click zooms on the pipper (decision 338)
+- [ ] Owner on the GPU: the sight, and the A-15's cannon (smoke, impacts, the speed it costs, the sound); a follow-up after R2.8's close (decision 341)
+- [x] The cannon's sound (synthesized, as the weather's; decision 340)
 - [x] Docs: decisions 333 on, design §Entities, visual-style Part I vehicles, roadmap state, CLAUDE.md's directory map
-- [ ] Owner on the GPU: vehicles in a followed CAS flight on seed 4, a take-over that destroys some, the battalion's strength after
-- [ ] Reduced infantry (if time allows; decision 331): a few squads per battalion near the player with the blocky figures, as targets, the dead turning gray and vanishing in a toon puff
+- [x] Owner on the GPU: vehicles in a followed CAS flight on seed 4, a take-over that destroys some, the battalion's strength after (signed off 2026-11-24; decision 341)
+- [ ] Reduced infantry (decision 331): moved to R3.8 with the full infantry (decision 341)
 
 ### R2.9 Survivors and CSAR
 
-- [ ] Survivor records: position, injury, survival timer, capture risk near enemy forces
-- [ ] CSAR plug-in: planner rule (always), package (rescue helicopter, escort, cover), aggregate resolver, outcomes
-- [ ] Rescued pilots return to their squadron's pool; the pool limits sorties
-- [ ] Rotary director: a target layer on `HeloLaws` (attitude, ground velocity, height, hover point, heading) without changing the player's feel
-- [ ] AI helicopter pilot: route, approach, landing at a point clear of trees and slopes
-- [ ] Surface-layer wind for rotorcraft in place of the 8 m/s cap
-- [ ] Tests: the director and recorded inputs fly the same result; a landing at a survivor in a 10 m/s crosswind
-- [ ] Test: every ejection in a 24 h run has a survivor and a CSAR mission
+Started 2026-11-24 (decisions 351 on). Two threads: the campaign's survivors and the CSAR plug-in (worker), and the rotary director, the AI helicopter pilot and the surface wind (flight model), joined in the follow at full fidelity.
+
+- [x] Survivor records (`sim/air/survivors.ts`): position, injury (none, light, serious), survival timer by injury and surface (land or water), state (down, aboard, rescued, captured, died); saved, hashed, logged (decision 351)
+- [x] Capture risk: a hazard per hour from the nearest enemy battalion's anchor and the enemy's territory; checked every ten minutes with draws from rng(seed, "survivors") forked by survivor (decision 351)
+- [x] CSAR plug-in, all eight parts, with the rescue escort and the rescue cover (decision 352); urgent planning at every tick and when a survivor comes down, outside the airborne cap; rescue alert at the side's nearest base; external tanks and, for the Alliance, air refueling for deep rescues
+- [x] The CSAR mission types' profiles (the rescue pair lands at the survivor), labels, mission search's threat column
+- [x] Outcomes: pickups put survivors aboard; rescued pilots back on their rosters at the rescue's landing; a failed rescue is followed by a new attempt; a rescue whose survivors are gone turns home
+- [x] Crews limit sorties: crews rest six hours after landing; the order's ledger and launch read the roster (decision 353)
+- [x] Rescue helicopters at low level: a CAP intercepts a helicopter with 0.4 of the chance; the cover fights as the rescue's escort (decision 352)
+- [x] Rotary director (`sim/flight/rotor/heloDirector.ts`): a target layer on `HeloLaws` sharing the inner loops; the player's laws unchanged bit for bit (decision 354)
+- [x] AI helicopter pilot: route, approach, a landing at a zone clear of trees, slopes and water (`landingZone.ts`), the wait, the takeoff (decision 355)
+- [x] Surface-layer wind for rotorcraft in place of the 8 m/s cap; jets keep it (decision 356)
+- [x] Tests: the director and recorded inputs fly the same result; a landing in a 10 m/s crosswind (`tests/heloDirector.test.ts`)
+- [x] Full fidelity for a followed CSAR helicopter (`follow/heloFidelity.ts`): promotion, the AI pilots on the drawn route, the landing zone, the hover HUD with the LZ cue, demotion (decision 357)
+- [x] The downed pilot in the simulation view (`follow/survivorFigures.ts`, `figure-pilot-*`), at the landing zone's edge with orange signal smoke, gone once aboard (decision 357)
+- [x] Test: every ejection in a 24 h run has a survivor and a CSAR mission (`tests/demoSeeds.test.ts`, the three seeds)
+- [x] Test: a followed CSAR helicopter lands at the survivor at full fidelity (`tests/heloFidelity.test.ts`)
+- [x] Check 6 for the figures (`tools/models.preview.ts`)
+- [ ] Owner on the GPU: follow a CSAR flight on seed 4 (checks 7 and 10 in a followed helicopter): the landing at the zone, the survivor and its smoke, the LZ marker on the HUD
+- [ ] Survivors on the strategic map (a parachute glyph by side) and in the selected rescue's panel
+- [ ] A survivor in the water: a dinghy model and a hoist pickup at full fidelity (the lead hovers today)
+- [ ] The Ve-18's flight data (Mi-8MT), so the Pact's rescues fly at full fidelity too
+- [ ] Taking over a helicopter in the campaign, and a player's pickup as a logged input (R4.3)
+- [ ] The crew limit binds only in a longer war: check it in R5.3's weeks of war
+- [x] Docs: decisions 351–357, design (survivors, CSAR, crews, the helicopter AI), visual-style Part I (the downed pilot, signal smoke), CLAUDE.md's directory map
 
 ### R2.10 Calibration
 
@@ -430,6 +455,7 @@ Started 2026-11-23, in parallel with R2.8 in a second session (decisions 314–3
 - [ ] `tests/militaryOverlays.test.ts` "shows the lanes and chokepoints in play" fails in CI now and then (5 of 174 runs, always 2 lanes for 3 theaters on seed 1); not reproduced in 100 local Node 24 runs before or after decision 234's fix; the CI `determinism` job runs it in fresh processes
 - [ ] GPU determinism flake in `detailStage` and `tileSynth` (about 1 run in 5–10 on record): not reproduced in 20 runs on the owner's GPU and 10 on lavapipe (2026-11-19), nothing changed to fix it; close if it stays away. History in the archived TODO
 - [ ] The Free Flight session's "drizzle: wet at once" check fails (decision 217); not investigated
+- [ ] The frame rate falls near the ground in Free Flight, which makes landings hard (owner, 2026-11-24, with a gamepad; the landings themselves were easy before). Suspects: the ground detail near a low camera (the ground cover ring, kit trees, props, the vehicles of R2.8), not the input. Measure first: `?dev&cputime=1` and `?dev&gputime=1` on the approach and the runway, and `PERF=n` on the `runway`, `hover`, `skid` and `nap` views of `tools/render.preview.ts` against Part I's budgets; then a fix or a quality tier (R6.4)
 - [ ] Stale code comments listed in the audit's "Left in the Code"; fix when the files are next touched
 - [ ] On lavapipe, `tests/gpu/mapSoak.test.ts` "keeps the relief tiles within their caches while panning at the floor" fails (geometries 274 against 234; the same at 8542fd3, before R2.4's changes), and in Chromium on lavapipe the app stops drawing after its ninth frame (simulation view or map) while the GPU process grows by about 1 GB every 5–10 s, until the kernel kills it after about 195 s: seeds 4 and 1983, the `campaign` part as well as `follow`, and at 8542fd3. Not seen on the owner's GPU (decision 245); look at the relief and terrain tiles' buffers on a software adapter
 
@@ -502,7 +528,8 @@ Plan: [docs/plans/input-layer.md](docs/plans/input-layer.md); branch `feature/in
 - [x] Phase 6: rumble
 - [x] Phase 7: tests, a scripted takeoff and landing from synthetic gamepad input, README, report
 - [x] The mouse kept flying beside the pad (owner's test, 2026-11-24): the pad takes the controls until Tab (decision 368)
-- [ ] Owner's test with a DualShock 4 in Chrome (`docs/reports/input-layer-report.md`); tune deadzones, curves and the throttle rate from it
+- [x] Owner's test with a DualShock 4 in Chrome (2026-11-24): flies; the mouse fight fixed (decision 368); merged to `main`
+- [ ] Tune deadzones, curves and the throttle rate from the owner's flying, once the low-level frame rate is fixed (landing by pad is hard; see Known issues)
 - [ ] Padlock, countermeasures message and rumble in the campaign's taken-over jet (`src/follow/follow.ts`; Free Flight has them)
 - [ ] The spectator's free look on the right stick while following (the mouse drags it today)
 - [ ] Gamepad navigation for the time controls and the map's camera (`timeControls.ts`, `strategicScene.ts`, `orbitCamera.ts`)

@@ -179,6 +179,10 @@ const MIN_CLEARANCE = 1.5;
 const MAX_LOOK_PITCH = 80 * DEG;
 /** The furthest a helicopter may sit from the view's axis (rad); its rig frames it within 19°. */
 const MAX_OFF_AXIS = 20 * DEG;
+/** The sight's field of view as a share of the rig's (three times closer), and its ease (s; decision 338). */
+export const SIGHT_ZOOM = 1 / 3;
+export const SIGHT_EASE = 0.25;
+
 /** The range of `zoom`, and the factor of one wheel step. */
 export const MIN_ZOOM = 0.5;
 export const MAX_ZOOM = 3;
@@ -228,6 +232,14 @@ export class ChaseCamera {
   lookHeld = false;
   /** Scale on the rig's distances (MIN_ZOOM..MAX_ZOOM); 1 is the rig's framing. */
   zoom = 1;
+  /**
+   * The sight (decision 338): while on, the view turns to `sightPoint` (world: the gun's or
+   * the bombs' pipper, or the boresight ahead) and narrows to SIGHT_ZOOM of the rig's field
+   * of view, easing in and out over SIGHT_EASE.
+   */
+  sightOn = false;
+  sightPoint: Vec3d | null = null;
+  private sight = 0;
   /** The displayed ground height at a unit direction, or null if unknown. */
   groundAt: ((d: Readonly<Vec3d>) => number | null) | null = null;
   /** Highest displayed terrain (m), for the far plane. */
@@ -349,6 +361,8 @@ export class ChaseCamera {
     this.lookYaw = this.lookPitch = 0;
     this.zoom = 1;
     this.recentering = false;
+    this.sightOn = false;
+    this.sight = 0;
   }
 
   update(dt: number): void {
@@ -572,6 +586,17 @@ export class ChaseCamera {
         }
       }
     }
+    // The sight (decision 338): the view turns toward the sight point and narrows.
+    const want = this.sightOn && this.sightPoint ? 1 : 0;
+    this.sight += (want - this.sight) * Math.min(1, dt / SIGHT_EASE);
+    if (want === 0 && this.sight < 1e-3) this.sight = 0;
+    if (this.sight > 0 && this.sightPoint) {
+      const to = this.sightPoint.clone().sub(this.eye).normalize();
+      this.forward
+        .scale(1 - this.sight)
+        .addScaled(to, this.sight)
+        .normalize();
+    }
     this.up.copy(u).addScaled(this.forward, -u.dot(this.forward)).normalize();
     // The same view with the look centered: eye behind and above, look point 25 m ahead.
     this.restForward
@@ -580,7 +605,7 @@ export class ChaseCamera {
       .addScaled(u, 1 - this.lift)
       .normalize();
     this.restUp.copy(u).addScaled(this.restForward, -u.dot(this.restForward)).normalize();
-    this.fov = rig.fov;
+    this.fov = rig.fov * (1 - this.sight * (1 - SIGHT_ZOOM));
     // Clip planes: near enough for the aircraft, far to the horizon past the tallest peaks.
     const R = this.radius;
     const alt = Math.max(2, this.altitude);

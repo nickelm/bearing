@@ -58,6 +58,7 @@ export const LOOK_IDS = [
   'flare-smoke',
   'mist',
   'debris-smoke',
+  'signal-smoke',
 ] as const;
 export type LookId = (typeof LOOK_IDS)[number];
 
@@ -316,6 +317,21 @@ export const LOOKS: readonly Look[] = [
     turbulence: 0.6,
     wind: 1,
   }),
+  // A survivor's signal smoke (R2.9): dense orange, low and drifting with the wind.
+  look('signal-smoke', {
+    life: [14, 20],
+    color: [
+      [0, 0.95, 0.36, 0.06],
+      [0.5, 0.9, 0.45, 0.12],
+      [1, 0.78, 0.55, 0.32],
+    ],
+    radius: BILLOW,
+    riseSpeed: 1.2,
+    rise: SLOWING,
+    drag: 0.8,
+    turbulence: 0.7,
+    wind: 1,
+  }),
   look('steam', {
     life: [24, 32],
     color: [gray(0, 0.92), gray(1, 0.88)],
@@ -461,6 +477,9 @@ export const PRESET_IDS = [
   'rotor-downwash',
   'flare',
   'waterfall-mist',
+  'gun-smoke',
+  'cannon-smoke',
+  'signal-smoke',
 ] as const;
 export type PresetId = (typeof PRESET_IDS)[number];
 
@@ -555,6 +574,59 @@ export const EMITTERS: Readonly<Partial<Record<PresetId, EmitterPreset>>> = {
     prewarm: false,
     range: 25_000,
   },
+  // The gun firing (decision 339): gas and smoke at the muzzle that the aircraft leaves
+  // behind as a trail, and a flickering flash. A 20 mm gun's is light; a 30 mm cannon's
+  // (the A-15's) a thick cloud round the nose, the more so the longer it fires.
+  'gun-smoke': {
+    id: 'gun-smoke',
+    label: 'Gun firing (20 mm)',
+    streams: [
+      stream({
+        look: 'gray-smoke',
+        spacing: 3,
+        rate: 40,
+        size: [1.1, 1.7],
+        speed: 20,
+        spread: 2.5,
+        jitter: 0.3,
+        inherit: 0.25,
+      }),
+      stream({ look: 'flash', rate: 45, size: [0.45, 0.7], inherit: 1, chance: 0.6 }),
+    ],
+    duration: null,
+    prewarm: false,
+    range: 12_000,
+  },
+  'cannon-smoke': {
+    id: 'cannon-smoke',
+    label: 'Cannon firing (30 mm)',
+    streams: [
+      stream({
+        look: 'gray-smoke',
+        spacing: 1.2,
+        rate: 80,
+        size: [2.6, 4.2],
+        speed: 35,
+        spread: 7,
+        jitter: 0.8,
+        inherit: 0.12,
+      }),
+      stream({
+        look: 'burst-smoke',
+        spacing: 4,
+        rate: 25,
+        size: [4.5, 6.5],
+        speed: 15,
+        spread: 5,
+        jitter: 1.2,
+        inherit: 0.3,
+      }),
+      stream({ look: 'flash', rate: 65, size: [0.9, 1.4], inherit: 1, chance: 0.8 }),
+    ],
+    duration: null,
+    prewarm: false,
+    range: 15_000,
+  },
   'aircraft-fire': {
     id: 'aircraft-fire',
     label: 'Aircraft on fire',
@@ -608,6 +680,23 @@ export const EMITTERS: Readonly<Partial<Record<PresetId, EmitterPreset>>> = {
     label: 'Chimney',
     streams: [
       stream({ look: 'chimney', rate: 0.6, size: [3, 4], up: 2, spread: 0.8, jitter: 0.8 }),
+    ],
+    duration: null,
+    prewarm: true,
+    range: 15_000,
+  },
+  'signal-smoke': {
+    id: 'signal-smoke',
+    label: 'Signal smoke',
+    streams: [
+      stream({
+        look: 'signal-smoke',
+        rate: 2.5,
+        size: [1.6, 2.6],
+        up: 1.5,
+        spread: 0.6,
+        jitter: 0.5,
+      }),
     ],
     duration: null,
     prewarm: true,
@@ -715,6 +804,12 @@ export interface ExplosionRecipe {
   fire: PresetId | null;
 }
 
+/**
+ * How much bigger explosions are drawn than the cube-root scale alone gives (owner, decision
+ * 319): twice, in size, spread, scorch, shockwave and light's reach.
+ */
+export const EXPLOSION_SIZE = 2;
+
 /** The cube root of the explosive (kg): explosions scale with it (decision 300's sizing). */
 export function blastScale(explosive: number): number {
   return Math.cbrt(Math.max(0.5, explosive));
@@ -723,13 +818,19 @@ export function blastScale(explosive: number): number {
 /** The layers of an explosion of `explosive` kg of a kind (Proposal 0011, *Explosions*). */
 export function explosionRecipe(kind: ExplosionKind, explosive: number): ExplosionRecipe {
   const k = blastScale(explosive);
+  // Sizes, spreads and reaches at EXPLOSION_SIZE times the cube-root scale; counts on the
+  // cube root alone, so the puff budget holds (decision 319).
+  const E = EXPLOSION_SIZE;
+  const g = E * k;
+  // Debris flies ballistic: its reach grows with the speed squared, so √E reaches E.
+  const b = Math.sqrt(E) * k;
   const n = (a: number, b: number, max: number) => Math.min(max, Math.round(a + b * k));
   const ground = kind === 'ground' || kind === 'fuel';
   const bursts: Burst[] = [
     {
       look: 'flash',
       count: 1,
-      size: [3.2 * k, 3.2 * k],
+      size: [3.2 * g, 3.2 * g],
       speed: [0, 0],
       up: 0,
       delay: 0,
@@ -738,9 +839,9 @@ export function explosionRecipe(kind: ExplosionKind, explosive: number): Explosi
     {
       look: 'fireball',
       count: n(5, 3, 36),
-      size: [1.3 * k, 2.1 * k],
-      speed: [2.5 * k, 6 * k],
-      up: ground ? 2 * k : 0,
+      size: [1.3 * g, 2.1 * g],
+      speed: [2.5 * g, 6 * g],
+      up: ground ? 2 * g : 0,
       delay: 0,
       upward: ground ? 0.5 : 0,
     },
@@ -749,8 +850,8 @@ export function explosionRecipe(kind: ExplosionKind, explosive: number): Explosi
     bursts.push({
       look: 'burst-smoke',
       count: n(6, 3, 30),
-      size: [1.5 * k, 2.2 * k],
-      speed: [1.5 * k, 3.5 * k],
+      size: [1.5 * g, 2.2 * g],
+      speed: [1.5 * g, 3.5 * g],
       up: 0,
       delay: 0.25,
       upward: 0,
@@ -760,18 +861,18 @@ export function explosionRecipe(kind: ExplosionKind, explosive: number): Explosi
       {
         look: 'spray',
         count: n(10, 4, 40),
-        size: [0.8 * k, 1.3 * k],
-        speed: [2, 3 * k],
-        up: 9 * k,
+        size: [0.8 * g, 1.3 * g],
+        speed: [2 * E, 3 * g],
+        up: 9 * g,
         delay: 0,
         upward: 0.85,
       },
       {
         look: 'black-smoke',
         count: n(4, 2, 20),
-        size: [1.2 * k, 1.8 * k],
-        speed: [0.5, 1.5 * k],
-        up: 1,
+        size: [1.2 * g, 1.8 * g],
+        speed: [0.5 * E, 1.5 * g],
+        up: E,
         delay: 0.6,
         upward: 0.6,
       },
@@ -781,18 +882,18 @@ export function explosionRecipe(kind: ExplosionKind, explosive: number): Explosi
       {
         look: 'dirt',
         count: n(8, 4, 44),
-        size: [1.4 * k, 2.2 * k],
-        speed: [2 * k, 5 * k],
-        up: 4 * k,
+        size: [1.4 * g, 2.2 * g],
+        speed: [2 * g, 5 * g],
+        up: 4 * g,
         delay: 0.05,
         upward: 0.7,
       },
       {
         look: kind === 'fuel' ? 'column-black' : 'burst-smoke',
         count: n(4, 2, 24),
-        size: [1.6 * k, 2.4 * k],
-        speed: [0.5 * k, 1.5 * k],
-        up: 2.5 * k,
+        size: [1.6 * g, 2.4 * g],
+        speed: [0.5 * g, 1.5 * g],
+        up: 2.5 * g,
         delay: 0.4,
         upward: 0.8,
       },
@@ -803,9 +904,9 @@ export function explosionRecipe(kind: ExplosionKind, explosive: number): Explosi
     bursts.push({
       look: 'fireball',
       count: n(8, 2, 30),
-      size: [1.4 * k, 2 * k],
-      speed: [0.8 * k, 2 * k],
-      up: 3 * k,
+      size: [1.4 * g, 2 * g],
+      speed: [0.8 * g, 2 * g],
+      up: 3 * g,
       delay: 0.3,
       upward: 0.9,
     });
@@ -813,11 +914,11 @@ export function explosionRecipe(kind: ExplosionKind, explosive: number): Explosi
   return {
     bursts,
     debris: ground
-      ? { count: n(3, 1.6, 24), speed: [3 * k, 7 * k], size: 0.22 * k, smoking: n(0, 0.4, 6) }
-      : { count: n(1, 1, 12), speed: [5 * k, 10 * k], size: 0.12 * k, smoking: 0 },
-    ring: ground && explosive >= 40 ? 9 * k : 0,
-    scorch: ground ? 1.5 * k : 0,
-    light: { intensity: 0.5 * k, reach: 10 * k },
+      ? { count: n(3, 1.6, 24), speed: [3 * b, 7 * b], size: 0.22 * k, smoking: n(0, 0.4, 6) }
+      : { count: n(1, 1, 12), speed: [5 * b, 10 * b], size: 0.12 * k, smoking: 0 },
+    ring: ground && explosive >= 40 ? 9 * g : 0,
+    scorch: ground ? 1.5 * g : 0,
+    light: { intensity: 0.5 * k, reach: 10 * g },
     fire: kind === 'fuel' ? 'fuel-fire' : null,
   };
 }

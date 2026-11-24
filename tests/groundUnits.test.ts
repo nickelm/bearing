@@ -128,3 +128,72 @@ describe('promoted vehicles near the player (R2.8)', () => {
     expect(rosterSize('mechanized')).toBeGreaterThan(PROMOTED.mechanized);
   });
 });
+
+describe('vehicles out of the woods (decision 336)', () => {
+  it('moves vehicles in forest or water to open ground near them, and draws none before', () => {
+    const { globe } = scene();
+    // Forest everywhere north of the anchor's latitude band, open south of it.
+    const edge = destination(HOME, Math.PI, 150, R);
+    let resident = false;
+    (globe.terrain as unknown as { groundAt: unknown }).groundAt = (d: Vec3d) =>
+      resident ? { forest: d.y > edge[1] ? 1 : 0, water: false } : null;
+    const u = new GroundUnits(globe, R, () => {});
+    u.setPicture(picture([bn(1, HOME)]));
+    u.place(eyeOver(HOME));
+    // Until the terrain's data is there, nothing is drawn or targeted.
+    expect(u.stats.vehicles).toBe(0);
+    expect(u.targets(eyeOver(HOME))).toEqual([]);
+    resident = true;
+    // Demote and promote again, so the vehicles settle with the data resident.
+    u.place(eyeOver(destination(HOME, 3, 40_000, R)));
+    u.place(eyeOver(HOME));
+    const ts = u.targets(eyeOver(HOME));
+    expect(ts.length).toBe(PROMOTED.mechanized);
+    for (const t of ts) expect(t.pos.clone().normalize().y).toBeLessThanOrEqual(edge[1]);
+  });
+});
+
+describe('the ground controller’s mark (decision 337)', () => {
+  it('marks the nearest enemy fighting battalion in range, holds it, and moves on when it is gone', () => {
+    const { globe } = scene();
+    const u = new GroundUnits(globe, R, () => {});
+    const near = destination(HOME, 0, 6_000, R);
+    const far = destination(HOME, 1, 11_000, R);
+    const own = destination(HOME, 2, 2_000, R);
+    const trucks = destination(HOME, 3, 3_000, R);
+    u.setPicture(
+      picture([
+        bn(1, near),
+        bn(2, far, { kind: 'tank' }),
+        bn(3, own, { side: 'alliance' }),
+        bn(4, trucks, { kind: 'logistics' }),
+      ]),
+    );
+    // From high up nothing is promoted: the mark is the battalion's anchor.
+    const high = eyeOver(HOME, 30_000);
+    const a = u.controllerMark('alliance', high)!;
+    expect(a.battalion).toBe(1);
+    expect(a.label).toBe('MECH');
+    expect(a.fresh).toBe(true);
+    expect(a.point).toEqual(near);
+    // Held, even when the aircraft is nearer another one.
+    const b = u.controllerMark('alliance', eyeOver(far, 30_000))!;
+    expect(b.battalion).toBe(1);
+    expect(b.fresh).toBe(false);
+    // Promoted, the mark is the middle of a company's vehicles, near the anchor.
+    u.place(eyeOver(near));
+    const c = u.controllerMark('alliance', eyeOver(near))!;
+    expect(c.battalion).toBe(1);
+    const off = new Vec3d(...c.point).distanceTo(new Vec3d(...near)) * R;
+    expect(off).toBeGreaterThan(1);
+    expect(off).toBeLessThan(1000);
+    // Its fighting vehicles destroyed and the battalion gone from the picture: the next one.
+    u.setPicture(picture([bn(1, near, { strength: 0 }), bn(2, far, { kind: 'tank' })]));
+    const d = u.controllerMark('alliance', high)!;
+    expect(d.battalion).toBe(2);
+    expect(d.label).toBe('ARMOR');
+    expect(d.fresh).toBe(true);
+    // Nothing for a side whose enemy has nothing near.
+    expect(u.controllerMark('pact', high)).toBeNull();
+  });
+});

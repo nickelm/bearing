@@ -351,6 +351,25 @@ const PAD_ONLY_LABELS: Record<string, string> = {
   ...DISPLAY_LABELS,
 };
 
+/**
+ * What the help card says of the flown jet (R2.7, decision 319): whether it has an
+ * afterburner, its rotation speed and on-speed angle of attack, and its gear's speed limit.
+ */
+export interface JetHelpFacts {
+  afterburner: boolean;
+  rotateKt: number;
+  approachDeg: number;
+  gearKt: number;
+}
+
+/** The Kestrel's, as the card said before the other jets (decision 134). */
+export const KESTREL_HELP: JetHelpFacts = {
+  afterburner: true,
+  rotateKt: 150,
+  approachDeg: 13,
+  gearKt: 300,
+};
+
 export class HelpOverlay {
   readonly el = card('ff-help');
 
@@ -362,20 +381,23 @@ export class HelpOverlay {
   /** What the card shows when it opens: the jet's table, or the last aircraft's given. */
   private render: () => void = () => this.refresh();
 
-  /** Rebuilds the table from the bindings (after a remap). */
-  refresh(): void {
-    this.render = () => this.refresh();
-    const rows = bindingRows(FLIGHT_BINDINGS, ACTION_LABELS);
+  /** Rebuilds the table from the bindings (after a remap) for the jet flown. */
+  refresh(jet: JetHelpFacts = KESTREL_HELP): void {
+    this.render = () => this.refresh(jet);
+    const rows = bindingRows(FLIGHT_BINDINGS, {
+      ...ACTION_LABELS,
+      ...(jet.afterburner ? {} : { throttleUp: 'Throttle up (stops at military power)' }),
+    });
     rows.push(
-      '<tr><td>Mouse wheel</td><td>Throttle, stopping at idle, military and the afterburner gate; zoom while looking around</td></tr>',
+      `<tr><td>Mouse wheel</td><td>Throttle, stopping at idle${jet.afterburner ? ', military and the afterburner gate' : ' and military'}; zoom while looking around</td></tr>`,
     );
     rows.push(
-      '<tr><td>Right drag</td><td>Free look; the view stays where you leave it (V recenters)</td></tr>',
+      '<tr><td>Right drag</td><td>Free look; the view stays where you leave it (V or Backspace recenters)</td></tr>',
     );
     rows.push(...displayRows());
     this.el.innerHTML = `<h1>Controls</h1><table>${rows.join('')}</table>
       <div class="ff-note">Ctrl+W closes the browser tab; the page asks first while you fly. The throttle also moves with = and −.</div>
-      <div class="ff-note">Takeoff: release the parking brake (P), full throttle; at about 150 kt hold the stick back until about 9° of pitch and let go: with the gear down the stick commands pitch rate (5°/s) and the attitude holds. Gear up (G) once climbing; the stick then commands g. Landing: gear down below 300 kt, fly the approach at 13° angle of attack, 3° glide path, brake (Space) after the nosewheel is down.</div>${gamepadRows('fixed', { ...ACTION_LABELS, ...DISPLAY_LABELS })}`;
+      <div class="ff-note">Takeoff: release the parking brake (P), full throttle; at about ${jet.rotateKt} kt hold the stick back until about 9° of pitch and let go: with the gear down the stick commands pitch rate (5°/s) and the attitude holds. Gear up (G) once climbing; the stick then commands g. Landing: gear down below ${jet.gearKt} kt, fly the approach at ${jet.approachDeg}° angle of attack, 3° glide path, brake (Space) after the nosewheel is down.</div>${gamepadRows('fixed', { ...ACTION_LABELS, ...DISPLAY_LABELS })}`;
   }
 
   /** Shows another aircraft's bindings (the helicopters'), with notes under the table. */
@@ -390,7 +412,7 @@ export class HelpOverlay {
       '<tr><td>Mouse</td><td>Forward: nose down; back: nose up; left and right: turn</td></tr>',
     );
     rows.push(
-      '<tr><td>Right drag</td><td>Free look; the view stays where you leave it (V or the middle button recenters it)</td></tr>',
+      '<tr><td>Right drag</td><td>Free look; the view stays where you leave it (V, Backspace or the middle button recenters it)</td></tr>',
     );
     rows.push('<tr><td>Wheel</td><td>Camera closer or farther</td></tr>');
     rows.push(...displayRows());

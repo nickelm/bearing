@@ -25,6 +25,7 @@ import type { Side } from '../../campaign/cast';
 import { rng } from '../../core/rng';
 import type { Rng, WorldSeed } from '../../core/rng';
 import type { Dir } from '../../core/greatCircle';
+import { HOUR } from '../../core/units';
 import type { GameTime } from '../../core/units';
 import type { Simulation } from '../simulation';
 import type { StateHasher } from '../stateHash';
@@ -33,7 +34,7 @@ import { carrierState, carrierTrack } from '../naval/carrierGroup';
 import type { CarrierTrack } from '../naval/carrierGroup';
 import { aircraftType, loadoutFuel, loadoutTanks } from './aircraft';
 import type { HandbackFix, HandbackLoss, HandbackStores } from '../eventLog';
-import { jumpInOpen, MISSION_PROFILES } from './mission';
+import { jumpInOpen, missionPhase as missionPhaseAt, MISSION_PROFILES } from './mission';
 import type { BaseRef, Mission, MissionPhase } from './mission';
 import { REJOIN_BANK, rejoinRoute, turnToward } from './missionRoute';
 import { buildOrderOfBattle, baseIndex } from './orbat';
@@ -44,22 +45,22 @@ import { MISSION_LABELS } from './mission';
 import { SUBSCRIPTION_EVENT, Subscriptions } from './subscriptions';
 import type { SubscriptionHit } from './subscriptions';
 import type { GroundSource } from './terrainFloor';
+import { groupOf, newSurvivor, survivorStream } from './survivors';
+import type { Survivor, SurvivorState } from './survivors';
 
 export const AIR_PHASE_EVENT = 'air:phase';
 export const AIR_READY_EVENT = 'air:ready';
+/** A survivor came down (R2.9): the side's order plans its rescue at once. */
+export const SURVIVOR_EVENT = 'air:survivor';
 /** Share of a lost aircraft's crew who eject (the rest are killed). */
 export const EJECT_CHANCE = 0.75;
 
-/** Aircrew down after an ejection (R2.2): R2.9 rescues, captures or loses them. */
-export interface Survivor {
-  id: number;
-  side: Side;
-  pilot: string;
-  squadron: number;
-  mission: number;
-  point: Dir;
-  time: GameTime;
-}
+export type { Survivor } from './survivors';
+/**
+ * Hours a crew rests after it lands before it flies again (R2.9): the roster, not the
+ * aircraft, then limits how often a busy squadron flies.
+ */
+export const CREW_REST = 6 * HOUR;
 
 /** Resolves engagements and effects at phase events (R2.2's MissionResolution). */
 export interface PhaseHook {
@@ -82,6 +83,8 @@ export interface AirOpsState {
   lost: Record<Side, number>;
   killed: Record<Side, number>;
   survivors: Survivor[];
+  /** Crews resting after a sortie: squadron, until, seats (R2.9; absent before decision 353). */
+  resting?: [number, number, number][];
   nextSurvivor: number;
   nextMission: number;
   nextPackage: number;
@@ -133,10 +136,18 @@ export class AirOps {
   readonly lost: Record<Side, number> = { alliance: 0, pact: 0 };
   readonly killed: Record<Side, number> = { alliance: 0, pact: 0 };
   survivors: Survivor[] = [];
+  /** Crews resting after a sortie: squadron, until, seats (R2.9). */
+  resting: [number, number, number][] = [];
+  /**
+   * The capture hazard (per second) a survivor of a side unhurt on land meets at a point
+   * (R2.9's survivor watch, from the ground war); null: no enemy known anywhere.
+   */
+  survivorThreat: ((side: Side, p: Readonly<Dir>) => number) | null = null;
   /** Engagements and effects at phase events (R2.2); null: flights only fly. */
   resolution: PhaseHook | null = null;
   private readonly events = new Map<number, number[]>();
   private readonly losses: Rng;
+  private readonly survivorRoot: Rng;
   private nextSurvivor = 0;
   private nextMission = 0;
   private nextPackage = 0;
@@ -146,12 +157,15 @@ export class AirOps {
     seed: WorldSeed,
     /** The ground under routes, for their terrain floor (R1.6); null: sea level. */
     readonly ground: GroundSource | null = null,
+    /** Whether a point is water, for a survivor's surface (R2.9); null: all land. */
+    readonly water: ((d: Readonly<Dir>) => boolean) | null = null,
   ) {
     this.radius = input.radius;
     this.orbat = buildOrderOfBattle(input, seed);
     this.carriers = input.carriers.map((c) => carrierTrack(c, input.radius));
     this.turnaround = this.orbat.squadrons.map(() => 0);
     this.losses = rng(seed, 'losses');
+    this.survivorRoot = survivorStream(seed);
   }
 
   /** Registers the event handlers and the saved state with the simulation. */
@@ -182,6 +196,7 @@ export class AirOps {
       lost: { ...this.lost },
       killed: { ...this.killed },
       survivors: this.survivors.map((x) => ({ ...x, point: [...x.point] })),
+      resting: this.resting.map((r) => [...r] as [number, number, number]),
       nextSurvivor: this.nextSurvivor,
       nextMission: this.nextMission,
       nextPackage: this.nextPackage,
@@ -214,7 +229,23 @@ export class AirOps {
     for (const [k, v] of s.events) this.events.set(k, [...v]);
     Object.assign(this.lost, s.lost);
     Object.assign(this.killed, s.killed);
-    this.survivors = s.survivors.map((x) => ({ ...x, point: [...x.point] }));
+    // Survivors saved before R2.9 have no state: down, unhurt, on land, three days to live.
+    type Saved = Partial<Survivor> & Pick<Survivor, 'time' | 'point'>;
+    this.survivors = (s.survivors as Saved[]).map(
+      (x): Survivor =>
+        ({
+          injury: 'none',
+          water: false,
+          until: x.time + 72 * HOUR,
+          state: 'down',
+          changed: x.time,
+          theater: -1,
+          attempts: 0,
+          ...x,
+          point: [...x.point],
+        }) as Survivor,
+    );
+    this.resting = (s.resting ?? []).map((r) => [...r] as [number, number, number]);
     this.nextSurvivor = s.nextSurvivor;
     this.nextMission = s.nextMission;
     this.nextPackage = s.nextPackage;
@@ -290,6 +321,9 @@ export class AirOps {
         `Squadron ${sq.name} has ${sq.available} aircraft, mission needs ${m.aircraft}`,
       );
     }
+    if (this.crewsFree(sq.id, m.timeline[0]!.time) < m.aircraft) {
+      throw new Error(`Squadron ${sq.name} has no crews for ${m.aircraft} aircraft`);
+    }
     sq.available -= m.aircraft;
     const base = this.base(m.base);
     const d = this.draw(m);
@@ -298,6 +332,11 @@ export class AirOps {
     base.stocks.tanks = (base.stocks.tanks ?? 0) - d.tanks;
     this.missions.set(m.id, m);
     this.launched[m.side]++;
+    // A rescue launched for survivors (R2.9): the next one for them is a new attempt.
+    for (const id of m.survivors ?? []) {
+      const s = this.survivors[id];
+      if (s) s.attempts++;
+    }
     sim.log.decision(sim.time, {
       kind: 'mission-launched',
       mission: m.id,
@@ -353,20 +392,29 @@ export class AirOps {
       // A crew that ejected at full fidelity survives (decision 301); otherwise its chances.
       if (cause === EJECTED || r.nextFloat() < EJECT_CHANCE) {
         ejected++;
-        this.survivors.push({
-          id: this.nextSurvivor++,
-          side: m.side,
-          pilot,
-          squadron: sq.id,
-          mission: m.id,
-          point: [...at],
-          time: sim.time,
-        });
+        this.survivors.push(
+          newSurvivor(
+            this.survivorRoot,
+            {
+              id: this.nextSurvivor++,
+              side: m.side,
+              pilot,
+              squadron: sq.id,
+              mission: m.id,
+              theater: m.theater,
+              time: sim.time,
+            },
+            at,
+            this.radius,
+            (d) => this.water?.(d) ?? false,
+          ),
+        );
       } else {
         killed++;
       }
     }
     this.killed[m.side] += killed;
+    if (ejected > 0) sim.schedule(sim.time, SURVIVOR_EVENT, { side: m.side });
     sim.log.decision(sim.time, {
       kind: 'aircraft-lost',
       mission: m.id,
@@ -379,11 +427,125 @@ export class AirOps {
     });
     this.revision++;
     if (m.aircraft === 0) {
+      // Survivors a lost rescue flight carried are down again where it went down.
+      for (const s of this.survivors) {
+        if (s.state === 'aboard' && s.carrier === m.id) {
+          s.state = 'down';
+          s.point = [...at];
+          s.changed = sim.time;
+          delete s.carrier;
+        }
+      }
       this.cancelPhases(m, sim);
       this.missions.delete(m.id);
       this.completed[m.side]++;
     }
     return n;
+  }
+
+  // ---- Survivors (R2.9) ----
+
+  /**
+   * Survivor s is captured or dies (the survivor watch): logged, and a rescue flight
+   * on its way whose survivors are all gone turns home with its package.
+   */
+  survivorLost(s: Survivor, state: 'captured' | 'died', sim: Simulation): void {
+    if (s.state !== 'down') return;
+    s.state = state;
+    s.changed = sim.time;
+    sim.log.decision(sim.time, {
+      kind: 'survivor-lost',
+      survivor: s.id,
+      side: s.side,
+      squadron: s.squadron,
+      state,
+    });
+    this.revision++;
+    for (const m of this.liveMissions()) {
+      if (!m.survivors?.includes(s.id) || m.aborted || m.resolved) continue;
+      const left = m.survivors.some((id) => this.survivors[id]?.state === 'down');
+      if (left || missionPhaseAt(m, sim.time) === 'on-target') continue;
+      for (const x of this.liveMissions()) {
+        if (x.side === m.side && x.package === m.package && !x.aborted && !x.flown)
+          this.abort(x, 'survivor lost', sim);
+      }
+    }
+  }
+
+  /** Rescue flight m picks up survivors `ids` still down: they are aboard until it lands home. */
+  pickUp(m: Mission, ids: readonly number[], sim: Simulation): number {
+    let n = 0;
+    for (const id of ids) {
+      const s = this.survivors[id];
+      if (!s || s.state !== 'down') continue;
+      s.state = 'aboard';
+      s.carrier = m.id;
+      s.changed = sim.time;
+      n++;
+      sim.log.decision(sim.time, {
+        kind: 'survivor-picked-up',
+        survivor: s.id,
+        side: s.side,
+        mission: m.id,
+      });
+    }
+    if (n > 0) this.revision++;
+    return n;
+  }
+
+  /** The survivors still down that a rescue of survivor `id` would take: its group. */
+  rescueGroup(id: number): Survivor[] {
+    const s = this.survivors[id];
+    return s ? groupOf(this.survivors, s, this.radius) : [];
+  }
+
+  /** Survivors flight m carried home are rescued: each pilot back on its squadron's roster, resting. */
+  private bringHome(m: Mission, sim: Simulation): void {
+    for (const s of this.survivors) {
+      if (s.state !== 'aboard' || s.carrier !== m.id) continue;
+      s.state = 'rescued' satisfies SurvivorState;
+      s.changed = sim.time;
+      const sq = this.orbat.squadrons[s.squadron];
+      if (sq) {
+        sq.pilots.push(s.pilot);
+        this.resting.push([sq.id, sim.time + CREW_REST, 1]);
+      }
+      sim.log.decision(sim.time, {
+        kind: 'survivor-rescued',
+        survivor: s.id,
+        side: s.side,
+        squadron: s.squadron,
+        mission: m.id,
+      });
+      this.revision++;
+    }
+  }
+
+  // ---- Crews (R2.9) ----
+
+  /** Crew seats of squadron `sq` resting at game time t. */
+  restingSeats(sq: number, t: GameTime): number {
+    let n = 0;
+    for (const [s, until, seats] of this.resting) if (s === sq && until > t) n += seats;
+    return n;
+  }
+
+  /** Crews (whole aircraft's worth) on squadron `sq`'s roster. */
+  crews(sq: number): number {
+    const s = this.orbat.squadrons[sq]!;
+    return Math.floor(s.pilots.length / Math.max(1, aircraftType(s.type).crew));
+  }
+
+  /**
+   * Aircraft squadron `sq` can crew now: its roster less the crews in the air and those
+   * resting, in whole aircraft's worth (R2.9's pool limits sorties).
+   */
+  crewsFree(sq: number, t: GameTime): number {
+    const s = this.orbat.squadrons[sq]!;
+    const crew = Math.max(1, aircraftType(s.type).crew);
+    let flying = 0;
+    for (const m of this.missions.values()) if (m.squadron === sq) flying += m.aircraft * crew;
+    return Math.floor((s.pilots.length - flying - this.restingSeats(sq, t)) / crew);
   }
 
   /** Turns a flight home at the current time (R2.2): its route is cut and its later phases rescheduled. */
@@ -528,6 +690,10 @@ export class AirOps {
     this.completed[m.side]++;
     this.revision++;
     this.turnaround[m.squadron]! += m.aircraft;
+    // Its crews rest before they fly again; survivors it carried are home (R2.9).
+    const crew = Math.max(1, aircraftType(m.aircraftType).crew);
+    if (m.aircraft > 0) this.resting.push([m.squadron, sim.time + CREW_REST, m.aircraft * crew]);
+    this.bringHome(m, sim);
     // The tanks still hanging come back to the base it recovers at.
     const home = this.base(m.base).stocks;
     home.tanks = (home.tanks ?? 0) + this.tanksHome(m);
@@ -540,6 +706,8 @@ export class AirOps {
   }
 
   private onReady(e: ReadyEvent, sim: Simulation): void {
+    // Rests that ended are forgotten (kept sorted by nothing: a filter is cheap at this size).
+    this.resting = this.resting.filter((r) => r[1] > sim.time);
     this.orbat.squadrons[e.squadron]!.available += e.aircraft;
     this.turnaround[e.squadron]! -= e.aircraft;
     const i = this.ready.findIndex(
@@ -572,6 +740,8 @@ export class AirOps {
       .number(this.killed.alliance)
       .number(this.killed.pact);
     h.number(this.survivors.length);
+    for (const x of this.survivors) h.string(x.state).number(x.changed).number(x.attempts);
+    for (const r of this.resting) h.number(r[0]).number(r[1]).number(r[2]);
     for (const sq of this.orbat.squadrons) h.number(sq.pilots.length);
     for (const b of this.orbat.bases)
       h.number(b.stocks.fuel)

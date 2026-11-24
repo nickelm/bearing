@@ -444,8 +444,15 @@
       },
       {
         "id": "rescue",
-        "stores": "Rescue hoist, door guns, a pararescue team",
-        "radiusFactor": 1
+        "stores": "Rescue hoist, door guns, a pararescue team, two 230-gallon external tanks",
+        "radiusFactor": 1.8,
+        "fuel": 2500
+      },
+      {
+        "id": "rescue/refueled",
+        "stores": "Rescue hoist, door guns, a pararescue team, two external tanks and the refueling probe: a tanker meets it on the way in and out",
+        "radiusFactor": 6,
+        "fuel": 2500
       },
       {
         "id": "sling",

@@ -112,10 +112,10 @@
       "type": "wing",
       "group": "body",
       "mirror": true,
-      "root": [1.7, 0.85, 0.8],
-      "rootChord": 3.4,
+      "root": [1.83, 0.865, 0.45],
+      "rootChord": 3.5,
       "tipChord": 1.5,
-      "span": 6.4,
+      "span": 6.75,
       "sweep": 20,
       "dihedral": -2.5,
       "thickness": 0.07
