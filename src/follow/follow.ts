@@ -55,7 +55,14 @@ import { storesEffect } from '../sim/flight/storesRack';
 import { DisplaySystem } from '../ui/displays/system';
 import { Hud, matrixProjector } from '../ui/flight/hud';
 import type { HudFrame } from '../ui/flight/hud';
-import { buildHudFrame, ccipHud, gunHud, landingAid, seekerHud } from '../ui/flight/hudFrame';
+import {
+  buildHudFrame,
+  ccipHud,
+  gunHud,
+  landingAid,
+  seekerHud,
+  sightPoint,
+} from '../ui/flight/hudFrame';
 import { Explosions } from '../render/sim/aircraft/explosions';
 import { airframePose, wingtipOf } from '../render/sim/effects/aircraftPose';
 import { Wrecks } from '../render/sim/aircraft/wrecks';
@@ -94,6 +101,7 @@ import type { WeatherView } from '../sim/weather/frame';
 import { flightRateCap } from '../sim/clock';
 import type { FlightModel } from '../sim/flight/flightModel';
 import type { FlightSpec } from '../sim/flight/flightSpec';
+import { gunEffects } from '../render/sim/effects/weapons';
 import type { Runway } from '../sim/flight/runway';
 import { flownGround } from '../freeflight/ground';
 import type { AirfieldGround, FlownTerrain } from '../freeflight/ground';
@@ -535,6 +543,8 @@ export class Follow {
     const m = this.mission();
     const f = this.full;
     if (!f || f.flight.playerSlot === null) return;
+    // The sight is the pilot's (decision 338): the AI's flight is watched at the rig's view.
+    this.deps.globe.chase.sightOn = false;
     const a = f.flight.bySlot(f.flight.playerSlot);
     // Posted after the take-over in any case: the worker applies them in order.
     if (m) {
@@ -617,6 +627,12 @@ export class Follow {
       case 'recenterView':
         this.deps.globe.chase.recenter();
         break;
+      case 'sight': {
+        // The right click or Z (decision 338): in on the pipper or the boresight, and out.
+        const chase = this.deps.globe.chase;
+        chase.sightOn = !chase.sightOn;
+        break;
+      }
       case 'help':
         this.hud.message(
           [
@@ -1293,6 +1309,7 @@ export class Follow {
     frame.ccip = ground
       ? ccipHud(model, rack, av, this.deps.globe.chase.eye, (d) => ground.height(d))
       : null;
+    this.deps.globe.chase.sightPoint = sightPoint(frame, model, this.deps.globe.chase.eye);
     this.updateDisplays(m, airframeState(model), frame, t);
     if (this.panels !== 'clean') this.hud.draw(frame, project);
   }
@@ -1448,6 +1465,15 @@ export class Follow {
         this.explosions.impact(x);
         if (a.slot === flight.playerSlot) this.reportImpact(x, a.rack.groundTargets);
       }
+    // The guns' smoke, flash and impacts on the ground (decision 339).
+    for (const a of flight.aircraft)
+      gunEffects(
+        g.effects,
+        `${this.missionId}:${a.slot}`,
+        a.rack,
+        a.flown.airframe as unknown as FlightModel,
+        this.flightSpec!.cg,
+      );
     // Hits: kills and damage to the campaign as logged inputs; the downed fall burning (decision 301).
     for (const a of flight.aircraft)
       for (const h of a.rack.hits.splice(0)) this.applyHit(h, a.rack);

@@ -5293,6 +5293,29 @@ The per-vertex coverage, albedo and side (±1) go to the GPU as one vec3 attribu
 
 **Reason:** the owner's request; CAS needs a way to find the enemy before R3.8.
 
+
+### 338. The sight: a right click zooms on the pipper
+
+**Date:** 2026-11-24
+**Decision:** The owner asked for a right click that zooms in around the boresight or the gun pipper. A right click (press and release within 300 ms and 6 px) or Z toggles the **sight** while the player flies a jet, in Free Flight and in a take-over: the chase camera turns its view toward the sight point and narrows its field of view to a third (50° to 17°), easing in and out over 0.25 s (`ChaseCamera.sightOn`, `sightPoint`). The sight point is the bombs' or rockets' CCIP pipper while one is selected, else the gun's pipper, else the boresight 1,500 m out along the nose (`sightPoint` in `ui/flight/hudFrame.ts`). The HUD's world-anchored symbols follow the narrower view, so the pipper, the target diamonds and the vehicles grow with it. A right drag still looks around, as before. A new sortie and a hand-back turn the sight off.
+
+**How it was checked.** `tests/gunEffects.test.ts`: the sight point is the bombs' pipper, else the gun's, else the boresight. The unit suite, the type check and lint pass. The owner's look on the GPU is open.
+
+**Reason:** the owner's request: targets on the ground are small from the chase camera.
+
+### 339. The gun's recoil, smoke and rounds on the ground
+
+**Date:** 2026-11-24
+**Decision:** The owner asked for the A-15's cannon to look and feel like one: smoke and flash when it fires, and recoil that costs speed.
+
+- **Recoil.** While the gun fires, the flight model takes a force back along the nose (`FlightModel.recoil`, set by the stores rack): the rounds' momentum per second times 1.5 for the propellant gas (`gunRecoil`). The A-15's cannon (65 rounds a second of 0.425 kg at 1,010 m/s) pushes back with about 42 kN, half its engines' thrust; the F-21's 20 mm gun with under half of that. Every gun takes it from its own figures, so no type needs a new field. With the gun silent the force is zero and the model unchanged: the Kestrel's lockstep test passes as it was. This touches `sim/flight/` (R2.7's) at the one line where thrust adds to the body force.
+- **Smoke and flash.** Two emitter presets: `gun-smoke` (light gray puffs and a small flickering flash) and `cannon-smoke` (large gray puffs, a slower billowing layer and a bigger flash), chosen by the rounds' momentum per second (above 20,000 kg·m/s², the A-15's 28,000). The emitter sits at the gun's muzzle while it fires; the puffs keep a sixth to a quarter of the aircraft's speed, so it leaves them behind as a trail (`gunEffects` in `render/sim/effects/weapons.ts`).
+- **Rounds on the ground.** Rounds that reach the ground end there (they passed through it before) and come back as impacts (`StoresRack.roundImpacts`); the ground under each round is sampled again at half its time to fall to it, at most every 0.1 s. Each impact kicks up a spark, two puffs of dirt and one of dust (`EffectsSystem.roundImpact`), 1.6 times larger for 30 mm, far lighter than an explosion, so a burst of a hundred rounds stays within the puff budget.
+- The effects sandbox has a strafing run (`strafe`, `strafe-ground` in `tools/effects.preview.ts`).
+
+**How it was checked.** `tests/gunEffects.test.ts`: the A-15's recoil is 38–46 kN and the F-21's under half of it; a second of fire leaves an F-21 slower than one that held its fire, and its recoil is zero when silent; rounds fired straight down end at the ground as impacts. `tools/effects.preview.ts` (`SHOTS=strafe,strafe-ground`, lavapipe): the cannon's flash leads a lumpy gray trail; the beaten zone rises into a brown cloud over a pale dust skirt. The unit suite (with the Kestrel's lockstep), the type check and lint pass.
+
+**Reason:** the owner's request.
 ### 350. R2.7 closed
 
 **Date:** 2026-11-24

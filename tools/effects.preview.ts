@@ -4,7 +4,7 @@
  *
  *   npx vitest run --config vitest.tools.config.ts tools/effects.preview.ts
  *   env: SHOTS (all: sam,sam-20km,airburst,impact,depot,contrails,chimneys,downwash,vortex,
- *        missiles,night,stress), W × H (960 × 540), POST=0, OUT (tools/out/effects),
+ *        missiles,strafe,strafe-ground,night,stress), W × H (960 × 540), POST=0, OUT (tools/out/effects),
  *        PERF=n (frames timed in the stress scene, 20), FPS (simulation steps per second, 30)
  *
  * Each shot resets the sandbox, steps it at FPS without drawing until its time, then draws.
@@ -96,6 +96,22 @@ const SHOTS: Record<string, Shot> = {
       s.flares();
     },
     at: [4],
+  },
+  strafe: {
+    view: 'range',
+    setup: (s) => {
+      s.lookFrom(s.local(-160, -1150, 380), s.local(0, -1450, 500), 50);
+      s.strafe(true);
+    },
+    at: [0.6, 1.2, 1.9, 2.6],
+  },
+  'strafe-ground': {
+    view: 'range',
+    setup: (s) => {
+      s.lookFrom(s.local(-90, -120, 25), s.local(0, 0, 4), 50);
+      s.strafe(true);
+    },
+    at: [1.6, 2.4, 3.4, 5],
   },
   night: {
     view: 'range',

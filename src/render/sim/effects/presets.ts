@@ -461,6 +461,8 @@ export const PRESET_IDS = [
   'rotor-downwash',
   'flare',
   'waterfall-mist',
+  'gun-smoke',
+  'cannon-smoke',
 ] as const;
 export type PresetId = (typeof PRESET_IDS)[number];
 
@@ -554,6 +556,59 @@ export const EMITTERS: Readonly<Partial<Record<PresetId, EmitterPreset>>> = {
     duration: null,
     prewarm: false,
     range: 25_000,
+  },
+  // The gun firing (decision 339): gas and smoke at the muzzle that the aircraft leaves
+  // behind as a trail, and a flickering flash. A 20 mm gun's is light; a 30 mm cannon's
+  // (the A-15's) a thick cloud round the nose, the more so the longer it fires.
+  'gun-smoke': {
+    id: 'gun-smoke',
+    label: 'Gun firing (20 mm)',
+    streams: [
+      stream({
+        look: 'gray-smoke',
+        spacing: 3,
+        rate: 40,
+        size: [1.1, 1.7],
+        speed: 20,
+        spread: 2.5,
+        jitter: 0.3,
+        inherit: 0.25,
+      }),
+      stream({ look: 'flash', rate: 45, size: [0.45, 0.7], inherit: 1, chance: 0.6 }),
+    ],
+    duration: null,
+    prewarm: false,
+    range: 12_000,
+  },
+  'cannon-smoke': {
+    id: 'cannon-smoke',
+    label: 'Cannon firing (30 mm)',
+    streams: [
+      stream({
+        look: 'gray-smoke',
+        spacing: 1.2,
+        rate: 80,
+        size: [2.6, 4.2],
+        speed: 35,
+        spread: 7,
+        jitter: 0.8,
+        inherit: 0.12,
+      }),
+      stream({
+        look: 'burst-smoke',
+        spacing: 4,
+        rate: 25,
+        size: [4.5, 6.5],
+        speed: 15,
+        spread: 5,
+        jitter: 1.2,
+        inherit: 0.3,
+      }),
+      stream({ look: 'flash', rate: 65, size: [0.9, 1.4], inherit: 1, chance: 0.8 }),
+    ],
+    duration: null,
+    prewarm: false,
+    range: 15_000,
   },
   'aircraft-fire': {
     id: 'aircraft-fire',

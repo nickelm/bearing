@@ -113,9 +113,17 @@ import { flightStartTime } from './clock';
 import { writeFreeFlightParams } from './url';
 import type { FreeFlightUrl } from './url';
 import { FlightWeather } from './flightWeather';
-import { buildHudFrame, ccipHud, gunHud, landingAid, seekerHud } from '../ui/flight/hudFrame';
+import {
+  buildHudFrame,
+  ccipHud,
+  gunHud,
+  landingAid,
+  seekerHud,
+  sightPoint,
+} from '../ui/flight/hudFrame';
 import { Explosions } from '../render/sim/aircraft/explosions';
 import { airframePose, wingtipOf } from '../render/sim/effects/aircraftPose';
+import { gunEffects } from '../render/sim/effects/weapons';
 import { Wrecks } from '../render/sim/aircraft/wrecks';
 import { gunSelected, rocketCounts } from '../sim/flight/storesRack';
 import { flyingOf, MissileViews } from '../render/sim/aircraft/missileViews';
@@ -446,6 +454,9 @@ export class FreeFlight {
         deps.globe.effects,
       );
       for (const x of this.rack?.impacts.splice(0) ?? []) this.explosions.impact(x);
+      // The gun's smoke, flash and impacts on the ground (decision 339).
+      if (this.rack && this.model && this.flightSpec)
+        gunEffects(this.deps.globe.effects, 'player', this.rack, this.model, this.flightSpec.cg);
       const explosions = this.explosions;
       this.wrecks.update(
         Math.max(0, this.gameTime - this.wreckTime),
@@ -1057,6 +1068,12 @@ export class FreeFlight {
       case 'recenterView':
         this.deps.globe.chase.recenter();
         break;
+      case 'sight': {
+        // The right click or Z (decision 338): in on the pipper or the boresight, and out.
+        const chase = this.deps.globe.chase;
+        chase.sightOn = !chase.sightOn;
+        break;
+      }
       case 'help':
         this.help.visible = !this.help.visible;
         break;
@@ -1393,6 +1410,7 @@ export class FreeFlight {
     frame.ccip = ground
       ? ccipHud(m, this.rack, av, this.deps.globe.chase.eye, (d) => ground.height(d))
       : null;
+    this.deps.globe.chase.sightPoint = sightPoint(frame, m, this.deps.globe.chase.eye);
     const radar = this.displays.avionics.radar;
     frame.acmCone = radar.on && radar.mode === 'acm' && !radar.lock ? ACM_CONE : null;
     this.hud.draw(frame, project);

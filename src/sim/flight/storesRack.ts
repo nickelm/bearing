@@ -112,6 +112,11 @@ export class StoresRack {
   groundTargets: GroundTarget[] = [];
   /** Hits since the app last took them (decision 301): on aircraft, or on ground targets. */
   readonly hits: Hit[] = [];
+  /** Whether the gun fired in the last step (decision 339): its recoil and its smoke. */
+  gunFiring = false;
+  /** Rounds that struck the ground since the app last took them (decision 339). */
+  readonly roundImpacts: { at: Vec3d; time: number }[] = [];
+  private readonly roundGround = new WeakMap<object, { h: number; next: number }>();
   /** The trigger held for the selected rocket pods: they ripple while it is. */
   rocketTrigger = false;
   private rocketOwed = 0;
@@ -195,6 +200,9 @@ export class StoresRack {
     const g = this.gun;
     if (!g) return 0;
     const armed = avionics.masterArm && !m.onGround && gunSelected(avionics);
+    // Firing pushes the aircraft back (decision 339), and the effects draw its smoke.
+    this.gunFiring = armed && g.trigger && g.rounds > 0;
+    m.recoil = this.gunFiring ? gunRecoil(g.spec) : 0;
     const n = g.step(m, this.spec.cg, dt, m.radius, armed);
     if (n > 0) this.state.expended[GUN] = (this.state.expended[GUN] ?? 0) + n;
     // Rounds that passed within an aircraft's radius this step hit it (decision 301).
@@ -359,6 +367,7 @@ export class StoresRack {
     ground: GroundQuery | null = null,
   ): void {
     this.stepGun(m, avionics, dt, t);
+    if (ground) this.groundRounds(m.radius, ground, t + dt);
     this.stepRockets(m, avionics, dt);
     const groundAt = (d: Readonly<Vec3d>) => (ground ? ground.height(d) : 0);
     for (let i = this.ordnance.length - 1; i >= 0; i--) {
@@ -406,6 +415,33 @@ export class StoresRack {
     }
   }
 
+  /**
+   * Rounds that reached the ground (decision 339) end there, as impacts for the effects.
+   * The ground under each round is sampled again at half its time to fall to it, so a high
+   * round costs ten samples a second and a burst of a hundred rounds little.
+   */
+  private groundRounds(R: number, ground: GroundQuery, t: number): void {
+    const g = this.gun;
+    if (!g) return;
+    for (let i = g.live.length - 1; i >= 0; i--) {
+      const r = g.live[i]!;
+      const alt = r.pos.length() - R;
+      let c = this.roundGround.get(r);
+      if (!c || t >= c.next) {
+        const h = ground.height(r.pos.clone().normalize());
+        // Sample again at half the time it would take to fall to that ground, at most
+        // GROUND_SAMPLE s on: rarely while high, every step in the last few meters.
+        const sink = Math.max(1, -r.vel.dot(r.pos) / r.pos.length());
+        c = { h, next: t + Math.min(GROUND_SAMPLE, (0.5 * (alt - h)) / sink) };
+        this.roundGround.set(r, c);
+      }
+      if (alt > c.h) continue;
+      g.live.splice(i, 1);
+      this.roundImpacts.push({ at: r.pos.clone().scale((R + c.h) / (R + alt)), time: t });
+      if (this.roundImpacts.length > 400) this.roundImpacts.shift();
+    }
+  }
+
   /** Drops every tank with the fuel in it; returns how many went. */
   jettisonTanks(m: FlightModel): number {
     const tanks = this.loadedList.filter((l) => STORES[l.store]?.kind === 'tank');
@@ -442,6 +478,20 @@ export function rocketCounts(
   }
   for (const k of Object.keys(out)) out[k] = Math.max(0, out[k]! - (expended[rocketKey(k)] ?? 0));
   return out;
+}
+
+/** Recoil over the round's momentum flow, for the propellant gas (decision 339). */
+export const GAS_FACTOR = 1.5;
+/** How often at most a round's ground is sampled (s). */
+const GROUND_SAMPLE = 0.1;
+
+/**
+ * A gun's recoil while it fires (N, decision 339): its rounds' momentum per second times
+ * GAS_FACTOR. The A-15's 30 mm cannon (65 rounds/s of 0.425 kg at 1,010 m/s) pushes back
+ * with about 42 kN, half its engines' thrust; a 20 mm gun with a sixth of that.
+ */
+export function gunRecoil(spec: Readonly<GunSpec>): number {
+  return spec.rate * spec.roundMass * spec.muzzleVelocity * GAS_FACTOR;
 }
 
 /** A ground target the bombs and rockets can damage (decision 301). */
