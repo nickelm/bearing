@@ -92,6 +92,29 @@ describe('demo seeds', () => {
       );
       expect(moved, `seed ${seed}: the front's largest move`).toBeGreaterThan(1000);
 
+      // R2.9's exit: every ejection in the day makes a survivor, and every survivor down
+      // before the day's end gets a CSAR mission (decisions 351, 352).
+      const log = sim.sim.log.entries;
+      const ejected = log.reduce(
+        (n, e) => n + (e.source === 'decision' && e.kind === 'aircraft-lost' ? e.ejected : 0),
+        0,
+      );
+      const survivors = sim.air!.survivors;
+      expect(survivors.length, `seed ${seed}: survivors`).toBe(ejected);
+      expect(ejected, `seed ${seed}: ejections`).toBeGreaterThan(0);
+      const rescues = [...seen.values()].filter((m) => m.type === 'csar');
+      for (const s of survivors) {
+        if (s.time > 24 * HOUR) continue;
+        expect(
+          rescues.some((m) => m.survivors?.includes(s.id)),
+          `seed ${seed}: survivor #${s.id} (${s.state}) has a CSAR mission`,
+        ).toBe(true);
+      }
+      expect(
+        survivors.some((s) => s.state === 'rescued'),
+        `seed ${seed}: a rescue`,
+      ).toBe(true);
+
       const surface = globalMapSampler(ground.height, ground.n);
       const v = new Vec3d();
       const R = DEFAULT_PLANET_PARAMS.radius;

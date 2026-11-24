@@ -23,6 +23,7 @@ import {
   loadoutsFor,
 } from '../src/sim/air/aircraft';
 import { MISSION_PROFILES, phaseTime } from '../src/sim/air/mission';
+import { missionPlugin } from '../src/sim/command/missions/registry';
 import type { Mission } from '../src/sim/air/mission';
 import { planMissionRoute, timeOnTarget } from '../src/sim/air/missionRoute';
 import { buildOrderOfBattle, PILOTS_PER_SEAT } from '../src/sim/air/orbat';
@@ -306,8 +307,18 @@ describe('air operations', () => {
       w.sim.advanceTo(t);
       for (const m of air.liveMissions()) seen.set(m.id, m);
       if (t > 3 * HOUR) airborne.push(air.airborneAt('alliance', t) + air.airborneAt('pact', t));
+      // Rescues fly outside the cap (R2.9): a rescue cannot wait for the sky to clear.
       for (const side of ['alliance', 'pact'] as const) {
-        expect(air.airborneAt(side, t)).toBeLessThanOrEqual(DOCTRINE[side].maxAirborne);
+        const rescue = air
+          .liveMissions()
+          .filter(
+            (m) =>
+              m.side === side &&
+              missionPlugin(m.type).urgent &&
+              routeState(m.route, t, air.radius).airborne,
+          )
+          .reduce((n, m) => n + m.aircraft, 0);
+        expect(air.airborneAt(side, t) - rescue).toBeLessThanOrEqual(DOCTRINE[side].maxAirborne);
       }
       // Conservation: available + on missions + in turnaround = strength.
       const flying = new Map<number, number>();

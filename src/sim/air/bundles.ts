@@ -154,6 +154,8 @@ function parseAirWar(raw: unknown, name: string, geometry: string | null, what: 
         if (typeof v !== 'string') throw new BundleError(`${what}.loadouts[${i}].stations.${k}`);
       loadout.stations = st as Record<string, string>;
     }
+    // Fuel with this load where it carries tanks outside the pylons (a rescue's, R2.9).
+    if (lo.fuel !== undefined) loadout.fuel = num(lo, 'fuel', `${what}.loadouts[${i}]`);
     return loadout;
   });
   const type: AircraftType = {

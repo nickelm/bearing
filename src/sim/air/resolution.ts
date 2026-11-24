@@ -6,7 +6,8 @@
  *   flight its plug-in marks as a `target` meets the nearest enemy CAP on
  *   station within INTERCEPT_RANGE of its way in (the last INTERCEPT_LOOKBACK
  *   of its route) or of its target, with
- *   INTERCEPT_CHANCE, and each CAP flight at most CAP_ENGAGEMENTS times. The
+ *   INTERCEPT_CHANCE (HELICOPTER_INTERCEPT of it for a helicopter, low in the terrain),
+ *   and each CAP flight at most CAP_ENGAGEMENTS times. The
  *   package's escorts and defense suppression fight with it. Each side's force
  *   is its aircraft times their air values (calibration.ts), the strike flight
  *   counting STRIKE_SELF_DEFENSE of its own; each aircraft is lost with a chance
@@ -31,12 +32,14 @@ import type { Side } from '../../campaign/cast';
 import { arcDistance } from '../../core/greatCircle';
 import type { Dir } from '../../core/greatCircle';
 import { rng } from '../../core/rng';
+import { HOUR } from '../../core/units';
 import type { Rng, WorldSeed } from '../../core/rng';
 import type { CampaignInput } from '../command/campaignInput';
 import type { DamageState } from '../ground/damage';
 import type { Simulation, Stateful } from '../simulation';
 import type { StateHasher } from '../stateHash';
 import type { AirOps, PhaseHook } from './airOps';
+import { aircraftType } from './aircraft';
 import { combatValues } from './calibration';
 import { missionPhase, phaseTime } from './mission';
 import type { Mission, MissionPhase, MissionType } from './mission';
@@ -46,6 +49,8 @@ import { routeState } from './route';
 
 export const INTERCEPT_RANGE = 100e3;
 export const INTERCEPT_CHANCE = 0.7;
+/** The interception chance's factor for a helicopter, low in the terrain (R2.9). */
+export const HELICOPTER_INTERCEPT = 0.4;
 /** How much of the way in a CAP can catch a flight (s), sampled INTERCEPT_SAMPLES times. */
 export const INTERCEPT_LOOKBACK = 30 * 60;
 export const INTERCEPT_SAMPLES = 10;
@@ -70,6 +75,9 @@ export const AIR_DEFENSE: Record<string, number> = {
   road: 0.15,
   front: 0.4,
 };
+
+/** The most air defense at a pickup, close to an enemy battalion (R2.9). */
+export const SURVIVOR_DEFENSE = 0.6;
 
 /** What resolution needs of a mission type: its plug-in's parts, joined by the world. */
 export interface ResolvedType {
@@ -151,7 +159,10 @@ export class MissionResolution implements PhaseHook, Stateful {
     }
     if (!cap) return;
     const r = this.root.fork(`intercept:${m.id}`);
-    if (r.nextFloat() >= INTERCEPT_CHANCE) return;
+    // A helicopter low in the terrain is harder to find than a jet (R2.9).
+    const chance =
+      INTERCEPT_CHANCE * (aircraftType(m.aircraftType).helicopter ? HELICOPTER_INTERCEPT : 1);
+    if (r.nextFloat() >= chance) return;
     cap.engagements = (cap.engagements ?? 0) + 1;
     this.stats[cap.side].intercepts++;
     const escorts = [...this.air.missions.values()]
@@ -228,6 +239,9 @@ export class MissionResolution implements PhaseHook, Stateful {
   airDefense(m: Mission): number {
     const t = m.target;
     if (t.kind === 'front') return AIR_DEFENSE.front!;
+    // Ground fire at a pickup grows near the enemy as the survivor's capture risk does (R2.9).
+    if (t.kind === 'survivor')
+      return Math.min(SURVIVOR_DEFENSE, (this.air.survivorThreat?.(m.side, t.point) ?? 0) * HOUR);
     if (t.kind === 'road') return AIR_DEFENSE.road!;
     if (t.kind === 'airbase') {
       return this.input.airbases[t.id]?.side === m.side ? 0 : AIR_DEFENSE.airbase!;
@@ -349,6 +363,9 @@ export class MissionResolution implements PhaseHook, Stateful {
         });
         break;
       case 'station-held':
+        break;
+      case 'rescue':
+        this.air.pickUp(m, e.survivors, sim);
         break;
     }
   }

@@ -12,11 +12,16 @@
  *   planned time on call they held: an amount of attack for the ground war.
  * - **Airlift:** the share of the flight's aircraft that landed and unloaded.
  * - **CAP:** the time it held its station.
+ * - **CSAR** (R2.9): a rescue that was on the ground at the survivor for PICKUP_TIME
+ *   picks up its survivors still down (its own and any down near them), unless the
+ *   enemy drives it off: a chance of 1 − exp(−λ · PICKUP_EXPOSURE), λ the capture
+ *   hazard there, at most PICKUP_RISK, halved with an escort over the pickup.
  *
  * The constants are priors until R2.10's calibration fits them (rule 18).
  */
 import type { TargetKind as SiteKind } from '../../worldgen/strategic/infrastructure';
 import { combatValues } from './calibration';
+import { MINUTE, HOUR } from '../../core/units';
 import type { Mission } from './mission';
 import type { AggregateResolver, MissionOutcome, ResolveContext } from './outcome';
 
@@ -117,5 +122,43 @@ export const airliftResolver: AggregateResolver = {
 export const capResolver: AggregateResolver = {
   resolve(m, ctx) {
     return base(m, ctx);
+  },
+};
+
+/** Time on the ground at the survivor a pickup takes (s). */
+export const PICKUP_TIME = 1 * MINUTE;
+/** The exposure of a pickup to the enemy's fire, as time of the capture hazard (s). */
+export const PICKUP_EXPOSURE = HOUR;
+/** The most chance the enemy drives a rescue off, and the factor with an escort. */
+export const PICKUP_RISK = 0.8;
+export const PICKUP_ESCORTED = 0.5;
+
+export const csarResolver: AggregateResolver = {
+  resolve(m, ctx) {
+    const o = base(m, ctx);
+    if (m.aborted || ctx.onStation < PICKUP_TIME || m.aircraft <= 0) return o;
+    const ids = new Set(m.survivors ?? []);
+    if (m.target.kind === 'survivor')
+      for (const s of ctx.air.rescueGroup(m.target.id)) ids.add(s.id);
+    const down = [...ids]
+      .filter((id) => ctx.air.survivors[id]?.state === 'down')
+      .sort((a, b) => a - b);
+    if (down.length === 0) return o;
+    const escorted = [...ctx.air.missions.values()].some(
+      (e) =>
+        e.id !== m.id &&
+        e.side === m.side &&
+        e.package === m.package &&
+        e.type === 'csar-escort' &&
+        !e.aborted,
+    );
+    const lambda = ctx.air.survivorThreat?.(m.side, m.target.point) ?? 0;
+    const risk =
+      Math.min(PICKUP_RISK, 1 - Math.exp(-lambda * PICKUP_EXPOSURE)) *
+      (escorted ? PICKUP_ESCORTED : 1);
+    if (ctx.rng.nextFloat() < risk) return o;
+    o.rescued = down;
+    o.effect = down.length / Math.max(1, ids.size);
+    return o;
   },
 };

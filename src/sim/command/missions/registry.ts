@@ -11,6 +11,7 @@ import { plannedStation } from './common';
 import { AIRLIFT } from './airlift';
 import { CAP } from './cap';
 import { CAS } from './cas';
+import { CSAR, RESCAP, RESCUE_ESCORT } from './csar';
 import { INTERDICTION } from './interdiction';
 import { isPending, PLUGIN_PARTS } from './plugin';
 import type { BriefingInput, MissionPlugin } from './plugin';
@@ -21,6 +22,9 @@ export const MISSION_PLUGINS: readonly MissionPlugin[] = [
   INTERDICTION,
   CAS,
   AIRLIFT,
+  CSAR,
+  RESCUE_ESCORT,
+  RESCAP,
   ...PROVISIONAL,
 ];
 

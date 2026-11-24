@@ -22,6 +22,8 @@ export interface MissionOutcome {
   delivered: number;
   losses: number;
   kills: number;
+  /** Survivors a rescue picked up (R2.9), by id. */
+  rescued?: number[];
 }
 
 /** A change to the world a mission's outcome causes; resolution.ts applies them, R2.3 reads the ground ones. */
@@ -30,7 +32,9 @@ export type WorldEffect =
   | { kind: 'road'; edge: number; amount: number }
   | { kind: 'stocks'; base: BaseRef; fuel: number; munitions: number }
   | { kind: 'ground-attack'; theater: number; point: Dir; amount: number }
-  | { kind: 'station-held'; key: string; seconds: number };
+  | { kind: 'station-held'; key: string; seconds: number }
+  /** A rescue picked survivors up (R2.9): aboard until it lands home. */
+  | { kind: 'rescue'; survivors: number[] };
 
 /** What an aggregate resolver may read. */
 export interface ResolveContext {

@@ -12,6 +12,8 @@ import { HOUR } from '../src/core/units';
 import type { FrontSegment } from '../src/sim/command/front';
 
 const DEMO = ['cap', 'interdiction', 'cas', 'airlift'];
+/** Types with all eight parts beyond the demo's four: the rescue package (R2.9). */
+const COMPLETE = [...DEMO, 'csar', 'csar-escort', 'rescap'];
 
 describe('the mission registry', () => {
   it('registers each type once, the four demo types first', () => {
@@ -19,7 +21,7 @@ describe('the mission registry', () => {
     expect(new Set(types).size).toBe(types.length);
     expect(types.slice(0, 4)).toEqual(DEMO);
     for (const p of MISSION_PLUGINS)
-      expect(p.status).toBe(DEMO.includes(p.type) ? 'demo' : 'provisional');
+      expect(p.status, p.type).toBe(COMPLETE.includes(p.type) ? 'demo' : 'provisional');
   });
 
   it('gives every type its eight parts, or a marker naming the milestone that builds one', () => {

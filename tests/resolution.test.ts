@@ -154,10 +154,13 @@ describe('a day of resolved war', () => {
     const killed = losses.reduce((s, e) => s + (e.kind === 'aircraft-lost' ? e.killed : 0), 0);
     expect(air.survivors.length).toBe(ejected);
     expect(air.killed.alliance + air.killed.pact).toBe(killed);
-    const names = new Set(air.squadrons.flatMap((s) => s.pilots));
+    // Survivors are off the roster until a rescue brings them home (R2.9).
     for (const s of air.survivors) {
-      expect(names.has(s.pilot) && air.squadrons[s.squadron]!.pilots.includes(s.pilot)).toBe(false);
+      expect(air.squadrons[s.squadron]!.pilots.includes(s.pilot), s.state).toBe(
+        s.state === 'rescued',
+      );
     }
+    expect(air.survivors.some((s) => s.state === 'rescued')).toBe(true);
   });
 
   it('damages targets and bridges, attacks troops and delivers airlift', () => {
