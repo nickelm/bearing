@@ -188,7 +188,7 @@ src/ui/             displays/ (P2, decisions 195, 199): layout.ts (the slots' re
                     bindings, HUD and the HUD frame built from an airframe, pause menu and cards; decisions 134,
                     135); missionSearch/ (the search model and panel, decision 241); sidePanel.ts; the aircraft
                     snapshot for the displays (displays/aircraftSnapshot.ts, R1.5); audio/ (synthesized thunder,
-                    rain and wind, no files; decision 142); input/ (Proposal 0014, decisions 360–367): the input
+                    rain and wind, no files; decision 142); input/ (Proposal 0014, decisions 360–368): the input
                     layer (codes, axis tuning, chords, profiles in localStorage, the Gamepad API source, the
                     throttle as a rate), menus by gamepad (menuNav.ts), the bindings screen, the connect prompt,
                     padlock and rumble; the flight inputs, displays and menus read actions and axes from it

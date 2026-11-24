@@ -295,6 +295,8 @@ export class FlightInput {
         if (!this.enabled && fa !== 'pause') return;
         // An open menu or the display focus has the pad's buttons; the pause button still pauses.
         if (fa !== 'pause' && menuActive()) return;
+        // Any pad button in flight hands the controls to the pad (decision 368).
+        if (this.enabled) this.padTakeover();
         if (PRESS_ACTIONS.has(fa)) this.onAction?.(fa);
       }) ?? (() => {});
     // A key's (or a mouse side button's) press or release; false if it is bound to nothing.
@@ -361,7 +363,9 @@ export class FlightInput {
         e.preventDefault();
         this.onAction?.('recenterView');
       } else if (e.button === 0 && this.capture && !this.capture.captured) {
-        this.capture.grab();
+        // While the pad flies, a click on the view (to focus the window, say) does not hand the
+        // mouse the controls; Tab does (decision 368).
+        if (!this.padOwns) this.capture.grab();
       } else if (e.button === 0) {
         // With the mouse captured, the left button is the trigger (decision 295).
         this.leftDown = true;
@@ -496,16 +500,54 @@ export class FlightInput {
    * no stick key or gamepad stick held. The app's hold then flies.
    */
   get handsOff(): boolean {
-    if (!this.enabled || this.mode !== 'direct' || this.capture?.captured) return false;
+    const direct = this.mode === 'direct' || this.padOwns;
+    if (!this.enabled || !direct || this.capture?.captured) return false;
     if (this.padStick) return false;
     return !(['pitchDown', 'pitchUp', 'rollLeft', 'rollRight'] as const).some((k) =>
       this.isHeld(k),
     );
   }
 
+  /**
+   * The gamepad has the controls (decision 368): set by the first pad button or stick input in
+   * flight, which frees the mouse; while set, the mouse neither steers the stick nor the aim
+   * ring, and mouse aim is off. Capturing the mouse again (Tab) gives the controls back to it.
+   */
+  get padOwns(): boolean {
+    return this.padHas;
+  }
+
+  /** Whether mouse aim flies the jet: mouse-aim mode, and the pad has not taken the controls. */
+  get mouseAimFlies(): boolean {
+    return this.mode === 'mouse-aim' && !this.padHas;
+  }
+
+  private padHas = false;
+  /** The mouse was captured at the last update (a new capture after a takeover gives it back). */
+  private capturedWas = false;
+
+  /** The pad takes the controls from the mouse: the lock freed, the cursor centered, aim off. */
+  private padTakeover(): void {
+    if (this.padHas) return;
+    this.padHas = true;
+    this.centerCursor();
+    this.keyStick.pitchWeight = this.keyStick.rollWeight = 0;
+    // Through the one capture (rule 14); also cancels a grab still being retried.
+    this.capture?.release();
+    this.onPadTakeover?.();
+    this.onMessage?.('Gamepad flies: the mouse is off (Tab gives it back)');
+  }
+
+  /** Called when the pad takes the controls from the mouse (the app drops mouse aim). */
+  onPadTakeover: (() => void) | null = null;
+
   /** Advances the held keys, mouse and gamepad by `dt` real seconds. */
   update(dt: number): void {
     const c = this.controls;
+    // A capture after the pad took the controls is the player's own (Tab): the mouse flies again.
+    const captured = this.capture?.captured === true;
+    if (captured && !this.capturedWas && this.padHas) this.padHas = false;
+    this.capturedWas = captured;
     this.lookHeld = this.enabled && (this.rightDown || this.isHeld('freeLook'));
     if (!this.lookHeld) {
       this.lookDelta.x = 0;
@@ -517,11 +559,11 @@ export class FlightInput {
       const d = target - current;
       return current + clamp(d, -rate * dt, rate * dt);
     };
-    if (this.mode === 'direct' || this.directOnGround) {
-      // The captured mouse is the stick in direct mode; a held key wins on its axis.
-      const captured = this.capture?.captured === true;
-      const mouse = this.mode === 'direct' && captured;
-      const rotate = this.mode === 'mouse-aim' && this.aimRotates && captured;
+    if (this.mode === 'direct' || this.directOnGround || this.padHas) {
+      // The captured mouse is the stick in direct mode; a held key wins on its axis. While the
+      // pad has the controls the mouse does nothing (decision 368).
+      const mouse = this.mode === 'direct' && captured && !this.padHas;
+      const rotate = this.mode === 'mouse-aim' && this.aimRotates && captured && !this.padHas;
       const keysPitch = this.isHeld('pitchDown') || this.isHeld('pitchUp');
       const keysRoll = this.isHeld('rollLeft') || this.isHeld('rollRight');
       c.pitch =
@@ -597,7 +639,8 @@ export class FlightInput {
       const pitch = L.axis('pitch');
       const roll = L.axis('roll');
       this.padStick = pitch !== 0 || roll !== 0;
-      if (this.mode === 'direct' || this.directOnGround) {
+      if (this.padStick) this.padTakeover();
+      if (this.mode === 'direct' || this.directOnGround || this.padHas) {
         if (pitch !== 0) c.pitch = pitch;
         if (roll !== 0) c.roll = roll;
       } else {
@@ -613,9 +656,13 @@ export class FlightInput {
       }
     }
     const yaw = L.axis('yaw');
-    if (yaw !== 0) c.yaw = yaw;
+    if (yaw !== 0) {
+      c.yaw = yaw;
+      this.padTakeover();
+    }
     if (!L.hasAxis('throttle') || keysOnThrottle) return;
     const t = L.axis('throttle');
+    if (t !== 0) this.padTakeover();
     if (L.axisMode('throttle') === 'absolute') {
       // A lever: its position is the throttle's (forward is up).
       if (t !== 0) c.throttle = clamp((1 + t) / 2, 0, this.maxLever);

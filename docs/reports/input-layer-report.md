@@ -1,6 +1,6 @@
 # Input Layer and Gamepad (Proposal 0014)
 
-_Branch `feature/input-layer`, 2026-11-23. Decisions 360–367; plan `docs/plans/input-layer.md`. This report is the pull request's description._
+_Branch `feature/input-layer`, 2026-11-23, amended 2026-11-24. Decisions 360–368; plan `docs/plans/input-layer.md`. This report is the pull request's description._
 
 ## Summary
 
@@ -15,6 +15,10 @@ What you get:
 - **Bindings screen** (pause menu or start screen → **Controls and gamepad…**): press-to-bind for keys, mouse side buttons, pad buttons, stick pushes and chords; per-axis deadzone, curve, inversion, sensitivity and rate or lever with live meters; yaw on the bumpers; rumble test; export and import as JSON. Saved in the browser per device and aircraft class.
 - **Connect prompt and toasts.** Browsers hide a pad until a button is pressed; the start screen and pause menu ask for one, and a toast reports each connect and disconnect.
 - **Rumble** for the gun, the stall buffet, touchdown and kills, where the browser and pad support it.
+
+## Amendment 2026-11-24: the Pad Takes the Controls (Decision 368)
+
+The owner's first test found a game-stopping bug: a mouse captured by mistake kept flying. In direct control its offset from the center held the stick, and in mouse aim the director kept flying toward the held ring, so with the pad's stick centered the pad had to fight it. Now the first pad input in flight frees the mouse and turns it off: no stick offset, no mouse aim, no capture by a click on the view. Only Tab gives the mouse back. The HUD says "Gamepad flies: the mouse is off (Tab gives it back)" and its mode reads GAMEPAD. To check: capture the mouse with Tab, leave it off center, touch the pad; let go of the pad and nothing pulls the stick.
 
 ## Testing It Tonight (Chrome on a Laptop, Windows 11)
 

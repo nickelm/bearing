@@ -492,7 +492,7 @@ Later, with the systems they wait for, or as polish (not part of the track):
 
 ## Out of sync: Proposal 0014, input layer and gamepad
 
-Plan: [docs/plans/input-layer.md](docs/plans/input-layer.md); branch `feature/input-layer`; decisions 360–367.
+Plan: [docs/plans/input-layer.md](docs/plans/input-layer.md); branch `feature/input-layer`; decisions 360–368.
 
 - [x] Phase 1: survey, proposal 0014 saved, plan
 - [x] Phase 2: input layer (codes, axis tuning, chords, profiles, persistence); keyboard and mouse on its tables
@@ -501,6 +501,7 @@ Plan: [docs/plans/input-layer.md](docs/plans/input-layer.md); branch `feature/in
 - [x] Phase 5: bindings screen (press-to-bind, axis tuning with a live monitor, export and import)
 - [x] Phase 6: rumble
 - [x] Phase 7: tests, a scripted takeoff and landing from synthetic gamepad input, README, report
+- [x] The mouse kept flying beside the pad (owner's test, 2026-11-24): the pad takes the controls until Tab (decision 368)
 - [ ] Owner's test with a DualShock 4 in Chrome (`docs/reports/input-layer-report.md`); tune deadzones, curves and the throttle rate from it
 - [ ] Padlock, countermeasures message and rumble in the campaign's taken-over jet (`src/follow/follow.ts`; Free Flight has them)
 - [ ] The spectator's free look on the right stick while following (the mouse drags it today)

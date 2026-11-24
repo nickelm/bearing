@@ -331,7 +331,7 @@ _Depends on all of R2._
 
 **State (2026-11-23):** built on branch `feature/input-layer`, awaiting the owner's test with a controller (`docs/reports/input-layer-report.md`).
 
-Runs beside the phases (`docs/proposals/0014-input-layer-and-gamepad.md`, `docs/plans/input-layer.md`, decisions 360–367): one input layer for the keyboard, the mouse, gamepads and joysticks, bindings and axis tuning per device and aircraft class with a bindings screen, the Mode 2 gamepad layout for jets and helicopters, menus by gamepad, and rumble. It takes R6.5's key remapping and gamepad buttons. R2.11's event log records actions, not devices; R3 wires the reserved secondary release and countermeasures to their systems; R4.5's crew menus register as gamepad menus.
+Runs beside the phases (`docs/proposals/0014-input-layer-and-gamepad.md`, `docs/plans/input-layer.md`, decisions 360–368): one input layer for the keyboard, the mouse, gamepads and joysticks, bindings and axis tuning per device and aircraft class with a bindings screen, the Mode 2 gamepad layout for jets and helicopters, menus by gamepad, and rumble. It takes R6.5's key remapping and gamepad buttons. R2.11's event log records actions, not devices; R3 wires the reserved secondary release and countermeasures to their systems; R4.5's crew menus register as gamepad menus.
 
 ## Out of Sync: Proposal 0011, Stylized Effects
 

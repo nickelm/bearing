@@ -95,7 +95,7 @@ A gamepad (PlayStation, Xbox or any pad the browser reports with the standard ma
 
 With L1 / LB held: D-pad ↑ acknowledges the master caution, ↓ next steerpoint, ← / → expand or collapse the left / right display; △ breaks the lock; R2 master arm; □ jettisons the drop tanks; ○ ejects (twice); R3 recenters; **Share turns on display focus**, in which the D-pad walks the displays' buttons, ✕ presses and ○ leaves while the sticks still fly. In every menu the D-pad (or left stick) moves an amber focus ring, ✕ presses, ○ goes back, L1 / R1 switch tabs; on the start screen, ✕ on an airbase selects it and a second ✕ flies. Following a campaign flight: ✕ takes control, L1 + Options hands back, ○ or Options goes back to the map, D-pad → next aircraft.
 
-The HUD shows the stored throttle as a bar beside THR while a pad is connected. **Controls and gamepad…** (pause menu, start screen) rebinds any action to a key, mouse side button, pad button, stick push or chord (hold one button and press another), tunes each axis (deadzone, curve, inversion, sensitivity, rate or lever) with live meters, sets the left stick's cross-talk guard, moves yaw to the bumpers, tests rumble, and exports or imports the whole set as JSON. Bindings are saved in the browser.
+The first pad input in flight takes the controls from the mouse: the mouse is freed and does nothing (no stick offset, no mouse aim) until **Tab** captures it again; a click on the view does not (decision 368). The HUD shows the stored throttle as a bar beside THR while a pad is connected. **Controls and gamepad…** (pause menu, start screen) rebinds any action to a key, mouse side button, pad button, stick push or chord (hold one button and press another), tunes each axis (deadzone, curve, inversion, sensitivity, rate or lever) with live meters, sets the left stick's cross-talk guard, moves yaw to the bumpers, tests rumble, and exports or imports the whole set as JSON. Bindings are saved in the browser.
 
 **Testing checklist with a controller** (Chrome, `npm run dev`, `http://localhost:5173/?mode=freeflight&seed=1`):
 
@@ -109,7 +109,8 @@ The HUD shows the stored throttle as a bar beside THR while a pad is connected. 
 8. Options pauses; the D-pad walks the pause menu; open **Controls and gamepad…**, move the sticks and watch the meters, rebind a button, ○ closes it.
 9. Land: gear down (✕), throttle back, hold the left stick down at idle after touchdown to brake.
 10. Pull the USB cable or switch the pad off: a toast says so and nothing stays held.
-11. Keyboard and mouse still fly exactly as before.
+11. Capture the mouse with Tab and leave it off center, then touch the pad: "Gamepad flies: the mouse is off", the HUD's mode reads GAMEPAD, and with the pad let go nothing pulls the stick. Tab gives the mouse back.
+12. Keyboard and mouse still fly exactly as before.
 
 Offline: `tests/inputLayer.test.ts` (the layer's parts) and `tests/gamepadFlight.test.ts` (a whole circuit flown through a synthetic pad); with `npm run dev` up, `node tools/gamepad.session.mjs` drives the real Free Flight with a synthetic pad in headless Chromium.
 

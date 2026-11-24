@@ -20,6 +20,7 @@ import { AB_HOLD, RATE, throttleRate, throttleRateState } from '../src/ui/input/
 import { AB_GATE, MIL_DETENT } from '../src/sim/flight/controlLaws';
 import { FlightInput } from '../src/ui/flight/flightInput';
 import { HeloInput } from '../src/ui/flight/heloInput';
+import { MouseCapture } from '../src/ui/flight/mouseCapture';
 
 const tuning = (o: Partial<AxisTuning> = {}): AxisTuning => ({
   axis: 0,
@@ -473,5 +474,134 @@ describe('menus, padlock and buffet', () => {
     expect(buffetFromAlpha(0.1, 0.3, 0.5)).toBe(0);
     expect(buffetFromAlpha(0.4, 0.3, 0.5)).toBeCloseTo(0.5);
     expect(buffetFromAlpha(0.9, 0.3, 0.5)).toBe(1);
+  });
+});
+
+describe('the gamepad takes the controls from the mouse (decision 368)', () => {
+  /** A canvas and document whose pointer lock the test controls (as tests/mouseCapture.test.ts). */
+  function fakeLock() {
+    const listeners = new Set<() => void>();
+    const doc = {
+      pointerLockElement: null as unknown,
+      exitPointerLock() {
+        this.pointerLockElement = null;
+        listeners.forEach((fn) => fn());
+      },
+      addEventListener: (_t: string, fn: () => void) => listeners.add(fn),
+      removeEventListener: (_t: string, fn: () => void) => listeners.delete(fn),
+    };
+    const el = {
+      requestPointerLock(): Promise<void> {
+        doc.pointerLockElement = el;
+        listeners.forEach((fn) => fn());
+        return Promise.resolve();
+      },
+    };
+    return { doc, el };
+  }
+
+  let pad: FakePad;
+  let layer: InputLayer;
+  let cap: MouseCapture;
+  let view: EventTarget;
+  beforeEach(() => {
+    vi.stubGlobal('window', new EventTarget());
+    vi.stubGlobal('document', new EventTarget());
+    pad = new FakePad();
+    const src = new GamepadSource(() => [pad]);
+    layer = new InputLayer(src, new ProfileStore(null));
+    src.poll();
+    const f = fakeLock();
+    cap = new MouseCapture(f.el, f.doc as never, () => 0);
+    view = new EventTarget();
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  const frames = (input: { update(dt: number): void }, n: number) => {
+    for (let i = 0; i < n; i++) {
+      layer.source.poll();
+      input.update(1 / 60);
+    }
+  };
+  const click = () =>
+    view.dispatchEvent(Object.assign(new Event('pointerdown'), { button: 0, pointerId: 1 }));
+
+  it('stops a captured mouse from holding the stick once the pad moves, until Tab', () => {
+    const input = new FlightInput(view as unknown as HTMLElement, cap, layer);
+    const messages: string[] = [];
+    input.onMessage = (t) => messages.push(t);
+    input.enabled = true;
+    input.mode = 'direct';
+    cap.grab();
+    // The mouse left off center: it holds the stick back.
+    input.moveCursor(0, 300, 1600, 900);
+    frames(input, 1);
+    expect(input.controls.pitch).toBeGreaterThan(0.5);
+    expect(input.padOwns).toBe(false);
+    // One touch of the pad's stick: the mouse is freed and centered.
+    pad.axes[2] = 0.5;
+    frames(input, 1);
+    expect(input.padOwns).toBe(true);
+    expect(cap.captured).toBe(false);
+    expect(input.cursor).toEqual({ x: 0, y: 0 });
+    expect(messages.some((m) => m.includes('mouse is off'))).toBe(true);
+    // The pad let go: nothing holds the stick, and the hold may fly (decision 306).
+    pad.axes[2] = 0;
+    frames(input, 30);
+    expect(input.controls.pitch).toBe(0);
+    expect(input.controls.roll).toBe(0);
+    expect(input.handsOff).toBe(true);
+    // A click on the view does not give the mouse back.
+    click();
+    expect(cap.captured).toBe(false);
+    // Tab (the capture key) does.
+    cap.grab();
+    frames(input, 1);
+    expect(input.padOwns).toBe(false);
+    input.moveCursor(0, 300, 1600, 900);
+    frames(input, 1);
+    expect(input.controls.pitch).toBeGreaterThan(0.5);
+    input.dispose();
+  });
+
+  it('turns mouse aim off when a pad button is pressed, and the stick flies directly', () => {
+    const input = new FlightInput(view as unknown as HTMLElement, cap, layer);
+    input.enabled = true;
+    input.mode = 'mouse-aim';
+    input.directOnGround = false;
+    cap.grab();
+    frames(input, 1);
+    expect(input.mouseAimFlies).toBe(true);
+    pad.set(1, 1);
+    frames(input, 1);
+    pad.set(1, 0);
+    frames(input, 1);
+    expect(input.padOwns).toBe(true);
+    expect(input.mouseAimFlies).toBe(false);
+    expect(cap.captured).toBe(false);
+    pad.axes[3] = 1;
+    frames(input, 1);
+    expect(input.controls.pitch).toBeGreaterThan(0.9);
+    expect(input.keyStick.pitchWeight).toBe(0);
+    input.dispose();
+  });
+
+  it("frees the helicopter's mouse when the pad moves, and ignores the mouse until Tab", () => {
+    const helo = new HeloInput(view as unknown as HTMLElement, cap, layer);
+    helo.enabled = true;
+    cap.grab();
+    frames(helo, 1);
+    pad.axes[1] = -1;
+    frames(helo, 1);
+    expect(helo.padOwns).toBe(true);
+    expect(cap.captured).toBe(false);
+    pad.axes[1] = 0;
+    frames(helo, 1);
+    click();
+    expect(cap.captured).toBe(false);
+    cap.grab();
+    frames(helo, 1);
+    expect(helo.padOwns).toBe(false);
+    helo.dispose();
   });
 });

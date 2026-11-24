@@ -491,7 +491,8 @@ export class Follow {
     this.hold.release();
     a.flown.pilot = (_af, ctl) => {
       Object.assign(ctl, inp.controls);
-      if (inp.mode === 'mouse-aim' && this.aimEngaged && !model.onGround) {
+      // Mouse aim, unless the gamepad took the controls (decision 368).
+      if (inp.mouseAimFlies && this.aimEngaged && !model.onGround) {
         this.hold.release();
         flyMouseAim(this.director, model, this.aimDirection(), ctl, inp);
         Object.assign(inp.controls, ctl);
@@ -1207,7 +1208,8 @@ export class Follow {
     t: number,
   ): void {
     const inp = this.input;
-    const aim = inp.mode === 'mouse-aim';
+    const aim = inp.mouseAimFlies;
+    const pad = inp.padOwns;
     const captured = this.capture.captured;
     let control: ControlCursor | null = null;
     if (aim && this.aimEngaged) {
@@ -1232,10 +1234,10 @@ export class Follow {
         deadzone: STICK_DEADZONE,
       };
     }
-    const mode = aim ? 'mouse aim' : 'direct';
+    const mode = pad ? 'gamepad' : aim ? 'mouse aim' : 'direct';
     const frame = buildHudFrame(model, inp.controls, {
       aid: landingAid(model, this.runways, this.deps.globe.chase.eye),
-      mode: captured ? mode : `${mode} · TAB TO FLY`,
+      mode: captured || pad ? mode : `${mode} · TAB TO FLY`,
       control,
       timing: null,
     });
@@ -1721,7 +1723,13 @@ export class Follow {
       track: p.track,
       heading: p.heading,
       fixedGear: helicopter,
-      control: this.flying ? (this.input.mode === 'mouse-aim' ? 'mouse aim' : 'direct') : 'AI',
+      control: this.flying
+        ? this.input.padOwns
+          ? 'gamepad'
+          : this.input.mode === 'mouse-aim'
+            ? 'mouse aim'
+            : 'direct'
+        : 'AI',
       mouseFree: this.flying && !this.capture.captured,
       messages: [],
       sensors: this.sensorSnap,

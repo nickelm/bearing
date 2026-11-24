@@ -385,6 +385,7 @@ export class FreeFlight {
     // The gamepad's throttle snaps, afterburner and parking brake (Proposal 0014).
     this.input.onMessage = (t) => this.hud.message(t, 2);
     this.heloInput = new HeloInput(deps.canvas, this.capture);
+    this.heloInput.onMessage = (t) => this.hud.message(t, 2);
     this.heloInput.onAction = (a) => this.heloAction(a);
     this.pose = {
       pos: new Vec3d(),
@@ -687,7 +688,8 @@ export class FreeFlight {
     flown.pilot = (_a, ctl, dt) => {
       if (this.pilot) this.pilot.fly(m, ctl, dt);
       else if (
-        this.input.mode === 'mouse-aim' &&
+        // Mouse aim, unless the gamepad took the controls (decision 368).
+        this.input.mouseAimFlies &&
         this.aimEngaged &&
         this.state === 'flying' &&
         !m.onGround
@@ -1328,8 +1330,9 @@ export class FreeFlight {
     }
     const m = this.model;
     if (!m) return;
-    const aim = this.input.mode === 'mouse-aim';
-    const mode = this.pilot ? 'autopilot' : aim ? 'mouse aim' : 'direct';
+    const aim = this.input.mouseAimFlies;
+    const pad = this.input.padOwns;
+    const mode = this.pilot ? 'autopilot' : pad ? 'gamepad' : aim ? 'mouse aim' : 'direct';
     const captured = this.capture.captured;
     // The control cursor (decision 198): mouse aim's ring always (a free mouse holds it), the
     // direct stick only while the mouse flies it.
@@ -1360,7 +1363,7 @@ export class FreeFlight {
     const frame = buildHudFrame(m, this.input.controls, {
       aid: landingAid(m, this.runways, this.deps.globe.chase.eye),
       // A free mouse holds the aim point; in direct mode the keys fly (decision 198).
-      mode: !captured && !this.pilot ? `${mode} · TAB TO FLY` : mode,
+      mode: !captured && !this.pilot && !pad ? `${mode} · TAB TO FLY` : mode,
       control,
       timing: this.debug
         ? { frameMs: this.frameMs, physicsMs: this.physicsMs, steps: this.steps }
@@ -1760,10 +1763,14 @@ export class FreeFlight {
     const control = this.pilot
       ? 'autopilot'
       : this.helo
-        ? 'fly-by-mouse'
-        : this.input.mode === 'mouse-aim'
-          ? 'mouse aim'
-          : 'direct';
+        ? this.heloInput.padOwns
+          ? 'gamepad'
+          : 'fly-by-mouse'
+        : this.input.padOwns
+          ? 'gamepad'
+          : this.input.mode === 'mouse-aim'
+            ? 'mouse aim'
+            : 'direct';
     // Where the aircraft is, its track over the ground and its heading (rad from north).
     const up = m.pos.clone().normalize();
     const east = new Vec3d(0, 1, 0).cross(up).normalize();

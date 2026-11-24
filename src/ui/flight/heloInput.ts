@@ -155,6 +155,7 @@ export class HeloInput {
         const ha = a as HeloAction;
         if (!this.enabled && ha !== 'pause') return;
         if (ha !== 'pause' && menuActive()) return;
+        if (this.enabled) this.padTakeover();
         if (ha === 'hoverHold') this.hoverToggle = true;
         if (ha === 'parkingBrake') this.command.parkingBrake = !this.command.parkingBrake;
         if (PRESS_ACTIONS.has(ha)) this.onAction?.(ha);
@@ -182,7 +183,7 @@ export class HeloInput {
       if (this.lookHeld) {
         this.lookDelta.x += e.movementX;
         this.lookDelta.y += e.movementY;
-      } else if (this.locked) {
+      } else if (this.locked && !this.padHas) {
         this.mouse.x += e.movementX;
         this.mouse.y += e.movementY;
       }
@@ -196,7 +197,8 @@ export class HeloInput {
         e.preventDefault();
         this.onAction?.('recenterView');
       } else if (e.button === 0 && this.capture && !this.capture.captured) {
-        this.capture.grab();
+        // While the pad flies, a click on the view does not hand the mouse the cyclic; Tab does.
+        if (!this.padHas) this.capture.grab();
       }
     };
     const wheel = (e: WheelEvent) => {
@@ -270,6 +272,10 @@ export class HeloInput {
    */
   update(dt = 1 / 60): void {
     const c = this.command;
+    // A capture after the pad took the controls is the player's own (Tab): the mouse flies again.
+    const captured = this.locked;
+    if (captured && !this.capturedWas && this.padHas) this.padHas = false;
+    this.capturedWas = captured;
     this.lookHeld = this.enabled && (this.rightDown || this.isHeld('freeLook'));
     if (!this.lookHeld) {
       this.lookDelta.x = 0;
@@ -301,6 +307,27 @@ export class HeloInput {
    * so letting go brings the nose back where it was; with the look modifier held the right
    * stick looks around instead.
    */
+  /**
+   * The gamepad has the controls (decision 368): the first pad button or stick input in flight
+   * frees the mouse, whose motion then commands nothing until Tab captures it again.
+   */
+  get padOwns(): boolean {
+    return this.padHas;
+  }
+
+  private padHas = false;
+  private capturedWas = false;
+  /** A line for the HUD when the pad takes the controls. */
+  onMessage: ((text: string) => void) | null = null;
+
+  private padTakeover(): void {
+    if (this.padHas) return;
+    this.padHas = true;
+    this.mouse.x = this.mouse.y = 0;
+    this.capture?.release();
+    this.onMessage?.('Gamepad flies: the mouse is off (Tab gives it back)');
+  }
+
   private gamepad(dt: number): void {
     const L = this.layer;
     const c = this.command;
@@ -317,6 +344,7 @@ export class HeloInput {
       pitch = L.axis('cyclicPitch') * PAD_CYCLIC_PITCH * (this.invertPitch ? -1 : 1);
       const roll = L.axis('cyclicRoll');
       if (roll !== 0) c.lateral = roll;
+      if (pitch !== 0 || roll !== 0) this.padTakeover();
     }
     c.mousePitch += pitch - this.padPitch;
     this.padPitch = pitch;
@@ -324,6 +352,7 @@ export class HeloInput {
     if (pedals !== 0) c.pedals = pedals;
     const coll = L.axis('collective');
     if (coll !== 0) c.collective = coll;
+    if (pedals !== 0 || coll !== 0) this.padTakeover();
   }
 
   /** After the first step of a frame: the mouse and the toggle count once. */

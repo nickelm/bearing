@@ -185,6 +185,11 @@ async function main(): Promise<void> {
   pad.axes[1] = -1;
   frames(200);
   check(!c.parkingBrake, 'the throttle push releases the parking brake');
+  check(ff.input.padOwns && !ff.input.mouseAimFlies, 'the pad has the controls (decision 368)');
+  check(
+    messages.some((m) => m.includes('mouse is off')),
+    'the HUD says the mouse is off',
+  );
   check(
     c.throttle >= AB_GATE,
     `a held push passes into afterburner (lever ${c.throttle.toFixed(2)})`,

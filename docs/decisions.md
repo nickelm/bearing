@@ -5327,3 +5327,20 @@ The per-vertex coverage, albedo and side (±1) go to the GPU as one vec3 attribu
 **Reason:** Proposal 0014's menus by gamepad with visible focus, its press-to-bind screen and optional rumble. Browser focus rather than a separate cursor keeps keyboard Enter and Space working on the same element.
 
 **How it was checked (360–367).** `tests/inputLayer.test.ts`: deadzones, curves, inversion and sensitivity; the cross-talk guard; throttle as a rate, the detent, the afterburner hold, the stop at military on the way down, both snaps and slow pushes that are no taps; codes, names and chords; conflicts and none in the default layouts; the source's connect, press, half-axis hysteresis, disconnect, merging and rumble; profile persistence, reset, export, import and refusal; the jet and the helicopter on a synthetic pad; spatial navigation; a consumed press; padlock angles; buffet. `tests/gamepadFlight.test.ts`: the test pilot's takeoff with afterburner, circuit and landing in the touchdown zone, every control passing through a fake pad and the input layer (parking brake released by the throttle push, gear by ✕). `tools/gamepad.session.mjs`: the real `FreeFlight` class in headless Chromium with a synthetic pad behind `navigator.getGamepads()`, from the hidden pad's prompt through the start screen by D-pad, a takeoff on the sticks, free look, the pause menu and the bindings screen, display focus and a disconnect. The existing unit suite, `tools/freeflight.session.mjs`, the type check and lint pass unchanged.
+
+### 368. The gamepad takes the controls from the mouse until Tab gives them back
+
+**Date:** 2026-11-24
+**Decision:** The first gamepad input in flight (any button press, or any stick past its deadzone) hands the flown aircraft's controls to the pad (`FlightInput.padOwns`, `HeloInput.padOwns`):
+
+- the pointer lock is freed through the one `MouseCapture` (rule 14), the jet's cursor is centered and any key blend of mouse aim is cut;
+- while the pad owns the controls the mouse commands nothing: in the jet it neither deflects the stick (direct) nor rotates on the wheels, and mouse aim is off (`FlightInput.mouseAimFlies` is false, so Free Flight and the campaign's taken-over jet fly the stick directly and hide the aim ring); in the helicopters a captured mouse's motion adds nothing;
+- with the pad's stick centered and the mouse free, the hold of decision 306 flies, as with the keys in direct control;
+- a click on the view no longer captures the mouse while the pad owns the controls; only the capture key (Tab) does, and that capture gives the controls back to the mouse until the pad is touched again;
+- the HUD says "Gamepad flies: the mouse is off (Tab gives it back)" once, and the HUD's mode and the strip's control read GAMEPAD.
+
+The keys keep working beside the pad, as they did. This amends decisions 198 and 206 for a player with a pad: a captured mouse, or mouse aim engaged once in the sortie, no longer keeps flying after the pad is used.
+
+**How it was checked.** `tests/inputLayer.test.ts`: a captured mouse holding the stick back stops the moment the pad's stick moves (the lock freed, the cursor centered, the stick at zero with the pad let go, the hold allowed), a click does not take the controls back and Tab does; a pad button turns mouse aim off and the stick flies directly; the helicopter's mouse is freed and stays out until Tab. `tools/gamepad.session.mjs` checks that the pad owns the controls after the takeoff push; `tools/freeflight.session.mjs` (keyboard and mouse) passes unchanged.
+
+**Reason:** the owner's test with a DualShock 4: a mouse captured by mistake kept its offset on the stick, and mouse aim kept flying toward the held ring, so the pad had to fight it at every moment with its stick centered. With a pad in hand the mouse is an accident, not an input; the deliberate key that captures it is the one way back.
