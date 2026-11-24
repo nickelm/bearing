@@ -13,6 +13,10 @@
  *   storm, blizzard and dust-storm presets blow a gale across whatever runway
  *   the player chose, more than any fighter's crosswind limit; with the limit
  *   a takeoff in a storm drifts and shakes but stays on the pavement.
+ *   Rotorcraft take the `surface` profile instead (R2.9): the wind falls off
+ *   toward the ground as a logarithmic surface layer over the ground's
+ *   roughness, with no cap, so a helicopter hovering low in a gale feels a
+ *   strong wind, as it would (`surfaceWindFactor`).
  * - Gusts: a smooth field that stands in the air, the same for every caller
  *   and every run (a lattice of hashed values in position and time, no random
  *   numbers; rule 5). Its strength comes from the weather: storms most
@@ -34,6 +38,32 @@ export const GUST_PERIOD = 6;
 /** Most wind an aircraft on the ground feels (m/s), and the height at which it feels all of it (m). */
 export const GROUND_WIND_LIMIT = 8;
 export const SHELTER_HEIGHT: Meters = 150;
+/**
+ * How the wind falls off near the ground: `runway`, the jets' cap of GROUND_WIND_LIMIT
+ * rising to the full wind at SHELTER_HEIGHT (decision 143); `surface`, a logarithmic
+ * surface layer for rotorcraft (R2.9).
+ */
+export type WindProfile = 'runway' | 'surface';
+/** Aerodynamic roughness lengths (m): open land, forest, open water. */
+export const OPEN_ROUGHNESS: Meters = 0.03;
+export const FOREST_ROUGHNESS: Meters = 0.8;
+export const WATER_ROUGHNESS: Meters = 0.0002;
+/** Least height the surface layer is evaluated at (m): below it the profile is held. */
+export const SURFACE_FLOOR: Meters = 2;
+
+/**
+ * The share of the weather's wind felt `aboveGround` m over ground of roughness `z0`
+ * (m), by the logarithmic surface layer u(h) = u(H)·ln(h/z0)/ln(H/z0), H = SHELTER_HEIGHT;
+ * 1 from H up. The height is floored at SURFACE_FLOOR or three roughness lengths, where
+ * the log law stops holding (in a forest, the canopy's own layer).
+ */
+export function surfaceWindFactor(aboveGround: Meters, z0: Meters = OPEN_ROUGHNESS): number {
+  if (aboveGround >= SHELTER_HEIGHT) return 1;
+  const z = Math.max(1e-5, z0);
+  const h = Math.max(aboveGround, SURFACE_FLOOR, 3 * z);
+  return Math.min(1, Math.max(0, Math.log(h / z) / Math.log(SHELTER_HEIGHT / z)));
+}
+
 /** RMS gust speed (m/s) in a full thunderstorm, in cloud, and per m/s of wind near the ground. */
 export const GUST_STORM = 4;
 export const GUST_CLOUD = 1.2;
@@ -117,7 +147,9 @@ const windScratch: Wind = { east: 0, north: 0 };
  * game time, into `out`: the weather's wind there plus `gusts` times the gust
  * field (1 = as the weather has it, 0 = the steady wind alone). `radius` is
  * the planet's, `aboveGround` the aircraft's height over the ground (m).
- * Without a view the air is still.
+ * Without a view the air is still. `profile` picks how the wind falls off near the
+ * ground (the jets' runway cap by default; `surface` for rotorcraft, over ground of
+ * roughness `roughness`).
  */
 export function airVelocity(
   view: WeatherView | null,
@@ -127,6 +159,8 @@ export function airVelocity(
   aboveGround: Meters,
   out: Vec3d,
   gusts = 1,
+  profile: WindProfile = 'runway',
+  roughness: Meters = OPEN_ROUGHNESS,
 ): Vec3d {
   if (!view || !view.ready) return out.set(0, 0, 0);
   const r = pos.length();
@@ -136,7 +170,12 @@ export function airVelocity(
   const altitude = r - radius;
   const wind = view.wind(pos, altitude, t, windScratch);
   let speed = Math.hypot(wind.east, wind.north);
-  if (speed > GROUND_WIND_LIMIT) {
+  if (profile === 'surface') {
+    const k = surfaceWindFactor(aboveGround, roughness);
+    wind.east *= k;
+    wind.north *= k;
+    speed *= k;
+  } else if (speed > GROUND_WIND_LIMIT) {
     const shelter = Math.min(1, Math.max(0, aboveGround / SHELTER_HEIGHT));
     const felt = GROUND_WIND_LIMIT + (speed - GROUND_WIND_LIMIT) * shelter;
     wind.east *= felt / speed;

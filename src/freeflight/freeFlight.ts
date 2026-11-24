@@ -1218,7 +1218,10 @@ export class FreeFlight {
     return flightStartTime(lon, this.options.timeOfDay, this.deps.orbit, this.deps.calendar());
   }
 
-  /** The air's velocity at the aircraft from the weather, before a step of the model. */
+  /**
+   * The air's velocity at the aircraft from the weather, before a step of the model:
+   * the jets' runway cap near the ground, the surface layer for a helicopter (R2.9).
+   */
   private setWind(m: Airframe): void {
     if (!this.options.wind) {
       m.wind.set(0, 0, 0);
@@ -1231,6 +1234,8 @@ export class FreeFlight {
       this.gameTime,
       Math.max(0, m.telemetry.radarAltitude),
       m.wind,
+      1,
+      m.kind === 'rotorcraft' ? 'surface' : 'runway',
     );
   }
 

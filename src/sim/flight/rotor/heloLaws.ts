@@ -90,6 +90,30 @@ const ROLL_RATE = 0.6;
 /** Most load factor the collective asks for (g). */
 const MAX_LOAD = 1.6;
 
+/**
+ * What the director asks this step (heloDirector.ts turns a `DirectorTarget` into it):
+ * the velocity over the ground to fly, the nose heading in the hover, the climb rate, and
+ * whether to land. The laws fly it with the same inner loops as the pilot's commands.
+ */
+export interface HeloDirective {
+  /** Ground velocity to fly (world, m/s); only its horizontal part is read. */
+  velocity: Readonly<Vec3d>;
+  /** Nose heading (rad, clockwise from north) in the hover's regime, or null to hold it. */
+  heading: number | null;
+  /** Climb rate (m/s, + up). */
+  climbRate: number;
+  /** Put it down: on contact the collective goes down and stays there (the S key's landing). */
+  land: boolean;
+  /** Most horizontal acceleration along the nose (m/s²); DIRECT_ACCEL if absent. */
+  maxAccel?: number;
+}
+
+/** Velocity loop gain of the director's entry (1/s) and its horizontal acceleration limit (m/s²). */
+export const DIRECT_VEL = 0.9;
+export const DIRECT_ACCEL = 2.5;
+/** Most bank the director's turns take at speed (rad): a rate-one turn needs far less. */
+const DIRECT_TURN_BANK = 30 * (Math.PI / 180);
+
 export class HeloLaws {
   /** Attitude and heading targets (rad), the altitude to hold (m above sea level) or null. */
   pitchTarget = 0;
@@ -313,7 +337,159 @@ export class HeloLaws {
     if (onGround) this.bankShaped = tel.bank;
     bankCmd = this.bankShaped;
 
-    // ---- Cyclic: attitude → angular acceleration → moment → disc tilt ----
+    this.cyclic(m, pitchCmd, bankCmd, dt, out);
+
+    // ---- Pedals: heading hold in the hover, coordination at speed, the torque's trim ----
+    const rmax = spec.controls.maxYawRate;
+    if (onGround && this.landed) this.headingTarget = psi;
+    this.headingTarget = wrap(this.headingTarget + cmd.pedals * rmax * (1 - w) * dt);
+    if (w > 0.5) this.headingTarget = psi;
+    const rHover =
+      clamp(YAW_GAIN * wrap(this.headingTarget - psi), -rmax, rmax) + cmd.pedals * rmax;
+    const v = Math.max(tel.tas, 10);
+    const rTurn = a.turnCoordination
+      ? (G * Math.tan(clamp(tel.bank, -1.2, 1.2))) / v + cmd.pedals * rmax * 0.5
+      : cmd.pedals * rmax * 0.5;
+    const rDes = (1 - w) * rHover + w * rTurn;
+    this.yaw(m, rDes, w, a, cmd.pedals, dt, out);
+
+    // ---- Collective ----
+    if (a.collective === 'climb-rate') {
+      let vsCmd: number;
+      if (Math.abs(cmd.collective) > 0.05) {
+        vsCmd = cmd.collective * spec.controls.maxClimbRate;
+        this.altitudeTarget = null;
+      } else {
+        // The altitude to hold: where a climb or descent at this rate stops at 2 m/s², so
+        // letting go of W in a full climb does not overshoot and sink back.
+        if (this.altitudeTarget === null && !onGround)
+          this.altitudeTarget = tel.altitude + (vs * Math.abs(vs)) / (2 * 2);
+        vsCmd =
+          this.altitudeTarget === null
+            ? 0
+            : clamp(ALT_GAIN * (this.altitudeTarget - tel.altitude), -2, 2);
+      }
+      this.lift(m, vsCmd, cmd.collective, a, dt);
+    } else {
+      this.collective = clamp(this.collective + cmd.collective * 0.4 * dt, 0, 1);
+      this.landed = onGround && this.collective < 0.2;
+    }
+    out.collective = this.collective;
+    out.brake = cmd.brake;
+    out.parkingBrake = cmd.parkingBrake;
+  }
+
+  /**
+   * The director's entry (heloDirector.ts; rule 12): the same layer flown from a ground
+   * velocity, a heading and a climb rate instead of the mouse and keys. A horizontal
+   * acceleration toward the velocity wanted becomes the attitude (pitch = trim − a_fwd/g,
+   * bank = trim + atan(a_right/g)), the nose holds its heading in the hover's regime and
+   * turns coordinated at speed, and the collective flies the climb rate; the cyclic, pedals
+   * and collective then come from the inner loops `update` uses, so the AI and the player
+   * meet at the same place.
+   */
+  direct(
+    m: RotorcraftModel,
+    d: Readonly<HeloDirective>,
+    a: Readonly<Assists>,
+    dt: number,
+    out: RotorControls,
+  ): void {
+    const spec = m.spec;
+    const tel = m.telemetry;
+    const sc = this.scratch;
+    const up = sc.up.copy(m.pos).normalize();
+    const psi = tel.heading;
+    const { east, north } = eastNorth(up);
+    const fwd = sc.fwd.copy(north).scale(Math.cos(psi)).addScaled(east, Math.sin(psi));
+    const right = sc.right.copy(fwd).cross(up);
+    const vf = m.vel.dot(fwd);
+    const vr = m.vel.dot(right);
+    const w = smoothstep(spec.controls.hoverSpeed, spec.controls.turnSpeed, Math.max(0, vf));
+    const onGround = tel.wow > 0.3;
+    this.hoverHold = false;
+    this.altitudeTarget = null;
+
+    // The trim attitude, as in `update`.
+    const f = tel.aero;
+    if (-f.z > 0.3 * m.mass * G) {
+      const k = Math.min(1, dt / TRIM_FILTER);
+      this.trimPitch += (Math.atan2(f.x, -f.z) - this.trimPitch) * k;
+      this.trimBank += (Math.atan2(-f.y, -f.z) - this.trimBank) * k;
+    }
+
+    // ---- Horizontal: the acceleration toward the velocity wanted, as an attitude ----
+    const vfCmd = d.velocity.dot(fwd);
+    const vrCmd = d.velocity.dot(right);
+    const amax = d.maxAccel ?? DIRECT_ACCEL;
+    // At speed the sideways acceleration is the turn's: up to DIRECT_TURN_BANK, at a softer gain.
+    const latMax = amax + w * (G * Math.tan(DIRECT_TURN_BANK) - amax);
+    let af = clamp(DIRECT_VEL * (vfCmd - vf), -amax, amax);
+    // Power goes to the height first: on the torque limit and short of the climb asked for,
+    // no more speed (an acceleration's nose-down attitude at the limit gave the height away).
+    const vsNow = m.vel.dot(up);
+    if (this.limited && vsNow < d.climbRate - 0.5) af = Math.min(af, 0);
+    const ar = clamp((DIRECT_VEL - 0.4 * w) * (vrCmd - vr), -latMax, latMax);
+    // Near the hover, integrators on small errors take up what the trim attitude misses.
+    if (!onGround && w < 0.5) {
+      if (Math.abs(vfCmd - vf) < 1)
+        this.velIFwd = clamp(this.velIFwd + HOLD_I * (vfCmd - vf) * dt, -0.05, 0.05);
+      if (Math.abs(vrCmd - vr) < 1)
+        this.velIRight = clamp(this.velIRight + HOLD_I * (vrCmd - vr) * dt, -0.05, 0.05);
+    } else if (onGround) {
+      this.velIFwd = this.velIRight = 0;
+    }
+    let pitchCmd = this.trimPitch - af / G - this.velIFwd;
+    let bankCmd = this.trimBank + Math.atan(ar / G) + this.velIRight;
+    if (a.protection === 'on') {
+      const over = tel.tas - 0.85 * spec.limits.vne;
+      if (over > 0) pitchCmd += (1.5 * over) / spec.limits.vne;
+    }
+    if (a.maxPitch !== null) pitchCmd = clamp(pitchCmd, -a.maxPitch, a.maxPitch);
+    if (a.maxBank !== null) bankCmd = clamp(bankCmd, -a.maxBank, a.maxBank);
+    this.bankShaped += clamp(wrap(bankCmd - this.bankShaped), -ROLL_RATE * dt, ROLL_RATE * dt);
+    if (onGround) this.bankShaped = tel.bank;
+    bankCmd = this.bankShaped;
+    // A pilot taking over carries on from here.
+    this.pitchTarget = pitchCmd;
+    this.bankTarget = w * bankCmd;
+    this.cyclic(m, pitchCmd, bankCmd, dt, out);
+
+    // ---- Yaw: the heading in the hover, coordination at speed ----
+    const rmax = spec.controls.maxYawRate;
+    if (onGround && this.landed) this.headingTarget = psi;
+    else if (d.heading !== null) this.headingTarget = wrap(d.heading);
+    else if (w > 0.5) this.headingTarget = psi;
+    else if (Math.hypot(vfCmd, vrCmd) > spec.controls.hoverSpeed) {
+      // Asked to go somewhere at speed without a heading: the nose turns to the way to go,
+      // so the speed builds along it and the turn's regime takes over.
+      this.headingTarget = wrap(psi + Math.atan2(vrCmd, vfCmd));
+    }
+    const rHover = clamp(YAW_GAIN * wrap(this.headingTarget - psi), -rmax, rmax);
+    const v = Math.max(tel.tas, 10);
+    const rTurn = a.turnCoordination ? (G * Math.tan(clamp(tel.bank, -1.2, 1.2))) / v : 0;
+    this.yaw(m, (1 - w) * rHover + w * rTurn, w, a, 0, dt, out);
+
+    // ---- Collective: the climb rate, and the landing ----
+    const climb = clamp(d.climbRate, -spec.controls.maxClimbRate, spec.controls.maxClimbRate);
+    this.lift(m, climb, d.land ? -1 : 0, a, dt);
+    out.collective = this.collective;
+    out.brake = 0;
+    out.parkingBrake = onGround && this.landed;
+  }
+
+  // ---- The inner loops, shared by the pilot's commands (`update`) and the director's (`direct`) ----
+
+  /** Cyclic: attitude → angular acceleration → moment → disc tilt, toward `pitchCmd` and `bankCmd` (rad). */
+  private cyclic(
+    m: RotorcraftModel,
+    pitchCmd: number,
+    bankCmd: number,
+    dt: number,
+    out: RotorControls,
+  ): void {
+    const spec = m.spec;
+    const tel = m.telemetry;
     const [ixx, iyy] = spec.inertia;
     const cp = Math.max(
       m.controlPower,
@@ -343,19 +519,24 @@ export class HeloLaws {
     const tiltR = (ixx * ap) / cp + tau * m.omega.x - m.flapRight;
     out.cyclicLon = clamp((air * tiltF) / spec.main.cyclic[0], -1, 1);
     out.cyclicLat = clamp((air * tiltR) / spec.main.cyclic[1], -1, 1);
+  }
 
-    // ---- Pedals: heading hold in the hover, coordination at speed, the torque's trim ----
-    const rmax = spec.controls.maxYawRate;
-    if (onGround && this.landed) this.headingTarget = psi;
-    this.headingTarget = wrap(this.headingTarget + cmd.pedals * rmax * (1 - w) * dt);
-    if (w > 0.5) this.headingTarget = psi;
-    const rHover =
-      clamp(YAW_GAIN * wrap(this.headingTarget - psi), -rmax, rmax) + cmd.pedals * rmax;
-    const v = Math.max(tel.tas, 10);
-    const rTurn = a.turnCoordination
-      ? (G * Math.tan(clamp(tel.bank, -1.2, 1.2))) / v + cmd.pedals * rmax * 0.5
-      : cmd.pedals * rmax * 0.5;
-    const rDes = (1 - w) * rHover + w * rTurn;
+  /**
+   * Pedals toward the yaw rate `rDes` (rad/s), with the torque's trim; without pedal trim,
+   * the raw pedals `rawPedals` pass through.
+   */
+  private yaw(
+    m: RotorcraftModel,
+    rDes: number,
+    w: number,
+    a: Readonly<Assists>,
+    rawPedals: number,
+    dt: number,
+    out: RotorControls,
+  ): void {
+    const spec = m.spec;
+    const tel = m.telemetry;
+    const sc = this.scratch;
     const izz = spec.inertia[2];
     const mzWant = izz * YAW_RATE_GAIN * (rDes - m.omega.z);
     if (a.pedalTrim) {
@@ -374,76 +555,70 @@ export class HeloLaws {
       const want = (mzWant + this.yawTrim - react) / arm;
       out.pedals = invertMonotone((p) => m.tailThrustFor(p), want, -1, 1);
     } else {
-      out.pedals = clamp(cmd.pedals, -1, 1);
+      out.pedals = clamp(rawPedals, -1, 1);
     }
+  }
 
-    // ---- Collective ----
-    if (a.collective === 'climb-rate') {
-      let vsCmd: number;
-      if (Math.abs(cmd.collective) > 0.05) {
-        vsCmd = cmd.collective * spec.controls.maxClimbRate;
-        this.altitudeTarget = null;
-      } else {
-        // The altitude to hold: where a climb or descent at this rate stops at 2 m/s², so
-        // letting go of W in a full climb does not overshoot and sink back.
-        if (this.altitudeTarget === null && !onGround)
-          this.altitudeTarget = tel.altitude + (vs * Math.abs(vs)) / (2 * 2);
-        vsCmd =
-          this.altitudeTarget === null
-            ? 0
-            : clamp(ALT_GAIN * (this.altitudeTarget - tel.altitude), -2, 2);
-      }
-      if (a.landingAid && vsCmd < 0)
-        vsCmd = Math.max(vsCmd, -Math.max(0.5, 0.3 * tel.radarAltitude));
-      // Down on the gear: with S held any contact lands it (a running landing carries
-      // the weight on the rotor for a while); let go, it lands once the gear carries it.
-      const down = m.onGround && cmd.collective < -0.05;
-      if ((onGround && cmd.collective <= 0.05 && vsCmd <= 0.05) || down) {
-        // Down on the gear: the collective goes down and stays there.
-        this.landed = true;
-        this.altitudeTarget = null;
-        this.collective = Math.max(0, this.collective - 0.6 * dt);
-      } else {
-        if (this.landed && vsCmd > 0.1) this.landed = false;
-        if (!this.landed) {
-          const az = clamp(CLIMB_GAIN * (vsCmd - vs), -3, 3);
-          const n = m.discNormal(sc.n);
-          const nUp = Math.max(0.3, m.q.rotate(n, new Vec3d()).dot(up));
-          // No more than 1.6 g of thrust: a level 45° turn needs 1.41 g. Past it the altitude
-          // gives way (unbounded, a steep bank asked for over 3 g and the roll ran away).
-          const want = Math.min((m.mass * (G + az)) / nUp, MAX_LOAD * m.mass * G);
-          let c = invertMonotone((x) => m.thrustFor(x), want, 0, 1);
-          // The torque limiter keeps the torque under the transmission's limit and the power
-          // within what the engine gives, and backs the collective off if the rotor droops: a
-          // drooping rotor takes the tail rotor's authority with it.
-          if (a.torqueLimiter) {
-            const atLimit = tel.power >= 0.99 * tel.powerAvailable;
-            const over = Math.max(
-              tel.torque - 1,
-              atLimit ? 0.97 - tel.rotorSpeed : -1,
-              0.93 - tel.rotorSpeed,
-            );
-            this.limited = over > -0.02 && c > this.collective;
-            if (over > 0) c = Math.min(c, this.collective - 2 * over * dt);
-            // Overspeed: in a flare or a quick stop the rotor speeds up and the engine cannot
-            // brake it; past 103% a floor on the collective loads it (altitude gives way).
-            const fast = tel.rotorSpeed - 1.03;
-            if (fast > 0) c = Math.max(c, this.collective + 10 * fast * dt);
-          }
-          this.collective = clamp(
-            this.collective + clamp(c - this.collective, -0.8 * dt, 0.6 * dt),
-            0,
-            1,
-          );
-        }
-      }
+  /**
+   * Collective toward the climb rate `vsCmd` (m/s), landing on the gear: `lever` is the
+   * collective key (−1..1); held down on contact it lands the helicopter, let go it lands
+   * once the gear carries it. Reads `scratch.up`, which the caller has set to the local up.
+   */
+  private lift(
+    m: RotorcraftModel,
+    vsCmd: number,
+    lever: number,
+    a: Readonly<Assists>,
+    dt: number,
+  ): void {
+    const tel = m.telemetry;
+    const sc = this.scratch;
+    const up = sc.up;
+    const vs = m.vel.dot(up);
+    const onGround = tel.wow > 0.3;
+    if (a.landingAid && vsCmd < 0) vsCmd = Math.max(vsCmd, -Math.max(0.5, 0.3 * tel.radarAltitude));
+    // Down on the gear: with S held any contact lands it (a running landing carries
+    // the weight on the rotor for a while); let go, it lands once the gear carries it.
+    const down = m.onGround && lever < -0.05;
+    if ((onGround && lever <= 0.05 && vsCmd <= 0.05) || down) {
+      // Down on the gear: the collective goes down and stays there.
+      this.landed = true;
+      this.altitudeTarget = null;
+      this.collective = Math.max(0, this.collective - 0.6 * dt);
     } else {
-      this.collective = clamp(this.collective + cmd.collective * 0.4 * dt, 0, 1);
-      this.landed = onGround && this.collective < 0.2;
+      if (this.landed && vsCmd > 0.1) this.landed = false;
+      if (!this.landed) {
+        const az = clamp(CLIMB_GAIN * (vsCmd - vs), -3, 3);
+        const n = m.discNormal(sc.n);
+        const nUp = Math.max(0.3, m.q.rotate(n, new Vec3d()).dot(up));
+        // No more than 1.6 g of thrust: a level 45° turn needs 1.41 g. Past it the altitude
+        // gives way (unbounded, a steep bank asked for over 3 g and the roll ran away).
+        const want = Math.min((m.mass * (G + az)) / nUp, MAX_LOAD * m.mass * G);
+        let c = invertMonotone((x) => m.thrustFor(x), want, 0, 1);
+        // The torque limiter keeps the torque under the transmission's limit and the power
+        // within what the engine gives, and backs the collective off if the rotor droops: a
+        // drooping rotor takes the tail rotor's authority with it.
+        if (a.torqueLimiter) {
+          const atLimit = tel.power >= 0.99 * tel.powerAvailable;
+          const over = Math.max(
+            tel.torque - 1,
+            atLimit ? 0.97 - tel.rotorSpeed : -1,
+            0.93 - tel.rotorSpeed,
+          );
+          this.limited = over > -0.02 && c > this.collective;
+          if (over > 0) c = Math.min(c, this.collective - 2 * over * dt);
+          // Overspeed: in a flare or a quick stop the rotor speeds up and the engine cannot
+          // brake it; past 103% a floor on the collective loads it (altitude gives way).
+          const fast = tel.rotorSpeed - 1.03;
+          if (fast > 0) c = Math.max(c, this.collective + 10 * fast * dt);
+        }
+        this.collective = clamp(
+          this.collective + clamp(c - this.collective, -0.8 * dt, 0.6 * dt),
+          0,
+          1,
+        );
+      }
     }
-    out.collective = this.collective;
-    out.brake = cmd.brake;
-    out.parkingBrake = cmd.parkingBrake;
   }
 
   private engageHold(m: RotorcraftModel): void {
