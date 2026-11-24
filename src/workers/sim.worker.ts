@@ -133,6 +133,18 @@ function post(
   header[SnapshotField.AirborneAlliance] = air?.airborneAt('alliance', time) ?? 0;
   header[SnapshotField.AirbornePact] = air?.airborneAt('pact', time) ?? 0;
   const missions = airChanged ? air.liveMissions() : undefined;
+  const survivors = airChanged
+    ? air.survivors
+        .filter((x) => x.state === 'down' || x.state === 'aboard')
+        .map((x) => ({
+          id: x.id,
+          side: x.side,
+          point: x.point,
+          state: x.state as 'down' | 'aboard',
+          injury: x.injury,
+          water: x.water,
+        }))
+    : undefined;
   const dmg = world.damage;
   const damageChanged = dmg !== null && (force || dmg.revision !== sentDamageRevision);
   const damage = damageChanged
@@ -159,6 +171,7 @@ function post(
       slowed,
       hash: force ? world.sim.hash() : undefined,
       missions,
+      survivors,
       ground,
       damage,
     },

@@ -551,6 +551,7 @@ async function main(): Promise<void> {
         weather: () => sim.weather,
         tone: (kind) => audio.cue(kind),
         groundUnits: () => groundUnits,
+        survivors: () => sim.survivors,
       });
   // The campaign's aircraft near the camera (R2.4); the followed flight is Follow's to draw.
   const traffic = freeFlightMode

@@ -58,6 +58,7 @@ export const LOOK_IDS = [
   'flare-smoke',
   'mist',
   'debris-smoke',
+  'signal-smoke',
 ] as const;
 export type LookId = (typeof LOOK_IDS)[number];
 
@@ -316,6 +317,21 @@ export const LOOKS: readonly Look[] = [
     turbulence: 0.6,
     wind: 1,
   }),
+  // A survivor's signal smoke (R2.9): dense orange, low and drifting with the wind.
+  look('signal-smoke', {
+    life: [14, 20],
+    color: [
+      [0, 0.95, 0.36, 0.06],
+      [0.5, 0.9, 0.45, 0.12],
+      [1, 0.78, 0.55, 0.32],
+    ],
+    radius: BILLOW,
+    riseSpeed: 1.2,
+    rise: SLOWING,
+    drag: 0.8,
+    turbulence: 0.7,
+    wind: 1,
+  }),
   look('steam', {
     life: [24, 32],
     color: [gray(0, 0.92), gray(1, 0.88)],
@@ -463,6 +479,7 @@ export const PRESET_IDS = [
   'waterfall-mist',
   'gun-smoke',
   'cannon-smoke',
+  'signal-smoke',
 ] as const;
 export type PresetId = (typeof PRESET_IDS)[number];
 
@@ -663,6 +680,23 @@ export const EMITTERS: Readonly<Partial<Record<PresetId, EmitterPreset>>> = {
     label: 'Chimney',
     streams: [
       stream({ look: 'chimney', rate: 0.6, size: [3, 4], up: 2, spread: 0.8, jitter: 0.8 }),
+    ],
+    duration: null,
+    prewarm: true,
+    range: 15_000,
+  },
+  'signal-smoke': {
+    id: 'signal-smoke',
+    label: 'Signal smoke',
+    streams: [
+      stream({
+        look: 'signal-smoke',
+        rate: 2.5,
+        size: [1.6, 2.6],
+        up: 1.5,
+        spread: 0.6,
+        jitter: 0.5,
+      }),
     ],
     duration: null,
     prewarm: true,

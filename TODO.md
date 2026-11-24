@@ -280,7 +280,7 @@ The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status
 - [ ] Each aircraft of a flight as its own contact and target near the aircraft (formation slots), merging into one at range
 - [ ] Surface-to-air sites as entities (R3.5) in place of the defended places' stand-in radars; their launches
 - [x] Interface defaults per mission type and phase: master mode, formats, HUD cues, declutter (the triggers' cruise mode, formats between edits and presets, weapon pre-selection, target and station diamonds, the landing aid on the ground and the approach only; decision 304)
-- [ ] The helicopters' 'landing-zone' cue (R2.9: the CSAR plug-in's on-target phase)
+- [x] The helicopters' 'landing-zone' cue (R2.9: the CSAR plug-in's fence-in and pickup; decision 357)
 - [x] Route and waypoints on the moving map; HUD steering to the next waypoint; the front on the map (waypoints from the route's phases, sequenced by phase or within 2 nm; the map's projection for every symbol; the front in the elevation modes; the picture without flights and units; decision 305)
 - [ ] Datalink tracks, threat rings and the bullseye on the moving map (with the intraflight datalink task and R3.2)
 - [ ] Waypoint callouts and a waypoint step key (the crewmate's in R4; a key or bezel button to step the steerpoint by hand)
@@ -361,22 +361,29 @@ Started 2026-11-23, in parallel with R2.8 in a second session (decisions 314–3
 
 Started 2026-11-24 (decisions 351 on). Two threads: the campaign's survivors and the CSAR plug-in (worker), and the rotary director, the AI helicopter pilot and the surface wind (flight model), joined in the follow at full fidelity.
 
-- [ ] Survivor records (`sim/air/survivors.ts`): position, injury (none, light, serious), survival timer by injury and surface (land or water), state (down, rescued, captured, died); saved, hashed, logged
-- [ ] Capture risk: a hazard per hour from the nearest enemy battalion's anchor (the ground war's picture) and the side of the front the survivor is on; checked on a survivor tick with draws from rng(seed, "survivors") forked by survivor
-- [ ] CSAR plug-in, all eight parts: planner rule (every survivor down and untasked, at once, never refused for its score), package (rescue helicopter, attack-helicopter escort, fighter cover over the survivor), aggregate resolver, AI behavior per phase, jump-in (departure to complete), success and consequences, briefing, interface defaults with the 'landing-zone' cue
-- [ ] The CSAR mission types' profiles (the rescue helicopter lands at the survivor), labels, categories; urgent planning at each ATO tick, outside the revision period
-- [ ] Outcomes: rescued pilots back on their squadron's roster at the rescue's recovery; captured or dead ones logged; the map's and mission search's view of them
-- [ ] Crews limit sorties: a squadron flies at most as many aircraft as it has crews (roster ÷ crew per aircraft); the ATO, the ledger and launch read it
-- [ ] Rotary director (`sim/flight/rotor/heloDirector.ts`): a target layer on `HeloLaws` (ground velocity, hover point, heading, height) sharing the inner loops; the player's laws unchanged bit for bit
-- [ ] AI helicopter pilot: route tracking, the approach, a landing at a point clear of trees and slopes (`landingZone.ts`), the pickup's wait, the takeoff and the way home
-- [ ] Surface-layer wind for rotorcraft in place of the 8 m/s cap (jets keep it; the Kestrel's lockstep unchanged)
-- [ ] Tests: the director and recorded inputs fly the same result; a landing at a survivor in a 10 m/s crosswind
-- [ ] Full fidelity for a followed CSAR helicopter (`follow/`): promotion of a rotorcraft flight, the AI pilot on the drawn route and the LZ, the helicopter's HUD with the LZ cue, demotion
-- [ ] The downed pilot in the simulation view: a model spec (flight suit, oversized helmet, survival vest; rule 21), standing at the LZ's edge, orange smoke as the helicopter comes in; gone once rescued
-- [ ] Test: every ejection in a 24 h run has a survivor and a CSAR mission (demo seeds)
-- [ ] Test: a followed CSAR helicopter lands at the survivor at full fidelity (headless)
-- [ ] Acceptance checks for what R2.9 draws (Part I check 6 for the figure; checks 7 and 10 in a followed CSAR); owner on the GPU
-- [ ] Docs: decisions, design (survivors, CSAR, crews), visual-style Part I (the downed pilot), roadmap state, CLAUDE.md's directory map
+- [x] Survivor records (`sim/air/survivors.ts`): position, injury (none, light, serious), survival timer by injury and surface (land or water), state (down, aboard, rescued, captured, died); saved, hashed, logged (decision 351)
+- [x] Capture risk: a hazard per hour from the nearest enemy battalion's anchor and the enemy's territory; checked every ten minutes with draws from rng(seed, "survivors") forked by survivor (decision 351)
+- [x] CSAR plug-in, all eight parts, with the rescue escort and the rescue cover (decision 352); urgent planning at every tick and when a survivor comes down, outside the airborne cap; rescue alert at the side's nearest base; external tanks and, for the Alliance, air refueling for deep rescues
+- [x] The CSAR mission types' profiles (the rescue pair lands at the survivor), labels, mission search's threat column
+- [x] Outcomes: pickups put survivors aboard; rescued pilots back on their rosters at the rescue's landing; a failed rescue is followed by a new attempt; a rescue whose survivors are gone turns home
+- [x] Crews limit sorties: crews rest six hours after landing; the order's ledger and launch read the roster (decision 353)
+- [x] Rescue helicopters at low level: a CAP intercepts a helicopter with 0.4 of the chance; the cover fights as the rescue's escort (decision 352)
+- [x] Rotary director (`sim/flight/rotor/heloDirector.ts`): a target layer on `HeloLaws` sharing the inner loops; the player's laws unchanged bit for bit (decision 354)
+- [x] AI helicopter pilot: route, approach, a landing at a zone clear of trees, slopes and water (`landingZone.ts`), the wait, the takeoff (decision 355)
+- [x] Surface-layer wind for rotorcraft in place of the 8 m/s cap; jets keep it (decision 356)
+- [x] Tests: the director and recorded inputs fly the same result; a landing in a 10 m/s crosswind (`tests/heloDirector.test.ts`)
+- [x] Full fidelity for a followed CSAR helicopter (`follow/heloFidelity.ts`): promotion, the AI pilots on the drawn route, the landing zone, the hover HUD with the LZ cue, demotion (decision 357)
+- [x] The downed pilot in the simulation view (`follow/survivorFigures.ts`, `figure-pilot-*`), at the landing zone's edge with orange signal smoke, gone once aboard (decision 357)
+- [x] Test: every ejection in a 24 h run has a survivor and a CSAR mission (`tests/demoSeeds.test.ts`, the three seeds)
+- [x] Test: a followed CSAR helicopter lands at the survivor at full fidelity (`tests/heloFidelity.test.ts`)
+- [x] Check 6 for the figures (`tools/models.preview.ts`)
+- [ ] Owner on the GPU: follow a CSAR flight on seed 4 (checks 7 and 10 in a followed helicopter): the landing at the zone, the survivor and its smoke, the LZ marker on the HUD
+- [ ] Survivors on the strategic map (a parachute glyph by side) and in the selected rescue's panel
+- [ ] A survivor in the water: a dinghy model and a hoist pickup at full fidelity (the lead hovers today)
+- [ ] The Ve-18's flight data (Mi-8MT), so the Pact's rescues fly at full fidelity too
+- [ ] Taking over a helicopter in the campaign, and a player's pickup as a logged input (R4.3)
+- [ ] The crew limit binds only in a longer war: check it in R5.3's weeks of war
+- [x] Docs: decisions 351–357, design (survivors, CSAR, crews, the helicopter AI), visual-style Part I (the downed pilot, signal smoke), CLAUDE.md's directory map
 
 ### R2.10 Calibration
 

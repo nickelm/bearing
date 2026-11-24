@@ -254,6 +254,8 @@ _Depends on R1.7, R2.2, R2.5._
 
 **Exit:** every ejection in a 24 h run produces a survivor and a CSAR mission; a followed CSAR helicopter lands at the survivor at full fidelity.
 
+**State (2026-11-24):** done in code (decisions 351–357): survivors with their injury, timer and capture risk; the CSAR plug-in with its escort and cover, planned the moment a survivor comes down; crews that rest; the rotary director, the AI helicopter pilot with landing zones and the surface-layer wind; a followed rescue at full fidelity with the downed pilot and its signal smoke. Both halves of the exit pass headless (`tests/demoSeeds.test.ts`, `tests/heloFidelity.test.ts`). Open for the owner: following a rescue on the GPU (checks 7 and 10).
+
 ### R2.10 Calibration — medium
 
 _Depends on R2.2, R2.5, R2.6._

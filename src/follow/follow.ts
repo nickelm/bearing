@@ -106,6 +106,14 @@ import type { Runway } from '../sim/flight/runway';
 import { flownGround } from '../freeflight/ground';
 import type { AirfieldGround, FlownTerrain } from '../freeflight/ground';
 import { FullFidelity, flightSpecOfType, fullFidelityWanted, routeKey } from './fullFidelity';
+import { HeloFidelity, heloFidelityWanted, rotorSpecOfType } from './heloFidelity';
+import { SurvivorFigures } from './survivorFigures';
+import type { RescueScene } from './survivorFigures';
+import type { SurvivorPicture } from '../workers/protocol';
+import type { RotorcraftSpec } from '../sim/flight/rotor/rotorSpec';
+import { neutralCommand } from '../sim/flight/rotor/heloLaws';
+import { buildHeloHudFrame } from '../ui/flight/heloHud';
+import type { Airframe } from '../sim/flight/airframe';
 import { nextWaypoint, routeWaypoints, sequenceWaypoints } from '../sim/air/waypoints';
 import { AttitudeHold, holdAllowed } from '../sim/flight/holds';
 import { calibratedAirspeed, standardAtmosphere } from '../sim/flight/atmosphere';
@@ -176,7 +184,12 @@ export interface FollowDeps {
   tone?(kind: ThreatTone): void;
   /** The promoted vehicles near the player (R2.8): the rack's targets beside the flight's own. */
   groundUnits?: () => GroundUnits | null;
+  /** Survivors down or aboard a rescue (R2.9), from the worker. */
+  survivors?: () => readonly SurvivorPicture[];
 }
+
+/** Seconds on the ground at the landing zone after which a rescue's survivors are aboard (R2.9). */
+const PICKUP_BOARD = 20;
 
 /** Target sites within this distance of the flown aircraft can be hit (m; R2.8). */
 export const SITE_RANGE = 12_000;
@@ -274,6 +287,11 @@ export class Follow {
   private wingtip: readonly [number, number] | null = null;
   /** The followed flight at full fidelity, or null. */
   private full: FullFidelity | null = null;
+  /** The followed helicopter flight at full fidelity (R2.9), and its type's rotorcraft data. */
+  private heli: HeloFidelity | null = null;
+  /** The downed pilots near the camera (R2.9). */
+  private figures: SurvivorFigures | null = null;
+  private rotorSpec: RotorcraftSpec | null = null;
   /** After a demotion: each slot's offset from its route (m, world), easing out, and its age (s). */
   private blend: Map<number, Vec3d> | null = null;
   private blendAge = 0;
@@ -700,7 +718,7 @@ export class Follow {
 
   /** Whether the followed flight flies at full fidelity now. */
   get fullFidelity(): boolean {
-    return this.full !== null;
+    return this.full !== null || this.heli !== null;
   }
 
   /**
@@ -746,6 +764,7 @@ export class Follow {
     this.bundle = b;
     this.spec = spec;
     this.flightSpec = flightSpecOfType(m!.aircraftType, (id) => modelSpec(id).flight);
+    this.rotorSpec = rotorSpecOfType(m!.aircraftType, (id) => modelSpec(id).flight);
     this.wingtip = this.flightSpec ? wingtipOf(spec, this.flightSpec.cg) : null;
     this.lastTime = NaN;
     const g = this.deps.globe;
@@ -817,6 +836,10 @@ export class Follow {
    * behind (a seek); the chase camera then follows the airframe.
    */
   private fidelity(m: Mission, t: number): void {
+    if (this.rotorSpec) {
+      this.heloFidelity(m, t);
+      return;
+    }
     const g = this.deps.globe;
     const want = fullFidelityWanted(m, t, this.deps.rate(), this.poses);
     // Flown, or held until the worker's rebuilt route arrives: it stays at full fidelity.
@@ -848,6 +871,57 @@ export class Follow {
     if (a) {
       this.slot = a.slot;
       followAirframe(g.chase.target, a.flown.airframe);
+    }
+  }
+
+  /**
+   * A followed helicopter flight at full fidelity (R2.9): promoted inside its window, on
+   * the ground or in the air, at the flight cap or slower; the AI helicopter pilots fly it
+   * and the lead lands at the landing zone where its plug-in's behavior says so.
+   */
+  private heloFidelity(m: Mission, t: number): void {
+    const g = this.deps.globe;
+    const spec = this.rotorSpec!;
+    const want = heloFidelityWanted(m, t, this.deps.rate());
+    if (this.heli && (!want || !this.heli.advance(m, t))) this.demote();
+    else if (!this.heli && want && this.airfield && g.terrainReady && this.poses.length > 0) {
+      const terrain = g.terrain as {
+        groundAt?: (d: Readonly<Vec3d>) => { forest: number; water: boolean } | null;
+      };
+      const v = new Vec3d();
+      this.heli = new HeloFidelity(
+        {
+          radius: this.deps.radius,
+          mission: () => this.mission(),
+          pose: (mm, u, slot) => {
+            const ps = flightPoses(
+              mm,
+              u,
+              this.deps.radius,
+              this.fieldsAt(mm, u),
+              missionPlugin(mm.type).formations,
+              this.span,
+            );
+            return ps[slot] ?? null;
+          },
+          ground: this.airfield,
+          site: (d) => terrain.groundAt?.(v.set(d[0], d[1], d[2])) ?? null,
+          gearHeight: this.gearHeight,
+          clearance: this.clearance,
+          weather: this.deps.weather,
+        },
+        spec,
+        m,
+        t,
+        this.poses,
+      );
+      this.blend = null;
+      for (const d of this.drawn) d.view.setCg(spec.cg);
+    }
+    const a = this.heli?.followed(this.slot);
+    if (a) {
+      this.slot = a.slot;
+      followAirframe(g.chase.target, a.model);
     }
   }
 
@@ -1115,9 +1189,10 @@ export class Follow {
 
   /** Back to the analytic poses: the drawn aircraft ease from where they flew onto their routes. */
   private demote(): void {
-    const f = this.full;
+    const f = this.full ?? this.heli;
     if (!f) return;
     this.full = null;
+    this.heli = null;
     const at = f.positions();
     this.blend = new Map();
     this.blendAge = 0;
@@ -1179,6 +1254,32 @@ export class Follow {
       window.innerWidth,
       window.innerHeight,
     );
+    const h = this.heli?.followed(this.slot);
+    if (h && this.airfield) {
+      // A helicopter at full fidelity: the hover HUD from its airframe and its laws (R2.9),
+      // the landing zone where the phase's interface lists it (rule 16).
+      const ui = phaseInterface(m, t);
+      const lz = ui?.hud.includes('landing-zone') ? this.heli!.lzPoint() : null;
+      const frame = buildHeloHudFrame(
+        h.model,
+        h.pilot.director.laws,
+        h.controls,
+        neutralCommand(),
+        {
+          aid: null,
+          ground: this.airfield,
+          eye: this.deps.globe.chase.eye,
+          locked: true,
+          timing: null,
+          lz,
+        },
+      );
+      frame.mode = 'follow · AI';
+      frame.panels = true;
+      this.updateDisplays(m, airframeState(h.model), frame, t);
+      if (this.panels !== 'clean') this.hud.draw(frame, project);
+      return;
+    }
     const a = this.full?.followed(this.slot);
     if (a && this.flying && a.slot === this.full!.flight.playerSlot) {
       this.drawFlownHud(m, a.flown.airframe as unknown as FlightModel, project, t);
@@ -1415,8 +1516,13 @@ export class Follow {
     if (this.missionId === null) return;
     const g = this.deps.globe;
     const rpp = (g.camera.fov * DEG) / Math.max(1, window.innerHeight);
+    this.placeFigures(eye, rpp);
     if (this.full) {
       this.placeAirframes(eye, rpp);
+      return;
+    }
+    if (this.heli) {
+      this.placeHelicopters(eye, rpp);
       return;
     }
     const rotors = this.spec ? spinningRotors(this.spec) : undefined;
@@ -1450,6 +1556,82 @@ export class Follow {
       v.radPerPixel = rpp;
       v.update(pose, eye);
     });
+  }
+
+  /**
+   * The downed pilots near the camera (R2.9): where they came down, or at the edge of the
+   * followed rescue's landing zone with their signal smoke as it comes in, gone aboard
+   * once the helicopter has waited PICKUP_BOARD seconds on the ground.
+   */
+  private placeFigures(eye: Readonly<Vec3d>, rpp: number): void {
+    const list = this.deps.survivors?.() ?? [];
+    if (!this.figures && list.length === 0) return;
+    const g = this.deps.globe;
+    this.figures ??= new SurvivorFigures(g, this.deps.radius);
+    const m = this.mission();
+    const lz = this.heli?.lzPoint() ?? null;
+    const lead = this.heli?.alive[0];
+    let rescue: RescueScene | null = null;
+    if (m?.survivors && lz && lead) {
+      const td = lead.pilot.touchdown;
+      const waited = td !== null && this.heli!.time - td.time > PICKUP_BOARD;
+      rescue = {
+        survivors: m.survivors,
+        lz,
+        helicopter: lead.model.pos,
+        aboard: waited || (td !== null && lead.pilot.state !== 'wait'),
+      };
+    }
+    this.figures.update(
+      list,
+      eye,
+      rpp,
+      (d) => {
+        if (!g.terrainReady) return null;
+        const u = d.clone().normalize();
+        const h = g.useTiles ? g.terrain.displaySurfaceAt(u) : g.terrain.displayHeightAt(u);
+        return h === null ? null : Math.max(0, h);
+      },
+      rescue,
+    );
+  }
+
+  /** Places the promoted helicopters from their airframes: attitude, rotors turning and tilting (R2.9). */
+  private placeHelicopters(eye: Readonly<Vec3d>, rpp: number): void {
+    const g = this.deps.globe;
+    const ground = this.airfield!;
+    for (const d of this.drawn) {
+      d.view.group.visible = false;
+      d.view.shadowMesh.visible = false;
+    }
+    for (const a of this.heli!.aircraft) {
+      const d = this.drawn[a.slot];
+      const h = a.model;
+      if (!d || h.crashed) continue;
+      d.view.group.visible = true;
+      d.view.shadowMesh.visible = true;
+      const speed = h.telemetry.rotorSpeed;
+      const pose: AircraftPose = {
+        pos: h.pos,
+        q: h.q,
+        elevator: 0,
+        aileron: 0,
+        rudder: 0,
+        gear: 1,
+        speedbrake: 0,
+        afterburner: 0,
+        flaps: 0,
+        groundHeight: ground.height(h.pos.clone().normalize()),
+        ground: (dir) => ground.height(dir),
+        rotors: [
+          { azimuth: h.azimuth, speed, tiltForward: h.tiltForward, tiltRight: h.tiltRight },
+          { azimuth: h.tailAzimuth, speed, tiltForward: 0, tiltRight: 0 },
+        ],
+      };
+      d.view.sun.copy(g.sun);
+      d.view.radPerPixel = rpp;
+      d.view.update(pose, eye);
+    }
   }
 
   /** Places the promoted flight's aircraft from their airframes: surfaces, gear, speedbrake, afterburner. */
@@ -1985,6 +2167,8 @@ export class Follow {
     this.drawn = [];
     this.poses = [];
     this.full = null;
+    this.heli = null;
+    this.figures?.hide();
     this.hung.clear();
     this.released?.clear();
     this.tracers?.place([], new Vec3d(), 1);
@@ -2074,7 +2258,7 @@ export function showsLandingAid(ui: PhaseInterface, mode: string): boolean {
 }
 
 /** The displays' view of a flown airframe (as Free Flight's). */
-function airframeState(m: FlightModel): FollowedState {
+function airframeState(m: Airframe): FollowedState {
   const t = m.telemetry;
   const up = m.pos.clone().normalize();
   const east = new Vec3d(0, 1, 0).cross(up).normalize();
