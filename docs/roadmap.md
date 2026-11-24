@@ -241,7 +241,7 @@ _Depends on R1.6, R2.3._
 
 **Exit:** CAS destroys promoted vehicles and the battalion's strength drops by the same count.
 
-**State (2026-11-23):** built and tested headless (decisions 333–335): rosters and promotion from a battalion's seed, strength and destroyed vehicles; the bubble round the camera with vehicles on the drawn ground and trucks on aligned roads; vehicles as targets for bombs, rockets and the gun; the `vehicle-destroyed` input that lowers the battalion's strength by one vehicle; burning wrecks; bombs on any site near the impact. The exit holds in `tests/promotion.test.ts`. Waiting for the owner's look on the GPU; the reduced infantry is not started.
+**State (2026-11-24):** done (decisions 333–341): the owner signed off on the GPU: the ground controller's mark found the enemy, CAS destroyed promoted vehicles and the kills reached the battalion's strength. The owner's reviews added messages off the HUD, larger vehicles out of the woods, the controller's mark, the sight, and the A-15's cannon; the vehicles carry ink and contact shadows. The reduced infantry is left to R3.8 (decision 341). Follow-ups are in `TODO.md`.
 
 ### R2.9 Survivors and CSAR — large
 

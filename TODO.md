@@ -351,11 +351,11 @@ Started 2026-11-23, in parallel with R2.8 in a second session (decisions 314–3
 - [x] Owner's review (2026-11-23; decision 336): status messages off the HUD, into the messages log and a popup at the messages slot's corner; mission search's filter on a type gone from the orders shows and resets; vehicles at 1.5 times life size and larger with distance; vehicles out of woods and water
 - [x] Finding targets on CAS: the ground controller's mark on the nearest enemy company, on the HUD and the moving map, with a message (decision 337); R3.8's talk-on requests replace it
 - [x] Owner (2026-11-24): the A-15's cannon with smoke, flash and recoil, rounds that strike the ground (decision 339); a right click zooms on the pipper (decision 338)
-- [ ] Owner on the GPU: the sight, and the A-15's cannon (smoke, impacts, the speed it costs)
+- [ ] Owner on the GPU: the sight, and the A-15's cannon (smoke, impacts, the speed it costs, the sound); a follow-up after R2.8's close (decision 341)
 - [x] The cannon's sound (synthesized, as the weather's; decision 340)
 - [x] Docs: decisions 333 on, design §Entities, visual-style Part I vehicles, roadmap state, CLAUDE.md's directory map
-- [ ] Owner on the GPU: vehicles in a followed CAS flight on seed 4, a take-over that destroys some, the battalion's strength after
-- [ ] Reduced infantry (if time allows; decision 331): a few squads per battalion near the player with the blocky figures, as targets, the dead turning gray and vanishing in a toon puff
+- [x] Owner on the GPU: vehicles in a followed CAS flight on seed 4, a take-over that destroys some, the battalion's strength after (signed off 2026-11-24; decision 341)
+- [ ] Reduced infantry (decision 331): moved to R3.8 with the full infantry (decision 341)
 
 ### R2.9 Survivors and CSAR
 

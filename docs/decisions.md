@@ -5328,6 +5328,15 @@ The per-vertex coverage, albedo and side (±1) go to the GPU as one vec3 attribu
 **How it was checked.** The render preview's `vehicles` view on seed 4 (lavapipe): the vehicles carry their outlines and sit on dark blots, the wreck with them. The unit suite, the type check and lint pass. The sound is for the owner's ears.
 
 **Reason:** Part I asks for ink on every model; vehicles floated without a shadow; the owner asked for the A-15's BRRRT.
+### 341. R2.8 closed; the reduced infantry goes to R3.8
+
+**Date:** 2026-11-24
+**Decision:** The owner signed off R2.8 on the GPU: the ground controller's mark (decision 337) led to the enemy, CAS destroyed promoted vehicles (a truck, among others), the HUD stayed clear of status messages, and the larger vehicles (decision 336) were found. The exit holds: CAS destroys promoted vehicles and the battalion's strength drops by the same count (`tests/promotion.test.ts`, and in the app). Part I check 6 passed for the four vehicle models (decision 335). The owner's look at the sight and the A-15's cannon (decisions 338–340), which came in the milestone's last review, is a follow-up in `TODO.md`, not a condition of closing.
+
+The reduced infantry of Proposal 0013, in R2.8 only if time allowed, is left to R3.8, which builds infantry in full (the owner's choice): squads and soldiers as worker state, the figure kit and its animation, splash profiles and the death without gore. R2.8's rosters, promotion and the `vehicle-destroyed` fold are what R3.8's companies extend.
+
+**Reason:** the owner's sign-off, so R2.9 can start.
+
 ### 350. R2.7 closed
 
 **Date:** 2026-11-24
