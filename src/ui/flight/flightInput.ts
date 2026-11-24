@@ -67,7 +67,7 @@ export const FLIGHT_BINDINGS: Record<FlightAction, string[]> = {
   jettison: ['KeyJ'],
   mouseAim: ['KeyN'],
   freeLook: ['KeyC'],
-  recenterView: ['KeyV'],
+  recenterView: ['KeyV', 'Backspace'],
   mouseCapture: ['Tab'],
   invertMouse: ['KeyI'],
   help: ['KeyH'],

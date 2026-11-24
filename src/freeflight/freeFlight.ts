@@ -164,7 +164,7 @@ const HELO_HELP = [
   'Takeoff: hold W until clear of the ground, let go to hold the altitude. Move the mouse forward to tilt the nose down and fly forward; back to slow down. Slow and let go: the hover holds (Assisted).',
   'In the hover the mouse turns the nose; above about 40 kt it banks into a coordinated turn. A/D slide sideways in the hover.',
   'Landing: slow to a hover over the spot, then hold S: the descent eases near the ground (VS under the radar altitude turns amber if it is too fast). Keep S held on the ground to lower the collective.',
-  'Camera: drag with the right mouse button to look around; the view stays where you leave it. Drag down to look further ahead. V or the middle button recenters it; the wheel zooms.',
+  'Camera: drag with the right mouse button to look around; the view stays where you leave it. Drag down to look further ahead. V, Backspace or the middle button recenters it; the wheel zooms.',
 ];
 /** What the HUD says when the jet's mouse mode starts (decisions 195, 198). */
 const MOUSE_MODE_MESSAGE: Record<ControlMode, string> = {

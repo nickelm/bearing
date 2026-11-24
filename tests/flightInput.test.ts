@@ -4,7 +4,9 @@
  * menu is not left held, and nothing else acts.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { FlightInput } from '../src/ui/flight/flightInput';
+import { FLIGHT_BINDINGS, FlightInput } from '../src/ui/flight/flightInput';
+import { HELO_BINDINGS } from '../src/ui/flight/heloInput';
+import { DISPLAY_BINDINGS } from '../src/ui/displays/bindings';
 import type { FlightAction } from '../src/ui/flight/flightInput';
 
 describe('flight input under the pause menu', () => {
@@ -142,5 +144,16 @@ describe('the keys in mouse aim (decision 219)', () => {
     frames(30);
     expect(input.controls.pitch).toBeCloseTo(1, 6);
     expect(input.keyStick.pitchWeight).toBe(0);
+  });
+});
+
+describe('Backspace recenters the view (owner, 2026-11-24)', () => {
+  it('in the jet and the helicopter, as V does, and does nothing else', () => {
+    for (const b of [FLIGHT_BINDINGS, HELO_BINDINGS] as Record<string, string[]>[]) {
+      expect(b.recenterView).toEqual(['KeyV', 'Backspace']);
+      const others = Object.entries(b).filter(([a]) => a !== 'recenterView');
+      expect(others.flatMap(([, keys]) => keys)).not.toContain('Backspace');
+    }
+    expect(Object.values(DISPLAY_BINDINGS).flat()).not.toContain('Backspace');
   });
 });

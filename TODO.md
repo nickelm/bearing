@@ -332,6 +332,7 @@ Started 2026-11-23, in parallel with R2.8 in a second session (decisions 314–3
 - [x] Owner, on the GPU (2026-11-23): flew the Vo-35 and A-15 and followed the Vo-31; fixes in decision 319 (the Vo-35's wing root, the Vo-31's second flame and its vortices, no afterburner mentioned without one, explosions twice the size)
 - [x] Owner (2026-11-23, noted by the R2.8 session): the A-15 Buzzard's canopy sits too high on the fuselage and its sides jut out; the control surfaces on its wings are attached at an odd angle (decision 319: the canopy lowered and narrowed, the drooped tips at the wing's end)
 - [x] Owner: a look at decision 319's fixes on the GPU (2026-11-24: all fixed); R2.7 closed (decision 350). The open items above are follow-ups
+- [x] Backspace recenters the view as V does (C while spectating), owner at the close (decision 350)
 
 ### R2.8 Minimal entity promotion
 

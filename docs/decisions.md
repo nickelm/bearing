@@ -5298,4 +5298,6 @@ The per-vertex coverage, albedo and side (±1) go to the GPU as one vec3 attribu
 **Date:** 2026-11-24
 **Decision:** R2.7 (the demo roster) is done. The exit holds: every type a day of war's orders fly on the demo seeds has its own model (decision 316), and every flyable type passes the silhouette check and checks 12–13: the Vo-31, Vo-35 and A-15 beside the Kestrel (decisions 314, 315, 317). The owner flew the Vo-35 and A-15 and followed the Vo-31 on the GPU, and checked the fixes their look asked for (decision 319). The C-150 is flown in R4.4 (decision 318). The follow-ups stay in `TODO.md`: the Vo-31's route climb against its military-power climb, models for the types outside the demo's orders, the Pact's own markings, and the A-15's Mavericks, cluster bombs and eleven stations.
 
+**At the close** the owner asked that Backspace also recenter the view: it does, beside V in the jet's and the helicopter's bindings and beside C while spectating a followed flight, and it is bound to nothing else (`tests/flightInput.test.ts`).
+
 **Reason:** the owner's sign-off, 2026-11-24.

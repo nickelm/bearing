@@ -355,7 +355,7 @@ export class HelpOverlay {
       `<tr><td>Mouse wheel</td><td>Throttle, stopping at idle${jet.afterburner ? ', military and the afterburner gate' : ' and military'}; zoom while looking around</td></tr>`,
     );
     rows.push(
-      '<tr><td>Right drag</td><td>Free look; the view stays where you leave it (V recenters)</td></tr>',
+      '<tr><td>Right drag</td><td>Free look; the view stays where you leave it (V or Backspace recenters)</td></tr>',
     );
     rows.push(...displayRows());
     this.el.innerHTML = `<h1>Controls</h1><table>${rows.join('')}</table>
@@ -377,7 +377,7 @@ export class HelpOverlay {
       '<tr><td>Mouse</td><td>Forward: nose down; back: nose up; left and right: turn</td></tr>',
     );
     rows.push(
-      '<tr><td>Right drag</td><td>Free look; the view stays where you leave it (V or the middle button recenters it)</td></tr>',
+      '<tr><td>Right drag</td><td>Free look; the view stays where you leave it (V, Backspace or the middle button recenters it)</td></tr>',
     );
     rows.push('<tr><td>Wheel</td><td>Camera closer or farther</td></tr>');
     rows.push(...displayRows());

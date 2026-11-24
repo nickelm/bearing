@@ -376,8 +376,11 @@ export class Follow {
         e.preventDefault();
         this.stop(null);
       } else if (e.code === 'KeyN') this.nextAircraft();
-      else if (e.code === 'KeyC') deps.globe.chase.recenter();
-      else if (e.code === 'KeyV') this.nextPanels();
+      else if (e.code === 'KeyC' || e.code === 'Backspace') {
+        // Backspace recenters the view too, as while flying (owner, 2026-11-24).
+        e.preventDefault();
+        deps.globe.chase.recenter();
+      } else if (e.code === 'KeyV') this.nextPanels();
     };
     // Free look: drag with any button; the wheel moves the camera closer or farther.
     const down = (e: PointerEvent) => {

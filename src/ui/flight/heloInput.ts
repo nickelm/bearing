@@ -11,7 +11,7 @@
  * - **Keys.** W/S collective (climb and descend; let go to hold the altitude),
  *   A/D sideways in the hover and bank at speed, Q/E the pedals, H hover hold.
  * - **Free look.** Hold the right mouse button (or C) and move the mouse; the
- *   view stays where it is left. V or a middle click recenters it, and the
+ *   view stays where it is left. V, Backspace or a middle click recenters it, and the
  *   mouse wheel moves the camera closer or farther (decision 160).
  */
 import { neutralCommand } from '../../sim/flight/rotor/heloLaws';
@@ -48,7 +48,7 @@ export const HELO_BINDINGS: Record<HeloAction, string[]> = {
   brakes: ['Space'],
   parkingBrake: ['KeyP'],
   freeLook: ['KeyC'],
-  recenterView: ['KeyV'],
+  recenterView: ['KeyV', 'Backspace'],
   mouseCapture: ['Tab'],
   invertMouse: ['KeyI'],
   help: ['F1'],
