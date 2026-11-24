@@ -32,6 +32,7 @@ import type { Dir } from '../core/greatCircle';
 import type { GameTime, Meters } from '../core/units';
 import { Vec3d } from '../core/vec3d';
 import type { AnalyticPose } from '../sim/air/analyticPose';
+import { aircraftType, loadoutFuel } from '../sim/air/aircraft';
 import { AIRCRAFT_BUNDLES, bundleOfType } from '../sim/air/bundles';
 import { jumpInOpen, phaseTime } from '../sim/air/mission';
 import type { Mission } from '../sim/air/mission';
@@ -122,6 +123,11 @@ export class HeloFidelity {
     const R = ctx.radius;
     const s = routeState(m.route, t, R);
     const share = m.route.fuel > 0 ? Math.max(0, Math.min(1, s.fuel / m.route.fuel)) : 1;
+    const type = aircraftType(m.aircraftType);
+    const capacity = loadoutFuel(
+      type,
+      type.loadouts.find((l) => l.id === m.loadout),
+    );
     this.aircraft = poses.slice(0, Math.max(1, m.aircraft)).map((p, slot) => {
       const model = new RotorcraftModel(spec, R);
       const reference = this.reference(slot);
@@ -134,9 +140,11 @@ export class HeloFidelity {
       model.place(pos, vel, p.heading, p.airborne ? 0 : 0);
       model.updateAttitude(ctx.ground);
       model.unlimitedFuel = false;
-      model.fuel = spec.mass.fuel * share;
+      // The loadout's fuel (a rescue's external tanks too) by the route's share (R2.9's review).
+      model.fuel = capacity * share;
       const pilot = new HeloPilot(reference);
-      pilot.director.laws.reset(model, !p.airborne);
+      pilot.ground = ctx.ground;
+      pilot.director.start(model, !p.airborne);
       return { slot, model, controls: neutralRotorControls(), pilot };
     });
     for (const a of this.aircraft) this.giveWind(a);

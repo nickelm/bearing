@@ -46,14 +46,18 @@ const flight = (id: string) =>
 function rescue(km: number): { m: Mission; survivor: Dir } {
   const w = createSimWorld({ ...syntheticConfig(7), radius: R, campaign: input });
   w.sim.advanceTo(4 * HOUR);
-  const own = input.airbases.find((a) => a.side === 'alliance' && sample(new Vec3d(...a.point)) > 0)!;
+  const own = input.airbases.find(
+    (a) => a.side === 'alliance' && sample(new Vec3d(...a.point)) > 0,
+  )!;
   const air = w.air!;
   const victim = air.liveMissions().find((x) => x.side === 'alliance' && isAirborne(x, 4 * HOUR))!;
   const before = air.survivors.length;
   air.lose(victim, 1, destination(own.point, 1, km * 1000, R), EJECTED, w.sim);
   w.sim.advanceTo(w.sim.time + 1);
   const ids = air.survivors.slice(before).map((s) => s.id);
-  const m = air.liveMissions().find((x) => x.type === 'csar' && x.survivors?.some((id) => ids.includes(id)))!;
+  const m = air
+    .liveMissions()
+    .find((x) => x.type === 'csar' && x.survivors?.some((id) => ids.includes(id)))!;
   return { m: structuredClone(m), survivor: air.survivors[ids[0]!]!.point };
 }
 
@@ -101,7 +105,6 @@ describe('a followed CSAR helicopter at full fidelity', () => {
       states.add(lead.pilot.state);
       if (lead.pilot.state === 'track' && lead.pilot.touchdown && t > egress + 60) break;
     }
-    if (process.env.DBG) console.log("t0", t0, "fence", phaseTime(m, "fence-in"), "on-target", phaseTime(m, "on-target"), "egress", egress, "end", t, "td", JSON.stringify(lead.pilot.touchdown), "lz", JSON.stringify(f.lz), "base-to-survivor km", (arcDistance(survivor, m.route.segments[0]!.a, R) / 1000).toFixed(1), [...states].join(","));
     for (const a of f.aircraft) expect(a.model.crashed, `slot ${a.slot}`).toBeNull();
     const lz = f.lz!;
     expect(lz).not.toBeNull();

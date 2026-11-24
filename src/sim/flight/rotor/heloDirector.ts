@@ -67,6 +67,16 @@ export class HeloDirector implements Director<RotorcraftModel, RotorControls> {
     this.primed = false;
   }
 
+  /**
+   * Starts the laws now from the helicopter's state, `grounded` saying whether it stands on
+   * its gear: before its first step the gear carries no load, so the next step's own start
+   * would take a helicopter on the ground for one in the air and lift it off (R2.9's review).
+   */
+  start(m: RotorcraftModel, grounded: boolean): void {
+    this.laws.reset(m, grounded);
+    this.primed = true;
+  }
+
   fly(m: RotorcraftModel, target: Readonly<DirectorTarget>, ctl: RotorControls, dt: number): void {
     if (!this.primed) {
       this.laws.reset(m);

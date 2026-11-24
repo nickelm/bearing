@@ -377,7 +377,11 @@ Started 2026-11-24 (decisions 351 on). Two threads: the campaign's survivors and
 - [x] Test: every ejection in a 24 h run has a survivor and a CSAR mission (`tests/demoSeeds.test.ts`, the three seeds)
 - [x] Test: a followed CSAR helicopter lands at the survivor at full fidelity (`tests/heloFidelity.test.ts`)
 - [x] Check 6 for the figures (`tools/models.preview.ts`)
-- [ ] Owner on the GPU: follow a CSAR flight on seed 4 (checks 7 and 10 in a followed helicopter): the landing at the zone, the survivor and its smoke, the LZ marker on the HUD
+- [x] Owner's first look (2026-11-24; decision 369): a quicker departure and run-in, no hover before the takeoff, helicopters on the apron, terrain look-ahead over buttes, one fuel reading at every rate, the smoke behind the survivor and lighter, no context menu after a right drag
+- [ ] Owner on the GPU: the fixes of decision 369 in a followed rescue (checks 7 and 10)
+- [ ] The slowdown on the runway at a takeoff (jets too): the owner's `?dev&cputime=1&gputime=1` figures at the runway, then the culprit
+- [ ] Swerving around obstacles and nap-of-the-earth routes for the AI helicopters (R4.3)
+- [ ] A survivor that moves toward friendly lines, and enemy infantry hunting it, for the door gunners (R3.8)
 - [ ] Survivors on the strategic map (a parachute glyph by side) and in the selected rescue's panel
 - [ ] A survivor in the water: a dinghy model and a hoist pickup at full fidelity (the lead hovers today)
 - [ ] The Ve-18's flight data (Mi-8MT), so the Pact's rescues fly at full fidelity too

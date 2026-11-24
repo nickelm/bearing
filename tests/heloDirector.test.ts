@@ -182,6 +182,37 @@ describe('the AI helicopter pilot', () => {
       expect(ref.pos.distanceTo(m.pos)).toBeLessThan(50);
     }
   }, 120_000);
+
+  it('climbs over a butte on its route instead of flying into it (R2.9 review)', () => {
+    const m = utility();
+    // A route at 40 m over flat ground, straight at a butte 180 m high and 300 m across.
+    const speed = 120 * KNOT;
+    const reference = (t: number): ReferencePoint => {
+      const p = runwayPoint(runway, frame, -1500 + speed * t, 300, 40, RADIUS);
+      const q = runwayPoint(runway, frame, -1500 + speed * (t + 0.1), 300, 40, RADIUS);
+      return { pos: p, vel: q.sub(p).scale(10) };
+    };
+    const butte = runwayPoint(runway, frame, 1500, 300, 0, RADIUS).normalize();
+    const withButte = {
+      height: (d: Readonly<Vec3d>) =>
+        ground.height(d) + (d.distanceTo(butte) * RADIUS < 150 ? 180 : 0),
+      surface: ground.surface,
+    };
+    spawn(m, 40, reference(0).vel.clone());
+    const pilot = new HeloPilot(reference);
+    pilot.ground = withButte;
+    const ctl = neutralRotorControls();
+    let least = Infinity;
+    for (let i = 0; i < 90 / FLIGHT_STEP && !m.crashed; i++) {
+      pilot.step(m, i * FLIGHT_STEP, ctl, FLIGHT_STEP);
+      m.step(ctl, withButte);
+      const d = m.pos.clone().normalize();
+      least = Math.min(least, m.pos.length() - RADIUS - withButte.height(d));
+    }
+    expect(m.crashed).toBeNull();
+    // It cleared the butte's top by a margin, and was past it by the end.
+    expect(least).toBeGreaterThan(5);
+  }, 60_000);
 });
 
 describe('the landing zone', () => {

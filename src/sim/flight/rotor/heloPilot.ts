@@ -11,7 +11,8 @@
  * - **track**: route following. The ground velocity is the reference's plus
  *   TRACK_GAIN times the horizontal distance to it (within the type's cruise
  *   limit); the altitude is the reference's, held at least TRACK_FLOOR above
- *   the ground. On the ground at the start with the reference still standing
+ *   the ground under it and, with a `ground` to look at, above the ground up to
+ *   25 s ahead (LOOK_TIMES), slowing where it could not climb in time. On the ground at the start with the reference still standing
  *   there, it waits on its gear; once the reference moves off, it takes off.
  * - **approach**: within APPROACH_RANGE of the landing point, a straight
  *   approach to it: the hover point's deceleration profile brings the speed down
@@ -33,6 +34,7 @@ import { DEG } from '../../../core/units';
 import { Vec3d } from '../../../core/vec3d';
 import type { Reference } from '../aiPilot';
 import type { DirectorTarget } from '../director';
+import type { GroundQuery } from '../contact';
 import { HeloDirector } from './heloDirector';
 import type { RotorControls, RotorcraftModel } from './rotorcraftModel';
 
@@ -76,8 +78,13 @@ export interface Touchdown {
   miss: Meters;
 }
 
+/** Seconds ahead along its way at which the tracking pilot looks at the ground (R2.9's review). */
+export const LOOK_TIMES = [2, 4, 7, 10, 14, 19, 25] as const;
+
 export class HeloPilot {
   readonly director = new HeloDirector();
+  /** The ground it looks ahead over while tracking (with obstacles: buttes, pillars); null: none. */
+  ground: GroundQuery | null = null;
   state: HeloPilotState = 'track';
   /** The landing task, until its takeoff is done. */
   landing: LandingTask | null = null;
@@ -161,8 +168,9 @@ export class HeloPilot {
         const up = m.pos.clone().normalize();
         const err = horizontal(ref.pos, m.pos);
         const refH = ref.vel.clone().addScaled(up, -ref.vel.dot(up));
-        // On the ground with the route still standing there: wait on the gear.
-        if (landed && refH.length() < STILL && err.length() < 200) {
+        // On the ground with the route still standing there: wait on the gear. The laws'
+        // landed state, not the gear's load, which is none before the first step.
+        if (this.director.laws.landed && refH.length() < STILL && err.length() < 200) {
           this.hold(m, m.pos, 0, 'radar');
           return;
         }
@@ -175,8 +183,23 @@ export class HeloPilot {
         const v = refH.addScaled(err, TRACK_GAIN);
         const most = 0.8 * m.spec.limits.vne;
         if (v.length() > most) v.scale(most / v.length());
+        let want = Math.max(altitudeOf(ref.pos, m.radius), ground + TRACK_FLOOR);
+        // Terrain ahead: climb early for rising ground (a butte, a ridge) within LOOK_AHEAD
+        // seconds on the way it flies, and slow down where the climb could not make it.
+        if (this.ground && v.length() > 5) {
+          const rate = 0.8 * m.spec.controls.maxClimbRate;
+          let slow = 1;
+          const p = new Vec3d();
+          for (const tau of LOOK_TIMES) {
+            p.copy(m.pos).addScaled(v, tau).normalize();
+            const need = this.ground.height(p) + TRACK_FLOOR;
+            want = Math.max(want, need);
+            const climb = need - tel.altitude;
+            if (climb > rate * tau) slow = Math.min(slow, Math.max(0.25, (rate * tau) / climb));
+          }
+          v.scale(slow);
+        }
         this.velocity(m, v, ref.vel.dot(up));
-        const want = Math.max(altitudeOf(ref.pos, m.radius), ground + TRACK_FLOOR);
         g.height = { reference: 'altitude', value: want };
         return;
       }

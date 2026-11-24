@@ -45,6 +45,7 @@ import {
   liftedPose,
 } from './followFlight';
 import type { AirfieldShift } from './followFlight';
+import { helicopterFields } from './followFlight';
 
 /** Flights whose lead is within this distance of the camera are drawn (m). */
 export const TRAFFIC_RANGE: Meters = 25_000;
@@ -164,6 +165,15 @@ export class CampaignTraffic {
   exclude: number | null = null;
   /** The airbases' coarse and sited places (decision 253). */
   fields: readonly AirfieldShift[] = [];
+  private heliFields: { of: readonly AirfieldShift[]; to: AirfieldShift[] } | null = null;
+
+  /** The fields a mission's aircraft stand on: helicopters on the aprons (R2.9's review). */
+  private fieldsOf(m: Readonly<Mission>): readonly AirfieldShift[] {
+    if (!bundleOfType(m.aircraftType).airWar?.helicopter) return this.fields;
+    if (this.heliFields?.of !== this.fields)
+      this.heliFields = { of: this.fields, to: helicopterFields(this.fields) };
+    return this.heliFields.to;
+  }
   /** The carrier groups' tracks (decision 255): drawn near the camera, their flights on deck. */
   carriers: readonly CarrierTrack[] = [];
   enabled = true;
@@ -220,7 +230,7 @@ export class CampaignTraffic {
         m,
         t,
         this.radius,
-        carrier ? [...this.fields, ...carrierFields(m, carrier)] : this.fields,
+        carrier ? [...this.fieldsOf(m), ...carrierFields(m, carrier)] : this.fieldsOf(m),
         missionPlugin(m.type).formations,
         type.span,
       ).forEach((p, k) => {

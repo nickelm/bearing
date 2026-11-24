@@ -319,7 +319,7 @@ export const LOOKS: readonly Look[] = [
   }),
   // A survivor's signal smoke (R2.9): dense orange, low and drifting with the wind.
   look('signal-smoke', {
-    life: [14, 20],
+    life: [10, 14],
     color: [
       [0, 0.95, 0.36, 0.06],
       [0.5, 0.9, 0.45, 0.12],
@@ -689,18 +689,19 @@ export const EMITTERS: Readonly<Partial<Record<PresetId, EmitterPreset>>> = {
     id: 'signal-smoke',
     label: 'Signal smoke',
     streams: [
+      // Few, large puffs: it marks a spot and costs little (R2.9's review found it heavy).
       stream({
         look: 'signal-smoke',
-        rate: 2.5,
-        size: [1.6, 2.6],
+        rate: 1,
+        size: [2.2, 3.2],
         up: 1.5,
         spread: 0.6,
         jitter: 0.5,
       }),
     ],
     duration: null,
-    prewarm: true,
-    range: 15_000,
+    prewarm: false,
+    range: 6_000,
   },
   'cooling-tower': {
     id: 'cooling-tower',

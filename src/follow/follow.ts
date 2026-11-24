@@ -122,7 +122,7 @@ import { AttitudeHold, holdAllowed } from '../sim/flight/holds';
 import { calibratedAirspeed, standardAtmosphere } from '../sim/flight/atmosphere';
 import { fuelStates } from '../sim/air/fuelStates';
 import type { FuelStates } from '../sim/air/fuelStates';
-import { aircraftType } from '../sim/air/aircraft';
+import { aircraftType, loadoutFuel } from '../sim/air/aircraft';
 import { FLIGHT_STEP } from '../sim/flight/rigidBody';
 import type { Waypoint } from '../sim/air/waypoints';
 import {
@@ -143,7 +143,7 @@ import {
   liftedPose,
 } from './followFlight';
 import type { AirfieldShift, FollowedLook } from './followFlight';
-import { carrierFields, drawnGround } from './followFlight';
+import { carrierFields, drawnGround, helicopterFields } from './followFlight';
 import { ReleasedStores } from '../render/sim/aircraft/releasedStores';
 import { Tracers } from '../render/sim/aircraft/tracers';
 import { STORES } from '../sim/air/stores';
@@ -250,6 +250,8 @@ export class Follow {
   slot = 0;
   /** The airbases' coarse and sited places (decision 253). */
   fields: readonly AirfieldShift[] = [];
+  /** The fields moved onto their aprons for helicopters (R2.9's review), built once. */
+  private heliFields: { of: readonly AirfieldShift[]; to: AirfieldShift[] } | null = null;
   /** The carrier groups' tracks: a carrier flight stands on its deck (decision 255). */
   carriers: readonly CarrierTrack[] = [];
   readonly hud = new Hud();
@@ -450,7 +452,12 @@ export class Follow {
       e.preventDefault();
       deps.globe.chase.zoomBy(Math.sign(e.deltaY));
     };
+    // A right-button drag looks around; the browser's menu must not open when it ends (R2.9's review).
+    const menu = (e: Event) => {
+      if (this.missionId !== null) e.preventDefault();
+    };
     window.addEventListener('keydown', key);
+    canvas.addEventListener('contextmenu', menu);
     canvas.addEventListener('pointerdown', down);
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
@@ -458,6 +465,7 @@ export class Follow {
     this.detach = () => {
       unPad();
       window.removeEventListener('keydown', key);
+      canvas.removeEventListener('contextmenu', menu);
       canvas.removeEventListener('pointerdown', down);
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
@@ -1323,7 +1331,13 @@ export class Follow {
     const down = gearDown(p, agl);
     const frame = followHudFrame({
       pose: p,
-      fuel: Math.max(0, routeState(m.route, t, this.deps.radius).fuel),
+      // The fuel aboard as full fidelity has it: the route's share of the loadout's capacity,
+      // so the reading does not jump when the flight is promoted or demoted (R2.9's review).
+      fuel: flightFuel(
+        Math.max(0, routeState(m.route, t, this.deps.radius).fuel),
+        m.route.fuel,
+        loadoutCapacity(m),
+      ),
       radarAltitude: agl,
       gear: down ? 1 : 0,
       gearDown: down,
@@ -1479,7 +1493,13 @@ export class Follow {
       m.base.kind === 'carrier' && this.carriers[m.base.id]
         ? carrierState(this.carriers[m.base.id]!, t)
         : null;
-    return carrier ? [...this.fields, ...carrierFields(m, carrier)] : this.fields;
+    let fields = this.fields;
+    if (bundleOfType(m.aircraftType).airWar?.helicopter) {
+      if (this.heliFields?.of !== this.fields)
+        this.heliFields = { of: this.fields, to: helicopterFields(this.fields) };
+      fields = this.heliFields.to;
+    }
+    return carrier ? [...fields, ...carrierFields(m, carrier)] : fields;
   }
 
   private pose(m: Mission, t: number, dt = 0): void {
@@ -2067,14 +2087,14 @@ export class Follow {
       R,
       aircraftType(m.aircraftType).cruiseSpeed,
     );
+    if (m.route.fuel <= 0) return { fuelStates: plan };
+    // In the aircraft's terms (the loadout's fuel), as the HUD reads it (R2.9's review).
     const a = this.full?.followed(this.slot);
-    if (!a || m.route.fuel <= 0) return { fuelStates: plan };
-    const k = a.rack.capacity / m.route.fuel;
+    const k = (a ? a.rack.capacity : loadoutCapacity(m)) / m.route.fuel;
+    const states = { joker: plan.joker * k, bingo: plan.bingo * k, low: plan.low * k };
+    if (!a) return { fuelStates: states };
     const fm = a.flown.airframe as unknown as FlightModel;
-    return {
-      fuelStates: { joker: plan.joker * k, bingo: plan.bingo * k, low: plan.low * k },
-      fuelTotal: fm.fuel + fm.tankFuel,
-    };
+    return { fuelStates: states, fuelTotal: fm.fuel + fm.tankFuel };
   }
 
   /**
@@ -2285,6 +2305,15 @@ export function showsLandingAid(ui: PhaseInterface, mode: string): boolean {
 }
 
 /** The displays' view of a flown airframe (as Free Flight's). */
+/** The fuel a mission's aircraft carry with their loadout (kg): internal plus tanks. */
+function loadoutCapacity(m: Readonly<Mission>): number {
+  const t = aircraftType(m.aircraftType);
+  return loadoutFuel(
+    t,
+    t.loadouts.find((l) => l.id === m.loadout),
+  );
+}
+
 function airframeState(m: Airframe): FollowedState {
   const t = m.telemetry;
   const up = m.pos.clone().normalize();

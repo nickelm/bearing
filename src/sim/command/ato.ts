@@ -77,6 +77,8 @@ import type { CampaignCalendar, OrbitParams } from '../../core/calendar';
 export const ATO_PERIOD = HOUR;
 /** Earliest departure after planning (s). */
 export const MIN_LEAD = 10 * MINUTE;
+/** Earliest departure of an urgent flight (a rescue on alert, R2.9) after planning (s). */
+export const URGENT_LEAD = 5 * MINUTE;
 /** Sorties departing within this are committed at the hourly tick (s). */
 export const COMMIT_AHEAD = HOUR;
 /** Standing stations are covered this far past the order's day (s). */
@@ -659,7 +661,8 @@ export class AirTaskingOrders implements TickProcess {
           orbitHeading: need.orbitHeading,
           wind,
         });
-      const earliest = now + MIN_LEAD;
+      // An urgent flight's crew is on alert (R2.9's review: a rescue goes at once).
+      const earliest = now + (plugin.urgent ? URGENT_LEAD : MIN_LEAD);
       let route = plan(earliest);
       if (!route) continue;
       const launch = Math.max(earliest, tot - (timeOnTarget(route) - earliest));

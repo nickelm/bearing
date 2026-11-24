@@ -24,6 +24,8 @@ export const FIGURE_SCALE = 1.4;
 export const LZ_EDGE: Meters = 25;
 /** The helicopter within this of the landing zone sets off the signal smoke (m). */
 export const SMOKE_RANGE: Meters = 3000;
+/** The smoke stands this far behind the survivor, away from the helicopter (m). */
+export const SMOKE_OFFSET: Meters = 15;
 
 const SPECS = {
   alliance: modelSpec('figure-pilot-alliance'),
@@ -108,7 +110,13 @@ export class SurvivorFigures {
       if (mine && rescue && rescue.helicopter.distanceTo(pos) < SMOKE_RANGE) {
         const key = `survivor:${s.id}`;
         smoke.add(key);
-        this.globe.effects.track(key, 'signal-smoke', { pos: pos.clone().addScaled(up, 0.5) });
+        // The smoke a few steps behind the survivor, away from the helicopter, so it marks
+        // the spot without hiding the figure (R2.9's review).
+        const away = pos.clone().sub(rescue.helicopter);
+        away.addScaled(up, -away.dot(up));
+        const at = pos.clone().addScaled(up, 0.5);
+        if (away.length() > 1e-6) at.addScaled(away.normalize(), SMOKE_OFFSET);
+        this.globe.effects.track(key, 'signal-smoke', { pos: at });
       }
     }
     for (const k of this.smoking) if (!smoke.has(k)) this.globe.effects.remove(k);

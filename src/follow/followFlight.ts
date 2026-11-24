@@ -28,6 +28,7 @@ import { routeState } from '../sim/air/route';
 import { calibratedAirspeed, standardAtmosphere } from '../sim/flight/atmosphere';
 import type { HudFrame } from '../ui/flight/hud';
 import { Vec3d } from '../core/vec3d';
+import { APRON_OFFSET, offsetPoint } from '../worldgen/edits/airfields';
 import type { Reference } from '../sim/flight/aiPilot';
 
 /** The bundle whose geometry stands in for a type without one, by class and side (types outside the demo's orders; decision 316). */
@@ -146,6 +147,18 @@ export function shiftedToAirfield(
 
 /** Height of a carrier's flight deck above the sea (m; tools/models/carrier.py). */
 export const DECK_HEIGHT: Meters = 23.2;
+
+/**
+ * The fields a helicopter flight stands on (R2.9's review): each sited field moved from
+ * the runway to the middle of its apron, APRON_OFFSET to the right of the runway's
+ * heading, where helicopters park and lift off; jets keep the runway.
+ */
+export function helicopterFields(fields: readonly AirfieldShift[]): AirfieldShift[] {
+  return fields.map((f) => {
+    const to = offsetPoint(new Vec3d(f.to[0], f.to[1], f.to[2]), f.heading, 0, APRON_OFFSET, 1);
+    return { ...f, to: [to.x, to.y, to.z] };
+  });
+}
 
 /**
  * A carrier-based flight's deck (decision 255): its route's ground points (the carrier

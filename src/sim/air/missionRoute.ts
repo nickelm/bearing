@@ -51,6 +51,8 @@ export const FENCE_IN = 40e3;
 export const LOW_FENCE_IN = 120e3;
 export const LOW_EGRESS = 60e3;
 export const PASS_HALF = 10e3;
+/** A low profile's landing slows to descent speed this far out (m; R2.9's review). */
+export const LAND_APPROACH = 4e3;
 /** Low-level altitude for jets and helicopters (m). Terrain following comes with the execution layer (V4, P1). */
 export const LOW_ALTITUDE = 100;
 export const HELICOPTER_LOW_ALTITUDE = 30;
@@ -207,7 +209,13 @@ function inbound(
     }
     b.orbit(target, axis, stationTime, cruise * LOITER_SPEED, 'on-target');
   } else {
-    // Land at the destination: descend on the way in, stop, take off again.
+    // Land at the destination: descend on the way in, stop, take off again. A low profile
+    // (a helicopter's rescue or sling load) runs in at low-level speed and slows only for
+    // the last LAND_APPROACH (R2.9's review: a rescue crawled 120 km at descent speed).
+    if (low && arcDistance(b.point, target, R) > LAND_APPROACH) {
+      // At cruise fuel flow: a helicopter low over the ground burns what it does in cruise.
+      b.leg(toward(target, b.point, LAND_APPROACH, R), inAlt, inSpeed, 'cruise', 'fence-in');
+    }
     b.changeAltitudeToward(target, 0, cruise * DESCENT_SPEED, 'descent', 'fence-in');
     b.leg(target, 0, cruise * DESCENT_SPEED, 'descent', 'fence-in');
     b.heading = initialHeading(target, recovery);
