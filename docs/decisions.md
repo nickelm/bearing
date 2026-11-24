@@ -5292,3 +5292,10 @@ The per-vertex coverage, albedo and side (±1) go to the GPU as one vec3 attribu
 **How it was checked.** `tests/groundUnits.test.ts`: the nearest enemy fighting battalion in range is marked (not one's own side's, not logistics), held when the aircraft is nearer another, marked at a company's middle once promoted, and the next one is marked when it is gone; a side with no enemy near gets none. The unit suite, the type check and lint pass.
 
 **Reason:** the owner's request; CAS needs a way to find the enemy before R3.8.
+
+### 350. R2.7 closed
+
+**Date:** 2026-11-24
+**Decision:** R2.7 (the demo roster) is done. The exit holds: every type a day of war's orders fly on the demo seeds has its own model (decision 316), and every flyable type passes the silhouette check and checks 12–13: the Vo-31, Vo-35 and A-15 beside the Kestrel (decisions 314, 315, 317). The owner flew the Vo-35 and A-15 and followed the Vo-31 on the GPU, and checked the fixes their look asked for (decision 319). The C-150 is flown in R4.4 (decision 318). The follow-ups stay in `TODO.md`: the Vo-31's route climb against its military-power climb, models for the types outside the demo's orders, the Pact's own markings, and the A-15's Mavericks, cluster bombs and eleven stations.
+
+**Reason:** the owner's sign-off, 2026-11-24.

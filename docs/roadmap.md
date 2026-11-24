@@ -15,7 +15,7 @@ _Adopted 2026-11-18 with Proposal 0008 (`docs/proposals/0008-game-loop-and-campa
 | ----------------------- | ---------------------------------------------------------------------------- | ---------- | ----------------- |
 | R0. Audit and reconcile | Know what exists; documents match the code                                   | —          | done (this audit) |
 | R1. Consolidation       | What the demo needs from earlier tracks, and nothing more                    | R1.1–R1.8  | done              |
-| R2. One day of war      | The thin, complete loop: the tech demo                                       | R2.1–R2.12 | R2.1–R2.4 and R2.6 done, R2.5 done in code, R2.7 built |
+| R2. One day of war      | The thin, complete loop: the tech demo                                       | R2.1–R2.12 | R2.1–R2.4, R2.6 and R2.7 done, R2.5 done in code |
 | R3. Combat depth        | Sensors, weapons, air combat, air defense, ground entities, infantry         | R3.1–R3.8  |                   |
 | R4. Breadth             | Roster, mission catalog, helicopters, transport, crews, naval war, gunship   | R4.1–R4.10 |                   |
 | R5. Dynamic campaign    | Logistics, morale, weeks of war, saves, consequences                         | R5.1–R5.6  |                   |
@@ -229,7 +229,7 @@ _Depends on R1.7; the flight data waits for R1.5's per-type laws._
 
 **Exit:** every type on the demo's orders has a model, and every flyable type passes the silhouette check and checks 12–13.
 
-**State (2026-11-23):** built (decisions 314–317), the owner's look on the GPU remains: the Vo-31, Vo-35 and A-15 fly in Free Flight and at full fidelity in the campaign (the A-15 if time allowed, and it did); every type a day of war's orders fly on the demo seeds has its own model (twenty new ones); the silhouettes pass check 6, and the Vo-35 and Vo-31 pass checks 12–13 in the Pact's skin, whose units the HUD now takes. The C-150 stays AI-flown; its flight data move to R4.4 with tactical airlift (owner, decision 318).
+**State (2026-11-24):** done (decisions 314–319, 350): the owner flew the Vo-35 and A-15 and followed the Vo-31 on the GPU, and checked the fixes of decision 319. The Vo-31, Vo-35 and A-15 fly in Free Flight and at full fidelity in the campaign (the A-15 if time allowed, and it did); every type a day of war's orders fly on the demo seeds has its own model (twenty new ones); the silhouettes pass check 6, and the Vo-35 and Vo-31 pass checks 12–13 in the Pact's skin, whose units the HUD now takes. The C-150 stays AI-flown; its flight data move to R4.4 with tactical airlift (owner, decision 318).
 
 ### R2.8 Minimal Entity Promotion — medium
 
