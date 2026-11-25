@@ -1,8 +1,10 @@
 # Plan: Terrain-adaptive networks (track N)
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 _Drafted 2026-11-16 for [proposal 0005](../proposals/0005-terrain-adaptive-networks.md) (decision 161). The tasks are in `TODO.md` under the terrain networks track; later decisions record what each milestone changes. Where this plan and the proposal differ, the plan says why, and decision 161 lists the readings for the owner to confirm._
 
-_Audit 2026-11-18 (decision 229): alignment is eager, once per world (decision 184), not lazy; structures are merged per structure in `bridgeLayer.ts` (decision 192); class fallback happens only when a route fails; the milestone table's "Proposal phase" column has no counterpart in the proposal; the measured network is 86,818 km (decision 186). "What exists" is a snapshot from drafting. Milestones are scheduled by `docs/roadmap.md` (decision 228); the tech demo does need bridges with a damage state and road data in the sim._
+_Audit 2026-11-18 (decision 229): alignment is eager, once per world (decision 184), not lazy; structures are merged per structure in `bridgeLayer.ts` (decision 192); class fallback happens only when a route fails; the milestone table's "Proposal phase" column has no counterpart in the proposal; the measured network is 86,818 km (decision 186). "What exists" is a snapshot from drafting. Milestones are scheduled by `docs/roadmap.md` (decision 228); the tech demo does need bridges with a damage state and road data in the game engine._
 
 ## Goal
 
@@ -46,7 +48,7 @@ Each conflict below has a resolution that decision 161 records.
    _Resolution:_ the network tier keeps its order (reordering changes every cast for no visible gain); the alignment tier aligns railways first, then major roads, then minor roads, as the proposal asks, and later classes treat earlier corridors as obstacles or attachment points.
 4. **Where the edits run.** River carving runs in the GPU tile kernel, and grading runs on the CPU after the render detail, so today a pad is applied _after_ the rivers, the opposite of the proposal's rule 3.
    _Resolution:_ carve, floodplain and build-up stay in the kernel (they belong to the base terrain and need the 48 m samples); corridors and pads run on the CPU after the render detail, as grading does now, because they are narrower than the samples. Rivers stay last by a **protected channel**: inside a river's channel and inner banks (the CPU knows them from the `RiverIndex` segments), the result is the minimum of the edited height and the carved tile height. Carving is not idempotent in its fade band, so the CPU never re-runs the carve; the minimum against the already-carved surface needs only a distance test, and it makes "no embankment dams a river" exact.
-5. **One sampler.** The headless simulation has no tiles; the main thread has them once loaded.
+5. **One sampler.** The headless game engine has no tiles; the main thread has them once loaded.
    _Resolution:_ one edit function, `TerrainEdits.apply(dir, base)`, in `worldgen/edits/` so `sim/` may use it. Its base is whatever height the caller has (the finest loaded tile data on the main thread; the global grid in the worker, as Free Flight's ground already falls back). Mesh vertices, trees, buildings, the camera's clearance, the flight model's ground and later line of sight and ground movement all call it. `SurfaceGrading` becomes a client of it.
 6. **"Per-chunk feature distance field generated on the GPU."** Decision 54 rejected per-tile offset textures in favor of exact per-fragment distance over per-tile segment lists, which already serve rivers and roads.
    _Resolution:_ the feature field _is_ the segment lists, extended with a kind and a profile per segment. No textures.
@@ -182,7 +184,7 @@ From the owner's session brief, for whoever implements this:
 
 - Read `CLAUDE.md`, `TODO.md`, `docs/design.md`, `docs/visual-style.md`, `docs/decisions.md` and every proposal before writing code.
 - Generation code stays headless in `src/worldgen/`; the edit framework stays usable from `src/sim/`; rendering goes in `src/render/`.
-- Run the type check, lint and tests before every commit; never leave the branch broken; do not break the strategic view, the simulation view or Free Flight. The Kestrel's lockstep test must pass unchanged (the ground query changes only where edits apply, and no lockstep scenario crosses a corridor; check this first).
+- Run the type check, lint and tests before every commit; never leave the branch broken; do not break the strategic view, the flight view or Free Flight. The Kestrel's lockstep test must pass unchanged (the ground query changes only where edits apply, and no lockstep scenario crosses a corridor; check this first).
 - Protect the river decisions: before changing river generation, read the code and tests above and keep them passing; port a test before replacing what it tests.
 - When a phase stalls, ship the simplest version that meets the verification criteria, record the simplification, and move on. Stretch items come last.
 - Unattended sessions take the most reasonable option consistent with the documents, record it in `docs/decisions.md`, and continue.

@@ -1,5 +1,7 @@
 # Plan: Settlements and Cities (Proposal 0009)
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 _Written 2026-11-20 before any code, for the out-of-sync session that implements `docs/proposals/0009-settlements-and-cities.md`. Two pull requests: Phase 1 on `feature/urban-ground`, the rest on `feature/cities`, branched from it. Decisions 259 onward; renumber them at merge if the main line has taken those numbers._
 
 ## What Exists (Survey, 2026-11-20)
@@ -54,7 +56,7 @@ planSettlement(input: SettlementInput, seed) → SettlementPlan
 - One building per parcel (`buildings.ts`): footprint inset by the district's setback and turned to the frontage, floors by district and distance, roof by style (gable, hip, flat, shed), extras by style (chimneys, dormers, balconies, water tanks). Microdistricts place slabs in parkland instead of one per parcel; industry places sheds and stacks.
 - Plinths are the renderer's: a building's base extends to the lowest drawn ground under its footprint.
 - Landmarks (`landmarks.ts`) by district and style, named from the settlement's flavor.
-- **Pads**: `pads.ts` returns pad edits for large structures on steep ground, in the edit framework's form. They are not added to `terrainEditsFor` in this session, because that function feeds the sim worker's height service (the other session's lane, rule 13); large structures prefer flat sites and use plinths until then. Recorded as a decision.
+- **Pads**: `pads.ts` returns pad edits for large structures on steep ground, in the edit framework's form. They are not added to `terrainEditsFor` in this session, because that function feeds the game worker's height service (the other session's lane, rule 13); large structures prefer flat sites and use plinths until then. Recorded as a decision.
 
 ### Rendering (`src/render/sim/city/`)
 

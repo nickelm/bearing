@@ -1,18 +1,20 @@
 # Plan: Free Flight mode
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 _Drafted 2026-11-13 for the overnight Free Flight task. Branch `feature/free-flight`. The decisions this plan leads to are recorded in `docs/decisions.md` (134 onward)._
 
 _Audit 2026-11-18 (decision 229): Free Flight has since gained the world's weather and presets (decisions 137, 143), two helicopters (decision 159) and scripted traffic for the sensors (decision 218); mouse aim, not direct control, is the default (decisions 195, 198). The order below is history; `docs/roadmap.md` schedules what follows (decision 228)._
 
 ## Goal
 
-A sandbox mode: pick a seed and an airbase, spawn on the runway in the F-21 Kestrel (the F-16 analogue), take off, fly anywhere, and land at the same or another airbase. No war simulation, no other traffic, no weapons.
+A sandbox mode: pick a seed and an airbase, spawn on the runway in the F-21 Kestrel (the F-16 analogue), take off, fly anywhere, and land at the same or another airbase. No war, no other traffic, no weapons.
 
 ## What exists
 
 | Area                                                         | State                                                                                                                                                        | Where                                                                                    |
 | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
-| Simulation view                                              | Faceted terrain quadtree to 20 km, sky, sea, clouds, trees, buildings; observer and free cameras                                                             | `render/sim/globeScene.ts`, `render/sim/terrain/`                                        |
+| Flight view                                              | Faceted terrain quadtree to 20 km, sky, sea, clouds, trees, buildings; observer and free cameras                                                             | `render/sim/globeScene.ts`, `render/sim/terrain/`                                        |
 | Terrain heights on the CPU                                   | `TerrainRenderer.displaySurfaceAt` (the finest drawn surface, graded) and `heightAt`                                                                         | `render/sim/terrain/terrainRenderer.ts`                                                  |
 | Airbases                                                     | Coarse-pass facts: id, name, kind, side, land node, theater, point, runway heading (0..π) and length (2,000–3,600 m)                                         | `worldgen/strategic/infrastructure.ts`                                                   |
 | Runway geometry                                              | 45 m wide runway, parallel taxiway, apron, links, as pavement segments                                                                                       | `render/sim/infra/infraScene.ts`                                                         |
@@ -23,7 +25,7 @@ A sandbox mode: pick a seed and an airbase, spawn on the runway in the F-21 Kest
 | F-16 analogue                                                | `alliance-fighter.json` (F-21 Kestrel), 400-odd triangles, one static mesh, no gear, no hinges                                                               | `data/models/`                                                            |
 | Aircraft performance table                                   | F-21 entry (speeds, ceiling, fuel) for the analytic air war                                                                                                  | `sim/air/aircraft.ts`                                                                    |
 | Camera rig, flight model, flight director, HUD, flight input | None                                                                                                                                                         | –                                                                                        |
-| Start screen                                                 | None: the app opens the simulation view with the debug GUI                                                                                                   | `main.ts`, `ui/debugGui.ts`                                                              |
+| Start screen                                                 | None: the app opens the flight view with the debug GUI                                                                                                   | `main.ts`, `ui/debugGui.ts`                                                              |
 | Map click                                                    | A click picks a flight icon or a ground point for the range rings                                                                                            | `render/strategic/strategicScene.ts`                                                     |
 
 Phase 1's runway generator and most of Phase 2 therefore already exist. The runway heading follows the prevailing winds rather than the flattest axis; Free Flight keeps it, since changing it would change every existing world's airfields.
@@ -66,9 +68,9 @@ Phase 1's runway generator and most of Phase 2 therefore already exist. The runw
 
 1. **Free Flight pulls player flight control forward.** Proposal 0002 and the design keep takeoff and landing with the AI and put player flight control in P1 after the demo. Free Flight adds a first version of P1 (flight model, control laws, direct control, a flight director) and part of P2 (a HUD) now, plus ground handling and landing gear, which the proposal ruled out. Recorded as a decision; the design's _Non-goals_ and _Later_ sections and the visual style's "No landing gear animation" are amended to name the exception.
 2. **Direct control is Free Flight's default**, not mouse aim, because takeoff and landing need direct inputs. Mouse aim exists through the flight director.
-3. **The player's flight model runs on the main thread** in Free Flight, at fixed 120 Hz steps, since there is no sim worker in the mode and input latency matters. This answers P1's open item for this mode only.
+3. **The player's flight model runs on the main thread** in Free Flight, at fixed 120 Hz steps, since there is no game worker in the mode and input latency matters. This answers P1's open item for this mode only.
 4. **Rotational dynamics are control-law driven.** The control laws compute the moments that achieve their commanded rates, bounded by an authority proportional to dynamic pressure; there are no aerodynamic moment tables (Cm(α), Cl(β)). This keeps the model stable and tunable at medium fidelity. Departures are not modeled.
-5. **No weather in Free Flight.** Without the sim worker there is no weather model, so the sky is clear.
+5. **No weather in Free Flight.** Without the game worker there is no weather model, so the sky is clear.
 6. **A non-rotating planet.** Coriolis and centrifugal terms from planet rotation are left out.
 
 ## Order

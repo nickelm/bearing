@@ -1,5 +1,7 @@
 # Plan: Ground detail for low flight (track G)
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 _Drafted 2026-11-16 from the owner's direction of the same day (decision 168). The tasks are in `TODO.md` under the ground detail track; later decisions record what each milestone changes._
 
 _Audit 2026-11-18 (decision 229): the downwash this plan left to H3 is built (decisions 176, 182, 188, 191), and the micro-facets are off by default (decision 197). Milestones are scheduled by `docs/roadmap.md` (decision 228)._
@@ -25,7 +27,7 @@ Make the ground within a few hundred meters of a low camera worth looking at, an
 | Detail noise                        | Periodic value noise on the wrapped coordinates at 16–256 m, ±12% brightness, faded by pixel footprint                    | `landShading.ts` (decisions 38, 124)                         |
 | Land cover                          | Biome, moisture, slope (rock), snow, seasons, farmland cells, marsh, sand and gravel bars, roads, pavement                | `landShading.ts`, `canopyNode.ts`, `water/`, `infra/`        |
 | Instanced placement near the camera | Per quarter of a level-10 tile, deterministic, masked by water, roads, towns and clearings, heights from `surfaceSampler` | `render/sim/forest/forestLayer.ts` (decisions 148, 150, 166) |
-| Shared placement fields             | Canopy height and stands as pure functions the sim can call                                                               | `worldgen/canopy.ts`                                         |
+| Shared placement fields             | Canopy height and stands as pure functions the game engine can call                                                               | `worldgen/canopy.ts`                                         |
 | Model kit                           | JSON specs built in code, baked occlusion, far models                                                                     | `render/common/models/` (decision 106)                       |
 | Wind                                | Hashed gusts, no random numbers, capped near the ground                                                                   | `sim/flight/wind.ts` (decision 143)                          |
 | Particles                           | Rain, snow and dust with wind, lit by the air they fall through                                                           | `render/sim/weather/precipitation.ts` (decision 142)         |
@@ -80,7 +82,7 @@ As built (decision 172; `tools/models/cover.py` writes the specs, class `cover`,
 
 ### 3. Placement and the ring (G3)
 
-- **A shared, pure placement function** in `worldgen/groundCover.ts`, beside `canopy.ts`: given a point, it returns what grows or lies there from integer cell hashes, biome, moisture, slope, snow and the masks below. No RNG stream is drawn, so no other stage changes (rule 5), and the sim can ask the same question later.
+- **A shared, pure placement function** in `worldgen/groundCover.ts`, beside `canopy.ts`: given a point, it returns what grows or lies there from integer cell hashes, biome, moisture, slope, snow and the masks below. No RNG stream is drawn, so no other stage changes (rule 5), and the game engine can ask the same question later.
 - **Cells.** One cell per level-10 sample (about 6 m on the campaign world), five candidate slots each; clumps of grass and fields of boulders from patterns over blocks of five cells, and one flower color per block of nine (decision 174).
 - **Masks.** None in water or protected channels, on roads, runways, taxiways, pads or rail ballast, in built-up patches, or where the canopy shell covers the ground; tufts thin into snow and vanish under full snow; road verges and field edges get a denser band.
 - **On the drawn surface.** Each instance sits on the triangle the terrain actually draws, interpolated from the finest level's mesh vertices on the mesh's own diagonal, and with the terrain's height exaggeration. A 0.5 m tuft on the smooth height instead of the facet would float or sink visibly. The ring must stay inside the range where the finest level is guaranteed; a test asserts it.
@@ -143,7 +145,7 @@ Decision 168 makes these in `docs/visual-style.md`:
 ## The owner's answers (decision 169)
 
 1. **Flowers: yes.** Sparse, muted flower tufts in meadows, two or three colors per biome, in G2 and G3.
-2. **Boulders block: yes.** The sim treats boulders taller than about 0.8 m as landing obstacles through the shared placement function (H3's landing zones).
+2. **Boulders block: yes.** The game engine treats boulders taller than about 0.8 m as landing obstacles through the shared placement function (H3's landing zones).
 3. **Dust: sprites** through the particle overlay.
 4. **Snow keeps its sparkle.** The micro-facets add only faint shade steps on snow and leave its normal and its sparkle (decision 139) alone.
 5. **Light on wet ground, ice and smooth rock.** Each micro-facet can glint: on wet ground (with the weather's wetness), on ice and on smooth or polished rock, a micro-facet whose tilted normal mirrors the sun toward the camera lights up as one small flat flash, the stepped counterpart of the snow's sparkle.

@@ -1,5 +1,7 @@
 # Plan: Helicopters (track H)
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 _Drafted 2026-11-15 for [proposal 0004](../proposals/0004-helicopter-flight.md) (decision 149); the owner's answers are decision 151. The tasks are in `TODO.md` under the helicopter track; later decisions record what each milestone changes._
 
 _Audit 2026-11-18 (decision 229): the rotor model is `rotorAero.ts` and `rotorcraftModel.ts` with a lagged inflow state, parameters in the spec's `flight` block (decision 159), not the modules and `rotor` block named under Architecture; `heloDirector.ts` does not exist yet; a helicopter chase rig and `MouseCapture` exist. "What exists" is a snapshot from drafting. Milestones are scheduled by `docs/roadmap.md` (decision 228)._
@@ -105,7 +107,7 @@ Mouse aim and its in-flight switch; direct control with augmentation on and off;
 
 ### H3. Ground and utility
 
-Skids and wheels with type slope limits; dynamic rollover and its warning; slope and confined-area landings; rooftop contact (structures in the ground query); ship decks as moving ground where a ship is in the simulation view; sling loads (a slack-capable cable, a load with mass and drag, pickup and release) with cable tension on the HUD and the hook camera as a render-target display; hoist and fast-rope as cable-length states with crew figures; downwash particles. Tests: a slope landing at the limit and a rejected one beyond it; a sling load carried 5 km and set down within 3 m.
+Skids and wheels with type slope limits; dynamic rollover and its warning; slope and confined-area landings; rooftop contact (structures in the ground query); ship decks as moving ground where a ship is in the flight view; sling loads (a slack-capable cable, a load with mass and drag, pickup and release) with cable tension on the HUD and the hook camera as a render-target display; hoist and fast-rope as cable-length states with crew figures; downwash particles. Tests: a slope landing at the limit and a rejected one beyond it; a sling load carried 5 km and set down within 3 m.
 
 ### H4. Hazards and damage
 
@@ -118,8 +120,8 @@ Fixed and turreted weapons on P4's guns, rockets and missiles; the turret follow
 ## Dependencies
 
 - H1 reads "follows P1" as needing P1's framework: the shared airframe and director interfaces (step 0 builds them) and the input and gamepad plumbing. Free Flight already has a first version of both. P1's campaign tasks (promotion, jump-in, handback, the flight cap) are needed only by H5. This reading lets H1 start before P1 closes; the owner confirmed it (decision 151).
-- H3's tree strikes and H5's battle positions need the canopy height field (decisions 148, 150) to reach the simulation: line of sight and tree strikes are its step 7.
-- H3's ship landings need a ship in the simulation view; H5's weapons need P4; H5's jump-in needs P1's take control and hand back.
+- H3's tree strikes and H5's battle positions need the canopy height field (decisions 148, 150) to reach the game engine: line of sight and tree strikes are its step 7.
+- H3's ship landings need a ship in the flight view; H5's weapons need P4; H5's jump-in needs P1's take control and hand back.
 
 ## Risks
 

@@ -1,5 +1,7 @@
 # Plan: Stylized Effects (Proposal 0011)
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 _Written 2026-11-22 before any code, for the out-of-sync session that implements `docs/proposals/0011-stylized-effects.md`. One pull request from `feature/stylized-effects`. Decisions 320 onward; renumber them at merge if the main line has taken those numbers (the main line stood at 301 when this plan was written)._
 
 ## What Exists (Survey, 2026-11-22)
@@ -19,7 +21,7 @@ _Written 2026-11-22 before any code, for the out-of-sync session that implements
 
 ### Event interface (`src/sim/effects/events.ts`)
 
-Plain, serializable types the sim may produce and the renderer consumes: `launch` (weapon, motor, where, direction), `hit` (where, what), `explosion` (where, explosive mass, kind: air burst, ground, water, fuel), `fire-started` and `fire-extinguished` (a keyed long-lived fire), `damage` (an aircraft's smoke state), plus `EffectSink`, the one method `handle(event)`. The module imports only `core`. Effects never feed back into sim state (proposal, _Integration_).
+Plain, serializable types the game engine may produce and the renderer consumes: `launch` (weapon, motor, where, direction), `hit` (where, what), `explosion` (where, explosive mass, kind: air burst, ground, water, fuel), `fire-started` and `fire-extinguished` (a keyed long-lived fire), `damage` (an aircraft's smoke state), plus `EffectSink`, the one method `handle(event)`. The module imports only `core`. Effects never feed back into game state (proposal, _Integration_).
 
 ### The puff system (`src/render/sim/effects/`)
 
@@ -58,7 +60,7 @@ Plain, serializable types the sim may produce and the renderer consumes: `launch
 
 0. Survey, proposal, this plan.
 1. Puff renderer: the impostor material on a test pool, in the sandbox.
-2. GPU simulation: curves, pool, the two kernels; the TypeScript reference and a GPU test against it.
+2. GPU compute: curves, pool, the two kernels; the TypeScript reference and a GPU test against it.
 3. Sandbox: `effects.html` (a third Vite page), a scene on a patch of planet with the real sky and light, buttons for every preset and explosion size, wind and sun controls, a stress test; `tools/effects.preview.ts` renders the same scene headless.
 4. Emitters and explosions: the presets, the five layers, debris, decals, flash lights.
 5. Ribbons.
