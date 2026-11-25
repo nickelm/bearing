@@ -1,5 +1,7 @@
 # Cities: Baseline (Proposal 0009, Phase 0)
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 _Measured 2026-11-20 on seed 4 (the eroded 1,024² world from the render preview's cache), before any change of Proposal 0009 (`main` at `8d37d2d`), with `tools/render.preview.ts` at 960 × 540, `PERF=5`. This session has no GPU: Dawn ran on lavapipe, Mesa's software Vulkan driver, so wall times per frame are CPU rasterization and only compare runs with each other. CPU per frame is the scene's own CPU time (`scene.render`), median of five frames; triangles and draw calls are counted from the scene graph. The owner's GPU run (`MODE=gpu`) remains the real measure._
 
 ## The Standard City Views

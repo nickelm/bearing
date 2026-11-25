@@ -1,5 +1,7 @@
 # Stylized Smoke, Fire and Explosions (Proposal 0011)
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 _Branch `feature/stylized-effects`, 2026-11-22. Decisions 320–327 (numbered past the main line's 301; renumber at merge if it has taken them). Plan: `docs/plans/stylized-effects.md`. Metrics: `docs/reports/stylized-effects-metrics.md`._
 
 ## Summary

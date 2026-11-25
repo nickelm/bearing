@@ -1,5 +1,7 @@
 # World diversity: report (track W, proposal 0007)
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 _Branch `feature/world-diversity`, 2026-11-17. Proposal: [docs/proposals/0007-world-diversity.md](../proposals/0007-world-diversity.md). Plan: [docs/plans/world-diversity.md](../plans/world-diversity.md). Decisions 204, 205 and 209–216 (206–208 belong to other tracks). Baseline: [world-diversity-baseline.md](world-diversity-baseline.md). Metrics: [world-diversity-metrics.md](world-diversity-metrics.md)._
 
 ## Summary

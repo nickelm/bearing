@@ -1,5 +1,7 @@
 # Free Flight: overnight report
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 _2026-11-13. Branch `feature/free-flight`. Plan: [docs/plans/free-flight.md](../plans/free-flight.md). Decisions 134 and 135 in [docs/decisions.md](../decisions.md)._
 
 Free Flight is a sandbox: pick a seed and an airbase, spawn on the runway in the F-21 Kestrel (the F-16 analogue), take off, fly anywhere, and land at the same or another airbase. No war, no traffic, no weapons. All eight phases are done. The flight model, the ground model and the outcomes are proven by a headless test that takes off from a generated airbase, flies a 1,000 m circuit and lands in the touchdown zone. One gap matters most: **I could not fly the app end to end in a browser**. In this cloud container, headless Chromium's software WebGPU loses its device during the world's GPU pass, in the normal app as well as in Free Flight. The screenshots therefore come from the project's Dawn renderer, with the real HUD drawn over them in Chromium. Your first desktop session will be the first time anyone flies it interactively.

@@ -1,5 +1,7 @@
 # World diversity: baseline
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 _Measured 2026-11-17 for [proposal 0007](../proposals/0007-world-diversity.md) (decision 204, track W0) with `tools/diversity.preview.ts` on generator version 21, before any of track W. The plan is [docs/plans/world-diversity.md](../plans/world-diversity.md)._
 
 ## How it was measured

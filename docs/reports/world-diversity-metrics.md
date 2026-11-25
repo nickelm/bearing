@@ -1,5 +1,7 @@
 # World diversity: metrics
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 _Measured 2026-11-17 on `feature/world-diversity` with `tools/diversity.preview.ts` and `tools/zones.preview.ts`, against the baseline in [world-diversity-baseline.md](world-diversity-baseline.md). Proposal 0007's verification criteria with the thresholds the plan set (decision 204), regional windows scaled to the planet (decision 205)._
 
 The coarse pass ran seeds 1–20 on generator version 27. Eroded worlds (1024² per face, Dawn on lavapipe, 15–25 minutes each) ran on version 26, which differs from 27 and 28 only in the wonders (graph only) and decision 215 (eroded wetland and mangrove, islets). Zones were recomputed on those worlds with decision 215's code.

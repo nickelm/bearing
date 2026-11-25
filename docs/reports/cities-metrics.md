@@ -1,5 +1,7 @@
 # Cities: Metrics (Proposal 0009, Phase 10)
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 _Measured 2026-11-20 with `tools/cities.preview.ts` over seeds 1–20 on the coarse campaign world (256² cells, about 6 km): per seed five cities, eight towns and eight villages spread over the population ranking, 420 plans in all. The coarse world's heights are smooth, so few streets lie on slopes above 10%; `tests/settlements.test.ts` checks the slope and grade criteria on a 15% hillside as well. Rivers are not passed to this tool (bridges and river setbacks are covered by the unit tests and the render views). Frame budgets are in the second part, from `tools/render.preview.ts` on seed 4's eroded world._
 
 ## Generator over 20 Seeds

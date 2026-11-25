@@ -1,5 +1,7 @@
 # Stylized Effects: Metrics
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 _2026-11-22, branch `feature/stylized-effects`, Proposal 0011, decisions 320–327._
 
 ## Where These Numbers Come From

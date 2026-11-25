@@ -1,5 +1,7 @@
 # Settlements and Cities: Report (Proposal 0009)
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 _2026-11-20, out-of-sync session. Phase 1 (urban ground) is [nickelm/bearing#5](https://github.com/nickelm/bearing/pull/5) on `feature/urban-ground`; this report covers `feature/cities`, branched from it, Phases 2–10. Decisions 259–270, the range the main line left free (it continues at 271). The baseline is `docs/reports/cities-baseline.md`, the generator's metrics over 20 seeds `docs/reports/cities-metrics.md`, the screenshots `docs/reports/screens/cities/`._
 
 ## What Works

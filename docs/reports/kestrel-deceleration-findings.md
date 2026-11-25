@@ -1,5 +1,7 @@
 # Kestrel deceleration: findings (decision 207, step 1)
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 The owner reported that the F-21 Kestrel is hard to slow down on a straight-in approach: the speedbrake seems to do little, and the gear "refuses to extend" because the jet stays above its 300 KIAS limit. This note records what the headless diagnostic found before any tuning.
 
 **Tool:** `npx vitest run --config vitest.tools.config.ts tools/decel.preview.ts --disable-console-intercept`. It flies the real `FlightModel` through the flight director, level at 1,500 m with the throttle at idle, at landing weight (internal fuel down to 1,000 kg, 11.1 t). The drag breakdown comes from a new telemetry field, `FlightTelemetry.drag`, which holds the terms the model sums into CD (same order of summation, so the lockstep fixture still passes). The fixtures live in `tests/helpers/decel.ts`, shared with the tests of step 2.
