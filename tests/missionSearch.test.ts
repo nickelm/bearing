@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { CubeGrid } from '../src/core/cubeGrid';
+import { destination } from '../src/core/greatCircle';
 import { HOUR, MINUTE } from '../src/core/units';
 import { aircraftType } from '../src/sim/air/aircraft';
-import { jumpInWindow, phaseTime } from '../src/sim/air/mission';
+import { EJECTED } from '../src/sim/air/airOps';
+import { isAirborne, jumpInWindow, phaseTime } from '../src/sim/air/mission';
 import type { Mission } from '../src/sim/air/mission';
 import { matchesQuery, SUBSCRIPTION_EVENT } from '../src/sim/air/subscriptions';
 import { campaignInput } from '../src/sim/command/campaignInput';
@@ -21,7 +23,8 @@ import { syntheticConfig } from './helpers/weatherWorld';
 
 const w = generateCampaignWorld({ ...DEFAULT_PLANET_PARAMS, seed: 7 }, { grid: new CubeGrid(64) });
 const input = campaignInput(w.graph, w.campaign.cast, w.infrastructure);
-const make = () => createSimWorld({ ...syntheticConfig(7), campaign: input });
+const R = DEFAULT_PLANET_PARAMS.radius;
+const make = () => createSimWorld({ ...syntheticConfig(7), radius: R, campaign: input });
 const names = w.campaign.cast.theaters.map((t) => t.name);
 
 describe('mission search', () => {
@@ -48,13 +51,16 @@ describe('mission search', () => {
   });
 
   it('filters by type, aircraft, theater, phase, threat and time until action', () => {
-    const choices = filterChoices(missions, 'alliance');
+    const choices = filterChoices(missions, 'alliance', names.length);
     expect(choices.types.length).toBeGreaterThan(1);
-    const type = choices.types[0]!;
+    const live = missions.find((m) => m.side === 'alliance')!;
+    const type = live.type;
+    expect(choices.types).toContain(type);
     const only = missionRows(missions, 'alliance', t, { ...NO_FILTERS, types: [type] }, names);
     expect(only.length).toBeGreaterThan(0);
     expect(only.every((r) => r.type === type)).toBe(true);
-    const ac = choices.aircraft[0]!;
+    const ac = live.aircraftType;
+    expect(choices.aircraft).toContain(ac);
     const byAircraft = missionRows(
       missions,
       'alliance',
@@ -70,7 +76,8 @@ describe('mission search', () => {
     expect(high.every((r) => r.threat === 'high')).toBe(true);
     const egress = missionRows(missions, 'both', t, { ...NO_FILTERS, phases: ['egress'] }, names);
     expect(egress.every((r) => r.phase === 'egress')).toBe(true);
-    const theater = choices.theaters[0]!;
+    const theater = live.theater;
+    expect(choices.theaters).toContain(theater);
     const inTheater = missionRows(
       missions,
       'alliance',
@@ -79,6 +86,31 @@ describe('mission search', () => {
       names,
     );
     expect(inTheater.every((r) => m.get(r.id)!.theater === theater)).toBe(true);
+  });
+
+  it('offers every planned type, aircraft and theater, so a rescue can be subscribed to before anyone is down (decision 371)', () => {
+    // Early in the war no rescue flies, yet the Type list has it, and the query it makes
+    // matches a rescue launched later.
+    const early = make();
+    early.sim.advanceTo(HOUR);
+    const live = early.air!.liveMissions();
+    expect(live.some((m) => m.type === 'csar')).toBe(false);
+    const choices = filterChoices(live, 'alliance', names.length);
+    expect(choices.types).toContain('csar');
+    expect(choices.types).toContain('cas');
+    for (const id of choices.aircraft) expect(aircraftType(id).side).toBe('alliance');
+    expect(choices.theaters).toEqual(names.map((_, i) => i));
+    expect(missionRows(live, 'alliance', HOUR, { ...NO_FILTERS, types: ['csar'] }, names)).toEqual(
+      [],
+    );
+    const query = queryOf({ ...NO_FILTERS, types: ['csar'] }, 'alliance');
+    const own = input.airbases.find((a) => a.side === 'alliance')!;
+    const flight = live.find((m) => m.side === 'alliance' && isAirborne(m, HOUR) && !m.survivors)!;
+    early.air!.lose(flight, 1, destination(own.point, 0.5, 8e3, R), EJECTED, early.sim);
+    early.sim.advanceTo(HOUR + 1);
+    const rescue = early.air!.liveMissions().find((m) => m.type === 'csar')!;
+    expect(rescue).toBeDefined();
+    expect(matchesQuery(rescue, query)).toBe(true);
   });
 
   it('opens fixed-wing jump-in from climb-out to approach, and helicopters over their ground phases', () => {

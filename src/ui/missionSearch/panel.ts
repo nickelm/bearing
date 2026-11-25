@@ -138,7 +138,7 @@ export class MissionSearchPanel {
   }
 
   private drawFilters(missions: readonly Mission[]): void {
-    const c = filterChoices(missions, this.side);
+    const c = filterChoices(missions, this.side, this.theaterNames.length);
     const key = JSON.stringify(c);
     if (key === this.choicesKey) return;
     this.choicesKey = key;
@@ -229,7 +229,13 @@ export class MissionSearchPanel {
     if (rows.length === 0) {
       const li = document.createElement('li');
       li.className = 'empty';
-      li.textContent = 'No mission matches.';
+      // The filters list every type the planner knows (decision 371): a type no flight is
+      // flying yet can still be subscribed to.
+      const f = this.filters;
+      const set = f.types.length || f.aircraft.length || f.theaters.length;
+      li.textContent = set
+        ? 'No mission matches now; subscribe to be told when one does.'
+        : 'No mission matches.';
       this.listEl.appendChild(li);
       return;
     }

@@ -14,9 +14,10 @@
 import type { Side } from '../../campaign/cast';
 import { MINUTE } from '../../core/units';
 import type { GameTime } from '../../core/units';
-import { aircraftType } from '../../sim/air/aircraft';
+import { AIRCRAFT_TYPES, aircraftType } from '../../sim/air/aircraft';
 import {
   jumpInWindow,
+  MISSION_LABELS,
   missionLabel,
   MISSION_PHASES,
   missionPhase,
@@ -24,6 +25,7 @@ import {
 } from '../../sim/air/mission';
 import type { Mission, MissionPhase, MissionType } from '../../sim/air/mission';
 import type { MissionQuery } from '../../sim/air/subscriptions';
+import { MISSION_PLUGINS } from '../../sim/command/missions/registry';
 
 export type ThreatLevel = 'low' | 'medium' | 'high';
 export const THREAT_LEVELS: readonly ThreatLevel[] = ['low', 'medium', 'high'];
@@ -194,17 +196,32 @@ export function missionRows(
   return rows;
 }
 
-/** What the filters can choose among, from the side's missions: types, aircraft, theaters in use. */
+/**
+ * What the filters can choose among: every mission type the registry plans (rule 16),
+ * the side's aircraft types and every theater, whether or not a mission of that kind is
+ * live now, so a subscription can wait for one that does not exist yet (a rescue before
+ * anyone is down; decision 371). Live values outside those lists are added.
+ */
 export function filterChoices(
   missions: readonly Mission[],
   side: Side | 'both',
+  theaterCount = 0,
 ): { types: MissionType[]; aircraft: string[]; theaters: number[] } {
   const mine = missions.filter((m) => side === 'both' || m.side === side);
   const uniq = <T>(xs: T[]) => [...new Set(xs)];
+  const types = uniq([...MISSION_PLUGINS.map((p) => p.type), ...mine.map((m) => m.type)]);
+  const aircraft = uniq([
+    ...AIRCRAFT_TYPES.filter((t) => side === 'both' || t.side === side).map((t) => t.id),
+    ...mine.map((m) => m.aircraftType),
+  ]);
+  const theaters = uniq([
+    ...Array.from({ length: theaterCount }, (_, i) => i),
+    ...mine.map((m) => m.theater),
+  ]);
   return {
-    types: uniq(mine.map((m) => m.type)).sort(),
-    aircraft: uniq(mine.map((m) => m.aircraftType)).sort(),
-    theaters: uniq(mine.map((m) => m.theater)).sort((a, b) => a - b),
+    types: types.sort((a, b) => MISSION_LABELS[a].localeCompare(MISSION_LABELS[b])),
+    aircraft: aircraft.sort((a, b) => aircraftType(a).name.localeCompare(aircraftType(b).name)),
+    theaters: theaters.sort((a, b) => a - b),
   };
 }
 
