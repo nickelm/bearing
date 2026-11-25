@@ -286,7 +286,7 @@ Bearing is a cartoony browser game (`README.md`, What Bearing Is; `CLAUDE.md` ru
 - [ ] The pilot's parachute after an ejection; Free Flight's ejection freezes the jet where it was
 - [ ] Bombs on targets other than the flight's own, on troops at the front (R2.8's vehicles) and on towns' sites (`CityLayer.setSiteDamage` from the campaign's damage)
 - [ ] The flight view's bridges broken when cut
-- [ ] Owner's future weapons (2026-11-22): Mavericks (TV-guided air-to-ground missiles), splash damage tuned per target, explosions more spectacular, cluster bombs and fuel-air explosives, ripple and release-interval settings for rockets and bombs
+- [ ] Owner's future weapons (2026-11-22): TV-guided air-to-ground missiles, splash damage tuned per target, explosions more spectacular, ripple and release-interval settings for rockets and bombs
 - [x] Sensors read campaign contacts: aggregate flights as radar targets, sites with radars as emitters (`follow/campaignSensors.ts`: flights at their leads, the other side's radars and defended places as emitters, the datalink from an airborne AEW; the radar lock gives the pipper its range and slaves the seeker; decision 303)
 - [ ] Each aircraft of a flight as its own contact and target near the aircraft (formation slots), merging into one at range
 - [ ] Surface-to-air sites as entities (R3.5) in place of the defended places' stand-in radars; their launches
@@ -337,7 +337,7 @@ Started 2026-11-23, in parallel with R2.8 in a second session (decisions 314–3
 - [ ] The Pact's transports and bombers in the Pact's own markings; the Su-24 and F-111 analogues set further apart if the owner mixes them up
 - [x] Silhouette check (Part I check 6) for every new model: `tools/models.preview.ts`, compared on contact sheets by class (decision 316)
 - [x] A-15 (A-10 analogue): model spec, flight data, laws, pylons and the GAU-8 analogue; Free Flight's `aircraft=a15` (decision 317)
-- [ ] The A-15's Mavericks and cluster bombs with the owner's future weapons; the A-10's eleven stations (four a wing and three under the fuselage today drawn as four a wing)
+- [ ] The A-15's Mavericks; the A-10's eleven stations (four a wing and three under the fuselage today drawn as four a wing)
 - [x] C-150 (C-130 analogue): AI-flown for the demo; its flight data, laws and transport rig move to R4.4 with tactical airlift (owner, decision 318; the test pilot's circuit flies fighter speeds, and the airlift's landing at a forward field needs the AI's full-detail landing)
 - [x] `tools/freeflight.session.mjs` starts the A-15, Vo-31 and Vo-35 from the start screen: their own flight data and names, the brake off and the throttle forward, no afterburner on the Vo-35, the Pact's side for the Vo-31 and Vo-35
 - [x] Owner, on the GPU (2026-11-23): flew the Vo-35 and A-15 and followed the Vo-31; fixes in decision 319 (the Vo-35's wing root, the Vo-31's second flame and its vortices, no afterburner mentioned without one, explosions twice the size)

@@ -109,7 +109,6 @@ Starting gameplay values, deliberately generous so that air power is visible and
 | 105 mm shell | 8 m | 25 m | 25 m | 80 m |
 | 250 kg bomb | 15 m | 45 m | 45 m | 150 m |
 | 500 kg bomb | 20 m | 60 m | 60 m | 200 m |
-| Cluster bomb | Pattern of bomblets over about 150 × 100 m, each with a small profile | | | 250 m |
 
 *The figures in this table are gameplay tuning values.*
 
