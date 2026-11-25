@@ -66,6 +66,37 @@ export interface Survivor {
   attempts: number;
 }
 
+/**
+ * A survivor as the main thread draws it (R2.9): where, whose, who, since when, and whether
+ * still down. The worker sends these with the missions; the map draws the ones down as
+ * parachute badges and the flight view as figures (decisions 357, 371).
+ */
+export interface SurvivorPicture {
+  id: number;
+  side: Side;
+  pilot: string;
+  point: Dir;
+  time: GameTime;
+  state: 'down' | 'aboard';
+  injury: Injury;
+  water: boolean;
+}
+
+/** The picture of a survivor down or aboard a rescue; null once rescued, captured or dead. */
+export function survivorPicture(s: Readonly<Survivor>): SurvivorPicture | null {
+  if (s.state !== 'down' && s.state !== 'aboard') return null;
+  return {
+    id: s.id,
+    side: s.side,
+    pilot: s.pilot,
+    point: s.point,
+    time: s.time,
+    state: s.state,
+    injury: s.injury,
+    water: s.water,
+  };
+}
+
 /** A survivor's chances of each injury: none, light, serious. */
 export const INJURY_CHANCES: readonly [number, number, number] = [0.55, 0.33, 0.12];
 /** Hours a survivor lasts unrescued, by injury, on land and in the water. */

@@ -90,6 +90,12 @@ export interface RouteState {
   /** Index of the segment, or −1 before the start or after the end. */
   segment: number;
   airborne: boolean;
+  /**
+   * On the ground away from its base: a rescue at its pickup, later a sling load's
+   * delivery or a forward refueling point. The map keeps drawing a landed flight, where
+   * it drops one on its base's ground time (decision 371).
+   */
+  landed: boolean;
 }
 
 /** Wind at a point and altitude above sea level (m/s east and north), or null in calm air. */
@@ -235,17 +241,25 @@ export function routeState(route: Route, t: GameTime, radius: Meters): RouteStat
   const fuel = s.fuel0 - s.flow * dt;
   const base = { altitude, fuel, phase: s.phase, segment: outside ? -1 : i };
   if (s.kind === 'ground') {
-    return { ...base, point: [...s.a], heading: s.heading, speed: 0, airborne: false };
+    const landed = !outside && s.phase !== 'departure' && s.phase !== 'recovery';
+    return { ...base, point: [...s.a], heading: s.heading, speed: 0, airborne: false, landed };
   }
   if (s.kind === 'orbit') {
     const o = orbitPoint(s.a, s.b, s.turn, (s.around ?? 0) + s.speed * dt, radius);
-    return { ...base, point: o.point, heading: o.heading, speed: s.speed, airborne: !outside };
+    return {
+      ...base,
+      point: o.point,
+      heading: o.heading,
+      speed: s.speed,
+      airborne: !outside,
+      landed: false,
+    };
   }
   const point = slerp(s.a, s.b, f);
   const end = f < 1 ? s.b : point;
   const heading =
     f < 1 ? initialHeading(point, end) : (initialHeading(s.b, s.a) + Math.PI) % (2 * Math.PI);
-  return { ...base, point, heading, speed: s.speed, airborne: !outside };
+  return { ...base, point, heading, speed: s.speed, airborne: !outside, landed: false };
 }
 
 /** Time spent at each phase start, in route order (the route's phase timeline). */

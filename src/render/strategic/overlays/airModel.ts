@@ -6,13 +6,16 @@
  * carrier tracks: routes are analytic (sim/air/route.ts), so positions follow
  * the display clock without new data from the worker.
  *
- * - **Flights** show from climb-out to approach: one icon per flight, at its
- *   position, nose along its heading, in its side's color.
+ * - **Flights** show from climb-out to approach, and while landed away from their
+ *   base (a rescue at its pickup): one icon per flight, at its position, nose along
+ *   its heading, in its side's color.
  * - **Trails** are the last TRAIL_TIME of the track, sampled TRAIL_SAMPLES times.
  * - **Routes** (a debug toggle until mission search selects one; the guide
  *   draws routes on hover and selection) are the whole planned track,
  *   racetracks included, densified for draping.
  * - **Carriers** sail their patrol tracks.
+ * - **Survivors** (decision 371): aircrew down, as parachute badges in their side's
+ *   color until a rescue takes them aboard.
  * - **Side.** Decision 48: the side is a view. `side` filters to one side's
  *   missions; 'both' is a developer view of ground truth until the
  *   intelligence overlay exists.
@@ -24,19 +27,28 @@ import { MINUTE } from '../../../core/units';
 import type { GameTime } from '../../../core/units';
 import type { Mission } from '../../../sim/air/mission';
 import { ORBIT_LEG, routeState } from '../../../sim/air/route';
+import type { SurvivorPicture } from '../../../sim/air/survivors';
 import { carrierState } from '../../../sim/naval/carrierGroup';
 import type { CarrierTrack } from '../../../sim/naval/carrierGroup';
 import { CASING_COLOR, FACTION_COLORS, SYMBOL_SHARE, unitBadge } from './militaryModel';
 import type { LineStyle, MilitaryOverlays, OverlayLine, OverlayMark } from './militaryModel';
 
-export type AirLayer = 'routes' | 'trails' | 'carriers' | 'flights';
-export const AIR_LAYERS: readonly AirLayer[] = ['routes', 'trails', 'carriers', 'flights'];
+export type AirLayer = 'routes' | 'trails' | 'carriers' | 'flights' | 'survivors';
+export const AIR_LAYERS: readonly AirLayer[] = [
+  'routes',
+  'trails',
+  'carriers',
+  'flights',
+  'survivors',
+];
 
 export const TRAIL_TIME = 4 * MINUTE;
 export const TRAIL_SAMPLES = 8;
 /** Badge sizes (CSS px; decision 133): large enough to see at a glance and to click. */
 export const FLIGHT_BADGE = 26;
 export const CARRIER_BADGE = 30;
+/** Downed aircrew (decision 371): a parachute on a smaller disc, under the flights. */
+export const SURVIVOR_BADGE = 22;
 /** Largest step between route points, as a central angle (rad): about 10 km on the 1,000 km planet. */
 const MAX_STEP = 0.01;
 const ORBIT_SAMPLES = 24;
@@ -87,6 +99,7 @@ export interface HeldFlight {
 
 export const missionKey = (id: number): string => `mission:${id}`;
 export const carrierKey = (id: number): string => `carrier:${id}`;
+export const survivorKey = (id: number): string => `survivor:${id}`;
 
 function densify(points: Dir[]): Float64Array {
   const out: number[] = [];
@@ -130,10 +143,30 @@ export function buildAirOverlays(
   t: GameTime,
   radius: number,
   options: AirViewOptions,
+  survivors: readonly SurvivorPicture[] = [],
 ): MilitaryOverlays<AirLayer> {
   const lines: OverlayLine<AirLayer>[] = [];
   const marks: OverlayMark<AirLayer>[] = [];
   const visible = (side: Side) => options.side === 'both' || options.side === side;
+  // Downed aircrew first, so the flights (a rescue landed beside one) draw over them.
+  for (const s of survivors) {
+    if (s.state !== 'down' || !visible(s.side)) continue;
+    const selected = options.selected === survivorKey(s.id);
+    marks.push({
+      layer: 'survivors',
+      shape: 'parachute',
+      point: s.point,
+      axis: [0, 0, 0],
+      length: SURVIVOR_BADGE * SYMBOL_SHARE.unit,
+      width: SURVIVOR_BADGE * SYMBOL_SHARE.unit,
+      color: CASING_COLOR,
+      outline: 0,
+      casing: 1.5,
+      bands: BANDS,
+      badge: unitBadge(FACTION_COLORS[s.side], SURVIVOR_BADGE, selected),
+      key: survivorKey(s.id),
+    });
+  }
   for (const m of missions) {
     if (!visible(m.side)) continue;
     const color = FACTION_COLORS[m.side];
@@ -154,7 +187,9 @@ export function buildAirOverlays(
         });
       }
     }
-    if (!now.airborne) continue;
+    // On its base's ground time a flight is off the map; landed away from it (a rescue at
+    // its pickup) it keeps its icon, so the owner can watch the pickup (decision 371).
+    if (!now.airborne && !now.landed) continue;
     const trail: Dir[] = [];
     for (let k = held ? -1 : TRAIL_SAMPLES; k >= 0; k--) {
       const s = routeState(m.route, t - (TRAIL_TIME * k) / TRAIL_SAMPLES, radius);

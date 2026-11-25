@@ -1,7 +1,7 @@
 /**
- * The selected flight or carrier group on the map (decision 133): a small panel
- * that says what it is, what it is doing and why. Mission search (C2) builds on
- * it. It reads only what the viewing side may know: its own missions, and (in the
+ * The selected flight, carrier group or downed aircrew on the map (decisions 133, 371): a
+ * small panel that says what it is, what it is doing and why. Mission search (C2) builds
+ * on it. It reads only what the viewing side may know: its own missions, and (in the
  * developer view of both sides) the other side's too.
  */
 import type { Cast } from '../campaign/cast';
@@ -12,6 +12,7 @@ import { aircraftType } from '../sim/air/aircraft';
 import { MISSION_PHASES, missionLabel, missionPhase } from '../sim/air/mission';
 import type { Mission, MissionPhase } from '../sim/air/mission';
 import { routeState } from '../sim/air/route';
+import type { SurvivorPicture } from '../sim/air/survivors';
 import { carrierState, carrierTrack } from '../sim/naval/carrierGroup';
 import type { CarrierTrack } from '../sim/naval/carrierGroup';
 import type { Infrastructure } from '../worldgen/strategic/infrastructure';
@@ -51,6 +52,8 @@ export class AirPanel {
   private radius = 1;
   private readonly body: HTMLDivElement;
   private readonly followEl: HTMLButtonElement;
+  /** The mission Follow goes to: the selected flight, or a selected survivor's rescue. */
+  private followMission: number | null = null;
   /** Called when the panel's close button clears the selection. */
   onClose: (() => void) | null = null;
   /** Follow was chosen for the selected mission (R2.4). */
@@ -73,8 +76,7 @@ export class AirPanel {
     this.followEl.title = 'Follow this flight in the flight view';
     this.followEl.hidden = true;
     this.followEl.onclick = () => {
-      const [kind, id] = (this.key ?? '').split(':');
-      if (kind === 'mission') this.onFollow?.(Number(id));
+      if (this.followMission !== null) this.onFollow?.(this.followMission);
     };
     this.el.append(close, this.body, this.followEl);
     parent.appendChild(this.el);
@@ -94,25 +96,66 @@ export class AirPanel {
   }
 
   /** Redraws the panel for the display time (throttled). */
-  update(missions: readonly Mission[], t: GameTime, nowMs: number): void {
+  update(
+    missions: readonly Mission[],
+    survivors: readonly SurvivorPicture[],
+    t: GameTime,
+    nowMs: number,
+  ): void {
     if (!this.key || nowMs - this.last < REFRESH_MS) return;
     this.last = nowMs;
     const [kind, idText] = this.key.split(':');
     const id = Number(idText);
+    // A survivor's Follow follows its rescue (decision 371).
+    const rescue =
+      kind === 'survivor'
+        ? (missions.find((x) => x.type === 'csar' && x.survivors?.includes(id)) ?? null)
+        : null;
     const rows =
       kind === 'mission'
         ? this.missionRows(missions.find((m) => m.id === id) ?? null, t)
-        : this.carrierRows(id, missions, t);
+        : kind === 'survivor'
+          ? this.survivorRows(survivors.find((s) => s.id === id) ?? null, rescue, t)
+          : this.carrierRows(id, missions, t);
     this.body.replaceChildren();
     for (const [i, text] of rows.entries()) {
       const p = document.createElement(i === 0 ? 'h2' : 'p');
       p.textContent = text;
       this.body.appendChild(p);
     }
-    const m = kind === 'mission' ? missions.find((x) => x.id === id) : undefined;
+    const m = kind === 'mission' ? missions.find((x) => x.id === id) : (rescue ?? undefined);
     const phase = m ? missionPhase(m, t) : 'complete';
     this.followEl.hidden = !m || m.aircraft <= 0 || phase === 'planned' || phase === 'complete';
+    this.followEl.title = rescue
+      ? 'Follow the rescue in the flight view'
+      : 'Follow this flight in the flight view';
+    this.followMission = m?.id ?? null;
     this.el.hidden = false;
+  }
+
+  /** The selected downed aircrew (decision 371): who, since when, how, and the rescue coming. */
+  private survivorRows(s: SurvivorPicture | null, rescue: Mission | null, t: GameTime): string[] {
+    if (!s) return ['Downed aircrew', 'Picked up, or no longer on the board.'];
+    const where = s.water ? 'in the water' : 'on land';
+    const hurt = s.injury === 'none' ? 'unhurt' : `${s.injury} injury`;
+    const since = `Down ${minutes(t - s.time)} ago, ${where}, ${hurt}.`;
+    if (!rescue)
+      return [`${s.pilot}: ${SIDE_LABELS[s.side]} aircrew down`, since, 'No rescue tasked yet.'];
+    const phase = missionPhase(rescue, t);
+    const onTarget = rescue.timeline.find((e) => e.phase === 'on-target')?.time ?? NaN;
+    const when =
+      phase === 'planned'
+        ? `takes off in ${minutes(rescue.timeline[0]!.time - t)}`
+        : onTarget > t
+          ? `at the pickup in ${minutes(onTarget - t)}`
+          : phase === 'on-target'
+            ? 'at the pickup now'
+            : PHASE_LABELS[phase];
+    return [
+      `${s.pilot}: ${SIDE_LABELS[s.side]} aircrew down`,
+      since,
+      `Rescue: ${rescue.callsign}, ${rescue.aircraft} × ${aircraftType(rescue.aircraftType).name}, ${when}.`,
+    ];
   }
 
   private baseName(m: Mission): string {
@@ -137,7 +180,9 @@ export class AirPanel {
             : '';
     const flying = s.airborne
       ? `, ${Math.round(s.altitude / 10) * 10} m, ${Math.round(s.speed / KNOT)} kn, heading ${compass(s.heading)}`
-      : '';
+      : s.landed
+        ? `, on the ground at ${m.target.name}`
+        : '';
     const step = MISSION_PHASES.indexOf(phase as MissionPhase) + 1;
     return [
       `${m.callsign}: ${m.aircraft} × ${type.name}`,

@@ -150,6 +150,7 @@ import { WeatherView } from '../src/sim/weather/frame';
 import { applyPreset, WEATHER_PRESETS } from '../src/sim/weather/presets';
 import type { WeatherPreset } from '../src/sim/weather/presets';
 import { createSimWorld } from '../src/sim/world';
+import { survivorPicture } from '../src/sim/air/survivors';
 import { campaignInput } from '../src/sim/command/campaignInput';
 import { findCheckTargets } from './checkViews';
 import { canopySeed, cellHash, hashBits, hedgeShare, regionalTerm } from '../src/worldgen/canopy';
@@ -2776,7 +2777,10 @@ async function renderStrategic(
       scene.relief.seasonPhase.value = seasonPhase(when, params, calendar);
       if (when < simWorld.sim.time) simWorld = createSimWorld(airConfig);
       simWorld.sim.advanceTo(when);
-      scene.setMissions(simWorld.air?.liveMissions() ?? []);
+      scene.setMissions(
+        simWorld.air?.liveMissions() ?? [],
+        (simWorld.air?.survivors ?? []).map(survivorPicture).filter((s) => s !== null),
+      );
       // The ground war's front line now and its unit symbols (R2.3).
       scene.setGround(simWorld.ground?.picture() ?? null);
       scene.setAirTime(when);
@@ -2784,8 +2788,9 @@ async function renderStrategic(
       scene.setAirVisible('routes', scene.airView.routes);
       if (simWorld.air) {
         const a = simWorld.air;
+        const down = a.survivors.filter((s) => s.state === 'down').length;
         console.log(
-          `strategic ${v.name}: ${a.missions.size} missions, airborne ${a.airborneAt('alliance', when)} Alliance / ${a.airborneAt('pact', when)} Pact, ${a.carriers.length} carriers`,
+          `strategic ${v.name}: ${a.missions.size} missions, airborne ${a.airborneAt('alliance', when)} Alliance / ${a.airborneAt('pact', when)} Pact, ${a.carriers.length} carriers, ${down} aircrew down`,
         );
       }
       const view = simWorld.weather.view();

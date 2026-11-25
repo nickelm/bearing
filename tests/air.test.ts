@@ -13,7 +13,9 @@ import {
 import type { Dir } from '../src/core/greatCircle';
 import { latLonToDirection } from '../src/core/coords';
 import { DEG, HOUR, KM, MINUTE } from '../src/core/units';
-import { buildAirOverlays } from '../src/render/strategic/overlays/airModel';
+import { buildAirOverlays, FLIGHT_BADGE } from '../src/render/strategic/overlays/airModel';
+import { MARK_SHAPES } from '../src/render/strategic/overlays/militaryModel';
+import type { SurvivorPicture } from '../src/sim/air/survivors';
 import {
   AIRCRAFT_ROLES,
   AIRCRAFT_TYPES,
@@ -366,7 +368,11 @@ describe('air operations', () => {
     const air = w.air!;
     const t = 6 * HOUR;
     const missions = air.liveMissions();
-    const airborne = missions.filter((m) => routeState(m.route, t, R).airborne);
+    // Flights in the air, and any landed away from their base (decision 371).
+    const airborne = missions.filter((m) => {
+      const s = routeState(m.route, t, R);
+      return s.airborne || s.landed;
+    });
     const both = buildAirOverlays(missions, air.carriers, t, R, { side: 'both', routes: true });
     expect(both.marks.filter((m) => m.layer === 'flights').length).toBe(airborne.length);
     expect(both.marks.filter((m) => m.layer === 'carriers').length).toBe(air.carriers.length);
@@ -395,6 +401,80 @@ describe('air operations', () => {
     expect(last.badge!.size).toBeGreaterThan(
       both.marks.find((m) => m.key === last.key)!.badge!.size,
     );
+  });
+
+  it('draws downed aircrew as parachute badges by side until they are aboard (decision 371)', () => {
+    const w = run(7, 6, HOUR);
+    const air = w.air!;
+    const t = 6 * HOUR;
+    const point = (lat: number): Dir => {
+      const v = latLonToDirection(lat * DEG, 10 * DEG);
+      return [v.x, v.y, v.z];
+    };
+    const survivors: SurvivorPicture[] = [
+      {
+        id: 0,
+        side: 'alliance',
+        pilot: 'A',
+        point: point(40),
+        time: t - HOUR,
+        state: 'down',
+        injury: 'none',
+        water: false,
+      },
+      {
+        id: 1,
+        side: 'pact',
+        pilot: 'B',
+        point: point(41),
+        time: t - HOUR,
+        state: 'down',
+        injury: 'light',
+        water: true,
+      },
+      {
+        id: 2,
+        side: 'alliance',
+        pilot: 'C',
+        point: point(42),
+        time: t - HOUR,
+        state: 'aboard',
+        injury: 'none',
+        water: false,
+      },
+    ];
+    const view = { side: 'both' as const, routes: false };
+    const both = buildAirOverlays(air.liveMissions(), air.carriers, t, R, view, survivors);
+    const drawn = both.marks.filter((m) => m.layer === 'survivors');
+    expect(drawn.map((m) => m.key)).toEqual(['survivor:0', 'survivor:1']);
+    for (const m of drawn) {
+      expect(m.shape).toBe('parachute');
+      expect(m.badge?.shape).toBe('disc');
+      expect(m.badge!.size).toBeLessThan(FLIGHT_BADGE);
+    }
+    const alliance = buildAirOverlays(
+      air.liveMissions(),
+      air.carriers,
+      t,
+      R,
+      { ...view, side: 'alliance' },
+      survivors,
+    );
+    expect(alliance.marks.filter((m) => m.layer === 'survivors').map((m) => m.key)).toEqual([
+      'survivor:0',
+    ]);
+    // The selected one grows, as a flight does; the shape's code is the last, so the others keep theirs.
+    const sel = buildAirOverlays(
+      air.liveMissions(),
+      air.carriers,
+      t,
+      R,
+      { ...view, selected: 'survivor:1' },
+      survivors,
+    );
+    const picked = sel.marks.find((m) => m.key === 'survivor:1')!;
+    expect(picked.badge!.size).toBeGreaterThan(drawn[1]!.badge!.size);
+    expect(MARK_SHAPES[MARK_SHAPES.length - 1]).toBe('parachute');
   });
 
   it('draws a flight the player flies where it is, without its old route or trail', () => {

@@ -127,7 +127,9 @@ export type MarkShape =
   | 'aircraft'
   | 'carrier'
   | 'unit-armor'
-  | 'unit-mech';
+  | 'unit-mech'
+  | 'parachute';
+/** In code order: a shape's index is its code in the layer's shader, so new shapes go last. */
 export const MARK_SHAPES: readonly MarkShape[] = [
   'arrowhead',
   'diamond',
@@ -145,6 +147,7 @@ export const MARK_SHAPES: readonly MarkShape[] = [
   'carrier',
   'unit-armor',
   'unit-mech',
+  'parachute',
 ];
 
 /** A mark lying on the map at a point: its own frame is `axis` (along) and the left of it. */

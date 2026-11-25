@@ -7,6 +7,7 @@
 import { rng } from '../core/rng';
 import { SimHost } from '../sim/host';
 import { SUBSCRIPTION_EVENT } from '../sim/air/subscriptions';
+import { survivorPicture } from '../sim/air/survivors';
 import type { SubscriptionHit } from '../sim/air/subscriptions';
 import { applyInput, createSimWorld } from '../sim/world';
 import type { SimConfig, SimWorld } from '../sim/world';
@@ -134,16 +135,7 @@ function post(
   header[SnapshotField.AirbornePact] = air?.airborneAt('pact', time) ?? 0;
   const missions = airChanged ? air.liveMissions() : undefined;
   const survivors = airChanged
-    ? air.survivors
-        .filter((x) => x.state === 'down' || x.state === 'aboard')
-        .map((x) => ({
-          id: x.id,
-          side: x.side,
-          point: x.point,
-          state: x.state as 'down' | 'aboard',
-          injury: x.injury,
-          water: x.water,
-        }))
+    ? air.survivors.map(survivorPicture).filter((x) => x !== null)
     : undefined;
   const dmg = world.damage;
   const damageChanged = dmg !== null && (force || dmg.revision !== sentDamageRevision);

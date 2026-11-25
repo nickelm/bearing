@@ -71,6 +71,7 @@ import type { OverlayMark } from './overlays/militaryModel';
 /** Extra reach around an icon's badge for a click to pick it (CSS px). */
 const PICK_SLOP = 6;
 import type { Mission } from '../../sim/air/mission';
+import type { SurvivorPicture } from '../../sim/air/survivors';
 import { carrierTrack } from '../../sim/naval/carrierGroup';
 import type { CarrierTrack } from '../../sim/naval/carrierGroup';
 import { KM } from '../../core/units';
@@ -181,6 +182,7 @@ export class StrategicScene {
   private lightsDirty = false;
   /** Missions from the sim and the cast's carrier tracks; the air layer redraws when these or the time change. */
   private missions: readonly Mission[] = [];
+  private survivors: readonly SurvivorPicture[] = [];
   private carriers: CarrierTrack[] = [];
   private airTime: GameTime = 0;
   private airDrawn: { time: GameTime; key: string } | null = null;
@@ -423,6 +425,7 @@ export class StrategicScene {
     this.carriers =
       graph && cast ? (cast.carriers ?? []).map((c) => carrierTrack(c, graph.radius)) : [];
     this.missions = [];
+    this.survivors = [];
     this.airRevision++;
     this.groundPicture = null;
     this.groundRevision++;
@@ -430,9 +433,10 @@ export class StrategicScene {
     this.lightsDirty = true;
   }
 
-  /** The sim's live missions (both sides; the air view filters). */
-  setMissions(missions: readonly Mission[]): void {
+  /** The sim's live missions and its survivors (both sides; the air view filters). */
+  setMissions(missions: readonly Mission[], survivors: readonly SurvivorPicture[] = []): void {
     this.missions = missions;
+    this.survivors = survivors;
     this.airRevision++;
   }
 
@@ -505,7 +509,14 @@ export class StrategicScene {
     if (this.airDrawn && this.airDrawn.time === this.airTime && this.airDrawn.key === key) return;
     this.airDrawn = { time: this.airTime, key };
     const radius = this.strategicData?.graph.radius ?? 1;
-    const overlays = buildAirOverlays(this.missions, this.carriers, this.airTime, radius, v);
+    const overlays = buildAirOverlays(
+      this.missions,
+      this.carriers,
+      this.airTime,
+      radius,
+      v,
+      this.survivors,
+    );
     this.airMarks = overlays.marks;
     this.air.updateOverlays(overlays, height);
   }

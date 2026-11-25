@@ -370,7 +370,7 @@ async function main(): Promise<void> {
     if (view?.ready) globe.weather.setFrames(view);
   };
   sim.onWeather = showWeather;
-  sim.onMissions = () => strategicView.setMissions(sim.missions);
+  sim.onMissions = () => strategicView.setMissions(sim.missions, sim.survivors);
   sim.onGround = () => {
     strategicView.setGround(sim.ground);
     groundUnits?.setPicture(sim.ground);
@@ -1384,6 +1384,7 @@ async function main(): Promise<void> {
     flights: true,
     trails: true,
     carriers: true,
+    survivors: true,
     routes: false,
     viewingSide: 'both',
   };
@@ -1415,6 +1416,7 @@ async function main(): Promise<void> {
     strategicView.setAirVisible('flights', m.flights);
     strategicView.setAirVisible('trails', m.trails);
     strategicView.setAirVisible('carriers', m.carriers);
+    strategicView.setAirVisible('survivors', m.survivors);
     strategicView.setAirVisible('routes', m.routes);
     strategicView.airView.side = m.viewingSide;
     strategicView.airView.routes = m.routes;
@@ -1768,7 +1770,7 @@ async function main(): Promise<void> {
     strategicView.setAirTime(gameTime);
     missionSearch.active = activeView === 'strategic' && !freeFlight;
     if (activeView === 'strategic') {
-      airPanel.update(sim.missions, gameTime, now);
+      airPanel.update(sim.missions, sim.survivors, gameTime, now);
       missionSearch.update(sim.missions, gameTime, now);
     }
     globe.clouds.time.value = gameTime;

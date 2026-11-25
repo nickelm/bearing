@@ -7,9 +7,8 @@
 import type { CampaignCalendar, OrbitParams } from '../core/calendar';
 import type { GameTime } from '../core/units';
 import type { GroundPicture } from '../sim/ground/war';
-import type { Side } from '../campaign/cast';
-import type { Dir } from '../core/greatCircle';
 import type { Mission } from '../sim/air/mission';
+import type { SurvivorPicture } from '../sim/air/survivors';
 import type { HostState } from '../sim/host';
 import type { CampaignInputEvent } from '../sim/eventLog';
 import type { CampaignInput } from '../sim/command/campaignInput';
@@ -163,15 +162,8 @@ export interface SnapshotMessage {
   survivors?: SurvivorPicture[];
 }
 
-/** A survivor as the main thread draws it (R2.9): where, whose, and whether still down. */
-export interface SurvivorPicture {
-  id: number;
-  side: Side;
-  point: Dir;
-  state: 'down' | 'aboard';
-  injury: 'none' | 'light' | 'serious';
-  water: boolean;
-}
+/** A survivor as the main thread draws it (R2.9), built by `survivorPicture` in the game engine. */
+export type { SurvivorPicture };
 
 export interface SimErrorMessage {
   type: 'error';

@@ -244,6 +244,19 @@ function symbolDistance(code: F, x: F, y: F): F {
       ),
     // A carrier from above: a long flight deck with the island on its right.
     carrier: () => min(sdBox(x, y, -0.06, 0, 0.32, 0.95), sdBox(x, y, 0.38, 0.12, 0.12, 0.26)),
+    // Downed aircrew (decision 371): a parachute canopy (the upper half of a disc), two
+    // risers and the figure under them.
+    parachute: () =>
+      min(
+        max(sdCircle(x, y, 0, 0.1, 0.78), sdBox(x, y, 0, 0.55, 0.9, 0.45)),
+        min(
+          min(
+            sdDiagonal(x.sub(0.35), y.add(0.2), 0.857, 0.05, 0.35, 0.3),
+            sdDiagonal(x.add(0.35), y.add(0.2), -0.857, 0.05, 0.35, 0.3),
+          ),
+          sdBox(x, y, 0, -0.68, 0.14, 0.2),
+        ),
+      ),
   };
   let d: F = float(FAR);
   // The code arrives as an interpolated varying: round it, since an exact float

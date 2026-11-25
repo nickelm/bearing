@@ -129,10 +129,11 @@ export interface MapGuiParams {
   roads: boolean;
   railways: boolean;
   sites: boolean;
-  /** The air war (C2): flights and their trails, carrier groups, and every route (a debug view). */
+  /** The air war (C2): flights and their trails, carrier groups, downed aircrew (decision 371), and every route (a debug view). */
   flights: boolean;
   trails: boolean;
   carriers: boolean;
+  survivors: boolean;
   routes: boolean;
   /** Viewing side (decision 48; a developer toggle until I1): 'both' shows ground truth. */
   viewingSide: 'both' | 'alliance' | 'pact';
@@ -563,6 +564,7 @@ export class DebugGui {
       ['flights', 'Flights'],
       ['trails', 'Trails'],
       ['carriers', 'Carrier groups'],
+      ['survivors', 'Downed aircrew'],
       ['routes', 'All routes (debug)'],
     ];
     for (const [key, name] of airLayers)

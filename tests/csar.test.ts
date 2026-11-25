@@ -9,10 +9,12 @@ import { CubeGrid } from '../src/core/cubeGrid';
 import { arcDistance, destination } from '../src/core/greatCircle';
 import type { Dir } from '../src/core/greatCircle';
 import { HOUR, MINUTE } from '../src/core/units';
+import { buildAirOverlays } from '../src/render/strategic/overlays/airModel';
 import { aircraftType } from '../src/sim/air/aircraft';
 import { CREW_REST, EJECTED } from '../src/sim/air/airOps';
-import { isAirborne, missionEnd } from '../src/sim/air/mission';
+import { isAirborne, missionEnd, phaseTime } from '../src/sim/air/mission';
 import type { Mission } from '../src/sim/air/mission';
+import { routeState } from '../src/sim/air/route';
 import { campaignInput } from '../src/sim/command/campaignInput';
 import { createSimWorld } from '../src/sim/world';
 import type { SimWorld } from '../src/sim/world';
@@ -32,9 +34,7 @@ const make = (): SimWorld => createSimWorld({ ...syntheticConfig(7), radius: R, 
 function flying(w: SimWorld, t: number): Mission {
   const m = w
     .air!.liveMissions()
-    .find(
-      (x) => x.side === 'alliance' && isAirborne(x, t) && !x.survivors && x.type !== 'rescap',
-    );
+    .find((x) => x.side === 'alliance' && isAirborne(x, t) && !x.survivors && x.type !== 'rescap');
   if (!m) throw new Error('no airborne alliance flight');
   return m;
 }
@@ -73,9 +73,7 @@ describe('a rescue for every survivor', () => {
         arcDistance(a.point, s.point, R) < arcDistance(b.point, s.point, R) ? a : b,
       );
     expect(m.base).toEqual({ kind: 'airbase', id: nearest.id });
-    expect(w.air!.liveMissions().some((x) => x.package === m.package && x.id !== m.id)).toBe(
-      false,
-    );
+    expect(w.air!.liveMissions().some((x) => x.package === m.package && x.id !== m.id)).toBe(false);
   });
 
   it('brings an escort and cover near the enemy', () => {
@@ -91,7 +89,11 @@ describe('a rescue for every survivor', () => {
     expect(types).toContain('rescap');
     expect(types).toContain('csar');
     // An escort where the side has attack helicopters in reach.
-    if (w.air!.squadrons.some((s) => s.side === 'alliance' && aircraftType(s.type).role === 'attack-helicopter'))
+    if (
+      w.air!.squadrons.some(
+        (s) => s.side === 'alliance' && aircraftType(s.type).role === 'attack-helicopter',
+      )
+    )
       expect(types).toContain('csar-escort');
   });
 
@@ -111,6 +113,38 @@ describe('a rescue for every survivor', () => {
     const log = w.sim.log.entries.filter((e) => e.source === 'decision');
     expect(log.filter((e) => e.kind === 'survivor-picked-up').length).toBe(ids.length);
     expect(log.filter((e) => e.kind === 'survivor-rescued').length).toBe(ids.length);
+  });
+
+  it('stays on the map while landed at the pickup, and off it on its base (decision 371)', () => {
+    const w = make();
+    w.sim.advanceTo(4 * HOUR);
+    const ids = downAt(w, destination(own.point, 2, 15e3, R));
+    w.sim.advanceTo(w.sim.time + 1);
+    const m = rescuesOf(w, ids)[0]!;
+    const view = { side: 'alliance' as const, routes: false };
+    const marks = (t: number) =>
+      buildAirOverlays(w.air!.liveMissions(), w.air!.carriers, t, R, view).marks.filter(
+        (x) => x.key === `mission:${m.id}`,
+      );
+    // On its base's ground time: no icon.
+    const departing = m.timeline[0]!.time + 1;
+    const onBase = routeState(m.route, departing, R);
+    expect(onBase.airborne).toBe(false);
+    expect(onBase.landed).toBe(false);
+    expect(marks(departing)).toEqual([]);
+    // Landed at the survivor: the icon stays, at the pickup, and the panel says so.
+    const pickup = phaseTime(m, 'on-target') + 30;
+    const down = routeState(m.route, pickup, R);
+    expect(down.airborne).toBe(false);
+    expect(down.landed).toBe(true);
+    expect(down.speed).toBe(0);
+    const [mark] = marks(pickup);
+    expect(mark).toBeDefined();
+    expect(arcDistance(mark!.point, w.air!.survivors[ids[0]!]!.point, R)).toBeLessThan(1);
+    // In the air, on its way down to the pickup, it is airborne, not landed.
+    const flying = routeState(m.route, phaseTime(m, 'on-target') - 60, R);
+    expect(flying.airborne).toBe(true);
+    expect(flying.landed).toBe(false);
   });
 
   it('turns home when its survivors are captured first, and tries again after a failure', () => {
