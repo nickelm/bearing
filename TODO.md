@@ -4,6 +4,17 @@ Tasks from [docs/roadmap.md](docs/roadmap.md) (decision 228), which is the sourc
 
 The state at the start of R1 is in [docs/status/audit-2026-11-18.md](docs/status/audit-2026-11-18.md). Every open item of the earlier tracks (F, S, C, V, I, P, H, N, G, W), with its notes, is kept in [docs/status/todo-2026-11-18.md](docs/status/todo-2026-11-18.md); the roadmap's "Where the Old Milestones Went" says where each went.
 
+Bearing is a cartoony browser game (`README.md`, What Bearing Is; `CLAUDE.md` rule 22): figures in these tasks, such as flight data from real types, are starting gameplay values, tuned for feel.
+
+## Game framing (2026-11-25)
+
+- [x] `CLAUDE.md`: *What Bearing Is* and rule 22 (Game first)
+- [x] `README.md`: *What Bearing Is*; the opening line names Bearing a cartoony browser game
+- [x] `docs/design.md` (revision 15), `docs/roadmap.md` and this file: the framing and its wording
+- [ ] `docs/decisions.md`: record rule 22 as a decision
+- [ ] `docs/visual-style.md`, `docs/proposals/`, `docs/plans/`: a framing line under each title; reword "realistic", "authentic", "accurate" and similar where they describe Bearing; tuning-value notes on tables of figures
+- [ ] `docs/reports/` and `docs/status/`: a framing line under each title only
+
 ## R0. Audit and reconcile (done)
 
 - [x] Proposal 0008 saved as accepted
@@ -311,7 +322,7 @@ Started 2026-11-23, in parallel with R2.8 in a second session (decisions 314–3
 
 - [x] Pact stores in the catalog with their model specs (decision 314): R-27 (`mrm-p`), the MiG-29's 1,500 l centerline tank, the Su-25's 800 l tanks, the B-8 pod of 20 × 80 mm rockets and the 250 kg bomb
 - [x] Vo-31 (MiG-29 analogue): its stores out of the body; pylons and stations (inner, middle, outer, centerline) and loadouts by station; its gun (GSh-30-1)
-- [x] Vo-31: flight data from public MiG-29 figures (two RD-33s), its gear and contact points from the model, its control laws' parameters; performance against the air-war table (decision 314; the tail raised for 14.6° of clearance)
+- [x] Vo-31: flight data starting from public MiG-29 figures as gameplay values (two RD-33s), its gear and contact points from the model, its control laws' parameters; performance against the air-war table (decision 314; the tail raised for 14.6° of clearance)
 - [x] Plausibility per flyable type: `tests/flightModel.test.ts`'s plausibility checks run for every bundle with flight data, with targets per type (takeoff, stall, top speed at sea level, level flight at 300 kt, cruise at military power, climb); `tools/flight.preview.ts` with `TYPE`
 - [x] Engines without an afterburner in the flight model (the Su-25's; decision 314); the Kestrel's lockstep unchanged
 - [x] The throttle's detent and the HUD's and strip's afterburner readouts for an engine without one (decision 315)

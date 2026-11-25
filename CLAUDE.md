@@ -1,5 +1,11 @@
 # CLAUDE.md
 
+## What Bearing Is
+
+Bearing is a game: cartoony, punchy, meant to be fun, and played in the browser. It takes its aircraft, weapons and kind of war from the late Cold War, then exaggerates freely: flat-shaded low-poly worlds, round toon smoke, blocky soldiers with oversized helmets, big explosions. Its spirit is War Thunder's arcade battles, a long way from the study-level realism of DCS. Every performance figure, weapon value and damage number is a gameplay value, tuned for feel and readability. Two tie-breakers settle disputes: when realism and fun conflict, fun wins; when realism and readability conflict, readability wins. Rule 22 turns this into working rules. Words such as *simulation*, *sim*, *fidelity* and *flight model* in this repository are engineering terms for how the game computes its world, and promise no realism.
+
+## Working in this repository
+
 Guidance for Claude Code sessions in this repository. **`docs/roadmap.md` is the source of truth for what to build next** (phases R0–R6, decision 228), and `TODO.md` breaks its current phases into tasks. `docs/design.md` is the source of truth for scope and architecture. Read both before starting milestone work. `docs/status/audit-2026-11-18.md` records what exists, feature by feature, as of the audit. `docs/decisions.md` records the decisions behind it, with dates and reasons. `docs/visual-style.md` is the source of truth for how the game looks: rendering, models and UI (rule 11). The game has two views of one world (decision 72): the illustrated **strategic view** (globe down to a ~100 km zoom floor; visual-style Part II) and the low-poly **simulation view** (0–20 km, entered through a unit; Part I). Owner proposals live in `docs/proposals/`; an accepted proposal is folded into the design doc and a decision.
 
 **Keep the documents in step with the decisions.** A decision that changes anything `docs/design.md` or `docs/visual-style.md` states must update that document in the same commit. Edit the statement in place rather than leaving the old text for readers to reconcile. If you find a document contradicting a decision anyway, the later decision wins: fix the document.
@@ -294,9 +300,15 @@ These are the project conventions. Lint enforces some of them (marked ⚙).
     - No system models civilian people, or civilian vehicles, aircraft or ships that would carry them. Settlements hold buildings and military units only. The strategic graph's *civilian* roads and geography are places, not entities.
     - Soldiers and downed pilots die without blood or dismemberment: the fallen turn gray within a few seconds and vanish in a toon puff, and no bodies accumulate.
 
+22. **Game first** (owner, 2026-11-25; see *What Bearing Is*). Bearing is a cartoony browser game, and every choice serves play.
+    - Prefer approachable controls, readable visuals and satisfying feedback over fidelity. A system earns detail where the player feels it, and nowhere else.
+    - Every performance, weapon, sensor and damage figure is a gameplay tuning value. Say so where such figures appear: specs, tests, reports and documents. Real aircraft and weapons are design references for fictional analogues; matching them is never a goal in itself.
+    - Never call Bearing a simulator, a sim or realistic, in documents, UI text, commit messages or reports. Prefer *game*, *gameplay*, *believable* and *recognizable*.
+    - Pinned and calibrated values (the Kestrel's lockstep, the calibration tables) pin determinism and consistency between levels of detail, not realism. Retuning them for feel is legitimate when a decision records it.
+
 ## Fidelity as level of detail
 
-Fidelity is a level of detail in both space and time.
+Fidelity is a level of detail in both space and time. It decides how much the game computes, where and when; it serves play and performance, never realism for its own sake (rule 22).
 
 - The renderer refines terrain where the camera looks.
 - The simulation refines units where the player looks and coarsens them when time runs fast.

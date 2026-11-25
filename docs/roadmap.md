@@ -2,8 +2,11 @@
 
 _Adopted 2026-11-18 with Proposal 0008 (`docs/proposals/0008-game-loop-and-campaign.md`, decision 228). This document is the source of truth for what to build next. It supersedes the milestone sections of `docs/design.md` and the roadmap sections of proposals 0001–0007. `docs/status/audit-2026-11-18.md` records the state each phase starts from; `TODO.md` breaks the current phases into tasks._
 
+_Bearing is a cartoony browser game (`README.md`, What Bearing Is; `CLAUDE.md` rule 22). Every milestone serves play, and every figure in this document is a gameplay value._
+
 ## How to Read This
 
+- **Game first** (rule 22). A milestone's exit criteria are met when it plays well and reads clearly as well as when its numbers hold; tuning a figure for feel is always in scope, with a decision.
 - **Phases** R0–R6 come from Proposal 0008. Each phase has **milestones** (R1.1, R1.2, …) with tasks, dependencies, an exit criterion and a size.
 - **Sizes:** _small_ fits one working session; _medium_ takes two to four; _large_ takes five or more and should be split into tasks of a few hours in `TODO.md` before it starts.
 - **Visual milestones** still close only after the acceptance checks of `docs/visual-style.md` for the views they touch (`CLAUDE.md`, _Working rules_). Here they are R1.1, R2.4, R2.6, R2.7, R2.8, R2.12, R3.2–R3.6, R3.8, all of R4 except R4.6's aggregates, R5.5 and all of R6.
