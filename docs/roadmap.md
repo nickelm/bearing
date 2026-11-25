@@ -49,9 +49,9 @@ _Needed by every R2 milestone: R2's exit criteria include determinism, three see
 
 ### R1.2 Campaign State That Can Be Saved — medium
 
-_Needed by R2.11 (event log and replay) and everything that changes sim state._
+_Needed by R2.11 (event log and replay) and everything that changes game state._
 
-- `save()` and `load()` for every sim process: the event queue, `AirOps`, the tasker's maps, the weather systems and the clock.
+- `save()` and `load()` for every game process: the event queue, `AirOps`, the tasker's maps, the weather systems and the clock.
 - Export the RNG state, or make every draw a fork keyed by game time (the tasker and weather already fork per hour).
 - A snapshot round-trip test: run, snapshot, restore, run on, and compare hashes with an uninterrupted run.
 - The event log's skeleton: player inputs to the campaign and campaign-level decisions as typed, timestamped events.
@@ -90,7 +90,7 @@ _Needed by R2.4 (follow) and R2.5 (take over)._
 _Needed by R2.4–R2.7._
 
 - Extract a `FlownAircraft` from `freeflight/freeFlight.ts`: airframe, control laws, director, input source (player or AI), avionics state, sensors and the HUD frame, usable by Free Flight and the campaign alike.
-- Move `AvionicsState` from the UI's `DisplaySystem` into per-aircraft sim state; build the aircraft snapshot outside `freeflight/`.
+- Move `AvionicsState` from the UI's `DisplaySystem` into per-aircraft game state; build the aircraft snapshot outside `freeflight/`.
 - One clock: Free Flight's `clock.ts` and the campaign clock share the game-time type and stepping rules.
 - Free Flight keeps working unchanged: the lockstep test passes bit for bit.
 
@@ -105,9 +105,9 @@ _Needed by R2.2 (low-level resolution), R2.5 (handover over terrain), R2.8 (vehi
 - Move the assembly of `TerrainEdits` from `render/sim/infra/airfieldGrading.ts` into `worldgen/edits/`, so the worker can build the one height function (rule 13).
 - A deterministic height service from the global grid plus edits, available in the worker; AI sensing and line of sight read it (owner decision 9).
 - Analytic low-level routes keep a terrain floor instead of 100 m above sea level.
-- Full-fidelity flight and the simulation view use the sited runway; the campaign keeps the coarse point (owner decision 8).
+- Full-detail flight and the flight view use the sited runway; the campaign keeps the coarse point (owner decision 8).
 
-**Exit:** no analytic low-level route on the pinned seeds passes below the terrain; a flight handed to full fidelity at any point of its route is above the ground.
+**Exit:** no analytic low-level route on the pinned seeds passes below the terrain; a flight handed to full detail at any point of its route is above the ground.
 
 **State (2026-11-19):** done (decision 240); the route criterion holds against the coarse ground. The handover criterion moves to R2.5, where a flight is first handed over above the drawn ground (TODO R2.5).
 
@@ -115,7 +115,7 @@ _Needed by R2.2 (low-level resolution), R2.5 (handover over terrain), R2.8 (vehi
 
 _Needed by R2.1, R2.6, R2.7, R2.9._
 
-- Every aircraft type becomes one JSON bundle (decision 232): the model spec gains the avionics profile (from `typeProfiles.ts`), the air-war entry (role tags, performance, crew roles, faction, name, skin, from `sim/air/aircraft.ts`), pylons and loadouts, the camera rig (from `FAST_JET_RIG` and `helicopterRig`) and a calibration block. Types without geometry yet get a spec without geometry. One loader serves the sim worker and the renderer, and a test lists what each bundle lacks.
+- Every aircraft type becomes one JSON bundle (decision 232): the model spec gains the avionics profile (from `typeProfiles.ts`), the air-war entry (role tags, performance, crew roles, faction, name, skin, from `sim/air/aircraft.ts`), pylons and loadouts, the camera rig (from `FAST_JET_RIG` and `helicopterRig`) and a calibration block. Types without geometry yet get a spec without geometry. One loader serves the game worker and the renderer, and a test lists what each bundle lacks.
 - A utility helicopter role with a Black Hawk and an Mi-8 analogue in the air war; rename the UH-68 "Buzzard" (owner decisions 3, 4), recorded as a change to every world's cast.
 - Pilots per squadron in the order of battle (data only; R2.2 uses them).
 
@@ -123,12 +123,12 @@ _Needed by R2.1, R2.6, R2.7, R2.9._
 
 **State (2026-11-19):** done (decisions 238, 239).
 
-### R1.8 Network Data for the Sim — medium
+### R1.8 Network Data for the Game Engine — medium
 
 _Needed by R2.1 (interdiction), R2.2 (strike effects), R2.3 (supply and movement)._
 
 - The road and rail networks as a node and edge graph in the campaign input: junctions as nodes, polylines as edges, bridges as edges a strike can cut.
-- A damage state for targets and bridges in the sim.
+- A damage state for targets and bridges in the game engine.
 - Bridge aim points: each network bridge drawn at its matched crossing, or at the nearest point of its aligned road (owner decision 7); the aim point lives on the main thread only.
 
 **Exit:** a test cuts a bridge and the detour the graph finds equals the bridge's recorded detour within a tolerance.
@@ -183,7 +183,7 @@ _Depends on R1.8, R2.2._
 
 _Depends on R1.4, R1.5, R1.7._
 
-- Aircraft of campaign flights in the simulation view, instanced, with a level of detail for packages.
+- Aircraft of campaign flights in the flight view, instanced, with a level of detail for packages.
 - _Follow_ from mission search and from a subscription offer: a cut with a chase-camera settle (owner decision 12) behind one aircraft of the mission; return to the map above the flight.
 - The read-only HUD and the followed aircraft's own displays (spectator displays).
 - Per-type camera rigs from the bundles.
@@ -192,7 +192,7 @@ _Depends on R1.4, R1.5, R1.7._
 
 **State (2026-11-20):** done (decisions 252–255): the owner followed a mission of each demo type on the GPU with checks 7 and 10 passing (`ONLY=follow`, seed 4), and checked the fixes of the two reviews.
 
-### R2.5 Full Fidelity and Handover — large
+### R2.5 Full Detail and Handover — large
 
 _Depends on R1.5, R1.6, R2.4._
 
@@ -204,7 +204,7 @@ _Depends on R1.5, R1.6, R2.4._
 
 **Exit:** take over and hand back at every phase of a CAP mission, with the mission completing; losses and stores survive both directions.
 
-**State (2026-11-20):** done in code (decisions 256, 257, 272–277, 280–284): promotion, demotion and the rejoin route, the AI pilot, the worker's hold and rebuild, the follow at full fidelity in the campaign's wind, take over and hand back (T), the flight cap, the session's consequences, the plug-ins' behavior parts, the abort's turn and the F-21's climb; the exit test passes headless (`tests/handoverExit.test.ts`), and the owner took over and handed back an F-21 on the GPU (gear fixed in decision 277). Open for the owner: a CAP take-over waits on the F-25's and F-28's flight data (R2.7), since the F-21 flies only interdiction on seed 4.
+**State (2026-11-20):** done in code (decisions 256, 257, 272–277, 280–284): promotion, demotion and the rejoin route, the AI pilot, the worker's hold and rebuild, the follow at full detail in the campaign's wind, take over and hand back (T), the flight cap, the session's consequences, the plug-ins' behavior parts, the abort's turn and the F-21's climb; the exit test passes headless (`tests/handoverExit.test.ts`), and the owner took over and handed back an F-21 on the GPU (gear fixed in decision 277). Open for the owner: a CAP take-over waits on the F-25's and F-28's flight data (R2.7), since the F-21 flies only interdiction on seed 4.
 
 ### R2.6 Weapons, Damage and Interface Defaults — large
 
@@ -212,7 +212,7 @@ _Depends on R1.5, R1.7, R2.5._
 
 - Pylons and loadouts in the bundles; stores on pylons that disappear on release; the stores format; master arm.
 - Guns with a lead-computing pipper, one IR missile per side with a seeker circle, unguided bombs with CCIP fall lines, rockets (owner decision 6).
-- Hit and kill resolution, minimal damage states, ejection from full fidelity.
+- Hit and kill resolution, minimal damage states, ejection from full detail.
 - The sensors read campaign contacts: aggregate flights become radar targets, sites with radars become emitters.
 - Interface defaults per mission type and phase: master mode, formats, HUD cues and declutter; route and waypoints on the moving map and HUD steering.
 - The player's own flight always in view: its other aircraft marked on the HUD and on the moving map and radar by the intraflight datalink, so a wingman a mile abeam is found at a glance (decision 258).
@@ -232,7 +232,7 @@ _Depends on R1.7; the flight data waits for R1.5's per-type laws._
 
 **Exit:** every type on the demo's orders has a model, and every flyable type passes the silhouette check and checks 12–13.
 
-**State (2026-11-24):** done (decisions 314–319, 350): the owner flew the Vo-35 and A-15 and followed the Vo-31 on the GPU, and checked the fixes of decision 319. The Vo-31, Vo-35 and A-15 fly in Free Flight and at full fidelity in the campaign (the A-15 if time allowed, and it did); every type a day of war's orders fly on the demo seeds has its own model (twenty new ones); the silhouettes pass check 6, and the Vo-35 and Vo-31 pass checks 12–13 in the Pact's skin, whose units the HUD now takes. The C-150 stays AI-flown; its flight data move to R4.4 with tactical airlift (owner, decision 318).
+**State (2026-11-24):** done (decisions 314–319, 350): the owner flew the Vo-35 and A-15 and followed the Vo-31 on the GPU, and checked the fixes of decision 319. The Vo-31, Vo-35 and A-15 fly in Free Flight and at full detail in the campaign (the A-15 if time allowed, and it did); every type a day of war's orders fly on the demo seeds has its own model (twenty new ones); the silhouettes pass check 6, and the Vo-35 and Vo-31 pass checks 12–13 in the Pact's skin, whose units the HUD now takes. The C-150 stays AI-flown; its flight data move to R4.4 with tactical airlift (owner, decision 318).
 
 ### R2.8 Minimal Entity Promotion — medium
 
@@ -255,16 +255,16 @@ _Depends on R1.7, R2.2, R2.5._
 - A rotary flight director and an AI helicopter pilot (route, approach, landing at a point) with the Assisted laws (owner decision 3); a surface-layer wind for hovering.
 - Outcomes: rescued pilots return to their squadron's pool, which limits sorties.
 
-**Exit:** every ejection in a 24 h run produces a survivor and a CSAR mission; a followed CSAR helicopter lands at the survivor at full fidelity.
+**Exit:** every ejection in a 24 h run produces a survivor and a CSAR mission; a followed CSAR helicopter lands at the survivor at full detail.
 
-**State (2026-11-24):** done in code (decisions 351–357): survivors with their injury, timer and capture risk; the CSAR plug-in with its escort and cover, planned the moment a survivor comes down; crews that rest; the rotary director, the AI helicopter pilot with landing zones and the surface-layer wind; a followed rescue at full fidelity with the downed pilot and its signal smoke. Both halves of the exit pass headless (`tests/demoSeeds.test.ts`, `tests/heloFidelity.test.ts`). Open for the owner: following a rescue on the GPU (checks 7 and 10).
+**State (2026-11-24):** done in code (decisions 351–357): survivors with their injury, timer and capture risk; the CSAR plug-in with its escort and cover, planned the moment a survivor comes down; crews that rest; the rotary director, the AI helicopter pilot with landing zones and the surface-layer wind; a followed rescue at full detail with the downed pilot and its signal smoke. Both halves of the exit pass headless (`tests/demoSeeds.test.ts`, `tests/heloFidelity.test.ts`). Open for the owner: following a rescue on the GPU (checks 7 and 10).
 
 ### R2.10 Calibration — medium
 
 _Depends on R2.2, R2.5, R2.6._
 
-- A headless runner flies many full-fidelity engagements per demo matchup (two Vo-31 against two Kestrels at a set range and altitude; CAS against a SHORAD vehicle) and fits the aggregate tables.
-- The tables live in the repository, a script regenerates them, and a test keeps aggregate and full-fidelity outcome rates within tolerance.
+- A headless runner flies many full-detail engagements per demo matchup (two Vo-31 against two Kestrels at a set range and altitude; CAS against a SHORAD vehicle) and fits the aggregate tables.
+- The tables live in the repository, a script regenerates them, and a test keeps aggregate and full-detail outcome rates within tolerance.
 
 **Exit:** the tolerance test passes for every demo matchup.
 
@@ -272,7 +272,7 @@ _Depends on R2.2, R2.5, R2.6._
 
 _Depends on R1.2, R2.5._
 
-- Every player input to the campaign, every campaign-level decision and every fidelity session's consequences go into the log.
+- Every player input to the campaign, every campaign-level decision and every full-detail session's consequences go into the log.
 - Replay from a snapshot; export and import of a log as a file.
 
 **Exit:** replaying a session's log from its starting snapshot reproduces the same final state hash.
@@ -282,7 +282,7 @@ _Depends on R1.2, R2.5._
 _Depends on all of R2._
 
 - Three seeds × 24 h at 64× unattended; the suppressed-air comparison; take over and hand back in each flyable aircraft.
-- Frame budgets on a real GPU during a full-fidelity mission with the war running.
+- Frame budgets on a real GPU during a full-detail mission with the war running.
 - Acceptance checks 7–10 and 12–14 for the demo types; Part II checks for the moving front and unit symbols.
 - A report in `docs/reports/` and the owner's checkpoint.
 
@@ -295,9 +295,9 @@ _Depends on all of R2._
 - **R3.3 Weapons in full — large.** Radar missiles: semi-active (Sparrow analogues, Fox 1) for most types, the navy fighter's long-range missile (the F-28's Phoenix analogue) for bomber raids, and active-radar missiles (Fox 3) as a campaign setting for the late era (owner, decision 258); anti-radiation missiles, CCRP, laser-guided bombs with the pod, countermeasures with programs and the threat warning's launch state, target and weapon cameras, damage effects (smoke, fire, missing parts); shells with time of flight, dispersion growing with range, and impact and short-delay fuzes, with fire control's lead for a moving shooter and the wind, built so the gunship's guns need no rework (decision 302). _Depends on R3.2._
 - **R3.4 Air combat — medium.** BVR timelines for the AI and the player's flight (commit, sort, shot, crank, notch, abort and minimum abort ranges by missile and threat; owner, decision 258) and basic fighter maneuvers in the merge; combat spread's tactical turns (cross, in-place) in place of holding the slot; AI maneuvering in air combat, departures and spins in the flight model, check 9, and a second look at a world-locked mouse aim point (owner decision 14). _Depends on R2.5._
 - **R3.5 Air defense networks and scrambles — large.** SAM and AAA sites and belts from the cast, air defense rings on the map, quick-reaction alert and the scramble mission. _Depends on R3.1._
-- **R3.7 Routes with steerpoints — large** (owner, decision 286). Routes become steerpoints planned against the threat: low-level legs that follow valleys and canyons under the radar horizon, ingress through holes in the air defense network (R3.5) and the enemy's picture (R3.1), pop-up points, initial points and egress turns, instead of great-circle legs. Shaping a route over terrain is the execution layer's (rule 9 holds: the planner reads the graph and the air defense picture, and the route is fitted to the eroded world by the sim, as the alignment tier fits roads). The steerpoints are what the moving map, the HUD's steering and the AI pilot follow. Enables the owner's two set pieces in R4.2: the canyon run to ambush an AWACS, and the deep low-level strike from a road base. _Depends on R3.1, R3.5, R3.6._
-- **R3.6 Ground entities and terrain in the sim — large.** Entity behavior for promoted vehicles (movement on aligned roads, firing; as the gunship needs them, decision 302: vehicles that move, scatter and hide, convoys on roads at night, units that return fire; infantry, MANPADS teams, strobes and talk-on requests are R3.8's, decision 331), line of sight through the canopy height field, tree strikes, props and wonder shapes in the one height function, corridor-aware refinement (spike N6.0), tracks near the camera. _Depends on R2.8, R1.6._
-- **R3.8 Infantry — large** (owner, proposal 0013, decision 331). The figure kit: six boxes and an oversized helmet (about 72 triangles) at 1.4 times life size for drawing and hits, faction helmets, uniforms and kit, specialist props (MANPADS, RPG, mortar, radio), the downed pilot's flight suit and parachute, four levels of detail and readability scaling beyond 1 km; rigid-limb animation in the vertex shader (idle to crawl, firing positions, mount and dismount, boarding, fast-rope, parachute, carrying, hands up, knockdown, tumble, getting up dazed, falling); squads on the sim worker within the bubble and individual soldiers within 3–5 km, whole companies promoted, a GPU pass that interpolates and animates them with a CPU reference; squad behavior (formations, bounding overwatch, cover points from vegetation, ditches, rubble and the settlement colliders, suppression, return fire with tracers and muzzle flashes, the six morale states), specialists (MANPADS against helicopters and low jets, RPGs, mortars, forward observers with support calls and talk-on requests), friendly infrared strobes, infantry in treelines and buildings for the gunship (decision 302); splash profiles on the warheads with the proposal's starting values and the cover and posture modifiers, the squad tables calibrated against individual strikes (rule 18); reactions and death without gore (tumbling arcs, helmets popping off, dust, gray within seconds, a toon puff); surrender, escort and prisoners as logged campaign state; survivors on foot (hiding, signaling, moving to a pickup point, injury) and enemy search parties; the sensor looks (warm in infrared, sides by uniform and helmet in TV, detection by movement, fire and dust); the stress scene (a battalion attack, 1,500 soldiers seen from a gunship orbit); checks 19 and 20. Exit: the proposal's verification table. _Depends on R2.8, R3.3, R3.6._
+- **R3.7 Routes with steerpoints — large** (owner, decision 286). Routes become steerpoints planned against the threat: low-level legs that follow valleys and canyons under the radar horizon, ingress through holes in the air defense network (R3.5) and the enemy's picture (R3.1), pop-up points, initial points and egress turns, instead of great-circle legs. Shaping a route over terrain is the execution layer's (rule 9 holds: the planner reads the graph and the air defense picture, and the route is fitted to the eroded world by the game engine, as the alignment tier fits roads). The steerpoints are what the moving map, the HUD's steering and the AI pilot follow. Enables the owner's two set pieces in R4.2: the canyon run to ambush an AWACS, and the deep low-level strike from a road base. _Depends on R3.1, R3.5, R3.6._
+- **R3.6 Ground entities and terrain in the game engine — large.** Entity behavior for promoted vehicles (movement on aligned roads, firing; as the gunship needs them, decision 302: vehicles that move, scatter and hide, convoys on roads at night, units that return fire; infantry, MANPADS teams, strobes and talk-on requests are R3.8's, decision 331), line of sight through the canopy height field, tree strikes, props and wonder shapes in the one height function, corridor-aware refinement (spike N6.0), tracks near the camera. _Depends on R2.8, R1.6._
+- **R3.8 Infantry — large** (owner, proposal 0013, decision 331). The figure kit: six boxes and an oversized helmet (about 72 triangles) at 1.4 times life size for drawing and hits, faction helmets, uniforms and kit, specialist props (MANPADS, RPG, mortar, radio), the downed pilot's flight suit and parachute, four levels of detail and readability scaling beyond 1 km; rigid-limb animation in the vertex shader (idle to crawl, firing positions, mount and dismount, boarding, fast-rope, parachute, carrying, hands up, knockdown, tumble, getting up dazed, falling); squads on the game worker within the bubble and individual soldiers within 3–5 km, whole companies promoted, a GPU pass that interpolates and animates them with a CPU reference; squad behavior (formations, bounding overwatch, cover points from vegetation, ditches, rubble and the settlement colliders, suppression, return fire with tracers and muzzle flashes, the six morale states), specialists (MANPADS against helicopters and low jets, RPGs, mortars, forward observers with support calls and talk-on requests), friendly infrared strobes, infantry in treelines and buildings for the gunship (decision 302); splash profiles on the warheads with the proposal's starting values and the cover and posture modifiers, the squad tables calibrated against individual strikes (rule 18); reactions and death without gore (tumbling arcs, helmets popping off, dust, gray within seconds, a toon puff); surrender, escort and prisoners as logged campaign state; survivors on foot (hiding, signaling, moving to a pickup point, injury) and enemy search parties; the sensor looks (warm in infrared, sides by uniform and helmet in TV, detection by movement, fire and dust); the stress scene (a battalion attack, 1,500 soldiers seen from a gunship orbit); checks 19 and 20. Exit: the proposal's verification table. _Depends on R2.8, R3.3, R3.6._
 
 ## R4. Breadth
 
@@ -307,8 +307,8 @@ _Depends on all of R2._
 - **R4.4 Transport operations — medium.** The airdrop format and combat airdrop, sling loads with the hook camera, hoist and fast-rope, troop insertion, with R3.8's soldiers boarding, fast-roping and jumping. The C-150 flyable (flight data, laws, the test pilot and the AI's landing at transport speeds) and tactical airlift: low-level runs into forward fields near the front, terrain masking through valleys and canyons, short-field landings (owner, decision 318). _Depends on R4.3, R3.8._
 - **R4.5 Crews and radio — large.** Plan P5: crewmates per seat, format ownership, the crew command menu, the six roles, callouts by priority, crew station mode, crew figures. The radio (owner, decision 258): check-ins with the package's strike lead and with AWACS and ground controllers (picture calls, bogey dope, the Pact's ground-controlled interception), air traffic control near airfields (departure, approach), brevity in the comms format and the messages display; controllers' callsigns invented per side, as the setting's names are. _Depends on R3.2._
 - **R4.6 Naval war — large.** Convoys, carrier groups tasked between theaters, surface action groups and abstract submarines on sea lanes with aggregate resolvers; amphibious groups, and amphibious and airborne seizure of an island airfield or port, after which a squadron stages forward onto it (the Iceland operation of *Red Storm Rising*, decision 254); Backfire (Ra-84) raids on carrier groups with heavy anti-ship missiles, the outer air battle against them (the carrier's CAP and the F-28's long-range missiles before launch) and the vampire calls and point defense when the missiles are inbound (owner, decision 258); convoy and naval icons on the map; ship decks as moving ground. _Depends on R2.2._
-- **R4.8 Road bases — medium** (owner, decision 286). Highway strips sited on long straight stretches of aligned roads near a side's airbases, with dispersal sites; squadrons disperse to them when their base is attacked or cratered (decision 254) or by doctrine (the Alliance's Nordic-style air arms); takeoff and landing on a road at full fidelity and in Free Flight; the strips on the map. _Depends on R4.2._
-- **R4.9 Air refueling — medium** (owner, decision 286). Tankers as real support: the Alliance plans tanker tracks into its packages (strike packages, CAP stations far forward, ferry flights), which extend their radius and station time in the aggregate; the Pact's few tankers serve its bombers. At full fidelity the player joins the tanker's boom or drogue with director cues, and the AI refuels by the same law. _Depends on R4.2, R2.6's drop tanks and fuel system._
+- **R4.8 Road bases — medium** (owner, decision 286). Highway strips sited on long straight stretches of aligned roads near a side's airbases, with dispersal sites; squadrons disperse to them when their base is attacked or cratered (decision 254) or by doctrine (the Alliance's Nordic-style air arms); takeoff and landing on a road at full detail and in Free Flight; the strips on the map. _Depends on R4.2._
+- **R4.9 Air refueling — medium** (owner, decision 286). Tankers as real support: the Alliance plans tanker tracks into its packages (strike packages, CAP stations far forward, ferry flights), which extend their radius and station time in the aggregate; the Pact's few tankers serve its bombers. At full detail the player joins the tanker's boom or drogue with director cues, and the AI refuels by the same law. _Depends on R4.2, R2.6's drop tanks and fuel system._
 - **R4.10 Gunship — large** (owner, proposal 0012, decision 302). The AC-31 Warden, after the AC-130H, Alliance only: its bundle on the transport's flight model with the guns' weight and drag; the left-hand pylon-turn autopilot that holds radius and altitude in wind, with the orbit's center, radius and altitude shifted by the pilot or the fire control officer; the 105 mm howitzer, the 40 mm autocannon and the 20 mm cannons (7.62 mm miniguns on the early variant) with limited loads in the stores format; the **gunner station**, a full-screen sensor view with zoom, stabilization, point and area track, a laser rangefinder, weapon state and time of flight, strobes and talk-on markers, and an optional chase view; switching between the pilot and gunner stations with the AI crew covering the other; four mission plug-ins (gunship CAS, armed overwatch, night convoy interdiction, CSAR cover) whose planner rules need the air defense picture free of radar SAMs, local air superiority and little AAA, and which break off on a radar SAM, a fighter or heavy flak; danger close with a confirmation, fratricide against morale and reputation, collateral damage against the side's standing (R5.2); impact, tracer and muzzle-flash presets (proposal 0011 when it exists; check 18). Exit: the proposal's verification table. _Depends on R3.2, R3.3, R3.5, R3.6, R3.8, R4.1, R4.5._
 - **R4.7 Power lines — small.** Pylons on high ground and wire strikes for helicopters, on the corridor framework. _Depends on R4.3._
 
@@ -318,7 +318,7 @@ _Depends on all of R2._
 - **R5.2 Morale and reputation — medium.** Unit, squadron and theater morale on sortie rates, AI skill and ground combat; the named pilot, reputation, and the enemy's reaction (owner decision 11); each side's standing, lowered by collateral damage to settlements and by firing on surrendering or captured soldiers, as ceasefire pressure (decisions 302, 331); prisoners on both sides' morale (decision 331). _Depends on R2.2._
 - **R5.3 Weeks of war — medium.** Two to four weeks, end conditions (breakthrough, successful defense, ceasefire from exhaustion and lost standing), the exchange of prisoners in a ceasefire (decision 331), the campaign summary. _Depends on R5.1, R5.2._
 - **R5.4 Save and load — medium.** Campaigns in IndexedDB with file export and import, on R1.2's snapshots and R2.11's log. _Depends on R2.11._
-- **R5.5 Consequence visibility — medium.** The chain of consequences on the map after a mission (bridge down, supply cut, battalion withdrawing); destroyed structures in the simulation view. _Depends on R5.1._
+- **R5.5 Consequence visibility — medium.** The chain of consequences on the map after a mission (bridge down, supply cut, battalion withdrawing); destroyed structures in the flight view. _Depends on R5.1._
 - **R5.6 Campaign tuning — medium.** Range factor, theater fit thresholds, ring continents (two cuts), island campaigns that leave the Alliance under 15 bases, the validity check counting placed airbases (owner decision 16), salt flats as airstrips, carrier tasking between theaters. _Depends on R5.3._
 
 ## R6. Polish
@@ -330,7 +330,7 @@ _Depends on all of R2._
 - **R6.5 Accessibility and input — medium.** UI scale, color-vision checks across the HUD and displays, a clean mode for screenshots. Key remapping in the UI and gamepad buttons came early with Proposal 0014 (out of sync, below); what remains of input here is presets for common flight sticks and WebHID.
 - **R6.6 Cameras and transitions — medium.** The eased dissolve through cloud, flyby and cinematic cameras, the scripted flythrough across both views, flight effects (vapor, contrails, heat shimmer).
 - **R6.7 Companion displays — medium.** Plan P6: a display in a second window, a tablet companion paired by WebRTC.
-- **R6.8 The visual backlog — large.** Everything the earlier tracks left open that no game system needs: the strategic view's leftovers (wetland reeds, broad-range glyphs, ocean names, range ring labels, the wonder glyph, new-biome patterns, generalized rivers, bridge labels and dashed tunnels); the simulation view's (river legibility, town patches and night lights, pixelation, palm, rides and firebreaks, parked aircraft, shadows of trees and buildings); track W's remainder (cirques and arêtes, plateau canyons, gullies, aspect, oases, disturbance, brine and shoreline rings, zone air, four prop kinds, four wonder kinds, router protection, local variety, checks 15–16); track N's remainder (corridor shading, the full bridge kit with tunnel portals, spirals, class order, names, river regimes per reach, distributaries, oxbow silting, braided channels, N8's report, canals); track G's remainder; and Part I and Part II acceptance checks against the reference board.
+- **R6.8 The visual backlog — large.** Everything the earlier tracks left open that no game system needs: the strategic view's leftovers (wetland reeds, broad-range glyphs, ocean names, range ring labels, the wonder glyph, new-biome patterns, generalized rivers, bridge labels and dashed tunnels); the flight view's (river legibility, town patches and night lights, pixelation, palm, rides and firebreaks, parked aircraft, shadows of trees and buildings); track W's remainder (cirques and arêtes, plateau canyons, gullies, aspect, oases, disturbance, brine and shoreline rings, zone air, four prop kinds, four wonder kinds, router protection, local variety, checks 15–16); track N's remainder (corridor shading, the full bridge kit with tunnel portals, spirals, class order, names, river regimes per reach, distributaries, oxbow silting, braided channels, N8's report, canals); track G's remainder; and Part I and Part II acceptance checks against the reference board.
 
 ## Out of Sync: Proposal 0014, Input Layer and Gamepad
 
@@ -357,13 +357,13 @@ flowchart LR
   R13[R1.3 Headless day] --> R21
   R14[R1.4 Mission search] --> R24
   R15[R1.5 FlownAircraft] --> R24 & R25 & R26
-  R16[R1.6 Terrain in sim] --> R25 & R28
+  R16[R1.6 Terrain in game] --> R25 & R28
   R17[R1.7 Aircraft bundles] --> R21 & R26 & R27 & R29
   R18[R1.8 Network data] --> R21 & R23
   R21[R2.1 ATO + plug-ins] --> R22[R2.2 Resolution]
   R22 --> R23[R2.3 Ground war]
   R22 --> R29[R2.9 CSAR]
-  R24[R2.4 Follow] --> R25[R2.5 Full fidelity]
+  R24[R2.4 Follow] --> R25[R2.5 Full detail]
   R25 --> R26[R2.6 Weapons]
   R25 --> R29
   R25 --> R211[R2.11 Event log]
@@ -397,8 +397,8 @@ R4 adds most types; R2 adds the first five missions and the demo roster. Both fo
 | ------------------------ | ---------------------------------------------------------------------------- | ---------------------------- |
 | Planner rule             | When the ATO creates the mission, from which need, with which priority score | `src/sim/command/`           |
 | Package template         | Flights, roles, escorts and support, by doctrine                             | `src/sim/command/`           |
-| Aggregate resolver       | Outcomes when no one watches, of the same kinds as full fidelity             | `src/sim/air/`               |
-| Full-fidelity behavior   | How the AI pilots fly it on the director, phase by phase                     | `src/sim/flight/`            |
+| Aggregate resolver       | Outcomes when no one watches, of the same kinds as full detail             | `src/sim/air/`               |
+| Full-detail behavior   | How the AI pilots fly it on the director, phase by phase                     | `src/sim/flight/`            |
 | Jump-in windows          | The phases that accept the player                                            | the mission's phase data     |
 | Success and consequences | What counts as success; what changes in the world                            | `src/sim/`                   |
 | Briefing template        | Text with named places                                                       | `src/campaign/`              |
@@ -441,6 +441,6 @@ All parts live in the type's JSON bundle (decision 232), and the bundle test (R1
 | P5                     | not started                                   | R4.5                                                                                     |
 | P6                     | not started                                   | R6.7                                                                                     |
 | H1–H5                  | H1 partly done                                | rotary director and AI pilot R2.9; the rest R4.3                                         |
-| N1–N8                  | N1, N2, N4, N5 largely done                   | bridge data R1.8; terrain for the sim R1.6; entities R3.6; logistics R5.1; the rest R6.8 |
+| N1–N8                  | N1, N2, N4, N5 largely done                   | bridge data R1.8; terrain for the game engine R1.6; entities R3.6; logistics R5.1; the rest R6.8 |
 | G1–G5                  | G2, G4, G5 done; G1, G3 partial               | R6.4, R6.8                                                                               |
 | W1–W9                  | W1, W5 done; the rest partial                 | seeds R1.1; strategic map frame rate R1.1; the rest R6.8                                 |

@@ -35,7 +35,7 @@ Bearing is a cartoony browser game (`README.md`, What Bearing Is; `CLAUDE.md` ru
 - [x] Strategic map frame rate (10–15 fps): profile labels, the zone list and glyph rebuilds; fix the hot path (its GPU time is 4.3 ms a frame at 640 × 360, so the cost is on the CPU; decision 242): the labels were laid out every frame; now shaped once and redrawn only on change (decision 245)
 - [x] Owner: the map with `?dev&cputime=1&gputime=1` for a few minutes: 30–38 fps (from 10–15); CPU 7–10 ms, GPU 15 ms, nothing growing (decision 246)
 - [ ] The map's main pass takes 15 ms of GPU at 1080p (owner): time its layers (relief, biome fill, patterns, glyphs, clouds) with `?dev&gputime=1` and bring the frame under 16.7 ms
-- [x] Owner feedback: orbit finicky near the poles; the campaign opened in the simulation view; too many zone names (decision 246)
+- [x] Owner feedback: orbit finicky near the poles; the campaign opened in the flight view; too many zone names (decision 246)
 - [x] Frame-rate decay over a session: check tile and mesh caches, undisposed geometries and textures, label rebuilds; a soak test that counts GPU objects after 20 view switches (`tests/gpu/mapSoak.test.ts`: flat with and without tiles; decision 245)
 - [x] GPU timing tool: timestamp queries per pass in the app behind `?dev`, logged per view (`?dev&gputime=1`, `GPU_TIMING=1` in the smoke test; decision 242)
 - [x] Owner: run `tools/browser.smoke.mjs` with `MODE=gpu` and the timing tool on the owner's machine; record the standard views in the audit's performance baseline (`MODE=gpu GPU_TIMING=1 node tools/browser.smoke.mjs`): 2026-11-19, at 640 × 360 (decision 242)
@@ -47,7 +47,7 @@ Bearing is a cartoony browser game (`README.md`, What Bearing Is; `CLAUDE.md` ru
 
 ### R1.2 Campaign state that can be saved
 
-- [x] Inventory every piece of sim state (queue, clock, `AirOps`, tasker maps, weather systems and caches, carrier groups) with its owner and type (decision 235's table)
+- [x] Inventory every piece of game state (queue, clock, `AirOps`, tasker maps, weather systems and caches, carrier groups) with its owner and type (decision 235's table)
 - [x] RNG: export and restore the xoshiro state, or move every draw to a fork keyed by game time; test (every draw was already a keyed fork; the round-trip test covers it)
 - [x] `save()`/`load()` for the event queue and clock (events are data already)
 - [x] `save()`/`load()` for `AirOps` and the interim tasker
@@ -59,7 +59,7 @@ Bearing is a cartoony browser game (`README.md`, What Bearing Is; `CLAUDE.md` ru
 
 ### R1.3 A headless day of war
 
-- [x] `tools/war.preview.ts`: build a pinned seed's campaign world, run the sim for 24 game hours as fast as possible, report errors, worker step cost per game hour, missions flown and the state hash (decision 236)
+- [x] `tools/war.preview.ts`: build a pinned seed's campaign world, run the game engine for 24 game hours as fast as possible, report errors, worker step cost per game hour, missions flown and the state hash (decision 236)
 - [x] Measure the worker's cost at 64× on the three seeds with the interim tasker; record it in the audit (7–12 ms per game hour, 0.02% of real time)
 - [x] Replace or supplement `tests/air.test.ts`'s synthetic world with a small generated world (fast parameters): `tests/war.test.ts`, with the world's own climate
 
@@ -79,7 +79,7 @@ Bearing is a cartoony browser game (`README.md`, What Bearing Is; `CLAUDE.md` ru
 
 - [x] Map `freeflight/freeFlight.ts`'s responsibilities (session flow, input, airframe, director, sensors, traffic, HUD frame, displays) and draw the split (decision 243)
 - [x] `FlownAircraft` in `src/sim/flight/`: airframe, control laws, director target, input source (player or AI), fuel and configuration; no DOM or render imports (the director target lives in the pilot hook)
-- [x] Move `AvionicsState` from `ui/displays/system.ts` into per-aircraft sim state; the display system reads it
+- [x] Move `AvionicsState` from `ui/displays/system.ts` into per-aircraft game state; the display system reads it
 - [x] Build the aircraft snapshot outside `freeflight/` from `FlownAircraft` and sensors (`ui/displays/aircraftSnapshot.ts`, `ui/flight/hudFrame.ts`)
 - [x] One flown-aircraft abstraction for both kinds (replaces Free Flight's `model`/`helo` branching): the stepping; the HUD and camera still branch by kind
 - [ ] The HUD frame and the chase camera from `FlownAircraft` instead of `model`/`helo` (with R2.4's followed aircraft)
@@ -93,13 +93,13 @@ Bearing is a cartoony browser game (`README.md`, What Bearing Is; `CLAUDE.md` ru
 - [x] A height service from the global grid plus edits that runs in the worker; test against the main thread's function at sample points (bit for bit)
 - [x] AI sensing and line of sight read the height service, not resident tiles (decision 227's sensors keep tiles for the ground map and elevation map only)
 - [x] Analytic low-level routes: a terrain floor along each leg from the coarse heights, with clearance by mission type; test that no route on the pinned seeds passes below terrain (clearance by airframe: 100 m jets, 30 m helicopters)
-- [x] Sited runways for full fidelity and the simulation view: the sim carries the sited runway as presentation data beside the coarse point (`world.terrain.fields`)
-- [x] R2.5: check a flight handed to full fidelity anywhere on its route is above the drawn ground (the floor is checked against the coarse ground only; decision 240): promotion starts from the drawn poses, lifted at least the follow's clearance over the drawn ground, and the lead's reference keeps that lift (decision 272)
+- [x] Sited runways for full detail and the flight view: the game engine carries the sited runway as presentation data beside the coarse point (`world.terrain.fields`)
+- [x] R2.5: check a flight handed to full detail anywhere on its route is above the drawn ground (the floor is checked against the coarse ground only; decision 240): promotion starts from the drawn poses, lifted at least the follow's clearance over the drawn ground, and the lead's reference keeps that lift (decision 272)
 
 ### R1.7 Aircraft bundles and roster data
 
 - [x] Bundle schema: the model spec gains `avionics`, `airWar` (role tags, performance, crew roles, faction, name, skin), `pylons`, `rig` and `calibration` blocks; geometry optional; validation (decision 238)
-- [x] One bundle loader usable by the sim worker (no render imports) and the renderer (`src/sim/air/bundles.ts`; bundles in `src/data/models/aircraft/`)
+- [x] One bundle loader usable by the game worker (no render imports) and the renderer (`src/sim/air/bundles.ts`; bundles in `src/data/models/aircraft/`)
 - [x] Move the 31 avionics profiles from `typeProfiles.ts` into the bundles; `tests/typeProfiles.test.ts` passes on the loaded data
 - [x] Move the air-war table from `sim/air/aircraft.ts` into the bundles; the air war's determinism hash is unchanged
 - [x] Camera rigs into the bundles (`FAST_JET_RIG`, `helicopterRig` become per-type data)
@@ -108,11 +108,11 @@ Bearing is a cartoony browser game (`README.md`, What Bearing Is; `CLAUDE.md` ru
 - [x] Utility helicopter role: a Black Hawk analogue and an Mi-8 analogue in `sim/air/aircraft.ts` with avionics profiles; a decision for the change to every world's cast (UH-68 Heron, Ve-18 Shmel; decision 239)
 - [x] Pilots per squadron in the order of battle (count, names from a fork); the hash change recorded (decision 239)
 
-### R1.8 Network data for the sim
+### R1.8 Network data for the game engine
 
 - [x] Road and rail networks as a node and edge graph in the campaign input: junctions as nodes, polylines as edges with class and length (decision 237)
 - [x] Bridges as edges that can be cut: split polylines at bridges in the graph object (not in the stored polylines)
-- [x] A damage state for target sites and bridges in the sim, saved with R1.2's snapshot
+- [x] A damage state for target sites and bridges in the game engine, saved with R1.2's snapshot
 - [x] Detour test: cut a bridge, compare the graph's detour with the bridge's recorded detour (15 of 15 equal)
 - [x] Bridge aim points on the main thread: matched crossing, or the nearest point of the aligned road where none matches (owner decision 7); `bridgeAimPoints`, used from R2.6
 
@@ -190,11 +190,11 @@ Bearing is a cartoony browser game (`README.md`, What Bearing Is; `CLAUDE.md` ru
 ### R2.4 Follow
 
 - [x] The followed flight's pose from its analytic route: position, nose and top, velocity, the turns at waypoints smoothed into banked turns, formation slots (`sim/air/analyticPose.ts`)
-- [x] Campaign aircraft in the simulation view: the followed flight's aircraft from their bundles' models, posed by the analytic pose (one model per aircraft, the flight in formation), lifted over the drawn ground (`follow/followFlight.ts`, `follow/follow.ts`)
+- [x] Campaign aircraft in the flight view: the followed flight's aircraft from their bundles' models, posed by the analytic pose (one model per aircraft, the flight in formation), lifted over the drawn ground (`follow/followFlight.ts`, `follow/follow.ts`)
 - [x] Stand-in models by class and side for types without geometry, in their own schemes, until R2.7; the C-150's model (it stands in for the large types)
 - [x] Other flights near the camera, instanced by type, with a level of detail for packages; shadows near the camera (full views within 1.5 km, at most six; `follow/campaignTraffic.ts`, `render/sim/aircraft/trafficLayer.ts`)
 - [x] Chase camera on an analytic target (`ChaseTarget` from the pose); the rig from the followed type's bundle, including a transport rig (the C-150's); rigs for the Vo-31, Vo-35 and F-124
-- [x] *Follow* from mission search and from a subscription offer (and the map's selection panel): a cut into the simulation view with a chase-camera settle (owner decision 12)
+- [x] *Follow* from mission search and from a subscription offer (and the map's selection panel): a cut into the flight view with a chase-camera settle (owner decision 12)
 - [x] Return to the map above the flight's position (Escape or M, and the bar's button)
 - [x] Read-only HUD for the followed aircraft from its analytic state (`followHudFrame`)
 - [x] Spectator displays: the followed aircraft's own formats, read-only, with the moving map
@@ -214,9 +214,9 @@ Bearing is a cartoony browser game (`README.md`, What Bearing Is; `CLAUDE.md` ru
 - [ ] Owner: the karst towers and other landform props are not in the one height function (R3.6), so low flights pass through them; keep, thin out or remove them?
 - [x] Spectator displays' radar and threat formats are empty until R2.6's sensors read campaign contacts (decision 303)
 - [x] Combat spread a nautical mile abeam, in meters whatever the span (owner; decision 258)
-- [x] Afterburner, control surfaces and speedbrake of the followed aircraft stay at rest until R2.5's flight model drives them (the F-21 at full fidelity; decision 272)
+- [x] Afterburner, control surfaces and speedbrake of the followed aircraft stay at rest until R2.5's flight model drives them (the F-21 at full detail; decision 272)
 
-### R2.5 Full fidelity and handover
+### R2.5 Full detail and handover
 
 - [x] Promotion: analytic state → `FlownAircraft` (position, attitude, speed, fuel by share, gear and power; stores and damage as records until R2.6) from the drawn poses (`sim/flight/promotion.ts`; decision 256)
 - [x] Demotion: `FlownAircraft` → the flight's state (survivors, crashes as losses, where the lead is, fuel by share, stores) and a route rebuilt from there that carries on the mission by its phase (`rejoinRoute`)
@@ -226,14 +226,14 @@ Bearing is a cartoony browser game (`README.md`, What Bearing Is; `CLAUDE.md` ru
 - [x] AI pilot: attack run and egress (the route's pass and turn home; weapons release is R2.6)
 - [x] Worker protocol: a take-over input holds the mission (no aggregate resolution, phase events cancelled); a handback input carries the demoted state, the worker rebuilds the route with `rejoinRoute`, reschedules the phases and logs losses (crashes) and the new route (decision 257)
 - [x] While the player flies, the map and the moving map draw the held flight where it is, without its old route or trail (decision 284)
-- [ ] Other flights' resolution and the enemy's sensors find the held flight where it flies (R2.6–R3: full-fidelity combat around the player, fixes posted to the worker if the aggregate needs them)
+- [ ] Other flights' resolution and the enemy's sensors find the held flight where it flies (R2.6–R3: full-detail combat around the player, fixes posted to the worker if the aggregate needs them)
 - [x] The follow must not end a held flight at its old route's end (`missionPhase` reads the old timeline while it is held; decision 273)
 - [x] The followed aircraft seemed to slide backward after a racetrack turn at 16×: the chase camera's acceleration lag read speed changes per real second, and the analytic speed stepped from leg to leg (decision 271)
 - [x] Follow on `PromotedFlight`: promote a followed flight whose type has flight data inside the window, its lead's reference the drawn route (the fields' shift and the lift over the drawn ground); draw the aircraft from their airframes (surfaces, afterburner, speedbrake); the HUD frame and displays from the airframe; demote at the approach (decision 272)
 - [x] Ground for promoted flights: the drawn surface with the airfields' grading (Free Flight's `AirfieldGround`, built by `flownGround` for both)
 - [x] Every other flight inside the bubble stays drawn while the player flies (`CampaignTraffic`, as while following; owner, decision 258)
-- [ ] Owner, on the GPU: follow an F-21 CAP from climb-out through the station to the approach; the flight at full fidelity holds formation, its surfaces move, and it eases back onto its route at the approach (decision 272)
-- [x] Wind at full fidelity: the promoted flight flies in the campaign's wind and gusts (decision 280)
+- [ ] Owner, on the GPU: follow an F-21 CAP from climb-out through the station to the approach; the flight at full detail holds formation, its surfaces move, and it eases back onto its route at the approach (decision 272)
+- [x] Wind at full detail: the promoted flight flies in the campaign's wind and gusts (decision 280)
 - [ ] Winds aloft in the worker's rebuilt routes (AirOps cannot read the planner's weather yet; decision 257)
 - [x] The route's climb (the air war's 110 m/s for the F-21) is steeper than the Kestrel sustains at its climb speed: the F-21 climbs at 50 m/s, the flight model's mean at military power (decision 283)
 - [ ] Climb rates of the other types from their flight models once they have them (R2.7; R2.10's calibration)
@@ -257,7 +257,7 @@ Bearing is a cartoony browser game (`README.md`, What Bearing Is; `CLAUDE.md` ru
 - [x] The stores format's jettison button (`ControlsAction` `jettisonTanks`, wired in the follow; decision 289)
 - [ ] The approach energy cue (`energy.ts`) predicts without the stores' drag and mass; stores' CG and inertia stay the spec's (R2.10)
 - [ ] The AI's jettison reads enemy flights on their routes; from the sensors' picture once they read campaign contacts
-- [x] Stores on pylons that disappear on release; jettison (store model specs, `AircraftView` mounts and `setStores`, the rack's stations at full fidelity, what was expended before off the pylons; decision 288)
+- [x] Stores on pylons that disappear on release; jettison (store model specs, `AircraftView` mounts and `setStores`, the rack's stations at full detail, what was expended before off the pylons; decision 288)
 - [ ] Pylons drawn under the stores (the fighter's pylon pieces)
 - [x] A released store falls away instead of vanishing; the F-21's strike load with 4 bombs and a centerline tank (`strike/long` the old one); drop tanks as a base stock; read-only spectator displays (owner; decision 294)
 - [ ] Tanks the AI drops while a flight is only spectated do not reach the campaign: post them as a logged input, or keep the AI's tanks on while spectating
@@ -280,12 +280,12 @@ Bearing is a cartoony browser game (`README.md`, What Bearing Is; `CLAUDE.md` ru
 - [x] Unguided bombs with CCIP fall lines; rockets (`sim/flight/ordnance.ts`, the CCIP pipper, explosions, the F-21's CAS loadout, Free Flight's `loadout=`; decision 300)
 - [ ] Bomb release modes (pairs, ripple with spacing) and the delayed cue when the CCIP point is below the HUD (DTOS); craters at impacts (scorch decals came with the effects, decision 323)
 - [ ] Rocket pods' mass falls as they fire (the pod's dry mass); rockets' warheads in hit resolution
-- [x] Hit and kill resolution; minimal damage states; ejection from full fidelity (warheads, rounds and bursts on aircraft, bombs and rockets on target sites at their drawn aim points, `shot-down` and `target-hit` inputs, wrecks, the map's damage marks, ejection on X twice; decision 301)
+- [x] Hit and kill resolution; minimal damage states; ejection from full detail (warheads, rounds and bursts on aircraft, bombs and rockets on target sites at their drawn aim points, `shot-down` and `target-hit` inputs, wrecks, the map's damage marks, ejection on X twice; decision 301)
 - [ ] Damaged aircraft smoke and turn home (enemy leads hit but not killed, the player's own once the AI fires; R3); damage to the player's aircraft from enemy fire (R3)
 - [ ] Heat sources and gun targets for every aircraft of an enemy flight, not its lead alone (formation slots)
 - [ ] The pilot's parachute after an ejection; Free Flight's ejection freezes the jet where it was
 - [ ] Bombs on targets other than the flight's own, on troops at the front (R2.8's vehicles) and on towns' sites (`CityLayer.setSiteDamage` from the campaign's damage)
-- [ ] The simulation view's bridges broken when cut
+- [ ] The flight view's bridges broken when cut
 - [ ] Owner's future weapons (2026-11-22): Mavericks (TV-guided air-to-ground missiles), splash damage tuned per target, explosions more spectacular, cluster bombs and fuel-air explosives, ripple and release-interval settings for rockets and bombs
 - [x] Sensors read campaign contacts: aggregate flights as radar targets, sites with radars as emitters (`follow/campaignSensors.ts`: flights at their leads, the other side's radars and defended places as emitters, the datalink from an airborne AEW; the radar lock gives the pipper its range and slaves the seeker; decision 303)
 - [ ] Each aircraft of a flight as its own contact and target near the aircraft (formation slots), merging into one at range
@@ -299,7 +299,7 @@ Bearing is a cartoony browser game (`README.md`, What Bearing Is; `CLAUDE.md` ru
 - [x] Direct control in cursor mode: an attitude and altitude hold as an assist (design §Cursor mode; `sim/flight/holds.ts`, Free Flight and the take-over; decision 306)
 - [ ] A pause-menu switch for the hold, if keyboard pilots want the bare laws; the hold's references set by hand (altitude and heading select) with R4's autopilot panel
 - [x] LOW FUEL in the status strip (with a mission's joker and bingo from its route, drop tanks counted; decision 307)
-- [ ] Fuel calls in the messages (JOKER, BINGO; the crewmate's in R4) and the AI turning home at bingo at full fidelity (R3)
+- [ ] Fuel calls in the messages (JOKER, BINGO; the crewmate's in R4) and the AI turning home at bingo at full detail (R3)
 - [x] The player's own flight on the HUD (markers on the other aircraft) and on the moving map and radar by intraflight datalink (decision 258; rings with numbers, the map's numbers all or none; decision 308)
 - [x] Acceptance check 8 with the pipper: the scripted half (`tests/pipperTurn.test.ts`, decision 309) and the owner's look on the GPU (decision 313)
 - [x] Owner's review of R2.6 (2026-11-22; decision 310): the AI at military power outside combat; bombs and missiles drawn once; the target kept as steerpoint and steered to with its distance; the steerpoint by hand (STPT, [ and ]); a new phase's formats over old edits; 1× at each new phase; CAS and GS named in the bar; the map's DEP own ship; the gold canopy
@@ -327,7 +327,7 @@ Started 2026-11-23, in parallel with R2.8 in a second session (decisions 314–3
 - [x] Engines without an afterburner in the flight model (the Su-25's; decision 314); the Kestrel's lockstep unchanged
 - [x] The throttle's detent and the HUD's and strip's afterburner readouts for an engine without one (decision 315)
 - [x] Vo-35 (Su-25 analogue): stores out of the body, ten pylons and loadouts by station, its gun (GSh-30-2), flight data and control laws (decision 315)
-- [x] Flying them: Free Flight's `aircraft=vo31|vo35` and the start screen's choice, its traffic mirrored for a Pact player; following and taking over Pact flights at full fidelity (`tests/pactPromotion.test.ts`; decision 315)
+- [x] Flying them: Free Flight's `aircraft=vo31|vo35` and the start screen's choice, its traffic mirrored for a Pact player; following and taking over Pact flights at full detail (`tests/pactPromotion.test.ts`; decision 315)
 - [ ] The Vo-31's route climb (the air-war table's 150 m/s) is more than military power sustains: the lead falls 3.4 km behind in the climb; with the F-21's climb item below (calibration, rule 18)
 - [x] The Pact skin in the HUD: km/h, meters, m/s, kilometers and kg; the angle-of-attack bracket and approach speed per type (decision 315)
 - [x] Checks 12–13 for an attack aircraft (the Vo-35) in `tools/displays.screens.mjs` (`AIRCRAFT=vo35`; every shot within the clutter limits, decision 315)
@@ -338,7 +338,7 @@ Started 2026-11-23, in parallel with R2.8 in a second session (decisions 314–3
 - [x] Silhouette check (Part I check 6) for every new model: `tools/models.preview.ts`, compared on contact sheets by class (decision 316)
 - [x] A-15 (A-10 analogue): model spec, flight data, laws, pylons and the GAU-8 analogue; Free Flight's `aircraft=a15` (decision 317)
 - [ ] The A-15's Mavericks and cluster bombs with the owner's future weapons; the A-10's eleven stations (four a wing and three under the fuselage today drawn as four a wing)
-- [x] C-150 (C-130 analogue): AI-flown for the demo; its flight data, laws and transport rig move to R4.4 with tactical airlift (owner, decision 318; the test pilot's circuit flies fighter speeds, and the airlift's landing at a forward field needs the AI's full-fidelity landing)
+- [x] C-150 (C-130 analogue): AI-flown for the demo; its flight data, laws and transport rig move to R4.4 with tactical airlift (owner, decision 318; the test pilot's circuit flies fighter speeds, and the airlift's landing at a forward field needs the AI's full-detail landing)
 - [x] `tools/freeflight.session.mjs` starts the A-15, Vo-31 and Vo-35 from the start screen: their own flight data and names, the brake off and the throttle forward, no afterburner on the Vo-35, the Pact's side for the Vo-31 and Vo-35
 - [x] Owner, on the GPU (2026-11-23): flew the Vo-35 and A-15 and followed the Vo-31; fixes in decision 319 (the Vo-35's wing root, the Vo-31's second flame and its vortices, no afterburner mentioned without one, explosions twice the size)
 - [x] Owner (2026-11-23, noted by the R2.8 session): the A-15 Buzzard's canopy sits too high on the fuselage and its sides jut out; the control surfaces on its wings are attached at an odd angle (decision 319: the canopy lowered and narrowed, the drooped tips at the wing's end)
@@ -370,7 +370,7 @@ Started 2026-11-23, in parallel with R2.8 in a second session (decisions 314–3
 
 ### R2.9 Survivors and CSAR
 
-Started 2026-11-24 (decisions 351 on). Two threads: the campaign's survivors and the CSAR plug-in (worker), and the rotary director, the AI helicopter pilot and the surface wind (flight model), joined in the follow at full fidelity.
+Started 2026-11-24 (decisions 351 on). Two threads: the campaign's survivors and the CSAR plug-in (worker), and the rotary director, the AI helicopter pilot and the surface wind (flight model), joined in the follow at full detail.
 
 - [x] Survivor records (`sim/air/survivors.ts`): position, injury (none, light, serious), survival timer by injury and surface (land or water), state (down, aboard, rescued, captured, died); saved, hashed, logged (decision 351)
 - [x] Capture risk: a hazard per hour from the nearest enemy battalion's anchor and the enemy's territory; checked every ten minutes with draws from rng(seed, "survivors") forked by survivor (decision 351)
@@ -383,10 +383,10 @@ Started 2026-11-24 (decisions 351 on). Two threads: the campaign's survivors and
 - [x] AI helicopter pilot: route, approach, a landing at a zone clear of trees, slopes and water (`landingZone.ts`), the wait, the takeoff (decision 355)
 - [x] Surface-layer wind for rotorcraft in place of the 8 m/s cap; jets keep it (decision 356)
 - [x] Tests: the director and recorded inputs fly the same result; a landing in a 10 m/s crosswind (`tests/heloDirector.test.ts`)
-- [x] Full fidelity for a followed CSAR helicopter (`follow/heloFidelity.ts`): promotion, the AI pilots on the drawn route, the landing zone, the hover HUD with the LZ cue, demotion (decision 357)
-- [x] The downed pilot in the simulation view (`follow/survivorFigures.ts`, `figure-pilot-*`), at the landing zone's edge with orange signal smoke, gone once aboard (decision 357)
+- [x] Full detail for a followed CSAR helicopter (`follow/heloFidelity.ts`): promotion, the AI pilots on the drawn route, the landing zone, the hover HUD with the LZ cue, demotion (decision 357)
+- [x] The downed pilot in the flight view (`follow/survivorFigures.ts`, `figure-pilot-*`), at the landing zone's edge with orange signal smoke, gone once aboard (decision 357)
 - [x] Test: every ejection in a 24 h run has a survivor and a CSAR mission (`tests/demoSeeds.test.ts`, the three seeds)
-- [x] Test: a followed CSAR helicopter lands at the survivor at full fidelity (`tests/heloFidelity.test.ts`)
+- [x] Test: a followed CSAR helicopter lands at the survivor at full detail (`tests/heloFidelity.test.ts`)
 - [x] Check 6 for the figures (`tools/models.preview.ts`)
 - [x] Owner's first look (2026-11-24; decision 369): a quicker departure and run-in, no hover before the takeoff, helicopters on the apron, terrain look-ahead over buttes, one fuel reading at every rate, the smoke behind the survivor and lighter, no context menu after a right drag
 - [ ] Owner on the GPU: the fixes of decision 369 in a followed rescue (checks 7 and 10)
@@ -394,8 +394,8 @@ Started 2026-11-24 (decisions 351 on). Two threads: the campaign's survivors and
 - [ ] Swerving around obstacles and nap-of-the-earth routes for the AI helicopters (R4.3)
 - [ ] A survivor that moves toward friendly lines, and enemy infantry hunting it, for the door gunners (R3.8)
 - [ ] Survivors on the strategic map (a parachute glyph by side) and in the selected rescue's panel
-- [ ] A survivor in the water: a dinghy model and a hoist pickup at full fidelity (the lead hovers today)
-- [ ] The Ve-18's flight data (Mi-8MT), so the Pact's rescues fly at full fidelity too
+- [ ] A survivor in the water: a dinghy model and a hoist pickup at full detail (the lead hovers today)
+- [ ] The Ve-18's flight data (Mi-8MT), so the Pact's rescues fly at full detail too
 - [ ] Taking over a helicopter in the campaign, and a player's pickup as a logged input (R4.3)
 - [ ] The crew limit binds only in a longer war: check it in R5.3's weeks of war
 - [x] Docs: decisions 351–357, design (survivors, CSAR, crews, the helicopter AI), visual-style Part I (the downed pilot, signal smoke), CLAUDE.md's directory map
@@ -405,11 +405,11 @@ Started 2026-11-24 (decisions 351 on). Two threads: the campaign's survivors and
 - [ ] Headless engagement runner on `FlownAircraft`: pairs and fours at set ranges and altitudes
 - [ ] Matchups: Vo-31 against Kestrel; CAS against a short-range air defense vehicle; strike against point defenses
 - [ ] Fit the aggregate tables; store them in the repository with the script that regenerates them
-- [ ] Tolerance test: aggregate and full-fidelity outcome rates agree
+- [ ] Tolerance test: aggregate and full-detail outcome rates agree
 
 ### R2.11 Event log and replay
 
-- [ ] Log every player input to the campaign, every campaign decision and every fidelity session's consequences
+- [ ] Log every player input to the campaign, every campaign decision and every full-detail session's consequences
 - [ ] Replay from a snapshot; test that the final state hash matches
 - [ ] Export and import a log as a file
 
@@ -418,7 +418,7 @@ Started 2026-11-24 (decisions 351 on). Two threads: the campaign's survivors and
 - [ ] Three seeds × 24 h at 64× unattended, without errors
 - [ ] The suppressed-air comparison on each seed
 - [ ] Take over and hand back in each flyable aircraft
-- [ ] Frame budgets on a real GPU during a full-fidelity mission with the war running
+- [ ] Frame budgets on a real GPU during a full-detail mission with the war running
 - [ ] Acceptance checks 7–10 and 12–14 for the demo types; Part II checks for the moving front and unit symbols
 - [ ] Report in `docs/reports/`; owner checkpoint
 
@@ -429,7 +429,7 @@ Started 2026-11-24 (decisions 351 on). Two threads: the campaign's survivors and
 - [ ] R3.3 Weapons in full (large); shells with time of flight, dispersion and fuzes, ready for the gunship's guns (decision 302)
 - [ ] R3.4 Air combat (medium)
 - [ ] R3.5 Air defense networks and scrambles (large)
-- [ ] R3.6 Ground entities and terrain in the sim (large); vehicles that scatter and hide, night convoys, return fire (decision 302)
+- [ ] R3.6 Ground entities and terrain in the game engine (large); vehicles that scatter and hide, night convoys, return fire (decision 302)
 - [ ] R3.7 Routes with steerpoints (large)
 - [ ] R3.8 Infantry (large; Proposal 0013, decision 331): figure kit and animation, squads and individual soldiers, behavior and specialists, infantry in treelines and buildings, strobes and talk-on requests (decision 302), splash profiles calibrated (rule 18), reactions without gore, prisoners, survivors on foot and search parties, sensor looks, the stress scene, checks 19–20
 
@@ -472,7 +472,7 @@ Started 2026-11-24 (decisions 351 on). Two threads: the campaign's survivors and
 - [ ] The Free Flight session's "drizzle: wet at once" check fails (decision 217); not investigated
 - [ ] The frame rate falls near the ground in Free Flight, which makes landings hard (owner, 2026-11-24, with a gamepad; the landings themselves were easy before). Suspects: the ground detail near a low camera (the ground cover ring, kit trees, props, the vehicles of R2.8), not the input. Measure first: `?dev&cputime=1` and `?dev&gputime=1` on the approach and the runway, and `PERF=n` on the `runway`, `hover`, `skid` and `nap` views of `tools/render.preview.ts` against Part I's budgets; then a fix or a quality tier (R6.4)
 - [ ] Stale code comments listed in the audit's "Left in the Code"; fix when the files are next touched
-- [ ] On lavapipe, `tests/gpu/mapSoak.test.ts` "keeps the relief tiles within their caches while panning at the floor" fails (geometries 274 against 234; the same at 8542fd3, before R2.4's changes), and in Chromium on lavapipe the app stops drawing after its ninth frame (simulation view or map) while the GPU process grows by about 1 GB every 5–10 s, until the kernel kills it after about 195 s: seeds 4 and 1983, the `campaign` part as well as `follow`, and at 8542fd3. Not seen on the owner's GPU (decision 245); look at the relief and terrain tiles' buffers on a software adapter
+- [ ] On lavapipe, `tests/gpu/mapSoak.test.ts` "keeps the relief tiles within their caches while panning at the floor" fails (geometries 274 against 234; the same at 8542fd3, before R2.4's changes), and in Chromium on lavapipe the app stops drawing after its ninth frame (flight view or map) while the GPU process grows by about 1 GB every 5–10 s, until the kernel kills it after about 195 s: seeds 4 and 1983, the `campaign` part as well as `follow`, and at 8542fd3. Not seen on the owner's GPU (decision 245); look at the relief and terrain tiles' buffers on a software adapter
 
 ## Out of sync: Proposal 0009, settlements and cities
 
@@ -495,7 +495,7 @@ Runs beside the main line (`docs/proposals/0009-settlements-and-cities.md`, `doc
 - [ ] Two buildings outside their parcels over 20 seeds (Mediterranean, Arid cities).
 - [x] Woods and parks inside planned towns keep their trees and canopy (decision 278).
 - [x] The war's town targets as complexes in their plans; damage by site; a sensor zoom (decision 279).
-- [ ] Main line: send damaged targets in the sim snapshot and call `CityLayer.setSiteDamage` (decision 279).
+- [ ] Main line: send damaged targets in the game engine snapshot and call `CityLayer.setSiteDamage` (decision 279).
 - [x] Streets of any width drawn whole: fields name the nearest segment (decision 290).
 - [x] Plans take the roads and railways as drawn (decision 291).
 - [x] Downtowns and business districts; American and Southeast Asian styles (decision 292).
@@ -504,7 +504,7 @@ Runs beside the main line (`docs/proposals/0009-settlements-and-cities.md`, `doc
 - [ ] A night vision system (owner's request with decision 296): the night is now dark enough to need one. Which aircraft carry it (NVG, FLIR or both) belongs in their avionics profiles (rule 14); a roadmap phase for it is the owner's call.
 - [ ] `tools/render.preview.ts`: `moonlit-range` cannot find a sun 30° down at the peak's latitude in August and renders at 11:00; take the lowest sun of the night when the wanted elevation is out of reach.
 - [ ] Targeting pod (P3–P5): set `CityLayer.zoom` from the pod's magnification (decision 279).
-- [ ] Wire settlement pads into `terrainEditsFor` once the sim's height service can take them (decision 264).
+- [ ] Wire settlement pads into `terrainEditsFor` once the game engine's height service can take them (decision 264).
 
 ## Out of sync: Proposal 0011, stylized effects (done 2026-11-22)
 
@@ -512,7 +512,7 @@ Runs beside the main line (`docs/proposals/0009-settlements-and-cities.md`, `doc
 
 - [x] Phase 0: survey, proposal, plan
 - [x] Phase 1: puff renderer (sphere impostor, depth, toon ramp, rim, dithered fade, shape variation; decision 320)
-- [x] Phase 2: GPU simulation (curves, pool, spawn and update kernels, TypeScript reference; decision 321)
+- [x] Phase 2: GPU compute (curves, pool, spawn and update kernels, TypeScript reference; decision 321)
 - [x] Phase 3: effects sandbox page and headless preview (decision 327)
 - [x] Phase 4: emitter presets, explosions' five layers, debris, decals, flash lights (decisions 322–324)
 - [x] Phase 5: contrails and wingtip vortices (decision 325)
@@ -520,7 +520,7 @@ Runs beside the main line (`docs/proposals/0009-settlements-and-cities.md`, `doc
 - [x] Phase 7: verification, metrics, screenshots, visual-style *Effects*, decisions, report
 - [x] Owner: every preset and the stress test in `effects.html` on the GPU, accepted (2026-11-22); no timings recorded
 - [x] Game layer: contrails and vortices for the flown, followed and nearby campaign aircraft and Free Flight's traffic (`EffectsSystem.aircraft`, decision 329)
-- [x] Game layer: burning columns from the worker's target damage, towns' targets through their plans, and smoke from damaged full-fidelity aircraft (decision 329)
+- [x] Game layer: burning columns from the worker's target damage, towns' targets through their plans, and smoke from damaged full-detail aircraft (decision 329)
 - [x] Stores catalog: `smoke` per missile and rocket pod in `src/data/stores.json` (decision 329)
 
 Later, with the systems they wait for, or as polish (not part of the track):
