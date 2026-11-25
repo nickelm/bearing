@@ -257,7 +257,7 @@ _Depends on R1.7, R2.2, R2.5._
 
 **Exit:** every ejection in a 24 h run produces a survivor and a CSAR mission; a followed CSAR helicopter lands at the survivor at full detail.
 
-**State (2026-11-24):** done in code (decisions 351–357): survivors with their injury, timer and capture risk; the CSAR plug-in with its escort and cover, planned the moment a survivor comes down; crews that rest; the rotary director, the AI helicopter pilot with landing zones and the surface-layer wind; a followed rescue at full detail with the downed pilot and its signal smoke. Both halves of the exit pass headless (`tests/demoSeeds.test.ts`, `tests/heloFidelity.test.ts`). Open for the owner: following a rescue on the GPU (checks 7 and 10).
+**State (2026-11-25):** done and closed (decisions 351–357, 369, 371): survivors with their injury, timer and capture risk; the CSAR plug-in with its escort and cover, planned the moment a survivor comes down; crews that rest; the rotary director, the AI helicopter pilot with landing zones and the surface-layer wind; a followed rescue at full detail with the downed pilot and its signal smoke. Both halves of the exit pass headless (`tests/demoSeeds.test.ts`, `tests/heloFidelity.test.ts`), and the owner followed rescues on the GPU twice (decisions 369, 371). The owner's second look brought mission search filters that offer every mission type (so a rescue can be subscribed to before anyone is down), rescue icons that stay on the map while landed at the pickup, downed aircrew on the map, and the UH-68's tail boom carried to its stabilizer. The war is deterministic by the world seed, as designed. Follow-ups are in `TODO.md`.
 
 ### R2.10 Calibration — medium
 

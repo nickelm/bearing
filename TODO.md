@@ -389,11 +389,16 @@ Started 2026-11-24 (decisions 351 on). Two threads: the campaign's survivors and
 - [x] Test: a followed CSAR helicopter lands at the survivor at full detail (`tests/heloFidelity.test.ts`)
 - [x] Check 6 for the figures (`tools/models.preview.ts`)
 - [x] Owner's first look (2026-11-24; decision 369): a quicker departure and run-in, no hover before the takeoff, helicopters on the apron, terrain look-ahead over buttes, one fuel reading at every rate, the smoke behind the survivor and lighter, no context menu after a right drag
-- [ ] Owner on the GPU: the fixes of decision 369 in a followed rescue (checks 7 and 10)
+- [x] Owner on the GPU: the fixes of decision 369 in a followed rescue (checks 7 and 10; the owner's second look, 2026-11-25, decision 371)
+- [x] Mission search offers every registered mission type, the side's aircraft types and every theater, so a rescue can be subscribed to before anyone is down (decision 371)
+- [x] A flight landed away from its base (a rescue at the pickup) stays on the map; `RouteState.landed`; the panel says "on the ground at …" (decision 371)
+- [x] Survivors on the strategic map: parachute badges by side, selectable, with the pilot, time down, injury and the rescue coming in the panel; Follow follows the rescue (decision 371)
+- [x] The UH-68's tail boom carried to the stabilizer's trailing edge, the stabilizer seated in it (decision 371)
+- [x] The owner's question on determinism: the war is a function of the world seed by design; documented, no run seed (decision 371)
 - [ ] The slowdown on the runway at a takeoff (jets too): the owner's `?dev&cputime=1&gputime=1` figures at the runway, then the culprit
 - [ ] Swerving around obstacles and nap-of-the-earth routes for the AI helicopters (R4.3)
 - [ ] A survivor that moves toward friendly lines, and enemy infantry hunting it, for the door gunners (R3.8)
-- [ ] Survivors on the strategic map (a parachute glyph by side) and in the selected rescue's panel
+- [ ] The mission search panel's list of subscriptions after a restore (the sim keeps them; the panel's list starts empty)
 - [ ] A survivor in the water: a dinghy model and a hoist pickup at full detail (the lead hovers today)
 - [ ] The Ve-18's flight data (Mi-8MT), so the Pact's rescues fly at full detail too
 - [ ] Taking over a helicopter in the campaign, and a player's pickup as a logged input (R4.3)
