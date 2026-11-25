@@ -355,11 +355,11 @@ export class DebugGui {
       { open: () => window.open(`${import.meta.env.BASE_URL}viewer.html`, '_blank') },
       'open',
     ).name('Model viewer (new tab)');
-    v.add(view, 'scene', ['simulation', 'strategic'])
+    v.add(view, 'scene', { 'Flight view': 'simulation', 'Strategic view': 'strategic' })
       .name('View')
       .onChange(() => callbacks.viewChanged(view));
     this.onCamera = () => callbacks.cameraChanged(view);
-    this.cameraFolder = v.addFolder('Simulation camera');
+    this.cameraFolder = v.addFolder('Flight view camera');
     this.cameraFolder
       .add(
         view,
@@ -421,7 +421,7 @@ export class DebugGui {
       .name('Canopy range (km)')
       .onFinishChange(() => callbacks.viewChanged(view));
     t.add(view, 'buildings')
-      .name('Buildings (sim detail)')
+      .name('Buildings (flight view detail)')
       .onChange(() => callbacks.viewChanged(view));
     t.add(view, 'ink')
       .name('Ink outlines on models')
@@ -430,7 +430,7 @@ export class DebugGui {
       .name('Ink width (px)')
       .onChange(() => callbacks.viewChanged(view));
     t.add(view, 'nightLights', 0, 10, 0.1)
-      .name('Night lights (sim detail)')
+      .name('Night lights (flight view detail)')
       .onChange(() => callbacks.viewChanged(view));
 
     const st = this.gui.addFolder('Status');
@@ -443,7 +443,7 @@ export class DebugGui {
     st.add(this.status, 'backend').name('Backend').disable().listen();
     st.add(this.status, 'resolution').name('Resolution').disable().listen();
     st.add(this.status, 'compute').name('GPU compute').disable().listen();
-    st.add(this.status, 'worker').name('Sim worker').disable().listen();
+    st.add(this.status, 'worker').name('Game worker').disable().listen();
     st.add(this.status, 'tiles').name('Tiles').disable().listen();
     st.add(this.status, 'trees').name('Trees').disable().listen();
     st.add(this.status, 'buildings').name('Buildings').disable().listen();
@@ -476,7 +476,7 @@ export class DebugGui {
       .onChange((v: boolean) => callbacks.autoSlowdownChanged(v));
     f.add(time, 'alarmHours', 0.25, 48, 0.25).name('Alarm in (h)');
     f.add({ alarm: () => callbacks.alarm(time.alarmHours) }, 'alarm').name('Set test alarm');
-    f.add(time, 'sim').name('Sim').disable().listen();
+    f.add(time, 'sim').name('Game status').disable().listen();
     f.add(time, 'weather').name('Weather here').disable().listen();
   }
 
@@ -700,7 +700,7 @@ export class DebugGui {
   ): void {
     const f = this.folderBeforeStatus('Campaign');
     f.add(params, 'overlay')
-      .name('Strategic graph (simulation view)')
+      .name('Strategic graph (flight view)')
       .onChange(() => changed(params));
     f.add(params, 'briefing')
       .name('Briefing')

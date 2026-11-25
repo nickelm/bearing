@@ -258,7 +258,7 @@ export class MissionSearchPanel {
         const follow = document.createElement('button');
         follow.className = 'follow';
         follow.textContent = 'Follow';
-        follow.title = 'Follow this flight in the simulation view';
+        follow.title = 'Follow this flight in the flight view';
         follow.addEventListener('pointerdown', (e) => {
           e.stopPropagation();
           this.onFollow?.(r.id);

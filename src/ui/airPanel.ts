@@ -70,7 +70,7 @@ export class AirPanel {
     this.followEl = document.createElement('button');
     this.followEl.className = 'follow';
     this.followEl.textContent = 'Follow';
-    this.followEl.title = 'Follow this flight in the simulation view';
+    this.followEl.title = 'Follow this flight in the flight view';
     this.followEl.hidden = true;
     this.followEl.onclick = () => {
       const [kind, id] = (this.key ?? '').split(':');
