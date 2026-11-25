@@ -136,7 +136,7 @@ The player's aircraft fills the center of the screen for entire missions, so it 
 
 **`docs/proposals/0001-two-views.md`**
 
-- *Simulation View:* entry happens by following or jumping into a unit, both in the same chase view. The observer camera at bases and ships remains.
+- *Flight View:* entry happens by following or jumping into a unit, both in the same chase view. The observer camera at bases and ships remains.
 
 ## Roadmap Changes
 

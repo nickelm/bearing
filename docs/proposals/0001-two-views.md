@@ -106,7 +106,7 @@ The base map keeps its fixed cartographic lighting regardless of time. Since nig
 
 Enemy territory that friendly reconnaissance has not covered recently could render in a sketched, desaturated style, similar to the unexplored areas of Civilization VI. Reconnaissance missions would then reveal the map. This depends on an intelligence model in the game engine and is out of scope for the demo.
 
-## Simulation View
+## Flight View
 
 - **Altitude envelope.** From the ground to about 20 km. The renderer only handles terrain within the horizon, at most about 200 km away.
 - **Entry.** Only through a unit: following a flight from mission search or jumping into one of its aircraft, both in the same chase view (Proposal 0002), or an observer camera at a base or ship. There is no free camera in the flight view.
@@ -144,7 +144,7 @@ Feature extraction, naming, and infrastructure stay headless in `worldgen`. Labe
 
 **`docs/visual-style.md`**
 
-- Restructure into *Part I: Simulation View* (the current content, minus orbit-level material) and *Part II: Strategic View* (the strategic sections of this proposal, with palette and typography details).
+- Restructure into *Part I: Flight View* (the current content, minus orbit-level material) and *Part II: Strategic View* (the strategic sections of this proposal, with palette and typography details).
 - Move the orbit acceptance check to Part II and add strategic acceptance checks:
   1. A screenshot at each zoom band with no overlapping labels.
   2. A legibility test: a new viewer finds the front line, the three largest mountain ranges, and the capital of each side within ten seconds.

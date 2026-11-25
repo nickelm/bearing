@@ -13,7 +13,7 @@ Bearing shows one world in two views, each with its own visual language.
 
 The two parts share the faction colors and the UI panels, and nothing else is assumed to carry over from one to the other.
 
-# Part I: Simulation View
+# Part I: Flight View
 
 Everything in Part I applies to the flight view: chase, target, weapon, flyby, and observer cameras from the ground to about 20 km altitude, with terrain drawn only within the horizon (about 200 km at 20 km, farther for peaks that rise above it). Nothing in it is tuned for orbit; the globe belongs to Part II. Bearing has no cockpits: the player sees their aircraft from outside, with the HUD, docked displays and status strip as 2D overlays (see *HUD and Displays* and *Displays and Status Strip*).
 
