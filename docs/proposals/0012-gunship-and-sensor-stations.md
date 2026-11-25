@@ -1,5 +1,7 @@
 # Proposal 0012: Gunship and Sensor Stations
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 *Drafted 2026-11-21. Status: accepted 2026-11-22 (decision 302). Affects `docs/roadmap.md`, `docs/visual-style.md`, `docs/proposals/0006-displays-and-crew.md`, `docs/proposals/0008-game-loop-and-campaign.md`, and `docs/proposals/0011-stylized-effects.md`.*
 
 *Proposal 0013 (decision 331) supplies the infantry the gunship fires on: blocky soldiers in companies, splash profiles for the 20 mm, 40 mm and 105 mm, surrender, and firing on prisoners as a cost to the side's standing. R4.10 depends on its milestone, R3.8.*
@@ -45,6 +47,8 @@ Period weapons, matching the AC-130H, with an earlier variant matching the AC-13
 | 40 mm autocannon | Clips of four, around 100 rounds per minute | Tight clusters of bursts, effective against vehicles and troops |
 | 20 mm cannons (two) | Selectable rate, very high | Fast lines of strikes against troops and soft vehicles |
 | 7.62 mm miniguns (AC-130A variant) | Very high rate | Dense strike patterns against troops; replaces the 105 mm on the earlier variant |
+
+*The figures in this table are gameplay tuning values.*
 
 - **Ballistics:** shells take several seconds to reach the ground. Fire control compensates for the orbit and wind, but moving targets need anticipation.
 - **Dispersion and fuzing:** each weapon has dispersion that grows with range; the 105 mm and 40 mm have impact and short-delay fuzes.

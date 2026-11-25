@@ -1,5 +1,7 @@
 # Proposal 0009: Settlements and Cities
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 *Drafted 2026-11-20. Status: accepted. Affects `docs/visual-style.md`, `docs/proposals/0001-two-views.md`, `docs/proposals/0005-terrain-adaptive-networks.md`, `docs/roadmap.md`, and `CLAUDE.md`.*
 
 ## Goals
@@ -8,7 +10,7 @@ Settlements currently look sparse, with buildings scattered on a ground texture 
 
 Constraints, in priority order:
 
-1. **Frame rate first.** Cities must not measurably slow the simulation view. Budgets in *Rendering* and *Verification* are hard limits.
+1. **Frame rate first.** Cities must not measurably slow the flight view. Budgets in *Rendering* and *Verification* are hard limits.
 2. **Structure over scatter.** Even the smallest hamlet follows roads, field boundaries, and terrain.
 3. **Stylized and slightly cartoony.** Flat-shaded, low-poly buildings with chunky proportions (slightly oversized roofs and chimneys), a warm palette, and window bands instead of modeled windows.
 4. **Adapt to terrain.** Streets follow contours on slopes; buildings sit on plinths; large structures get pads.

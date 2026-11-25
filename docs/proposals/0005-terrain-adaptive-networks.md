@@ -1,5 +1,7 @@
 # Proposal 0005: Terrain-Adaptive Networks
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 *Drafted 2026-11-15. Status: accepted (decision 161). Affects `docs/design.md`, `docs/visual-style.md`, `docs/proposals/0001-two-views.md`, `TODO.md`, and `CLAUDE.md`. The implementation plan is [docs/plans/terrain-networks.md](../plans/terrain-networks.md). Extended by [proposal 0007](0007-world-diversity.md) (decision 204): rivers into closed basins end at their lake's surface and keep the monotone profile, and alignments keep out of natural wonders' footprints except for scenic routes that pass in sight.*
 
 *Audit 2026-11-18 (decision 229): features are drawn from segment lists, not a per-chunk distance field (decision 161); airfield pads are exempt from "rivers always last" until siting keeps them off rivers (decision 164); links are aligned independently in a spatial order (decision 184), not railways first; bridges are not yet nodes that a strike can cut, and fewer than half of the network's bridges match a drawn crossing (decision 190). This proposal has no roadmap section; `docs/roadmap.md` schedules its remaining work (decision 228).*
@@ -132,7 +134,7 @@ Approximate values, to be tuned:
 
 ### Rendering
 
-Roads and railways render in the terrain shader from the same feature distance field: asphalt or gravel, shoulders, lane markings at close range, rail ballast with rails visible below about 1 km altitude, and lighter or darker shading on embankment and cutting slopes. They add no ribbon geometry in the simulation view. On the strategic map, they render as cartographic lines per proposal 0001, with tunnels as dashed segments.
+Roads and railways render in the terrain shader from the same feature distance field: asphalt or gravel, shoulders, lane markings at close range, rail ballast with rails visible below about 1 km altitude, and lighter or darker shading on embankment and cutting slopes. They add no ribbon geometry in the flight view. On the strategic map, they render as cartographic lines per proposal 0001, with tunnels as dashed segments.
 
 ## Structures
 
@@ -147,7 +149,7 @@ Bridges matter for the strategic war: they are interdiction targets, chokepoints
 
 ### Tunnels
 
-Tunnels are visual and named: portal geometry at each end (about 100 to 200 triangles), the route drawn as a dashed segment on the strategic map, and terrain left intact above them. Vehicles in the ground simulation traverse them; aircraft cannot enter them.
+Tunnels are visual and named: portal geometry at each end (about 100 to 200 triangles), the route drawn as a dashed segment on the strategic map, and terrain left intact above them. Vehicles in the ground war traverse them; aircraft cannot enter them.
 
 ### Locks and Canals (Stretch)
 

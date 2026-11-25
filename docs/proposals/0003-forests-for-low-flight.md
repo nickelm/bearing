@@ -1,5 +1,7 @@
 # Proposal 0003: Forests for Low Flight
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 *Drafted 2026-11-15 from the owner's brief. Status: accepted 2026-11-15 (decision 148). Would affect `docs/design.md` (Line of sight, the flight model's ground model), `docs/visual-style.md` Part I (Vegetation, Performance Budgets, Acceptance Checks), and `TODO.md` (V2's tree kit and tree LOD).*
 
 *Audit 2026-11-18 (decision 229): near trees reach 600 m on an 8 m lattice over quarter level-10 tiles and edge trees 1.2 km (decision 150), not 700 m, 7 m, level 11 and 1.5 km as in sections 2 and 6. Line of sight and tree strikes from the canopy field (section 5) are not built. The steps in section 8 are superseded by `docs/roadmap.md` (decision 228).*
@@ -19,7 +21,7 @@ For a helicopter the second problem matters most. A tree line 2 km away must sta
 
 ## Proposal in One Paragraph
 
-Treat a forest as a **volume with a canopy height**, and draw that volume in three layers that agree with each other and with the simulation. A **canopy height field** H(p), a pure function of position, gives every point its canopy top: zero in the open, the stand's height inside a forest, with a sharp edge on the existing density contour. A **canopy shell** draws H as a raised, faceted surface from the terrain's own tile meshes, out to many kilometers; it gives the forest its mass, its skyline and its cover at every range for about the cost of the terrain. **Instanced trees** from a new tree kit stand on top of and in front of the shell near the camera: crowns only inside stands, where trunks never show, and whole trees on the forest edge, in hedgerows, tree rows, riverbanks and the open field. The simulation reads the same H for line of sight and for tree strikes, so what hides the player on screen hides them from the AI, and what the rotor hits is what the player sees.
+Treat a forest as a **volume with a canopy height**, and draw that volume in three layers that agree with each other and with the game engine. A **canopy height field** H(p), a pure function of position, gives every point its canopy top: zero in the open, the stand's height inside a forest, with a sharp edge on the existing density contour. A **canopy shell** draws H as a raised, faceted surface from the terrain's own tile meshes, out to many kilometers; it gives the forest its mass, its skyline and its cover at every range for about the cost of the terrain. **Instanced trees** from a new tree kit stand on top of and in front of the shell near the camera: crowns only inside stands, where trunks never show, and whole trees on the forest edge, in hedgerows, tree rows, riverbanks and the open field. The game engine reads the same H for line of sight and for tree strikes, so what hides the player on screen hides them from the AI, and what the rotor hits is what the player sees.
 
 This is the owner's suggestion of separating canopy cover from individual trees, made precise.
 
@@ -29,7 +31,7 @@ H(p) = cover(p) × h_stand(p), in meters above the ground.
 
 - **cover** is 1 where the forest density (decision 44) exceeds the canopy threshold (0.42, decision 71's `forestThreshold`) and 0 elsewhere, with the edge on the bilinear density contour of the level-7 tiles. It is already the contour the terrain's canopy shading follows, so nothing moves.
 - **h_stand** comes from the stand the point lies in (section 3): a height per stand from its composition and age class, between bounds per biome. Starting values: conifer 18–26 m, temperate broadleaf 14–22 m, birch and young stands 8–12 m, rainforest 28–38 m, savanna woodland 6–10 m, shrubland 2–4 m, krummholz near the tree line 1–3 m.
-- **Where it lives.** The function goes in `worldgen/` beside the tile synthesis, written once for the CPU (sim, placement, tests) and once in TSL or WGSL (rendering), with a test that the two agree. Rule 9 holds: line of sight and collision are the sim's execution layer, which may read terrain; the campaign's planning layer keeps reading the strategic graph's forest density.
+- **Where it lives.** The function goes in `worldgen/` beside the tile synthesis, written once for the CPU (sim, placement, tests) and once in TSL or WGSL (rendering), with a test that the two agree. Rule 9 holds: line of sight and collision are the game engine's execution layer, which may read terrain; the campaign's planning layer keeps reading the strategic graph's forest density.
 
 The field is the contract between three consumers. That is the main design choice here, and the reason the shell and the trees take their heights from it rather than from their own noise.
 
@@ -83,7 +85,7 @@ The kit uses Part I's canopy shades, which are darker and less saturated than th
 ## 5. The Simulation Reads the Same Forest
 
 - **Line of sight.** The design already asks for line of sight against level-7 tiles and forest density (design, *Simulation*). With H, a sight line is blocked where it passes below ground + H inside a forest, except within the first 20–30 m beyond an edge, so a target just inside a tree line can still be seen through the edge trees. A helicopter unmasks when its sensor rises above H; its mast-mounted sight would unmask first if P5 models one.
-- **Tree strikes.** The ground model (decision 134) adds H as an obstacle: rotor or fuselage below the canopy top inside a stand is a crash, as hitting the ground is today. Hovering beside a tree line is safe. The edge on screen and the edge in the sim come from one contour, so they agree within the edge trees' spread of a few meters.
+- **Tree strikes.** The ground model (decision 134) adds H as an obstacle: rotor or fuselage below the canopy top inside a stand is a crash, as hitting the ground is today. Hovering beside a tree line is safe. The edge on screen and the edge in the game engine come from one contour, so they agree within the edge trees' spread of a few meters.
 - **AI.** Attack helicopter AI picks firing positions behind edges and hedgerows from the same field, which makes the AI's cover the player's cover.
 
 ## 6. Performance

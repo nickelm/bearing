@@ -1,5 +1,7 @@
 # Proposal 0002: Third-Person Flight Without Cockpits
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 *Drafted 2026-11-11. Status: accepted. Affects `docs/design.md`, `docs/visual-style.md`, `docs/proposals/0001-two-views.md`, and `TODO.md`. Amended for helicopters by [proposal 0004](0004-helicopter-flight.md) (decision 149): helicopters take off and land under the player's control, and that proposal specifies their camera rig and hover symbology. [Proposal 0006](0006-displays-and-crew.md) (decision 189) supersedes the *Displays* and *Layout and Style* sections and the P2, P3 and P5 milestones below; the HUD symbology and crew station mode stay, crew station mode now working through format ownership.*
 
 *Audit 2026-11-18 (decision 229): free look stays where it is left instead of springing back (decisions 160, 198); mouse aim steers by the cursor's direction in the chase view, not a world-locked aim point (decisions 135, 198); Free Flight animates the landing gear. The Displays and Layout sections are superseded by proposal 0006, and player flight control is in the tech demo (R2) under proposal 0008. The roadmap section below is superseded by `docs/roadmap.md` (decision 228).*
@@ -8,7 +10,7 @@
 
 Bearing models no cockpits. The player flies every aircraft and helicopter from a third-person chase camera, with the aircraft near the center of the screen. The HUD and the key cockpit displays (radar, moving map, threat warning, weapons) appear as 2D elements on screen. Spectating an AI flight and flying it use the same view: taking control changes who provides the inputs, and the screen stays the same.
 
-The simulation remains a simulation of a specific aircraft. The player sees the world from outside, but every display shows only what that aircraft and its crew know.
+The game still plays out one specific aircraft. The player sees the world from outside, but every display shows only what that aircraft and its crew know.
 
 ## Rationale
 
@@ -18,11 +20,11 @@ The simulation remains a simulation of a specific aircraft. The player sees the 
 - **Spectator parity.** Following an AI flight from mission search and flying it become the same experience, which makes taking control and handing back seamless.
 - **Browser budget.** One exterior model and a 2D overlay cost far less than a detailed interior with its own lighting and render pass.
 
-The cost is immersion and some realism. A chase camera gives the player more awareness of the surroundings than a real pilot has, especially to the rear. We accept this advantage in a single-player game against AI.
+The cost is some immersion. A chase camera gives the player more awareness of the surroundings than a real pilot has, especially to the rear. We accept this advantage in a single-player game against AI.
 
 ## The Camera Rig
 
-The camera rig becomes the most important piece of the simulation view's presentation.
+The camera rig becomes the most important piece of the flight view's presentation.
 
 - **Chase camera.** Positioned behind and slightly above the aircraft, attached through a spring-damper so the camera lags behind rolls, pitch changes, and acceleration. Lag conveys speed and maneuvering; tuning must keep the aircraft near screen center during hard turns.
 - **Per-type rigs.** Each aircraft class gets its own offsets and damping: further back and looser for fast jets, closer and tighter for helicopters, further back and higher for bombers and transports. The helicopter rig also lifts and tilts down as airspeed falls (proposal 0004).
@@ -43,7 +45,7 @@ AI pilots use the same flight director and the same flight model. Handback hands
 
 ## Flight Model
 
-Without a cockpit to sell realism, the flight model carries the feeling of the aircraft. It is table-driven at medium fidelity: per-type data for thrust, drag, lift, instantaneous and sustained turn rates, specific excess power, roll rate, and the effects of altitude, wing sweep, and stores. Energy management, stalls, and departures follow the tables in simplified form. The data lives in the aircraft's JSON specification, next to its geometry and avionics profile.
+Without a cockpit to sell the feel, the flight model carries the feeling of the aircraft. It is table-driven at a medium level of detail tuned for feel: per-type data for thrust, drag, lift, instantaneous and sustained turn rates, specific excess power, roll rate, and the effects of altitude, wing sweep, and stores. Energy management, stalls, and departures follow the tables in simplified form. The data lives in the aircraft's JSON specification, next to its geometry and avionics profile.
 
 ## HUD and Displays
 
@@ -82,7 +84,7 @@ Implementation: a Canvas 2D overlay at device pixel ratio for HUD symbols and ve
 
 ## Sensors and Information
 
-Since the displays carry what a cockpit would, they must show what the aircraft knows rather than ground truth. A **sensor model** filters simulation state per aircraft:
+Since the displays carry what a cockpit would, they must show what the aircraft knows rather than ground truth. A **sensor model** filters game state per aircraft:
 
 - **Radar.** Detection depends on radar type (none, ranging only, pulse, pulse-Doppler with look-down), mode, range, target radar cross-section, aspect, terrain masking, and clutter. Stealth enters here.
 - **RWR.** Detects emitting radars by bearing and type.
@@ -121,7 +123,7 @@ The player's aircraft fills the center of the screen for entire missions, so it 
 **`docs/design.md`**
 
 - *Vision* and *Decisions So Far:* state that flying happens in a third-person chase view without cockpits, with HUD and displays as 2D overlays.
-- *Architecture:* the *Full* fidelity level means "the aircraft the player controls or follows", with the flight model, sensor model, and flight director.
+- *Architecture:* the *Full* level of detail means "the aircraft the player controls or follows", with the flight model, sensor model, and flight director.
 - *Time:* rename the cockpit cap to the **flight cap**: while the player controls an aircraft, acceleration is limited to cruise phases (up to 8×) and cancels on any threat.
 - *Factions and Sides:* replace the side-by-side cockpit paragraph with the crew station description above.
 - *Non-goals* and *Later:* replace "cockpit flight" with "player flight control, HUD, and displays".

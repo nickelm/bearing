@@ -1,5 +1,7 @@
 # Proposal 0011: Stylized Effects
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 *Drafted 2026-11-21. Status: accepted. Affects `docs/visual-style.md`, `docs/proposals/0004-helicopters.md`, `docs/proposals/0009-settlements-and-cities.md`, `docs/roadmap.md`, and `CLAUDE.md`.*
 
 *Proposal 0013 (decision 331) adds the infantry's uses of the effects system: muzzle flashes and tracers of squads in contact, the dust of a soldier landing after a blast, and the small toon puff in which the dead vanish.*
@@ -75,7 +77,7 @@ Point lights from flashes are capped at a small number per frame, with the oldes
 
 ## Integration
 
-- **Event interface.** The simulation emits events (launch, hit, explosion, fire started, fire extinguished); the renderer spawns effects from them. Effects are cosmetic and never feed back into simulation state.
+- **Event interface.** The game engine emits events (launch, hit, explosion, fire started, fire extinguished); the renderer spawns effects from them. Effects are cosmetic and never feed back into game state.
 - **Long-lived columns** derive from damage states (proposal 0009 and the game layer's target states), so a burning depot keeps smoking when the camera returns.
 - **Existing effects.** City plumes from proposal 0009 and rotor downwash from proposal 0004 move to this system.
 - **Visibility to the game.** Smoke does not block line of sight in this proposal. Obscuration by smoke is a later idea for the game layer.

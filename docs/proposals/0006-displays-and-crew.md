@@ -1,5 +1,7 @@
 # Proposal 0006: Displays, Status Strip, Master Modes, and AI Crew
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 *Drafted 2026-11-16. Status: accepted 2026-11-16 (decision 189). Affects `docs/design.md`, `docs/visual-style.md`, `docs/proposals/0002-third-person-flight.md`, `docs/proposals/0004-helicopter-flight.md`, `TODO.md`, and `CLAUDE.md`. The implementation plan is [docs/plans/displays.md](../plans/displays.md).*
 
 *Audit 2026-11-18 (decision 229): Tab captures the mouse and only hot actions have keys (decision 193, superseding the Left Alt cursor key and a key for every action); freeing the mouse in direct control centers the stick (decision 198); the moving map is read back into the display's canvas (decision 201); pin and minimize are frame icons (decision 222); avionics profiles live in code (decision 224); the elevation modes are sampled on the CPU (decision 227). Master-mode declutter and alerts that claim a slot are not built. The roadmap section below is superseded by `docs/roadmap.md` (decision 228).*
@@ -201,7 +203,7 @@ Displays can later pop out of the game window:
 - **Second window on the same machine:** a display opens in its own browser window and syncs through a broadcast channel.
 - **Tablet or phone:** a companion page shows one or more displays as a touchscreen glass cockpit. Since Bearing is a static site, pairing needs a peer-to-peer connection with a handshake through a QR code, or an optional public signaling broker.
 
-To keep this possible, every format renders from a **serializable display model**: a pure function from the sensor-filtered simulation snapshot and the display state to a display description. The game window, a second window, and a tablet all draw from the same model, and input from any of them returns as the same display commands.
+To keep this possible, every format renders from a **serializable display model**: a pure function from the sensor-filtered game snapshot and the display state to a display description. The game window, a second window, and a tablet all draw from the same model, and input from any of them returns as the same display commands.
 
 ## Implementation Notes
 

@@ -1,12 +1,14 @@
 # Proposal 0004: Helicopter Flight Model and Controls
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 *Drafted 2026-11-15. Status: accepted 2026-11-15 (decision 149); open questions answered (decision 151). Affects `docs/design.md`, `docs/visual-style.md`, `docs/proposals/0002-third-person-flight.md`, `TODO.md`, and `CLAUDE.md`. The implementation plan is [docs/plans/helicopters.md](../plans/helicopters.md).*
 
-*Audit 2026-11-18 (decision 229): free look stays where it is left in cruise too (decision 160); type parameters live in the spec's `flight` block with `kind: "rotorcraft"`, and avionics profiles in `src/sim/avionics/typeProfiles.ts` (decision 224). No rotary flight director exists yet, so no AI flies a helicopter at full fidelity. The roadmap section below is superseded by `docs/roadmap.md` (decision 228).*
+*Audit 2026-11-18 (decision 229): free look stays where it is left in cruise too (decision 160); type parameters live in the spec's `flight` block with `kind: "rotorcraft"`, and avionics profiles in `src/sim/avionics/typeProfiles.ts` (decision 224). No rotary flight director exists yet, so no AI flies a helicopter at full detail. The roadmap section below is superseded by `docs/roadmap.md` (decision 228).*
 
 ## Decision
 
-Bearing's helicopters use a rotor-disc flight model of medium fidelity and three control modes over one flight director. The design has two goals that it treats as equally important:
+Bearing's helicopters use a rotor-disc flight model of a medium level of detail, tuned for feel and three control modes over one flight director. The design has two goals that it treats as equally important:
 
 - **Approachable.** A new player with mouse and keyboard can take off, fly to a landing zone, and land on the first attempt, using the default mode and assists.
 - **Complete.** An experienced player can do everything a real helicopter can do: hover, pedal turns, sideward and rearward flight, nap-of-the-earth flight, pop-up attacks, slope and confined-area landings, sling loads, autorotation, and, in the right types, loops and rolls.
@@ -21,7 +23,7 @@ Two games shaped this design. Arma 3's standard flight model shows that mouse-co
 
 ### Rotor as a Thrust Disc
 
-Each helicopter is one rigid body. The main rotor is a disc that produces thrust along its normal. Blade-element simulation is out of scope. Seven effects give each type its character:
+Each helicopter is one rigid body. The main rotor is a disc that produces thrust along its normal. Blade-element modeling is out of scope. Seven effects give each type its character:
 
 1. **Thrust vector.** Cyclic tilts the disc, with a first-order lag set by the flapping time constant. Collective and available engine power set thrust magnitude. Rotor speed stays governed during normal flight and becomes a state variable in autorotation.
 2. **Hub stiffness.** The control moment the rotor produces beyond tilting the thrust vector. It decides how a type behaves at low and negative load factor:
@@ -56,6 +58,8 @@ All parameters live in the type's JSON specification, next to its geometry and a
 | Never-exceed speed | Retreating blade stall onset |
 | Landing gear: skids or wheels, contact points | Ground handling |
 | Sling hook, hoist, fast-rope positions | Utility roles |
+
+*The figures in this table are gameplay tuning values.*
 
 ### Types
 

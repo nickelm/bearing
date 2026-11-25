@@ -1,5 +1,7 @@
 # Proposal 0013: Infantry
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 *Drafted 2026-11-22. Status: accepted 2026-11-22 (decision 331). Affects `docs/roadmap.md`, `docs/visual-style.md`, `docs/proposals/0008-game-loop-and-campaign.md`, `docs/proposals/0011-stylized-effects.md`, and `docs/proposals/0012-gunship-and-sensor-stations.md`.*
 
 ## Decision
@@ -8,7 +10,7 @@ Bearing's infantry are **blocky, Minecraft-like, cartoony soldiers with oversize
 
 ## Rationale
 
-Infantry fails in most flight and tank simulators because soldiers are too few, too small to see, too static, and too expensive to animate. The blocky style removes the cost problem: rigid boxes animate in the vertex shader without skinning, so the budget goes into numbers, readability, and behavior. Infantry matters to Bearing because close air support, the gunship (proposal 0012), attack helicopters, and CSAR all revolve around soldiers on the ground.
+Infantry fails in most flight and tank games because soldiers are too few, too small to see, too static, and too expensive to animate. The blocky style removes the cost problem: rigid boxes animate in the vertex shader without skinning, so the budget goes into numbers, readability, and behavior. Infantry matters to Bearing because close air support, the gunship (proposal 0012), attack helicopters, and CSAR all revolve around soldiers on the ground.
 
 ## The Figure
 
@@ -59,12 +61,12 @@ Muzzle flashes and tracers come from the effects system (proposal 0011).
 
 ## Simulation Levels
 
-The fidelity ladder of proposal 0008 gains a level between battalions and individuals:
+The level-of-detail ladder of proposal 0008 gains a level between battalions and individuals:
 
 | Level | Range | Content |
 |---|---|---|
 | Battalion aggregate | Everywhere | Strength, supply, posture, attrition |
-| Squad simulation | Within about 20 km of the camera | Squad positions, formations, suppression, morale, ammunition, casualties |
+| Squad play | Within about 20 km of the camera | Squad positions, formations, suppression, morale, ammunition, casualties |
 | Individual soldiers | Within about 3 to 5 km | Rendered figures with per-soldier position, animation state, and simple behavior |
 
 Battalions promote whole companies into squads near the camera, not a token squad. Squads promote into individuals nearer still. Demotion folds casualties back up.
@@ -109,6 +111,8 @@ Starting gameplay values, deliberately generous so that air power is visible and
 | 500 kg bomb | 20 m | 60 m | 60 m | 200 m |
 | Cluster bomb | Pattern of bomblets over about 150 × 100 m, each with a small profile | | | 250 m |
 
+*The figures in this table are gameplay tuning values.*
+
 Machine gun and cannon fire without explosive rounds hits soldiers individually and adds suppression along its path.
 
 ## Reactions and Death
@@ -148,7 +152,7 @@ Bearing never models civilians. Settlements (proposal 0009) contain buildings an
 ## Budgets
 
 - Up to 5,000 individually rendered soldiers within range, at most about 400,000 triangles across all detail levels.
-- GPU update of individual soldiers under 0.5 ms; squad simulation under 1 ms per tick on the simulation worker.
+- GPU update of individual soldiers under 0.5 ms; squad play under 1 ms per tick on the game engine worker.
 - In a stress scene (a battalion attack with 1,500 soldiers visible from a gunship orbit), the frame stays within the budgets of `docs/visual-style.md`.
 
 ## Dependencies and Roadmap

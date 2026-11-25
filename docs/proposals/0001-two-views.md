@@ -1,6 +1,8 @@
-# Proposal 0001: Illustrated Strategic Map and Simulation View
+# Proposal 0001: Illustrated Strategic Map and Flight View
 
-*Drafted 2026-11-11. Status: accepted 2026-11-11 with one amendment (decision 72). Amended by Proposal 0002 (decision 94): Bearing has no cockpits, so the simulation view is entered through a chase view or an observer camera. Extended by Proposal 0005 (decision 161): roads and railways are aligned to the terrain, bridges are typed and named nodes of the networks, and the map adds bridge labels, dashed tunnels and generalized rivers. Extended by [Proposal 0007](0007-world-diversity.md) (decision 204): the map's fills and patterns follow twenty biomes in a brighter palette, zone names label regions, natural wonders get glyphs and labels, and the simulation view gives each zone its own look. Affects `docs/design.md`, `docs/visual-style.md`, and `TODO.md`.*
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
+*Drafted 2026-11-11. Status: accepted 2026-11-11 with one amendment (decision 72). Amended by Proposal 0002 (decision 94): Bearing has no cockpits, so the flight view is entered through a chase view or an observer camera. Extended by Proposal 0005 (decision 161): roads and railways are aligned to the terrain, bridges are typed and named nodes of the networks, and the map adds bridge labels, dashed tunnels and generalized rivers. Extended by [Proposal 0007](0007-world-diversity.md) (decision 204): the map's fills and patterns follow twenty biomes in a brighter palette, zone names label regions, natural wonders get glyphs and labels, and the flight view gives each zone its own look. Affects `docs/design.md`, `docs/visual-style.md`, and `TODO.md`.*
 
 *Audit 2026-11-18 (decision 229): the code diverges from this proposal in three settled ways. The hillshade is computed per fragment, not baked (decision 78); labels use a single-channel SDF atlas built at load time, not MSDF (decision 98); infrastructure lives in `worldgen/strategic/`, not `worldgen/infrastructure/` (rule 9). The transition between views is not built. The roadmap section below is superseded by `docs/roadmap.md` (decision 228).*
 
@@ -11,23 +13,23 @@
 Bearing gets two distinct views of the same world, each with its own renderer and visual language.
 
 - **The strategic view** is an illustrated globe in the spirit of Civilization VI and Cold War operational maps. It caricatures the world to convey strategic information: exaggerated relief, painted biomes with pattern textures, low-poly mountain and city glyphs, a hierarchy of roads, and labels for cities, roads, mountain ranges, peaks, deserts, forests, rivers, and seas. Zoom stops at a floor where the map still looks crisp. Individual trees do not appear.
-- **The simulation view** is the high-fidelity, low-poly world from `docs/visual-style.md`: faceted terrain, the tree kit, atmosphere, clouds, water, and ground detail. It covers altitudes from the ground to about 20 km and is entered only through a unit.
+- **The flight view** is the high-fidelity, low-poly world from `docs/visual-style.md`: faceted terrain, the tree kit, atmosphere, clouds, water, and ground detail. It covers altitudes from the ground to about 20 km and is entered only through a unit.
 
-The two views share world data and the simulation, and differ in everything they draw. A short transition connects them.
+The two views share world data and the game engine, and differ in everything they draw. A short transition connects them.
 
 ## Rationale
 
 **Clarity.** A strategic view must answer questions at a glance: where the front runs, which roads feed it, which mountains shield which bases, how far the bombers must fly. Photographic rendering hides these answers among detail. A map that abstracts, exaggerates, and labels shows them directly. Civilization VI does this for a game board, and the NATO planning maps and 1980s board wargames that shaped *Red Storm Rising* did it for real campaigns.
 
-**Risk.** The current plan requires one renderer that zooms continuously from orbit to 500 m with consistent atmosphere, terrain LOD, and vegetation. That is the hardest rendering problem in the project. Splitting the views removes it. The strategic renderer never gets closer than its zoom floor, and the simulation renderer never climbs above the aircraft ceiling.
+**Risk.** The current plan requires one renderer that zooms continuously from orbit to 500 m with consistent atmosphere, terrain LOD, and vegetation. That is the hardest rendering problem in the project. Splitting the views removes it. The strategic renderer never gets closer than its zoom floor, and the game engine renderer never climbs above the aircraft ceiling.
 
-**Bounded simulation rendering.** On a planet with a 1,000 km radius, the horizon distance at altitude *h* is about √(2Rh). At 20 km altitude the horizon lies about 200 km away; at 500 m, about 32 km. The simulation view therefore never needs terrain beyond 200 km, which bounds its terrain streaming, LOD depth, and memory.
+**Bounded flight-view rendering.** On a planet with a 1,000 km radius, the horizon distance at altitude *h* is about √(2Rh). At 20 km altitude the horizon lies about 200 km away; at 500 m, about 32 km. The flight view therefore never needs terrain beyond 200 km, which bounds its terrain streaming, LOD depth, and memory.
 
-**Identity.** Two clearly different looks make each mode feel purposeful: the map is where you plan and choose, and the simulation view is where you fly.
+**Identity.** Two clearly different looks make each mode feel purposeful: the map is where you plan and choose, and the flight view is where you fly.
 
 ## Comparison of the Two Views
 
-| Aspect | Strategic view | Simulation view |
+| Aspect | Strategic view | Flight view |
 |---|---|---|
 | Purpose | Read the war, find missions, follow events | Fly, fight, watch |
 | Camera | Orbit, from full globe down to a zoom floor of about 100 km altitude | Chase and observer cameras, 0 to about 20 km altitude |
@@ -62,7 +64,7 @@ The two views share world data and the simulation, and differ in everything they
 - **Relief.** A cube-sphere mesh displaced from the baked height map with 4× vertical exaggeration (tunable), and a moderate quadtree so the floor zoom stays sharp. Shading uses a baked hillshade with a fixed light from the upper left of the screen, following cartographic convention, plus soft ambient light.
 - **Biome painting.** A softened, illustrative version of the biome palette. Each biome gets a procedural pattern texture generated in the shader: stippled canopy for forests, dune ripples for deserts, a faint field grid for farmland, tussocks for tundra, rock hatching on steep slopes. Biome boundaries blend over a few kilometers. Patterns use screen-stable scaling so they look the same at every zoom within a band.
 - **Coasts and water.** Water gets depth tints in a few flat bands, with a lighter halo along coasts and the faint parallel coastal lines of old printed maps. Coastlines carry a thin dark outline. Lakes and wide rivers use the same treatment.
-- **Graticule.** Optional latitude and longitude lines, plus range rings around a selected base or aircraft. There is no hex grid: hexes imply movement rules, and the simulation has none.
+- **Graticule.** Optional latitude and longitude lines, plus range rings around a selected base or aircraft. There is no hex grid: hexes imply movement rules, and the game engine has none.
 
 ### Geographic Glyphs
 
@@ -96,24 +98,24 @@ Territory tint per faction; the front line as a bold line with teeth on the atta
 
 ### Time and Weather
 
-The base map keeps its fixed cartographic lighting regardless of time. Since night and weather matter for missions, two optional overlays show them: a night overlay that tints the dark side of the terminator in deep blue, and a stylized cloud-cover layer of soft, translucent shapes from the simulation's weather field.
+The base map keeps its fixed cartographic lighting regardless of time. Since night and weather matter for missions, two optional overlays show them: a night overlay that tints the dark side of the terminator in deep blue, and a stylized cloud-cover layer of soft, translucent shapes from the game engine's weather field.
 
 > **Amendment (owner, on acceptance; decision 72).** Planning sorties needs night and weather, so the map always shows day and night, seasons, and weather and clouds in stylized form. They are not optional overlays. Only the relief hillshade keeps the fixed cartographic light. See `docs/visual-style.md`, Part II.
 
 ### Later Idea: Intelligence
 
-Enemy territory that friendly reconnaissance has not covered recently could render in a sketched, desaturated style, similar to the unexplored areas of Civilization VI. Reconnaissance missions would then reveal the map. This depends on an intelligence model in the simulation and is out of scope for the demo.
+Enemy territory that friendly reconnaissance has not covered recently could render in a sketched, desaturated style, similar to the unexplored areas of Civilization VI. Reconnaissance missions would then reveal the map. This depends on an intelligence model in the game engine and is out of scope for the demo.
 
 ## Simulation View
 
 - **Altitude envelope.** From the ground to about 20 km. The renderer only handles terrain within the horizon, at most about 200 km away.
-- **Entry.** Only through a unit: following a flight from mission search or jumping into one of its aircraft, both in the same chase view (Proposal 0002), or an observer camera at a base or ship. There is no free camera in the simulation view.
+- **Entry.** Only through a unit: following a flight from mission search or jumping into one of its aircraft, both in the same chase view (Proposal 0002), or an observer camera at a base or ship. There is no free camera in the flight view.
 - **Content.** Unchanged from `docs/visual-style.md`: faceted terrain, the tree kit, settlements and the base kit, models from the procedural builders, atmosphere, clouds, water, and the full post-processing chain.
 - **Removed requirements.** The orbit-level parts of `docs/visual-style.md` move to the strategic view or disappear: the limb glow at orbit, terrain LOD above 20 km, and the acceptance check for an orbit view at golden hour.
 
 ## Transition Between Views
 
-Selecting a flight and choosing *Follow* or *Jump in* starts a transition. The strategic camera eases toward the flight down to the zoom floor; a quick dissolve through a cloud layer hides the switch; and the simulation view opens with a chase camera behind the aircraft. Returning to the map reverses the sequence, landing the strategic camera above the flight's position. The whole transition lasts under two seconds. Both scenes stay resident: the strategic scene is light, and the simulation scene keeps streaming terrain around the active unit.
+Selecting a flight and choosing *Follow* or *Jump in* starts a transition. The strategic camera eases toward the flight down to the zoom floor; a quick dissolve through a cloud layer hides the switch; and the flight view opens with a chase camera behind the aircraft. Returning to the map reverses the sequence, landing the strategic camera above the flight's position. The whole transition lasts under two seconds. Both scenes stay resident: the strategic scene is light, and the game engine scene keeps streaming terrain around the active unit.
 
 ## Architecture Impact
 
@@ -128,14 +130,14 @@ Feature extraction, naming, and infrastructure stay headless in `worldgen`. Labe
 
 ## Revised Roadmap
 
-*Superseded by `docs/roadmap.md` (decision 228). This section split the work into a foundation (F1, F2), a strategic track (S1–S4), a simulation core track (C1–C3), a flight view track (V1–V4) and an integration milestone (I1). F1, F2, S2, S3, S4 and C1 are done; the roadmap's "Where the Old Milestones Went" places the rest: the transition and following in R2.4, the ATO and mission search in R1.4 and R2.1, the ground war in R2.3, the naval war in R4.6, and the remaining polish in R6.*
+*Superseded by `docs/roadmap.md` (decision 228). This section split the work into a foundation (F1, F2), a strategic track (S1–S4), a game core track (C1–C3), a flight view track (V1–V4) and an integration milestone (I1). F1, F2, S2, S3, S4 and C1 are done; the roadmap's "Where the Old Milestones Went" places the rest: the transition and following in R2.4, the ATO and mission search in R1.4 and R2.1, the ground war in R2.3, the naval war in R4.6, and the remaining polish in R6.*
 
 ## Changes to Existing Documents
 
 **`docs/design.md`**
 
 - *Vision* and *Architecture:* describe the two views and the transition.
-- *Demo Goals:* replace "render from orbit to 500 m" with two goals, an illustrated strategic map down to its zoom floor and a simulation view from 0 to 20 km. Add a goal for named geography and labels.
+- *Demo Goals:* replace "render from orbit to 500 m" with two goals, an illustrated strategic map down to its zoom floor and a flight view from 0 to 20 km. Add a goal for named geography and labels.
 - *World Generation Pipeline:* add stages for feature extraction, naming, and infrastructure hierarchy.
 - *Rendering:* split into a short pointer to each view's specification.
 - *Milestones:* replace with the revised roadmap above.

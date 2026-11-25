@@ -1,5 +1,7 @@
 # Proposal 0014: Input Layer and Gamepad
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 *Drafted 2026-11-23. Status: accepted (decision 360). Runs out of sync with the roadmap, beside R2; it brings forward the gamepad and key remapping of R6.5. Plan: `docs/plans/input-layer.md`.*
 
 ## Decision

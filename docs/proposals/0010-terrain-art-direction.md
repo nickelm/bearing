@@ -1,5 +1,7 @@
 # Proposal 0010: Terrain Art Direction
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 *Drafted 2026-11-21. Status: rejected (owner, 2026-11-22, decision 328); kept for the record and not implemented. Would have affected `docs/visual-style.md`, `docs/proposals/0005-terrain-adaptive-networks.md`, `docs/proposals/0007-world-diversity.md`, `docs/roadmap.md`, and `CLAUDE.md`.*
 
 ## Goals
