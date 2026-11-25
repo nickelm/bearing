@@ -1,5 +1,7 @@
 # Architecture decisions
 
+Bearing is a cartoony browser game; the values and systems here serve gameplay (README.md, What Bearing Is; CLAUDE.md rule 22).
+
 Newest entries go at the bottom. Each entry records the date, the decision and the reason. If a decision is reversed, add a new entry that references the old one rather than editing history.
 
 When an entry changes something `docs/design.md` or `docs/visual-style.md` states, update that document in the same commit, so the documents always describe the current plan. As of 2026-11-11, decisions 1–102 are reflected in both.
@@ -5553,3 +5555,16 @@ The keys keep working beside the pad, as they did. This amends decisions 198 and
 **How it was checked.** `tests/heloFidelity.test.ts`: the promoted rescue now stands on its gear through the ground time (radar altitude 0) and lifts off when its route moves. `tests/heloDirector.test.ts`: a route straight at a butte 180 m high is flown over with more than 5 m to spare; without the look-ahead the helicopter strikes it. `tests/demoSeeds.test.ts`: every survivor still gets a CSAR mission on the three seeds. The unit suite, the type check and lint pass.
 
 **Reason:** the owner's review, 2026-11-24.
+
+### 370. Game framing: cartoony browser game, fun first, plain vocabulary
+
+**Date:** 2026-11-25
+**Decision:** Rule 22 of `CLAUDE.md` (owner): Bearing is a cartoony browser game.
+
+- When fun and realism conflict, fun wins; when readability and realism conflict, readability wins.
+- Every performance, weapon, sensor and damage figure is a gameplay tuning value. Real aircraft and weapons are design references for fictional analogues.
+- Prose and user-facing text do not use *simulator*, *simulation*, *sim* or *fidelity* about Bearing. The 0–20 km view is the **flight view** (decision 72's "simulation view"); *fidelity* as level of detail is **level of detail**, and its top level is **full detail**. *Flight model* stays.
+- Identifiers, file and directory names (`src/sim/`, `simulation.ts`), code comments, test names and the earlier entries of this log keep their words as recorded.
+- `tests/docsFraming.test.ts` keeps the design documents to this vocabulary.
+
+**Reason:** the owner's direction of 2026-11-25. A game's documents and text should say what the player gets, not promise a realism the design gives up on purpose.
